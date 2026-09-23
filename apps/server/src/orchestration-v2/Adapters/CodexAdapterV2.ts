@@ -6020,10 +6020,14 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 updated.delete(payload.turn.id);
                 return updated;
               });
-              // Resubmit only a turn Codex confirms it stopped. If the
-              // interrupt lost the race, Codex already did the work (and the
-              // voice speaks its answer), so running it again would repeat it.
-              if (payload.turn.status === "interrupted" && continuationRequests !== undefined) {
+              // Resubmit a turn Codex stopped or failed, so the request isn't
+              // lost. If the interrupt lost the race and the turn completed,
+              // Codex already did the work (and the voice speaks its answer),
+              // so running it again would repeat it.
+              if (
+                (payload.turn.status === "interrupted" || payload.turn.status === "failed") &&
+                continuationRequests !== undefined
+              ) {
                 yield* voice.expectSpokenTurn(voiceResubmit.text);
                 yield* continuationRequests.offer({
                   threadId: voiceResubmit.providerThread.appThreadId ?? input.threadId,
