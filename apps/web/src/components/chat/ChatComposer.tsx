@@ -7772,7 +7772,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             variant="ghost"
                             size="sm"
                             // aria-disabled rather than disabled keeps the tooltip explaining why.
-                            className="aria-disabled:cursor-not-allowed aria-disabled:opacity-64"
+                            className="aria-disabled:cursor-not-allowed"
                             pressed={voiceEngaged}
                             onPointerDown={(event) => event.preventDefault()}
                             onPressedChange={() => {
@@ -7783,7 +7783,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                           />
                         }
                       >
-                        <AudioLinesIcon />
+                        {/* Dim the glyph, not the Toggle, which owns its own disabled styling. */}
+                        <AudioLinesIcon
+                          className={voiceButtonDisabledReason === null ? undefined : "opacity-50"}
+                        />
                       </TooltipTrigger>
                       <TooltipPopup>{voiceButtonDisabledReason ?? voiceButtonLabel}</TooltipPopup>
                     </Tooltip>
