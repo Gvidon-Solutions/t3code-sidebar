@@ -314,14 +314,15 @@ const config: ExpoConfig = {
       foregroundImage: variant.assets.androidAdaptiveForeground,
       monochromeImage: variant.assets.androidMonochromeIcon,
     },
-    // react-native-webrtc's plugin requests overlay access for screen sharing, which voice does not use.
-    blockedPermissions: ["android.permission.SYSTEM_ALERT_WINDOW"],
     // Opts into OnBackInvokedCallback-based back dispatch (Android 13+).
     // JS back handling survives it via react-native's Android 16 shim plus
     // withAndroidPredictiveBackCompat on Android 13-15.
     predictiveBackGestureEnabled: true,
-    // expo-sensors declares this for its pedometer, which the app does not use.
-    blockedPermissions: ["android.permission.ACTIVITY_RECOGNITION"],
+    // The app uses neither expo-sensors' pedometer nor WebRTC screen sharing.
+    blockedPermissions: [
+      "android.permission.ACTIVITY_RECOGNITION",
+      "android.permission.SYSTEM_ALERT_WINDOW",
+    ],
   },
   web: {
     favicon: variant.assets.appIcon,
