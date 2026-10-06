@@ -269,7 +269,7 @@ describe("ProviderContinuationService", () => {
         assert.isUndefined(command.notification);
       }).pipe(
         Effect.provide(
-          testLayer({ dispatched, getThreadRecords: () => Effect.succeed(projection) }),
+          layerTest({ dispatched, getThreadRecords: () => Effect.succeed(projection) }),
         ),
         Effect.scoped,
       );

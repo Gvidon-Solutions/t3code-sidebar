@@ -412,7 +412,7 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       const persisted = yield* readKeybindingsConfig(keybindingsConfigPath);
       assert.isFalse(persisted.some((entry) => entry.command === "voice.toggle"));
       assert.isTrue(persisted.some((entry) => entry.command === "navigation.back"));
-    }).pipe(Effect.provide(makeKeybindingsLayer())),
+    }).pipe(Effect.provide(layerKeybindings())),
   );
 
   it.effect("upserts custom keybindings to configured path", () =>
