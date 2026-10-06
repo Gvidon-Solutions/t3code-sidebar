@@ -12,7 +12,7 @@ import {
   type VoiceSessionTarget,
 } from "@t3tools/client-runtime/voice-mode";
 import * as Effect from "effect/Effect";
-import { AtomRegistry } from "effect/unstable/reactivity";
+import { AtomRegistry } from "effect/reactivity";
 import { useSyncExternalStore } from "react";
 
 import { stackedThreadToast, toastManager } from "../components/ui/toast";

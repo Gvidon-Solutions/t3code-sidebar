@@ -6,7 +6,7 @@ import {
   type VoicePeerConnection,
 } from "@t3tools/client-runtime/voice-mode";
 import * as Effect from "effect/Effect";
-import { AtomRegistry } from "effect/unstable/reactivity";
+import { AtomRegistry } from "effect/reactivity";
 import { setAudioModeAsync, setIsAudioActiveAsync } from "expo-audio";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { AppState, NativeModules } from "react-native";
