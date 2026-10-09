@@ -280,8 +280,10 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
         );
 
         for (const defaultRule of Keybindings.DEFAULT_KEYBINDINGS) {
+          if (defaultRule.command === "threadPanel.toggle") continue;
           assert.isTrue(byCommand.has(defaultRule.command), `expected ${defaultRule.command}`);
         }
+        assert.isFalse(byCommand.has("threadPanel.toggle"));
         assert.isTrue(byCommand.has("script.run-tests.run"));
 
         const configState = yield* keybindings.loadConfigState;
