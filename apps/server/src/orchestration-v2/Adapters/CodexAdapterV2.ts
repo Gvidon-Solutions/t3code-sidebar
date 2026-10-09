@@ -7225,7 +7225,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               Stream.mapError((cause) =>
                 cause._tag === "ProviderAdapterProtocolError"
                   ? cause
-                  : new ProviderAdapterProtocolError({
+                  : new ProviderAdapter.ProviderAdapterProtocolError({
                       driver: CODEX_PROVIDER,
                       detail:
                         cause._tag === "CodexVoiceSessionError" ? cause.detail : cause.message,
