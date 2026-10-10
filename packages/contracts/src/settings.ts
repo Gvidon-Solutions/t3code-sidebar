@@ -1,4 +1,5 @@
 import { SshDeviceHostConfigs } from "./device.ts";
+import { SidebarWorkspacesConfig } from "./sidebarWorkspaces.ts";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
@@ -460,6 +461,9 @@ export const ClientSettingsSchema = Schema.Struct({
   // old keys, so everyone, including prior beta opt-outs, resets to the new
   // default sidebar.
   legacySidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Fork: the workspace sidebar (workspace tiles + project folders). Wins
+  // over the legacy sidebar while on.
+  workspaceSidebarEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   // Beta: working and monitoring threads fold into a Working shelf and return
   // to the top of the inbox once they need the user. The inbox then orders by
   // time, so manual placement there is ignored (and kept) while it is on.
@@ -1190,6 +1194,7 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
   sidebarAutoSettleOnMerge: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  sidebarWorkspaces: SidebarWorkspacesConfig.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   backgroundActivity: BackgroundActivitySettings,
   // Legacy flat fields retained for old settings files and old clients. New
   // consumers should resolve `backgroundActivity` instead.
@@ -1528,6 +1533,7 @@ export const ServerSettingsPatch = Schema.Struct({
   deviceHosts: Schema.optionalKey(SshDeviceHostConfigs),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
+  sidebarWorkspaces: Schema.optionalKey(SidebarWorkspacesConfig),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
       schemaVersion: Schema.optionalKey(Schema.Literal(1)),
@@ -1669,6 +1675,7 @@ export const ClientSettingsPatch = Schema.Struct({
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
+  workspaceSidebarEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarWorkingShelfEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(

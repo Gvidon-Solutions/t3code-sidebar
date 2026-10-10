@@ -2061,6 +2061,7 @@ const LEGACY_FEATURE_TARGET_IDS: ReadonlySet<string> = new Set([
   "legacy-plan-mode",
   "legacy-context-window-indicator",
   "legacy-sidebar",
+  "workspace-sidebar",
 ]);
 
 /**
@@ -2124,6 +2125,19 @@ function LegacyFeaturesSection() {
                     updateSettings({ contextWindowMeterEnabled: Boolean(checked) })
                   }
                   aria-label="Context window indicator (legacy)"
+                />
+              }
+            />
+            <SettingsRow
+              {...searchableSetting("workspace-sidebar")}
+              description="Workspace tiles with project folders. Turn off to use the default sidebar."
+              control={
+                <Switch
+                  checked={settings.workspaceSidebarEnabled}
+                  onCheckedChange={(checked) =>
+                    updateSettings({ workspaceSidebarEnabled: Boolean(checked) })
+                  }
+                  aria-label="Workspace sidebar"
                 />
               }
             />

@@ -492,6 +492,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["composer meter usage tokens circle old"],
   },
   {
+    id: "workspace-sidebar",
+    title: "Workspace sidebar",
+    to: "/settings/general",
+    searchTerms: ["workspaces tiles folders projects zen"],
+  },
+  {
     id: "legacy-sidebar",
     title: "Sidebar (legacy)",
     to: "/settings/general",
