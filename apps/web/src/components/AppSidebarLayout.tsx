@@ -25,7 +25,13 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { resolveThreadRouteRef } from "../threadRoutes";
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
-import { useEnvironmentIdentificationMode, useLegacySidebarEnabled } from "../hooks/useSettings";
+import {
+  useClientSettings,
+  useClientSettingsHydrated,
+  useEnvironmentIdentificationMode,
+  useLegacySidebarEnabled,
+} from "../hooks/useSettings";
+import WorkspaceSidebar from "./workspaces/WorkspaceSidebar";
 import {
   PanelAnimationSuppressionProvider,
   usePanelAnimationSettings,
@@ -217,6 +223,11 @@ function ProjectProjectionRetention() {
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const legacySidebarEnabled = useLegacySidebarEnabled();
+  // Fork: the workspace sidebar is the default. Before client settings hydrate
+  // the schema default (on) holds, so opt-outs see one swap rather than everyone.
+  const settingsHydrated = useClientSettingsHydrated();
+  const workspaceSidebarSetting = useClientSettings((s) => s.workspaceSidebarEnabled);
+  const workspaceSidebarEnabled = !settingsHydrated || workspaceSidebarSetting;
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
     usePanelAnimationSettings();
   // Settings routes show the settings nav in place of whichever thread
@@ -321,6 +332,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
               <SidebarChromeHeader isElectron={isElectron} />
               <SettingsSidebarNav pathname={pathname} />
             </>
+          ) : workspaceSidebarEnabled ? (
+            <WorkspaceSidebar />
           ) : legacySidebarEnabled ? (
             <LegacyThreadSidebar />
           ) : (
