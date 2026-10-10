@@ -380,7 +380,6 @@ export default function WorkspaceSidebar() {
     lastFollowedRouteRef.current = followKey;
     if (routeWorkspaceId !== activeWorkspaceId) view.setActiveWorkspace(routeWorkspaceId);
     // Only route changes drive this; switching tiles must not bounce back.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeThreadKey, routeProjectKey, routeWorkspaceId]);
 
   const navigateToThread = useCallback(
@@ -477,7 +476,6 @@ export default function WorkspaceSidebar() {
   useEffect(() => {
     if (menuRequest) openMenu(menuRequest.position);
     // A new request (nonce) opens the menu once; openMenu identity churns.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuRequest?.nonce]);
   const handleThreadContextMenu = useCallback(
     (ref: ScopedThreadRef, position: { x: number; y: number }) => {
@@ -717,7 +715,6 @@ export default function WorkspaceSidebar() {
       }
     }
     return keys;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSearching, searchResults, model, activeWorkspaceId, view.tilesVisible, view.folderOpen]);
   const jumpLabelByKey = useMemo(
     () => new Map(orderedThreadKeys.slice(0, 9).map((key, index) => [key, String(index + 1)])),
@@ -908,7 +905,7 @@ export default function WorkspaceSidebar() {
           )}
           <span className="min-w-0 flex-1 truncate">{folder.label}</span>
           {!open && (attention > 0 || working > 0) ? (
-            <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-semibold tabular-nums group-hover/ws-folder:hidden">
+            <span className="flex shrink-0 items-center gap-1.5 text-2xs font-semibold tabular-nums group-hover/ws-folder:hidden">
               {attention > 0 ? <span className="text-warning-foreground">◆{attention}</span> : null}
               {working > 0 ? (
                 <span className="text-sky-600 dark:text-sky-400">●{working}</span>
@@ -1057,7 +1054,7 @@ export default function WorkspaceSidebar() {
                 <WorkspaceAvatar workspace={bucket.workspace} />
                 <span className="min-w-0 flex-1 truncate">{bucket.workspace.name}</span>
                 {!open && activity.attention > 0 ? (
-                  <span className="text-[11px] text-warning-foreground">◆{activity.attention}</span>
+                  <span className="text-2xs text-warning-foreground">◆{activity.attention}</span>
                 ) : null}
               </button>
               {open ? <div className="pl-1">{renderWorkspaceBody(bucket, true)}</div> : null}
@@ -1253,7 +1250,7 @@ function Section({
 }) {
   return (
     <div className="mb-1 flex flex-col">
-      <div className="flex h-6 items-center gap-1.5 px-2 text-[11px] font-medium tracking-wide text-sidebar-muted-foreground uppercase">
+      <div className="flex h-6 items-center gap-1.5 px-2 text-2xs font-medium tracking-wide text-sidebar-muted-foreground uppercase">
         {icon}
         {label}
       </div>
@@ -1285,7 +1282,7 @@ function CollapsibleSection({
         type="button"
         title={title}
         aria-expanded={open}
-        className="flex h-6 items-center gap-1.5 rounded-md px-1 text-left text-[11px] font-medium tracking-wide text-sidebar-muted-foreground uppercase outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-6 items-center gap-1.5 rounded-md px-1 text-left text-2xs font-medium tracking-wide text-sidebar-muted-foreground uppercase outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onToggle}
       >
         <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />

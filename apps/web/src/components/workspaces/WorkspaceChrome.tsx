@@ -34,7 +34,7 @@ export function WorkspaceAvatar({
       style={color ? ({ "--ws-tile": color } as CSSProperties) : undefined}
       className={cn(
         "flex shrink-0 items-center justify-center font-semibold tracking-tight",
-        size === "lg" ? "size-6 rounded-[7px] text-[11px]" : "size-5 rounded-md text-[10px]",
+        size === "lg" ? "size-6 rounded-md text-2xs" : "size-5 rounded-md text-3xs",
         workspace
           ? "bg-(--ws-tile) text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.18)]"
           : "bg-foreground/8 text-sidebar-muted-foreground",
@@ -88,7 +88,7 @@ export function WorkspaceTitlebar({
           onDoubleClick={workspace ? onStartRename : undefined}
           onContextMenu={onContextMenu}
         >
-          {workspace ? workspace.name : "All workspaces"}
+          {workspace ? workspace.name : "All"}
         </button>
       )}
       <span className="flex-1" />
@@ -139,7 +139,7 @@ function TileIndicator({ activity }: { activity: WorkspaceActivity }) {
     return (
       <span
         className={cn(
-          "absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] leading-none font-bold text-white ring-2 ring-sidebar",
+          "absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-3xs leading-none font-bold text-white ring-2 ring-sidebar",
           activity.failed > 0 ? "bg-red-500" : "bg-amber-500",
         )}
       >
@@ -230,10 +230,10 @@ export function WorkspaceDock({
                         aria-pressed={isActive}
                         style={{ "--ws-tile": color } as CSSProperties}
                         className={cn(
-                          "relative flex size-8 shrink-0 items-center justify-center rounded-[9px] text-[12px] font-semibold tracking-tight outline-hidden transition-[background-color,color,box-shadow,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring active:scale-95",
+                          "relative flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold tracking-tight outline-hidden transition-[background-color,color,box-shadow,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring active:scale-95",
                           isActive
                             ? "bg-(--ws-tile) text-white shadow-[0_1px_2px_rgb(0_0_0/0.18),inset_0_0_0_1px_rgb(255_255_255/0.2)]"
-                            : "bg-[color-mix(in_oklab,var(--ws-tile)_14%,transparent)] text-(--ws-tile) hover:bg-[color-mix(in_oklab,var(--ws-tile)_24%,transparent)]",
+                            : "bg-[color-mix(in_oklab,var(--ws-tile)_14%,transparent)] text-(--ws-tile) hover:bg-[color-mix(in_oklab,var(--ws-tile)_24%,transparent)] dark:bg-[color-mix(in_oklab,var(--ws-tile)_24%,transparent)] dark:text-[color-mix(in_oklab,var(--ws-tile)_65%,white)] dark:hover:bg-[color-mix(in_oklab,var(--ws-tile)_34%,transparent)]",
                           dropTarget === workspace.id &&
                             "ring-2 ring-(--ws-tile) ring-offset-2 ring-offset-sidebar",
                         )}
@@ -261,7 +261,7 @@ export function WorkspaceDock({
                   <button
                     type="button"
                     aria-label="New workspace"
-                    className="flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-dashed border-sidebar-border text-sidebar-muted-foreground outline-hidden transition-colors hover:border-sidebar-foreground/40 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-dashed border-sidebar-border text-sidebar-muted-foreground outline-hidden transition-colors hover:border-sidebar-foreground/40 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={onCreate}
                   />
                 }

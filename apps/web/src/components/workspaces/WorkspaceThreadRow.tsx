@@ -224,7 +224,7 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
         <>
           <span
             className={cn(
-              "shrink-0 text-[11px] tabular-nums text-sidebar-muted-foreground group-hover/ws-row:hidden group-focus-within/ws-row:hidden",
+              "shrink-0 text-2xs tabular-nums text-sidebar-muted-foreground group-hover/ws-row:hidden group-focus-within/ws-row:hidden",
               status === "working" && "text-sky-600 dark:text-sky-400",
             )}
           >
@@ -232,7 +232,7 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
               <PinIcon className="mr-1 inline size-3 align-[-2px] opacity-60" />
             ) : null}
             {props.jumpLabel ? (
-              <span className="rounded bg-foreground/8 px-1 text-[10px] font-medium text-sidebar-foreground">
+              <span className="rounded bg-foreground/8 px-1 text-3xs font-medium text-sidebar-foreground">
                 {props.jumpLabel}
               </span>
             ) : (
