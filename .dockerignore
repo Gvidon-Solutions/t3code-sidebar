@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+**/dist-electron
+**/.vite-plus
+.git
+apps/mobile/android
+apps/mobile/ios

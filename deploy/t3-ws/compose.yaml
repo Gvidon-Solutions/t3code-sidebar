@@ -1,0 +1,25 @@
+# /opt/t3-ws/compose.yaml on the VPS. Reachable only through an SSH tunnel:
+#   ssh -N -L 3790:127.0.0.1:3790 root@<vps>  ->  http://localhost:3790
+name: t3-ws
+services:
+  t3:
+    image: t3-ws:dev
+    container_name: t3-ws
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3790:3790"
+    volumes:
+      - /opt/t3-ws/home:/home/t3
+    environment:
+      TZ: Europe/Moscow
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 4g
+    memswap_limit: 4g
+    cpus: 4
+    pids_limit: 1024
+    init: false
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
