@@ -6,6 +6,9 @@ name: Sidebar fork desktop build
 # electron-updater manifests, so installed apps offer the build as an update.
 # Windows embeds the Linux CLI archive as its WSL runtime; that backend keeps
 # its data in ~/.t3-sidebar inside the distro. Builds are unsigned.
+# The release also carries the Android app (sidebar variant), signed with the
+# fork's own key; every APK shares one version code so any of them installs
+# over another (Settings › About › Version history on the phone).
 
 on:
   push:
@@ -222,9 +225,67 @@ jobs:
             release/latest.yml
           if-no-files-found: error
 
+  android:
+    name: Build Android APK
+    needs: bundle
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.bundle.outputs.version }}
+      APP_VARIANT: sidebar
+      EXPO_NO_GIT_STATUS: "1"
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=8192
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - run: vp install --filter=@t3tools/mobile...
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Build signed APK
+        env:
+          T3_SIDEBAR_VERSION: ${{ needs.bundle.outputs.version }}
+          T3_ANDROID_KEYSTORE_BASE64: ${{ secrets.T3_ANDROID_KEYSTORE_BASE64 }}
+          T3_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.T3_ANDROID_KEYSTORE_PASSWORD }}
+          T3_ANDROID_KEY_ALIAS: ${{ secrets.T3_ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          export T3_ANDROID_KEYSTORE="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$T3_ANDROID_KEYSTORE_BASE64" | base64 -d > "$T3_ANDROID_KEYSTORE"
+          cd apps/mobile
+          npx expo prebuild --platform android --no-install
+          cd android
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
+          mkdir -p "$GITHUB_WORKSPACE/release-android"
+          cp app/build/outputs/apk/release/app-release.apk \
+            "$GITHUB_WORKSPACE/release-android/T3-Code-Sidebar-$VERSION.apk"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: desktop-android
+          path: release-android/*.apk
+          if-no-files-found: error
+
   release:
     name: Publish release
-    needs: [bundle, linux, windows]
+    needs: [bundle, linux, windows, android]
     env:
       VERSION: ${{ needs.bundle.outputs.version }}
     if: github.event_name == 'push'
@@ -249,4 +310,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --latest \
             --title "T3 Code Sidebar $VERSION" \
-            --notes "Unsigned build of the sidebar fork ($GITHUB_SHA). Installs next to upstream T3 Code: own app id, data in ~/.t3-sidebar. Installed apps pick it up as an update."
+            --notes "Build of the sidebar fork ($GITHUB_SHA). Desktop installers are unsigned and install next to upstream T3 Code: own app id, data in ~/.t3-sidebar; installed apps pick this up as an update. The APK is the Android app (com.gvidon.t3codesidebar)."

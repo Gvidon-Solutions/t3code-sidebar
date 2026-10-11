@@ -85,6 +85,9 @@ import {
 } from "./thread-inspector-content-stack";
 import { threadRouteIsHydrating } from "./thread-route-hydration";
 import { ThreadHeader } from "./ThreadHeader";
+import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
+import { ThreadPager } from "../panels/ThreadPager";
+import { ThreadFileView } from "../files/ThreadFilesRouteScreen";
 
 interface ThreadInspectorSelection {
   readonly routeThreadIdentity: string | null;
@@ -110,6 +113,10 @@ function OpeningThreadLoadingScreen() {
 type ThreadRouteScreenRouteProps = StaticScreenProps<{
   readonly environmentId: string;
   readonly threadId: string;
+  /** Sidebar fork: a file tab to show in the thread pager, requested at `tabAt`. */
+  readonly tab?: string;
+  readonly line?: string;
+  readonly tabAt?: number;
 }>;
 
 interface ThreadRouteScreenProps extends ThreadRouteScreenRouteProps {
@@ -1027,7 +1034,7 @@ function ThreadRouteContent(
     </>
   );
 
-  return (
+  const chat = (
     <>
       {activeInspectorRenderer ? <InspectorPaneRoleActivation /> : null}
       <ThreadHeader
@@ -1045,8 +1052,43 @@ function ThreadRouteContent(
         onOpenFilesInspector={handleOpenFilesInspector}
         onReturnToThread={props.onReturnToThread}
       />
+      <ThreadTabStrip
+        environmentId={String(selectedThread.environmentId)}
+        threadId={String(selectedThread.id)}
+        activePath={null}
+      />
 
       {renderThreadRouteBody()}
     </>
+  );
+  if (Platform.OS !== "android" || fileInspector.supported) return chat;
+  const threadParams = {
+    environmentId: String(selectedThread.environmentId),
+    threadId: String(selectedThread.id),
+  };
+  return (
+    <ThreadPager
+      environmentId={selectedThread.environmentId}
+      threadId={threadParams.threadId}
+      cwd={selectedThreadCwd}
+      request={
+        params.tab !== undefined
+          ? { path: params.tab, line: params.line ?? null, at: params.tabAt ?? 0 }
+          : null
+      }
+      chat={chat}
+      renderFile={(path, line) => (
+        <ThreadFileView
+          embedded
+          route={{
+            params: {
+              ...threadParams,
+              path: path.split("/").filter(Boolean),
+              ...(line === null ? {} : { line }),
+            },
+          }}
+        />
+      )}
+    />
   );
 }

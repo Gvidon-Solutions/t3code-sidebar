@@ -144,12 +144,15 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
     rowsDecodeGeneration += 1
     val generation = rowsDecodeGeneration
     val prepareLayout = canvasView.prepareRows()
+    val measureCode = canvasView.codeWidthMeasurer()
     payloadDecodeExecutor.execute {
       val decodedRows = parseRows(value)
       val codeLayouts = prepareLayout(decodedRows)
+      val codeWidth = measureCode(decodedRows)
       post {
         if (generation != rowsDecodeGeneration) return@post
         canvasView.useCodeLayouts(codeLayouts)
+        canvasView.useMeasuredCodeWidth(codeWidth)
         rows = decodedRows
         lastVisibleFileId = null
         rebuildVisibleRows()
@@ -212,7 +215,9 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
         horizontalDragTarget = canvasView.horizontalPanTarget(event.y)
         lastTouchX = event.x
         lastTouchY = event.y
-        parent?.requestDisallowInterceptTouchEvent(true)
+        // The parent is claimed only once a drag axis is taken below: claiming it here
+        // would cancel gesture-handler pans around the view, such as the phone's
+        // thread-tab pager, before they could see the drag.
         return false
       }
       MotionEvent.ACTION_MOVE -> {
@@ -223,10 +228,13 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
             dragAxis = if (abs(deltaY) >= abs(deltaX)) {
               DragAxis.VERTICAL
             } else {
+              // A drag past the content's edge stays with the parent, so a pager
+              // around the view (the phone's thread tabs) can turn the page.
               horizontalDragTarget
-                ?.takeIf { canvasView.maxHorizontalOffset(it) > 0 }
+                ?.takeIf { canPanHorizontally(it, deltaX) }
                 ?.let { DragAxis.HORIZONTAL }
             }
+            if (dragAxis != null) parent?.requestDisallowInterceptTouchEvent(true)
           }
         }
         return dragAxis != null
@@ -234,6 +242,11 @@ class T3ReviewDiffView(context: Context, appContext: AppContext) : ExpoView(cont
       MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> return dragAxis != null
     }
     return false
+  }
+
+  private fun canPanHorizontally(target: HorizontalPanTarget, fingerDeltaX: Float): Boolean {
+    val offset = canvasView.horizontalOffset(target)
+    return if (fingerDeltaX > 0) offset > 0 else offset < canvasView.maxHorizontalOffset(target)
   }
 
   override fun dispatchTouchEvent(event: MotionEvent): Boolean {
@@ -757,6 +770,34 @@ private class DiffCanvasView(context: Context) : View(context) {
     drawing.codeLayouts = layouts
   }
 
+  // The widest code row and the font size it was measured at; 0 until rows arrive.
+  private var measuredCodeWidth = 0f
+  private var measuredCodeFontSizePx = 0f
+
+  fun codeWidthMeasurer(): (List<DiffRow>) -> Pair<Float, Float> {
+    val fontSizePx = style.codeFontSizePx
+    val measure = drawing.codeWidthMeasurer(style)
+    return { rows -> measure(rows) to fontSizePx }
+  }
+
+  fun useMeasuredCodeWidth(measured: Pair<Float, Float>) {
+    measuredCodeWidth = measured.first
+    measuredCodeFontSizePx = measured.second
+    setHorizontalOffset(horizontalOffset)
+    invalidate()
+  }
+
+  /** The content width, cut down to the longest code line once it is measured. */
+  private fun scrollableWidth(): Int {
+    if (measuredCodeWidth <= 0f || measuredCodeFontSizePx <= 0f) return contentWidthPx
+    // Bold and italic tokens run a little wider than the plain paint measured.
+    val codeWidth = measuredCodeWidth * style.codeFontSizePx / measuredCodeFontSizePx * 1.05f
+    val needed = ceil(
+      style.changeBarWidthPx + style.gutterWidthPx + style.codePaddingPx * 2f + codeWidth,
+    ).toInt()
+    return min(contentWidthPx, max(width, needed))
+  }
+
   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
     setMeasuredDimension(
       MeasureSpec.getSize(widthMeasureSpec),
@@ -835,8 +876,15 @@ private class DiffCanvasView(context: Context) : View(context) {
 
   fun horizontalOffset(): Int = horizontalOffset
 
+  fun horizontalOffset(target: HorizontalPanTarget): Int =
+    if (target.kind == HorizontalPanKind.FILE_HEADER_PATH) {
+      headerPathOffsetsByFileId[target.fileId] ?: 0
+    } else {
+      horizontalOffset
+    }
+
   fun maxHorizontalOffset(): Int =
-    if (codeWrap.enabled) 0 else max(0, contentWidthPx - width)
+    if (codeWrap.enabled) 0 else max(0, scrollableWidth() - width)
 
   fun maxHorizontalOffset(target: HorizontalPanTarget): Int =
     if (target.kind == HorizontalPanKind.FILE_HEADER_PATH) {
@@ -1284,7 +1332,7 @@ private class DiffCanvasView(context: Context) : View(context) {
     val maxOffset = maxHorizontalOffset()
     if (maxOffset <= 0 || width <= 0) return
     val trackWidth = width.toFloat()
-    val thumbWidth = max(24f * density, trackWidth * trackWidth / contentWidthPx)
+    val thumbWidth = max(24f * density, trackWidth * trackWidth / scrollableWidth())
     val thumbTravel = trackWidth - thumbWidth
     val left = thumbTravel * horizontalOffset / maxOffset
     fill(

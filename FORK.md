@@ -1,8 +1,9 @@
 # T3 Code Sidebar — fork notes and feature log
 
 This repository is a personal fork of [pingdotgg/t3code](https://github.com/pingdotgg/t3code),
-maintained alongside upstream. It adds a workspace sidebar and ships its own desktop builds
-("T3 Code Sidebar") that install next to upstream T3 Code. Everything else is upstream.
+maintained alongside upstream. It adds a workspace sidebar and thread tabs and ships its own
+desktop and Android builds ("T3 Code Sidebar") that install next to upstream T3 Code.
+Everything else is upstream.
 
 ## How the fork is kept
 
@@ -29,8 +30,26 @@ maintained alongside upstream. It adds a workspace sidebar and ships its own des
   picks which one shows. The fork reuses upstream's thread data, statuses, actions, menus,
   keybindings and project icons, and adds no server logic beyond one settings key. Projects,
   threads, providers and the server run upstream code unchanged.
-- **Not covered yet.** The mobile app (`apps/mobile`) shows upstream's UI and ignores
-  workspaces.
+- **Mobile.** The Android app is upstream's `apps/mobile` built as a fourth variant
+  (`APP_VARIANT=sidebar`) next to upstream's development/preview/production. Its fork
+  features live in `apps/mobile/src/features/{workspaces,tabs,panels}/`; workspace rules are shared
+  with web through `packages/client-runtime/src/state/sidebarWorkspaces.ts`. iOS is not built.
+
+## Identity (Android)
+
+|            | Upstream (production)  | Fork                                                    |
+| ---------- | ---------------------- | ------------------------------------------------------- |
+| App name   | T3 Code                | T3 Code Sidebar                                         |
+| Package    | upstream's store id    | `com.gvidon.t3codesidebar`                              |
+| URL scheme | `t3code://`            | `t3code-sidebar://`                                     |
+| Signing    | Play / EAS             | fork key (`T3_ANDROID_*` secrets in CI)                 |
+| Version    | store version          | `versionName` = release version, `versionCode` always 1 |
+| Updates    | Play Store, EAS Update | APKs on this fork's releases; EAS Update off            |
+
+The constant version code lets Android install any fork APK over any other, older ones
+included, keeping the app's data. Changed in `apps/mobile/app.config.ts`
+(`VARIANT_CONFIG.sidebar` and sidebar-only branches), `plugins/withAndroidReleaseSigning.cjs`,
+the linking prefix in `src/App.tsx` and `src/lib/appLinking.ts`.
 
 ## Identity (desktop)
 
@@ -56,12 +75,105 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   the CLI archive embedded as the WSL runtime → GitHub release `sidebar-v<version>` marked
   latest, with `latest.yml` / `latest-linux.yml`. Version is `<upstream version>-sidebar.<run>`;
   the core stays upstream's so version-skew checks against servers hold. Builds are unsigned.
+- **Android.** The same workflow's `android` job prebuilds the sidebar variant, builds a release
+  APK signed with the fork key and attaches `T3-Code-Sidebar-<version>.apk` to the release.
+  Local builds: source `~/.local/share/t3-ws/android-signing.env`, then
+  `APP_VARIANT=sidebar npx expo prebuild --platform android` and `./gradlew assembleRelease`.
+  E2E helpers for the emulator are in `scripts/sidebar-mobile-e2e/`.
 - **Self-hosted web.** `deploy/t3-ws/` builds a Docker image of `t3 serve` and runs it on the
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 
 ## Feature log
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
+
+### 2026-10-11 — Keyboard stays up after sending (phone)
+
+- **What.** Sending a message no longer closes the keyboard, so follow-ups are one tap away;
+  tap outside the composer to close it.
+- **Where.** One removed `blur()` in `handleSendMessage`, `ThreadDetailScreen.tsx`.
+
+### 2026-10-11 — Install any version on the phone
+
+- **What.** Settings › About › Version history on the Android app lists every fork release that
+  has an APK, marks the installed one, and installs any of them (older ones too) after a
+  confirm: the APK downloads and Android's installer opens. Connections and settings stay.
+- **How.** Lists GitHub releases of `extra.forkReleaseRepo` with an `.apk` asset and opens the
+  download with the existing attachment viewer (`application/vnd.android.package-archive`).
+  Works because every fork APK has version code 1 and the same signing key; the sidebar
+  variant also requests `REQUEST_INSTALL_PACKAGES`.
+- **Where.** `apps/mobile/src/features/settings/ForkVersionHistory.tsx`; seams: one line in
+  `SettingsAboutRouteScreen.tsx`, sidebar branches in `app.config.ts`.
+
+### 2026-10-11 — Thread tabs on the phone
+
+- **What.** Files opened from a thread (markdown, PDF, code) become tabs next to its chat, shown
+  as chips under the header. Tapping a chip switches; long-press closes. Each tab reopens in
+  the mode (preview / source) and at the scroll position it was left in, across app
+  restarts. Up to 8 tabs per thread; the least recently used closes first. PDFs preview in
+  the app on Android (pdf.js).
+- **How.** Tab state is a per-device preference (`threadTabs`, keyed by environment and
+  thread, 40 threads kept). Markdown and PDF store a scroll offset; source stores the first
+  visible row (native code view's `visible-range` event and `initialRowIndex`).
+- **Where.** `apps/mobile/src/lib/threadTabs.ts`, `apps/mobile/src/features/tabs/`,
+  `apps/mobile/src/features/files/WorkspaceFilePdfPreview.tsx`; seams: the tab strip in
+  `ThreadRouteScreen.tsx` and `ThreadFilesRouteScreen.tsx`, restore/report props in
+  `FileMarkdownPreview.tsx` and `SourceFileSurface.tsx`, `threadTabs` in
+  `persistence/mobile-preferences.ts`.
+
+### 2026-10-11 — Chat swipes on the phone
+
+- **What.** In a chat, the chat and its file tabs are full-screen pages in the order the tabs
+  were opened, and a horizontal swipe flips between them, following the finger, from the chat
+  and from any file. Swiping right on the chat is Back: Home slides in from underneath. Past
+  the last tab, a swipe left pulls in the Files panel: open tabs, files changed in the working
+  tree, All files and Git. Code without word wrap and a zoomed PDF pan until their edge, then
+  flip; vertical scrolling and zoom always stay with the file. Back walks the same
+  way (panel, tab, chat). Files opened from the chat or the file tree land in the pager too.
+- **How.** One pan on the thread screen with manual activation, so vertical scrolling and a
+  zoomed PDF keep their touches. The page track is as wide as all pages, because Android only
+  hands touches to native views (code, PDF) inside their parents' bounds. The native code view
+  leaves a horizontal drag to the pager once it is at its edge in that direction
+  (`T3ReviewDiffView.kt`). Only the pages next to the current one are mounted. A file
+  screen whose thread sits below it in the stack hands the file to that thread's pager
+  (`tab` route param) and pops; on Android it opens without an animation so the hand-off
+  doesn't show. Android phones only; tablets and iOS keep upstream's screens.
+- **Where.** `apps/mobile/src/features/panels/`; seams: the `ThreadPager` branch at the end of
+  `ThreadRouteScreen.tsx`, the `ThreadFileScreen` hand-off and `embedded` file view in
+  `ThreadFilesRouteScreen.tsx`, a nullable role in `useAdaptiveWorkspacePaneRole`, the
+  `ThreadFile` animation in `Stack.tsx`, the edge check in `T3ReviewDiffView.kt`, and two
+  exported status-label constants in `thread-list-v2-items.tsx`.
+
+### 2026-10-11 — Workspaces on the phone
+
+- **What.** With workspaces set up on a connected server, the Android Home looks like the
+  desktop sidebar: the workspace's tile and name in the toolbar, pinned threads, then project folders of
+  one-line threads (status glyph, title, time), each folder with a + for a new thread there,
+  "N settled" and "Show N more" under it, Quiet projects and Snoozed folded at the bottom,
+  workspace tiles along the bottom with a dot for threads that need you or are working.
+  Long-press a folder to move the project to another workspace; long-press or swipe a
+  thread for upstream's actions. Tap the workspace name to rename it in place; long-press it
+  or a tile for the desktop's workspace menu (icon, colour, order, default, delete); the +
+  tile adds a workspace. The New thread button floats above the tiles; the filter gives way
+  to them. Searching shows upstream's flat results.
+- **How.** Reads the same shared `sidebarWorkspaces` server setting as the desktop and uses
+  the same partition, sort and quiet rules (`workspaceNavigator.ts` mirrors
+  `WorkspaceSidebar.tsx`; workspace resolution is shared in client-runtime), so the phone
+  and desktop agree on what goes where. Thread rows are upstream's rows in a one-line mode,
+  so menus and swipes are unchanged; their swipe buttons drop the caption to fit the row. Moving a project and workspace edits write to every
+  server that has workspaces, through edit helpers shared with the desktop. The open workspace and folded sections are per-device
+  preferences. Without workspaces Home stays upstream's.
+- **Where.** `apps/mobile/src/features/workspaces/`,
+  `packages/client-runtime/src/state/sidebarWorkspaces.ts` (web's `workspaces.logic.ts`
+  re-exports it); seams: `HomeScreen.tsx` (project filter, rows, dock), the
+  `compact` prop of `ThreadListV2Row`, `iconOnlyActions` in `thread-swipe-actions.tsx`, the FAB lift in `AndroidHomeFab.android.tsx`, the
+  title and filter hide in `MaterialThreadListToolbar.tsx`, two preferences in `persistence/mobile-preferences.ts`.
+
+### 2026-10-11 — Android app "T3 Code Sidebar"
+
+- **What.** An APK of the mobile app with the fork's identity that installs next to upstream's
+  T3 Code and pairs with any T3 server, including t3-ws.
+- **How / Where.** See Identity (Android) and Releases above.
 
 ### 2026-10-11 — Install any version (rollback) from Settings
 

@@ -12,6 +12,7 @@ import { useWorkspaceState } from "../../state/workspace";
 import { MaterialFabScrollContext } from "./MaterialFabScrollContext";
 import { updateMaterialFabScroll } from "./material-fab-scroll";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
+import { useWorkspaceDockHeight } from "../workspaces/workspaceDockInset";
 
 export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidHomeFabLayout>) {
   const insets = useSafeAreaInsets();
@@ -20,6 +21,7 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
   const { state } = useWorkspaceState();
   const [expanded, setExpanded] = useState(true);
+  const dockHeight = useWorkspaceDockHeight();
   const scrollState = useRef({ anchor: 0, expanded: true });
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -36,6 +38,7 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   return (
     <View className="flex-1" onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}>
       <MaterialFabScrollContext value={onScroll}>{props.children}</MaterialFabScrollContext>
+      {/* Sidebar fork: the button floats above the workspace dock. */}
       {state.hasConnections && layoutWidth !== null ? (
         <MaterialNewThreadButton
           key={`${appearance.baseFontSize}:${fontScale}:${layoutWidth}`}
@@ -44,9 +47,12 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
           onPress={props.onStartNewTask}
           className="absolute right-5"
           style={{
-            bottom: props.sidebar
-              ? Math.max(insets.bottom, 12) + 6
-              : Math.max(insets.bottom, 16) + 16,
+            bottom:
+              dockHeight > 0
+                ? dockHeight + 16
+                : props.sidebar
+                  ? Math.max(insets.bottom, 12) + 6
+                  : Math.max(insets.bottom, 16) + 16,
           }}
         />
       ) : null}

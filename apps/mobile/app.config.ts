@@ -3,7 +3,8 @@ import type { ExpoConfig } from "expo/config";
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
-type AppVariant = "development" | "preview" | "production";
+// "sidebar" is the fork build: its own package, name and scheme, next to upstream's apps.
+type AppVariant = "development" | "preview" | "production" | "sidebar";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
@@ -12,7 +13,7 @@ const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   process.env.MOBILE_VERSION_POLICY ??
-  (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
+  (APP_VARIANT === "development" || APP_VARIANT === "sidebar" ? "appVersion" : "fingerprint");
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
@@ -96,6 +97,14 @@ const VARIANT_CONFIG = {
     relyingParty: "clerk.t3.codes",
     assets: RELEASE_ASSETS,
   },
+  sidebar: {
+    appName: "T3 Code Sidebar",
+    scheme: "t3code-sidebar",
+    iosBundleIdentifier: "com.gvidon.t3codesidebar",
+    androidPackage: "com.gvidon.t3codesidebar",
+    relyingParty: "clerk.t3.codes",
+    assets: PREVIEW_ASSETS,
+  },
 } as const;
 
 function resolveAppVariant(value: string | undefined): AppVariant {
@@ -103,6 +112,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
     case "development":
     case "preview":
     case "production":
+    case "sidebar":
       return value;
     default:
       return "production";
@@ -229,7 +239,9 @@ const config: ExpoConfig = {
   slug: "t3-code",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
-  version: "2.0.0",
+  // Sidebar builds carry the fork release version (set by CI).
+  version:
+    APP_VARIANT === "sidebar" ? (process.env.T3_SIDEBAR_VERSION ?? "0.0.0-sidebar.local") : "2.0.0",
   runtimeVersion: {
     // Development manifests resolve on every launch, so avoid fingerprint's
     // expensive native-project calculation there. Preview and production stay
@@ -240,7 +252,8 @@ const config: ExpoConfig = {
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
   updates: {
-    enabled: repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    // Upstream's OTA channel would replace the fork's JavaScript.
+    enabled: APP_VARIANT !== "sidebar" && repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
     url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
@@ -299,6 +312,11 @@ const config: ExpoConfig = {
   android: {
     icon: variant.assets.appIcon,
     package: variant.androidPackage,
+    // Sidebar builds share one version code so any fork APK, older ones included,
+    // installs over another and keeps its data (Settings › About › Version history).
+    ...(APP_VARIANT === "sidebar"
+      ? { versionCode: 1, permissions: ["android.permission.REQUEST_INSTALL_PACKAGES"] }
+      : {}),
     ...(repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE
       ? { googleServicesFile: repoEnv.T3CODE_ANDROID_GOOGLE_SERVICES_FILE }
       : {}),
@@ -466,10 +484,12 @@ const config: ExpoConfig = {
     "./plugins/withAndroidModernAlertDialog.cjs",
     "./plugins/withAndroidPredictiveBackCompat.cjs",
     "./plugins/withAndroidTabletOrientation.cjs",
+    ...(APP_VARIANT === "sidebar" ? ["./plugins/withAndroidReleaseSigning.cjs"] : []),
     ...(isIosPersonalTeamBuild ? ["./plugins/withoutIosPersonalTeamCapabilities.cjs"] : []),
   ],
   extra: {
     appVariant: APP_VARIANT,
+    forkReleaseRepo: APP_VARIANT === "sidebar" ? "Gvidon-Solutions/t3code-sidebar" : null,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,

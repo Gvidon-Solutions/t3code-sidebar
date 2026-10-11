@@ -199,6 +199,24 @@ internal class ReviewDiffCanvasDrawing(context: Context) {
     }
   }
 
+  /**
+   * Captures the code paint on the UI thread; a worker then measures the widest code row with
+   * it, so unwrapped code scrolls to its longest line instead of the fixed content width.
+   */
+  fun codeWidthMeasurer(style: DiffStyle): (List<DiffRow>) -> Float {
+    configureCodePaint(theme.text, 0, style)
+    val paint = TextPaint(textPaint)
+    return { rows ->
+      rows.fold(0f) { widest, row ->
+        when (row.kind) {
+          "file", "notice", "comment" -> widest
+          "hunk" -> max(widest, paint.measureText(row.text.ifEmpty { row.content }))
+          else -> max(widest, paint.measureText(row.content))
+        }
+      }
+    }
+  }
+
   fun codeWrapLayout(
     rows: List<DiffRow>,
     tokens: Map<String, List<DiffToken>>,

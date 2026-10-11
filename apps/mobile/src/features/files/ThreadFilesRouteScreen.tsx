@@ -1,8 +1,14 @@
 import { resolveFilesystemReadAccess } from "@t3tools/client-runtime/state/filesystem";
 import { environmentSession } from "../../state/session";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
-import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  CommonActions,
+  StackActions,
+  useNavigation,
+  useRoute,
+  type StaticScreenProps,
+} from "@react-navigation/native";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
@@ -55,6 +61,10 @@ import { WorkspaceFileImagePreview } from "./WorkspaceFileImagePreview";
 import { WorkspaceFilePreviewError } from "./WorkspaceFilePreviewError";
 import { WorkspaceFileVideoPreview } from "./WorkspaceFileVideoPreview";
 import { WorkspaceFileWebPreview } from "./WorkspaceFileWebPreview";
+import { WorkspaceFilePdfPreview } from "./WorkspaceFilePdfPreview";
+import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
+import { useThreadPager } from "../panels/threadPagerContext";
+import { useThreadTabPosition } from "../tabs/useThreadTabPosition";
 import {
   basename,
   fileHeaderSubtitle,
@@ -227,6 +237,9 @@ function FileContent(props: {
   readonly initialLine: number | null;
   readonly truncated: boolean;
   readonly onRefresh?: () => Promise<void> | void;
+  /** Thread tabs (sidebar fork): pixels in preview, first line in source. */
+  readonly restorePosition?: number;
+  readonly onPositionChange?: (position: number) => void;
 }) {
   // Reopening a mutable host file must not reuse a poster from an earlier visit.
   const thumbnailInstanceId = useId();
@@ -289,6 +302,16 @@ function FileContent(props: {
   }
 
   if (props.activeMode === "preview" && isBrowserFile) {
+    // Android's WebView cannot show a PDF on its own.
+    if (Platform.OS === "android" && isPdfFile({ name: props.relativePath })) {
+      return (
+        <WorkspaceFilePdfPreview
+          uri={props.previewUri}
+          restoreScrollY={props.restorePosition}
+          onScrollSettle={props.onPositionChange}
+        />
+      );
+    }
     return <WorkspaceFileWebPreview uri={props.previewUri} />;
   }
 
@@ -319,6 +342,8 @@ function FileContent(props: {
           relativePath={props.relativePath}
           threadId={props.threadId}
           onRefresh={props.onRefresh}
+          restoreScrollY={props.restorePosition}
+          onScrollSettle={props.onPositionChange}
         />
       ) : (
         <SourceFileSurface
@@ -327,6 +352,8 @@ function FileContent(props: {
           initialLine={props.initialLine}
           headerInsetTop={props.truncated ? 0 : undefined}
           onRefresh={props.onRefresh}
+          restoreRow={props.restorePosition}
+          onVisibleRowChange={props.onPositionChange}
         />
       )}
     </View>
@@ -587,9 +614,66 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
   return Platform.OS === "android" ? <View className="flex-1 bg-header">{content}</View> : content;
 }
 
+/**
+ * On an Android phone a file opened from its thread's chat, tree or panel
+ * joins that thread's pager (sidebar fork): it becomes the thread's active
+ * tab and the stack pops back to the thread, so the file swipes like the
+ * others. Without the thread below it, the file stays a screen of its own.
+ */
 export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
-  useAdaptiveWorkspacePaneRole("inspector");
   const navigation = useNavigation();
+  const { fileInspector } = useAdaptiveWorkspaceLayout();
+  const params = props.route.params;
+  const ownKey = useRoute().key;
+  const [threadBelow] = useState(() => {
+    if (Platform.OS !== "android" || fileInspector.supported || params.threadId === undefined) {
+      return null;
+    }
+    const routes = navigation.getState()?.routes ?? [];
+    const own = routes.findIndex((route) => route.key === ownKey);
+    for (let index = own - 1; index >= 0; index -= 1) {
+      const route = routes[index];
+      const routeParams = route?.params as
+        | { readonly environmentId?: unknown; readonly threadId?: unknown }
+        | undefined;
+      if (
+        route?.name === "Thread" &&
+        routeParams?.environmentId === params.environmentId &&
+        routeParams?.threadId === params.threadId
+      ) {
+        return { key: route.key, depth: own - index };
+      }
+    }
+    return null;
+  });
+  useLayoutEffect(() => {
+    if (threadBelow === null) return;
+    const path = normalizeRoutePath(params.path);
+    if (path === null) return;
+    navigation.dispatch({
+      ...CommonActions.setParams({
+        tab: path,
+        line: firstRouteParam(params.line) ?? undefined,
+        tabAt: Date.now(),
+      }),
+      source: threadBelow.key,
+    });
+    navigation.dispatch(StackActions.pop(threadBelow.depth));
+    // Runs once: the redirect is decided when the screen mounts.
+  }, []);
+  if (threadBelow !== null && normalizeRoutePath(params.path) !== null) {
+    return <View className="flex-1 bg-screen" />;
+  }
+  return <ThreadFileView {...props} />;
+}
+
+/** A file of a thread or draft; `embedded` when it is a page of the thread pager. */
+export function ThreadFileView(
+  props: ThreadFileRouteScreenProps & { readonly embedded?: boolean },
+) {
+  useAdaptiveWorkspacePaneRole(props.embedded ? null : "inspector");
+  const navigation = useNavigation();
+  const pager = useThreadPager();
   const { fileInspector } = useAdaptiveWorkspaceLayout();
   const { appearance, setCodeWordBreak } = useAppearancePreferences();
   const iconColor = useUniwindTheme()["--color-icon"];
@@ -619,10 +703,11 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
       isImageFile ||
       isVideoFile ||
       isAudioFile);
+  const tabPosition = useThreadTabPosition({ environmentId, threadId, relativePath });
   const activeMode =
     relativePath !== null && modeOverride?.path === relativePath
       ? modeOverride.mode
-      : defaultViewMode(relativePath);
+      : (tabPosition.mode ?? defaultViewMode(relativePath));
   const resolvedActiveMode =
     isVideoFile || isAudioFile ? "preview" : canPreview ? activeMode : "source";
   const assetPreviewPath =
@@ -780,7 +865,10 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             title: "Preview",
             icon: "eye",
             inline: true,
-            onPress: () => setModeOverride({ path: relativePath, mode: "preview" }),
+            onPress: () => {
+              setModeOverride({ path: relativePath, mode: "preview" });
+              tabPosition.setMode("preview");
+            },
           } as const)
         : null,
       canToggleMode
@@ -789,7 +877,10 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
             title: "Source",
             icon: "doc.text",
             inline: true,
-            onPress: () => setModeOverride({ path: relativePath, mode: "source" }),
+            onPress: () => {
+              setModeOverride({ path: relativePath, mode: "source" });
+              tabPosition.setMode("source");
+            },
           } as const)
         : null,
       // Only the source body wraps; a rendered preview lays itself out.
@@ -887,9 +978,14 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     mediaActions.actions,
     fileData?.contents,
     fileData?.truncated,
+    tabPosition.setMode,
   ]);
 
   const handleReturnToThread = useCallback(() => {
+    if (props.embedded && pager) {
+      pager.goTo(null);
+      return;
+    }
     if (environmentId !== null && threadId !== null) {
       navigation.dispatch(
         StackActions.replace("Thread", {
@@ -898,14 +994,18 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
         }),
       );
     }
-  }, [environmentId, navigation, threadId]);
+  }, [environmentId, navigation, pager, props.embedded, threadId]);
   const handleBack = useCallback(() => {
+    if (props.embedded) {
+      handleReturnToThread();
+      return;
+    }
     if (navigation.canGoBack()) {
       navigation.goBack();
       return;
     }
     handleReturnToThread();
-  }, [handleReturnToThread, navigation]);
+  }, [handleReturnToThread, navigation, props.embedded]);
 
   // A file opened from a project draft has no thread, and needs none: the thread only supplies
   // the workspace to read from and the target to navigate back to, both of which a draft names
@@ -949,6 +1049,13 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
         onReturnToThread={handleReturnToThread}
         actions={fileMenuActions}
       />
+      {threadId !== null ? (
+        <ThreadTabStrip
+          environmentId={String(environmentId)}
+          threadId={String(threadId)}
+          activePath={relativePath}
+        />
+      ) : null}
       <MaterialScreenContent>
         <FileContent
           key={previewKey}
@@ -968,6 +1075,8 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
           threadId={threadId}
           truncated={fileData?.truncated ?? false}
           onRefresh={() => fileQuery.refresh()}
+          restorePosition={tabPosition.restorePosition(resolvedActiveMode)}
+          onPositionChange={(position) => tabPosition.savePosition(resolvedActiveMode, position)}
         />
       </MaterialScreenContent>
       <FilePreviewModal

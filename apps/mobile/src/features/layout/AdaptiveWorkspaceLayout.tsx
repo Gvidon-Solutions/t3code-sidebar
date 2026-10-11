@@ -121,11 +121,15 @@ export function useAdaptiveWorkspaceLayout(): AdaptiveWorkspaceContextValue {
   return use(AdaptiveWorkspaceContext);
 }
 
-export function useAdaptiveWorkspacePaneRole(role: WorkspaceAuxiliaryPaneRole) {
+export function useAdaptiveWorkspacePaneRole(role: WorkspaceAuxiliaryPaneRole | null) {
   const { activateAuxiliaryPaneRole } = useAdaptiveWorkspaceLayout();
 
+  // Null for a screen embedded in another (the sidebar fork's thread pager).
   useFocusEffect(
-    useCallback(() => activateAuxiliaryPaneRole(role), [activateAuxiliaryPaneRole, role]),
+    useCallback(
+      () => (role === null ? undefined : activateAuxiliaryPaneRole(role)),
+      [activateAuxiliaryPaneRole, role],
+    ),
   );
 }
 

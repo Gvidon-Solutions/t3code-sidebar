@@ -40,7 +40,13 @@ void SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 const appLinking = {
-  prefixes: [Linking.createURL("/"), "t3code://", "t3code-dev://", "t3code-preview://"],
+  prefixes: [
+    Linking.createURL("/"),
+    "t3code://",
+    "t3code-dev://",
+    "t3code-preview://",
+    "t3code-sidebar://",
+  ],
   // Keep the compact thread list available beneath a directly opened thread.
   config: { initialRouteName: "Home" },
   filter: shouldHandleAppLink,

@@ -61,11 +61,9 @@ import {
   buildThreadListV2Items,
   getThreadListV2OrderedSection,
   buildThreadListV2ListItems,
-  threadListV2ListItemsAreEqual,
   threadListInboxReturns,
   THREAD_LIST_V2_SETTLED_INITIAL_COUNT,
   THREAD_LIST_V2_SETTLED_PAGE_COUNT,
-  type ThreadListV2ListItem,
 } from "../threads/threadListV2";
 import { useThreadListV2ShelfPreferences } from "../threads/use-thread-list-v2-shelf-preferences";
 import type { HomeListFilterMenuEnvironment } from "./home-list-filter-menu";
@@ -77,6 +75,18 @@ import {
 import { createSwipeRowActivation } from "./swipe-row-activation";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-swipe-actions";
 import { useMaterialFabScroll } from "./MaterialFabScrollContext";
+import { useWorkspaceHome } from "../workspaces/useWorkspaceHome";
+import {
+  WorkspaceDock,
+  WorkspaceFolderRow,
+  WorkspaceMoreRow,
+  WorkspaceSectionRow,
+} from "../workspaces/WorkspaceChrome";
+import { requestWorkspaceEdit, workspaceMenu } from "../workspaces/WorkspaceMenu";
+import {
+  workspaceHomeItemsAreEqual,
+  type WorkspaceHomeListItem,
+} from "../workspaces/workspaceNavigator";
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 
@@ -337,7 +347,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const listRef = useRef<LegendListRef>(null);
   const swipeRowActivation = useMemo(() => createSwipeRowActivation(), []);
   const activateVisibleRows = useCallback(
-    (rows: ReadonlyArray<ThreadListV2ListItem>) => {
+    (rows: ReadonlyArray<{ readonly key: string }>) => {
       const state = listRef.current?.getState();
       if (state === undefined || !(state.end >= 0)) return;
       swipeRowActivation.activate(
@@ -385,6 +395,7 @@ export function HomeScreen(props: HomeScreenProps) {
       }),
     [props.projectGroupingMode, props.projects, props.selectedEnvironmentId],
   );
+  const workspaceHome = useWorkspaceHome({ projectScopes, threads: props.threads });
   const hasSearchQuery = props.searchQuery.trim().length > 0;
   const projectByKey = useMemo(() => {
     const map = new Map<string, EnvironmentProject>();
@@ -414,16 +425,21 @@ export function HomeScreen(props: HomeScreenProps) {
       ),
     [projectScopes],
   );
+  // Workspace mode narrows the list to the open workspace's projects.
+  const v2ProjectRefs = useMemo(
+    () => workspaceHome.restrictProjectRefs(v2ScopedProjectGroup?.projectRefs ?? null),
+    [v2ScopedProjectGroup, workspaceHome.restrictProjectRefs],
+  );
   const v2ScopedProjectKeys = useMemo(
     () =>
-      v2ScopedProjectGroup === null
+      v2ProjectRefs === null
         ? null
         : new Set(
-            v2ScopedProjectGroup.projectRefs.map((projectRef) =>
+            v2ProjectRefs.map((projectRef) =>
               scopedProjectKey(projectRef.environmentId, projectRef.projectId),
             ),
           ),
-    [v2ScopedProjectGroup],
+    [v2ProjectRefs],
   );
   // Thread List v2 (beta): one flat list in creation order, no grouping.
   // Settled threads collapse into a recency tail below the card block.
@@ -580,7 +596,7 @@ export function HomeScreen(props: HomeScreenProps) {
       pendingOrder,
       threads: props.threads.filter((thread) => thread.archivedAt === null),
       environmentId: props.selectedEnvironmentId,
-      projectRefs: v2ScopedProjectGroup === null ? null : v2ScopedProjectGroup.projectRefs,
+      projectRefs: v2ProjectRefs,
       searchQuery: props.searchQuery,
       matchedThreadKeys,
       settlementEnvironmentIds,
@@ -612,7 +628,7 @@ export function HomeScreen(props: HomeScreenProps) {
     props.selectedEnvironmentId,
     props.threads,
     matchedThreadKeys,
-    v2ScopedProjectGroup,
+    v2ProjectRefs,
   ]);
   // Re-partition the moment the earliest snooze expires (clamped to the
   // signed-32-bit setTimeout range; far-future wakes re-arm at the clamp).
@@ -682,13 +698,71 @@ export function HomeScreen(props: HomeScreenProps) {
     ],
   );
 
+  const homeListItems = useMemo(
+    () =>
+      workspaceHome.buildItems({
+        base: threadListV2Items,
+        searching: hasSearchQuery,
+        sortOrder: props.projectSortOrder,
+        settlementEnvironmentIds,
+        snoozeEnvironmentIds,
+        queuedThreadKeys,
+        selectedThreadKey,
+        toRow: (item) => {
+          const [row] = buildThreadListV2ListItems({
+            items: [item],
+            pendingTasks: [],
+            snoozeLabelNow: `${nowMinute}:00.000Z`,
+            snoozeEnvironmentIds,
+            queuedThreadKeys,
+          });
+          return row as Extract<typeof row, { type: "v2-thread" }>;
+        },
+      }),
+    [
+      hasSearchQuery,
+      nowMinute,
+      props.projectSortOrder,
+      queuedThreadKeys,
+      selectedThreadKey,
+      settlementEnvironmentIds,
+      snoozeEnvironmentIds,
+      threadListV2Items,
+      workspaceHome.buildItems,
+    ],
+  );
+
   useThreadJumpShortcuts(threadListV2Items, props.onSelectThread);
   useEffect(() => {
-    if (swipeEnabled) activateVisibleRows(threadListV2Items);
-  }, [activateVisibleRows, swipeEnabled, threadListV2Items]);
+    if (swipeEnabled) activateVisibleRows(homeListItems);
+  }, [activateVisibleRows, swipeEnabled, homeListItems]);
 
   const renderV2Item = useCallback(
-    ({ item }: { readonly item: ThreadListV2ListItem }) => {
+    ({ item }: { readonly item: WorkspaceHomeListItem }) => {
+      if (item.type === "ws-folder") {
+        return workspaceHome.config && workspaceHome.currentWorkspaceId ? (
+          <WorkspaceFolderRow
+            item={item}
+            workspaces={workspaceHome.config.workspaces}
+            currentWorkspaceId={workspaceHome.currentWorkspaceId}
+            onToggle={workspaceHome.toggle}
+            onMove={workspaceHome.moveProject}
+            onNewThread={props.onNewThreadInProject}
+          />
+        ) : null;
+      }
+      if (item.type === "ws-section") {
+        return <WorkspaceSectionRow item={item} onToggle={workspaceHome.toggle} />;
+      }
+      if (item.type === "ws-more") {
+        return (
+          <WorkspaceMoreRow
+            item={item}
+            onToggle={workspaceHome.toggle}
+            onNewThread={props.onNewThreadInProject}
+          />
+        );
+      }
       if (item.type === "v2-pending") {
         const pendingScopeKey = scopedProjectKey(
           item.pendingTask.environmentId,
@@ -744,8 +818,10 @@ export function HomeScreen(props: HomeScreenProps) {
         );
       }
       const thread = item.item.thread;
+      const compact = item.type === "ws-thread";
       return (
         <ThreadListV2Row
+          compact={compact ? { projectLabel: item.projectLabel } : undefined}
           pane={primaryColumn ? "sidebar" : "screen"}
           selected={scopedThreadKey(thread.environmentId, thread.id) === selectedThreadKey}
           fullSwipeWidth={fullSwipeWidth}
@@ -792,9 +868,11 @@ export function HomeScreen(props: HomeScreenProps) {
           pinningSupported={pinningEnvironmentIds.has(thread.environmentId)}
           autoSettleOptOutSupported={autoSettleOptOutEnvironmentIds.has(thread.environmentId)}
           reorderSupported={
-            item.item.pinned
-              ? pinReorderEnvironmentIds.has(thread.environmentId)
-              : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
+            compact
+              ? false
+              : item.item.pinned
+                ? pinReorderEnvironmentIds.has(thread.environmentId)
+                : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
           }
           canMoveUp={item.canMoveUp}
           canMoveDown={item.canMoveDown}
@@ -853,9 +931,14 @@ export function HomeScreen(props: HomeScreenProps) {
       v2ProjectTitleByProjectKey,
       props.searchQuery,
       workingShelfEnabled,
+      workspaceHome.config,
+      workspaceHome.currentWorkspaceId,
+      workspaceHome.toggle,
+      workspaceHome.moveProject,
+      props.onNewThreadInProject,
     ],
   );
-  const v2KeyExtractor = useCallback((item: ThreadListV2ListItem) => item.key, []);
+  const v2KeyExtractor = useCallback((item: WorkspaceHomeListItem) => item.key, []);
 
   // FlatList/LegendList treat a changed extraData identity as "re-render every
   // visible row", so an inline object literal would invalidate all rows on
@@ -955,7 +1038,23 @@ export function HomeScreen(props: HomeScreenProps) {
 
   // Project scoping lives in the header filter menu (no inline chip row on
   // mobile — the menu is the one filter surface).
+  // Sidebar fork: the open workspace names itself in the toolbar, not over the list.
   const v2ListHeader = listHeader;
+  const workspaceConfig = workspaceHome.config;
+  const workspaceDock = workspaceConfig ? (
+    <WorkspaceDock
+      workspaces={workspaceConfig.workspaces}
+      currentWorkspaceId={workspaceHome.currentWorkspaceId}
+      activity={workspaceHome.activity}
+      onOpen={workspaceHome.openWorkspace}
+      menuFor={(workspace) => workspaceMenu(workspace, workspaceConfig, workspaceHome)}
+      onAdd={() => {
+        const id = workspaceHome.edit.add();
+        if (id !== null) requestWorkspaceEdit(id, "name");
+      }}
+      bottomInset={Platform.OS === "android" ? insets.bottom : 0}
+    />
+  ) : null;
 
   // Use the v2 project scope for its empty state. Snoozed threads need no
   // special empty state: their shelf header is a list row even while collapsed.
@@ -995,6 +1094,7 @@ export function HomeScreen(props: HomeScreenProps) {
         >
           {v2ListEmpty}
         </View>
+        {workspaceDock}
       </View>
     );
   }
@@ -1014,16 +1114,16 @@ export function HomeScreen(props: HomeScreenProps) {
         <SwipeableScrollGateProvider enabled={swipeEnabled} activation={swipeRowActivation}>
           <LegendList
             ref={listRef}
-            onLoad={() => activateVisibleRows(threadListV2Items)}
+            onLoad={() => activateVisibleRows(homeListItems)}
             onTouchStart={(event) => trackListTouches(event, true)}
             onTouchEnd={(event) => trackListTouches(event, false)}
             onTouchCancel={(event) => trackListTouches(event, false)}
             renderScrollComponent={Platform.OS === "ios" ? renderHomeScrollView : undefined}
-            data={threadListV2Items}
+            data={homeListItems}
             renderItem={renderV2Item}
             keyExtractor={v2KeyExtractor}
             getItemType={(item) => item.type}
-            itemsAreEqual={threadListV2ListItemsAreEqual}
+            itemsAreEqual={workspaceHomeItemsAreEqual}
             estimatedItemSize={ESTIMATED_THREAD_LIST_V2_ROW_HEIGHT}
             drawDistance={THREAD_LIST_V2_DRAW_DISTANCE}
             recycleItems
@@ -1051,13 +1151,15 @@ export function HomeScreen(props: HomeScreenProps) {
             contentContainerStyle={{
               paddingLeft: (contentSideInsets?.left ?? 0) + (primaryColumn ? 8 : 0),
               paddingRight: (contentSideInsets?.right ?? 0) + (primaryColumn ? 8 : 0),
-              paddingBottom:
-                Platform.OS === "ios"
+              paddingBottom: workspaceDock
+                ? 16
+                : Platform.OS === "ios"
                   ? iosBottomClearance
                   : Math.max(insets.bottom, 16) + (Platform.OS === "android" ? fabClearance : 88),
             }}
           />
         </SwipeableScrollGateProvider>
+        {workspaceDock}
       </View>
     </View>
   );

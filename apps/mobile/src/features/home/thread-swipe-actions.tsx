@@ -236,6 +236,8 @@ interface ThreadSwipeableProps {
   /** Uses action visuals that fit inside compact 44pt rows. The press target
    * still spans the row's full height and width. */
   readonly compactActions?: boolean;
+  /** Sidebar fork: circles without labels, for one-line rows too short for a caption. */
+  readonly iconOnlyActions?: boolean;
   readonly containerStyle?: StyleProp<ViewStyle>;
   /** Disables NEW swipe activations (e.g. while the list scrolls). */
   readonly enabled?: boolean;
@@ -476,7 +478,8 @@ function ThreadSwipeableRow(props: ThreadSwipeableProps) {
             >
               <ThreadSwipeActions
                 backgroundColor={props.backgroundColor}
-                compact={props.compactActions === true}
+                compact={props.compactActions === true || props.iconOnlyActions === true}
+                iconOnly={props.iconOnlyActions === true}
                 fullSwipeAction={fullSwipeAction}
                 fullSwipeThreshold={fullSwipeThreshold}
                 onFullSwipeArmedChange={handleFullSwipeArmedChange}
@@ -509,6 +512,7 @@ function SwipeActionButton(props: {
   readonly actionsWidth: number;
   readonly tone: "primary" | "secondary" | "danger";
   readonly compact: boolean;
+  readonly iconOnly: boolean;
   readonly entryRange: readonly [number, number];
   readonly fullSwipeThreshold: number;
   readonly icon: ComponentProps<typeof SymbolView>["name"];
@@ -656,16 +660,18 @@ function SwipeActionButton(props: {
           />
         </Animated.View>
       </View>
-      <Animated.View
-        style={[
-          { height: 14, justifyContent: "center", paddingTop: props.compact ? 0 : 2 },
-          labelStyle,
-        ]}
-      >
-        <Text className="text-3xs font-t3-medium text-foreground-muted" numberOfLines={1}>
-          {props.label}
-        </Text>
-      </Animated.View>
+      {props.iconOnly ? null : (
+        <Animated.View
+          style={[
+            { height: 14, justifyContent: "center", paddingTop: props.compact ? 0 : 2 },
+            labelStyle,
+          ]}
+        >
+          <Text className="text-3xs font-t3-medium text-foreground-muted" numberOfLines={1}>
+            {props.label}
+          </Text>
+        </Animated.View>
+      )}
     </Pressable>
   );
 
@@ -701,6 +707,7 @@ function SwipeActionButton(props: {
 export function ThreadSwipeActions(props: {
   readonly backgroundColor: ColorValue;
   readonly compact: boolean;
+  readonly iconOnly?: boolean;
   readonly fullSwipeAction?: "delete" | "primary";
   readonly fullSwipeThreshold: number;
   readonly onFullSwipeArmedChange: (armed: boolean) => void;
@@ -735,6 +742,7 @@ export function ThreadSwipeActions(props: {
         actionsWidth={actionsWidth}
         tone="primary"
         compact={props.compact}
+        iconOnly={props.iconOnly === true}
         entryRange={
           secondaryAction === null
             ? [8, ACTION_ITEM_WIDTH * 0.72]
@@ -753,6 +761,7 @@ export function ThreadSwipeActions(props: {
           actionsWidth={actionsWidth}
           tone={secondaryAction.tone}
           compact={props.compact}
+          iconOnly={props.iconOnly === true}
           entryRange={[8, ACTION_ITEM_WIDTH * 0.72]}
           fullSwipeThreshold={props.fullSwipeThreshold}
           icon={secondaryAction.icon}

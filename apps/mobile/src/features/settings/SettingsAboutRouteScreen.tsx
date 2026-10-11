@@ -12,6 +12,7 @@ import {
   registerHiddenUpdateTap,
   runAppUpdateCheck,
 } from "../updates/app-updates";
+import { ForkVersionHistorySection } from "./ForkVersionHistory";
 import { SettingsRow } from "./components/SettingsRow";
 import { SettingsSection } from "./components/SettingsSection";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -29,6 +30,7 @@ export function SettingsAboutRouteScreen() {
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
         <AppSettingsSection />
+        <ForkVersionHistorySection />
       </ScrollView>
     </SettingsScreen>
   );

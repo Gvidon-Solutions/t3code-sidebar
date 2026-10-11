@@ -762,7 +762,12 @@ const RootStackConfig = createWorkspaceStackNavigator({
     ThreadFile: createNativeStackScreen({
       screen: ThreadFileScreen,
       linking: `${THREAD_LINKING_PREFIX}/files/:path*`,
-      options: GLASS_HEADER_OPTIONS,
+      // Sidebar fork: on Android phones a file usually hands itself to its thread's pager
+      // right away, which must not show as a screen sliding in and out.
+      options:
+        Platform.OS === "android"
+          ? { ...GLASS_HEADER_OPTIONS, animation: "none" }
+          : GLASS_HEADER_OPTIONS,
     }),
     ThreadMcpApp: createNativeStackScreen({
       screen: McpAppFullscreenScreen,

@@ -20,6 +20,8 @@ import { WorkspaceConnectionTitle } from "./WorkspaceConnectionTitle";
 import { useWorkspaceState } from "../../state/workspace";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
 import { useMaterialToolbarLayout } from "../../components/useMaterialToolbarLayout";
+import { useWorkspaceDockHeight } from "../workspaces/workspaceDockInset";
+import { WorkspaceHeaderTitle } from "../workspaces/WorkspaceHeaderTitle";
 
 /** One toolbar height for the compact list and expanded sidebar, including search. */
 export function MaterialThreadListToolbar(props: {
@@ -38,6 +40,7 @@ export function MaterialThreadListToolbar(props: {
   const { fabSize } = useAndroidControlSizing();
   const { height: toolbarHeight, ...headerPadding } = useMaterialToolbarLayout();
   const { state } = useWorkspaceState();
+  const dockHeight = useWorkspaceDockHeight();
   const { onRequestVisibility, onSearchQueryChange } = props;
   const searchRef = useRef<TextInputInstance>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -105,7 +108,11 @@ export function MaterialThreadListToolbar(props: {
                 <WorkspaceConnectionTitle
                   grow
                   onPress={props.onOpenEnvironments}
-                  brand={<CompactBrandTitle allowFontScaling={false} />}
+                  brand={
+                    <WorkspaceHeaderTitle
+                      fallback={<CompactBrandTitle allowFontScaling={false} />}
+                    />
+                  }
                 />
               </View>
               <AndroidHeaderIconButton
@@ -122,8 +129,9 @@ export function MaterialThreadListToolbar(props: {
           )}
         </View>
       </View>
-      {/* Keep the filter above the New thread FAB at every text size. */}
-      {state.hasConnections ? (
+      {/* Keep the filter above the New thread FAB at every text size. Sidebar
+          fork: workspaces replace the filter, so it hides with the dock. */}
+      {state.hasConnections && dockHeight === 0 ? (
         <View
           className="absolute right-5 z-[5]"
           style={{

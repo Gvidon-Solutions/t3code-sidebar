@@ -1033,7 +1033,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
           queuedMessageCount: props.selectedThreadQueueCount,
         }),
       );
-      composerEditorRef.current?.blur();
+      // Sidebar fork: the keyboard stays up after sending, for quick follow-ups.
       return messageId;
     },
     [

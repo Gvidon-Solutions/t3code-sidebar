@@ -53,6 +53,7 @@ import {
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { shouldRecedeThreadRow } from "./thread-row-emphasis";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
+import { WorkspaceThreadLine } from "../workspaces/WorkspaceThreadLine";
 
 /**
  * Thread List v2 renders one flat native list: rich edge-to-edge rows for
@@ -71,7 +72,7 @@ interface StatusLabel {
   readonly className: string;
   readonly iconTintClassName: string;
 }
-const STATUS_LABEL_BY_STATUS: Partial<Record<ThreadListV2Status, StatusLabel>> = {
+export const STATUS_LABEL_BY_STATUS: Partial<Record<ThreadListV2Status, StatusLabel>> = {
   approval: {
     label: "Approval",
     icon: "exclamationmark.shield",
@@ -109,7 +110,7 @@ const STATUS_LABEL_BY_STATUS: Partial<Record<ThreadListV2Status, StatusLabel>> =
     iconTintClassName: "accent-warning-foreground",
   },
 };
-const DONE_STATUS_LABEL: StatusLabel = {
+export const DONE_STATUS_LABEL: StatusLabel = {
   label: "Done",
   icon: "checkmark.circle",
   className: "text-adaptive-emerald-700-300",
@@ -496,6 +497,8 @@ export const ThreadListV2PendingRow = memo(function ThreadListV2PendingRow(props
 export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
   readonly variant: "card" | "slim";
+  /** Sidebar fork: draw as one line in a workspace folder (same menu and swipes). */
+  readonly compact?: { readonly projectLabel: string | null };
   /** A message for this thread is waiting in the outbox. */
   readonly hasQueuedMessages?: boolean;
   /** Snoozed-shelf row: shows its wake time and offers Wake. */
@@ -1190,7 +1193,36 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   );
 
   const rowContent = (close: () => void) =>
-    variant === "card" ? (
+    props.compact ? (
+      <RowPressable
+        key={`${thread.environmentId}:${thread.id}`}
+        interactionClassName={rowAppearance.interactionClassName}
+        interactionOpacity={rowAppearance.interactionOpacity}
+        accessibilityHint={swipeAccessibilityHint}
+        accessibilityLabel={statusLabel ? `${thread.title}, ${statusLabel.label}` : thread.title}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        className={rowAppearance.className}
+        onPress={() => {
+          close();
+          onSelectThread(thread);
+        }}
+        style={rowAppearance.style}
+      >
+        <WorkspaceThreadLine
+          thread={thread}
+          status={statusLabel ?? null}
+          unread={isUnread}
+          settled={variant === "slim"}
+          showPin={thread.pinnedAt != null && !pinnedRow}
+          projectLabel={props.compact.projectLabel}
+          timeLabel={props.timeLabel}
+          working={status === "working"}
+          hasQueuedMessages={props.hasQueuedMessages === true}
+          selected={selected}
+        />
+      </RowPressable>
+    ) : variant === "card" ? (
       <RowPressable
         key={`${thread.environmentId}:${thread.id}`}
         interactionClassName={rowAppearance.interactionClassName}
@@ -1313,6 +1345,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         threadKey={`${thread.environmentId}:${thread.id}`}
         backgroundColor={rowAppearance.swipeBackgroundColor}
         compactActions={variant === "slim"}
+        iconOnlyActions={props.compact !== undefined}
         containerStyle={rowAppearance.swipeContainerStyle}
         enableTrackpadSwipe
         // Full swipe commits the advertised lifecycle action (Settle /

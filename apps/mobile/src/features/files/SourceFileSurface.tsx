@@ -49,6 +49,9 @@ interface SourceFileSurfaceProps {
   readonly selectable?: boolean;
   /** Enables native pull-to-refresh on the source surface. */
   readonly onRefresh?: () => Promise<void> | void;
+  /** Thread tabs (sidebar fork): first line to show again, and where reading is now. */
+  readonly restoreRow?: number | null;
+  readonly onVisibleRowChange?: (row: number) => void;
 }
 
 type SourceHighlightStatus = "highlighting" | "ready" | "error";
@@ -198,6 +201,8 @@ function NativeSourceFileSurface(
   const { width: viewportWidth } = useWindowDimensions();
   const { rowsJson, status, targetIndex, tokens } = useSourceFileModel(props);
   const { isPullRefreshing, handlePullToRefresh } = useSourceFileRefresh(onRefresh);
+  // Read once: a changed initial row would scroll the canvas again on every save.
+  const [restoreRow] = useState(props.restoreRow ?? null);
   const tokensJson = useMemo(() => JSON.stringify(buildNativeSourceTokens(tokens)), [tokens]);
   const selectedRowIdsJson = useMemo(
     () => JSON.stringify(targetIndex === null ? [] : [nativeSourceRowId(targetIndex)]),
@@ -224,7 +229,17 @@ function NativeSourceFileSurface(
         contentWidth={contentWidth}
         contentInsetTop={props.embedded ? 0 : (props.headerInsetTop ?? safeArea.top)}
         contentInsetBottom={props.embedded ? 0 : safeArea.bottom + 8}
-        initialRowIndex={targetIndex ?? -1}
+        initialRowIndex={targetIndex ?? restoreRow ?? -1}
+        onDebug={
+          props.onVisibleRowChange
+            ? (event) => {
+                const { message, firstRowIndex } = event.nativeEvent;
+                if (message === "visible-range" && typeof firstRowIndex === "number") {
+                  props.onVisibleRowChange?.(firstRowIndex);
+                }
+              }
+            : undefined
+        }
         rowHeight={nativeSourceStyle.rowHeight ?? codeSurface.rowHeight}
         rowsJson={rowsJson}
         selectedRowIdsJson={selectedRowIdsJson}
@@ -266,6 +281,31 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
     });
     return () => cancelAnimationFrame(frame);
   }, [props.path, targetIndex]);
+
+  // A reopened tab returns to the line it was left at (only when no line was asked for).
+  // Read once: later saves of this same view must not scroll it again.
+  const restoreRowRef = useRef(targetIndex === null ? (props.restoreRow ?? null) : null);
+  useEffect(() => {
+    const restoreRow = restoreRowRef.current;
+    if (restoreRow === null || restoreRow <= 0 || lines.length === 0) return;
+    restoreRowRef.current = null;
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({
+        index: Math.min(restoreRow, lines.length - 1),
+        animated: false,
+        viewPosition: 0,
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [lines.length]);
+  const onVisibleRowChange = props.onVisibleRowChange;
+  const handleViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ReadonlyArray<{ readonly index?: number | null }> }) => {
+      const first = viewableItems[0]?.index;
+      if (typeof first === "number") onVisibleRowChange?.(first);
+    },
+    [onVisibleRowChange],
+  );
 
   const renderLine = useCallback(
     ({ item, index }: { item: string; index: number }) => (
@@ -340,6 +380,13 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
       data={lines}
       keyExtractor={(_line, index) => String(index)}
       initialNumToRender={80}
+      onViewableItemsChanged={onVisibleRowChange ? handleViewableItemsChanged : undefined}
+      onScrollToIndexFailed={(info) =>
+        listRef.current?.scrollToOffset({
+          offset: info.averageItemLength * info.index,
+          animated: false,
+        })
+      }
       maxToRenderPerBatch={80}
       windowSize={12}
       {...(codeWordBreak

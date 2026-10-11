@@ -117,9 +117,10 @@ import { useWorkspaceViewStore } from "./workspaceViewStore";
 import {
   effectiveDefaultWorkspaceId,
   EMPTY_WORKSPACE_ACTIVITY,
+  addWorkspace,
+  deleteWorkspace,
   isProjectQuiet,
   isThreadUnread,
-  makeWorkspaceId,
   needsAttention,
   normalizeWorkspaceLabel,
   reorderWorkspaces,
@@ -129,6 +130,7 @@ import {
   WORKSPACE_COLORS,
   workspaceColor,
   WORKSPACE_GLYPH_PREFIX,
+  updateWorkspace,
 } from "./workspaces.logic";
 
 const FOLDER_PREVIEW_COUNT = 8;
@@ -559,17 +561,10 @@ export default function WorkspaceSidebar() {
   // ── Workspace edits ───────────────────────────────────────────────────
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceTitleEditing>(null);
   const createWorkspace = useCallback(() => {
-    const current = configRef.current;
-    const taken = new Set(current.workspaces.map((workspace) => workspace.id));
-    const name = `Workspace ${current.workspaces.length + 1}`;
-    const id = makeWorkspaceId(name, taken);
-    const usedColors = new Set(current.workspaces.map((workspace) => workspaceColor(workspace)));
-    const color =
-      WORKSPACE_COLORS.find((candidate) => !usedColors.has(candidate)) ?? WORKSPACE_COLORS[0];
-    writeConfig((config) => ({
-      ...config,
-      workspaces: [...config.workspaces, { id, name, color }],
-    }));
+    const added = addWorkspace(configRef.current).config.workspaces;
+    const workspace = added[added.length - 1]!;
+    const { id } = workspace;
+    writeConfig((config) => ({ ...config, workspaces: [...config.workspaces, workspace] }));
     view.setActiveWorkspace(id);
     setEditingWorkspace("name");
   }, [view, writeConfig]);
@@ -578,26 +573,14 @@ export default function WorkspaceSidebar() {
       setEditingWorkspace(null);
       const trimmed = name?.trim();
       if (!trimmed) return;
-      writeConfig((config) => ({
-        ...config,
-        workspaces: config.workspaces.map((workspace) =>
-          workspace.id === workspaceId ? { ...workspace, name: trimmed } : workspace,
-        ),
-      }));
+      writeConfig((config) => updateWorkspace(config, workspaceId, { name: trimmed }));
     },
     [writeConfig],
   );
   /** `undefined` resets the tile to the name's first letter. */
   const setWorkspaceIcon = useCallback(
     (workspaceId: string, icon: string | undefined) => {
-      writeConfig((config) => ({
-        ...config,
-        workspaces: config.workspaces.map((workspace) => {
-          if (workspace.id !== workspaceId) return workspace;
-          const { icon: _previous, ...rest } = workspace;
-          return icon === undefined ? rest : { ...rest, icon };
-        }),
-      }));
+      writeConfig((config) => updateWorkspace(config, workspaceId, { icon: icon ?? null }));
     },
     [writeConfig],
   );
@@ -714,12 +697,7 @@ export default function WorkspaceSidebar() {
         setWorkspaceIcon(workspaceId, undefined);
       } else if (clicked.startsWith("color:")) {
         const color = clicked.slice("color:".length);
-        writeConfig((config) => ({
-          ...config,
-          workspaces: config.workspaces.map((entry) =>
-            entry.id === workspaceId ? { ...entry, color } : entry,
-          ),
-        }));
+        writeConfig((config) => updateWorkspace(config, workspaceId, { color }));
       } else if (clicked === "move-left") {
         reorderWorkspace(workspaceId, index - 1);
       } else if (clicked === "move-right") {
@@ -731,20 +709,7 @@ export default function WorkspaceSidebar() {
           `Delete workspace "${workspace.name}"? Its projects move to the default workspace; no threads are deleted.`,
         );
         if (!confirmed) return;
-        writeConfig((config) => {
-          // The default can't be deleted, so pinning it keeps it put.
-          const defaultWorkspace = effectiveDefaultWorkspaceId(config);
-          if (defaultWorkspace === workspaceId) return config;
-          return {
-            ...config,
-            workspaces: config.workspaces.filter((entry) => entry.id !== workspaceId),
-            assignments: Object.fromEntries(
-              Object.entries(config.assignments).filter(([, target]) => target !== workspaceId),
-            ),
-            rules: config.rules.filter((rule) => rule.workspace !== workspaceId),
-            defaultWorkspace,
-          };
-        });
+        writeConfig((config) => deleteWorkspace(config, workspaceId));
         if (activeWorkspaceId === workspaceId) view.setActiveWorkspace(null);
       }
     },

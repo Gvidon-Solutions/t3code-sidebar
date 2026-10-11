@@ -1,7 +1,7 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { resolveMediaSource } from "@t3tools/client-runtime/media-source";
 import { getBrowseDirectoryPath } from "@t3tools/client-runtime/state/projects";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type ComponentRef } from "react";
 import {
   Markdown,
   type CustomRenderers,
@@ -198,8 +198,22 @@ export function FileMarkdownPreview(props: {
   /** Absent for a file opened from a project draft, which has no thread yet. */
   readonly threadId: ThreadId | null;
   readonly onRefresh?: () => Promise<void> | void;
+  /** Thread tabs (sidebar fork): offset to scroll back to, and where reading stopped. */
+  readonly restoreScrollY?: number;
+  readonly onScrollSettle?: (y: number) => void;
 }) {
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  // Read once: later saves of this same view must not scroll it again.
+  const restoreScrollYRef = useRef(props.restoreScrollY ?? 0);
+  const handleContentSizeChange = (_width: number, height: number) => {
+    const y = restoreScrollYRef.current;
+    if (y <= 0 || height < y) return;
+    restoreScrollYRef.current = 0;
+    scrollRef.current?.scrollTo({ y, animated: false });
+  };
+  const reportScroll = (event: { nativeEvent: { contentOffset: { y: number } } }) =>
+    props.onScrollSettle?.(event.nativeEvent.contentOffset.y);
   const handlePullToRefresh = useCallback(async () => {
     if (!props.onRefresh) {
       return;
@@ -252,8 +266,12 @@ export function FileMarkdownPreview(props: {
 
   return (
     <ScrollView
+      ref={scrollRef}
       className="flex-1 bg-sheet"
       contentContainerStyle={{ padding: 18 }}
+      onContentSizeChange={handleContentSizeChange}
+      onScrollEndDrag={props.onScrollSettle ? reportScroll : undefined}
+      onMomentumScrollEnd={props.onScrollSettle ? reportScroll : undefined}
       refreshControl={
         props.onRefresh ? (
           <RefreshControl

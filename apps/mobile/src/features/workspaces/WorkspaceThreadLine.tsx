@@ -1,0 +1,66 @@
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { View } from "react-native";
+
+import { SymbolView, type AppSymbolName } from "../../components/AppSymbol";
+import { AppText as Text } from "../../components/AppText";
+import { cn } from "../../lib/cn";
+import { QueuedMessageIcon } from "../threads/queued-message-icon";
+
+/**
+ * A thread as one line inside a workspace folder, like the desktop sidebar:
+ * status glyph, title (with the project for pinned and snoozed rows), time.
+ * The row around it (press, long-press menu, swipes) is upstream's.
+ */
+export function WorkspaceThreadLine(props: {
+  readonly thread: EnvironmentThreadShell;
+  readonly status: { readonly icon: AppSymbolName; readonly iconTintClassName: string } | null;
+  readonly unread: boolean;
+  /** Settled history recedes. */
+  readonly settled: boolean;
+  /** Pinned threads outside the Pinned section keep a pin mark. */
+  readonly showPin: boolean;
+  readonly projectLabel: string | null;
+  readonly timeLabel: string;
+  readonly working: boolean;
+  readonly hasQueuedMessages: boolean;
+  readonly selected: boolean;
+}) {
+  return (
+    <View className="min-h-[40px] flex-row items-center gap-2.5 py-2 pl-7 pr-5">
+      <View className="w-4 items-center">
+        {props.status ? (
+          <SymbolView
+            name={props.status.icon}
+            size={14}
+            tintColorClassName={props.status.iconTintClassName}
+          />
+        ) : null}
+      </View>
+      <Text
+        className={cn(
+          "min-w-0 flex-1 text-[15px]",
+          props.settled && !props.selected ? "text-foreground-tertiary" : "text-foreground",
+          props.unread && "font-t3-medium",
+        )}
+        numberOfLines={1}
+      >
+        {props.projectLabel ? (
+          <Text className="text-[15px] text-foreground-tertiary">{props.projectLabel} </Text>
+        ) : null}
+        {props.thread.title}
+      </Text>
+      {props.hasQueuedMessages ? <QueuedMessageIcon selected={props.selected} /> : null}
+      {props.showPin ? (
+        <SymbolView name="pin" size={11} tintColorClassName="accent-foreground-muted" />
+      ) : null}
+      <Text
+        className={cn(
+          "text-xs tabular-nums",
+          props.working ? "text-adaptive-sky-600-400" : "text-foreground-tertiary",
+        )}
+      >
+        {props.timeLabel}
+      </Text>
+    </View>
+  );
+}

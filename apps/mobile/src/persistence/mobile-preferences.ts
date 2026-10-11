@@ -10,6 +10,7 @@ import type { ComposerEnterBehavior } from "../lib/composerEnterBehavior";
 import type { FollowUpBehavior } from "../lib/followUpBehavior";
 import { isMicrophoneKind, type MicrophoneEntry } from "../lib/microphonePriority";
 import { MOBILE_THEME_IDS, type MobileThemeId, type MobileThemeMode } from "../lib/mobileTheme";
+import { sanitizeThreadTabs, type ThreadTabsByThread } from "../lib/threadTabs";
 import * as MobileDatabase from "./mobile-database";
 import * as MobileSecureStorage from "./mobile-secure-storage";
 import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-storage";
@@ -55,6 +56,11 @@ export interface Preferences {
   readonly threadListSettledShelfExpanded?: boolean;
   readonly threadListSnoozedShelfExpanded?: boolean;
   readonly threadListWorkingShelfExpanded?: boolean;
+  /** Sidebar fork: the workspace open on this device, and folders/sections flipped from their default. */
+  readonly sidebarWorkspaceId?: string;
+  readonly workspaceToggles?: readonly string[];
+  /** Sidebar fork: open file tabs per thread (`environmentId:threadId`). */
+  readonly threadTabs?: ThreadTabsByThread;
 }
 
 export class MobilePreferencesLoadError extends Schema.TaggedError<MobilePreferencesLoadError>()(
@@ -119,6 +125,9 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListSettledShelfExpanded?: boolean;
     threadListSnoozedShelfExpanded?: boolean;
     threadListWorkingShelfExpanded?: boolean;
+    sidebarWorkspaceId?: string;
+    workspaceToggles?: readonly string[];
+    threadTabs?: ThreadTabsByThread;
   } = {};
 
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
@@ -170,6 +179,16 @@ function sanitizePreferences(parsed: Preferences): Preferences {
       (key): key is string => typeof key === "string",
     );
   }
+  if (typeof parsed.sidebarWorkspaceId === "string") {
+    preferences.sidebarWorkspaceId = parsed.sidebarWorkspaceId;
+  }
+  if (Array.isArray(parsed.workspaceToggles)) {
+    preferences.workspaceToggles = parsed.workspaceToggles.filter(
+      (key): key is string => typeof key === "string",
+    );
+  }
+  const threadTabs = sanitizeThreadTabs(parsed.threadTabs);
+  if (threadTabs) preferences.threadTabs = threadTabs;
   if (parsed.composerEnterBehavior === "send" || parsed.composerEnterBehavior === "newline") {
     preferences.composerEnterBehavior = parsed.composerEnterBehavior;
   }
