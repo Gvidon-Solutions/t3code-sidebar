@@ -6,6 +6,7 @@ import {
   hasUnseenCompletion,
   isSidebarThreadWorking,
   resolveSidebarThreadStatus,
+  resolveThreadLastVisitedAt,
 } from "../Sidebar.logic";
 
 export const WORKSPACE_COLORS = [
@@ -158,8 +159,8 @@ function timestampMs(value: string | null | undefined): number {
 export function threadActivityMs(thread: SidebarThreadSummary): number {
   let latest = Number.NEGATIVE_INFINITY;
   for (const value of [
-    thread.latestTurn?.completedAt,
-    thread.latestTurn?.startedAt,
+    thread.latestRun?.completedAt,
+    thread.latestRun?.startedAt,
     thread.latestUserMessageAt,
     thread.createdAt,
   ]) {
@@ -171,7 +172,7 @@ export function threadActivityMs(thread: SidebarThreadSummary): number {
 
 export function needsAttention(thread: SidebarThreadSummary): boolean {
   const status = resolveSidebarThreadStatus(thread);
-  return status === "approval" || status === "input" || status === "failed";
+  return status === "approval" || status === "input" || status === "failed" || status === "limited";
 }
 
 /**
@@ -222,18 +223,17 @@ export const EMPTY_WORKSPACE_ACTIVITY: WorkspaceActivity = {
 };
 
 /**
- * Done-but-unread: the latest turn finished after this device last looked.
- * A thread this device never opened counts from `seenBaselineAt` instead.
+ * Done-but-unread: the latest run finished after the last visit (the server's
+ * watermark, or this device's for servers without one). A thread never visited
+ * counts from `seenBaselineAt`, when this device started using the sidebar.
  */
 export function isThreadUnread(
   thread: SidebarThreadSummary,
-  lastVisitedAt: string | undefined,
+  localLastVisitedAt: string | undefined,
   seenBaselineAt: string | null,
 ): boolean {
-  return hasUnseenCompletion({
-    ...thread,
-    lastVisitedAt: lastVisitedAt ?? seenBaselineAt ?? undefined,
-  });
+  const visited = resolveThreadLastVisitedAt(thread.lastVisitedAt, localLastVisitedAt);
+  return hasUnseenCompletion({ ...thread, lastVisitedAt: visited ?? seenBaselineAt ?? undefined });
 }
 
 export function summarizeWorkspaceActivity(
@@ -247,8 +247,8 @@ export function summarizeWorkspaceActivity(
   for (const thread of threads) {
     if (thread.archivedAt !== null) continue;
     const status = resolveSidebarThreadStatus(thread);
-    if (status === "failed") failed += 1;
-    if (status === "approval" || status === "input" || status === "failed") attention += 1;
+    if (status === "failed" || status === "limited") failed += 1;
+    if (needsAttention(thread)) attention += 1;
     else if (status === "working") working += 1;
     else if (isUnread(thread)) {
       unread += 1;

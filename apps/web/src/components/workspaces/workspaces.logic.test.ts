@@ -45,13 +45,13 @@ function makeThread(overrides: Partial<SidebarThreadSummary> = {}): SidebarThrea
     branch: null,
     worktreePath: null,
     pullRequests: [],
-    latestTurn: null,
+    latestRun: null,
     createdAt: "2026-10-01T10:00:00.000Z",
     updatedAt: "2026-10-01T10:00:00.000Z",
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
-    session: null,
+    runtime: null,
     latestUserMessageAt: null,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
@@ -204,14 +204,14 @@ describe("workspace tile marks", () => {
 
 describe("isThreadUnread", () => {
   const done = makeThread({
-    latestTurn: {
-      turnId: "turn-1",
-      state: "completed",
+    latestRun: {
+      runId: "run-1" as never,
+      status: "completed",
       requestedAt: "2026-10-10T10:00:00.000Z",
       startedAt: "2026-10-10T10:00:00.000Z",
       completedAt: "2026-10-10T11:00:00.000Z",
       assistantMessageId: null,
-    } as SidebarThreadSummary["latestTurn"],
+    } as SidebarThreadSummary["latestRun"],
   });
 
   it("counts a never-opened thread from the device baseline", () => {

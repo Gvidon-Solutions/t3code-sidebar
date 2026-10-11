@@ -17,9 +17,9 @@ maintained alongside upstream. It adds a workspace sidebar and ships its own des
 
 ## Relation to upstream
 
-- **Base.** The fork is upstream at `6c8fed35dd` (2026-10-02) plus the fork's own commits.
-  On 2026-10-11 upstream `main` was 748 commits ahead; syncing is a merge into `ws`. The
-  last upstream release at that point was v0.0.45, while fork builds report 0.0.44.
+- **Base.** Last synced with upstream `main` at `18656a3402` on 2026-10-11 (merge into `ws`;
+  the previous base, `6c8fed35dd` from 2026-10-02, was 748 commits behind). Fork builds report
+  upstream's version plus `-sidebar.<run>`.
 - **Footprint in upstream files.** Small, about 16 files and 70 lines: the settings schema
   key, the shared-settings list, the sidebar switch in `AppSidebarLayout.tsx`, one Settings
   row, desktop identity and WSL paths, and the artifact build script. Everything else is in
@@ -43,17 +43,18 @@ maintained alongside upstream. It adds a workspace sidebar and ships its own des
 | `t3code://` handler      | registered           | not registered (left to upstream) |
 | Updates                  | upstream releases    | this fork's GitHub releases       |
 
-Changed in `apps/desktop/src/app/{DesktopEnvironment,DesktopStatePaths,DesktopEarlyElectronStartup,DesktopApp}.ts`,
+Changed in `apps/desktop/src/app/{DesktopEnvironment,DesktopStatePaths,DesktopEarlyElectronStartup,DesktopApp,DesktopUserData,DesktopLegacyLocalStorage}.ts`,
 `apps/desktop/src/backend/DesktopBackendConfiguration.ts` (WSL `t3Home`),
 `apps/desktop/src/wsl/DesktopWslEnvironment.ts` (WSL runtime dir), `apps/desktop/package.json`
-and `scripts/build-desktop-artifact.ts` (app id, artifact names, no URL schemes).
+and `scripts/build-desktop-artifact.ts` (app id, artifact and `.deb` package names, no URL
+schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Releases and deployment
 
 - **Desktop.** `.github/workflows/sidebar-desktop.yml` runs on every push to `ws` (docs and
   `deploy/` excluded): JS bundle → Linux AppImage/deb + Linux CLI archive → Windows NSIS with
   the CLI archive embedded as the WSL runtime → GitHub release `sidebar-v<version>` marked
-  latest, with `latest.yml` / `latest-linux.yml`. Version is `0.0.44-sidebar.<run number>`;
+  latest, with `latest.yml` / `latest-linux.yml`. Version is `<upstream version>-sidebar.<run>`;
   the core stays upstream's so version-skew checks against servers hold. Builds are unsigned.
 - **Self-hosted web.** `deploy/t3-ws/` builds a Docker image of `t3 serve` and runs it on the
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.

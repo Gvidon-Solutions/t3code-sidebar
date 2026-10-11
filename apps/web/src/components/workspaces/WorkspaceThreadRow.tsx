@@ -6,7 +6,8 @@ import {
   CircleAlertIcon,
   CircleCheckIcon,
   CircleDashedIcon,
-  EyeIcon,
+  GaugeIcon,
+  HourglassIcon,
   MessageCircleQuestionIcon,
   PinIcon,
   PinOffIcon,
@@ -60,33 +61,38 @@ function StatusGlyph({ thread, isUnread }: { thread: SidebarThreadSummary; isUnr
           icon: <CircleDashedIcon className="size-3.5 text-sky-600 dark:text-sky-400" />,
           label: "Working",
         }
-      : status === "monitoring"
-        ? { icon: <EyeIcon className="size-3.5 text-foreground/70" />, label: "Monitoring" }
-        : status === "approval"
+      : status === "waiting"
+        ? { icon: <HourglassIcon className="size-3.5 text-foreground/60" />, label: "Waiting" }
+        : status === "limited"
           ? {
-              icon: <ShieldQuestionIcon className="size-3.5 text-warning-foreground" />,
-              label: "Needs approval",
+              icon: <GaugeIcon className="size-3.5 text-warning" />,
+              label: "Usage limit reached",
             }
-          : status === "input"
+          : status === "approval"
             ? {
-                icon: (
-                  <MessageCircleQuestionIcon className="size-3.5 text-indigo-600 dark:text-indigo-300" />
-                ),
-                label: "Waiting for your answer",
+                icon: <ShieldQuestionIcon className="size-3.5 text-warning-foreground" />,
+                label: "Needs approval",
               }
-            : status === "failed"
+            : status === "input"
               ? {
-                  icon: <CircleAlertIcon className="size-3.5 text-red-600 dark:text-red-400" />,
-                  label: "Failed",
+                  icon: (
+                    <MessageCircleQuestionIcon className="size-3.5 text-indigo-600 dark:text-indigo-300" />
+                  ),
+                  label: "Waiting for your answer",
                 }
-              : isUnread
+              : status === "failed"
                 ? {
-                    icon: (
-                      <CircleCheckIcon className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                    ),
-                    label: "Done, unread",
+                    icon: <CircleAlertIcon className="size-3.5 text-red-600 dark:text-red-400" />,
+                    label: "Failed",
                   }
-                : null;
+                : isUnread
+                  ? {
+                      icon: (
+                        <CircleCheckIcon className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                      ),
+                      label: "Done, unread",
+                    }
+                  : null;
   return (
     <span
       className="flex size-3.5 shrink-0 items-center justify-center"
@@ -154,7 +160,7 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
   const seenBaselineAt = useWorkspaceViewStore((state) => state.seenBaselineAt);
   const isUnread = isThreadUnread(thread, lastVisitedAt, seenBaselineAt);
   const status = resolveSidebarThreadStatus(thread);
-  const isRunning = thread.session?.status === "running" && thread.session.activeTurnId != null;
+  const isRunning = status === "working";
   const isRegenerating = thread.titleRegeneration != null;
 
   const meta =

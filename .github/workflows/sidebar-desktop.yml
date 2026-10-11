@@ -20,16 +20,13 @@ concurrency:
   group: sidebar-desktop-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Semver-ordered so electron-updater sees each build as newer; the core
-  # version stays upstream's so version-skew checks against servers hold.
-  VERSION: 0.0.44-sidebar.${{ github.run_number }}
-
 jobs:
   bundle:
     name: Build JS bundle
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -37,6 +34,15 @@ jobs:
             /*
             !/.repos/
           sparse-checkout-cone-mode: false
+
+      # Upstream's version plus the run number: semver-ordered so electron-updater
+      # sees each build as newer, while the core version stays upstream's so
+      # version-skew checks against servers hold.
+      - id: version
+        run: |
+          version="$(node -p "require('./apps/server/package.json').version")-sidebar.${{ github.run_number }}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
         with:
@@ -66,6 +72,8 @@ jobs:
     name: Build Linux x64 (and WSL runtime)
     needs: bundle
     runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.bundle.outputs.version }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
@@ -138,6 +146,8 @@ jobs:
     name: Build Windows x64
     needs: [bundle, linux]
     runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.bundle.outputs.version }}
     timeout-minutes: 45
     steps:
       # checkout's credential cleanup trips over the orphaned gitlinks in .repos.
@@ -214,7 +224,9 @@ jobs:
 
   release:
     name: Publish release
-    needs: [linux, windows]
+    needs: [bundle, linux, windows]
+    env:
+      VERSION: ${{ needs.bundle.outputs.version }}
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:

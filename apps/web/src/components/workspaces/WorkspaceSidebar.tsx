@@ -94,6 +94,7 @@ import { useUiStateStore } from "../../uiStateStore";
 import { ProjectFavicon } from "../ProjectFavicon";
 import {
   resolveAdjacentThreadId,
+  resolveSidebarThreadStatus,
   sortLogicalProjectsForSidebar,
   sortPinnedThreadsForSidebar,
   sortThreadsForSidebar,
@@ -989,7 +990,7 @@ export default function WorkspaceSidebar() {
       : undefined;
     const attention = folder.all.filter(needsAttention).length;
     const working = folder.all.filter(
-      (thread) => thread.session?.status === "running" && thread.session.activeTurnId != null,
+      (thread) => resolveSidebarThreadStatus(thread) === "working",
     ).length;
     return (
       <div key={folderKey} className="flex flex-col">
