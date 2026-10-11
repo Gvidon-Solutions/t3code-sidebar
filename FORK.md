@@ -39,7 +39,7 @@ maintained alongside upstream. It adds a workspace sidebar and ships its own des
 | Product name             | T3 Code (Alpha)      | T3 Code Sidebar                   |
 | App id                   | `com.t3tools.t3code` | `com.gvidon.t3code-sidebar`       |
 | Data dir (`T3CODE_HOME`) | `~/.t3`              | `~/.t3-sidebar` (also inside WSL) |
-| Electron profile         | `t3code`             | `t3code-sidebar`                  |
+| Electron profile         | `t3code-v2`          | `t3code-sidebar-v2`               |
 | `t3code://` handler      | registered           | not registered (left to upstream) |
 | Updates                  | upstream releases    | this fork's GitHub releases       |
 
@@ -63,13 +63,25 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-11 — Upstream merge: orchestration v2
+
+- **What.** Brings in 748 upstream commits (orchestration v2, server-tracked thread visits,
+  usage-limit and waiting states, new Electron profile layout). The sidebar shows the new
+  states: hourglass for waiting, gauge for a usage limit; both count as needing attention.
+- **How.** The sidebar reads v2 thread shells (`latestRun`, `runtime`) through upstream's
+  `resolveSidebarThreadStatus`; the fork identity moved into upstream's new
+  `DesktopUserData.ts` and `DesktopLegacyLocalStorage.ts`. The `.deb` package name and
+  AppUserModelID are now distinct from upstream, so both install side by side.
+- **Where.** `workspaces.logic.ts`, `WorkspaceThreadRow.tsx`, the identity files above.
+
 ### 2026-10-11 — Done badge for threads never opened on this device
 
 - **What.** A thread whose latest turn finished after you started using the workspace sidebar
   on this device shows a green check until you open it, even if this device never opened it.
-- **How.** Upstream counts a completion as unseen only when the device has a visit timestamp.
-  The workspace view store records `seenBaselineAt` once per device; `isThreadUnread` falls
-  back to it. Opening a thread stamps the visit (upstream `ChatView`).
+- **How.** Upstream counts a completion as unseen only when there is a visit timestamp (the
+  server's `lastVisitedAt`, or this device's). The workspace view store records
+  `seenBaselineAt` once per device; `isThreadUnread` falls back to it. Opening a thread stamps
+  the visit (upstream `ChatView`).
 - **Where.** `workspaces.logic.ts` (`isThreadUnread`), `workspaceViewStore.ts`,
   `WorkspaceThreadRow.tsx`.
 
