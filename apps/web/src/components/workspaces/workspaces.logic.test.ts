@@ -13,6 +13,7 @@ import {
   effectiveDefaultWorkspaceId,
   globToRegExp,
   isProjectQuiet,
+  isThreadUnread,
   makeWorkspaceId,
   normalizeWorkspaceLabel,
   reorderWorkspaces,
@@ -198,5 +199,31 @@ describe("workspace tile marks", () => {
       text: "P+",
     });
     expect(workspaceMark({ name: "personal" })).toEqual({ kind: "text", text: "P" });
+  });
+});
+
+describe("isThreadUnread", () => {
+  const done = makeThread({
+    latestTurn: {
+      turnId: "turn-1",
+      state: "completed",
+      requestedAt: "2026-10-10T10:00:00.000Z",
+      startedAt: "2026-10-10T10:00:00.000Z",
+      completedAt: "2026-10-10T11:00:00.000Z",
+      assistantMessageId: null,
+    } as SidebarThreadSummary["latestTurn"],
+  });
+
+  it("counts a never-opened thread from the device baseline", () => {
+    expect(isThreadUnread(done, undefined, "2026-10-10T09:00:00.000Z")).toBe(true);
+    expect(isThreadUnread(done, undefined, "2026-10-10T12:00:00.000Z")).toBe(false);
+    expect(isThreadUnread(done, undefined, null)).toBe(false);
+  });
+
+  it("clears once the completion has been seen", () => {
+    expect(isThreadUnread(done, "2026-10-10T11:00:00.000Z", "2026-10-10T09:00:00.000Z")).toBe(
+      false,
+    );
+    expect(isThreadUnread(done, "2026-10-10T10:30:00.000Z", null)).toBe(true);
   });
 });

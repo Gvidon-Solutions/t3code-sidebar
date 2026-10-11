@@ -221,9 +221,24 @@ export const EMPTY_WORKSPACE_ACTIVITY: WorkspaceActivity = {
   unread: 0,
 };
 
+/**
+ * Done-but-unread: the latest turn finished after this device last looked.
+ * A thread this device never opened counts from `seenBaselineAt` instead.
+ */
+export function isThreadUnread(
+  thread: SidebarThreadSummary,
+  lastVisitedAt: string | undefined,
+  seenBaselineAt: string | null,
+): boolean {
+  return hasUnseenCompletion({
+    ...thread,
+    lastVisitedAt: lastVisitedAt ?? seenBaselineAt ?? undefined,
+  });
+}
+
 export function summarizeWorkspaceActivity(
   threads: readonly SidebarThreadSummary[],
-  lastVisitedAtByKey: (thread: SidebarThreadSummary) => string | undefined,
+  isUnread: (thread: SidebarThreadSummary) => boolean,
 ): WorkspaceActivity {
   let attention = 0;
   let failed = 0;
@@ -235,7 +250,7 @@ export function summarizeWorkspaceActivity(
     if (status === "failed") failed += 1;
     if (status === "approval" || status === "input" || status === "failed") attention += 1;
     else if (status === "working") working += 1;
-    else if (hasUnseenCompletion({ ...thread, lastVisitedAt: lastVisitedAtByKey(thread) })) {
+    else if (isUnread(thread)) {
       unread += 1;
     }
   }

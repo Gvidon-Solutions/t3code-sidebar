@@ -20,6 +20,12 @@ interface WorkspaceViewState {
   folderExpanded: Record<string, boolean>;
   /** Folders showing their settled tail. */
   settledOpen: Record<string, boolean>;
+  /**
+   * When this device started using the workspace sidebar. A completion after
+   * it reads as Done even for a thread this device never opened; older history
+   * stays quiet instead of flooding a fresh browser with Done badges.
+   */
+  seenBaselineAt: string | null;
   /** Last open thread per workspace, to return to it when switching back. */
   lastThreadByWorkspace: Record<string, string>;
   setActiveWorkspace: (workspaceId: string | null) => void;
@@ -29,6 +35,7 @@ interface WorkspaceViewState {
   toggleFolderExpanded: (key: string) => void;
   toggleSettledOpen: (key: string) => void;
   rememberThread: (workspaceId: string, threadKey: string) => void;
+  ensureSeenBaseline: () => void;
 }
 
 export const useWorkspaceViewStore = create<WorkspaceViewState>()(
@@ -41,6 +48,7 @@ export const useWorkspaceViewStore = create<WorkspaceViewState>()(
       folderExpanded: {},
       settledOpen: {},
       lastThreadByWorkspace: {},
+      seenBaselineAt: null,
       setActiveWorkspace: (activeWorkspaceId) => set({ activeWorkspaceId }),
       toggleTiles: () => set((state) => ({ tilesVisible: !state.tilesVisible })),
       setFolderOpen: (key, open) =>
@@ -61,6 +69,10 @@ export const useWorkspaceViewStore = create<WorkspaceViewState>()(
                 lastThreadByWorkspace: { ...state.lastThreadByWorkspace, [workspaceId]: threadKey },
               },
         ),
+      ensureSeenBaseline: () =>
+        set((state) =>
+          state.seenBaselineAt !== null ? state : { seenBaselineAt: new Date().toISOString() },
+        ),
     }),
     {
       name: "t3code:workspace-sidebar:v1",
@@ -76,6 +88,7 @@ export const useWorkspaceViewStore = create<WorkspaceViewState>()(
         folderExpanded: state.folderExpanded,
         settledOpen: state.settledOpen,
         lastThreadByWorkspace: state.lastThreadByWorkspace,
+        seenBaselineAt: state.seenBaselineAt,
       }),
     },
   ),

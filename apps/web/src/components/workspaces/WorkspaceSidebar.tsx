@@ -117,6 +117,7 @@ import {
   effectiveDefaultWorkspaceId,
   EMPTY_WORKSPACE_ACTIVITY,
   isProjectQuiet,
+  isThreadUnread,
   makeWorkspaceId,
   needsAttention,
   normalizeWorkspaceLabel,
@@ -910,9 +911,13 @@ export default function WorkspaceSidebar() {
   ]);
 
   // ── Activity per workspace (tiles) ────────────────────────────────────
-  const lastVisitedOf = useCallback(
-    (thread: SidebarThreadSummary) => lastVisitedById[threadKeyOf(thread)],
-    [lastVisitedById],
+  const seenBaselineAt = useWorkspaceViewStore((state) => state.seenBaselineAt);
+  const ensureSeenBaseline = useWorkspaceViewStore((state) => state.ensureSeenBaseline);
+  useEffect(ensureSeenBaseline, [ensureSeenBaseline]);
+  const isUnreadThread = useCallback(
+    (thread: SidebarThreadSummary) =>
+      isThreadUnread(thread, lastVisitedById[threadKeyOf(thread)], seenBaselineAt),
+    [lastVisitedById, seenBaselineAt],
   );
   const tileEntries: WorkspaceTileEntry[] = useMemo(
     () =>
@@ -921,11 +926,11 @@ export default function WorkspaceSidebar() {
         return {
           workspace,
           activity: bucket
-            ? summarizeWorkspaceActivity(bucket.threads, lastVisitedOf)
+            ? summarizeWorkspaceActivity(bucket.threads, isUnreadThread)
             : EMPTY_WORKSPACE_ACTIVITY,
         };
       }),
-    [config.workspaces, lastVisitedOf, model],
+    [config.workspaces, isUnreadThread, model],
   );
 
   // ── Render ────────────────────────────────────────────────────────────

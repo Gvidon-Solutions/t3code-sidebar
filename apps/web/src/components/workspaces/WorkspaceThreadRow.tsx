@@ -4,6 +4,7 @@ import {
   AlarmClockOffIcon,
   CheckIcon,
   CircleAlertIcon,
+  CircleCheckIcon,
   CircleDashedIcon,
   EyeIcon,
   MessageCircleQuestionIcon,
@@ -25,12 +26,9 @@ import {
 import { cn } from "~/lib/utils";
 import type { SidebarThreadSummary } from "../../types";
 import { useUiStateStore } from "../../uiStateStore";
-import {
-  hasUnseenCompletion,
-  resolveSidebarThreadStatus,
-  resolveWorkingStartedAt,
-} from "../Sidebar.logic";
-import { compactAgo, threadActivityMs } from "./workspaces.logic";
+import { resolveSidebarThreadStatus, resolveWorkingStartedAt } from "../Sidebar.logic";
+import { useWorkspaceViewStore } from "./workspaceViewStore";
+import { compactAgo, isThreadUnread, threadActivityMs } from "./workspaces.logic";
 
 export type WorkspaceRowVariant = "active" | "pinned" | "settled" | "snoozed";
 
@@ -84,7 +82,7 @@ function StatusGlyph({ thread, isUnread }: { thread: SidebarThreadSummary; isUnr
               : isUnread
                 ? {
                     icon: (
-                      <span className="size-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+                      <CircleCheckIcon className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                     ),
                     label: "Done, unread",
                   }
@@ -153,7 +151,8 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const threadKey = scopedThreadKey(threadRef);
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
-  const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
+  const seenBaselineAt = useWorkspaceViewStore((state) => state.seenBaselineAt);
+  const isUnread = isThreadUnread(thread, lastVisitedAt, seenBaselineAt);
   const status = resolveSidebarThreadStatus(thread);
   const isRunning = thread.session?.status === "running" && thread.session.activeTurnId != null;
   const isRegenerating = thread.titleRegeneration != null;
