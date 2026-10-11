@@ -22,6 +22,7 @@ import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   type ContextMenuItem,
+  type ProjectIconOverride,
   type ScopedThreadRef,
   type SidebarWorkspace,
   type SidebarWorkspacesConfig,
@@ -40,6 +41,8 @@ import {
 } from "lucide-react";
 import {
   Fragment,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -78,6 +81,7 @@ import {
 import { useProjects, useThreadShells } from "../../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../../state/server";
+import { projectEnvironment } from "../../state/projects";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import {
@@ -172,6 +176,12 @@ async function reportFailure(
     failureToast(title, squashAtomCommandFailure(result));
   }
 }
+
+const ProjectIconPickerDialog = lazy(() =>
+  import("../settings/ProjectIconPickerDialog").then((module) => ({
+    default: module.ProjectIconPickerDialog,
+  })),
+);
 
 export default function WorkspaceSidebar() {
   const router = useRouter();
@@ -738,12 +748,32 @@ export default function WorkspaceSidebar() {
     },
     [activeWorkspaceId, reorderWorkspace, setWorkspaceIcon, view, writeConfig],
   );
+  // Project icons are the project's own setting (same as Project settings ›
+  // Icon), written to every checkout of the folder.
+  const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
+  const [iconPickerFolder, setIconPickerFolder] = useState<FolderModel | null>(null);
+  const setFolderIcon = useCallback(
+    async (folder: FolderModel, projectIcon: ProjectIconOverride | null) => {
+      for (const member of folder.group.memberProjects) {
+        await reportFailure("Failed to update project icon", () =>
+          updateProject({
+            environmentId: member.environmentId,
+            input: { projectId: member.id, faviconPath: null, projectIcon },
+          }),
+        );
+      }
+    },
+    [updateProject],
+  );
   const openFolderMenu = useCallback(
     async (folder: FolderModel, position: { x: number; y: number }) => {
       const api = readLocalApi();
       if (!api) return;
       const projectKey = folder.group.projectKey;
       const isAlwaysShown = configRef.current.alwaysShow.includes(projectKey);
+      const hasCustomIcon = folder.group.memberProjects.some(
+        (member) => member.projectIcon != null || member.faviconPath != null,
+      );
       const items: ContextMenuItem[] = [
         { id: "new-thread", label: "New thread", icon: "message-square-plus" },
         {
@@ -761,11 +791,15 @@ export default function WorkspaceSidebar() {
           label: "Never fold into quiet projects",
           checked: isAlwaysShown,
         },
+        { id: "icon", label: "Icon…", icon: "smile", separatorBefore: true },
+        ...(hasCustomIcon ? [{ id: "icon-reset", label: "Reset icon" }] : []),
         { id: "settings", label: "Project settings", icon: "settings", separatorBefore: true },
       ];
       const clicked = await api.contextMenu.show(items, position);
       if (!clicked) return;
       if (clicked === "new-thread") startThreadInFolder(folder);
+      else if (clicked === "icon") setIconPickerFolder(folder);
+      else if (clicked === "icon-reset") void setFolderIcon(folder, null);
       else if (clicked.startsWith("move:")) moveProject(projectKey, clicked.slice("move:".length));
       else if (clicked === "always-show") {
         writeConfig((config) => ({
@@ -779,7 +813,7 @@ export default function WorkspaceSidebar() {
         void router.navigate({ to: "/projects/$projectKey", params: { projectKey } });
       }
     },
-    [isMobile, moveProject, router, setOpenMobile, startThreadInFolder, writeConfig],
+    [isMobile, moveProject, router, setFolderIcon, setOpenMobile, startThreadInFolder, writeConfig],
   );
 
   // ── Ordered rows for jump / traversal shortcuts ───────────────────────
@@ -1287,6 +1321,19 @@ export default function WorkspaceSidebar() {
         onReorder={reorderWorkspace}
       />
       <SidebarChromeFooter />
+      {iconPickerFolder ? (
+        <Suspense fallback={null}>
+          <ProjectIconPickerDialog
+            current={iconPickerFolder.group.memberProjects[0]?.projectIcon ?? null}
+            projectName={iconPickerFolder.group.memberProjects[0]?.title ?? iconPickerFolder.label}
+            open
+            onOpenChange={(open) => {
+              if (!open) setIconPickerFolder(null);
+            }}
+            onSelect={(icon) => void setFolderIcon(iconPickerFolder, icon)}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }
