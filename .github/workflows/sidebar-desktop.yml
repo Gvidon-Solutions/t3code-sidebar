@@ -1,16 +1,16 @@
 name: Sidebar fork desktop build
 
-# Unsigned desktop installers of the sidebar fork ("T3 Code Sidebar"), which
-# installs next to upstream T3 Code with its own app id and ~/.t3-sidebar data.
-# Push a `sidebar-desktop-<n>` tag (or dispatch from the default branch) and the
-# installers land on a GitHub release named after the tag. No update feed: the
-# build runs without GITHUB_REPOSITORY, so the app never polls for updates.
+# Desktop installers of the sidebar fork ("T3 Code Sidebar"), which installs
+# next to upstream T3 Code with its own app id and ~/.t3-sidebar data. Every
+# push to `ws` publishes a GitHub release with the installers and the
+# electron-updater manifests, so installed apps offer the build as an update.
 # Windows embeds the Linux CLI archive as its WSL runtime; that backend keeps
-# its data in ~/.t3-sidebar inside the distro.
+# its data in ~/.t3-sidebar inside the distro. Builds are unsigned.
 
 on:
   push:
-    tags: ["sidebar-desktop-*"]
+    branches: [ws]
+    paths-ignore: ["deploy/**", "docs/**", "**/*.md"]
   workflow_dispatch:
 
 permissions:
@@ -21,6 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # Semver-ordered so electron-updater sees each build as newer; the core
+  # version stays upstream's so version-skew checks against servers hold.
   VERSION: 0.0.44-sidebar.${{ github.run_number }}
 
 jobs:
@@ -97,9 +99,9 @@ jobs:
 
       - name: Build desktop artifact
         run: |
-          env -u GITHUB_REPOSITORY -u T3CODE_DESKTOP_UPDATE_REPOSITORY \
-            vp run dist:desktop:artifact --platform linux --target AppImage --arch x64 \
-              --build-version "$VERSION" --skip-build --verbose
+          # GITHUB_REPOSITORY gives the app its update feed: this fork's releases.
+          vp run dist:desktop:artifact --platform linux --target AppImage --arch x64 \
+            --build-version "$VERSION" --skip-build --verbose
 
       # The Linux CLI archive is what the Windows build embeds as its WSL runtime.
       - name: Build CLI single-executable
@@ -129,6 +131,7 @@ jobs:
           path: |
             release/*.AppImage
             release/*.deb
+            release/latest-linux.yml
           if-no-files-found: error
 
   windows:
@@ -195,21 +198,24 @@ jobs:
       - name: Build desktop artifact
         shell: bash
         run: |
-          env -u GITHUB_REPOSITORY -u T3CODE_DESKTOP_UPDATE_REPOSITORY \
-            vp run dist:desktop:artifact --platform win --target nsis --arch x64 \
-              --build-version "$VERSION" --skip-build --verbose \
-              --wsl-runtime "$GITHUB_WORKSPACE"/wsl-runtime/t3-*-linux-x64.tar.gz
+          # GITHUB_REPOSITORY gives the app its update feed: this fork's releases.
+          vp run dist:desktop:artifact --platform win --target nsis --arch x64 \
+            --build-version "$VERSION" --skip-build --verbose \
+            --wsl-runtime "$GITHUB_WORKSPACE"/wsl-runtime/t3-*-linux-x64.tar.gz
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-win-x64
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/latest.yml
           if-no-files-found: error
 
   release:
     name: Publish release
     needs: [linux, windows]
-    if: startsWith(github.ref, 'refs/tags/sidebar-desktop-')
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -220,12 +226,15 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # A full (non-pre) release marked latest: that is the one electron-updater's
+      # GitHub provider reads latest.yml / latest-linux.yml from.
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" dist/* \
+          gh release create "sidebar-v$VERSION" dist/* \
             --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --latest \
             --title "T3 Code Sidebar $VERSION" \
-            --notes "Unsigned build of the sidebar fork ($GITHUB_SHA). Installs next to upstream T3 Code: own app id, data in ~/.t3-sidebar, no auto-update."
+            --notes "Unsigned build of the sidebar fork ($GITHUB_SHA). Installs next to upstream T3 Code: own app id, data in ~/.t3-sidebar. Installed apps pick it up as an update."
