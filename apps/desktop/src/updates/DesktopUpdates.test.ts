@@ -745,6 +745,32 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
+  it.effect("follows a pinned release feed, older versions included, then the app feed", () => {
+    const harness = makeHarness();
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const feed = "https://github.com/o/r/releases/download/sidebar-v0.0.44-sidebar.3";
+        yield* updates.followFeed(feed);
+        assert.deepEqual(harness.feedUrls().at(-1), { provider: "generic", url: feed });
+        assert.equal(harness.allowDowngrade(), true);
+        assert.equal(harness.checkCount(), 1);
+
+        harness.emit("update-available", { version: "0.0.44-sidebar.3" });
+        yield* flushCallbacks;
+        assert.equal((yield* updates.getState).availableVersion, "0.0.44-sidebar.3");
+
+        yield* updates.followFeed(null);
+        assert.equal(harness.allowDowngrade(), false);
+        assert.equal(harness.checkCount(), 2);
+        assert.equal((yield* updates.getState).availableVersion, null);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
   it.effect("persists channel changes through the settings service", () => {
     const harness = makeHarness();
 

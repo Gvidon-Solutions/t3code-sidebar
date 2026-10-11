@@ -13,6 +13,7 @@ import { AdvertisedEndpoint } from "./remoteAccess.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import { type ClientSettings, type QuitConfirmationMode, SnapShotShortcut } from "./settings.ts";
 import type { EditorId } from "./editor.ts";
+import type { DesktopForkRelease } from "./forkReleases.ts";
 import type { PreviewForwardedShortcut } from "./keybindings.ts";
 
 import type {
@@ -1239,6 +1240,12 @@ export interface DesktopBridge {
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
   installUpdate: () => Promise<DesktopUpdateActionResult>;
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
+  /** Sidebar fork: its published builds, and switching the updater to one of them. */
+  forkReleases?: {
+    list: () => Promise<readonly DesktopForkRelease[]>;
+    /** Checks one release (any version, older included); null follows the newest again. */
+    select: (tag: string | null) => Promise<DesktopUpdateState>;
+  };
   /** Settings → `t3` command. Optional: older desktop builds lack it. */
   cliCommand?: {
     getState: () => Promise<DesktopCliCommandState>;

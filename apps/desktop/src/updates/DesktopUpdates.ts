@@ -181,6 +181,11 @@ export class DesktopUpdates extends Context.Service<
     readonly setChannel: (
       channel: DesktopUpdateChannel,
     ) => Effect.Effect<DesktopUpdateState, DesktopUpdateSetChannelError>;
+    /** Sidebar fork: checks one release's feed (any version, older included), or
+        with null the app's own feed again. Lasts until the app restarts. */
+    readonly followFeed: (
+      feedUrl: string | null,
+    ) => Effect.Effect<DesktopUpdateState, DesktopUpdateActionInProgressError>;
     readonly check: (reason: string) => Effect.Effect<DesktopUpdateCheckResult>;
     readonly download: Effect.Effect<DesktopUpdateActionResult>;
     readonly install: Effect.Effect<DesktopUpdateActionResult>;
@@ -1007,6 +1012,35 @@ export const make = Effect.gen(function* () {
         yield* checkForUpdates("channel-change", "held").pipe(
           Effect.ensuring(electronUpdater.setAllowDowngrade(allowDowngrade).pipe(Effect.ignore)),
         );
+        return yield* Ref.get(updateStateRef);
+      }).pipe(Effect.ensuring(finishUpdateAction("channel")));
+    }),
+    followFeed: Effect.fn("desktop.updates.followFeed")(function* (feedUrl: string | null) {
+      const activeAction = yield* tryStartChannelChange;
+      const state = yield* Ref.get(updateStateRef);
+      if (Option.isSome(activeAction)) {
+        return yield* new DesktopUpdateActionInProgressError({
+          action: activeAction.value === "install-recovery" ? "install" : activeAction.value,
+          requestedChannel: state.channel,
+        });
+      }
+
+      return yield* Effect.gen(function* () {
+        if (!(yield* Ref.get(updaterConfiguredRef))) return state;
+        const appFeed = yield* Ref.get(appUpdateYmlConfigRef);
+        if (feedUrl !== null) {
+          yield* electronUpdater.setFeedURL({ provider: "generic", url: feedUrl });
+        } else if (Option.isSome(appFeed)) {
+          yield* electronUpdater.setFeedURL(
+            appFeed.value as unknown as ElectronUpdater.ElectronUpdaterFeedUrl,
+          );
+        }
+        // A pinned release may be older than the running app.
+        yield* electronUpdater.setAllowDowngrade(feedUrl !== null);
+        // Forget what the previous feed offered; this check decides what is available.
+        yield* setState(createBaseUpdateState(state.channel, true, environment));
+        yield* logUpdaterInfo("following update feed", { feedUrl: feedUrl ?? "app" });
+        yield* checkForUpdates("follow-feed", "held");
         return yield* Ref.get(updateStateRef);
       }).pipe(Effect.ensuring(finishUpdateAction("channel")));
     }),

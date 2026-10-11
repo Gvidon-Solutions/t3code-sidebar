@@ -56,6 +56,7 @@ import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
 import { IS_NIGHTLY_BUILD, NightlyMobileBetaRow } from "../NightlyMobileBeta";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
+import { ForkVersionRow } from "./ForkVersionRow";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -449,7 +450,9 @@ function AboutVersionSection() {
           </Tooltip>
         }
       />
-      {hasDesktopBridge ? (
+      {hasDesktopBridge && window.desktopBridge?.forkReleases ? (
+        <ForkVersionRow />
+      ) : hasDesktopBridge ? (
         <SettingsRow
           {...searchableSetting("update-track")}
           description="Use stable releases or nightly builds. Switch back anytime."

@@ -1,4 +1,5 @@
 import {
+  DesktopForkReleaseListSchema,
   DesktopUpdateActionResultSchema,
   DesktopUpdateChannelSchema,
   DesktopUpdateCheckResultSchema,
@@ -7,6 +8,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import * as DesktopForkReleases from "../../updates/DesktopForkReleases.ts";
 import * as DesktopUpdates from "../../updates/DesktopUpdates.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
@@ -58,5 +60,23 @@ export const checkForUpdate = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.updates.check")(function* () {
     const updates = yield* DesktopUpdates.DesktopUpdates;
     return yield* updates.check("web-ui");
+  }),
+});
+
+export const listForkReleases = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.FORK_RELEASES_LIST_CHANNEL,
+  payload: Schema.Void,
+  result: DesktopForkReleaseListSchema,
+  handler: Effect.fn("desktop.ipc.updates.listForkReleases")(function* () {
+    return yield* DesktopForkReleases.list();
+  }),
+});
+
+export const selectForkRelease = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.FORK_RELEASES_SELECT_CHANNEL,
+  payload: Schema.NullOr(Schema.String),
+  result: DesktopUpdateStateSchema,
+  handler: Effect.fn("desktop.ipc.updates.selectForkRelease")(function* (tag) {
+    return yield* DesktopForkReleases.select(tag);
   }),
 });

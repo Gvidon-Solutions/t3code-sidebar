@@ -63,6 +63,22 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-11 — Install any version (rollback) from Settings
+
+- **What.** Settings › General › Version history lists every published fork build. Picking one
+  makes it the available update; Download and Install on the Version row then install it, older
+  builds included. Newest goes back to following updates. Lasts until the app restarts, after
+  which the newest build is offered again (never installed without a click).
+- **How.** The desktop app lists GitHub releases of the repo in its `app-update.yml` that carry
+  this platform's updater manifest. Picking one points electron-updater at that release
+  (`generic` feed `releases/download/<tag>/`) with downgrades allowed and runs a check. It
+  replaces upstream's Stable/Nightly track, which the fork does not publish.
+- **Where.** `apps/desktop/src/updates/DesktopForkReleases.ts`, `packages/contracts/src/forkReleases.ts`,
+  `apps/web/src/components/settings/ForkVersionRow.tsx`; seams: `followFeed` in
+  `DesktopUpdates.ts`, the IPC wiring (`channels.ts`, `methods/updates.ts`,
+  `DesktopIpcHandlers.ts`, `preload.ts`, `ipc.ts` bridge type) and one branch in
+  `SettingsPanels.tsx`.
+
 ### 2026-10-11 — Upstream merge: orchestration v2
 
 - **What.** Brings in 748 upstream commits (orchestration v2, server-tracked thread visits,
