@@ -5,6 +5,8 @@ name: Sidebar fork desktop build
 # Push a `sidebar-desktop-<n>` tag (or dispatch from the default branch) and the
 # installers land on a GitHub release named after the tag. No update feed: the
 # build runs without GITHUB_REPOSITORY, so the app never polls for updates.
+# Windows embeds the Linux CLI archive as its WSL runtime; that backend keeps
+# its data in ~/.t3-sidebar inside the distro.
 
 on:
   push:
@@ -58,27 +60,82 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  desktop:
-    name: Build ${{ matrix.label }}
+  linux:
+    name: Build Linux x64 (and WSL runtime)
     needs: bundle
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Windows x64
-            runner: windows-latest
-            platform: win
-            target: nsis
-            arch: x64
-            rust_target: x86_64-pc-windows-msvc
-          - label: Linux x64
-            runner: ubuntu-24.04
-            platform: linux
-            target: AppImage
-            arch: x64
-            rust_target: x86_64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-gnu
+
+      - run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config imagemagick
+
+      - run: node scripts/update-release-package-versions.ts "$VERSION"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: js-bundle
+          path: apps
+
+      - name: Build desktop artifact
+        run: |
+          env -u GITHUB_REPOSITORY -u T3CODE_DESKTOP_UPDATE_REPOSITORY \
+            vp run dist:desktop:artifact --platform linux --target AppImage --arch x64 \
+              --build-version "$VERSION" --skip-build --verbose
+
+      # The Linux CLI archive is what the Windows build embeds as its WSL runtime.
+      - name: Build CLI single-executable
+        env:
+          # Keep in step with SEA_NODE_VERSION in apps/server/vite.config.ts.
+          VP_NODE_VERSION: "26.8.2"
+        run: node apps/server/scripts/cli.ts build-exe --verbose
+
+      - name: Build CLI archive
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cli-resource-monitor/linux-x64"
+          cp native/resource-monitor/target/x86_64-unknown-linux-gnu/release/t3-resource-monitor \
+            "$RUNNER_TEMP/cli-resource-monitor/linux-x64/"
+          node scripts/build-cli-archive.ts --platform linux --arch x64 --version "$VERSION" \
+            --resource-monitor-dir "$RUNNER_TEMP/cli-resource-monitor" --output-dir release-cli
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cli-linux-x64
+          path: release-cli/*
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: desktop-linux-x64
+          path: |
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+
+  windows:
+    name: Build Windows x64
+    needs: [bundle, linux]
+    runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       # checkout's credential cleanup trips over the orphaned gitlinks in .repos.
       - name: Checkout
@@ -96,7 +153,7 @@ jobs:
       - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
         with:
           node-version-file: package.json
-          cache: ${{ matrix.platform != 'win' }}
+          cache: false
           run-install: false
 
       - run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
@@ -104,10 +161,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: stable
-          targets: ${{ matrix.rust_target }}
+          targets: x86_64-pc-windows-msvc
 
       - name: Install Spectre-mitigated MSVC libs
-        if: matrix.platform == 'win'
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -123,43 +179,36 @@ jobs:
             exit $code
           }
 
-      - name: Install Linux desktop build libraries
-        if: matrix.platform == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config imagemagick
-
-      - run: node scripts/update-release-package-versions.ts "$VERSION"
+      - shell: bash
+        run: node scripts/update-release-package-versions.ts "$VERSION"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: js-bundle
           path: apps
 
-      # Windows ships without the bundled WSL runtime: its WSL backend would
-      # share ~/.t3 inside the distro with an upstream install.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: cli-linux-x64
+          path: wsl-runtime
+
       - name: Build desktop artifact
         shell: bash
         run: |
           env -u GITHUB_REPOSITORY -u T3CODE_DESKTOP_UPDATE_REPOSITORY \
-            vp run dist:desktop:artifact \
-              --platform "${{ matrix.platform }}" \
-              --target "${{ matrix.target }}" \
-              --arch "${{ matrix.arch }}" \
-              --build-version "$VERSION" \
-              --skip-build \
-              --verbose
+            vp run dist:desktop:artifact --platform win --target nsis --arch x64 \
+              --build-version "$VERSION" --skip-build --verbose \
+              --wsl-runtime "$GITHUB_WORKSPACE"/wsl-runtime/t3-*-linux-x64.tar.gz
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
-          path: |
-            release/*.exe
-            release/*.AppImage
-            release/*.deb
+          name: desktop-win-x64
+          path: release/*.exe
           if-no-files-found: error
 
   release:
     name: Publish release
-    needs: desktop
+    needs: [linux, windows]
     if: startsWith(github.ref, 'refs/tags/sidebar-desktop-')
     runs-on: ubuntu-24.04
     permissions:
