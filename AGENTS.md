@@ -1,5 +1,22 @@
 # T3 Code
 
+## This checkout is a fork
+
+You are working in `Gvidon-Solutions/t3code-sidebar`, a personal fork maintained alongside
+upstream `pingdotgg/t3code`. Read [FORK.md](FORK.md) before changing anything. In short:
+
+- Fork work goes on `ws`; `upstream/main` is merged in, never rebased over published history.
+- Keep fork code in its own files (`apps/web/src/components/workspaces/`,
+  `packages/contracts/src/sidebarWorkspaces.ts`, `deploy/t3-ws/`, `sidebar-desktop.yml`) and keep
+  the seams into upstream files small. FORK.md lists them.
+- The desktop app is "T3 Code Sidebar" with its own app id and `~/.t3-sidebar`. Never point it,
+  or anything you run, at `~/.t3`.
+- Every user-visible fork feature gets an entry in FORK.md's feature log: what, how, where.
+- Every push to `ws` publishes a desktop release that installed apps update to. Push only
+  changes you have verified.
+- Never open PRs against upstream unless the owner asks. The rest of this file is upstream's
+  guidance and still applies; where it says "we" it means upstream maintainers.
+
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity) and serves web, desktop, and mobile clients.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
