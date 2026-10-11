@@ -10,10 +10,14 @@ import {
 
 import type { SidebarThreadSummary } from "../../types";
 import {
+  effectiveDefaultWorkspaceId,
   globToRegExp,
   isProjectQuiet,
   makeWorkspaceId,
+  normalizeWorkspaceLabel,
+  reorderWorkspaces,
   resolveProjectWorkspaceId,
+  workspaceMark,
 } from "./workspaces.logic";
 
 const config: SidebarWorkspacesConfig = {
@@ -146,5 +150,53 @@ describe("makeWorkspaceId", () => {
   it("slugs names and avoids taken ids", () => {
     expect(makeWorkspaceId("Potential Plus", new Set())).toBe("potential-plus");
     expect(makeWorkspaceId("work", new Set(["work"]))).toBe("work-2");
+  });
+});
+
+describe("effectiveDefaultWorkspaceId", () => {
+  it("uses the configured default and falls back to the first workspace", () => {
+    expect(effectiveDefaultWorkspaceId(config)).toBe("personal");
+    expect(effectiveDefaultWorkspaceId({ ...config, defaultWorkspace: "gone" })).toBe("personal");
+    expect(effectiveDefaultWorkspaceId({ ...config, defaultWorkspace: "vtbfamily" })).toBe(
+      "vtbfamily",
+    );
+  });
+});
+
+describe("reorderWorkspaces", () => {
+  const ids = (list: readonly { id: string }[]) => list.map((entry) => entry.id);
+  const list = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+
+  it("moves a workspace before the given slot", () => {
+    expect(ids(reorderWorkspaces(list, "a", 3))).toEqual(["b", "c", "a", "d"]);
+    expect(ids(reorderWorkspaces(list, "a", 4))).toEqual(["b", "c", "d", "a"]);
+    expect(ids(reorderWorkspaces(list, "d", 0))).toEqual(["d", "a", "b", "c"]);
+    expect(ids(reorderWorkspaces(list, "c", 1))).toEqual(["a", "c", "b", "d"]);
+  });
+
+  it("returns the same order for no-op moves and unknown ids", () => {
+    expect(reorderWorkspaces(list, "b", 1)).toBe(list);
+    expect(reorderWorkspaces(list, "b", 2)).toBe(list);
+    expect(reorderWorkspaces(list, "zz", 0)).toBe(list);
+  });
+});
+
+describe("workspace tile marks", () => {
+  it("keeps at most two characters, counting an emoji as one", () => {
+    expect(normalizeWorkspaceLabel("  vtb ")).toBe("vt");
+    expect(normalizeWorkspaceLabel("👨‍👩‍👧x")).toBe("👨‍👩‍👧x");
+    expect(normalizeWorkspaceLabel("   ")).toBeNull();
+  });
+
+  it("shows a glyph, the custom label or the first letter", () => {
+    expect(workspaceMark({ name: "edu", icon: "glyph:graduation" })).toEqual({
+      kind: "glyph",
+      glyph: "graduation",
+    });
+    expect(workspaceMark({ name: "potentialplus", icon: "P+" })).toEqual({
+      kind: "text",
+      text: "P+",
+    });
+    expect(workspaceMark({ name: "personal" })).toEqual({ kind: "text", text: "P" });
   });
 });

@@ -104,19 +104,25 @@ import {
   WorkspaceDock,
   WorkspaceTitlebar,
   type WorkspaceTileEntry,
+  type WorkspaceTitleEditing,
+  WORKSPACE_GLYPHS,
 } from "./WorkspaceChrome";
 import { WorkspaceThreadRow, type WorkspaceRowVariant } from "./WorkspaceThreadRow";
 import { useWorkspaceViewStore } from "./workspaceViewStore";
 import {
+  effectiveDefaultWorkspaceId,
   EMPTY_WORKSPACE_ACTIVITY,
   isProjectQuiet,
   makeWorkspaceId,
   needsAttention,
+  normalizeWorkspaceLabel,
+  reorderWorkspaces,
   resolveProjectWorkspaceId,
   summarizeWorkspaceActivity,
   threadActivityMs,
   WORKSPACE_COLORS,
   workspaceColor,
+  WORKSPACE_GLYPH_PREFIX,
 } from "./workspaces.logic";
 
 const FOLDER_PREVIEW_COUNT = 8;
@@ -362,10 +368,11 @@ export default function WorkspaceSidebar() {
 
   // ── Active workspace ──────────────────────────────────────────────────
   const workspaceIds = config.workspaces.map((workspace) => workspace.id);
+  const defaultWorkspaceId = effectiveDefaultWorkspaceId(config);
   const activeWorkspaceId =
     view.activeWorkspaceId !== null && workspaceIds.includes(view.activeWorkspaceId)
       ? view.activeWorkspaceId
-      : (config.defaultWorkspace ?? workspaceIds[0] ?? IMPLICIT_WORKSPACE.id);
+      : (defaultWorkspaceId ?? IMPLICIT_WORKSPACE.id);
   const activeWorkspace =
     config.workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
 
@@ -538,7 +545,7 @@ export default function WorkspaceSidebar() {
   );
 
   // ── Workspace edits ───────────────────────────────────────────────────
-  const [renamingWorkspace, setRenamingWorkspace] = useState(false);
+  const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceTitleEditing>(null);
   const createWorkspace = useCallback(() => {
     const current = configRef.current;
     const taken = new Set(current.workspaces.map((workspace) => workspace.id));
@@ -552,11 +559,11 @@ export default function WorkspaceSidebar() {
       workspaces: [...config.workspaces, { id, name, color }],
     }));
     view.setActiveWorkspace(id);
-    setRenamingWorkspace(true);
+    setEditingWorkspace("name");
   }, [view, writeConfig]);
   const renameWorkspace = useCallback(
     (workspaceId: string, name: string | null) => {
-      setRenamingWorkspace(false);
+      setEditingWorkspace(null);
       const trimmed = name?.trim();
       if (!trimmed) return;
       writeConfig((config) => ({
@@ -564,6 +571,37 @@ export default function WorkspaceSidebar() {
         workspaces: config.workspaces.map((workspace) =>
           workspace.id === workspaceId ? { ...workspace, name: trimmed } : workspace,
         ),
+      }));
+    },
+    [writeConfig],
+  );
+  /** `undefined` resets the tile to the name's first letter. */
+  const setWorkspaceIcon = useCallback(
+    (workspaceId: string, icon: string | undefined) => {
+      writeConfig((config) => ({
+        ...config,
+        workspaces: config.workspaces.map((workspace) => {
+          if (workspace.id !== workspaceId) return workspace;
+          const { icon: _previous, ...rest } = workspace;
+          return icon === undefined ? rest : { ...rest, icon };
+        }),
+      }));
+    },
+    [writeConfig],
+  );
+  const commitWorkspaceLabel = useCallback(
+    (workspaceId: string, label: string | null) => {
+      setEditingWorkspace(null);
+      if (label === null) return;
+      setWorkspaceIcon(workspaceId, normalizeWorkspaceLabel(label) ?? undefined);
+    },
+    [setWorkspaceIcon],
+  );
+  const reorderWorkspace = useCallback(
+    (workspaceId: string, beforeIndex: number) => {
+      writeConfig((config) => ({
+        ...config,
+        workspaces: [...reorderWorkspaces(config.workspaces, workspaceId, beforeIndex)],
       }));
     },
     [writeConfig],
@@ -580,44 +618,88 @@ export default function WorkspaceSidebar() {
   const openWorkspaceMenu = useCallback(
     async (workspaceId: string, position: { x: number; y: number }) => {
       const api = readLocalApi();
-      const workspace = configRef.current.workspaces.find((entry) => entry.id === workspaceId);
+      const current = configRef.current;
+      const index = current.workspaces.findIndex((entry) => entry.id === workspaceId);
+      const workspace = current.workspaces[index];
       if (!api || !workspace) return;
+      const isDefault = effectiveDefaultWorkspaceId(current) === workspaceId;
+      const currentIcon = workspace.icon ?? "";
       const items: ContextMenuItem[] = [
         { id: "rename", label: "Rename", icon: "pencil" },
         {
+          id: "icon",
+          label: "Icon",
+          children: [
+            { id: "icon:label", label: "Letters or emoji…" },
+            ...Object.entries(WORKSPACE_GLYPHS).map(([key, glyph], glyphIndex) => ({
+              id: `icon:glyph:${key}`,
+              label: glyph.label,
+              checked: currentIcon === `${WORKSPACE_GLYPH_PREFIX}${key}`,
+              separatorBefore: glyphIndex === 0,
+            })),
+            {
+              id: "icon:reset",
+              label: "First letter of the name",
+              checked: currentIcon === "",
+              separatorBefore: true,
+            },
+          ],
+        },
+        {
           id: "color",
           label: "Color",
-          children: WORKSPACE_COLORS.map((color, index) => ({
+          children: WORKSPACE_COLORS.map((color, colorIndex) => ({
             id: `color:${color}`,
             label:
-              ["Blue", "Coral", "Green", "Violet", "Amber", "Teal", "Rose", "Olive"][index] ??
+              ["Blue", "Coral", "Green", "Violet", "Amber", "Teal", "Rose", "Olive"][colorIndex] ??
               color,
             checked: workspaceColor(workspace) === color,
           })),
         },
         {
-          id: "default",
-          label: "Default for new projects",
-          checked: configRef.current.defaultWorkspace === workspaceId,
+          id: "move-left",
+          label: "Move left",
+          disabled: index === 0,
           separatorBefore: true,
         },
-        ...(configRef.current.workspaces.length > 1
-          ? [
-              {
-                id: "delete",
-                label: "Delete workspace",
-                icon: "trash",
-                destructive: true,
-                separatorBefore: true,
-              },
-            ]
-          : []),
+        {
+          id: "move-right",
+          label: "Move right",
+          disabled: index === current.workspaces.length - 1,
+        },
+        {
+          id: "default",
+          label: "Default for new projects",
+          checked: isDefault,
+          separatorBefore: true,
+        },
+        isDefault
+          ? {
+              id: "delete-blocked",
+              label: "Default workspace can't be deleted",
+              disabled: true,
+              separatorBefore: true,
+            }
+          : {
+              id: "delete",
+              label: "Delete workspace",
+              icon: "trash",
+              destructive: true,
+              separatorBefore: true,
+            },
       ];
       const clicked = await api.contextMenu.show(items, position);
       if (!clicked) return;
-      if (clicked === "rename") {
+      if (clicked === "rename" || clicked === "icon:label") {
         view.setActiveWorkspace(workspaceId);
-        setRenamingWorkspace(true);
+        setEditingWorkspace(clicked === "rename" ? "name" : "label");
+      } else if (clicked.startsWith("icon:glyph:")) {
+        setWorkspaceIcon(
+          workspaceId,
+          `${WORKSPACE_GLYPH_PREFIX}${clicked.slice("icon:glyph:".length)}`,
+        );
+      } else if (clicked === "icon:reset") {
+        setWorkspaceIcon(workspaceId, undefined);
       } else if (clicked.startsWith("color:")) {
         const color = clicked.slice("color:".length);
         writeConfig((config) => ({
@@ -626,6 +708,10 @@ export default function WorkspaceSidebar() {
             entry.id === workspaceId ? { ...entry, color } : entry,
           ),
         }));
+      } else if (clicked === "move-left") {
+        reorderWorkspace(workspaceId, index - 1);
+      } else if (clicked === "move-right") {
+        reorderWorkspace(workspaceId, index + 2);
       } else if (clicked === "default") {
         writeConfig((config) => ({ ...config, defaultWorkspace: workspaceId }));
       } else if (clicked === "delete") {
@@ -634,24 +720,23 @@ export default function WorkspaceSidebar() {
         );
         if (!confirmed) return;
         writeConfig((config) => {
-          const remaining = config.workspaces.filter((entry) => entry.id !== workspaceId);
+          // The default can't be deleted, so pinning it keeps it put.
+          const defaultWorkspace = effectiveDefaultWorkspaceId(config);
+          if (defaultWorkspace === workspaceId) return config;
           return {
             ...config,
-            workspaces: remaining,
+            workspaces: config.workspaces.filter((entry) => entry.id !== workspaceId),
             assignments: Object.fromEntries(
               Object.entries(config.assignments).filter(([, target]) => target !== workspaceId),
             ),
             rules: config.rules.filter((rule) => rule.workspace !== workspaceId),
-            defaultWorkspace:
-              config.defaultWorkspace === workspaceId
-                ? (remaining[0]?.id ?? null)
-                : config.defaultWorkspace,
+            defaultWorkspace,
           };
         });
         if (activeWorkspaceId === workspaceId) view.setActiveWorkspace(null);
       }
     },
-    [activeWorkspaceId, view, writeConfig],
+    [activeWorkspaceId, reorderWorkspace, setWorkspaceIcon, view, writeConfig],
   );
   const openFolderMenu = useCallback(
     async (folder: FolderModel, position: { x: number; y: number }) => {
@@ -1110,9 +1195,12 @@ export default function WorkspaceSidebar() {
       <WorkspaceTitlebar
         workspace={headerWorkspace}
         isElectron={isElectron}
-        isRenaming={renamingWorkspace && headerWorkspace !== null}
-        onStartRename={() => setRenamingWorkspace(true)}
+        editing={headerWorkspace !== null ? editingWorkspace : null}
+        onStartRename={() => setEditingWorkspace("name")}
         onCommitRename={(name) => headerWorkspace && renameWorkspace(headerWorkspace.id, name)}
+        onCommitLabel={(label) =>
+          headerWorkspace && commitWorkspaceLabel(headerWorkspace.id, label)
+        }
         onContextMenu={(event) => {
           event.preventDefault();
           if (headerWorkspace) {
@@ -1189,12 +1277,14 @@ export default function WorkspaceSidebar() {
       <WorkspaceDock
         entries={tileEntries}
         activeWorkspaceId={activeWorkspaceId}
+        defaultWorkspaceId={defaultWorkspaceId}
         tilesVisible={view.tilesVisible}
         onSelect={switchWorkspace}
         onTileContextMenu={(workspaceId, position) => void openWorkspaceMenu(workspaceId, position)}
         onCreate={createWorkspace}
         onToggleTiles={view.toggleTiles}
         onDropProject={moveProject}
+        onReorder={reorderWorkspace}
       />
       <SidebarChromeFooter />
     </div>

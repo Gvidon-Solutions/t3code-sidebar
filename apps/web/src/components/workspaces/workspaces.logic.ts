@@ -19,12 +19,37 @@ export const WORKSPACE_COLORS = [
   "#8f9a5a",
 ] as const;
 
-/** Tile letter: the explicit icon, else the name's first letter. */
-export function workspaceInitials(workspace: Pick<SidebarWorkspace, "name" | "icon">): string {
+/** `icon` values with this prefix name a built-in glyph; anything else is a short label. */
+export const WORKSPACE_GLYPH_PREFIX = "glyph:";
+/** Longest tile label, in user-perceived characters (an emoji counts as one). */
+export const WORKSPACE_LABEL_MAX = 2;
+
+const graphemes = (value: string): string[] =>
+  Array.from(
+    new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value),
+    (part) => part.segment,
+  );
+
+/** Trims a typed tile label to its first few characters; null when nothing is left. */
+export function normalizeWorkspaceLabel(raw: string): string | null {
+  const label = graphemes(raw.trim()).slice(0, WORKSPACE_LABEL_MAX).join("").trim();
+  return label.length > 0 ? label : null;
+}
+
+export type WorkspaceMarkSpec = { kind: "glyph"; glyph: string } | { kind: "text"; text: string };
+
+/** What a tile shows: a built-in glyph, the custom label, or the name's first letter. */
+export function workspaceMark(
+  workspace: Pick<SidebarWorkspace, "name" | "icon">,
+): WorkspaceMarkSpec {
   const icon = workspace.icon?.trim();
-  if (icon) return icon.slice(0, 2);
-  const letter = workspace.name.trim().charAt(0);
-  return letter ? letter.toUpperCase() : "?";
+  if (icon?.startsWith(WORKSPACE_GLYPH_PREFIX)) {
+    return { kind: "glyph", glyph: icon.slice(WORKSPACE_GLYPH_PREFIX.length) };
+  }
+  const label = icon ? normalizeWorkspaceLabel(icon) : null;
+  if (label) return { kind: "text", text: label };
+  const letter = graphemes(workspace.name.trim())[0];
+  return { kind: "text", text: letter ? letter.toUpperCase() : "?" };
 }
 
 export function workspaceColor(workspace: Pick<SidebarWorkspace, "id" | "color">): string {
@@ -84,10 +109,42 @@ export function resolveProjectWorkspaceId(
     const pattern = globToRegExp(rule.match);
     if (project.workspaceRoots.some((root) => pattern.test(root))) return rule.workspace;
   }
-  if (config.defaultWorkspace !== null && known.has(config.defaultWorkspace)) {
-    return config.defaultWorkspace;
+  return effectiveDefaultWorkspaceId(config);
+}
+
+/**
+ * The workspace unplaced projects fall into: the configured default, or the
+ * first workspace when that is unset or gone. It is the one workspace that
+ * can't be deleted, so there is always somewhere for projects to land.
+ */
+export function effectiveDefaultWorkspaceId(config: SidebarWorkspacesConfig): string | null {
+  const configured = config.defaultWorkspace;
+  if (configured !== null && config.workspaces.some((workspace) => workspace.id === configured)) {
+    return configured;
   }
   return config.workspaces[0]?.id ?? null;
+}
+
+/**
+ * Moves a workspace so it sits before `beforeIndex` (a slot in the current
+ * order, 0..length) and returns the new order; unknown ids leave it as is.
+ */
+export function reorderWorkspaces<T extends { readonly id: string }>(
+  workspaces: readonly T[],
+  workspaceId: string,
+  beforeIndex: number,
+): readonly T[] {
+  const from = workspaces.findIndex((workspace) => workspace.id === workspaceId);
+  if (from < 0) return workspaces;
+  const moved = workspaces[from]!;
+  const insertAt = Math.max(
+    0,
+    Math.min(beforeIndex > from ? beforeIndex - 1 : beforeIndex, workspaces.length - 1),
+  );
+  if (insertAt === from) return workspaces;
+  const next = workspaces.filter((_, index) => index !== from);
+  next.splice(insertAt, 0, moved);
+  return next;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
