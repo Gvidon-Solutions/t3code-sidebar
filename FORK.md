@@ -87,6 +87,28 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-12 — Projects keep their place; drag to reorder; swipe the tile bar
+
+- **What.** Project folders no longer jump to the top when a thread in them gets activity:
+  they stay in the order you put them in, the same on desktop and phone. A new project
+  appears on top. "No project" (desktop: Chats) always sits last, under Quiet projects and
+  above Snoozed, and never folds into Quiet. Desktop: drag a folder above or below another
+  (dropping it on a workspace tile still moves it there). Phone: hold a folder and move the
+  finger; the list turns into a compact list of folders to drop it into place. Hold and let
+  go without moving for the folder menu as before. A horizontal swipe along the bottom tile
+  bar opens the previous or next workspace.
+- **How.** The order is `projectOrder` in the shared `sidebarWorkspaces` setting, one list of
+  project keys for all workspaces; projects not in it yet sort first, newest first. Quiet
+  projects keep their slot and return to it. The phone's long-press is a pan gesture that
+  activates after the hold and opens the anchored menu itself when the finger never moved.
+  The tile-bar swipe is off while the tiles overflow and the bar scrolls. Servers older than
+  this drop the field on write, so the server needs this build too.
+- **Where.** `sortWorkspaceProjects` and `moveProjectInOrder` in
+  `packages/client-runtime/src/state/sidebarWorkspaces.ts`; desktop drag in
+  `WorkspaceSidebar.tsx`; phone drag in `apps/mobile/src/features/workspaces/WorkspaceFolderDrag.tsx`,
+  hosted by `HomeScreen.tsx` and `WorkspaceDrawer.tsx`; the tile-bar swipe in
+  `WorkspaceChrome.tsx`.
+
 ### 2026-10-11 — Keyboard stays up after sending (phone)
 
 - **What.** Sending a message no longer closes the keyboard, so follow-ups are one tap away;

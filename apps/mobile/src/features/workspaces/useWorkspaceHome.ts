@@ -1,10 +1,12 @@
+import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { resolveProjectWorkspaceId } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
 import { useCallback, useMemo } from "react";
 
 import { scopedProjectKey } from "../../lib/scopedEntities";
-import type { HomeProjectScope, HomeProjectSortOrder } from "../home/homeThreadList";
+import { useServerConfigs } from "../../state/entities";
+import type { HomeProjectScope } from "../home/homeThreadList";
 import {
   resolveThreadListV2Status,
   type ThreadListV2Item,
@@ -13,7 +15,11 @@ import {
 } from "../threads/threadListV2";
 import { useSidebarWorkspaces } from "./useSidebarWorkspaces";
 import type { WorkspaceTileActivity } from "./WorkspaceChrome";
-import { buildWorkspaceHomeItems, type WorkspaceHomeListItem } from "./workspaceNavigator";
+import {
+  arrangeWorkspaceFolders,
+  buildWorkspaceHomeItems,
+  type WorkspaceHomeListItem,
+} from "./workspaceNavigator";
 
 /**
  * Home's workspace mode (fork feature): which projects the open workspace
@@ -26,6 +32,7 @@ export function useWorkspaceHome(input: {
 }) {
   const workspaces = useSidebarWorkspaces();
   const { config, currentWorkspaceId, toggles } = workspaces;
+  const serverConfigs = useServerConfigs();
 
   const scopeByProjectRef = useMemo(() => {
     const map = new Map<string, { scope: HomeProjectScope; workspaceId: string | null }>();
@@ -111,10 +118,16 @@ export function useWorkspaceHome(input: {
             memberKeys: scope.projectRefs.map((member) =>
               scopedProjectKey(member.environmentId, member.projectId),
             ),
+            isScratch: scope.projects.some((project) =>
+              isScratchProject(
+                project,
+                serverConfigs.get(project.environmentId)?.scratchWorkspaceRoot,
+              ),
+            ),
           },
         ];
       }),
-    [currentWorkspaceId, input.projectScopes, scopeByProjectRef],
+    [currentWorkspaceId, input.projectScopes, scopeByProjectRef, serverConfigs],
   );
 
   /** Home's rows: the folder list, or upstream's flat list while searching. */
@@ -122,7 +135,6 @@ export function useWorkspaceHome(input: {
     (list: {
       readonly base: ReadonlyArray<ThreadListV2ListItem>;
       readonly searching: boolean;
-      readonly sortOrder: HomeProjectSortOrder;
       readonly settlementEnvironmentIds: ReadonlySet<EnvironmentId>;
       readonly snoozeEnvironmentIds: ReadonlySet<EnvironmentId>;
       readonly queuedThreadKeys: ReadonlySet<string>;
@@ -141,7 +153,7 @@ export function useWorkspaceHome(input: {
           quietAfterDays: config.quietAfterDays,
           alwaysShow: new Set(config.alwaysShow),
           toggles,
-          sortOrder: list.sortOrder,
+          projectOrder: config.projectOrder,
           settlementEnvironmentIds: list.settlementEnvironmentIds,
           snoozeEnvironmentIds: list.snoozeEnvironmentIds,
           queuedThreadKeys: list.queuedThreadKeys,
@@ -154,7 +166,30 @@ export function useWorkspaceHome(input: {
     [config, currentWorkspaceId, folders, input.threads, toggles],
   );
 
+  /** The open workspace's folders for the long-press drag, read when a drag starts. */
+  const arrangeFolders = useCallback(
+    () =>
+      config === null
+        ? []
+        : arrangeWorkspaceFolders({
+            folders,
+            threads: input.threads,
+            quietAfterDays: config.quietAfterDays,
+            alwaysShow: new Set(config.alwaysShow),
+            projectOrder: config.projectOrder,
+            now: Date.now(),
+          }),
+    [config, folders, input.threads],
+  );
+
   const workspace =
     config?.workspaces.find((candidate) => candidate.id === currentWorkspaceId) ?? null;
-  return { ...workspaces, workspace, restrictProjectRefs, activity, buildItems } as const;
+  return {
+    ...workspaces,
+    workspace,
+    restrictProjectRefs,
+    activity,
+    buildItems,
+    arrangeFolders,
+  } as const;
 }

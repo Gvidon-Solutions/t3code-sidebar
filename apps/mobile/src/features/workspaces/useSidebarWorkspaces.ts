@@ -3,6 +3,7 @@ import {
   addWorkspace,
   deleteWorkspace,
   effectiveDefaultWorkspaceId,
+  moveProjectInOrder,
   reorderWorkspaces,
   updateWorkspace,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
@@ -91,6 +92,15 @@ export function useSidebarWorkspaces() {
       })),
     [updateConfig],
   );
+  /** Drops `projectKey` before `beforeKey` (null: last) among `sequence`, the open workspace's folders. */
+  const reorderProject = useCallback(
+    (projectKey: string, beforeKey: string | null, sequence: ReadonlyArray<string>) =>
+      updateConfig((current) => ({
+        ...current,
+        projectOrder: moveProjectInOrder(current.projectOrder, sequence, projectKey, beforeKey),
+      })),
+    [updateConfig],
+  );
   /** The workspace edits the desktop offers, writing to every server that has workspaces. */
   const edit = useMemo(
     () => ({
@@ -130,6 +140,7 @@ export function useSidebarWorkspaces() {
     openWorkspace,
     toggle,
     moveProject,
+    reorderProject,
     edit,
   } as const;
 }

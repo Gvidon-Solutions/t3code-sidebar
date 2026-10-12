@@ -19,11 +19,14 @@ import { workspaceColor, workspaceMark } from "@t3tools/client-runtime/state/sid
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { SidebarWorkspace } from "@t3tools/contracts";
 import type { MenuAction, NativeActionEvent } from "@react-native-menu/menu";
-import { memo, useEffect, useMemo } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import * as Haptics from "expo-haptics";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Platform, Pressable, ScrollView, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
+import { AndroidAnchoredMenu } from "../../components/AndroidAnchoredMenu";
 import { ControlPillMenu } from "../../components/ControlPillMenu";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
@@ -33,6 +36,7 @@ import type {
   WorkspaceSectionListItem,
 } from "./workspaceNavigator";
 import { setWorkspaceDockHeight } from "./workspaceDockInset";
+import { FolderDragHandle, useFolderDragAvailable } from "./WorkspaceFolderDrag";
 
 /** Same glyph keys as the desktop tile icons (`glyph:<key>` in the shared config). */
 const WORKSPACE_GLYPHS: Readonly<Record<string, Icon>> = {
@@ -133,6 +137,31 @@ export function WorkspaceDock(props: {
 }) {
   const reportsHeight = props.reportsHeight !== false;
   useEffect(() => (reportsHeight ? () => setWorkspaceDockHeight(0) : undefined), [reportsHeight]);
+  // A horizontal swipe along the bar opens the neighbouring workspace. Only
+  // while the tiles fit: once the bar scrolls, the swipe belongs to it.
+  const [barWidth, setBarWidth] = useState(0);
+  const [tilesWidth, setTilesWidth] = useState(0);
+  const tilesFit = barWidth > 0 && tilesWidth <= barWidth;
+  const latest = useRef(props);
+  latest.current = props;
+  const swipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(tilesFit)
+        .activeOffsetX([-16, 16])
+        .failOffsetY([-14, 14])
+        .runOnJS(true)
+        .onEnd((event) => {
+          if (Math.abs(event.translationX) < 40 && Math.abs(event.velocityX) < 500) return;
+          const { workspaces, currentWorkspaceId, onOpen } = latest.current;
+          const index = workspaces.findIndex((workspace) => workspace.id === currentWorkspaceId);
+          const next = workspaces[index + (event.translationX < 0 ? 1 : -1)];
+          if (index < 0 || !next) return;
+          void Haptics.selectionAsync();
+          onOpen(next.id);
+        }),
+    [tilesFit],
+  );
   return (
     <View
       className="border-t border-border bg-screen"
@@ -144,82 +173,92 @@ export function WorkspaceDock(props: {
       style={{ paddingBottom: props.bottomInset }}
       testID="workspace-dock"
     >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          gap: 10,
-          paddingLeft: 16,
-          paddingRight: 16,
-          paddingVertical: 10,
-        }}
-      >
-        {props.workspaces.map((workspace) => {
-          const selected = workspace.id === props.currentWorkspaceId;
-          const activity = props.activity.get(workspace.id);
-          const tile = (
+      <GestureDetector gesture={swipe}>
+        <ScrollView
+          horizontal
+          // A bar with nothing to scroll would still claim horizontal drags.
+          scrollEnabled={!tilesFit}
+          showsHorizontalScrollIndicator={false}
+          onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
+          onContentSizeChange={(width) => setTilesWidth(width)}
+          contentContainerStyle={{
+            gap: 10,
+            paddingLeft: 16,
+            paddingRight: 16,
+            paddingVertical: 10,
+          }}
+        >
+          {props.workspaces.map((workspace) => {
+            const selected = workspace.id === props.currentWorkspaceId;
+            const activity = props.activity.get(workspace.id);
+            const tile = (
+              <Pressable
+                key={workspace.id}
+                accessibilityLabel={`Workspace ${workspace.name}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => props.onOpen(workspace.id)}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                testID={`workspace-tile-${workspace.id}`}
+              >
+                <WorkspaceAvatar workspace={workspace} size={40} selected={selected} />
+                {activity && (activity.attention > 0 || activity.working > 0) ? (
+                  <View
+                    className={cn(
+                      "absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-screen",
+                      activity.attention > 0 ? "bg-warning" : "bg-primary",
+                    )}
+                  />
+                ) : null}
+              </Pressable>
+            );
+            const menu = props.menuFor?.(workspace);
+            return menu ? (
+              <ControlPillMenu
+                key={workspace.id}
+                actions={menu.actions}
+                onPressAction={menu.onPressAction}
+                shouldOpenOnLongPress
+              >
+                {tile}
+              </ControlPillMenu>
+            ) : (
+              tile
+            );
+          })}
+          {props.onAdd ? (
             <Pressable
-              key={workspace.id}
-              accessibilityLabel={`Workspace ${workspace.name}`}
+              accessibilityLabel="New workspace"
               accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => props.onOpen(workspace.id)}
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-              testID={`workspace-tile-${workspace.id}`}
+              onPress={props.onAdd}
+              className="items-center justify-center border border-dashed border-border"
+              style={({ pressed }) => ({
+                width: 40,
+                height: 40,
+                borderRadius: 40 * 0.28,
+                opacity: pressed ? 0.6 : 1,
+              })}
+              testID="workspace-tile-new"
             >
-              <WorkspaceAvatar workspace={workspace} size={40} selected={selected} />
-              {activity && (activity.attention > 0 || activity.working > 0) ? (
-                <View
-                  className={cn(
-                    "absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-screen",
-                    activity.attention > 0 ? "bg-warning" : "bg-primary",
-                  )}
-                />
-              ) : null}
+              <SymbolView
+                name="plus"
+                size={18}
+                tintColorClassName="accent-foreground-muted"
+                type="monochrome"
+              />
             </Pressable>
-          );
-          const menu = props.menuFor?.(workspace);
-          return menu ? (
-            <ControlPillMenu
-              key={workspace.id}
-              actions={menu.actions}
-              onPressAction={menu.onPressAction}
-              shouldOpenOnLongPress
-            >
-              {tile}
-            </ControlPillMenu>
-          ) : (
-            tile
-          );
-        })}
-        {props.onAdd ? (
-          <Pressable
-            accessibilityLabel="New workspace"
-            accessibilityRole="button"
-            onPress={props.onAdd}
-            className="items-center justify-center border border-dashed border-border"
-            style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 40 * 0.28,
-              opacity: pressed ? 0.6 : 1,
-            })}
-            testID="workspace-tile-new"
-          >
-            <SymbolView
-              name="plus"
-              size={18}
-              tintColorClassName="accent-foreground-muted"
-              type="monochrome"
-            />
-          </Pressable>
-        ) : null}
-      </ScrollView>
+          ) : null}
+        </ScrollView>
+      </GestureDetector>
     </View>
   );
 }
 
-/** A project folder header, as on the desktop: tap folds it, + starts a thread, long-press moves it. */
+/**
+ * A project folder header, as on the desktop: tap folds it, + starts a thread.
+ * Long-press opens its menu; on Android, holding and moving drags it into a
+ * new place (see `WorkspaceFolderDrag`). "No project" only has the menu.
+ */
 export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly item: WorkspaceFolderListItem;
   readonly workspaces: ReadonlyArray<SidebarWorkspace>;
@@ -248,64 +287,76 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       props.onMove(item.projectKey, nativeEvent.event.slice("move:".length));
     }
   };
-  return (
-    <ControlPillMenu actions={actions} onPressAction={handleAction} shouldOpenOnLongPress>
+  const draggable = useFolderDragAvailable() && Platform.OS === "android" && !item.isScratch;
+  const row = (
+    <Pressable
+      accessibilityLabel={item.title}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: item.open }}
+      className="mt-1 flex-row items-center gap-2 py-1 pl-3 pr-2"
+      onPress={() => props.onToggle(item.folderKey)}
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      testID={`workspace-folder-${item.projectKey}`}
+    >
+      <SymbolView
+        name={item.open ? "chevron.down" : "chevron.right"}
+        size={12}
+        tintColorClassName="accent-foreground-muted"
+        type="monochrome"
+      />
+      <ProjectFavicon
+        environmentId={item.project.environmentId}
+        faviconPath={item.project.faviconPath}
+        projectIcon={item.project.projectIcon}
+        size={16}
+        projectTitle={item.project.title}
+        workspaceRoot={item.project.workspaceRoot}
+      />
+      <Text className="min-w-0 flex-1 text-[15px] font-t3-medium text-foreground" numberOfLines={1}>
+        {item.title}
+      </Text>
+      {!item.open && item.attention > 0 ? (
+        <Text className="text-xs font-t3-bold tabular-nums text-warning-foreground">
+          ◆{item.attention}
+        </Text>
+      ) : null}
+      {!item.open && item.working > 0 ? (
+        <Text className="text-xs font-t3-bold tabular-nums text-adaptive-sky-600-400">
+          ●{item.working}
+        </Text>
+      ) : null}
       <Pressable
-        accessibilityLabel={item.title}
+        accessibilityLabel={`New thread in ${item.title}`}
         accessibilityRole="button"
-        accessibilityState={{ expanded: item.open }}
-        className="mt-1 flex-row items-center gap-2 py-1 pl-3 pr-2"
-        onPress={() => props.onToggle(item.folderKey)}
-        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-        testID={`workspace-folder-${item.projectKey}`}
+        hitSlop={8}
+        onPress={() => props.onNewThread(item.project)}
+        className="h-8 w-8 items-center justify-center rounded-full"
+        style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+        testID={`workspace-folder-new-${item.projectKey}`}
       >
         <SymbolView
-          name={item.open ? "chevron.down" : "chevron.right"}
-          size={12}
+          name="square.and.pencil"
+          size={16}
           tintColorClassName="accent-foreground-muted"
           type="monochrome"
         />
-        <ProjectFavicon
-          environmentId={item.project.environmentId}
-          faviconPath={item.project.faviconPath}
-          projectIcon={item.project.projectIcon}
-          size={16}
-          projectTitle={item.project.title}
-          workspaceRoot={item.project.workspaceRoot}
-        />
-        <Text
-          className="min-w-0 flex-1 text-[15px] font-t3-medium text-foreground"
-          numberOfLines={1}
-        >
-          {item.title}
-        </Text>
-        {!item.open && item.attention > 0 ? (
-          <Text className="text-xs font-t3-bold tabular-nums text-warning-foreground">
-            ◆{item.attention}
-          </Text>
-        ) : null}
-        {!item.open && item.working > 0 ? (
-          <Text className="text-xs font-t3-bold tabular-nums text-adaptive-sky-600-400">
-            ●{item.working}
-          </Text>
-        ) : null}
-        <Pressable
-          accessibilityLabel={`New thread in ${item.title}`}
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => props.onNewThread(item.project)}
-          className="h-8 w-8 items-center justify-center rounded-full"
-          style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-          testID={`workspace-folder-new-${item.projectKey}`}
-        >
-          <SymbolView
-            name="square.and.pencil"
-            size={16}
-            tintColorClassName="accent-foreground-muted"
-            type="monochrome"
-          />
-        </Pressable>
       </Pressable>
+    </Pressable>
+  );
+  if (draggable) {
+    return (
+      <AndroidAnchoredMenu actions={actions} onPressAction={handleAction}>
+        {(open) => (
+          <FolderDragHandle projectKey={item.projectKey} onMenu={open}>
+            {row}
+          </FolderDragHandle>
+        )}
+      </AndroidAnchoredMenu>
+    );
+  }
+  return (
+    <ControlPillMenu actions={actions} onPressAction={handleAction} shouldOpenOnLongPress>
+      {row}
     </ControlPillMenu>
   );
 });

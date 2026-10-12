@@ -8,6 +8,8 @@ import {
   WORKSPACE_COLORS,
   addWorkspace,
   deleteWorkspace,
+  moveProjectInOrder,
+  sortWorkspaceProjects,
   updateWorkspace,
 } from "./sidebarWorkspaces";
 
@@ -46,5 +48,36 @@ describe("workspace edits", () => {
     expect(next.rules).toEqual([]);
     expect(next.defaultWorkspace).toBe("home");
     expect(deleteWorkspace(config, "home")).toBe(config);
+  });
+});
+
+describe("project order", () => {
+  const project = (projectKey: string, createdAt: string) => ({ projectKey, createdAt });
+  const keys = (projects: ReadonlyArray<{ projectKey: string }>) =>
+    projects.map((entry) => entry.projectKey);
+
+  it("keeps the user's order and puts unlisted projects on top, newest first", () => {
+    const sorted = sortWorkspaceProjects(
+      [
+        project("a", "2026-01-01T00:00:00Z"),
+        project("old", "2025-01-01T00:00:00Z"),
+        project("b", "2026-02-01T00:00:00Z"),
+        project("new", "2026-09-01T00:00:00Z"),
+      ],
+      ["b", "elsewhere", "a"],
+      (entry) => entry,
+    );
+    expect(keys(sorted)).toEqual(["new", "old", "b", "a"]);
+  });
+
+  it("moves a project within its workspace and keeps other workspaces' keys", () => {
+    expect(moveProjectInOrder(["x", "a", "b"], ["new", "a", "b"], "b", "new")).toEqual([
+      "b",
+      "new",
+      "a",
+      "x",
+    ]);
+    expect(moveProjectInOrder([], ["a", "b", "c"], "a", null)).toEqual(["b", "c", "a"]);
+    expect(moveProjectInOrder([], ["a", "b", "c"], "c", "b")).toEqual(["a", "c", "b"]);
   });
 });

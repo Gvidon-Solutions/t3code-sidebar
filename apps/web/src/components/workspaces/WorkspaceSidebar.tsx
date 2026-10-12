@@ -121,10 +121,12 @@ import {
   deleteWorkspace,
   isProjectQuiet,
   isThreadUnread,
+  moveProjectInOrder,
   needsAttention,
   normalizeWorkspaceLabel,
   reorderWorkspaces,
   resolveProjectWorkspaceId,
+  sortWorkspaceProjects,
   summarizeWorkspaceActivity,
   threadActivityMs,
   WORKSPACE_COLORS,
@@ -336,13 +338,16 @@ export default function WorkspaceSidebar() {
         workspaceId,
         label: isScratch ? "Chats" : group.displayName,
         isScratch,
-        quiet: isProjectQuiet({
-          threads: all,
-          projectCreatedAt: group.createdAt ?? null,
-          quietAfterDays: config.quietAfterDays,
-          alwaysShow: alwaysShow.has(group.projectKey),
-          now,
-        }),
+        // "No project" never folds away: it sits last, below Quiet projects.
+        quiet:
+          !isScratch &&
+          isProjectQuiet({
+            threads: all,
+            projectCreatedAt: group.createdAt ?? null,
+            quietAfterDays: config.quietAfterDays,
+            alwaysShow: alwaysShow.has(group.projectKey),
+            now,
+          }),
         active: sortThreadsForSidebar(active),
         settled: settled.toSorted(
           (left, right) =>
@@ -352,6 +357,17 @@ export default function WorkspaceSidebar() {
       });
     }
     for (const bucket of byWorkspace.values()) {
+      bucket.folders = [
+        ...sortWorkspaceProjects(
+          bucket.folders.filter((folder) => !folder.isScratch),
+          config.projectOrder,
+          (folder) => ({
+            projectKey: folder.group.projectKey,
+            createdAt: folder.group.createdAt ?? null,
+          }),
+        ),
+        ...bucket.folders.filter((folder) => folder.isScratch),
+      ];
       bucket.pinned = sortPinnedThreadsForSidebar(bucket.pinned);
       bucket.snoozed.sort(
         (left, right) =>
@@ -441,6 +457,11 @@ export default function WorkspaceSidebar() {
   );
 
   // ── Search ────────────────────────────────────────────────────────────
+  // Folder drag within a workspace: the lifted folder and the line it would land on.
+  const [folderDrag, setFolderDrag] = useState<{ workspaceId: string; projectKey: string } | null>(
+    null,
+  );
+  const [folderDrop, setFolderDrop] = useState<{ projectKey: string; after: boolean } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isSearching = searchQuery.trim().length > 0;
@@ -939,8 +960,32 @@ export default function WorkspaceSidebar() {
       : group.displayName;
   };
 
+  /** Drops the dragged folder next to `target`, in the order both workspaces' clients share. */
+  const dropFolder = (target: FolderModel, after: boolean) => {
+    const dragged = folderDrag?.projectKey;
+    const bucket = model.byWorkspace.get(target.workspaceId);
+    if (!dragged || !bucket || dragged === target.group.projectKey) return;
+    const sequence = bucket.folders
+      .filter((folder) => !folder.isScratch)
+      .map((folder) => folder.group.projectKey);
+    const rest = sequence.filter((key) => key !== dragged);
+    const beforeKey = after
+      ? (rest[rest.indexOf(target.group.projectKey) + 1] ?? null)
+      : target.group.projectKey;
+    writeConfig((current) => ({
+      ...current,
+      projectOrder: moveProjectInOrder(current.projectOrder, sequence, dragged, beforeKey),
+    }));
+  };
+
   const renderFolder = (folder: FolderModel) => {
     const folderKey = `${folder.workspaceId}:${folder.group.projectKey}`;
+    const dropAt = folderDrop?.projectKey === folder.group.projectKey ? folderDrop : null;
+    const acceptsDrop =
+      folderDrag !== null &&
+      !folder.isScratch &&
+      folderDrag.workspaceId === folder.workspaceId &&
+      folderDrag.projectKey !== folder.group.projectKey;
     const open = view.folderOpen[folderKey] ?? !folder.quiet;
     const expanded = view.folderExpanded[folderKey] ?? false;
     const settledOpen = view.settledOpen[folderKey] ?? false;
@@ -965,7 +1010,7 @@ export default function WorkspaceSidebar() {
           draggable
           aria-expanded={open}
           title={folder.group.memberProjects.map((member) => member.workspaceRoot).join("\n")}
-          className="group/ws-folder flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-[13px] font-medium text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
+          className="group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-[13px] font-medium text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => view.setFolderOpen(folderKey, !open)}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
@@ -980,8 +1025,48 @@ export default function WorkspaceSidebar() {
           onDragStart={(event) => {
             event.dataTransfer.setData(WORKSPACE_PROJECT_DRAG_TYPE, folder.group.projectKey);
             event.dataTransfer.effectAllowed = "move";
+            if (!folder.isScratch) {
+              setFolderDrag({
+                workspaceId: folder.workspaceId,
+                projectKey: folder.group.projectKey,
+              });
+            }
+          }}
+          onDragEnd={() => {
+            setFolderDrag(null);
+            setFolderDrop(null);
+          }}
+          onDragOver={(event) => {
+            if (!acceptsDrop) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            const rect = event.currentTarget.getBoundingClientRect();
+            const after = event.clientY > rect.top + rect.height / 2;
+            if (dropAt?.after !== after) {
+              setFolderDrop({ projectKey: folder.group.projectKey, after });
+            }
+          }}
+          onDragLeave={(event) => {
+            if (dropAt && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setFolderDrop(null);
+            }
+          }}
+          onDrop={(event) => {
+            if (!acceptsDrop) return;
+            event.preventDefault();
+            dropFolder(folder, dropAt?.after ?? false);
+            setFolderDrag(null);
+            setFolderDrop(null);
           }}
         >
+          {dropAt ? (
+            <span
+              className={cn(
+                "pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-primary",
+                dropAt.after ? "-bottom-px" : "-top-px",
+              )}
+            />
+          ) : null}
           <ChevronRightIcon
             className={cn(
               "size-3.5 shrink-0 text-sidebar-muted-foreground transition-transform duration-150",
@@ -1051,8 +1136,9 @@ export default function WorkspaceSidebar() {
   };
 
   const renderWorkspaceBody = (bucket: WorkspaceModel, nested: boolean) => {
-    const loud = bucket.folders.filter((folder) => !folder.quiet);
+    const loud = bucket.folders.filter((folder) => !folder.quiet && !folder.isScratch);
     const quiet = bucket.folders.filter((folder) => folder.quiet);
+    const scratch = bucket.folders.filter((folder) => folder.isScratch);
     const quietKey = `quiet:${bucket.workspace.id}`;
     const quietHoldsActive = quiet.some((folder) =>
       folder.all.some((thread) => threadKeyOf(thread) === routeThreadKey),
@@ -1088,6 +1174,7 @@ export default function WorkspaceSidebar() {
             {quiet.map(renderFolder)}
           </CollapsibleSection>
         ) : null}
+        {scratch.map(renderFolder)}
         {!nested && bucket.snoozed.length > 0 ? (
           <CollapsibleSection
             icon={<AlarmClockIcon className="size-3" />}

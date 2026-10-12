@@ -146,6 +146,48 @@ export function reorderWorkspaces<T extends { readonly id: string }>(
   return next;
 }
 
+/**
+ * A workspace's projects in the user's order (`config.projectOrder`).
+ * Projects the order doesn't list yet go on top, newest first, so a new
+ * project shows up where it is easy to find and nothing moves on activity.
+ */
+export function sortWorkspaceProjects<T>(
+  projects: readonly T[],
+  projectOrder: readonly string[],
+  identity: (project: T) => { readonly projectKey: string; readonly createdAt: string | null },
+): T[] {
+  const rank = new Map(projectOrder.map((projectKey, index) => [projectKey, index] as const));
+  const created = (project: T) => Date.parse(identity(project).createdAt ?? "") || 0;
+  const unlisted: T[] = [];
+  const listed: T[] = [];
+  for (const project of projects) {
+    (rank.has(identity(project).projectKey) ? listed : unlisted).push(project);
+  }
+  unlisted.sort((left, right) => created(right) - created(left));
+  listed.sort(
+    (left, right) => rank.get(identity(left).projectKey)! - rank.get(identity(right).projectKey)!,
+  );
+  return [...unlisted, ...listed];
+}
+
+/**
+ * Moves `projectKey` so it sits before `beforeKey` (null: last) in
+ * `sequence`, one workspace's projects as shown, and returns the new
+ * `projectOrder`. Keys of other workspaces keep their relative order.
+ */
+export function moveProjectInOrder(
+  projectOrder: readonly string[],
+  sequence: readonly string[],
+  projectKey: string,
+  beforeKey: string | null,
+): string[] {
+  const next = sequence.filter((key) => key !== projectKey);
+  const at = beforeKey === null ? -1 : next.indexOf(beforeKey);
+  next.splice(at < 0 ? next.length : at, 0, projectKey);
+  const moved = new Set(next);
+  return [...next, ...projectOrder.filter((key) => !moved.has(key))];
+}
+
 /** Lowercase slug for a new workspace id, unique against `taken`. */
 export function makeWorkspaceId(name: string, taken: ReadonlySet<string>): string {
   const base =

@@ -4,15 +4,14 @@ import type {
 } from "@t3tools/client-runtime/state/shell";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
+import { sortWorkspaceProjects } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import {
-  getThreadSortTimestamp,
   sortActiveThreadsByOrderKey,
   sortPinnedThreadsByOrderKey,
   toSortableTimestamp,
 } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentId } from "@t3tools/contracts";
 
-import type { HomeProjectSortOrder } from "../home/homeThreadList";
 import {
   resolveThreadListV2Status,
   threadListV2ListItemsAreEqual,
@@ -23,9 +22,10 @@ import {
 
 /**
  * Home in workspace mode (sidebar fork), laid out like the desktop workspace
- * sidebar: pinned threads, then project folders of one-line threads, quiet
- * projects folded into one group, snoozed threads last. Same partition and
- * order rules as the desktop (`WorkspaceSidebar.tsx`).
+ * sidebar: pinned threads, then project folders of one-line threads in the
+ * user's order, quiet projects folded into one group, "No project", snoozed
+ * threads last. Same partition and order rules as the desktop
+ * (`WorkspaceSidebar.tsx`).
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -38,6 +38,8 @@ export interface WorkspaceFolderInput {
   readonly projectCreatedAt: string | null;
   /** `environmentId:projectId` of every member project. */
   readonly memberKeys: ReadonlyArray<string>;
+  /** The environment's "No project" folder: never quiet, always last. */
+  readonly isScratch: boolean;
 }
 
 export type WorkspaceSectionKind = "pinned" | "quiet" | "snoozed";
@@ -62,6 +64,7 @@ export interface WorkspaceFolderListItem {
   readonly project: EnvironmentProject;
   readonly open: boolean;
   readonly quiet: boolean;
+  readonly isScratch: boolean;
   readonly attention: number;
   readonly working: number;
 }
@@ -151,6 +154,52 @@ export function isFolderQuiet(input: {
   return true;
 }
 
+/** A folder as the drag overlay lists it. */
+export interface ArrangeableFolder {
+  readonly projectKey: string;
+  readonly title: string;
+  readonly project: EnvironmentProject;
+  readonly quiet: boolean;
+}
+
+/**
+ * The open workspace's folders in the user's order, quiet ones included, for
+ * the long-press drag. "No project" is left out: it always sits last.
+ */
+export function arrangeWorkspaceFolders(input: {
+  readonly folders: ReadonlyArray<WorkspaceFolderInput>;
+  readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  readonly quietAfterDays: number;
+  readonly alwaysShow: ReadonlySet<string>;
+  readonly projectOrder: ReadonlyArray<string>;
+  readonly now: number;
+}): ArrangeableFolder[] {
+  const folders = input.folders.filter((folder) => !folder.isScratch);
+  const threadsByMember = new Map<string, EnvironmentThreadShell[]>();
+  for (const thread of input.threads) {
+    if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent") continue;
+    const memberKey = `${thread.environmentId}:${thread.projectId}`;
+    const list = threadsByMember.get(memberKey);
+    if (list) list.push(thread);
+    else threadsByMember.set(memberKey, [thread]);
+  }
+  return sortWorkspaceProjects(folders, input.projectOrder, (folder) => ({
+    projectKey: folder.projectKey,
+    createdAt: folder.projectCreatedAt,
+  })).map((folder) => ({
+    projectKey: folder.projectKey,
+    title: folder.title,
+    project: folder.project,
+    quiet: isFolderQuiet({
+      threads: folder.memberKeys.flatMap((memberKey) => threadsByMember.get(memberKey) ?? []),
+      projectCreatedAt: folder.projectCreatedAt,
+      quietAfterDays: input.quietAfterDays,
+      alwaysShow: input.alwaysShow.has(folder.projectKey),
+      now: input.now,
+    }),
+  }));
+}
+
 interface FolderModel {
   readonly input: WorkspaceFolderInput;
   readonly folderKey: string;
@@ -174,7 +223,7 @@ export function buildWorkspaceHomeItems(input: {
   readonly quietAfterDays: number;
   readonly alwaysShow: ReadonlySet<string>;
   readonly toggles: ReadonlySet<string>;
-  readonly sortOrder: HomeProjectSortOrder;
+  readonly projectOrder: ReadonlyArray<string>;
   readonly settlementEnvironmentIds: ReadonlySet<EnvironmentId>;
   readonly snoozeEnvironmentIds: ReadonlySet<EnvironmentId>;
   readonly queuedThreadKeys: ReadonlySet<string>;
@@ -227,13 +276,15 @@ export function buildWorkspaceHomeItems(input: {
     models.push({
       input: folder,
       folderKey: `${input.workspaceId}:${folder.projectKey}`,
-      quiet: isFolderQuiet({
-        threads: all,
-        projectCreatedAt: folder.projectCreatedAt,
-        quietAfterDays: input.quietAfterDays,
-        alwaysShow: input.alwaysShow.has(folder.projectKey),
-        now: input.now,
-      }),
+      quiet:
+        !folder.isScratch &&
+        isFolderQuiet({
+          threads: all,
+          projectCreatedAt: folder.projectCreatedAt,
+          quietAfterDays: input.quietAfterDays,
+          alwaysShow: input.alwaysShow.has(folder.projectKey),
+          now: input.now,
+        }),
       active: sortActiveThreadsByOrderKey(active),
       settled: settled.sort(
         (left, right) =>
@@ -243,25 +294,10 @@ export function buildWorkspaceHomeItems(input: {
       all,
     });
   }
-  const folderTimestamp = (model: FolderModel) =>
-    model.all.length > 0
-      ? model.all.reduce(
-          (latest, thread) => Math.max(latest, getThreadSortTimestamp(thread, input.sortOrder)),
-          Number.NEGATIVE_INFINITY,
-        )
-      : (toSortableTimestamp(
-          (input.sortOrder === "created_at"
-            ? model.input.projectCreatedAt
-            : (model.input.project.updatedAt ?? model.input.projectCreatedAt)) ?? undefined,
-        ) ?? Number.NEGATIVE_INFINITY);
-  const timestamps = new Map(models.map((model) => [model, folderTimestamp(model)] as const));
-  models.sort(
-    (left, right) =>
-      (timestamps.get(right)! > timestamps.get(left)!
-        ? 1
-        : timestamps.get(right)! < timestamps.get(left)!
-          ? -1
-          : 0) || left.input.title.localeCompare(right.input.title),
+  const ordered = sortWorkspaceProjects(
+    models.filter((model) => !model.input.isScratch),
+    input.projectOrder,
+    (model) => ({ projectKey: model.input.projectKey, createdAt: model.input.projectCreatedAt }),
   );
 
   const rows: WorkspaceHomeListItem[] = [];
@@ -315,6 +351,7 @@ export function buildWorkspaceHomeItems(input: {
       project: model.input.project,
       open,
       quiet: model.quiet,
+      isScratch: model.input.isScratch,
       attention: model.all.filter(needsAttention).length,
       working: model.all.filter((thread) => resolveThreadListV2Status(thread) === "working").length,
     });
@@ -364,8 +401,8 @@ export function buildWorkspaceHomeItems(input: {
     }
   };
 
-  const loud = models.filter((model) => !model.quiet);
-  const quiet = models.filter((model) => model.quiet);
+  const loud = ordered.filter((model) => !model.quiet);
+  const quiet = ordered.filter((model) => model.quiet);
   for (const model of loud) pushFolder(model);
   if (quiet.length > 0) {
     const quietKey = `quiet:${input.workspaceId}`;
@@ -383,6 +420,7 @@ export function buildWorkspaceHomeItems(input: {
     });
     if (open) for (const model of quiet) pushFolder(model);
   }
+  for (const model of models) if (model.input.isScratch) pushFolder(model);
   if (snoozed.length > 0) {
     const snoozedKey = `snoozed:${input.workspaceId}`;
     const open = has(snoozedKey);

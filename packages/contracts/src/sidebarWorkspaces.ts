@@ -44,6 +44,12 @@ export const SidebarWorkspacesConfig = Schema.Struct({
   defaultWorkspace: Schema.NullOr(Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
+  /**
+   * Logical project keys in the order the user dragged them into. One list
+   * for all workspaces; each workspace shows its own projects in this order,
+   * projects missing from it first (newest first).
+   */
+  projectOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   /** Logical project keys that never fold into "Quiet projects". */
   alwaysShow: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   quietAfterDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })).pipe(

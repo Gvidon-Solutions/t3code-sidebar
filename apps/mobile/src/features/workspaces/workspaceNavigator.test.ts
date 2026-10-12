@@ -10,13 +10,14 @@ const environmentId = EnvironmentId.make("env");
 const NOW = Date.parse("2026-10-11T12:00:00.000Z");
 const hoursAgo = (hours: number) => new Date(NOW - hours * 3_600_000).toISOString();
 
-function folder(id: string, title: string) {
+function folder(id: string, title: string, isScratch = false) {
   return {
     projectKey: `key-${id}`,
     title,
     project: { id, title } as unknown as EnvironmentProject,
     projectCreatedAt: hoursAgo(24 * 60),
     memberKeys: [`${environmentId}:${id}`],
+    isScratch,
   };
 }
 
@@ -35,15 +36,19 @@ function thread(id: string, projectId: string, overrides: Record<string, unknown
 function build(
   threads: ReturnType<typeof thread>[],
   toggles: ReadonlyArray<string> = [],
+  options: {
+    folders?: ReturnType<typeof folder>[];
+    projectOrder?: ReadonlyArray<string>;
+  } = {},
 ): WorkspaceHomeListItem[] {
   return buildWorkspaceHomeItems({
     workspaceId: "w",
-    folders: [folder("a", "Alpha"), folder("b", "Beta")],
+    folders: options.folders ?? [folder("a", "Alpha"), folder("b", "Beta")],
     threads,
     quietAfterDays: 5,
     alwaysShow: new Set(),
     toggles: new Set(toggles),
-    sortOrder: "updated_at",
+    projectOrder: options.projectOrder ?? [],
     settlementEnvironmentIds: new Set([environmentId]),
     snoozeEnvironmentIds: new Set([environmentId]),
     queuedThreadKeys: new Set(),
@@ -126,6 +131,42 @@ describe("buildWorkspaceHomeItems", () => {
       "folder Alpha",
       "more New thread",
       "folder Beta (closed)",
+    ]);
+  });
+
+  it("keeps the user's order whatever saw activity last", () => {
+    const items = build(
+      [thread("fresh", "b", { latestUserMessageAt: hoursAgo(0) }), thread("older", "a")],
+      [],
+      { projectOrder: ["key-a", "key-b"] },
+    );
+    expect(outline(items).filter((line) => line.startsWith("folder"))).toEqual([
+      "folder Alpha",
+      "folder Beta",
+    ]);
+  });
+
+  it("puts No project last, after Quiet projects and before Snoozed, and never folds it", () => {
+    const items = build(
+      [
+        thread("old", "b", {
+          createdAt: hoursAgo(24 * 30),
+          latestUserMessageAt: hoursAgo(24 * 30),
+        }),
+        thread("chat", "s", {
+          createdAt: hoursAgo(24 * 30),
+          latestUserMessageAt: hoursAgo(24 * 30),
+        }),
+        thread("later", "a", { snoozedUntil: hoursAgo(-5) }),
+      ],
+      [],
+      { folders: [folder("s", "No project", true), folder("a", "Alpha"), folder("b", "Beta")] },
+    );
+    expect(outline(items)).toEqual([
+      "section quiet 2",
+      "folder No project",
+      "thread chat",
+      "section snoozed 1",
     ]);
   });
 });

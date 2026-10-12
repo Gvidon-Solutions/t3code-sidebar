@@ -13,6 +13,7 @@ import { buildHomeProjectScopes } from "../home/homeThreadList";
 import { DONE_STATUS_LABEL, STATUS_LABEL_BY_STATUS } from "../threads/thread-list-v2-items";
 import { resolveThreadListV2Status, threadHasUnseenCompletion } from "../threads/threadListV2";
 import { useWorkspaceHome } from "../workspaces/useWorkspaceHome";
+import { FolderDragHost } from "../workspaces/WorkspaceFolderDrag";
 import {
   WorkspaceDock,
   WorkspaceFolderRow,
@@ -54,12 +55,12 @@ export function WorkspaceDrawer(props: {
     () => new Set(threads.map((thread) => thread.environmentId)),
     [threads],
   );
+  const { buildItems } = workspaceHome;
   const items = useMemo(() => {
     const now = new Date().toISOString();
-    return workspaceHome.buildItems({
+    return buildItems({
       base: [],
       searching: false,
-      sortOrder: options.projectSortOrder,
       settlementEnvironmentIds: environmentIds,
       snoozeEnvironmentIds: environmentIds,
       queuedThreadKeys: NO_KEYS,
@@ -80,7 +81,7 @@ export function WorkspaceDrawer(props: {
         canMoveDown: false,
       }),
     });
-  }, [environmentIds, options.projectSortOrder, props.currentThreadKey, workspaceHome.buildItems]);
+  }, [buildItems, environmentIds, props.currentThreadKey]);
 
   const { onClose } = props;
   const startThread = useCallback(
@@ -163,12 +164,17 @@ export function WorkspaceDrawer(props: {
   return (
     <View className="flex-1 bg-screen" style={{ paddingTop: insets.top }}>
       {workspaceHome.workspace ? <WorkspaceTitle workspace={workspaceHome.workspace} /> : null}
-      <FlatList
-        data={items}
-        keyExtractor={(item) => item.key}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 12 }}
-      />
+      <FolderDragHost
+        getFolders={workspaceHome.arrangeFolders}
+        onDrop={workspaceHome.reorderProject}
+      >
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.key}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 12 }}
+        />
+      </FolderDragHost>
       {workspaceHome.config ? (
         <WorkspaceDock
           workspaces={workspaceHome.config.workspaces}
