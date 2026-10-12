@@ -140,6 +140,7 @@ interface HomeScreenProps {
   readonly onSelectPendingTask: (pendingTask: PendingNewTask) => void;
   readonly onDeletePendingTask: (pendingTask: PendingNewTask) => void;
   readonly onNewThreadOnBranch: (thread: EnvironmentThreadShell) => void;
+  readonly onForkThread?: (thread: EnvironmentThreadShell) => void;
   readonly onNewThreadInProject: (project: EnvironmentProject) => void;
 }
 
@@ -850,6 +851,7 @@ export function HomeScreen(props: HomeScreenProps) {
           selected={scopedThreadKey(thread.environmentId, thread.id) === selectedThreadKey}
           fullSwipeWidth={fullSwipeWidth}
           onNewThreadOnBranch={props.onNewThreadOnBranch}
+          onForkThread={props.onForkThread}
           thread={thread}
           variant={item.item.variant}
           hasQueuedMessages={item.hasQueuedMessages}
@@ -944,6 +946,7 @@ export function HomeScreen(props: HomeScreenProps) {
       selectedThreadKey,
       fullSwipeWidth,
       props.onNewThreadOnBranch,
+      props.onForkThread,
       props.savedConnectionsById,
       resolveProviderInstance,
       providersByEnvironmentId,

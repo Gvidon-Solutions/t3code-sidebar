@@ -433,7 +433,6 @@ import {
   useChildThreadInputs,
   useThreadRefs,
   useThreadVisibleTurnItems,
-  waitForThreadShell,
 } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
@@ -576,6 +575,7 @@ import { fileAttachmentCapabilityBlockReason } from "./chat/composerAttachmentFi
 import { assetEnvironment } from "../state/assets";
 import { readEnvironmentScope, readPreparedConnection } from "../state/session";
 import { useAtomCommand } from "../state/use-atom-command";
+import { useForkThread } from "./workspaces/useForkThread";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { Button, InlineButton } from "./ui/button";
@@ -1660,9 +1660,8 @@ export default function ChatView(props: ChatViewProps) {
   const revertThreadCheckpoint = useOrchestrationCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
-  const forkThreadFromRun = useAtomCommand(threadEnvironment.forkFromRun, {
-    reportFailure: false,
-  });
+  // Sidebar fork: "Title (n)", placed under the source.
+  const forkThread = useForkThread();
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
   const closePreview = useAtomCommand(previewEnvironment.close, "preview close");
   const { environments } = useEnvironments();
@@ -8663,48 +8662,13 @@ export default function ChatView(props: ChatViewProps) {
   const onForkFromRun = useCallback(
     async (input: { readonly sourceThreadId: ThreadId; readonly runId: RunId }) => {
       if (!activeThread || activeEnvironmentUnavailable) return;
-      const targetThreadId = newThreadId();
-      const targetThreadRef = scopeThreadRef(environmentId, targetThreadId);
-      const result = await forkThreadFromRun({
-        environmentId,
-        input: {
-          sourceThreadId: input.sourceThreadId,
-          targetThreadId,
-          runId: input.runId,
-          title: `${activeThread.title} fork`,
-        },
-      });
-      if (result._tag === "Failure") {
-        if (!isAtomCommandInterrupted(result)) {
-          const error = squashAtomCommandFailure(result);
-          setThreadError(
-            activeThread.id,
-            error instanceof Error ? error.message : "Failed to fork this response.",
-          );
-        }
-        return;
-      }
-      const targetThreadReady = await waitForThreadShell(targetThreadRef);
-      if (!targetThreadReady) {
-        setThreadError(
-          activeThread.id,
-          "The fork was created, but its thread data did not reach this client. Reconnect and try opening it from the sidebar.",
-        );
-        return;
-      }
-      await navigate({
-        to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(targetThreadRef),
-      });
+      const error = await forkThread(
+        scopeThreadRef(environmentId, input.sourceThreadId),
+        input.runId,
+      );
+      if (error !== null) setThreadError(activeThread.id, error);
     },
-    [
-      activeEnvironmentUnavailable,
-      activeThread,
-      environmentId,
-      forkThreadFromRun,
-      navigate,
-      setThreadError,
-    ],
+    [activeEnvironmentUnavailable, activeThread, environmentId, forkThread, setThreadError],
   );
   const onCompactContext = () => {
     if (compactDisabled) return;

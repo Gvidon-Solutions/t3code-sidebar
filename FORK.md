@@ -87,6 +87,29 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-12 — Fork any thread; no tab bar on the phone
+
+- **What.** "Fork" in the thread menu (desktop right-click and chat header, phone long-press)
+  copies a Codex or Claude thread up to its latest finished response; a reply still streaming
+  is left out. Threads imported from T3 v1 or from agent sessions fork too, even if nobody
+  continued them yet. The fork is named "Title (n)", n counting up across all forks of that
+  thread (a fork of "Title (2)" is "Title (3)"), lands under its source after its earlier
+  forks and opens. It is never pinned, even when the source is. "Fork from this response"
+  names and places its fork the same way. On the phone the Chats / Pull requests bar is gone:
+  the workspace tile bar is the bottom of the screen.
+- **How.** The client sends `thread.fork` with `latest_stable` (or the response's run), then
+  writes `activeOrderKey`s that place the fork (`planForkPlacement`, usually a single write).
+  The server's fork plan clears the pin fields it copies from the source. An imported thread
+  without runs has nothing `latest_stable` can point at, so the server copies its runless
+  history into the fork (`planLegacyImportFork`); the fork's first turn hands that history
+  to the provider like any imported thread's first turn.
+- **Where.** `client-runtime/src/state/threadForks.ts`, `operations/commands.ts` (optional
+  `runId`); `useForkThread.ts` in web and mobile `workspaces/`; `threadActionMenu.logic.ts`,
+  `useThreadActionMenu.ts`, `ChatView.tsx`, `contextMenuFallback.ts`;
+  `thread-list-v2-items.tsx`, `ThreadFeed.tsx`, `HomeRouteScreen.tsx`, `HomeScreen.tsx`,
+  `ThreadNavigationSidebar.tsx`, `WorkspaceRootScreen.android.tsx`; server
+  `ThreadForkService.ts`, `Orchestrator.ts` (`dispatchThreadFork`).
+
 ### 2026-10-12 — Desktop shows the same workspaces as the phone
 
 - **What.** A desktop paired with the user's server (for example the T3 server on the same

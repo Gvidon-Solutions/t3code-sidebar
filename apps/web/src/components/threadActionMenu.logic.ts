@@ -8,6 +8,7 @@ import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled"
  */
 export type ThreadActionMenuId =
   | "new-thread-on-branch"
+  | "fork"
   | "filter-by-project"
   | "project-settings"
   | "pin"
@@ -81,6 +82,8 @@ export interface ThreadActionMenuState {
     /** True when the list is already scoped to this thread's project. */
     readonly isActive: boolean;
   } | null;
+  /** Sidebar fork: offer "Fork" (Codex and Claude threads with a run). */
+  readonly canFork?: boolean;
   readonly isPinned: boolean;
   readonly isSettled: boolean;
   /** False while the user has turned automatic settlement off for this thread. */
@@ -132,6 +135,7 @@ export function buildThreadActionMenuItems(
           },
         ]
       : []),
+    ...(state.canFork ? [{ id: "fork" as const, label: "Fork", icon: "git-fork" }] : []),
     ...(state.supports.pinning
       ? [
           state.isPinned

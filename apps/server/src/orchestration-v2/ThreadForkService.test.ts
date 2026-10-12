@@ -11,6 +11,7 @@ import {
   ProviderThreadId,
   RunId,
   ThreadId,
+  TurnItemId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -30,7 +31,9 @@ const snoozedAt = DateTime.makeUnsafe("2026-07-24T09:05:00.000Z");
 const snoozedUntil = DateTime.makeUnsafe("2026-07-25T09:00:00.000Z");
 const forkCreatedAt = DateTime.makeUnsafe("2026-07-24T09:10:00.000Z");
 
-function makeSourceThread(): OrchestrationV2AppThread {
+function makeSourceThread(
+  overrides: Partial<OrchestrationV2AppThread> = {},
+): OrchestrationV2AppThread {
   return {
     createdBy: "user",
     creationSource: "web",
@@ -59,6 +62,7 @@ function makeSourceThread(): OrchestrationV2AppThread {
     snoozedUntil,
     snoozedAt,
     deletedAt: null,
+    ...overrides,
   };
 }
 
@@ -83,9 +87,12 @@ function makeSourceRun(status: OrchestrationV2Run["status"]): OrchestrationV2Run
   };
 }
 
-function makeSourceProjection(sourceRun: OrchestrationV2Run): OrchestrationV2ThreadProjection {
+function makeSourceProjection(
+  sourceRun: OrchestrationV2Run,
+  thread = makeSourceThread(),
+): OrchestrationV2ThreadProjection {
   return {
-    thread: makeSourceThread(),
+    thread,
     runs: [sourceRun],
     attempts: [],
     nodes: [],
@@ -106,11 +113,11 @@ function makeSourceProjection(sourceRun: OrchestrationV2Run): OrchestrationV2Thr
   };
 }
 
-const planFork = (sourceRun: OrchestrationV2Run) =>
+const planFork = (sourceRun: OrchestrationV2Run, sourceThread = makeSourceThread()) =>
   Effect.gen(function* () {
     const service = yield* ThreadForkService.ThreadForkServiceV2;
     return yield* service.plan({
-      sourceProjection: makeSourceProjection(sourceRun),
+      sourceProjection: makeSourceProjection(sourceRun, sourceThread),
       sourceRun,
       sourceProviderThread: undefined,
       canonicalSourcePoint: {
@@ -168,6 +175,17 @@ it.effect("keeps a fork awake when its source thread is snoozed", () =>
   }),
 );
 
+it.effect("never pins a fork of a pinned thread", () =>
+  Effect.gen(function* () {
+    const result = yield* planFork(
+      makeSourceRun("completed"),
+      makeSourceThread({ pinnedAt: snoozedAt, pinOrderKey: "m" }),
+    );
+    assert.isNull(result.targetThread.pinnedAt);
+    assert.isNull(result.targetThread.pinOrderKey);
+  }),
+);
+
 it.effect("forks from a usage-limited failed run", () =>
   Effect.gen(function* () {
     const result = yield* planFork(makeSourceRun("failed"));
@@ -191,3 +209,87 @@ it.effect("rejects in-progress and rolled-back fork sources", () =>
     }
   }),
 );
+
+it("copies the history of an imported thread that has no runs", () => {
+  const at = DateTime.makeUnsafe("2026-07-24T09:00:00.000Z");
+  const userMessageId = MessageId.make("message:legacy-user");
+  const common = {
+    threadId: sourceThreadId,
+    runId: null,
+    nodeId: null,
+    providerThreadId: null,
+    providerTurnId: null,
+    nativeItemRef: null,
+    parentItemId: null,
+    status: "completed" as const,
+    title: null,
+    startedAt: at,
+    completedAt: at,
+    updatedAt: at,
+  };
+  const plan = ThreadForkService.planLegacyImportFork({
+    sourceThread: makeSourceThread({ historyOrigin: "v1_import", pinnedAt: at }),
+    messages: [
+      {
+        createdBy: "user",
+        creationSource: "server",
+        id: userMessageId,
+        threadId: sourceThreadId,
+        runId: null,
+        nodeId: null,
+        role: "user",
+        text: "hello",
+        attachments: [],
+        streaming: false,
+        createdAt: at,
+        updatedAt: at,
+      },
+    ],
+    turnItems: [
+      {
+        ...common,
+        id: TurnItemId.make("item:legacy-user"),
+        ordinal: 1,
+        createdBy: "user",
+        creationSource: "server",
+        type: "user_message",
+        messageId: userMessageId,
+        inputIntent: "turn_start",
+        text: "hello",
+        attachments: [],
+      },
+      {
+        ...common,
+        id: TurnItemId.make("item:v2-run"),
+        runId: sourceRunId,
+        ordinal: 2,
+        type: "assistant_message",
+        messageId: MessageId.make("message:v2-run"),
+        text: "not copied",
+        streaming: false,
+      },
+    ],
+    targetThreadId,
+    title: "Snoozed source (1)",
+    createdBy: "user",
+    creationSource: "mobile",
+    createdAt: forkCreatedAt,
+  });
+
+  assert.equal(plan.targetThread.id, targetThreadId);
+  assert.equal(plan.targetThread.title, "Snoozed source (1)");
+  assert.equal(plan.targetThread.historyOrigin, "v1_import");
+  assert.isNull(plan.targetThread.pinnedAt);
+  assert.deepEqual(plan.targetThread.lineage, {
+    parentThreadId: sourceThreadId,
+    relationshipToParent: "fork",
+    rootThreadId: sourceThreadId,
+  });
+  assert.equal(plan.messages.length, 1);
+  assert.equal(plan.messages[0]!.threadId, targetThreadId);
+  assert.notEqual(plan.messages[0]!.id, userMessageId);
+  assert.equal(plan.turnItems.length, 1);
+  const item = plan.turnItems[0]!;
+  assert.equal(item.threadId, targetThreadId);
+  assert.equal(item.type === "user_message" ? item.messageId : null, plan.messages[0]!.id);
+});

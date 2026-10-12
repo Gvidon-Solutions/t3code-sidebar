@@ -45,6 +45,7 @@ import { buildHomeProjectScopes } from "../home/homeThreadList";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "../home/thread-swipe-actions";
 import { usePendingTaskListActions } from "../home/usePendingTaskListActions";
 import { useThreadListActions } from "../home/useThreadListActions";
+import { useForkThread } from "../workspaces/useForkThread";
 import {
   getConnectionAwareBrandHeaderOptions,
   WorkspaceConnectionTitle,
@@ -159,6 +160,12 @@ function ThreadNavigationSidebarPane(
     renameThread,
     regenerateThreadTitle,
   } = useThreadListActions();
+  const forkThread = useForkThread();
+  const handleForkThread = useCallback(
+    (thread: EnvironmentThreadShell) =>
+      void forkThread({ environmentId: thread.environmentId, threadId: thread.id }),
+    [forkThread],
+  );
   const pendingTasks = usePendingNewTasks();
   const queuedThreadKeys = useQueuedThreadKeys();
   const { openPendingTask, confirmDeletePendingTask } = usePendingTaskListActions();
@@ -693,6 +700,7 @@ function ThreadNavigationSidebarPane(
           return (
             <ThreadListV2Row
               onNewThreadOnBranch={props.onNewThreadOnBranch}
+              onForkThread={handleForkThread}
               thread={thread}
               variant={item.item.variant}
               hasQueuedMessages={item.hasQueuedMessages}
@@ -815,6 +823,7 @@ function ThreadNavigationSidebarPane(
       projectTitleByProjectKey,
       regenerateThreadTitle,
       renameThread,
+      handleForkThread,
       props.onNewThreadOnBranch,
       props.searchQuery,
       props.selectedThreadKey,

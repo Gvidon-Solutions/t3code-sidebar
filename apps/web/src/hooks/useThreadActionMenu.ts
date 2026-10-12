@@ -33,6 +33,7 @@ import {
   readEnvironmentSupportsTitleRegeneration,
   readThreadShell,
   useProjects,
+  useServerConfigs,
 } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { readLocalApi } from "../localApi";
@@ -43,6 +44,8 @@ import {
 } from "../logicalProject";
 import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
+import { canForkThreadFromMenu } from "@t3tools/client-runtime/state/thread-forks";
+import { useForkThread } from "../components/workspaces/useForkThread";
 import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
@@ -104,6 +107,8 @@ export function useThreadActionMenu(input: {
     reportFailure: false,
   });
   const handleNewThread = useNewThreadHandler();
+  const forkThread = useForkThread();
+  const serverConfigs = useServerConfigs();
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -150,6 +155,10 @@ export function useThreadActionMenu(input: {
         const items = buildThreadActionMenuItems({
           canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
           branch: thread.branch ?? null,
+          canFork: canForkThreadFromMenu(
+            thread,
+            serverConfigs.get(threadRef.environmentId)?.providers,
+          ),
           projectFilter: null,
           isPinned: thread.pinnedAt != null,
           isSettled: supports.settlement && thread.settledOverride === "settled",
@@ -226,6 +235,11 @@ export function useThreadActionMenu(input: {
             if (result._tag === "Failure") {
               failureToast("Could not create thread", squashAtomCommandFailure(result));
             }
+            return;
+          }
+          case "fork": {
+            const error = await forkThread(threadRef);
+            if (error !== null) failureToast("Failed to fork thread", new Error(error));
             return;
           }
           case "settle":
@@ -349,6 +363,7 @@ export function useThreadActionMenu(input: {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      forkThread,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,
@@ -358,6 +373,7 @@ export function useThreadActionMenu(input: {
       projectGroupingSettings,
       projects,
       router,
+      serverConfigs,
       setThreadAutoSettle,
       settleThread,
       snoozeThread,

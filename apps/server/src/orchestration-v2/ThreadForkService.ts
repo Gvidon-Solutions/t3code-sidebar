@@ -4,11 +4,15 @@ import {
   OrchestrationV2AppThread,
   OrchestrationV2ContextSourcePoint,
   OrchestrationV2ContextTransfer,
+  OrchestrationV2ConversationMessage,
   OrchestrationV2CreationSource,
   OrchestrationV2ProviderThread,
   OrchestrationV2Run,
   OrchestrationV2ThreadProjection,
+  OrchestrationV2TurnItem,
+  MessageId,
   ThreadId,
+  TurnItemId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -109,6 +113,9 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
           settledAt: null,
           snoozedUntil: null,
           snoozedAt: null,
+          // Sidebar fork: a fork lands in its project's list, never pinned.
+          pinnedAt: null,
+          pinOrderKey: null,
           lastVisitedAt: null,
           deletedAt: null,
         };
@@ -137,3 +144,86 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
       }),
   }),
 );
+
+/**
+ * Sidebar fork: a thread imported from T3 v1 (or an agent session) that was
+ * never continued has history but no runs to fork from. Its fork copies that
+ * runless history under fresh ids; the fork's first turn then hands it to the
+ * provider the way any imported thread's first turn does.
+ */
+export function planLegacyImportFork(input: {
+  readonly sourceThread: OrchestrationV2AppThread;
+  readonly messages: ReadonlyArray<OrchestrationV2ConversationMessage>;
+  readonly turnItems: ReadonlyArray<OrchestrationV2TurnItem>;
+  readonly targetThreadId: ThreadId;
+  readonly title?: string;
+  readonly createdBy: OrchestrationV2Actor;
+  readonly creationSource: OrchestrationV2CreationSource;
+  readonly createdAt: DateTime.Utc;
+}): {
+  readonly targetThread: OrchestrationV2AppThread;
+  readonly messages: ReadonlyArray<OrchestrationV2ConversationMessage>;
+  readonly turnItems: ReadonlyArray<OrchestrationV2TurnItem>;
+} {
+  const target = input.targetThreadId;
+  const messages = input.messages.filter((message) => message.runId === null);
+  const turnItems = input.turnItems.filter((item) => item.runId === null);
+  const messageIds = new Map(
+    messages.map((message, index) => [
+      message.id,
+      MessageId.make(`${target}:fork:${String(index).padStart(6, "0")}`),
+    ]),
+  );
+  const itemIds = new Map(
+    turnItems.map((item, index) => [
+      item.id,
+      TurnItemId.make(`${target}:fork-item:${String(index).padStart(6, "0")}`),
+    ]),
+  );
+  return {
+    targetThread: {
+      ...input.sourceThread,
+      createdBy: input.createdBy,
+      creationSource: input.creationSource,
+      id: target,
+      title: input.title ?? `${input.sourceThread.title} fork`,
+      historyOrigin: "v1_import",
+      activeProviderThreadId: null,
+      lineage: {
+        parentThreadId: input.sourceThread.id,
+        relationshipToParent: "fork",
+        rootThreadId: input.sourceThread.lineage.rootThreadId,
+      },
+      forkedFrom: null,
+      createdAt: input.createdAt,
+      updatedAt: input.createdAt,
+      archivedAt: null,
+      settledOverride: null,
+      settledAt: null,
+      snoozedUntil: null,
+      snoozedAt: null,
+      pinnedAt: null,
+      pinOrderKey: null,
+      lastVisitedAt: null,
+      deletedAt: null,
+    },
+    messages: messages.map((message) => ({
+      ...message,
+      id: messageIds.get(message.id)!,
+      threadId: target,
+    })),
+    turnItems: turnItems.map(
+      (item) =>
+        ({
+          ...item,
+          id: itemIds.get(item.id)!,
+          threadId: target,
+          parentItemId:
+            item.parentItemId === null ? null : (itemIds.get(item.parentItemId) ?? null),
+          ...("messageId" in item && typeof item.messageId === "string"
+            ? { messageId: messageIds.get(item.messageId) ?? item.messageId }
+            : {}),
+        }) as OrchestrationV2TurnItem,
+    ),
+  };
+}

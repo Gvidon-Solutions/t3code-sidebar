@@ -128,6 +128,7 @@ import {
 import {
   forkableSourceRunStatusError,
   isForkableSourceRunStatus,
+  planLegacyImportFork,
   ThreadForkServiceV2,
 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
@@ -3576,6 +3577,58 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 
     const sourceRun = runForSourcePoint(sourceProjection, command.sourcePoint);
 
+    if (
+      sourceRun === null &&
+      command.sourcePoint.type === "latest_stable" &&
+      sourceProjection.thread.historyOrigin === "v1_import"
+    ) {
+      // Sidebar fork: an imported thread nobody continued forks by copying its history.
+      const history = yield* readHandoffItems(command.sourceThreadId, [null]);
+      const messages = yield* projectionStore
+        .getThreadRecords(command.sourceThreadId, ["messages"])
+        .pipe(
+          Effect.map((records) => records.messages),
+          Effect.mapError(
+            (cause) => new OrchestratorProjectionError({ threadId: command.sourceThreadId, cause }),
+          ),
+        );
+      const now = command.createdAt ?? (yield* DateTime.now);
+      const emitEvent = emit(events, command);
+      const plan = planLegacyImportFork({
+        sourceThread: sourceProjection.thread,
+        messages,
+        turnItems: history,
+        targetThreadId: command.targetThreadId,
+        ...(command.title === undefined ? {} : { title: command.title }),
+        createdBy: command.createdBy,
+        creationSource: command.creationSource,
+        createdAt: now,
+      });
+      yield* emitEvent({
+        type: "thread.created",
+        threadId: command.targetThreadId,
+        providerInstanceId: plan.targetThread.providerInstanceId,
+        occurredAt: now,
+        payload: plan.targetThread,
+      });
+      for (const message of plan.messages) {
+        yield* emitEvent({
+          type: "message.updated",
+          threadId: command.targetThreadId,
+          occurredAt: message.updatedAt,
+          payload: message,
+        });
+      }
+      for (const item of plan.turnItems) {
+        yield* emitEvent({
+          type: "turn-item.updated",
+          threadId: command.targetThreadId,
+          occurredAt: item.updatedAt,
+          payload: item,
+        });
+      }
+      return;
+    }
     if (sourceRun === null) {
       return yield* new OrchestratorDispatchError({
         commandId: command.commandId,
