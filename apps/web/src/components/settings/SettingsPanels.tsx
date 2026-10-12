@@ -57,6 +57,7 @@ import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../..
 import { IS_NIGHTLY_BUILD, NightlyMobileBetaRow } from "../NightlyMobileBeta";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { ForkVersionRow } from "./ForkVersionRow";
+import { describeDesktopUpdateProgress } from "../workspaces/desktopUpdateProgress";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -413,18 +414,25 @@ function AboutVersionSection() {
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
-  const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
+  // Sidebar fork: the download's percent and a failed install's reason show
+  // here, not only in the tooltip (workspaces/desktopUpdateProgress.ts).
+  const progress = describeDesktopUpdateProgress(updateState);
+  const actionLabel: Record<string, string> = {
+    download: "Download",
+    install: isUpdateActionPending ? "Installing…" : "Install",
+  };
   const statusLabel: Record<string, string> = {
     checking: "Checking…",
-    downloading: "Downloading…",
+    downloading: progress?.label ?? "Downloading…",
     "up-to-date": "Up to Date",
   };
   const buttonLabel =
     actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
   const description =
-    action === "download" || action === "install"
+    progress?.detail ??
+    (action === "download" || action === "install"
       ? "Update available."
-      : "Current version of the application.";
+      : "Current version of the application.");
 
   return (
     <>

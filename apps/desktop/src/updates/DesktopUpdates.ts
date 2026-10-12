@@ -245,8 +245,9 @@ function shouldBroadcastDownloadProgress(
     return true;
   }
 
-  const previousStep = Math.floor(currentPercent / 10);
-  const nextStep = Math.floor(nextPercent / 10);
+  // Sidebar fork: every whole percent, so the download visibly moves.
+  const previousStep = Math.floor(currentPercent);
+  const nextStep = Math.floor(nextPercent);
   return nextStep !== previousStep || nextPercent === 100;
 }
 

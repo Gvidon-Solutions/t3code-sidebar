@@ -104,7 +104,11 @@ export function ForkVersionRow() {
           >
             <SelectValue>{pinned ? pinned.version : "Newest"}</SelectValue>
           </SelectTrigger>
-          <SelectPopup align="end" alignItemWithTrigger={false}>
+          <SelectPopup
+            align="end"
+            alignItemWithTrigger={false}
+            className="max-h-[min(20rem,var(--available-height))]"
+          >
             <SelectItem hideIndicator value={NEWEST}>
               Newest
             </SelectItem>

@@ -87,6 +87,23 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-12 — Desktop updates you can watch, and that install on Ubuntu
+
+- **What.** While an update downloads, the Version row in Settings and a strip above the
+  workspace tiles show its percent. Once downloaded, the strip offers "Restart to update", and a
+  failed download or install says why. On a .deb install, Install asks for the system password and
+  installs; if that fails, the message gives the `sudo apt install` command for the downloaded
+  file. The Version history list is capped in height so it scrolls.
+- **How.** electron-updater's own deb install never reached polkit on Ubuntu and reported nothing.
+  For a downloaded .deb the app now runs `pkexec dpkg -i <file>` itself, asynchronously, then
+  relaunches the way electron-updater would. Download progress reaches the window at every whole
+  percent instead of every tenth.
+- **Where.** `apps/desktop/src/updates/debInstall.ts`,
+  `apps/web/src/components/workspaces/desktopUpdateProgress.ts`, `WorkspaceUpdateStrip.tsx`;
+  seams: `quitAndInstall` and `ElectronUpdaterQuitAndInstallError.message` in
+  `electron/ElectronUpdater.ts`, `shouldBroadcastDownloadProgress` in `DesktopUpdates.ts`, the
+  Version row labels in `SettingsPanels.tsx`, the strip in `WorkspaceSidebar.tsx`.
+
 ### 2026-10-12 — Compact new-thread button on the phone
 
 - **What.** The phone's new-thread button stays a small pencil button above the workspace tile

@@ -112,6 +112,7 @@ import {
   type WorkspaceTitleEditing,
   WORKSPACE_GLYPHS,
 } from "./WorkspaceChrome";
+import { WorkspaceUpdateStrip } from "./WorkspaceUpdateStrip";
 import { WorkspaceThreadRow, type WorkspaceRowVariant } from "./WorkspaceThreadRow";
 import { useWorkspaceViewStore } from "./workspaceViewStore";
 import {
@@ -1380,6 +1381,7 @@ export default function WorkspaceSidebar() {
               })()
             : renderAllWorkspaces()}
       </SidebarContent>
+      <WorkspaceUpdateStrip />
       <WorkspaceDock
         entries={tileEntries}
         activeWorkspaceId={activeWorkspaceId}

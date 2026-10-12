@@ -4,7 +4,10 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
+import * as Electron from "electron";
 import { autoUpdater } from "electron-updater";
+
+import { DebInstallError, downloadedDebFile, installDebPackage } from "../updates/debInstall.ts";
 
 type AutoUpdater = typeof autoUpdater;
 
@@ -44,6 +47,8 @@ export class ElectronUpdaterQuitAndInstallError extends Schema.TaggedError<Elect
   },
 ) {
   override get message(): string {
+    // Sidebar fork: a failed .deb install says why and how to finish by hand.
+    if (this.cause instanceof DebInstallError) return this.cause.message;
     return `Electron updater failed to quit and install the update on channel ${this.channel ?? "default"} (silent: ${this.isSilent}, force run after: ${this.isForceRunAfter}).`;
   }
 }
@@ -140,15 +145,25 @@ export const make = ElectronUpdater.of({
   quitAndInstall: ({ isSilent, isForceRunAfter }) =>
     Effect.suspend(() => {
       const channel = autoUpdater.channel;
+      const fail = (cause: unknown) =>
+        new ElectronUpdaterQuitAndInstallError({ channel, isSilent, isForceRunAfter, cause });
+      // Sidebar fork: a .deb update installs through debInstall.ts, then quits
+      // the way electron-updater's quitAndInstall does.
+      const debFile = downloadedDebFile(autoUpdater);
+      if (debFile !== null) {
+        return Effect.tryPromise({ try: () => installDebPackage(debFile), catch: fail }).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              Electron.autoUpdater.emit("before-quit-for-update");
+              if (isForceRunAfter) Electron.app.relaunch();
+              Electron.app.quit();
+            }),
+          ),
+        );
+      }
       return Effect.try({
         try: () => autoUpdater.quitAndInstall(isSilent, isForceRunAfter),
-        catch: (cause) =>
-          new ElectronUpdaterQuitAndInstallError({
-            channel,
-            isSilent,
-            isForceRunAfter,
-            cause,
-          }),
+        catch: fail,
       });
     }),
   on: (eventName, listener) => {
