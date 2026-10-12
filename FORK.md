@@ -87,6 +87,16 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-12 — Desktop shows the same workspaces as the phone
+
+- **What.** A desktop paired with the user's server (for example the T3 server on the same
+  machine) shows that server's workspaces, folder order and assignments, as the phone does,
+  instead of the empty set of its own bundled server.
+- **How.** The sidebar reads `sidebarWorkspaces` from the first connected non-primary server
+  that has workspaces (by environment id, the phone's rule), else from the primary. Edits
+  already go to every shared-settings target.
+- **Where.** `WorkspaceSidebar.tsx` (config source).
+
 ### 2026-10-12 — Upstream merge: phone tab bar
 
 - **What.** Brings in 95 upstream commits (phone bottom tab bar with Pull requests, saved list

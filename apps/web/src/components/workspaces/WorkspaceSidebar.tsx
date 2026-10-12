@@ -200,7 +200,7 @@ export default function WorkspaceSidebar() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
-  const storedConfig = usePrimarySettings((s) => s.sidebarWorkspaces);
+  const primaryConfig = usePrimarySettings((s) => s.sidebarWorkspaces);
   const updatePrimarySettings = useUpdatePrimarySettings();
   const lastVisitedById = useUiStateStore((s) => s.threadLastVisitedAtById);
   const nowMinute = useNowMinute();
@@ -215,6 +215,20 @@ export default function WorkspaceSidebar() {
   const handleNewThread = useNewThreadHandler();
 
   // ── Config ────────────────────────────────────────────────────────────
+  // Edits go to every server that syncs shared settings. Reads prefer a
+  // connected remote that has workspaces (first by id, as the phone picks),
+  // so a desktop paired with the user's server shows what the phone shows
+  // rather than its own bundled server's copy.
+  const storedConfig = useMemo(() => {
+    const remote = [...serverConfigs]
+      .filter(
+        ([environmentId, serverConfig]) =>
+          environmentId !== primaryEnvironmentId &&
+          serverConfig.settings.sidebarWorkspaces.workspaces.length > 0,
+      )
+      .sort(([left], [right]) => left.localeCompare(right))[0];
+    return remote?.[1].settings.sidebarWorkspaces ?? primaryConfig;
+  }, [primaryConfig, primaryEnvironmentId, serverConfigs]);
   const config: SidebarWorkspacesConfig = useMemo(() => {
     const base = storedConfig ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
     return base.workspaces.length > 0
