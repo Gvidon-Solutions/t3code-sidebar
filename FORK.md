@@ -13,13 +13,13 @@ Everything else is upstream.
   kept in its own files so merges stay small; the seams into upstream files are listed per
   feature below. Re-check those seams after every upstream merge.
 - **No upstream PRs** from this fork unless the owner asks for one.
-- **Tests.** Some desktop tests still assert upstream's app name and paths and fail on `ws`;
-  upstream CI does not run here (it triggers on `main`).
+- **Tests.** The packaging tests assert the fork's app name, id and missing URL schemes; upstream
+  CI does not run here (it triggers on `main`).
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream `main` at `18656a3402` on 2026-10-11 (merge into `ws`;
-  the previous base, `6c8fed35dd` from 2026-10-02, was 748 commits behind). Fork builds report
+- **Base.** Last synced with upstream `main` at `9e552285ba` on 2026-10-12 (merge into `ws`).
+  Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   upstream's version plus `-sidebar.<run>`.
 - **Footprint in upstream files.** Small, about 16 files and 70 lines: the settings schema
   key, the shared-settings list, the sidebar switch in `AppSidebarLayout.tsx`, one Settings
@@ -86,6 +86,24 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 ## Feature log
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
+
+### 2026-10-12 — Talk to Codex (voice conversations, upstream PR #14865)
+
+- **What.** In a Codex thread, the waveform button in the composer (or F8, or `/voice`) starts a
+  live voice conversation. Captions show above the composer; what you ask lands in the thread as a
+  message, the agent does the work, and its final answer is read aloud. `/voice` or the button
+  again stops it. The voice is picked in Settings › Providers › Codex › Voice. Web, desktop and
+  the Android app; in a browser the microphone needs https or localhost. Codex only, and the
+  thread needs a started session (send one message first).
+- **How.** Upstream's PR #14865 is merged as is, ahead of upstream: audio runs straight between
+  the client and OpenAI over WebRTC, and the server only relays SDP, captions and lifecycle over
+  the `provider.voice.session` stream (Codex app-server `thread/realtime/*`). Android gains
+  `react-native-webrtc` and the microphone permission. Also brings 4 upstream `main` commits.
+- **Where.** Upstream code, no fork seams: `apps/server/src/provider/CodexVoice.ts`,
+  `packages/client-runtime/src/voice-mode/`, `apps/web/src/voice/`, `VoiceModeStrip.tsx`,
+  `apps/mobile/src/features/voice-mode/`, `MainWindowPermissions.ts`;
+  `docs/internals/voice-conversations.md`. When upstream lands the PR, the next upstream merge
+  takes its final version.
 
 ### 2026-10-12 — Agents hang under the thread that launched them
 

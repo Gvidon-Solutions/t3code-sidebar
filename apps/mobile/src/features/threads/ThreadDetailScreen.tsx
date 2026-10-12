@@ -1393,10 +1393,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   ) : null}
                 </View>
 
-              {/* The composer below hides for a question card; keep a live
+                {/* The composer below hides for a question card; keep a live
                 voice conversation's mute and stop controls reachable. */}
-              {activeUserInputRequestId !== null && voiceLiveHere ? <ComposerVoiceStrip /> : null}
-              {/* Hidden (not unmounted) while a user-input request owns the
+                {activeUserInputRequestId !== null && voiceLiveHere ? <ComposerVoiceStrip /> : null}
+                {/* Hidden (not unmounted) while a user-input request owns the
                 composer slot, so composer drafts and editor state survive.
                 A rejected creation has no thread to send to; the failure card
                 owns the slot instead. */}
