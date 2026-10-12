@@ -3,6 +3,13 @@ import type {
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
+import {
+  type AgentRunState,
+  groupThreadAgents,
+  summarizeThreadAgents,
+  threadAgentsLabel,
+  threadAgentsOpenByDefault,
+} from "@t3tools/client-runtime/state/thread-agents";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import { sortWorkspaceProjects } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import {
@@ -82,6 +89,18 @@ export interface WorkspaceMoreListItem {
 export interface WorkspaceThreadListItem extends Omit<ThreadListV2ThreadListItem, "type"> {
   readonly type: "ws-thread";
   readonly projectLabel: string | null;
+  /** An agent drawn under the thread that started it. */
+  readonly nested?: boolean;
+}
+
+/** "5 agents · 4 working" under a thread that launched subagents; opens to list them. */
+export interface WorkspaceAgentsListItem {
+  readonly type: "ws-agents";
+  readonly key: string;
+  readonly toggleKey: string;
+  readonly open: boolean;
+  readonly label: string;
+  readonly dots: ReadonlyArray<{ readonly key: string; readonly state: AgentRunState }>;
 }
 
 export type WorkspaceHomeListItem =
@@ -89,7 +108,8 @@ export type WorkspaceHomeListItem =
   | WorkspaceSectionListItem
   | WorkspaceFolderListItem
   | WorkspaceMoreListItem
-  | WorkspaceThreadListItem;
+  | WorkspaceThreadListItem
+  | WorkspaceAgentsListItem;
 
 const threadKey = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
   `${thread.environmentId}:${thread.id}`;
@@ -236,6 +256,14 @@ export function buildWorkspaceHomeItems(input: {
   for (const folder of input.folders) {
     for (const memberKey of folder.memberKeys) folderByMember.set(memberKey, folder);
   }
+  // Subagents are left out of the folders below; they hang under the thread
+  // that started them (pushAgents).
+  const agents = groupThreadAgents(input.threads);
+  let selectedRootKey: string | null = null;
+  for (const [rootKey, list] of agents.agentsByRoot) {
+    if (list.some((agent) => threadKey(agent) === input.selectedThreadKey))
+      selectedRootKey = rootKey;
+  }
   const threadsByFolder = new Map<string, EnvironmentThreadShell[]>();
   for (const thread of input.threads) {
     if (thread.archivedAt !== null || thread.lineage.relationshipToParent === "subagent") continue;
@@ -303,7 +331,7 @@ export function buildWorkspaceHomeItems(input: {
   const rows: WorkspaceHomeListItem[] = [];
   const pushThread = (
     thread: EnvironmentThreadShell,
-    flags: { variant: "card" | "slim"; snoozed?: boolean; pinned?: boolean },
+    flags: { variant: "card" | "slim"; snoozed?: boolean; pinned?: boolean; nested?: boolean },
     projectLabel: string | null,
   ) => {
     const { type: _type, ...row } = input.toRow({
@@ -319,9 +347,33 @@ export function buildWorkspaceHomeItems(input: {
       key: `ws-thread:${threadKey(thread)}`,
       timeLabel: row.snoozeWakeLabelText ?? compactAgo(threadActivityMs(thread), input.now),
       projectLabel,
+      ...(flags.nested ? { nested: true } : {}),
     });
+    if (!flags.nested) pushAgents(thread);
   };
   const has = (key: string) => input.toggles.has(key);
+  const pushAgents = (thread: EnvironmentThreadShell) => {
+    const rootKey = threadKey(thread);
+    const list = agents.agentsByRoot.get(rootKey);
+    if (!list) return;
+    const summary = summarizeThreadAgents(list);
+    const byDefault = threadAgentsOpenByDefault(summary) || selectedRootKey === rootKey;
+    // A flip is remembered per default, so finished agents fold away again.
+    const toggleKey = `agents:${rootKey}:${byDefault ? "open" : "closed"}`;
+    const open = byDefault !== has(toggleKey);
+    rows.push({
+      type: "ws-agents",
+      key: `ws-agents:${rootKey}`,
+      toggleKey,
+      open,
+      label: threadAgentsLabel(summary),
+      dots: list.map((agent, index) => ({
+        key: threadKey(agent),
+        state: summary.states[index] ?? "done",
+      })),
+    });
+    if (open) for (const agent of list) pushThread(agent, { variant: "card", nested: true }, null);
+  };
 
   if (pinned.length > 0) {
     rows.push({
@@ -341,7 +393,7 @@ export function buildWorkspaceHomeItems(input: {
     const { folderKey } = model;
     const open = !model.quiet !== has(folderKey);
     const holdsSelected = (thread: EnvironmentThreadShell) =>
-      threadKey(thread) === input.selectedThreadKey;
+      threadKey(thread) === input.selectedThreadKey || threadKey(thread) === selectedRootKey;
     rows.push({
       type: "ws-folder",
       key: `ws-folder:${folderKey}`,
@@ -474,10 +526,22 @@ export function workspaceHomeItemsAreEqual(
       );
     case "ws-more":
       return previous.type === "ws-more" && previous.label === item.label;
+    case "ws-agents":
+      return (
+        previous.type === "ws-agents" &&
+        previous.open === item.open &&
+        previous.label === item.label &&
+        previous.dots.length === item.dots.length &&
+        previous.dots.every(
+          (dot, index) =>
+            dot.key === item.dots[index]?.key && dot.state === item.dots[index]?.state,
+        )
+      );
     case "ws-thread":
       return (
         previous.type === "ws-thread" &&
         previous.projectLabel === item.projectLabel &&
+        previous.nested === item.nested &&
         threadListV2ListItemsAreEqual(
           { ...previous, type: "v2-thread" },
           { ...item, type: "v2-thread" },
@@ -489,6 +553,7 @@ export function workspaceHomeItemsAreEqual(
         previous.type !== "ws-folder" &&
         previous.type !== "ws-more" &&
         previous.type !== "ws-thread" &&
+        previous.type !== "ws-agents" &&
         threadListV2ListItemsAreEqual(previous, item)
       );
   }

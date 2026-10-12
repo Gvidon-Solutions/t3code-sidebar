@@ -18,6 +18,11 @@ import {
   squashAtomCommandFailure,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
+import {
+  groupThreadAgents,
+  summarizeThreadAgents,
+  threadAgentsOpenByDefault,
+} from "@t3tools/client-runtime/state/thread-agents";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
@@ -112,6 +117,7 @@ import {
   type WorkspaceTitleEditing,
   WORKSPACE_GLYPHS,
 } from "./WorkspaceChrome";
+import { WorkspaceAgentGroup } from "./WorkspaceAgentGroup";
 import { WorkspaceUpdateStrip } from "./WorkspaceUpdateStrip";
 import { WorkspaceThreadRow, type WorkspaceRowVariant } from "./WorkspaceThreadRow";
 import { useWorkspaceViewStore } from "./workspaceViewStore";
@@ -297,6 +303,7 @@ export default function WorkspaceSidebar() {
         groupByPhysical.set(`${ref.environmentId}:${ref.projectId}`, group);
       }
     }
+    const agents = groupThreadAgents(threads);
     const threadsByGroup = new Map<string, SidebarThreadSummary[]>();
     for (const thread of threads) {
       if (thread.archivedAt !== null) continue;
@@ -332,6 +339,8 @@ export default function WorkspaceSidebar() {
       for (const thread of all) {
         const capabilities = serverConfigs.get(thread.environmentId)?.environment.capabilities;
         bucket.threads.push(thread);
+        // Subagents hang under the thread that started them (renderThread).
+        if (agents.nested.has(threadKeyOf(thread))) continue;
         if (capabilities?.threadSnooze === true && effectiveSnoozed(thread, { now: nowIso })) {
           bucket.snoozed.push(thread);
         } else if (
@@ -389,7 +398,12 @@ export default function WorkspaceSidebar() {
           (Date.parse(left.snoozedUntil ?? "") || 0) - (Date.parse(right.snoozedUntil ?? "") || 0),
       );
     }
-    return { byWorkspace, workspaceIdByProjectKey, groupByPhysical };
+    return {
+      byWorkspace,
+      workspaceIdByProjectKey,
+      groupByPhysical,
+      agentsByRoot: agents.agentsByRoot,
+    };
   }, [config, now, projectGroups, scratchRoots, serverConfigs, threads]);
 
   const workspaceOfThread = useCallback(
@@ -967,6 +981,45 @@ export default function WorkspaceSidebar() {
       />
     );
   };
+  // The top-level thread whose agents hold the open route, so its group opens.
+  const routeRootKey = (() => {
+    if (!routeThreadKey) return null;
+    for (const [rootKey, agents] of model.agentsByRoot) {
+      if (agents.some((agent) => threadKeyOf(agent) === routeThreadKey)) return rootKey;
+    }
+    return null;
+  })();
+  const holdsRoute = (thread: SidebarThreadSummary) => {
+    const key = threadKeyOf(thread);
+    return key === routeThreadKey || key === routeRootKey;
+  };
+  /** A thread row and, under it, the agents it launched. */
+  const renderThread = (
+    thread: SidebarThreadSummary,
+    variant: WorkspaceRowVariant,
+    projectLabel?: string | null,
+  ) => {
+    const key = threadKeyOf(thread);
+    const agents = model.agentsByRoot.get(key);
+    if (!agents) return renderRow(thread, variant, projectLabel);
+    const summary = summarizeThreadAgents(agents);
+    const toggleKey = `agents:${key}`;
+    const open =
+      view.sectionOpen[toggleKey] ?? (threadAgentsOpenByDefault(summary) || routeRootKey === key);
+    return (
+      <Fragment key={key}>
+        {renderRow(thread, variant, projectLabel)}
+        <WorkspaceAgentGroup
+          summary={summary}
+          dotKeys={agents.map(threadKeyOf)}
+          open={open}
+          onToggle={() => view.setSectionOpen(toggleKey, !open)}
+        >
+          {agents.map((agent) => renderRow(agent, "agent"))}
+        </WorkspaceAgentGroup>
+      </Fragment>
+    );
+  };
   const labelOfThread = (thread: SidebarThreadSummary) => {
     const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
     if (!group) return null;
@@ -1007,12 +1060,10 @@ export default function WorkspaceSidebar() {
     let visible = folder.active;
     if (!expanded && visible.length > FOLDER_PREVIEW_COUNT) {
       visible = visible.slice(0, FOLDER_PREVIEW_COUNT);
-      const activeRow = folder.active.find((thread) => threadKeyOf(thread) === routeThreadKey);
+      const activeRow = folder.active.find((thread) => holdsRoute(thread));
       if (activeRow && !visible.includes(activeRow)) visible = [...visible, activeRow];
     }
-    const collapsedActive = !open
-      ? folder.active.find((thread) => threadKeyOf(thread) === routeThreadKey)
-      : undefined;
+    const collapsedActive = !open ? folder.active.find((thread) => holdsRoute(thread)) : undefined;
     const attention = folder.all.filter(needsAttention).length;
     const working = folder.all.filter(
       (thread) => resolveSidebarThreadStatus(thread) === "working",
@@ -1119,7 +1170,7 @@ export default function WorkspaceSidebar() {
         </div>
         {open ? (
           <div className="flex flex-col pl-3">
-            {visible.map((thread) => renderRow(thread, "active"))}
+            {visible.map((thread) => renderThread(thread, "active"))}
             {folder.active.length > FOLDER_PREVIEW_COUNT ? (
               <MoreButton onClick={() => view.toggleFolderExpanded(folderKey)}>
                 {expanded ? "Show less" : `Show ${folder.active.length - visible.length} more`}
@@ -1135,7 +1186,7 @@ export default function WorkspaceSidebar() {
                 {settledOpen
                   ? folder.settled
                       .slice(0, expanded ? undefined : SETTLED_PAGE_COUNT)
-                      .map((thread) => renderRow(thread, "settled"))
+                      .map((thread) => renderThread(thread, "settled"))
                   : null}
                 <MoreButton onClick={() => view.toggleSettledOpen(folderKey)}>
                   {settledOpen ? "Hide settled" : `${folder.settled.length} settled`}
@@ -1144,7 +1195,7 @@ export default function WorkspaceSidebar() {
             ) : null}
           </div>
         ) : collapsedActive ? (
-          <div className="flex flex-col pl-3">{renderRow(collapsedActive, "active")}</div>
+          <div className="flex flex-col pl-3">{renderThread(collapsedActive, "active")}</div>
         ) : null}
       </div>
     );
@@ -1165,7 +1216,7 @@ export default function WorkspaceSidebar() {
       <div className="flex flex-col gap-0.5">
         {!nested && bucket.pinned.length > 0 ? (
           <Section icon={<PinIcon className="size-3" />} label="Pinned">
-            {bucket.pinned.map((thread) => renderRow(thread, "pinned", labelOfThread(thread)))}
+            {bucket.pinned.map((thread) => renderThread(thread, "pinned", labelOfThread(thread)))}
           </Section>
         ) : null}
         {bucket.folders.length === 0 ? (
@@ -1198,7 +1249,7 @@ export default function WorkspaceSidebar() {
             open={snoozedOpen}
             onToggle={() => view.setSectionOpen(snoozedKey, !snoozedOpen)}
           >
-            {bucket.snoozed.map((thread) => renderRow(thread, "snoozed", labelOfThread(thread)))}
+            {bucket.snoozed.map((thread) => renderThread(thread, "snoozed", labelOfThread(thread)))}
           </CollapsibleSection>
         ) : null}
       </div>
@@ -1213,7 +1264,7 @@ export default function WorkspaceSidebar() {
       <div className="flex flex-col gap-1">
         {allPinned.length > 0 ? (
           <Section icon={<PinIcon className="size-3" />} label="Pinned">
-            {allPinned.map((thread) => renderRow(thread, "pinned", labelOfThread(thread)))}
+            {allPinned.map((thread) => renderThread(thread, "pinned", labelOfThread(thread)))}
           </Section>
         ) : null}
         {[...model.byWorkspace.values()].map((bucket) => {
@@ -1261,7 +1312,7 @@ export default function WorkspaceSidebar() {
             open={snoozedOpen}
             onToggle={() => view.setSectionOpen("snoozed:all", !snoozedOpen)}
           >
-            {allSnoozed.map((thread) => renderRow(thread, "snoozed", labelOfThread(thread)))}
+            {allSnoozed.map((thread) => renderThread(thread, "snoozed", labelOfThread(thread)))}
           </CollapsibleSection>
         ) : null}
       </div>

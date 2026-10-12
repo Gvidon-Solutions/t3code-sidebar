@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { resolveProjectWorkspaceId } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
@@ -13,6 +14,7 @@ import {
   type ThreadListV2ListItem,
   type ThreadListV2ThreadListItem,
 } from "../threads/threadListV2";
+import { agentThreadShellsAtom } from "./agentThreadShells";
 import { useSidebarWorkspaces } from "./useSidebarWorkspaces";
 import type { WorkspaceTileActivity } from "./WorkspaceChrome";
 import {
@@ -33,6 +35,12 @@ export function useWorkspaceHome(input: {
   const workspaces = useSidebarWorkspaces();
   const { config, currentWorkspaceId, toggles } = workspaces;
   const serverConfigs = useServerConfigs();
+  // Subagents, which the navigation list leaves out, hang under their thread.
+  const agentThreads = useAtomValue(agentThreadShellsAtom);
+  const homeThreads = useMemo(
+    () => (agentThreads.length === 0 ? input.threads : [...input.threads, ...agentThreads]),
+    [agentThreads, input.threads],
+  );
 
   const scopeByProjectRef = useMemo(() => {
     const map = new Map<string, { scope: HomeProjectScope; workspaceId: string | null }>();
@@ -149,7 +157,7 @@ export function useWorkspaceHome(input: {
         ...buildWorkspaceHomeItems({
           workspaceId: currentWorkspaceId,
           folders,
-          threads: input.threads,
+          threads: homeThreads,
           quietAfterDays: config.quietAfterDays,
           alwaysShow: new Set(config.alwaysShow),
           toggles,
@@ -163,7 +171,7 @@ export function useWorkspaceHome(input: {
         }),
       ];
     },
-    [config, currentWorkspaceId, folders, input.threads, toggles],
+    [config, currentWorkspaceId, folders, homeThreads, toggles],
   );
 
   /** The open workspace's folders for the long-press drag, read when a drag starts. */

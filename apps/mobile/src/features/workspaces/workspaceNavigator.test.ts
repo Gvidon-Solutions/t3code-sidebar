@@ -78,8 +78,10 @@ const outline = (items: WorkspaceHomeListItem[]) =>
         : item.type === "ws-more"
           ? `more ${item.label}`
           : item.type === "ws-thread"
-            ? `thread ${item.item.thread.title}${item.projectLabel ? ` [${item.projectLabel}]` : ""}`
-            : item.type,
+            ? `${item.nested ? "  agent" : "thread"} ${item.item.thread.title}${item.projectLabel ? ` [${item.projectLabel}]` : ""}`
+            : item.type === "ws-agents"
+              ? `agents ${item.label}${item.open ? "" : " (closed)"}`
+              : item.type,
   );
 
 describe("buildWorkspaceHomeItems", () => {
@@ -119,6 +121,36 @@ describe("buildWorkspaceHomeItems", () => {
       "more Hide settled",
       "section quiet 1",
       "folder Beta (closed)",
+    ]);
+  });
+
+  it("hangs a thread's subagents under it, open while they work", () => {
+    const agent = (id: string, parent: string, status: string) =>
+      thread(id, "a", {
+        lineage: { relationshipToParent: "subagent", parentThreadId: parent, rootThreadId: "lead" },
+        runtime: { status },
+      });
+    const working = build(
+      [thread("lead", "a"), agent("one", "lead", "completed"), agent("two", "lead", "running")],
+      [],
+      { folders: [folder("a", "Alpha")] },
+    );
+    expect(outline(working)).toEqual([
+      "folder Alpha",
+      "thread lead",
+      "agents 2 agents · 1 working",
+      "  agent one",
+      "  agent two",
+    ]);
+    const done = build(
+      [thread("lead", "a"), agent("one", "lead", "completed"), agent("two", "lead", "completed")],
+      [],
+      { folders: [folder("a", "Alpha")] },
+    );
+    expect(outline(done)).toEqual([
+      "folder Alpha",
+      "thread lead",
+      "agents 2 agents · done (closed)",
     ]);
   });
 

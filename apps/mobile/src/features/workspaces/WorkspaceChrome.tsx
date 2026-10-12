@@ -31,12 +31,14 @@ import { ControlPillMenu } from "../../components/ControlPillMenu";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
 import type {
+  WorkspaceAgentsListItem,
   WorkspaceFolderListItem,
   WorkspaceMoreListItem,
   WorkspaceSectionListItem,
 } from "./workspaceNavigator";
 import { setWorkspaceDockHeight } from "./workspaceDockInset";
 import { FolderDragHandle, useFolderDragAvailable } from "./WorkspaceFolderDrag";
+import { WorkspaceAgentGuide } from "./WorkspaceThreadLine";
 
 /** Same glyph keys as the desktop tile icons (`glyph:<key>` in the shared config). */
 const WORKSPACE_GLYPHS: Readonly<Record<string, Icon>> = {
@@ -405,6 +407,52 @@ export const WorkspaceSectionRow = memo(function WorkspaceSectionRow(props: {
       {toggleKey ? (
         <Text className="text-xs tabular-nums text-foreground-tertiary">{item.count}</Text>
       ) : null}
+    </Pressable>
+  );
+});
+
+const AGENT_DOT_CLASS = {
+  working: "bg-adaptive-sky-600-400",
+  attention: "bg-warning",
+  failed: "bg-danger",
+  done: "bg-adaptive-emerald-600-400",
+} as const;
+
+const MAX_AGENT_DOTS = 8;
+
+/**
+ * "5 agents · 4 working" under a thread that launched subagents, with a dot
+ * per agent; tapping it shows or hides the agents' rows.
+ */
+export const WorkspaceAgentsRow = memo(function WorkspaceAgentsRow(props: {
+  readonly item: WorkspaceAgentsListItem;
+  readonly onToggle: (key: string) => void;
+}) {
+  const { item } = props;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={item.label}
+      accessibilityState={{ expanded: item.open }}
+      className="min-h-[32px] flex-row items-center gap-2 py-1.5 pl-[48px] pr-5"
+      onPress={() => props.onToggle(item.toggleKey)}
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+    >
+      <WorkspaceAgentGuide />
+      <SymbolView
+        name={item.open ? "chevron.down" : "chevron.right"}
+        size={11}
+        tintColorClassName="accent-foreground-muted"
+        type="monochrome"
+      />
+      <Text className="min-w-0 flex-1 text-[13px] text-foreground-tertiary" numberOfLines={1}>
+        {item.label}
+      </Text>
+      <View className="flex-row items-center gap-1">
+        {item.dots.slice(0, MAX_AGENT_DOTS).map((dot) => (
+          <View key={dot.key} className={cn("size-1.5 rounded-full", AGENT_DOT_CLASS[dot.state])} />
+        ))}
+      </View>
     </Pressable>
   );
 });

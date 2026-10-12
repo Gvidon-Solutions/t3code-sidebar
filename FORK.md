@@ -87,6 +87,25 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-12 — Agents hang under the thread that launched them
+
+- **What.** A thread's subagents no longer stand in the thread list as ordinary threads. Under
+  the thread that launched them sits one line, "5 agents · 4 working", with a coloured dot per
+  agent; it opens onto the agents' rows along a guide line. Agents of agents join the same list.
+  The group is open while any agent works or needs you and folds away once all are done; a tap
+  opens or closes it. Desktop sidebar and phone Home/drawer alike.
+- **How.** Subagents are grouped under their top-level thread by `lineage.parentThreadId`; one
+  whose top-level thread is not loaded stays an ordinary row on the desktop (the phone hid
+  subagents before and still does in that case). Opening an agent opens its group.
+- **Where.** `packages/client-runtime/src/state/threadAgents.ts`,
+  `apps/web/src/components/workspaces/WorkspaceAgentGroup.tsx`,
+  `apps/mobile/src/features/workspaces/agentThreadShells.ts` (Home's navigation list drops subagents,
+  so `useWorkspaceHome.ts` adds them back for the grouping); seams: `renderThread` and the
+  model in `WorkspaceSidebar.tsx`, the `agent` row variant in `WorkspaceThreadRow.tsx`, `pushAgents`
+  in `workspaceNavigator.ts`, `WorkspaceAgentsRow` in `WorkspaceChrome.tsx`, `nested` in
+  `WorkspaceThreadLine.tsx` (passed through `compact` in `thread-list-v2-items.tsx`), and the
+  `ws-agents` cases in `HomeScreen.tsx` and `WorkspaceDrawer.tsx`.
+
 ### 2026-10-12 — Desktop updates you can watch, and that install on Ubuntu
 
 - **What.** While an update downloads, the Version row in Settings and a strip above the

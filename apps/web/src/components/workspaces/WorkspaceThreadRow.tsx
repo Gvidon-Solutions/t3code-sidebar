@@ -31,7 +31,8 @@ import { resolveSidebarThreadStatus, resolveWorkingStartedAt } from "../Sidebar.
 import { useWorkspaceViewStore } from "./workspaceViewStore";
 import { compactAgo, isThreadUnread, threadActivityMs } from "./workspaces.logic";
 
-export type WorkspaceRowVariant = "active" | "pinned" | "settled" | "snoozed";
+/** `agent`: a subagent under the thread that started it (WorkspaceAgentGroup). */
+export type WorkspaceRowVariant = "active" | "pinned" | "settled" | "snoozed" | "agent";
 
 export interface WorkspaceThreadRowProps {
   thread: SidebarThreadSummary;
@@ -53,7 +54,15 @@ export interface WorkspaceThreadRowProps {
   onCommitRename: (threadRef: ScopedThreadRef, title: string | null) => void;
 }
 
-function StatusGlyph({ thread, isUnread }: { thread: SidebarThreadSummary; isUnread: boolean }) {
+function StatusGlyph({
+  thread,
+  isUnread,
+  isAgent,
+}: {
+  thread: SidebarThreadSummary;
+  isUnread: boolean;
+  isAgent: boolean;
+}) {
   const status = resolveSidebarThreadStatus(thread);
   const glyph: { icon: ReactNode; label: string } | null =
     status === "working"
@@ -92,7 +101,12 @@ function StatusGlyph({ thread, isUnread }: { thread: SidebarThreadSummary; isUnr
                       ),
                       label: "Done, unread",
                     }
-                  : null;
+                  : isAgent
+                    ? {
+                        icon: <CheckIcon className="size-3.5 text-sidebar-muted-foreground" />,
+                        label: "Done",
+                      }
+                    : null;
   return (
     <span
       className="flex size-3.5 shrink-0 items-center justify-center"
@@ -205,7 +219,7 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
       onKeyDown={handleKeyDown}
       onContextMenu={handleContextMenu}
     >
-      <StatusGlyph thread={thread} isUnread={isUnread} />
+      <StatusGlyph thread={thread} isUnread={isUnread} isAgent={variant === "agent"} />
       {props.isRenaming ? (
         <RenameInput
           initialTitle={thread.title}
@@ -229,7 +243,8 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
         <>
           <span
             className={cn(
-              "shrink-0 text-2xs tabular-nums text-sidebar-muted-foreground group-hover/ws-row:hidden group-focus-within/ws-row:hidden",
+              "shrink-0 text-2xs tabular-nums text-sidebar-muted-foreground",
+              variant !== "agent" && "group-hover/ws-row:hidden group-focus-within/ws-row:hidden",
               status === "working" && "text-sky-600 dark:text-sky-400",
             )}
           >
@@ -245,7 +260,7 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
             )}
           </span>
           <span className="hidden shrink-0 items-center gap-0.5 group-hover/ws-row:flex group-focus-within/ws-row:flex">
-            {variant === "snoozed" ? (
+            {variant === "agent" ? null : variant === "snoozed" ? (
               <RowAction label="Wake now" onClick={() => props.onWake(threadRef)}>
                 <AlarmClockOffIcon />
               </RowAction>

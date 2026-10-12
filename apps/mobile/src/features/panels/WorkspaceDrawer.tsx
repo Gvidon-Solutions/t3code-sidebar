@@ -17,6 +17,7 @@ import { FolderDragHost } from "../workspaces/WorkspaceFolderDrag";
 import {
   WorkspaceDock,
   WorkspaceFolderRow,
+  WorkspaceAgentsRow,
   WorkspaceMoreRow,
   WorkspaceSectionRow,
   WorkspaceTitle,
@@ -118,6 +119,8 @@ export function WorkspaceDrawer(props: {
         return (
           <WorkspaceMoreRow item={item} onToggle={workspaceHome.toggle} onNewThread={startThread} />
         );
+      case "ws-agents":
+        return <WorkspaceAgentsRow item={item} onToggle={workspaceHome.toggle} />;
       case "ws-thread": {
         const thread = item.item.thread;
         const key = `${thread.environmentId}:${thread.id}`;
@@ -152,6 +155,7 @@ export function WorkspaceDrawer(props: {
               working={status === "working"}
               hasQueuedMessages={false}
               selected={selected}
+              nested={item.nested === true}
             />
           </Pressable>
         );

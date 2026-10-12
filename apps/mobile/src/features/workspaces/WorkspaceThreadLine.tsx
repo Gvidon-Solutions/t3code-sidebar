@@ -7,6 +7,21 @@ import { cn } from "../../lib/cn";
 import { QueuedMessageIcon } from "../threads/queued-message-icon";
 
 /**
+ * The vertical guide that ties a thread's agents to it. Agent rows sit inside
+ * the row pressable, 8pt in from the list edge, so they draw it 8pt further left.
+ */
+export function WorkspaceAgentGuide(props: { readonly inRow?: boolean }) {
+  return (
+    <View
+      className={cn(
+        "absolute top-0 bottom-0 w-px bg-border",
+        props.inRow ? "left-[27px]" : "left-[35px]",
+      )}
+    />
+  );
+}
+
+/**
  * A thread as one line inside a workspace folder, like the desktop sidebar:
  * status glyph, title (with the project for pinned and snoozed rows), time.
  * The row around it (press, long-press menu, swipes) is upstream's.
@@ -24,15 +39,29 @@ export function WorkspaceThreadLine(props: {
   readonly working: boolean;
   readonly hasQueuedMessages: boolean;
   readonly selected: boolean;
+  /** An agent under the thread that started it: indented on the guide, a check once done. */
+  readonly nested?: boolean;
 }) {
   return (
-    <View className="min-h-[40px] flex-row items-center gap-2.5 py-2 pl-7 pr-5">
+    <View
+      className={cn(
+        "min-h-[40px] flex-row items-center gap-2.5 py-2 pr-5",
+        props.nested ? "pl-[48px]" : "pl-7",
+      )}
+    >
+      {props.nested ? <WorkspaceAgentGuide inRow /> : null}
       <View className="w-4 items-center">
         {props.status ? (
           <SymbolView
             name={props.status.icon}
             size={14}
             tintColorClassName={props.status.iconTintClassName}
+          />
+        ) : props.nested ? (
+          <SymbolView
+            name="checkmark.circle"
+            size={13}
+            tintColorClassName="accent-foreground-muted"
           />
         ) : null}
       </View>

@@ -81,6 +81,7 @@ import { FolderDragHost } from "../workspaces/WorkspaceFolderDrag";
 import {
   WorkspaceDock,
   WorkspaceFolderRow,
+  WorkspaceAgentsRow,
   WorkspaceMoreRow,
   WorkspaceSectionRow,
 } from "../workspaces/WorkspaceChrome";
@@ -779,6 +780,9 @@ export function HomeScreen(props: HomeScreenProps) {
       if (item.type === "ws-section") {
         return <WorkspaceSectionRow item={item} onToggle={workspaceHome.toggle} />;
       }
+      if (item.type === "ws-agents") {
+        return <WorkspaceAgentsRow item={item} onToggle={workspaceHome.toggle} />;
+      }
       if (item.type === "ws-more") {
         return (
           <WorkspaceMoreRow
@@ -846,7 +850,9 @@ export function HomeScreen(props: HomeScreenProps) {
       const compact = item.type === "ws-thread";
       return (
         <ThreadListV2Row
-          compact={compact ? { projectLabel: item.projectLabel } : undefined}
+          compact={
+            compact ? { projectLabel: item.projectLabel, nested: item.nested === true } : undefined
+          }
           pane={primaryColumn ? "sidebar" : "screen"}
           selected={scopedThreadKey(thread.environmentId, thread.id) === selectedThreadKey}
           fullSwipeWidth={fullSwipeWidth}
