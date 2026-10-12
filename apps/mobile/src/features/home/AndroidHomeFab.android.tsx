@@ -1,16 +1,9 @@
-import { useCallback, useRef, useState, type ComponentProps } from "react";
-import {
-  useWindowDimensions,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from "react-native";
+import { useState, type ComponentProps } from "react";
+import { useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialNewThreadButton } from "../../components/MaterialNewThreadButton";
 import type { AndroidHomeFabLayout as SharedAndroidHomeFabLayout } from "./AndroidHomeFab.shared";
 import { useWorkspaceState } from "../../state/workspace";
-import { MaterialFabScrollContext } from "./MaterialFabScrollContext";
-import { updateMaterialFabScroll } from "./material-fab-scroll";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { useWorkspaceDockHeight } from "../workspaces/workspaceDockInset";
 
@@ -20,30 +13,19 @@ export function AndroidHomeFabLayout(props: ComponentProps<typeof SharedAndroidH
   const { fontScale } = useWindowDimensions();
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
   const { state } = useWorkspaceState();
-  const [expanded, setExpanded] = useState(true);
   const dockHeight = useWorkspaceDockHeight();
-  const scrollState = useRef({ anchor: 0, expanded: true });
-  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const next = updateMaterialFabScroll(
-      scrollState.current,
-      contentOffset.y,
-      contentSize.height - layoutMeasurement.height,
-    );
-    if (next.expanded !== scrollState.current.expanded) setExpanded(next.expanded);
-    scrollState.current = next;
-  }, []);
 
   // Remount only the FAB when its font or pane changes to clear the cached expanded width.
   return (
     <View className="flex-1" onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}>
-      <MaterialFabScrollContext value={onScroll}>{props.children}</MaterialFabScrollContext>
-      {/* Sidebar fork: the button floats above the workspace dock. */}
+      {props.children}
+      {/* Sidebar fork: a compact button that floats above the workspace dock and
+          never unfolds into "New thread". */}
       {!props.disabled && state.hasConnections && layoutWidth !== null ? (
         <MaterialNewThreadButton
           key={`${appearance.baseFontSize}:${fontScale}:${layoutWidth}`}
           extended
-          expanded={expanded}
+          expanded={false}
           onPress={props.onStartNewTask}
           className="absolute right-5"
           style={{

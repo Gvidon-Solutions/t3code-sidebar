@@ -87,6 +87,13 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-12 — Compact new-thread button on the phone
+
+- **What.** The phone's new-thread button stays a small pencil button above the workspace tile
+  bar; it no longer unfolds into a wide "New thread" pill.
+- **How.** The Android FAB is always rendered collapsed, so it no longer tracks list scrolling.
+- **Where.** `AndroidHomeFab.android.tsx`.
+
 ### 2026-10-12 — Fork any thread; no tab bar on the phone
 
 - **What.** "Fork" in the thread menu (desktop right-click and chat header, phone long-press)
