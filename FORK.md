@@ -87,6 +87,18 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-12 — Upstream merge: phone tab bar
+
+- **What.** Brings in 95 upstream commits (phone bottom tab bar with Pull requests, saved list
+  filters, theme and menu fixes, desktop and server fixes). On the phone the workspace tile bar
+  sits above upstream's tab bar.
+- **How.** Home keeps the fork's folder list inside upstream's new scroll gesture, under the
+  folder drag host; list padding and scroll restore follow upstream. The review diff view still
+  claims touches only once a drag axis is chosen, which already honours upstream's new
+  scroll-enabled flag.
+- **Where.** `HomeScreen.tsx`, `T3ReviewDiffView.kt`, `FileMarkdownPreview.tsx`,
+  `ThreadRouteScreen.tsx`, `mobile-preferences.ts`, `AndroidHomeFab.android.tsx`.
+
 ### 2026-10-12 — Projects keep their place; drag to reorder; swipe the tile bar
 
 - **What.** Project folders no longer jump to the top when a thread in them gets activity:
