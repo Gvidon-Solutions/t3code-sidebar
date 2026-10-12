@@ -11,7 +11,7 @@ import {
   moveProjectInOrder,
   sortWorkspaceProjects,
   updateWorkspace,
-} from "./sidebarWorkspaces";
+} from "./sidebarWorkspaces.ts";
 
 const config: SidebarWorkspacesConfig = {
   ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
