@@ -2893,9 +2893,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       maintainer: "T3 Tools <hello@t3.codes>",
       // The sidebar fork installs next to upstream T3 Code and leaves the
       // t3code:// scheme to it, so it declares no URL scheme handler.
+      // The window class equals the desktop id the app sets at runtime
+      // (resolveLinuxWmClass); any other value leaves the window to the
+      // hidden URL-handler entry, which can't be pinned.
       desktop: {
         entry: {
-          StartupWMClass: "t3code-sidebar",
+          StartupWMClass: "com.gvidon.T3CodeSidebar",
         },
       },
     };

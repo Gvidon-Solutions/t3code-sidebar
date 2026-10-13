@@ -13,7 +13,10 @@ import * as Path from "effect/Path";
 
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
-import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
+import {
+  resolveLinuxDesktopEntryName,
+  resolveLinuxWmClass,
+} from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
@@ -239,7 +242,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
       isDevelopment ? "com.gvidon.t3code-sidebar.dev" : "com.gvidon.t3code-sidebar",
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
-    linuxWmClass: isDevelopment ? "t3code-sidebar-dev" : "t3code-sidebar",
+    linuxWmClass: resolveLinuxWmClass(isDevelopment),
     linuxApplicationsDir,
     appImagePath: config.appImagePath,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),

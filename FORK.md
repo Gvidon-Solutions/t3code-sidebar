@@ -88,6 +88,20 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-13 — Pin the desktop app to the dock (Linux)
+
+- **What.** On GNOME the running app offered no "Pin to Dash": the dock tied its window to the
+  hidden `t3code://` handler entry. The window now belongs to the installed "T3 Code Sidebar"
+  entry and can be pinned.
+- **How.** Electron 44 names the window after `setDesktopName` (X11 `WM_CLASS`, Wayland
+  `app_id` = `com.gvidon.T3CodeSidebar`) and ignores `--class`, while the `.deb`/AppImage entry
+  declared `StartupWMClass=t3code-sidebar`. The packaged entry now declares the desktop id as its
+  `StartupWMClass`, which docks match before desktop ids, and the `--class` switch uses the same
+  value.
+- **Where.** `resolveLinuxWmClass` in `apps/desktop/src/app/DesktopEarlyElectronStartup.ts`
+  (used by `DesktopEnvironment.ts`); `linux.desktop.entry` in `scripts/build-desktop-artifact.ts`
+  (test: "applies platform-specific packaging"). Takes effect once the new `.deb` is installed.
+
 ### 2026-10-13 — Agents that still work show as working
 
 - **What.** The agents under a thread showed "done" with green dots while they were still

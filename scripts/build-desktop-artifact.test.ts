@@ -95,6 +95,7 @@ import {
   wslRuntimeArchiveStem,
 } from "./build-desktop-artifact.ts";
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
+import { resolveLinuxWmClass } from "../apps/desktop/src/app/DesktopEarlyElectronStartup.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
 
@@ -717,6 +718,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       // Sidebar fork: installs next to upstream T3 Code and leaves the t3code://
       // scheme (and the default-browser role) to it.
       assert.equal((linux.linux as Record<string, unknown>).protocols, undefined);
+      // The packaged entry must own the window, or GNOME offers no "Pin to Dash".
+      assert.deepStrictEqual((linux.linux as Record<string, unknown>).desktop, {
+        entry: { StartupWMClass: resolveLinuxWmClass(false) },
+      });
       assert.equal((mac.mac as Record<string, unknown>).protocols, undefined);
       // macOS lists a default browser only when it also opens web pages as documents.
       const macInfo = (mac.mac as { extendInfo: Record<string, unknown> }).extendInfo;
