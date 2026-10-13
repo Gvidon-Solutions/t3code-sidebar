@@ -74,4 +74,13 @@ describe("summarizeThreadAgents", () => {
     expect(threadAgentsLabel(summary)).toBe("2 agents · done");
     expect(threadAgentsOpenByDefault(summary)).toBe(false);
   });
+
+  it("reads a runless subagent from the server shell status", () => {
+    const summary = summarizeThreadAgents([
+      { ...thread("a"), source: { status: "running" } },
+      { ...thread("b"), source: { status: "completed" } },
+    ]);
+    expect(summary.states).toEqual(["working", "done"]);
+    expect(threadAgentsLabel(summary)).toBe("2 agents · 1 working");
+  });
 });

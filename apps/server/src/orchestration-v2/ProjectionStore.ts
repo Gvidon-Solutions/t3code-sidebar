@@ -994,6 +994,7 @@ type ShellThreadRow = {
   readonly has_actionable_proposed_plan: number;
   readonly item_count: number;
   readonly runless_item_count: number;
+  readonly runless_root_status: string | null;
 };
 
 type ShellRunRow = {
@@ -1494,7 +1495,21 @@ export function threadShellFromProjection(
     activityRunStatus: activityRun?.status ?? null,
     activityRunStartedAt:
       activityRun === null ? null : orchestrationV2RunWorkStartedAt(activityRun),
-    status: latestRun?.status ?? "idle",
+    status:
+      latestRun?.status ??
+      subagentShellStatus({
+        lineage: projection.thread.lineage,
+        latestRunId: null,
+        rootStatus:
+          (projection.nodes ?? [])
+            .filter((node) => node.runId === null && node.kind === "root_turn")
+            .toSorted(
+              (left, right) =>
+                (right.startedAt === null ? 0 : DateTime.toEpochMillis(right.startedAt)) -
+                (left.startedAt === null ? 0 : DateTime.toEpochMillis(left.startedAt)),
+            )[0]?.status ?? null,
+      }) ??
+      "idle",
     ...threadErrorSummary(
       latestRootProviderFailure(latestRun, projection.turnItems),
       providerSession?.lastError ?? null,
@@ -1620,6 +1635,28 @@ type ShellThreadState = {
   readonly runOrdinalById: ReadonlyMap<RunId, number>;
   readonly itemCountByRunId: ReadonlyMap<RunId, number>;
 };
+
+/**
+ * Sidebar fork: a subagent thread has no runs of its own. The provider drives
+ * it through a runless root_turn node, so that node's status is the thread's;
+ * without it the thread reads idle while the agent still works.
+ */
+function subagentShellStatus(input: {
+  readonly lineage: OrchestrationV2ThreadShell["lineage"];
+  readonly latestRunId: RunId | null;
+  readonly rootStatus: string | null;
+}): OrchestrationV2ShellThreadStatus | null {
+  if (input.latestRunId !== null || input.lineage.relationshipToParent !== "subagent") return null;
+  switch (input.rootStatus) {
+    case null:
+    case "idle":
+      return null;
+    case "pending":
+      return "starting";
+    default:
+      return shellStatusFromStoredRunStatus(input.rootStatus);
+  }
+}
 
 function shellStatusFromStoredRunStatus(status: string | null): OrchestrationV2ShellThreadStatus {
   switch (status) {
@@ -5303,7 +5340,16 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 FROM orchestration_v2_projection_turn_items i
                 WHERE i.thread_id = t.thread_id
                   AND i.run_id IS NULL
-              ) AS runless_item_count
+              ) AS runless_item_count,
+              (
+                SELECT n.status
+                FROM orchestration_v2_projection_nodes n
+                WHERE n.thread_id = t.thread_id
+                  AND n.run_id IS NULL
+                  AND n.kind = 'root_turn'
+                ORDER BY n.started_at DESC
+                LIMIT 1
+              ) AS runless_root_status
             FROM orchestration_v2_projection_threads t
             -- The newest run not waiting in a held queue, matching latestUnheldRun.
             LEFT JOIN orchestration_v2_projection_runs presented ON presented.run_id = (
@@ -5685,6 +5731,12 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 : DateTime.makeUnsafe(row.blocking_run_completed_at);
           }
         }
+        latestRunStatus =
+          subagentShellStatus({
+            lineage: thread.lineage,
+            latestRunId,
+            rootStatus: row.runless_root_status,
+          }) ?? latestRunStatus;
         const pendingBackgroundTasks = [
           ...derivePendingBackgroundWork({
             latestRun:

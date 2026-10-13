@@ -397,6 +397,96 @@ it.effect("memory recovery selects unfinished runless native subagents", () =>
   runlessNativeSubagentNeedsRecovery.pipe(Effect.provide(ProjectionStore.layerMemory)),
 );
 
+// Sidebar fork: a native subagent's thread has no runs; the provider drives it
+// through a runless root_turn node, and the shell reports that node's status.
+const subagentShellFollowsItsRootNode = Effect.gen(function* () {
+  const store = yield* ProjectionStore.ProjectionStoreV2;
+  const now = yield* DateTime.now;
+  const parentId = ThreadId.make("thread:subagent-shell-parent");
+  const threadId = ThreadId.make("thread:subagent-shell-child");
+  const rootNodeId = NodeId.make("node:subagent-shell-child:thread-root");
+  yield* store.apply({
+    id: EventId.make("event:subagent-shell:thread"),
+    type: "thread.created",
+    threadId,
+    occurredAt: now,
+    payload: {
+      createdBy: "agent",
+      creationSource: "provider",
+      id: threadId,
+      projectId: ProjectId.make("project:subagent-shell"),
+      title: "Backend audit",
+      providerInstanceId,
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      activeProviderThreadId: null,
+      lineage: {
+        parentThreadId: parentId,
+        relationshipToParent: "subagent",
+        rootThreadId: parentId,
+      },
+      forkedFrom: null,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+      settledOverride: null,
+      settledAt: null,
+      lastVisitedAt: null,
+      deletedAt: null,
+    },
+  });
+  const shellStatus = Effect.gen(function* () {
+    const fromSnapshot = (yield* store.getShellSnapshot()).threads.find(
+      (thread) => thread.id === threadId,
+    )?.status;
+    const fromProjection = ProjectionStore.threadShellFromProjection(
+      yield* store.getThreadProjection(threadId),
+    ).status;
+    assert.equal(fromSnapshot, fromProjection);
+    return fromSnapshot;
+  });
+  assert.equal(yield* shellStatus, "idle");
+  for (const [status, expected] of [
+    ["pending", "starting"],
+    ["running", "running"],
+    ["completed", "completed"],
+  ] as const) {
+    yield* store.apply({
+      id: EventId.make(`event:subagent-shell:root:${status}`),
+      type: "node.updated",
+      threadId,
+      nodeId: rootNodeId,
+      driver,
+      occurredAt: now,
+      payload: {
+        id: rootNodeId,
+        threadId,
+        runId: null,
+        rootNodeId,
+        parentNodeId: null,
+        kind: "root_turn",
+        status,
+        countsForRun: false,
+        providerThreadId: null,
+        providerTurnId: null,
+        nativeItemRef: null,
+        runtimeRequestId: null,
+        checkpointScopeId: null,
+        startedAt: now,
+        completedAt: status === "completed" ? now : null,
+      },
+    });
+    assert.equal(yield* shellStatus, expected);
+  }
+});
+
+it.effect("memory shells present a runless subagent's root node status", () =>
+  subagentShellFollowsItsRootNode.pipe(Effect.provide(ProjectionStore.layerMemory)),
+);
+
 // Project A holds an active thread, an archived thread and a fork of a run in
 // an archived project B thread, so a project-scoped snapshot still has to load
 // a fork source that is outside the project and archived.
@@ -552,6 +642,11 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
   it.effect(
     "SQL recovery selects unfinished runless native subagents",
     () => runlessNativeSubagentNeedsRecovery,
+  );
+
+  it.effect(
+    "SQL shells present a runless subagent's root node status",
+    () => subagentShellFollowsItsRootNode,
   );
 
   it.effect(

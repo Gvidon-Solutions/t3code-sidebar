@@ -16,6 +16,11 @@ export interface AgentThreadInput {
   readonly hasPendingApprovals: boolean;
   readonly hasPendingUserInput: boolean;
   readonly runtime: Pick<ThreadRuntimeSummary, "status"> | null;
+  /**
+   * The server shell. A subagent has no runs of its own, so runtime stays null;
+   * the server reports its root node status here instead.
+   */
+  readonly source?: { readonly status: string };
 }
 
 export type AgentRunState = "working" | "attention" | "failed" | "done";
@@ -30,8 +35,9 @@ const WORKING_STATUSES: ReadonlySet<string> = new Set([
 
 export function agentRunState(thread: AgentThreadInput): AgentRunState {
   if (thread.hasPendingApprovals || thread.hasPendingUserInput) return "attention";
-  if (thread.runtime !== null && WORKING_STATUSES.has(thread.runtime.status)) return "working";
-  if (thread.runtime?.status === "failed") return "failed";
+  const status = thread.runtime?.status ?? thread.source?.status;
+  if (status !== undefined && WORKING_STATUSES.has(status)) return "working";
+  if (status === "failed") return "failed";
   return "done";
 }
 
