@@ -110,9 +110,11 @@ function AppSettingsSection() {
         type="monochrome"
         weight="regular"
       />
-      <Text className="flex-1 text-lg text-foreground">Version</Text>
-      <View className="items-end">
-        <Text className="text-lg text-foreground-muted">{versionLabel}</Text>
+      {/* Sidebar fork: a long version (0.0.45-sidebar.14 · Sidebar) wraps on its
+          side instead of squeezing the label to "Versi / on". */}
+      <Text className="shrink-0 text-lg text-foreground">Version</Text>
+      <View className="min-w-0 flex-1 items-end">
+        <Text className="text-right text-lg text-foreground-muted">{versionLabel}</Text>
         {statusLabel ? (
           <Text className="text-xs text-foreground-muted/70">{statusLabel}</Text>
         ) : null}

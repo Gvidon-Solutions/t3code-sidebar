@@ -28,7 +28,8 @@ Everything else is upstream.
 - **What is replaced, what is reused.** The workspace sidebar is a third sidebar next to
   upstream's two: upstream `Sidebar` and `LegacySidebar` are untouched, and the setting
   picks which one shows. The fork reuses upstream's thread data, statuses, actions, menus,
-  keybindings and project icons, and adds no server logic beyond one settings key. Projects,
+  keybindings and project icons. Server logic added: one settings key, and a subagent thread's
+  status read from its root node (see the 2026-10-13 entry). Projects,
   threads, providers and the server run upstream code unchanged.
 - **Mobile.** The Android app is upstream's `apps/mobile` built as a fourth variant
   (`APP_VARIANT=sidebar`) next to upstream's development/preview/production. Its fork
@@ -86,6 +87,48 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 ## Feature log
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
+
+### 2026-10-13 — Agents that still work show as working
+
+- **What.** The agents under a thread showed "done" with green dots while they were still
+  running. They now show as working (blue dot, "2 agents · 2 working", group open) until they
+  finish, and as failed when they fail.
+- **How.** A subagent thread has no runs and no provider session of its own: the provider drives
+  it through a runless `root_turn` node, so its shell read idle and its runtime null. The server
+  now gives such a thread (subagent lineage, no runs) the status of its newest runless root node,
+  in both the SQL snapshot and the in-memory shell; any event on the thread refreshes the shell.
+  Clients read that status from the shell when the thread has no runtime.
+- **Where.** `subagentShellStatus` and the `runless_root_status` column in
+  `apps/server/src/orchestration-v2/ProjectionStore.ts` (tests: "runless subagent's root node
+  status"); `agentRunState` in `packages/client-runtime/src/state/threadAgents.ts`. Needs the
+  server update; older servers keep the old behaviour.
+
+### 2026-10-13 — Long answers no longer overlap on Android
+
+- **What.** On the phone, a long answer with quotes inside list items came out shorter than its
+  text: the copy/fork/time row sat on top of the last lines and the end was cut off. Answers and
+  Markdown file previews now get their full height.
+- **How.** The GitHub-flavoured Markdown view (react-native-enriched-markdown) sizes itself from an
+  estimate built with StaticLayouts before it renders, and that estimate runs short for a quote
+  nested in a list item. After laying out its segments the view now compares
+  their real height with its frame; when they differ it stores the real height for that width and
+  document and asks Yoga to measure again, which then returns it.
+- **Where.** `patches/react-native-enriched-markdown@1.2.0-t3.11.patch` (`storeLaidOutHeight` in
+  `MeasurementStore.kt`, `reportLaidOutHeight` in `EnrichedMarkdown.kt`), registered in
+  `pnpm-workspace.yaml` (`patchedDependencies`, and `allowBuilds` for the patched package). When
+  the vendored tgz is bumped, re-create the patch or drop it if upstream fixed the estimate.
+
+### 2026-10-13 — Version history in order, with download progress (Android)
+
+- **What.** Settings › About › Version history lists builds newest first by build number
+  (sidebar.14 above sidebar.9), and "newest" marks the real newest. While an APK downloads its row
+  shows "Downloading 37%" over a thin bar; tapping the row again cancels. The Version row keeps its
+  label whole and wraps a long version on the right.
+- **How.** Releases are sorted by version instead of GitHub's order; the download reports
+  progress through `File.downloadFileAsync`'s `onProgress`.
+- **Where.** `apps/mobile/src/features/settings/forkVersions.ts`, `ForkVersionHistory.tsx`; seams:
+  the optional `onProgress` of `openAttachmentInViewer` in `apps/mobile/src/lib/attachmentDownload.ts`,
+  the Version row in `SettingsAboutRouteScreen.tsx`.
 
 ### 2026-10-12 — Talk to Codex (voice conversations, upstream PR #14865)
 

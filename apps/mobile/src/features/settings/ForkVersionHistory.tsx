@@ -1,10 +1,11 @@
 import Constants from "expo-constants";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { openAttachmentInViewer } from "../../lib/attachmentDownload";
 import { SettingsSection } from "./components/SettingsSection";
+import { compareForkVersionsNewestFirst, downloadPercent } from "./forkVersions";
 
 interface ForkApkRelease {
   readonly version: string;
@@ -27,7 +28,7 @@ async function listForkApkReleases(repo: string, signal: AbortSignal): Promise<F
     published_at: string | null;
     assets: ReadonlyArray<{ name: string; browser_download_url: string }>;
   }>;
-  return releases.flatMap((release) => {
+  const apks = releases.flatMap((release) => {
     const version = RELEASE_TAG.exec(release.tag_name)?.[1];
     const apk = release.assets.find((asset) => asset.name.endsWith(".apk"));
     return !release.draft && version && apk
@@ -41,6 +42,8 @@ async function listForkApkReleases(repo: string, signal: AbortSignal): Promise<F
         ]
       : [];
   });
+  // GitHub lists releases in its own order (an edited release can jump ahead).
+  return apks.sort((left, right) => compareForkVersionsNewestFirst(left.version, right.version));
 }
 
 /**
@@ -53,7 +56,13 @@ export function ForkVersionHistorySection() {
   const installedVersion = Constants.expoConfig?.version ?? "";
   const [releases, setReleases] = useState<ReadonlyArray<ForkApkRelease> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [installing, setInstalling] = useState<string | null>(null);
+  // The APK being downloaded and how far along it is (null percent: size unknown).
+  const [download, setDownload] = useState<{
+    readonly version: string;
+    readonly percent: number | null;
+  } | null>(null);
+  const downloadController = useRef<AbortController | null>(null);
+  const installing = download?.version ?? null;
 
   useEffect(() => {
     if (!repo) return;
@@ -70,6 +79,10 @@ export function ForkVersionHistorySection() {
   if (!repo) return null;
 
   const install = (release: ForkApkRelease) => {
+    if (installing === release.version) {
+      downloadController.current?.abort();
+      return;
+    }
     if (installing !== null) return;
     Alert.alert(
       `Install ${release.version}?`,
@@ -79,22 +92,36 @@ export function ForkVersionHistorySection() {
         {
           text: "Install",
           onPress: () => {
-            setInstalling(release.version);
+            const controller = new AbortController();
+            downloadController.current = controller;
+            setDownload({ version: release.version, percent: null });
             void openAttachmentInViewer({
               uri: release.apkUrl,
               attachment: {
                 name: release.apkName,
                 mimeType: "application/vnd.android.package-archive",
               },
-              signal: new AbortController().signal,
+              signal: controller.signal,
+              onProgress: (progress) => {
+                const percent = downloadPercent(progress);
+                setDownload((current) =>
+                  current?.version === release.version && current.percent !== percent
+                    ? { version: release.version, percent }
+                    : current,
+                );
+              },
             })
-              .catch((cause: unknown) =>
+              .catch((cause: unknown) => {
+                if (controller.signal.aborted) return;
                 Alert.alert(
                   "Install failed",
                   cause instanceof Error ? cause.message : String(cause),
-                ),
-              )
-              .finally(() => setInstalling(null));
+                );
+              })
+              .finally(() => {
+                if (downloadController.current === controller) downloadController.current = null;
+                setDownload(null);
+              });
           },
         },
       ],
@@ -112,11 +139,13 @@ export function ForkVersionHistorySection() {
       ) : (
         releases.map((release, index) => {
           const installed = release.version === installedVersion;
+          const downloading = download?.version === release.version ? download : null;
           return (
             <Pressable
               key={release.version}
               accessibilityRole="button"
-              disabled={installed || installing !== null}
+              accessibilityHint={downloading ? "Cancels the download" : undefined}
+              disabled={installed || (installing !== null && downloading === null)}
               onPress={() => install(release)}
               testID={`fork-version-${release.version}`}
               style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
@@ -127,13 +156,23 @@ export function ForkVersionHistorySection() {
                   {index === 0 ? "  · newest" : ""}
                 </Text>
                 <Text className="text-sm text-foreground-muted">
-                  {installing === release.version
-                    ? "Downloading…"
+                  {downloading
+                    ? downloading.percent === null
+                      ? "Downloading…"
+                      : `Downloading ${downloading.percent}%`
                     : installed
                       ? "Installed"
                       : release.publishedAt.slice(0, 10)}
                 </Text>
               </View>
+              {downloading ? (
+                <View className="mx-4 mb-2 h-1 overflow-hidden rounded-full bg-subtle-strong">
+                  <View
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${downloading.percent ?? 0}%` }}
+                  />
+                </View>
+              ) : null}
             </Pressable>
           );
         })

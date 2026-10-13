@@ -173,6 +173,10 @@ export async function openAttachmentInViewer(input: {
   readonly uri: string;
   readonly attachment: AttachmentFileMetadata;
   readonly signal: AbortSignal;
+  readonly onProgress?: (progress: {
+    readonly bytesWritten: number;
+    readonly totalBytes: number;
+  }) => void;
 }): Promise<void> {
   const { File } = await import("expo-file-system");
   const { requireNativeModule } = await import("expo");
@@ -182,7 +186,10 @@ export async function openAttachmentInViewer(input: {
     if (/^(file|content):/.test(input.uri)) {
       await new File(input.uri).copy(cached.file);
     } else {
-      await File.downloadFileAsync(input.uri, cached.file, { signal: input.signal });
+      await File.downloadFileAsync(input.uri, cached.file, {
+        signal: input.signal,
+        ...(input.onProgress ? { onProgress: input.onProgress } : {}),
+      });
     }
     if (input.signal.aborted) return;
     const endHandoff = beginForegroundHandoff();
