@@ -94,6 +94,7 @@ describe("serverSettings helpers", () => {
       placements: {},
       projectOrder: [],
       workspaceProjectOrder: {},
+      workspaceFold: {},
       alwaysShow: [],
       alwaysQuiet: [],
       quietAfterDays: 5,

@@ -229,30 +229,34 @@ export function dropProjectOnWorkspace(
 }
 
 /**
- * How a project folds into "Quiet projects": by itself once nothing in it
- * needs a look ("auto"), never ("active"), or always, until moved back ("quiet").
+ * How a project folds into "Quiet projects" in one workspace: by itself once
+ * nothing in it needs a look ("auto"), never ("active"), or always, until
+ * moved back ("quiet"). Each workspace keeps its own choice.
  */
 export type ProjectFoldMode = "auto" | "active" | "quiet";
 
 export function projectFoldModeOf(
   config: SidebarWorkspacesConfig,
+  workspaceId: string,
   projectKey: string,
 ): ProjectFoldMode {
-  if (config.alwaysQuiet.includes(projectKey)) return "quiet";
-  if (config.alwaysShow.includes(projectKey)) return "active";
-  return "auto";
+  return config.workspaceFold[workspaceId]?.[projectKey] ?? "auto";
 }
 
 export function setProjectFoldMode(
   config: SidebarWorkspacesConfig,
+  workspaceId: string,
   projectKey: string,
   mode: ProjectFoldMode,
 ): SidebarWorkspacesConfig {
-  const alwaysShow = config.alwaysShow.filter((key) => key !== projectKey);
-  const alwaysQuiet = config.alwaysQuiet.filter((key) => key !== projectKey);
-  if (mode === "active") alwaysShow.push(projectKey);
-  if (mode === "quiet") alwaysQuiet.push(projectKey);
-  return { ...config, alwaysShow, alwaysQuiet };
+  const { [projectKey]: _previous, ...rest } = config.workspaceFold[workspaceId] ?? {};
+  const inWorkspace = mode === "auto" ? rest : { ...rest, [projectKey]: mode };
+  const { [workspaceId]: _workspace, ...others } = config.workspaceFold;
+  return {
+    ...config,
+    workspaceFold:
+      Object.keys(inWorkspace).length > 0 ? { ...others, [workspaceId]: inWorkspace } : others,
+  };
 }
 
 /** A workspace's project order: its own once arranged, else the shared one. */
@@ -445,6 +449,9 @@ export function deleteWorkspace(
     placements,
     workspaceProjectOrder: Object.fromEntries(
       Object.entries(config.workspaceProjectOrder).filter(([id]) => id !== workspaceId),
+    ),
+    workspaceFold: Object.fromEntries(
+      Object.entries(config.workspaceFold).filter(([id]) => id !== workspaceId),
     ),
     defaultWorkspace,
   };

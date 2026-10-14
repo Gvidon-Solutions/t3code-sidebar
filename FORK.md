@@ -107,20 +107,24 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   one guard in `cleanUpSettledThread`, `ThreadSettlementService.ts` (test: "leaves the settle
   script of a parent's worktree to the parent"). Needs the server running this build.
 
-### 2026-10-14 — Move projects into "Quiet projects" and back by hand
+### 2026-10-15 — Move projects into "Quiet projects" and back by hand, per workspace
 
 - **What.** A project's menu has "Move to quiet projects" / "Move to active projects", on the
   desktop and the phone; on the desktop a folder can also be dragged onto the "Quiet projects"
-  header or among the other section's folders. A project moved by hand stays where it was put,
-  even with new activity, until it is moved back; "Fold automatically" returns it to the usual
-  rule (it folds once nothing in it needs a look). "Never fold into quiet projects" became "Move to
-  active projects". Agents: `t3ctl ws fold <P> quiet|active|auto`.
-- **How.** `sidebarWorkspaces` gains `alwaysQuiet` next to `alwaysShow`; `projectFoldModeOf` /
-  `setProjectFoldMode` keep a project in at most one of them. Old clients drop `alwaysQuiet` when
-  they save the config.
-- **Where.** `packages/client-runtime/src/state/sidebarWorkspaces.ts`, `isProjectQuiet`
-  (`workspaces.logic.ts`) and `isFolderQuiet` (`workspaceNavigator.ts`), the folder menus in
-  `WorkspaceSidebar.tsx` and the mobile `WorkspaceChrome.tsx`.
+  header or among the other section's folders. The choice belongs to the open workspace: a project
+  can be quiet in one workspace and active in another. A project moved by hand stays where it was
+  put, even with new activity, until it is moved back; "Fold automatically" returns it to the
+  usual rule (it folds once nothing in it needs a look), which is the same in every workspace.
+  "Never fold into quiet projects" became "Move to active projects". Agents:
+  `t3ctl ws fold <P> quiet|active|auto [<W>]` (W required when P shows in several workspaces).
+- **How.** `sidebarWorkspaces.workspaceFold`: workspace id → project key → "quiet" | "active".
+  `alwaysShow` (and sidebar.22's `alwaysQuiet`) are legacy and no longer read; the owner's two
+  "Never fold" marks were moved into `workspaceFold` for the workspaces those projects showed in.
+  Old clients drop `workspaceFold` when they save the config.
+- **Where.** `packages/client-runtime/src/state/sidebarWorkspaces.ts` (`projectFoldModeOf`,
+  `setProjectFoldMode`), `isProjectQuiet` (`workspaces.logic.ts`) and `isFolderQuiet`
+  (`workspaceNavigator.ts`), the folder menus in `WorkspaceSidebar.tsx` and the mobile
+  `WorkspaceChrome.tsx`.
 
 ### 2026-10-14 — A project in several workspaces
 

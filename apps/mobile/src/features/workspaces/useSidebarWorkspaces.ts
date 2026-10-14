@@ -95,11 +95,16 @@ export function useSidebarWorkspaces() {
       updateConfig((current) => toggleProjectWorkspace(current, project, workspaceId, sequenceOf)),
     [updateConfig],
   );
-  /** Moves a project into "Quiet projects" or out of it by hand, or back to folding by itself. */
+  /**
+   * Moves a project into "Quiet projects" or out of it by hand in the open
+   * workspace, or back to folding by itself there.
+   */
   const setFoldMode = useCallback(
-    (projectKey: string, mode: ProjectFoldMode) =>
-      updateConfig((current) => setProjectFoldMode(current, projectKey, mode)),
-    [updateConfig],
+    (projectKey: string, mode: ProjectFoldMode) => {
+      if (currentWorkspaceId === null) return;
+      updateConfig((current) => setProjectFoldMode(current, currentWorkspaceId, projectKey, mode));
+    },
+    [currentWorkspaceId, updateConfig],
   );
   /** Drops `projectKey` before `beforeKey` (null: last) among `sequence`, the open workspace's folders. */
   const reorderProject = useCallback(

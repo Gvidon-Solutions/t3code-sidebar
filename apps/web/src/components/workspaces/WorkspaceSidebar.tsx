@@ -382,16 +382,7 @@ export default function WorkspaceSidebar() {
         group,
         label: isScratch ? SCRATCH_LABEL : group.displayName,
         isScratch,
-        // "No project" never folds away: it sits last, below Quiet projects.
-        quiet:
-          !isScratch &&
-          isProjectQuiet({
-            threads: all,
-            projectCreatedAt: group.createdAt ?? null,
-            quietAfterDays: config.quietAfterDays,
-            foldMode: projectFoldModeOf(config, group.projectKey),
-            now,
-          }),
+        quiet: false,
         active: sortThreadsForSidebar(active),
         settled: settled.toSorted(
           (left, right) =>
@@ -399,10 +390,24 @@ export default function WorkspaceSidebar() {
         ),
         all,
       };
+      // Each workspace keeps its own hand-made choice; the rule itself is shared.
+      const quietOf = (foldMode: ProjectFoldMode) =>
+        !isScratch &&
+        isProjectQuiet({
+          threads: all,
+          projectCreatedAt: group.createdAt ?? null,
+          quietAfterDays: config.quietAfterDays,
+          foldMode,
+          now,
+        });
+      const quietByItself = quietOf("auto");
       for (const workspaceId of workspaceIds) {
         const bucket = byWorkspace.get(workspaceId);
         if (!bucket) continue;
-        bucket.folders.push({ ...folder, workspaceId });
+        const foldMode = projectFoldModeOf(config, workspaceId, group.projectKey);
+        // "No project" never folds away: it sits last, below Quiet projects.
+        const quiet = foldMode === "auto" ? quietByItself : quietOf(foldMode);
+        bucket.folders.push({ ...folder, workspaceId, quiet });
         bucket.threads.push(...all);
         bucket.snoozed.push(...snoozed);
       }
@@ -848,7 +853,7 @@ export default function WorkspaceSidebar() {
       const api = readLocalApi();
       if (!api) return;
       const projectKey = folder.group.projectKey;
-      const foldMode = projectFoldModeOf(configRef.current, projectKey);
+      const foldMode = projectFoldModeOf(configRef.current, folder.workspaceId, projectKey);
       const hasCustomIcon = folder.group.memberProjects.some(
         (member) => member.projectIcon != null || member.faviconPath != null,
       );
@@ -892,7 +897,7 @@ export default function WorkspaceSidebar() {
         toggleProjectIn(projectKey, clicked.slice("show:".length));
       else if (clicked.startsWith("fold:")) {
         const mode = clicked.slice("fold:".length) as ProjectFoldMode;
-        writeConfig((config) => setProjectFoldMode(config, projectKey, mode));
+        writeConfig((config) => setProjectFoldMode(config, folder.workspaceId, projectKey, mode));
       } else if (clicked === "settings") {
         if (isMobile) setOpenMobile(false);
         void router.navigate({ to: "/projects/$projectKey", params: { projectKey } });
@@ -1139,7 +1144,7 @@ export default function WorkspaceSidebar() {
         beforeKey,
       );
       return crosses
-        ? setProjectFoldMode(moved, dragged, target.quiet ? "quiet" : "active")
+        ? setProjectFoldMode(moved, target.workspaceId, dragged, target.quiet ? "quiet" : "active")
         : moved;
     });
   };
@@ -1151,7 +1156,9 @@ export default function WorkspaceSidebar() {
     );
     if (!dragged || dragged.isScratch || dragged.quiet) return null;
     return () =>
-      writeConfig((current) => setProjectFoldMode(current, dragged.group.projectKey, "quiet"));
+      writeConfig((current) =>
+        setProjectFoldMode(current, bucket.workspace.id, dragged.group.projectKey, "quiet"),
+      );
   };
   /** A folder dropped on a tile moves there, or with Ctrl shows there as well. */
   const dropProjectOnTile = (projectKey: string, workspaceId: string, add: boolean) => {

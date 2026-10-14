@@ -66,9 +66,18 @@ export const SidebarWorkspacesConfig = Schema.Struct({
   workspaceProjectOrder: Schema.Record(Schema.String, Schema.Array(Schema.String)).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  /** Logical project keys that never fold into "Quiet projects". */
+  /**
+   * Workspace id → logical project key → where the user put the project by
+   * hand in that workspace: "quiet" (in "Quiet projects" until moved back) or
+   * "active" (never folds there). Absent: it folds by itself.
+   */
+  workspaceFold: Schema.Record(
+    Schema.String,
+    Schema.Record(Schema.String, Schema.Literals(["quiet", "active"])),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  /** Legacy, before `workspaceFold`: project keys that never folded, in every workspace. Unused. */
   alwaysShow: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
-  /** Logical project keys the user moved into "Quiet projects": they stay there until moved back. */
+  /** Legacy, sidebar.22 only: project keys moved into "Quiet projects" everywhere. Unused. */
   alwaysQuiet: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   quietAfterDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS)),

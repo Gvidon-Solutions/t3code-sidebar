@@ -184,16 +184,17 @@ describe("projects in several workspaces", () => {
 });
 
 describe("moving projects into quiet projects by hand", () => {
-  it("keeps one mode per project and goes back to automatic", () => {
-    expect(projectFoldModeOf(config, "a")).toBe("auto");
-    const quiet = setProjectFoldMode({ ...config, alwaysShow: ["a"] }, "a", "quiet");
-    expect(projectFoldModeOf(quiet, "a")).toBe("quiet");
-    expect(quiet.alwaysShow).toEqual([]);
-    const active = setProjectFoldMode(quiet, "a", "active");
-    expect(projectFoldModeOf(active, "a")).toBe("active");
-    expect(active.alwaysQuiet).toEqual([]);
-    const auto = setProjectFoldMode(active, "a", "auto");
-    expect(projectFoldModeOf(auto, "a")).toBe("auto");
-    expect([auto.alwaysShow, auto.alwaysQuiet]).toEqual([[], []]);
+  it("keeps one choice per workspace and goes back to automatic", () => {
+    expect(projectFoldModeOf(config, "home", "a")).toBe("auto");
+    const quiet = setProjectFoldMode(config, "home", "a", "quiet");
+    expect(projectFoldModeOf(quiet, "home", "a")).toBe("quiet");
+    expect(projectFoldModeOf(quiet, "work", "a")).toBe("auto");
+    const both = setProjectFoldMode(quiet, "work", "a", "active");
+    expect(projectFoldModeOf(both, "home", "a")).toBe("quiet");
+    expect(projectFoldModeOf(both, "work", "a")).toBe("active");
+    const auto = setProjectFoldMode(both, "home", "a", "auto");
+    expect(projectFoldModeOf(auto, "home", "a")).toBe("auto");
+    expect(auto.workspaceFold).toEqual({ work: { a: "active" } });
+    expect(deleteWorkspace(both, "work").workspaceFold).toEqual({ home: { a: "quiet" } });
   });
 });
