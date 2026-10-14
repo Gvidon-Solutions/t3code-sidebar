@@ -94,6 +94,17 @@ export interface WorkspaceProjectIdentity {
 }
 
 /**
+ * The config key of "No project": one for every environment and client, since
+ * clients key the scratch folder differently.
+ */
+export const SCRATCH_WORKSPACE_PROJECT_KEY = "no-project";
+
+/** The key a project's assignment and placements are stored under. */
+export function workspaceConfigKeyOf(project: WorkspaceProjectIdentity): string {
+  return project.isScratch ? SCRATCH_WORKSPACE_PROJECT_KEY : project.projectKey;
+}
+
+/**
  * The workspace a project belongs to: explicit assignment, then the first
  * matching rule, then the default (or first) workspace. Null only when there
  * are no workspaces at all. Ignores `placements`; see `resolveProjectWorkspaceIds`.
@@ -103,7 +114,7 @@ export function resolveProjectWorkspaceId(
   config: SidebarWorkspacesConfig,
 ): string | null {
   const known = new Set(config.workspaces.map((workspace) => workspace.id));
-  const assigned = config.assignments[project.projectKey];
+  const assigned = config.assignments[workspaceConfigKeyOf(project)];
   if (assigned !== undefined && known.has(assigned)) return assigned;
   for (const rule of config.rules) {
     if (!known.has(rule.workspace)) continue;
@@ -122,7 +133,7 @@ export function resolveProjectWorkspaceIds(
   project: WorkspaceProjectIdentity,
   config: SidebarWorkspacesConfig,
 ): string[] {
-  const placed = new Set(config.placements[project.projectKey] ?? []);
+  const placed = new Set(config.placements[workspaceConfigKeyOf(project)] ?? []);
   const shown = config.workspaces
     .map((workspace) => workspace.id)
     .filter((workspaceId) => placed.has(workspaceId));
@@ -156,10 +167,11 @@ export function setProjectWorkspaces(
     .filter((workspaceId) => wanted.has(workspaceId));
   if (next.length === 0) return config;
   const before = new Set(resolveProjectWorkspaceIds(project, config));
-  const { projectKey } = project;
+  const projectKey = workspaceConfigKeyOf(project);
   const workspaceProjectOrder = { ...config.workspaceProjectOrder };
   for (const workspaceId of next) {
-    if (before.has(workspaceId)) continue;
+    // "No project" always sits last, outside the order.
+    if (before.has(workspaceId) || project.isScratch) continue;
     const shown = sequenceOf?.(workspaceId) ?? [];
     const order = moveProjectInOrder(
       projectOrderOf(config, workspaceId),

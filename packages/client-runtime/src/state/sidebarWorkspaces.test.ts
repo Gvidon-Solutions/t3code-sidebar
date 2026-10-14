@@ -8,6 +8,7 @@ import {
   WORKSPACE_COLORS,
   addWorkspace,
   deleteWorkspace,
+  SCRATCH_WORKSPACE_PROJECT_KEY,
   dropProjectOnWorkspace,
   moveProjectInOrder,
   moveProjectInWorkspace,
@@ -118,6 +119,13 @@ describe("projects in several workspaces", () => {
   it('places "No project" like any project once it is unticked somewhere', () => {
     const next = toggleProjectWorkspace(desk, scratch, "work");
     expect(resolveProjectWorkspaceIds(scratch, next)).toEqual(["home", "desk"]);
+    // Web and mobile key the scratch folder differently; the config key is shared.
+    expect(next.placements).toEqual({ [SCRATCH_WORKSPACE_PROJECT_KEY]: ["home", "desk"] });
+    const elsewhere = { ...scratch, projectKey: "\0scratch" };
+    expect(resolveProjectWorkspaceIds(elsewhere, next)).toEqual(["home", "desk"]);
+    // It stays last, out of every order.
+    const back = toggleProjectWorkspace(next, scratch, "work");
+    expect(back.workspaceProjectOrder).toEqual(next.workspaceProjectOrder);
   });
 
   it("moves a dropped project, or with add shows it there as well", () => {

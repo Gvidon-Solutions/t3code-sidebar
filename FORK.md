@@ -99,7 +99,8 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   workspace when that workspace shows its project, else goes to the first one that does. Pinned
   threads still show everywhere. Agents: `t3ctl ws show|hide <P> <W>`.
 - **How.** `sidebarWorkspaces` gains `placements` (project key → workspace ids) and
-  `workspaceProjectOrder` (workspace id → its own order, seeded from `projectOrder`).
+  `workspaceProjectOrder` (workspace id → its own order, seeded from `projectOrder`). "No project"
+  is stored under the key `no-project` (web and mobile key its folder differently).
   `assignments` keeps a placed project's first workspace for clients that predate this; such a
   client still drops `placements` when it saves the config, so update the phone app too. Needs
   the server running this build (an older one drops the new fields).
