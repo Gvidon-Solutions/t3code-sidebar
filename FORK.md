@@ -88,6 +88,21 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-14 — Fork Claude threads of a moved or renamed project
+
+- **What.** Forking a Claude thread whose project folder was moved or renamed after the thread
+  started failed on the first message ("Provider turn failed to start · Claude Agent SDK query
+  failed"). Such forks now work like any other; normal turns were never affected.
+- **How.** Claude keeps a transcript under the folder the session started in. Resume finds it in
+  any project folder, but the SDK's `forkSession` with `dir` looks only under the current folder.
+  The Claude adapter now retries the fork without `dir` when that lookup fails, so the SDK
+  searches every project folder; the fork lands next to the source transcript, where resume finds
+  it.
+- **Where.** `forkThread` in `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts`
+  (tests: "forks a session whose transcript stayed under the project's old directory", "reports
+  the project-directory miss when no project has the session"). Needs the server running this
+  build.
+
 ### 2026-10-14 — Removing a project from a workspace sticks
 
 - **What.** Moving a project out of a workspace (or deleting the workspace) left its old

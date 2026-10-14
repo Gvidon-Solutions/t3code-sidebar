@@ -9141,12 +9141,25 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 ...(input.runtimePolicy.cwd === null ? {} : { dir: input.runtimePolicy.cwd }),
                 ...(upToMessageId === undefined ? {} : { upToMessageId }),
               };
-              const forked = yield* queryRunner.forkSession({
-                sessionId: sourceNativeThreadId,
-                options: forkOptions,
-                threadId: forkInput.targetThreadId,
-                providerSessionId: input.providerSessionId,
-              });
+              const forkSession = (options: ForkSessionOptions) =>
+                queryRunner.forkSession({
+                  sessionId: sourceNativeThreadId,
+                  options,
+                  threadId: forkInput.targetThreadId,
+                  providerSessionId: input.providerSessionId,
+                });
+              // With `dir` the SDK looks for the source transcript only in that
+              // directory's project folder, while resume finds it in any. A
+              // project moved or renamed after the source session started keeps
+              // its transcript under the old folder, so retry across all of them.
+              const { dir, ...forkOptionsWithoutDir } = forkOptions;
+              const forked = yield* forkSession(forkOptions).pipe(
+                Effect.catch((error) =>
+                  dir === undefined
+                    ? Effect.fail(error)
+                    : forkSession(forkOptionsWithoutDir).pipe(Effect.mapError(() => error)),
+                ),
+              );
               yield* Ref.update(openedNativeThreads, (current) => {
                 const updated = new Set(current);
                 updated.add(forked.sessionId);

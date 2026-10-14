@@ -46,6 +46,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -1919,6 +1920,109 @@ describe("ClaudeAdapterV2 native fork", () => {
         ),
       ),
     ),
+  );
+
+  // The SDK reports a transcript outside `dir`'s project folder as missing.
+  const forkMovedProjectSession = (sessionFoundWithoutDir: boolean) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const forkOptions: Array<unknown> = [];
+        const adapter = yield* ClaudeAdapterV2.makeClaudeAdapterV2({
+          instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,
+          settings: DEFAULT_CLAUDE_SETTINGS,
+          environment: {},
+          attachmentsDir: yield* fileSystem.makeTempDirectoryScoped({
+            prefix: "t3-claude-v2-fork-moved-attachments-",
+          }),
+          fileSystem,
+          path: yield* Path.Path,
+          crypto: yield* Crypto.Crypto,
+          idAllocator: yield* IdAllocator.IdAllocatorV2,
+          queryRunner: {
+            allocateSessionId: Effect.succeed("source-native-session"),
+            open: () => Effect.die("unused open"),
+            forkSession: (input) => {
+              forkOptions.push(input.options);
+              return input.options.dir === undefined && sessionFoundWithoutDir
+                ? Effect.succeed({ sessionId: "forked-native-session" })
+                : Effect.fail(
+                    new ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError({
+                      method: "forkSession",
+                      cause: new Error(
+                        input.options.dir === undefined
+                          ? "Session source-native-session not found in any project directory"
+                          : `Session source-native-session not found in project directory for ${input.options.dir}`,
+                      ),
+                    }),
+                  );
+            },
+            subagentLaunchToolUseId: () => Effect.succeed(null),
+            assertComplete: Effect.void,
+          },
+        });
+        const sourceThreadId = ThreadId.make("thread-claude-fork-moved-source");
+        const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          cwd: "/workspace/moved",
+        });
+        const modelSelection = {
+          instanceId: ProviderInstanceId.make(ClaudeAdapterV2.CLAUDE_PROVIDER),
+          model: "claude-sonnet-4-6",
+        };
+        const runtime = yield* adapter.openSession({
+          threadId: sourceThreadId,
+          providerSessionId: ProviderSessionId.make("provider-session-claude-fork-moved"),
+          modelSelection,
+          runtimePolicy,
+        });
+        const sourceProviderThread = yield* runtime.ensureThread({
+          threadId: sourceThreadId,
+          modelSelection,
+          runtimePolicy,
+        });
+        const forked = yield* runtime
+          .forkThread({
+            sourceProviderThread,
+            sourceProviderTurns: [],
+            targetThreadId: ThreadId.make("thread-claude-fork-moved-target"),
+          })
+          .pipe(Effect.exit);
+        return { forked, forkOptions };
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
+    );
+
+  it.effect("forks a session whose transcript stayed under the project's old directory", () =>
+    Effect.gen(function* () {
+      const { forked, forkOptions } = yield* forkMovedProjectSession(true);
+
+      assert.deepEqual(forkOptions, [{ dir: "/workspace/moved" }, {}]);
+      assert.isTrue(Exit.isSuccess(forked));
+      if (Exit.isSuccess(forked)) {
+        assert.equal(forked.value.nativeThreadRef?.nativeId, "forked-native-session");
+      }
+    }),
+  );
+
+  it.effect("reports the project-directory miss when no project has the session", () =>
+    Effect.gen(function* () {
+      const { forked, forkOptions } = yield* forkMovedProjectSession(false);
+
+      assert.deepEqual(forkOptions, [{ dir: "/workspace/moved" }, {}]);
+      assert.isTrue(Exit.isFailure(forked));
+      const error = Exit.isFailure(forked) ? Cause.squash(forked.cause) : undefined;
+      assert.instanceOf(error, ProviderAdapter.ProviderAdapterForkThreadError);
+      assert.instanceOf(error.cause, ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError);
+      assert.include(
+        String(error.cause.cause),
+        "not found in project directory for /workspace/moved",
+      );
+    }),
   );
 });
 
