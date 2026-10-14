@@ -88,6 +88,40 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-15 — Settling a thread settles its agents
+
+- **What.** Settling a thread also settles the agents under it (Claude/Codex subagents and
+  delegated tasks), and theirs, so the project can fold into "Quiet projects" without settling
+  each agent by hand. Un-settling the thread un-settles them again. This works from every client,
+  from agents and `t3ctl`, and for automatic settlement. An agent that is still running, waiting
+  on an approval or has a queued message stays active, along with the agents under it; settling
+  the thread again later picks it up. Settling or un-settling an agent never touches its parent;
+  archived agents are left alone. A new message to a settled thread re-opens only that thread.
+- **How.** A server reactor on the committed `thread.settled` / `thread.unsettled` events (only an
+  explicit un-settle, not a re-engaging turn) walks the thread's subagent records, checks each
+  child's lineage, and dispatches `thread.settle` / `thread.unsettle` with a command id derived
+  from the parent event. Each child's own event carries the cascade one level further. A subagent
+  thread no longer runs the project's settle script: it shares its parent's checkout.
+- **Where.** `apps/server/src/orchestration-v2/ThreadSettlementCascade.ts` (tests in
+  `ThreadSettlementCascade.test.ts`). Seams: the reactor's layer in `apps/server/src/server.ts`;
+  one guard in `cleanUpSettledThread`, `ThreadSettlementService.ts` (test: "leaves the settle
+  script of a parent's worktree to the parent"). Needs the server running this build.
+
+### 2026-10-14 — Move projects into "Quiet projects" and back by hand
+
+- **What.** A project's menu has "Move to quiet projects" / "Move to active projects", on the
+  desktop and the phone; on the desktop a folder can also be dragged onto the "Quiet projects"
+  header or among the other section's folders. A project moved by hand stays where it was put,
+  even with new activity, until it is moved back; "Fold automatically" returns it to the usual
+  rule (it folds once nothing in it needs a look). "Never fold into quiet projects" became "Move to
+  active projects". Agents: `t3ctl ws fold <P> quiet|active|auto`.
+- **How.** `sidebarWorkspaces` gains `alwaysQuiet` next to `alwaysShow`; `projectFoldModeOf` /
+  `setProjectFoldMode` keep a project in at most one of them. Old clients drop `alwaysQuiet` when
+  they save the config.
+- **Where.** `packages/client-runtime/src/state/sidebarWorkspaces.ts`, `isProjectQuiet`
+  (`workspaces.logic.ts`) and `isFolderQuiet` (`workspaceNavigator.ts`), the folder menus in
+  `WorkspaceSidebar.tsx` and the mobile `WorkspaceChrome.tsx`.
+
 ### 2026-10-14 — A project in several workspaces
 
 - **What.** A project can show in several workspaces at once: the same project, the same threads.

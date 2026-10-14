@@ -111,6 +111,7 @@ export function WorkspaceDrawer(props: {
             workspaces={workspaceHome.config.workspaces}
             onToggle={workspaceHome.toggle}
             onToggleWorkspace={workspaceHome.toggleProjectIn}
+            onFoldMode={workspaceHome.setFoldMode}
             onNewThread={startThread}
           />
         ) : null;

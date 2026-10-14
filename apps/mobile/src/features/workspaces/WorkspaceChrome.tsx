@@ -15,7 +15,11 @@ import IconSparkles from "@tabler/icons-react-native/IconSparkles";
 import IconStar from "@tabler/icons-react-native/IconStar";
 import IconUsers from "@tabler/icons-react-native/IconUsers";
 import IconWallet from "@tabler/icons-react-native/IconWallet";
-import { workspaceColor, workspaceMark } from "@t3tools/client-runtime/state/sidebar-workspaces";
+import {
+  workspaceColor,
+  workspaceMark,
+  type ProjectFoldMode,
+} from "@t3tools/client-runtime/state/sidebar-workspaces";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { SidebarWorkspace } from "@t3tools/contracts";
 import type { MenuAction, NativeActionEvent } from "@react-native-menu/menu";
@@ -269,6 +273,8 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly onToggle: (key: string) => void;
   /** Ticks or unticks one workspace in "Show in workspaces". */
   readonly onToggleWorkspace: (projectKey: string, workspaceId: string) => void;
+  /** Moves the project into "Quiet projects" or out of it, or back to folding by itself. */
+  readonly onFoldMode: (projectKey: string, mode: ProjectFoldMode) => void;
   readonly onNewThread: (project: EnvironmentProject) => void;
 }) {
   const { item } = props;
@@ -287,12 +293,25 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
           attributes: { disabled: shownIn.length === 1 && shownIn[0] === workspace.id },
         })),
       },
+      // "No project" is never quiet.
+      ...(item.isScratch
+        ? []
+        : [
+            item.quiet
+              ? { id: "fold:active", title: "Move to active projects", image: "sun.max" }
+              : { id: "fold:quiet", title: "Move to quiet projects", image: "moon" },
+            ...(item.foldMode === "auto"
+              ? []
+              : [{ id: "fold:auto", title: "Fold automatically", image: "wand.and.stars" }]),
+          ]),
     ];
-  }, [item.workspaceIds, props.workspaces]);
+  }, [item.foldMode, item.isScratch, item.quiet, item.workspaceIds, props.workspaces]);
   const handleAction = ({ nativeEvent }: NativeActionEvent) => {
     if (nativeEvent.event === "new") props.onNewThread(item.project);
     else if (nativeEvent.event.startsWith("show:")) {
       props.onToggleWorkspace(item.projectKey, nativeEvent.event.slice("show:".length));
+    } else if (nativeEvent.event.startsWith("fold:")) {
+      props.onFoldMode(item.projectKey, nativeEvent.event.slice("fold:".length) as ProjectFoldMode);
     }
   };
   const draggable = useFolderDragAvailable() && Platform.OS === "android" && !item.isScratch;

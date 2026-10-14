@@ -12,8 +12,10 @@ import {
   dropProjectOnWorkspace,
   moveProjectInOrder,
   moveProjectInWorkspace,
+  projectFoldModeOf,
   projectOrderOf,
   resolveProjectWorkspaceIds,
+  setProjectFoldMode,
   sortWorkspaceProjects,
   toggleProjectWorkspace,
   updateWorkspace,
@@ -178,5 +180,20 @@ describe("projects in several workspaces", () => {
     expect(resolveProjectWorkspaceIds({ projectKey: "b", workspaceRoots: [] }, gone)).toEqual([
       "home",
     ]);
+  });
+});
+
+describe("moving projects into quiet projects by hand", () => {
+  it("keeps one mode per project and goes back to automatic", () => {
+    expect(projectFoldModeOf(config, "a")).toBe("auto");
+    const quiet = setProjectFoldMode({ ...config, alwaysShow: ["a"] }, "a", "quiet");
+    expect(projectFoldModeOf(quiet, "a")).toBe("quiet");
+    expect(quiet.alwaysShow).toEqual([]);
+    const active = setProjectFoldMode(quiet, "a", "active");
+    expect(projectFoldModeOf(active, "a")).toBe("active");
+    expect(active.alwaysQuiet).toEqual([]);
+    const auto = setProjectFoldMode(active, "a", "auto");
+    expect(projectFoldModeOf(auto, "a")).toBe("auto");
+    expect([auto.alwaysShow, auto.alwaysQuiet]).toEqual([[], []]);
   });
 });

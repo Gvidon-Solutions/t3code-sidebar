@@ -228,6 +228,33 @@ export function dropProjectOnWorkspace(
   return setProjectWorkspaces(config, project, [...kept, input.toWorkspaceId], input.sequenceOf);
 }
 
+/**
+ * How a project folds into "Quiet projects": by itself once nothing in it
+ * needs a look ("auto"), never ("active"), or always, until moved back ("quiet").
+ */
+export type ProjectFoldMode = "auto" | "active" | "quiet";
+
+export function projectFoldModeOf(
+  config: SidebarWorkspacesConfig,
+  projectKey: string,
+): ProjectFoldMode {
+  if (config.alwaysQuiet.includes(projectKey)) return "quiet";
+  if (config.alwaysShow.includes(projectKey)) return "active";
+  return "auto";
+}
+
+export function setProjectFoldMode(
+  config: SidebarWorkspacesConfig,
+  projectKey: string,
+  mode: ProjectFoldMode,
+): SidebarWorkspacesConfig {
+  const alwaysShow = config.alwaysShow.filter((key) => key !== projectKey);
+  const alwaysQuiet = config.alwaysQuiet.filter((key) => key !== projectKey);
+  if (mode === "active") alwaysShow.push(projectKey);
+  if (mode === "quiet") alwaysQuiet.push(projectKey);
+  return { ...config, alwaysShow, alwaysQuiet };
+}
+
 /** A workspace's project order: its own once arranged, else the shared one. */
 export function projectOrderOf(config: SidebarWorkspacesConfig, workspaceId: string): string[] {
   return [...(config.workspaceProjectOrder[workspaceId] ?? config.projectOrder)];

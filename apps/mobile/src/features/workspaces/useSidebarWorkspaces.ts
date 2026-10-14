@@ -5,10 +5,12 @@ import {
   effectiveDefaultWorkspaceId,
   moveProjectInWorkspace,
   reorderWorkspaces,
+  setProjectFoldMode,
   toggleProjectWorkspace,
   updateWorkspace,
   type WorkspaceProjectIdentity,
   type WorkspaceSequenceOf,
+  type ProjectFoldMode,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import type { EnvironmentId, SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
@@ -93,6 +95,12 @@ export function useSidebarWorkspaces() {
       updateConfig((current) => toggleProjectWorkspace(current, project, workspaceId, sequenceOf)),
     [updateConfig],
   );
+  /** Moves a project into "Quiet projects" or out of it by hand, or back to folding by itself. */
+  const setFoldMode = useCallback(
+    (projectKey: string, mode: ProjectFoldMode) =>
+      updateConfig((current) => setProjectFoldMode(current, projectKey, mode)),
+    [updateConfig],
+  );
   /** Drops `projectKey` before `beforeKey` (null: last) among `sequence`, the open workspace's folders. */
   const reorderProject = useCallback(
     (projectKey: string, beforeKey: string | null, sequence: ReadonlyArray<string>) => {
@@ -142,6 +150,7 @@ export function useSidebarWorkspaces() {
     openWorkspace,
     toggle,
     toggleProjectIn,
+    setFoldMode,
     reorderProject,
     edit,
   } as const;

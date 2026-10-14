@@ -772,6 +772,7 @@ export function HomeScreen(props: HomeScreenProps) {
             workspaces={workspaceHome.config.workspaces}
             onToggle={workspaceHome.toggle}
             onToggleWorkspace={workspaceHome.toggleProjectIn}
+            onFoldMode={workspaceHome.setFoldMode}
             onNewThread={props.onNewThreadInProject}
           />
         ) : null;

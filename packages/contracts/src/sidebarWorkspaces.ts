@@ -68,6 +68,8 @@ export const SidebarWorkspacesConfig = Schema.Struct({
   ),
   /** Logical project keys that never fold into "Quiet projects". */
   alwaysShow: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  /** Logical project keys the user moved into "Quiet projects": they stay there until moved back. */
+  alwaysQuiet: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   quietAfterDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS)),
   ),

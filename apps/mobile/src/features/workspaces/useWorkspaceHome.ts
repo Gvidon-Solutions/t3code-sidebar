@@ -1,6 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import {
+  projectFoldModeOf,
   projectOrderOf,
   resolveProjectWorkspaceIds,
   sortWorkspaceProjects,
@@ -213,7 +214,7 @@ export function useWorkspaceHome(input: {
           otherFolders,
           threads: homeThreads,
           quietAfterDays: config.quietAfterDays,
-          alwaysShow: new Set(config.alwaysShow),
+          foldModeOf: (projectKey) => projectFoldModeOf(config, projectKey),
           toggles,
           projectOrder: projectOrderOf(config, currentWorkspaceId),
           settlementEnvironmentIds: list.settlementEnvironmentIds,
@@ -237,7 +238,7 @@ export function useWorkspaceHome(input: {
             folders,
             threads: input.threads,
             quietAfterDays: config.quietAfterDays,
-            alwaysShow: new Set(config.alwaysShow),
+            foldModeOf: (projectKey) => projectFoldModeOf(config, projectKey),
             projectOrder: projectOrderOf(config, currentWorkspaceId),
             now: Date.now(),
           }),

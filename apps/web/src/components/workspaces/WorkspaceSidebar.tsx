@@ -132,9 +132,12 @@ import {
   moveProjectInWorkspace,
   needsAttention,
   normalizeWorkspaceLabel,
+  projectFoldModeOf,
   projectOrderOf,
+  type ProjectFoldMode,
   reorderWorkspaces,
   resolveProjectWorkspaceIds,
+  setProjectFoldMode,
   sortWorkspaceProjects,
   toggleProjectWorkspace,
   summarizeWorkspaceActivity,
@@ -337,7 +340,6 @@ export default function WorkspaceSidebar() {
       if (list) list.push(thread);
       else threadsByGroup.set(group.projectKey, [thread]);
     }
-    const alwaysShow = new Set(config.alwaysShow);
     const workspaceIdsByProjectKey = new Map<string, string[]>();
     const scratchProjectKeys = new Set<string>();
     // Pinned threads show in every workspace; tiles still count them where their project shows.
@@ -387,7 +389,7 @@ export default function WorkspaceSidebar() {
             threads: all,
             projectCreatedAt: group.createdAt ?? null,
             quietAfterDays: config.quietAfterDays,
-            alwaysShow: alwaysShow.has(group.projectKey),
+            foldMode: projectFoldModeOf(config, group.projectKey),
             now,
           }),
         active: sortThreadsForSidebar(active),
@@ -846,7 +848,7 @@ export default function WorkspaceSidebar() {
       const api = readLocalApi();
       if (!api) return;
       const projectKey = folder.group.projectKey;
-      const isAlwaysShown = configRef.current.alwaysShow.includes(projectKey);
+      const foldMode = projectFoldModeOf(configRef.current, projectKey);
       const hasCustomIcon = folder.group.memberProjects.some(
         (member) => member.projectIcon != null || member.faviconPath != null,
       );
@@ -868,11 +870,10 @@ export default function WorkspaceSidebar() {
         ...(folder.isScratch
           ? []
           : [
-              {
-                id: "always-show",
-                label: "Never fold into quiet projects",
-                checked: isAlwaysShown,
-              },
+              folder.quiet
+                ? { id: "fold:active", label: "Move to active projects" }
+                : { id: "fold:quiet", label: "Move to quiet projects" },
+              ...(foldMode === "auto" ? [] : [{ id: "fold:auto", label: "Fold automatically" }]),
             ]),
       ];
       const items: ContextMenuItem[] = [
@@ -889,13 +890,9 @@ export default function WorkspaceSidebar() {
       else if (clicked === "icon-reset") void setFolderIcon(folder, null);
       else if (clicked.startsWith("show:"))
         toggleProjectIn(projectKey, clicked.slice("show:".length));
-      else if (clicked === "always-show") {
-        writeConfig((config) => ({
-          ...config,
-          alwaysShow: isAlwaysShown
-            ? config.alwaysShow.filter((key) => key !== projectKey)
-            : [...config.alwaysShow, projectKey],
-        }));
+      else if (clicked.startsWith("fold:")) {
+        const mode = clicked.slice("fold:".length) as ProjectFoldMode;
+        writeConfig((config) => setProjectFoldMode(config, projectKey, mode));
       } else if (clicked === "settings") {
         if (isMobile) setOpenMobile(false);
         void router.navigate({ to: "/projects/$projectKey", params: { projectKey } });
@@ -1130,9 +1127,31 @@ export default function WorkspaceSidebar() {
     const beforeKey = after
       ? (rest[rest.indexOf(target.group.projectKey) + 1] ?? null)
       : target.group.projectKey;
-    writeConfig((current) =>
-      moveProjectInWorkspace(current, target.workspaceId, sequence, dragged, beforeKey),
+    // Dropped among the other section's folders, it moves into that section by hand.
+    const draggedFolder = bucket.folders.find((folder) => folder.group.projectKey === dragged);
+    const crosses = draggedFolder !== undefined && draggedFolder.quiet !== target.quiet;
+    writeConfig((current) => {
+      const moved = moveProjectInWorkspace(
+        current,
+        target.workspaceId,
+        sequence,
+        dragged,
+        beforeKey,
+      );
+      return crosses
+        ? setProjectFoldMode(moved, dragged, target.quiet ? "quiet" : "active")
+        : moved;
+    });
+  };
+  /** A loud folder dropped on the "Quiet projects" header moves there by hand. */
+  const quietDropOf = (bucket: WorkspaceModel) => {
+    if (folderDrag === null || folderDrag.workspaceId !== bucket.workspace.id) return null;
+    const dragged = bucket.folders.find(
+      (folder) => folder.group.projectKey === folderDrag.projectKey,
     );
+    if (!dragged || dragged.isScratch || dragged.quiet) return null;
+    return () =>
+      writeConfig((current) => setProjectFoldMode(current, dragged.group.projectKey, "quiet"));
   };
   /** A folder dropped on a tile moves there, or with Ctrl shows there as well. */
   const dropProjectOnTile = (projectKey: string, workspaceId: string, add: boolean) => {
@@ -1315,6 +1334,7 @@ export default function WorkspaceSidebar() {
     const quietOpen = (view.sectionOpen[quietKey] ?? false) || quietHoldsActive;
     const snoozedKey = `snoozed:${bucket.workspace.id}`;
     const snoozedOpen = view.sectionOpen[snoozedKey] ?? false;
+    const quietDrop = quietDropOf(bucket);
     return (
       <div className="flex flex-col gap-0.5">
         {!nested && bucket.pinned.length > 0 ? (
@@ -1333,13 +1353,14 @@ export default function WorkspaceSidebar() {
           </div>
         ) : null}
         {loud.map(renderFolder)}
-        {quiet.length > 0 ? (
+        {quiet.length > 0 || quietDrop !== null ? (
           <CollapsibleSection
             label="Quiet projects"
             count={quiet.length}
             open={quietOpen}
-            title={`No activity for ${config.quietAfterDays}+ days`}
+            title={`No activity for ${config.quietAfterDays}+ days, or moved here by hand`}
             onToggle={() => view.setSectionOpen(quietKey, !quietOpen)}
+            onDropFolder={quietDrop}
           >
             {quiet.map(renderFolder)}
           </CollapsibleSection>
@@ -1638,6 +1659,7 @@ function CollapsibleSection({
   open,
   title,
   onToggle,
+  onDropFolder,
   children,
 }: {
   icon?: ReactNode;
@@ -1646,16 +1668,38 @@ function CollapsibleSection({
   open: boolean;
   title?: string;
   onToggle: () => void;
+  /** Set while a folder that may drop here is dragged. */
+  onDropFolder?: (() => void) | null;
   children: ReactNode;
 }) {
+  const [dropOver, setDropOver] = useState(false);
   return (
     <div className="mt-1 flex flex-col">
       <button
         type="button"
         title={title}
         aria-expanded={open}
-        className="flex h-6 items-center gap-1.5 rounded-md px-1 text-left text-2xs font-medium tracking-wide text-sidebar-muted-foreground uppercase outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "flex h-6 items-center gap-1.5 rounded-md px-1 text-left text-2xs font-medium tracking-wide text-sidebar-muted-foreground uppercase outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring",
+          onDropFolder && "outline-1 -outline-offset-1 outline-dashed outline-sidebar-border",
+          onDropFolder &&
+            dropOver &&
+            "bg-sidebar-row-hover text-sidebar-foreground outline-primary",
+        )}
         onClick={onToggle}
+        onDragOver={(event) => {
+          if (!onDropFolder) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          if (!dropOver) setDropOver(true);
+        }}
+        onDragLeave={() => setDropOver(false)}
+        onDrop={(event) => {
+          setDropOver(false);
+          if (!onDropFolder) return;
+          event.preventDefault();
+          onDropFolder();
+        }}
       >
         <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
         {icon}
