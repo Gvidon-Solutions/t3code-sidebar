@@ -85,6 +85,25 @@ describe("serverSettings helpers", () => {
       tokens: {},
     });
   });
+  it("replaces the sidebar workspace config so a removed project assignment does not survive", () => {
+    const workspaces = [{ id: "personal", name: "Personal" }];
+    const base = {
+      workspaces,
+      rules: [],
+      defaultWorkspace: null,
+      projectOrder: [],
+      alwaysShow: [],
+      quietAfterDays: 5,
+    };
+    const assigned = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      sidebarWorkspaces: { ...base, assignments: { "github.com/acme/app": "personal" } },
+    });
+    const unassigned = applyServerSettingsPatch(assigned, {
+      sidebarWorkspaces: { ...base, assignments: {} },
+    });
+    expect(unassigned.sidebarWorkspaces.assignments).toEqual({});
+    expect(unassigned.sidebarWorkspaces.workspaces).toEqual(workspaces);
+  });
   it("replaces SSH host lists when saving, editing, and removing hosts", () => {
     const host = { id: "mini", label: "Mac mini", target: "mini" };
     const saved = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, { deviceHosts: [host] });

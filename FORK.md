@@ -88,6 +88,18 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-14 — Removing a project from a workspace sticks
+
+- **What.** Moving a project out of a workspace (or deleting the workspace) left its old
+  assignment in the server settings, so the project could jump back. Removed assignments are now
+  gone for good, from the app and from agents (`/t3` skill, `t3ctl ws unassign`).
+- **How.** Settings patches are deep-merged, which can add record keys but never drop them.
+  Clients always send the whole `sidebarWorkspaces` config, so the server now replaces it instead
+  of merging it.
+- **Where.** Seam: one spread in `applyServerSettingsPatch`, `packages/shared/src/serverSettings.ts` (test: "replaces
+  the sidebar workspace config so a removed project assignment does not survive"). Needs the
+  server running this build.
+
 ### 2026-10-13 — Pin the desktop app to the dock (Linux)
 
 - **What.** On GNOME the running app offered no "Pin to Dash": the dock tied its window to the

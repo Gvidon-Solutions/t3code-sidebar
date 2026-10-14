@@ -534,6 +534,11 @@ export function applyServerSettingsPatch(
     ...(patch.providerInstances !== undefined
       ? { providerInstances: patch.providerInstances }
       : {}),
+    // Fork: clients always send the whole workspace config; a deep merge would keep
+    // project assignments the client removed.
+    ...(patch.sidebarWorkspaces !== undefined
+      ? { sidebarWorkspaces: patch.sidebarWorkspaces }
+      : {}),
     ...(patch.worktreesDirectory !== undefined &&
     patch.worktreesDirectory !== current.worktreesDirectory
       ? {
