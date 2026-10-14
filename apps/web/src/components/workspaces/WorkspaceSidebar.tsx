@@ -126,14 +126,17 @@ import {
   EMPTY_WORKSPACE_ACTIVITY,
   addWorkspace,
   deleteWorkspace,
+  dropProjectOnWorkspace,
   isProjectQuiet,
   isThreadUnread,
-  moveProjectInOrder,
+  moveProjectInWorkspace,
   needsAttention,
   normalizeWorkspaceLabel,
+  projectOrderOf,
   reorderWorkspaces,
-  resolveProjectWorkspaceId,
+  resolveProjectWorkspaceIds,
   sortWorkspaceProjects,
+  toggleProjectWorkspace,
   summarizeWorkspaceActivity,
   threadActivityMs,
   WORKSPACE_COLORS,
@@ -150,6 +153,7 @@ const SCRATCH_LABEL = "No project";
 
 interface FolderModel {
   group: SidebarProjectSnapshot;
+  /** The workspace this copy of the folder shows in; a project can show in several. */
   workspaceId: string;
   label: string;
   isScratch: boolean;
@@ -167,12 +171,8 @@ interface WorkspaceModel {
   threads: SidebarThreadSummary[];
 }
 
-/**
- * What every workspace shows: the "No project" folder, which belongs to no
- * workspace, and all pinned threads. Tiles still count a pinned thread's
- * activity in its own workspace.
- */
-type SharedModel = Omit<WorkspaceModel, "workspace">;
+/** What the shortcuts walk: pinned threads, then folders. */
+type ThreadListModel = Pick<WorkspaceModel, "pinned" | "folders">;
 
 /** Snoozed threads, the soonest to wake first. */
 function sortSnoozedThreads(threads: readonly SidebarThreadSummary[]): SidebarThreadSummary[] {
@@ -180,6 +180,14 @@ function sortSnoozedThreads(threads: readonly SidebarThreadSummary[]): SidebarTh
     (left, right) =>
       (Date.parse(left.snoozedUntil ?? "") || 0) - (Date.parse(right.snoozedUntil ?? "") || 0),
   );
+}
+
+function projectIdentity(group: SidebarProjectSnapshot, isScratch: boolean) {
+  return {
+    projectKey: group.projectKey,
+    workspaceRoots: group.memberProjects.map((member) => member.workspaceRoot),
+    isScratch,
+  };
 }
 
 function threadKeyOf(thread: Pick<SidebarThreadSummary, "environmentId" | "id">): string {
@@ -330,9 +338,10 @@ export default function WorkspaceSidebar() {
       else threadsByGroup.set(group.projectKey, [thread]);
     }
     const alwaysShow = new Set(config.alwaysShow);
-    const workspaceIdByProjectKey = new Map<string, string>();
-    const sharedProjectKeys = new Set<string>();
-    const shared: SharedModel = { folders: [], pinned: [], snoozed: [], threads: [] };
+    const workspaceIdsByProjectKey = new Map<string, string[]>();
+    const scratchProjectKeys = new Set<string>();
+    // Pinned threads show in every workspace; tiles still count them where their project shows.
+    const pinned: SidebarThreadSummary[] = [];
     const byWorkspace = new Map<string, WorkspaceModel>(
       config.workspaces.map((workspace) => [
         workspace.id,
@@ -343,45 +352,32 @@ export default function WorkspaceSidebar() {
       const isScratch = group.memberProjects.some((member) =>
         scratchRoots.has(member.workspaceRoot),
       );
-      const workspaceId = isScratch
-        ? null
-        : (resolveProjectWorkspaceId(
-            {
-              projectKey: group.projectKey,
-              workspaceRoots: group.memberProjects.map((member) => member.workspaceRoot),
-            },
-            config,
-          ) ?? IMPLICIT_WORKSPACE.id);
-      if (workspaceId !== null) workspaceIdByProjectKey.set(group.projectKey, workspaceId);
-      else sharedProjectKeys.add(group.projectKey);
-      const bucket = workspaceId === null ? shared : byWorkspace.get(workspaceId);
-      if (!bucket) continue;
+      if (isScratch) scratchProjectKeys.add(group.projectKey);
+      const workspaceIds = resolveProjectWorkspaceIds(projectIdentity(group, isScratch), config);
+      workspaceIdsByProjectKey.set(group.projectKey, workspaceIds);
       const all = threadsByGroup.get(group.projectKey) ?? [];
       const active: SidebarThreadSummary[] = [];
       const settled: SidebarThreadSummary[] = [];
+      const snoozed: SidebarThreadSummary[] = [];
       for (const thread of all) {
         const capabilities = serverConfigs.get(thread.environmentId)?.environment.capabilities;
-        bucket.threads.push(thread);
         // Subagents hang under the thread that started them (renderThread).
         if (agents.nested.has(threadKeyOf(thread))) continue;
         if (capabilities?.threadSnooze === true && effectiveSnoozed(thread, { now: nowIso })) {
-          bucket.snoozed.push(thread);
+          snoozed.push(thread);
         } else if (
           capabilities?.threadSettlement === true &&
           thread.settledOverride === "settled"
         ) {
           settled.push(thread);
         } else if (thread.pinnedAt != null) {
-          // Pinned threads show in every workspace.
-          shared.pinned.push(thread);
+          pinned.push(thread);
         } else {
           active.push(thread);
         }
       }
-      bucket.folders.push({
+      const folder: Omit<FolderModel, "workspaceId"> = {
         group,
-        // A shared folder takes the workspace it is shown in (`withShared`).
-        workspaceId: workspaceId ?? "",
         label: isScratch ? SCRATCH_LABEL : group.displayName,
         isScratch,
         // "No project" never folds away: it sits last, below Quiet projects.
@@ -400,47 +396,52 @@ export default function WorkspaceSidebar() {
             (Date.parse(right.settledAt ?? "") || 0) - (Date.parse(left.settledAt ?? "") || 0),
         ),
         all,
-      });
+      };
+      for (const workspaceId of workspaceIds) {
+        const bucket = byWorkspace.get(workspaceId);
+        if (!bucket) continue;
+        bucket.folders.push({ ...folder, workspaceId });
+        bucket.threads.push(...all);
+        bucket.snoozed.push(...snoozed);
+      }
     }
     for (const bucket of byWorkspace.values()) {
-      bucket.folders = sortWorkspaceProjects(bucket.folders, config.projectOrder, (folder) => ({
-        projectKey: folder.group.projectKey,
-        createdAt: folder.group.createdAt ?? null,
-      }));
-    }
-    for (const bucket of [...byWorkspace.values(), shared]) {
-      bucket.pinned = sortPinnedThreadsForSidebar(bucket.pinned);
+      bucket.folders = [
+        ...sortWorkspaceProjects(
+          bucket.folders.filter((folder) => !folder.isScratch),
+          projectOrderOf(config, bucket.workspace.id),
+          (folder) => ({
+            projectKey: folder.group.projectKey,
+            createdAt: folder.group.createdAt ?? null,
+          }),
+        ),
+        ...bucket.folders.filter((folder) => folder.isScratch),
+      ];
       bucket.snoozed = sortSnoozedThreads(bucket.snoozed);
     }
     return {
       byWorkspace,
-      shared,
-      workspaceIdByProjectKey,
-      sharedProjectKeys,
+      pinned: sortPinnedThreadsForSidebar(pinned),
+      workspaceIdsByProjectKey,
+      scratchProjectKeys,
       groupByPhysical,
       agentsByRoot: agents.agentsByRoot,
     };
   }, [config, now, projectGroups, scratchRoots, serverConfigs, threads]);
 
-  const workspaceOfThread = useCallback(
-    (thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">) => {
+  /** Every workspace that shows the thread's project. */
+  const workspacesOfThread = useCallback(
+    (thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">): readonly string[] => {
       const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
-      return group ? (model.workspaceIdByProjectKey.get(group.projectKey) ?? null) : null;
+      return group ? (model.workspaceIdsByProjectKey.get(group.projectKey) ?? []) : [];
     },
     [model],
   );
-  /** "No project" threads open in whichever workspace is showing. */
-  const isSharedProject = useCallback(
-    (thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">) => {
-      const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
-      return group !== undefined && model.sharedProjectKeys.has(group.projectKey);
-    },
-    [model],
-  );
-  /** Threads every workspace shows, which open without switching workspaces. */
-  const isSharedThread = useCallback(
-    (thread: SidebarThreadSummary) => thread.pinnedAt != null || isSharedProject(thread),
-    [isSharedProject],
+  /** Whether a workspace shows the thread: pinned threads show everywhere. */
+  const isShownIn = useCallback(
+    (thread: SidebarThreadSummary, workspaceId: string) =>
+      thread.pinnedAt != null || workspacesOfThread(thread).includes(workspaceId),
+    [workspacesOfThread],
   );
 
   const threadByKey = useMemo(
@@ -449,10 +450,9 @@ export default function WorkspaceSidebar() {
   );
   const routeThread = routeThreadKey ? (threadByKey.get(routeThreadKey) ?? null) : null;
   const routeTargetThread = routeThread ?? routeDraftThread;
-  const routeIsShared = routeThread
-    ? isSharedThread(routeThread)
-    : routeDraftThread !== null && isSharedProject(routeDraftThread);
-  const routeWorkspaceId = routeTargetThread ? workspaceOfThread(routeTargetThread) : null;
+  const routePinned = routeThread?.pinnedAt != null;
+  const routeWorkspaceIds = routeTargetThread ? workspacesOfThread(routeTargetThread) : [];
+  const routeWorkspacesKey = routeWorkspaceIds.join("\n");
 
   // ── Active workspace ──────────────────────────────────────────────────
   const workspaceIds = config.workspaces.map((workspace) => workspace.id);
@@ -464,24 +464,27 @@ export default function WorkspaceSidebar() {
   const activeWorkspace =
     config.workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
 
-  // Opening a thread from elsewhere (notification, palette, phone) follows it
-  // into its workspace, and the workspace remembers it for the next switch.
-  // A thread every workspace shows stays in the open one, which remembers it.
+  // A thread the open workspace shows (its project is there, or it is pinned)
+  // opens in place, and the workspace remembers it for the next switch.
+  // Opening one from elsewhere (notification, palette, phone) follows it into
+  // the first workspace that shows it.
   const lastFollowedRouteRef = useRef<string | null>(null);
   useEffect(() => {
-    if (routeIsShared) {
+    if (!routeTargetThread) return;
+    const followKey = routeThreadKey ?? routeProjectKey;
+    if (routePinned || routeWorkspaceIds.includes(activeWorkspaceId)) {
       if (routeThreadKey) view.rememberThread(activeWorkspaceId, routeThreadKey);
-      lastFollowedRouteRef.current = routeThreadKey ?? routeProjectKey;
+      lastFollowedRouteRef.current = followKey;
       return;
     }
-    if (!routeWorkspaceId) return;
-    const followKey = routeThreadKey ?? routeProjectKey;
-    if (routeThreadKey) view.rememberThread(routeWorkspaceId, routeThreadKey);
+    const target = routeWorkspaceIds[0];
+    if (!target) return;
+    if (routeThreadKey) view.rememberThread(target, routeThreadKey);
     if (followKey === lastFollowedRouteRef.current) return;
     lastFollowedRouteRef.current = followKey;
-    if (routeWorkspaceId !== activeWorkspaceId) view.setActiveWorkspace(routeWorkspaceId);
+    view.setActiveWorkspace(target);
     // Only route changes drive this; switching tiles must not bounce back.
-  }, [routeThreadKey, routeProjectKey, routeWorkspaceId, routeIsShared]);
+  }, [routeThreadKey, routeProjectKey, routeWorkspacesKey, routePinned]);
 
   const navigateToThread = useCallback(
     (threadRef: ScopedThreadRef) => {
@@ -501,11 +504,7 @@ export default function WorkspaceSidebar() {
       lastFollowedRouteRef.current = routeThreadKey ?? routeProjectKey;
       const remembered = view.lastThreadByWorkspace[workspaceId];
       const thread = remembered ? threadByKey.get(remembered) : undefined;
-      if (
-        thread &&
-        thread.archivedAt === null &&
-        (isSharedThread(thread) || workspaceOfThread(thread) === workspaceId)
-      ) {
+      if (thread && thread.archivedAt === null && isShownIn(thread, workspaceId)) {
         lastFollowedRouteRef.current = remembered ?? null;
         void router.navigate({
           to: "/$environmentId/$threadId",
@@ -513,32 +512,12 @@ export default function WorkspaceSidebar() {
         });
       }
     },
-    [
-      activeWorkspaceId,
-      routeProjectKey,
-      routeThreadKey,
-      router,
-      threadByKey,
-      view,
-      isSharedThread,
-      workspaceOfThread,
-    ],
+    [activeWorkspaceId, routeProjectKey, routeThreadKey, router, threadByKey, view, isShownIn],
   );
 
-  /** A workspace as shown on its own: all pinned threads, its folders, then "No project". */
-  const withShared = useCallback(
-    (bucket: WorkspaceModel): WorkspaceModel => {
-      const { shared } = model;
-      return {
-        ...bucket,
-        folders: [
-          ...bucket.folders,
-          ...shared.folders.map((folder) => ({ ...folder, workspaceId: bucket.workspace.id })),
-        ],
-        pinned: sortPinnedThreadsForSidebar([...bucket.pinned, ...shared.pinned]),
-        snoozed: sortSnoozedThreads([...bucket.snoozed, ...shared.snoozed]),
-      };
-    },
+  /** A workspace as shown on its own: all pinned threads, then its folders. */
+  const withPinned = useCallback(
+    (bucket: WorkspaceModel): WorkspaceModel => ({ ...bucket, pinned: model.pinned }),
     [model],
   );
 
@@ -556,10 +535,16 @@ export default function WorkspaceSidebar() {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
     const results: { thread: SidebarThreadSummary; folder: FolderModel }[] = [];
+    const seenProjects = new Set<string>();
     const folders = [...model.byWorkspace.values()]
       .filter((bucket) => searchScopeAll || bucket.workspace.id === activeWorkspaceId)
       .flatMap((bucket) => bucket.folders)
-      .concat(model.shared.folders);
+      // A project in several workspaces is searched once.
+      .filter((folder) => {
+        if (seenProjects.has(folder.group.projectKey)) return false;
+        seenProjects.add(folder.group.projectKey);
+        return true;
+      });
     for (const folder of folders) {
       const folderMatches = folder.label.toLowerCase().includes(query);
       for (const thread of folder.all) {
@@ -709,14 +694,30 @@ export default function WorkspaceSidebar() {
     },
     [writeConfig],
   );
-  const moveProject = useCallback(
-    (projectKey: string, workspaceId: string) => {
-      writeConfig((config) => ({
-        ...config,
-        assignments: { ...config.assignments, [projectKey]: workspaceId },
-      }));
+  const identityOfProject = useCallback(
+    (projectKey: string) => {
+      const group = projectGroups.find((candidate) => candidate.projectKey === projectKey);
+      return group ? projectIdentity(group, model.scratchProjectKeys.has(projectKey)) : null;
     },
-    [writeConfig],
+    [model, projectGroups],
+  );
+  /** A workspace's projects as shown, so a project added there lands on top. */
+  const sequenceOf = useCallback(
+    (workspaceId: string) =>
+      (model.byWorkspace.get(workspaceId)?.folders ?? [])
+        .filter((folder) => !folder.isScratch)
+        .map((folder) => folder.group.projectKey),
+    [model],
+  );
+  /** "Show in workspaces": ticks or unticks one workspace (never the last). */
+  const toggleProjectIn = useCallback(
+    (projectKey: string, workspaceId: string) => {
+      const project = identityOfProject(projectKey);
+      if (project) {
+        writeConfig((config) => toggleProjectWorkspace(config, project, workspaceId, sequenceOf));
+      }
+    },
+    [identityOfProject, sequenceOf, writeConfig],
   );
   const openWorkspaceMenu = useCallback(
     async (workspaceId: string, position: { x: number; y: number }) => {
@@ -849,26 +850,31 @@ export default function WorkspaceSidebar() {
       const hasCustomIcon = folder.group.memberProjects.some(
         (member) => member.projectIcon != null || member.faviconPath != null,
       );
-      // "No project" is in every workspace and never quiet.
-      const placement: ContextMenuItem[] = folder.isScratch
-        ? []
-        : [
-            {
-              id: "move",
-              label: "Move to workspace",
-              icon: "folder",
-              children: configRef.current.workspaces.map((workspace) => ({
-                id: `move:${workspace.id}`,
-                label: workspace.name,
-                checked: workspace.id === folder.workspaceId,
-              })),
-            },
-            {
-              id: "always-show",
-              label: "Never fold into quiet projects",
-              checked: isAlwaysShown,
-            },
-          ];
+      const shownIn = model.workspaceIdsByProjectKey.get(projectKey) ?? [];
+      const placement: ContextMenuItem[] = [
+        {
+          id: "show-in",
+          label: "Show in workspaces",
+          icon: "folder",
+          // The last workspace can't be unticked: a project always shows somewhere.
+          children: configRef.current.workspaces.map((workspace) => ({
+            id: `show:${workspace.id}`,
+            label: workspace.name,
+            checked: shownIn.includes(workspace.id),
+            disabled: shownIn.length === 1 && shownIn[0] === workspace.id,
+          })),
+        },
+        // "No project" is never quiet.
+        ...(folder.isScratch
+          ? []
+          : [
+              {
+                id: "always-show",
+                label: "Never fold into quiet projects",
+                checked: isAlwaysShown,
+              },
+            ]),
+      ];
       const items: ContextMenuItem[] = [
         { id: "new-thread", label: "New thread", icon: "message-square-plus" },
         ...placement,
@@ -881,7 +887,8 @@ export default function WorkspaceSidebar() {
       if (clicked === "new-thread") startThreadInFolder(folder);
       else if (clicked === "icon") setIconPickerFolder(folder);
       else if (clicked === "icon-reset") void setFolderIcon(folder, null);
-      else if (clicked.startsWith("move:")) moveProject(projectKey, clicked.slice("move:".length));
+      else if (clicked.startsWith("show:"))
+        toggleProjectIn(projectKey, clicked.slice("show:".length));
       else if (clicked === "always-show") {
         writeConfig((config) => ({
           ...config,
@@ -894,30 +901,40 @@ export default function WorkspaceSidebar() {
         void router.navigate({ to: "/projects/$projectKey", params: { projectKey } });
       }
     },
-    [isMobile, moveProject, router, setFolderIcon, setOpenMobile, startThreadInFolder, writeConfig],
+    [
+      isMobile,
+      model,
+      router,
+      setFolderIcon,
+      setOpenMobile,
+      startThreadInFolder,
+      toggleProjectIn,
+      writeConfig,
+    ],
   );
 
   // ── Ordered rows for jump / traversal shortcuts ───────────────────────
   const activeBucket = model.byWorkspace.get(activeWorkspaceId);
-  const visibleWorkspaces: SharedModel[] = view.tilesVisible
+  const visibleWorkspaces: ThreadListModel[] = view.tilesVisible
     ? activeBucket
-      ? [withShared(activeBucket)]
+      ? [withPinned(activeBucket)]
       : []
-    : [...model.byWorkspace.values(), model.shared];
+    : [{ pinned: model.pinned, folders: [] }, ...model.byWorkspace.values()];
   const orderedThreadKeys = useMemo(() => {
     if (isSearching) return searchResults.map(({ thread }) => threadKeyOf(thread));
-    const keys: string[] = [];
+    // A Set: in the all-workspaces list a project can show more than once.
+    const keys = new Set<string>();
     for (const bucket of visibleWorkspaces) {
-      for (const thread of bucket.pinned) keys.push(threadKeyOf(thread));
+      for (const thread of bucket.pinned) keys.add(threadKeyOf(thread));
       for (const folder of bucket.folders) {
         if (folder.quiet) continue;
         const open = view.folderOpen[`${folder.workspaceId}:${folder.group.projectKey}`] ?? true;
         if (!open) continue;
         for (const thread of folder.active.slice(0, FOLDER_PREVIEW_COUNT))
-          keys.push(threadKeyOf(thread));
+          keys.add(threadKeyOf(thread));
       }
     }
-    return keys;
+    return [...keys];
   }, [
     isSearching,
     searchResults,
@@ -925,7 +942,7 @@ export default function WorkspaceSidebar() {
     activeWorkspaceId,
     view.tilesVisible,
     view.folderOpen,
-    withShared,
+    withPinned,
   ]);
   const jumpLabelByKey = useMemo(
     () => new Map(orderedThreadKeys.slice(0, 9).map((key, index) => [key, String(index + 1)])),
@@ -1098,10 +1115,10 @@ export default function WorkspaceSidebar() {
   const labelOfThread = (thread: SidebarThreadSummary) => {
     const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
     if (!group) return null;
-    return model.sharedProjectKeys.has(group.projectKey) ? SCRATCH_LABEL : group.displayName;
+    return model.scratchProjectKeys.has(group.projectKey) ? SCRATCH_LABEL : group.displayName;
   };
 
-  /** Drops the dragged folder next to `target`, in the order both workspaces' clients share. */
+  /** Drops the dragged folder next to `target`, in that workspace's own order. */
   const dropFolder = (target: FolderModel, after: boolean) => {
     const dragged = folderDrag?.projectKey;
     const bucket = model.byWorkspace.get(target.workspaceId);
@@ -1113,18 +1130,33 @@ export default function WorkspaceSidebar() {
     const beforeKey = after
       ? (rest[rest.indexOf(target.group.projectKey) + 1] ?? null)
       : target.group.projectKey;
-    writeConfig((current) => ({
-      ...current,
-      projectOrder: moveProjectInOrder(current.projectOrder, sequence, dragged, beforeKey),
-    }));
+    writeConfig((current) =>
+      moveProjectInWorkspace(current, target.workspaceId, sequence, dragged, beforeKey),
+    );
+  };
+  /** A folder dropped on a tile moves there, or with Ctrl shows there as well. */
+  const dropProjectOnTile = (projectKey: string, workspaceId: string, add: boolean) => {
+    const project = identityOfProject(projectKey);
+    if (!project) return;
+    const fromWorkspaceId = folderDrag?.workspaceId ?? activeWorkspaceId;
+    writeConfig((current) =>
+      dropProjectOnWorkspace(current, project, {
+        fromWorkspaceId,
+        toWorkspaceId: workspaceId,
+        add,
+        sequenceOf,
+      }),
+    );
   };
 
   const renderFolder = (folder: FolderModel) => {
     const folderKey = `${folder.workspaceId}:${folder.group.projectKey}`;
     const dropAt = folderDrop?.projectKey === folder.group.projectKey ? folderDrop : null;
+    // "No project" stays last, so it neither takes nor makes a place in the order.
     const acceptsDrop =
       folderDrag !== null &&
       !folder.isScratch &&
+      !model.scratchProjectKeys.has(folderDrag.projectKey) &&
       folderDrag.workspaceId === folder.workspaceId &&
       folderDrag.projectKey !== folder.group.projectKey;
     const open = view.folderOpen[folderKey] ?? !folder.quiet;
@@ -1146,7 +1178,7 @@ export default function WorkspaceSidebar() {
         <div
           role="button"
           tabIndex={0}
-          draggable={!folder.isScratch}
+          draggable
           aria-expanded={open}
           title={folder.group.memberProjects.map((member) => member.workspaceRoot).join("\n")}
           className="group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-[13px] font-medium text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
@@ -1163,7 +1195,7 @@ export default function WorkspaceSidebar() {
           }}
           onDragStart={(event) => {
             event.dataTransfer.setData(WORKSPACE_PROJECT_DRAG_TYPE, folder.group.projectKey);
-            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.effectAllowed = "copyMove";
             setFolderDrag({
               workspaceId: folder.workspaceId,
               projectKey: folder.group.projectKey,
@@ -1296,7 +1328,8 @@ export default function WorkspaceSidebar() {
             <span className="font-medium text-sidebar-foreground">{bucket.workspace.name}</span>{" "}
             yet.
             <br />
-            Drag a project folder onto its tile, or use “Move to workspace” in a folder menu.
+            Drag a project folder onto this tile (hold Ctrl to keep it where it is too), or use
+            “Show in workspaces” in a folder menu.
           </div>
         ) : null}
         {loud.map(renderFolder)}
@@ -1328,9 +1361,14 @@ export default function WorkspaceSidebar() {
   };
 
   const renderAllWorkspaces = () => {
-    const buckets = [...model.byWorkspace.values(), model.shared];
-    const allPinned = buckets.flatMap((bucket) => bucket.pinned);
-    const allSnoozed = buckets.flatMap((bucket) => bucket.snoozed);
+    const allPinned = model.pinned;
+    const allSnoozed = sortSnoozedThreads([
+      ...new Map(
+        [...model.byWorkspace.values()]
+          .flatMap((bucket) => bucket.snoozed)
+          .map((thread) => [threadKeyOf(thread), thread] as const),
+      ).values(),
+    ]);
     const snoozedOpen = view.sectionOpen["snoozed:all"] ?? false;
     return (
       <div className="flex flex-col gap-1">
@@ -1376,9 +1414,6 @@ export default function WorkspaceSidebar() {
             </Fragment>
           );
         })}
-        {model.shared.folders.length > 0 ? (
-          <div className="mt-1">{model.shared.folders.map(renderFolder)}</div>
-        ) : null}
         {allSnoozed.length > 0 ? (
           <CollapsibleSection
             icon={<AlarmClockIcon className="size-3" />}
@@ -1503,7 +1538,7 @@ export default function WorkspaceSidebar() {
           : view.tilesVisible
             ? (() => {
                 const bucket = model.byWorkspace.get(activeWorkspaceId);
-                return bucket ? renderWorkspaceBody(withShared(bucket), false) : null;
+                return bucket ? renderWorkspaceBody(withPinned(bucket), false) : null;
               })()
             : renderAllWorkspaces()}
       </SidebarContent>
@@ -1517,7 +1552,7 @@ export default function WorkspaceSidebar() {
         onTileContextMenu={(workspaceId, position) => void openWorkspaceMenu(workspaceId, position)}
         onCreate={createWorkspace}
         onToggleTiles={view.toggleTiles}
-        onDropProject={moveProject}
+        onDropProject={dropProjectOnTile}
         onReorder={reorderWorkspace}
       />
       <SidebarChromeFooter />

@@ -11,9 +11,11 @@ import { TrimmedNonEmptyString } from "./baseSchemas.ts";
  * same workspaces; which workspace is open, collapsed folders and similar view
  * state stay per device.
  *
- * A project belongs to the workspace named by `assignments[projectKey]`, else
- * to the first rule whose glob matches its workspace root, else to
- * `defaultWorkspace` (or the first workspace).
+ * A project shows in the workspaces listed in `placements[projectKey]`, else
+ * in the workspace named by `assignments[projectKey]`, else in the first
+ * workspace whose rule glob matches its workspace root, else in
+ * `defaultWorkspace` (or the first workspace). The "No project" folder shows
+ * in every workspace until it is placed.
  */
 export const SidebarWorkspace = Schema.Struct({
   id: TrimmedNonEmptyString,
@@ -36,8 +38,18 @@ export const DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS = 5;
 
 export const SidebarWorkspacesConfig = Schema.Struct({
   workspaces: Schema.Array(SidebarWorkspace).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
-  /** Logical project key → workspace id. Wins over rules. */
+  /**
+   * Logical project key → workspace id. Wins over rules. Since `placements`,
+   * the first workspace a placed project shows in, for clients that predate it.
+   */
   assignments: Schema.Record(Schema.String, Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  /**
+   * Logical project key → every workspace it shows in (one project, the same
+   * threads, in several workspaces). Wins over `assignments` and rules.
+   */
+  placements: Schema.Record(Schema.String, Schema.Array(Schema.String)).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   rules: Schema.Array(SidebarWorkspaceRule).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
@@ -45,11 +57,15 @@ export const SidebarWorkspacesConfig = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   /**
-   * Logical project keys in the order the user dragged them into. One list
-   * for all workspaces; each workspace shows its own projects in this order,
-   * projects missing from it first (newest first).
+   * Logical project keys in the order the user dragged them into, for
+   * workspaces without their own order. Each workspace shows its projects in
+   * its order, projects missing from it first (newest first).
    */
   projectOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  /** Workspace id → its own project order, once the user arranges or adds to it. */
+  workspaceProjectOrder: Schema.Record(Schema.String, Schema.Array(Schema.String)).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   /** Logical project keys that never fold into "Quiet projects". */
   alwaysShow: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   quietAfterDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })).pipe(

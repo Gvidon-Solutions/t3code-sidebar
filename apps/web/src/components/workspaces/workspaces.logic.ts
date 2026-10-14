@@ -11,6 +11,11 @@ import {
 export {
   addWorkspace,
   deleteWorkspace,
+  dropProjectOnWorkspace,
+  moveProjectInWorkspace,
+  projectOrderOf,
+  resolveProjectWorkspaceIds,
+  toggleProjectWorkspace,
   updateWorkspace,
   WORKSPACE_COLORS,
   WORKSPACE_GLYPH_PREFIX,

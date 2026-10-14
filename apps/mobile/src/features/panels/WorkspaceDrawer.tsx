@@ -109,9 +109,8 @@ export function WorkspaceDrawer(props: {
           <WorkspaceFolderRow
             item={item}
             workspaces={workspaceHome.config.workspaces}
-            currentWorkspaceId={workspaceHome.currentWorkspaceId}
             onToggle={workspaceHome.toggle}
-            onMove={workspaceHome.moveProject}
+            onToggleWorkspace={workspaceHome.toggleProjectIn}
             onNewThread={startThread}
           />
         ) : null;

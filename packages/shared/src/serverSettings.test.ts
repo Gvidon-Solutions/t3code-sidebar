@@ -91,7 +91,9 @@ describe("serverSettings helpers", () => {
       workspaces,
       rules: [],
       defaultWorkspace: null,
+      placements: {},
       projectOrder: [],
+      workspaceProjectOrder: {},
       alwaysShow: [],
       quietAfterDays: 5,
     };

@@ -770,9 +770,8 @@ export function HomeScreen(props: HomeScreenProps) {
           <WorkspaceFolderRow
             item={item}
             workspaces={workspaceHome.config.workspaces}
-            currentWorkspaceId={workspaceHome.currentWorkspaceId}
             onToggle={workspaceHome.toggle}
-            onMove={workspaceHome.moveProject}
+            onToggleWorkspace={workspaceHome.toggleProjectIn}
             onNewThread={props.onNewThreadInProject}
           />
         ) : null;
@@ -969,7 +968,7 @@ export function HomeScreen(props: HomeScreenProps) {
       workspaceHome.config,
       workspaceHome.currentWorkspaceId,
       workspaceHome.toggle,
-      workspaceHome.moveProject,
+      workspaceHome.toggleProjectIn,
       props.onNewThreadInProject,
     ],
   );

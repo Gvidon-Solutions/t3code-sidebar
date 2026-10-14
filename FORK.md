@@ -88,6 +88,26 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-14 — A project in several workspaces
+
+- **What.** A project can show in several workspaces at once: the same project, the same threads.
+  Its menu's "Show in workspaces" ticks every workspace it shows in, on the desktop and on the
+  phone; the last one can't be unticked. Dropping a folder on a tile moves the project there;
+  with Ctrl held it shows there as well (the tile gets a "+"). "No project" works the same way and
+  shows in every workspace until it is placed; it still sits last and tiles now count its
+  activity. Each workspace keeps its own project order. Opening a thread stays in the open
+  workspace when that workspace shows its project, else goes to the first one that does. Pinned
+  threads still show everywhere. Agents: `t3ctl ws show|hide <P> <W>`.
+- **How.** `sidebarWorkspaces` gains `placements` (project key → workspace ids) and
+  `workspaceProjectOrder` (workspace id → its own order, seeded from `projectOrder`).
+  `assignments` keeps a placed project's first workspace for clients that predate this; such a
+  client still drops `placements` when it saves the config, so update the phone app too. Needs
+  the server running this build (an older one drops the new fields).
+- **Where.** `packages/client-runtime/src/state/sidebarWorkspaces.ts`
+  (`resolveProjectWorkspaceIds`, `toggleProjectWorkspace`, `dropProjectOnWorkspace`,
+  `moveProjectInWorkspace`; tests in `sidebarWorkspaces.test.ts`), `WorkspaceSidebar.tsx`,
+  `WorkspaceChrome.tsx` (web and mobile), `useWorkspaceHome.ts`, `useSidebarWorkspaces.ts`.
+
 ### 2026-10-14 — Pinned threads in every workspace
 
 - **What.** Pinned shows every pinned thread in every workspace, whatever project it belongs to,

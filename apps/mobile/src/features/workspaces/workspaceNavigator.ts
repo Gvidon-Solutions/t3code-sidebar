@@ -47,6 +47,8 @@ export interface WorkspaceFolderInput {
   readonly memberKeys: ReadonlyArray<string>;
   /** The environment's "No project" folder: never quiet, always last. */
   readonly isScratch: boolean;
+  /** Every workspace the project shows in, for the folder's "Show in workspaces". */
+  readonly workspaceIds?: ReadonlyArray<string>;
 }
 
 export type WorkspaceSectionKind = "pinned" | "quiet" | "snoozed";
@@ -72,6 +74,8 @@ export interface WorkspaceFolderListItem {
   readonly open: boolean;
   readonly quiet: boolean;
   readonly isScratch: boolean;
+  /** Every workspace the project shows in. */
+  readonly workspaceIds: ReadonlyArray<string>;
   readonly attention: number;
   readonly working: number;
 }
@@ -414,6 +418,7 @@ export function buildWorkspaceHomeItems(input: {
       open,
       quiet: model.quiet,
       isScratch: model.input.isScratch,
+      workspaceIds: model.input.workspaceIds ?? [],
       attention: model.all.filter(needsAttention).length,
       working: model.all.filter((thread) => resolveThreadListV2Status(thread) === "working").length,
     });
@@ -531,6 +536,7 @@ export function workspaceHomeItemsAreEqual(
         previous.title === item.title &&
         previous.project === item.project &&
         previous.open === item.open &&
+        previous.workspaceIds.join("\n") === item.workspaceIds.join("\n") &&
         previous.attention === item.attention &&
         previous.working === item.working
       );

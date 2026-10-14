@@ -258,40 +258,41 @@ export function WorkspaceDock(props: {
 
 /**
  * A project folder header, as on the desktop: tap folds it, + starts a thread.
- * Long-press opens its menu; on Android, holding and moving drags it into a
- * new place (see `WorkspaceFolderDrag`). "No project", shown in every
- * workspace, can't be dragged or moved: its menu only starts threads.
+ * Long-press opens its menu, where "Show in workspaces" picks every workspace
+ * the project shows in; on Android, holding and moving drags it into a new
+ * place (see `WorkspaceFolderDrag`). "No project" always sits last, so it
+ * can't be dragged.
  */
 export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly item: WorkspaceFolderListItem;
   readonly workspaces: ReadonlyArray<SidebarWorkspace>;
-  readonly currentWorkspaceId: string;
   readonly onToggle: (key: string) => void;
-  readonly onMove: (projectKey: string, workspaceId: string) => void;
+  /** Ticks or unticks one workspace in "Show in workspaces". */
+  readonly onToggleWorkspace: (projectKey: string, workspaceId: string) => void;
   readonly onNewThread: (project: EnvironmentProject) => void;
 }) {
   const { item } = props;
-  const actions = useMemo(
-    () => [
+  const actions = useMemo((): MenuAction[] => {
+    const shownIn = item.workspaceIds;
+    return [
       { id: "new", title: "New thread", image: "square.and.pencil" },
-      ...(item.isScratch
-        ? []
-        : [
-            {
-              id: "move",
-              title: "Move to workspace",
-              subactions: props.workspaces
-                .filter((workspace) => workspace.id !== props.currentWorkspaceId)
-                .map((workspace) => ({ id: `move:${workspace.id}`, title: workspace.name })),
-            },
-          ]),
-    ],
-    [item.isScratch, props.currentWorkspaceId, props.workspaces],
-  );
+      {
+        id: "show-in",
+        title: "Show in workspaces",
+        // The last workspace can't be unticked: a project always shows somewhere.
+        subactions: props.workspaces.map((workspace) => ({
+          id: `show:${workspace.id}`,
+          title: workspace.name,
+          state: shownIn.includes(workspace.id) ? ("on" as const) : ("off" as const),
+          attributes: { disabled: shownIn.length === 1 && shownIn[0] === workspace.id },
+        })),
+      },
+    ];
+  }, [item.workspaceIds, props.workspaces]);
   const handleAction = ({ nativeEvent }: NativeActionEvent) => {
     if (nativeEvent.event === "new") props.onNewThread(item.project);
-    else if (nativeEvent.event.startsWith("move:")) {
-      props.onMove(item.projectKey, nativeEvent.event.slice("move:".length));
+    else if (nativeEvent.event.startsWith("show:")) {
+      props.onToggleWorkspace(item.projectKey, nativeEvent.event.slice("show:".length));
     }
   };
   const draggable = useFolderDragAvailable() && Platform.OS === "android" && !item.isScratch;
