@@ -88,6 +88,18 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-14 — Pinned threads in every workspace
+
+- **What.** Pinned shows every pinned thread in every workspace, whatever project it belongs to,
+  on the desktop and on the phone. Opening one stays in the open workspace; its own workspace's
+  tile still counts its activity. Snoozed and settled threads stay in their own workspace.
+- **How.** The desktop moves pinned threads into the shared part of the sidebar model (next to
+  "No project"); the phone hands the other workspaces' folders to `buildWorkspaceHomeItems`,
+  which takes only their pinned threads.
+- **Where.** `WorkspaceSidebar.tsx` (`shared.pinned`, `isSharedThread`); `otherFolders` in
+  `useWorkspaceHome.ts` and `workspaceNavigator.ts` (test: "shows threads pinned in other
+  workspaces, and nothing else of theirs").
+
 ### 2026-10-14 — "No project" in every workspace
 
 - **What.** Chats without a project live in one "No project" folder that every workspace shows,

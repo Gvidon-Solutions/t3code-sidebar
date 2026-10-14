@@ -239,6 +239,8 @@ interface FolderModel {
 export function buildWorkspaceHomeItems(input: {
   readonly workspaceId: string;
   readonly folders: ReadonlyArray<WorkspaceFolderInput>;
+  /** Other workspaces' folders: their pinned threads show here too. */
+  readonly otherFolders?: ReadonlyArray<WorkspaceFolderInput>;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly quietAfterDays: number;
   readonly alwaysShow: ReadonlySet<string>;
@@ -252,8 +254,9 @@ export function buildWorkspaceHomeItems(input: {
   readonly toRow: (item: ThreadListV2Item) => ThreadListV2ThreadListItem;
 }): WorkspaceHomeListItem[] {
   const nowIso = new Date(input.now).toISOString();
+  const otherFolders = input.otherFolders ?? [];
   const folderByMember = new Map<string, WorkspaceFolderInput>();
-  for (const folder of input.folders) {
+  for (const folder of [...input.folders, ...otherFolders]) {
     for (const memberKey of folder.memberKeys) folderByMember.set(memberKey, folder);
   }
   // Subagents are left out of the folders below; they hang under the thread
@@ -278,28 +281,35 @@ export function buildWorkspaceHomeItems(input: {
   const snoozed: EnvironmentThreadShell[] = [];
   const titleByThread = new Map<string, string>();
   const models: FolderModel[] = [];
+  const shelfOf = (thread: EnvironmentThreadShell) =>
+    input.snoozeEnvironmentIds.has(thread.environmentId) &&
+    effectiveSnoozed(thread, { now: nowIso })
+      ? "snoozed"
+      : input.settlementEnvironmentIds.has(thread.environmentId) &&
+          thread.settledOverride === "settled" &&
+          !input.queuedThreadKeys.has(threadKey(thread))
+        ? "settled"
+        : thread.pinnedAt != null
+          ? "pinned"
+          : "active";
+  for (const folder of otherFolders) {
+    for (const thread of threadsByFolder.get(folder.projectKey) ?? []) {
+      if (shelfOf(thread) !== "pinned") continue;
+      titleByThread.set(threadKey(thread), folder.title);
+      pinned.push(thread);
+    }
+  }
   for (const folder of input.folders) {
     const all = threadsByFolder.get(folder.projectKey) ?? [];
     const active: EnvironmentThreadShell[] = [];
     const settled: EnvironmentThreadShell[] = [];
     for (const thread of all) {
       titleByThread.set(threadKey(thread), folder.title);
-      if (
-        input.snoozeEnvironmentIds.has(thread.environmentId) &&
-        effectiveSnoozed(thread, { now: nowIso })
-      ) {
-        snoozed.push(thread);
-      } else if (
-        input.settlementEnvironmentIds.has(thread.environmentId) &&
-        thread.settledOverride === "settled" &&
-        !input.queuedThreadKeys.has(threadKey(thread))
-      ) {
-        settled.push(thread);
-      } else if (thread.pinnedAt != null) {
-        pinned.push(thread);
-      } else {
-        active.push(thread);
-      }
+      const shelf = shelfOf(thread);
+      if (shelf === "snoozed") snoozed.push(thread);
+      else if (shelf === "settled") settled.push(thread);
+      else if (shelf === "pinned") pinned.push(thread);
+      else active.push(thread);
     }
     models.push({
       input: folder,

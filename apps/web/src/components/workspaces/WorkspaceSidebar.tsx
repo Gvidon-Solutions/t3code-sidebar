@@ -167,7 +167,11 @@ interface WorkspaceModel {
   threads: SidebarThreadSummary[];
 }
 
-/** "No project" belongs to no workspace: every workspace shows the same folder. */
+/**
+ * What every workspace shows: the "No project" folder, which belongs to no
+ * workspace, and all pinned threads. Tiles still count a pinned thread's
+ * activity in its own workspace.
+ */
 type SharedModel = Omit<WorkspaceModel, "workspace">;
 
 /** Snoozed threads, the soonest to wake first. */
@@ -368,7 +372,8 @@ export default function WorkspaceSidebar() {
         ) {
           settled.push(thread);
         } else if (thread.pinnedAt != null) {
-          bucket.pinned.push(thread);
+          // Pinned threads show in every workspace.
+          shared.pinned.push(thread);
         } else {
           active.push(thread);
         }
@@ -425,12 +430,17 @@ export default function WorkspaceSidebar() {
     [model],
   );
   /** "No project" threads open in whichever workspace is showing. */
-  const isSharedThread = useCallback(
+  const isSharedProject = useCallback(
     (thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">) => {
       const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
       return group !== undefined && model.sharedProjectKeys.has(group.projectKey);
     },
     [model],
+  );
+  /** Threads every workspace shows, which open without switching workspaces. */
+  const isSharedThread = useCallback(
+    (thread: SidebarThreadSummary) => thread.pinnedAt != null || isSharedProject(thread),
+    [isSharedProject],
   );
 
   const threadByKey = useMemo(
@@ -439,7 +449,9 @@ export default function WorkspaceSidebar() {
   );
   const routeThread = routeThreadKey ? (threadByKey.get(routeThreadKey) ?? null) : null;
   const routeTargetThread = routeThread ?? routeDraftThread;
-  const routeIsShared = routeTargetThread !== null && isSharedThread(routeTargetThread);
+  const routeIsShared = routeThread
+    ? isSharedThread(routeThread)
+    : routeDraftThread !== null && isSharedProject(routeDraftThread);
   const routeWorkspaceId = routeTargetThread ? workspaceOfThread(routeTargetThread) : null;
 
   // ── Active workspace ──────────────────────────────────────────────────
@@ -454,7 +466,7 @@ export default function WorkspaceSidebar() {
 
   // Opening a thread from elsewhere (notification, palette, phone) follows it
   // into its workspace, and the workspace remembers it for the next switch.
-  // A "No project" thread stays in the open workspace, which remembers it.
+  // A thread every workspace shows stays in the open one, which remembers it.
   const lastFollowedRouteRef = useRef<string | null>(null);
   useEffect(() => {
     if (routeIsShared) {
@@ -513,11 +525,10 @@ export default function WorkspaceSidebar() {
     ],
   );
 
-  /** A workspace as shown on its own: its folders, then the shared "No project". */
+  /** A workspace as shown on its own: all pinned threads, its folders, then "No project". */
   const withShared = useCallback(
     (bucket: WorkspaceModel): WorkspaceModel => {
       const { shared } = model;
-      if (shared.folders.length === 0) return bucket;
       return {
         ...bucket,
         folders: [

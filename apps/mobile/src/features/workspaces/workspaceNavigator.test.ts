@@ -38,12 +38,14 @@ function build(
   toggles: ReadonlyArray<string> = [],
   options: {
     folders?: ReturnType<typeof folder>[];
+    otherFolders?: ReturnType<typeof folder>[];
     projectOrder?: ReadonlyArray<string>;
   } = {},
 ): WorkspaceHomeListItem[] {
   return buildWorkspaceHomeItems({
     workspaceId: "w",
     folders: options.folders ?? [folder("a", "Alpha"), folder("b", "Beta")],
+    ...(options.otherFolders ? { otherFolders: options.otherFolders } : {}),
     threads,
     quietAfterDays: 5,
     alwaysShow: new Set(),
@@ -85,6 +87,28 @@ const outline = (items: WorkspaceHomeListItem[]) =>
   );
 
 describe("buildWorkspaceHomeItems", () => {
+  it("shows threads pinned in other workspaces, and nothing else of theirs", () => {
+    const items = build(
+      [
+        thread("here", "a"),
+        thread("pinned elsewhere", "c", { pinnedAt: hoursAgo(1) }),
+        thread("unpinned elsewhere", "c"),
+        thread("snoozed elsewhere", "c", {
+          pinnedAt: hoursAgo(1),
+          snoozedUntil: new Date(NOW + 3_600_000).toISOString(),
+        }),
+      ],
+      [],
+      { folders: [folder("a", "Alpha")], otherFolders: [folder("c", "Gamma")] },
+    );
+    expect(outline(items)).toEqual([
+      "section pinned 1",
+      "thread pinned elsewhere [Gamma]",
+      "folder Alpha",
+      "thread here",
+    ]);
+  });
+
   it("lays out pinned, folders, settled and quiet projects like the desktop", () => {
     const items = build([
       thread("pinned", "a", { pinnedAt: hoursAgo(1) }),

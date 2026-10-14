@@ -20,6 +20,7 @@ import type { WorkspaceTileActivity } from "./WorkspaceChrome";
 import {
   arrangeWorkspaceFolders,
   buildWorkspaceHomeItems,
+  type WorkspaceFolderInput,
   type WorkspaceHomeListItem,
 } from "./workspaceNavigator";
 
@@ -123,25 +124,25 @@ export function useWorkspaceHome(input: {
     return map as ReadonlyMap<string, WorkspaceTileActivity>;
   }, [input.threads, scopeByProjectRef]);
 
-  const folders = useMemo(
-    () =>
-      input.projectScopes.flatMap((scope) => {
-        if (!isInCurrentWorkspace(scope)) return [];
-        return [
-          {
-            projectKey: scope.key,
-            title: scope.title,
-            project: scope.representative,
-            projectCreatedAt: scope.representative.createdAt ?? null,
-            memberKeys: scope.projectRefs.map((member) =>
-              scopedProjectKey(member.environmentId, member.projectId),
-            ),
-            isScratch: isScratchScope(scope),
-          },
-        ];
-      }),
-    [input.projectScopes, isInCurrentWorkspace, isScratchScope],
-  );
+  // Pinned threads show in every workspace, so the other workspaces' folders
+  // come along for their pinned threads only.
+  const { folders, otherFolders } = useMemo(() => {
+    const own: WorkspaceFolderInput[] = [];
+    const other: WorkspaceFolderInput[] = [];
+    for (const scope of input.projectScopes) {
+      (isInCurrentWorkspace(scope) ? own : other).push({
+        projectKey: scope.key,
+        title: scope.title,
+        project: scope.representative,
+        projectCreatedAt: scope.representative.createdAt ?? null,
+        memberKeys: scope.projectRefs.map((member) =>
+          scopedProjectKey(member.environmentId, member.projectId),
+        ),
+        isScratch: isScratchScope(scope),
+      });
+    }
+    return { folders: own, otherFolders: other };
+  }, [input.projectScopes, isInCurrentWorkspace, isScratchScope]);
 
   /** Home's rows: the folder list, or upstream's flat list while searching. */
   const buildItems = useCallback(
@@ -162,6 +163,7 @@ export function useWorkspaceHome(input: {
         ...buildWorkspaceHomeItems({
           workspaceId: currentWorkspaceId,
           folders,
+          otherFolders,
           threads: homeThreads,
           quietAfterDays: config.quietAfterDays,
           alwaysShow: new Set(config.alwaysShow),
@@ -176,7 +178,7 @@ export function useWorkspaceHome(input: {
         }),
       ];
     },
-    [config, currentWorkspaceId, folders, homeThreads, toggles],
+    [config, currentWorkspaceId, folders, homeThreads, otherFolders, toggles],
   );
 
   /** The open workspace's folders for the long-press drag, read when a drag starts. */
