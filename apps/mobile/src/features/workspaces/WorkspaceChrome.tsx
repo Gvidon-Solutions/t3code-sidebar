@@ -259,7 +259,8 @@ export function WorkspaceDock(props: {
 /**
  * A project folder header, as on the desktop: tap folds it, + starts a thread.
  * Long-press opens its menu; on Android, holding and moving drags it into a
- * new place (see `WorkspaceFolderDrag`). "No project" only has the menu.
+ * new place (see `WorkspaceFolderDrag`). "No project", shown in every
+ * workspace, can't be dragged or moved: its menu only starts threads.
  */
 export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly item: WorkspaceFolderListItem;
@@ -273,15 +274,19 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   const actions = useMemo(
     () => [
       { id: "new", title: "New thread", image: "square.and.pencil" },
-      {
-        id: "move",
-        title: "Move to workspace",
-        subactions: props.workspaces
-          .filter((workspace) => workspace.id !== props.currentWorkspaceId)
-          .map((workspace) => ({ id: `move:${workspace.id}`, title: workspace.name })),
-      },
+      ...(item.isScratch
+        ? []
+        : [
+            {
+              id: "move",
+              title: "Move to workspace",
+              subactions: props.workspaces
+                .filter((workspace) => workspace.id !== props.currentWorkspaceId)
+                .map((workspace) => ({ id: `move:${workspace.id}`, title: workspace.name })),
+            },
+          ]),
     ],
-    [props.currentWorkspaceId, props.workspaces],
+    [item.isScratch, props.currentWorkspaceId, props.workspaces],
   );
   const handleAction = ({ nativeEvent }: NativeActionEvent) => {
     if (nativeEvent.event === "new") props.onNewThread(item.project);

@@ -146,6 +146,7 @@ const FOLDER_PREVIEW_COUNT = 8;
 const SETTLED_PAGE_COUNT = 10;
 /** Stand-in until the user creates a workspace: everything lives here. */
 const IMPLICIT_WORKSPACE: SidebarWorkspace = { id: "personal", name: "Personal" };
+const SCRATCH_LABEL = "No project";
 
 interface FolderModel {
   group: SidebarProjectSnapshot;
@@ -164,6 +165,17 @@ interface WorkspaceModel {
   pinned: SidebarThreadSummary[];
   snoozed: SidebarThreadSummary[];
   threads: SidebarThreadSummary[];
+}
+
+/** "No project" belongs to no workspace: every workspace shows the same folder. */
+type SharedModel = Omit<WorkspaceModel, "workspace">;
+
+/** Snoozed threads, the soonest to wake first. */
+function sortSnoozedThreads(threads: readonly SidebarThreadSummary[]): SidebarThreadSummary[] {
+  return threads.toSorted(
+    (left, right) =>
+      (Date.parse(left.snoozedUntil ?? "") || 0) - (Date.parse(right.snoozedUntil ?? "") || 0),
+  );
 }
 
 function threadKeyOf(thread: Pick<SidebarThreadSummary, "environmentId" | "id">): string {
@@ -315,6 +327,8 @@ export default function WorkspaceSidebar() {
     }
     const alwaysShow = new Set(config.alwaysShow);
     const workspaceIdByProjectKey = new Map<string, string>();
+    const sharedProjectKeys = new Set<string>();
+    const shared: SharedModel = { folders: [], pinned: [], snoozed: [], threads: [] };
     const byWorkspace = new Map<string, WorkspaceModel>(
       config.workspaces.map((workspace) => [
         workspace.id,
@@ -322,16 +336,21 @@ export default function WorkspaceSidebar() {
       ]),
     );
     for (const group of projectGroups) {
-      const workspaceId =
-        resolveProjectWorkspaceId(
-          {
-            projectKey: group.projectKey,
-            workspaceRoots: group.memberProjects.map((member) => member.workspaceRoot),
-          },
-          config,
-        ) ?? IMPLICIT_WORKSPACE.id;
-      workspaceIdByProjectKey.set(group.projectKey, workspaceId);
-      const bucket = byWorkspace.get(workspaceId);
+      const isScratch = group.memberProjects.some((member) =>
+        scratchRoots.has(member.workspaceRoot),
+      );
+      const workspaceId = isScratch
+        ? null
+        : (resolveProjectWorkspaceId(
+            {
+              projectKey: group.projectKey,
+              workspaceRoots: group.memberProjects.map((member) => member.workspaceRoot),
+            },
+            config,
+          ) ?? IMPLICIT_WORKSPACE.id);
+      if (workspaceId !== null) workspaceIdByProjectKey.set(group.projectKey, workspaceId);
+      else sharedProjectKeys.add(group.projectKey);
+      const bucket = workspaceId === null ? shared : byWorkspace.get(workspaceId);
       if (!bucket) continue;
       const all = threadsByGroup.get(group.projectKey) ?? [];
       const active: SidebarThreadSummary[] = [];
@@ -354,13 +373,11 @@ export default function WorkspaceSidebar() {
           active.push(thread);
         }
       }
-      const isScratch = group.memberProjects.some((member) =>
-        scratchRoots.has(member.workspaceRoot),
-      );
       bucket.folders.push({
         group,
-        workspaceId,
-        label: isScratch ? "Chats" : group.displayName,
+        // A shared folder takes the workspace it is shown in (`withShared`).
+        workspaceId: workspaceId ?? "",
+        label: isScratch ? SCRATCH_LABEL : group.displayName,
         isScratch,
         // "No project" never folds away: it sits last, below Quiet projects.
         quiet:
@@ -381,26 +398,20 @@ export default function WorkspaceSidebar() {
       });
     }
     for (const bucket of byWorkspace.values()) {
-      bucket.folders = [
-        ...sortWorkspaceProjects(
-          bucket.folders.filter((folder) => !folder.isScratch),
-          config.projectOrder,
-          (folder) => ({
-            projectKey: folder.group.projectKey,
-            createdAt: folder.group.createdAt ?? null,
-          }),
-        ),
-        ...bucket.folders.filter((folder) => folder.isScratch),
-      ];
+      bucket.folders = sortWorkspaceProjects(bucket.folders, config.projectOrder, (folder) => ({
+        projectKey: folder.group.projectKey,
+        createdAt: folder.group.createdAt ?? null,
+      }));
+    }
+    for (const bucket of [...byWorkspace.values(), shared]) {
       bucket.pinned = sortPinnedThreadsForSidebar(bucket.pinned);
-      bucket.snoozed.sort(
-        (left, right) =>
-          (Date.parse(left.snoozedUntil ?? "") || 0) - (Date.parse(right.snoozedUntil ?? "") || 0),
-      );
+      bucket.snoozed = sortSnoozedThreads(bucket.snoozed);
     }
     return {
       byWorkspace,
+      shared,
       workspaceIdByProjectKey,
+      sharedProjectKeys,
       groupByPhysical,
       agentsByRoot: agents.agentsByRoot,
     };
@@ -413,17 +424,23 @@ export default function WorkspaceSidebar() {
     },
     [model],
   );
+  /** "No project" threads open in whichever workspace is showing. */
+  const isSharedThread = useCallback(
+    (thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">) => {
+      const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
+      return group !== undefined && model.sharedProjectKeys.has(group.projectKey);
+    },
+    [model],
+  );
 
   const threadByKey = useMemo(
     () => new Map(threads.map((thread) => [threadKeyOf(thread), thread] as const)),
     [threads],
   );
   const routeThread = routeThreadKey ? (threadByKey.get(routeThreadKey) ?? null) : null;
-  const routeWorkspaceId = routeThread
-    ? workspaceOfThread(routeThread)
-    : routeDraftThread
-      ? workspaceOfThread(routeDraftThread)
-      : null;
+  const routeTargetThread = routeThread ?? routeDraftThread;
+  const routeIsShared = routeTargetThread !== null && isSharedThread(routeTargetThread);
+  const routeWorkspaceId = routeTargetThread ? workspaceOfThread(routeTargetThread) : null;
 
   // ── Active workspace ──────────────────────────────────────────────────
   const workspaceIds = config.workspaces.map((workspace) => workspace.id);
@@ -437,8 +454,14 @@ export default function WorkspaceSidebar() {
 
   // Opening a thread from elsewhere (notification, palette, phone) follows it
   // into its workspace, and the workspace remembers it for the next switch.
+  // A "No project" thread stays in the open workspace, which remembers it.
   const lastFollowedRouteRef = useRef<string | null>(null);
   useEffect(() => {
+    if (routeIsShared) {
+      if (routeThreadKey) view.rememberThread(activeWorkspaceId, routeThreadKey);
+      lastFollowedRouteRef.current = routeThreadKey ?? routeProjectKey;
+      return;
+    }
     if (!routeWorkspaceId) return;
     const followKey = routeThreadKey ?? routeProjectKey;
     if (routeThreadKey) view.rememberThread(routeWorkspaceId, routeThreadKey);
@@ -446,7 +469,7 @@ export default function WorkspaceSidebar() {
     lastFollowedRouteRef.current = followKey;
     if (routeWorkspaceId !== activeWorkspaceId) view.setActiveWorkspace(routeWorkspaceId);
     // Only route changes drive this; switching tiles must not bounce back.
-  }, [routeThreadKey, routeProjectKey, routeWorkspaceId]);
+  }, [routeThreadKey, routeProjectKey, routeWorkspaceId, routeIsShared]);
 
   const navigateToThread = useCallback(
     (threadRef: ScopedThreadRef) => {
@@ -466,7 +489,11 @@ export default function WorkspaceSidebar() {
       lastFollowedRouteRef.current = routeThreadKey ?? routeProjectKey;
       const remembered = view.lastThreadByWorkspace[workspaceId];
       const thread = remembered ? threadByKey.get(remembered) : undefined;
-      if (thread && thread.archivedAt === null && workspaceOfThread(thread) === workspaceId) {
+      if (
+        thread &&
+        thread.archivedAt === null &&
+        (isSharedThread(thread) || workspaceOfThread(thread) === workspaceId)
+      ) {
         lastFollowedRouteRef.current = remembered ?? null;
         void router.navigate({
           to: "/$environmentId/$threadId",
@@ -481,8 +508,27 @@ export default function WorkspaceSidebar() {
       router,
       threadByKey,
       view,
+      isSharedThread,
       workspaceOfThread,
     ],
+  );
+
+  /** A workspace as shown on its own: its folders, then the shared "No project". */
+  const withShared = useCallback(
+    (bucket: WorkspaceModel): WorkspaceModel => {
+      const { shared } = model;
+      if (shared.folders.length === 0) return bucket;
+      return {
+        ...bucket,
+        folders: [
+          ...bucket.folders,
+          ...shared.folders.map((folder) => ({ ...folder, workspaceId: bucket.workspace.id })),
+        ],
+        pinned: sortPinnedThreadsForSidebar([...bucket.pinned, ...shared.pinned]),
+        snoozed: sortSnoozedThreads([...bucket.snoozed, ...shared.snoozed]),
+      };
+    },
+    [model],
   );
 
   // ── Search ────────────────────────────────────────────────────────────
@@ -499,18 +545,19 @@ export default function WorkspaceSidebar() {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
     const results: { thread: SidebarThreadSummary; folder: FolderModel }[] = [];
-    for (const bucket of model.byWorkspace.values()) {
-      if (!searchScopeAll && bucket.workspace.id !== activeWorkspaceId) continue;
-      for (const folder of bucket.folders) {
-        const folderMatches = folder.label.toLowerCase().includes(query);
-        for (const thread of folder.all) {
-          if (
-            folderMatches ||
-            thread.title.toLowerCase().includes(query) ||
-            (thread.branch ?? "").toLowerCase().includes(query)
-          ) {
-            results.push({ thread, folder });
-          }
+    const folders = [...model.byWorkspace.values()]
+      .filter((bucket) => searchScopeAll || bucket.workspace.id === activeWorkspaceId)
+      .flatMap((bucket) => bucket.folders)
+      .concat(model.shared.folders);
+    for (const folder of folders) {
+      const folderMatches = folder.label.toLowerCase().includes(query);
+      for (const thread of folder.all) {
+        if (
+          folderMatches ||
+          thread.title.toLowerCase().includes(query) ||
+          (thread.branch ?? "").toLowerCase().includes(query)
+        ) {
+          results.push({ thread, folder });
         }
       }
     }
@@ -791,23 +838,29 @@ export default function WorkspaceSidebar() {
       const hasCustomIcon = folder.group.memberProjects.some(
         (member) => member.projectIcon != null || member.faviconPath != null,
       );
+      // "No project" is in every workspace and never quiet.
+      const placement: ContextMenuItem[] = folder.isScratch
+        ? []
+        : [
+            {
+              id: "move",
+              label: "Move to workspace",
+              icon: "folder",
+              children: configRef.current.workspaces.map((workspace) => ({
+                id: `move:${workspace.id}`,
+                label: workspace.name,
+                checked: workspace.id === folder.workspaceId,
+              })),
+            },
+            {
+              id: "always-show",
+              label: "Never fold into quiet projects",
+              checked: isAlwaysShown,
+            },
+          ];
       const items: ContextMenuItem[] = [
         { id: "new-thread", label: "New thread", icon: "message-square-plus" },
-        {
-          id: "move",
-          label: "Move to workspace",
-          icon: "folder",
-          children: configRef.current.workspaces.map((workspace) => ({
-            id: `move:${workspace.id}`,
-            label: workspace.name,
-            checked: workspace.id === folder.workspaceId,
-          })),
-        },
-        {
-          id: "always-show",
-          label: "Never fold into quiet projects",
-          checked: isAlwaysShown,
-        },
+        ...placement,
         { id: "icon", label: "Icon…", icon: "smile", separatorBefore: true },
         ...(hasCustomIcon ? [{ id: "icon-reset", label: "Reset icon" }] : []),
         { id: "settings", label: "Project settings", icon: "settings", separatorBefore: true },
@@ -834,9 +887,12 @@ export default function WorkspaceSidebar() {
   );
 
   // ── Ordered rows for jump / traversal shortcuts ───────────────────────
-  const visibleWorkspaces = view.tilesVisible
-    ? [model.byWorkspace.get(activeWorkspaceId)].filter((entry): entry is WorkspaceModel => !!entry)
-    : [...model.byWorkspace.values()];
+  const activeBucket = model.byWorkspace.get(activeWorkspaceId);
+  const visibleWorkspaces: SharedModel[] = view.tilesVisible
+    ? activeBucket
+      ? [withShared(activeBucket)]
+      : []
+    : [...model.byWorkspace.values(), model.shared];
   const orderedThreadKeys = useMemo(() => {
     if (isSearching) return searchResults.map(({ thread }) => threadKeyOf(thread));
     const keys: string[] = [];
@@ -844,14 +900,22 @@ export default function WorkspaceSidebar() {
       for (const thread of bucket.pinned) keys.push(threadKeyOf(thread));
       for (const folder of bucket.folders) {
         if (folder.quiet) continue;
-        const open = view.folderOpen[`${bucket.workspace.id}:${folder.group.projectKey}`] ?? true;
+        const open = view.folderOpen[`${folder.workspaceId}:${folder.group.projectKey}`] ?? true;
         if (!open) continue;
         for (const thread of folder.active.slice(0, FOLDER_PREVIEW_COUNT))
           keys.push(threadKeyOf(thread));
       }
     }
     return keys;
-  }, [isSearching, searchResults, model, activeWorkspaceId, view.tilesVisible, view.folderOpen]);
+  }, [
+    isSearching,
+    searchResults,
+    model,
+    activeWorkspaceId,
+    view.tilesVisible,
+    view.folderOpen,
+    withShared,
+  ]);
   const jumpLabelByKey = useMemo(
     () => new Map(orderedThreadKeys.slice(0, 9).map((key, index) => [key, String(index + 1)])),
     [orderedThreadKeys],
@@ -1023,9 +1087,7 @@ export default function WorkspaceSidebar() {
   const labelOfThread = (thread: SidebarThreadSummary) => {
     const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
     if (!group) return null;
-    return group.memberProjects.some((member) => scratchRoots.has(member.workspaceRoot))
-      ? "Chats"
-      : group.displayName;
+    return model.sharedProjectKeys.has(group.projectKey) ? SCRATCH_LABEL : group.displayName;
   };
 
   /** Drops the dragged folder next to `target`, in the order both workspaces' clients share. */
@@ -1073,7 +1135,7 @@ export default function WorkspaceSidebar() {
         <div
           role="button"
           tabIndex={0}
-          draggable
+          draggable={!folder.isScratch}
           aria-expanded={open}
           title={folder.group.memberProjects.map((member) => member.workspaceRoot).join("\n")}
           className="group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-[13px] font-medium text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
@@ -1091,12 +1153,10 @@ export default function WorkspaceSidebar() {
           onDragStart={(event) => {
             event.dataTransfer.setData(WORKSPACE_PROJECT_DRAG_TYPE, folder.group.projectKey);
             event.dataTransfer.effectAllowed = "move";
-            if (!folder.isScratch) {
-              setFolderDrag({
-                workspaceId: folder.workspaceId,
-                projectKey: folder.group.projectKey,
-              });
-            }
+            setFolderDrag({
+              workspaceId: folder.workspaceId,
+              projectKey: folder.group.projectKey,
+            });
           }}
           onDragEnd={() => {
             setFolderDrag(null);
@@ -1219,7 +1279,7 @@ export default function WorkspaceSidebar() {
             {bucket.pinned.map((thread) => renderThread(thread, "pinned", labelOfThread(thread)))}
           </Section>
         ) : null}
-        {bucket.folders.length === 0 ? (
+        {loud.length === 0 && quiet.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs leading-relaxed text-sidebar-muted-foreground">
             No projects in{" "}
             <span className="font-medium text-sidebar-foreground">{bucket.workspace.name}</span>{" "}
@@ -1257,8 +1317,9 @@ export default function WorkspaceSidebar() {
   };
 
   const renderAllWorkspaces = () => {
-    const allPinned = [...model.byWorkspace.values()].flatMap((bucket) => bucket.pinned);
-    const allSnoozed = [...model.byWorkspace.values()].flatMap((bucket) => bucket.snoozed);
+    const buckets = [...model.byWorkspace.values(), model.shared];
+    const allPinned = buckets.flatMap((bucket) => bucket.pinned);
+    const allSnoozed = buckets.flatMap((bucket) => bucket.snoozed);
     const snoozedOpen = view.sectionOpen["snoozed:all"] ?? false;
     return (
       <div className="flex flex-col gap-1">
@@ -1304,6 +1365,9 @@ export default function WorkspaceSidebar() {
             </Fragment>
           );
         })}
+        {model.shared.folders.length > 0 ? (
+          <div className="mt-1">{model.shared.folders.map(renderFolder)}</div>
+        ) : null}
         {allSnoozed.length > 0 ? (
           <CollapsibleSection
             icon={<AlarmClockIcon className="size-3" />}
@@ -1428,7 +1492,7 @@ export default function WorkspaceSidebar() {
           : view.tilesVisible
             ? (() => {
                 const bucket = model.byWorkspace.get(activeWorkspaceId);
-                return bucket ? renderWorkspaceBody(bucket, false) : null;
+                return bucket ? renderWorkspaceBody(withShared(bucket), false) : null;
               })()
             : renderAllWorkspaces()}
       </SidebarContent>

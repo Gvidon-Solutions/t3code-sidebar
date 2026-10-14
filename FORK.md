@@ -88,6 +88,21 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-14 — "No project" in every workspace
+
+- **What.** Chats without a project live in one "No project" folder that every workspace shows,
+  last, with the same chats: a chat started from any workspace is seen from all of them. It can't
+  be moved to a workspace, dragged or folded into quiet projects. The desktop called it "Chats";
+  it is "No project" everywhere now.
+- **How.** The scratch project gets no workspace. The desktop keeps it as a shared part of the
+  sidebar model that each workspace view appends (its pinned and snoozed chats too); the
+  all-workspaces view and search show it once. Tiles don't count its activity, so a running chat
+  doesn't light every tile. Opening such a chat stays in the open workspace. The phone keeps the
+  folder in whichever workspace is open.
+- **Where.** `WorkspaceSidebar.tsx` (`SharedModel`, `withShared`, `isSharedThread`, the folder
+  menu); `isInCurrentWorkspace` in `apps/mobile/src/features/workspaces/useWorkspaceHome.ts`; the
+  folder menu in `WorkspaceChrome.tsx`.
+
 ### 2026-10-14 — Fork Claude threads of a moved or renamed project
 
 - **What.** Forking a Claude thread whose project folder was moved or renamed after the thread

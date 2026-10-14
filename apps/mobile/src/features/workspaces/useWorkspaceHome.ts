@@ -42,37 +42,54 @@ export function useWorkspaceHome(input: {
     [agentThreads, input.threads],
   );
 
+  const isScratchScope = useCallback(
+    (scope: HomeProjectScope) =>
+      scope.projects.some((project) =>
+        isScratchProject(project, serverConfigs.get(project.environmentId)?.scratchWorkspaceRoot),
+      ),
+    [serverConfigs],
+  );
+
+  // "No project" belongs to no workspace (null): every workspace shows it.
   const scopeByProjectRef = useMemo(() => {
-    const map = new Map<string, { scope: HomeProjectScope; workspaceId: string | null }>();
+    const map = new Map<
+      string,
+      { scope: HomeProjectScope; workspaceId: string | null; shared: boolean }
+    >();
     if (config === null) return map;
     for (const scope of input.projectScopes) {
-      const workspaceId = resolveProjectWorkspaceId(
-        {
-          projectKey: scope.key,
-          workspaceRoots: scope.projects.map((project) => project.workspaceRoot),
-        },
-        config,
-      );
+      const shared = isScratchScope(scope);
+      const workspaceId = shared
+        ? null
+        : resolveProjectWorkspaceId(
+            {
+              projectKey: scope.key,
+              workspaceRoots: scope.projects.map((project) => project.workspaceRoot),
+            },
+            config,
+          );
       for (const ref of scope.projectRefs) {
-        map.set(scopedProjectKey(ref.environmentId, ref.projectId), { scope, workspaceId });
+        map.set(scopedProjectKey(ref.environmentId, ref.projectId), { scope, workspaceId, shared });
       }
     }
     return map;
-  }, [config, input.projectScopes]);
+  }, [config, input.projectScopes, isScratchScope]);
+
+  /** Whether a project's folder shows in the open workspace. */
+  const isInCurrentWorkspace = useCallback(
+    (scope: HomeProjectScope) => {
+      const ref = scope.projectRefs[0];
+      if (ref === undefined) return false;
+      const entry = scopeByProjectRef.get(scopedProjectKey(ref.environmentId, ref.projectId));
+      return entry !== undefined && (entry.shared || entry.workspaceId === currentWorkspaceId);
+    },
+    [currentWorkspaceId, scopeByProjectRef],
+  );
 
   const projectRefs = useMemo((): ReadonlyArray<ScopedProjectRef> | null => {
     if (config === null) return null;
-    return input.projectScopes
-      .filter((scope) => {
-        const ref = scope.projectRefs[0];
-        return (
-          ref !== undefined &&
-          scopeByProjectRef.get(scopedProjectKey(ref.environmentId, ref.projectId))?.workspaceId ===
-            currentWorkspaceId
-        );
-      })
-      .flatMap((scope) => scope.projectRefs);
-  }, [config, currentWorkspaceId, input.projectScopes, scopeByProjectRef]);
+    return input.projectScopes.filter(isInCurrentWorkspace).flatMap((scope) => scope.projectRefs);
+  }, [config, input.projectScopes, isInCurrentWorkspace]);
 
   /** Narrows a project filter (or none) to the open workspace. */
   const restrictProjectRefs = useCallback(
@@ -109,14 +126,7 @@ export function useWorkspaceHome(input: {
   const folders = useMemo(
     () =>
       input.projectScopes.flatMap((scope) => {
-        const ref = scope.projectRefs[0];
-        if (
-          ref === undefined ||
-          scopeByProjectRef.get(scopedProjectKey(ref.environmentId, ref.projectId))?.workspaceId !==
-            currentWorkspaceId
-        ) {
-          return [];
-        }
+        if (!isInCurrentWorkspace(scope)) return [];
         return [
           {
             projectKey: scope.key,
@@ -126,16 +136,11 @@ export function useWorkspaceHome(input: {
             memberKeys: scope.projectRefs.map((member) =>
               scopedProjectKey(member.environmentId, member.projectId),
             ),
-            isScratch: scope.projects.some((project) =>
-              isScratchProject(
-                project,
-                serverConfigs.get(project.environmentId)?.scratchWorkspaceRoot,
-              ),
-            ),
+            isScratch: isScratchScope(scope),
           },
         ];
       }),
-    [currentWorkspaceId, input.projectScopes, scopeByProjectRef, serverConfigs],
+    [input.projectScopes, isInCurrentWorkspace, isScratchScope],
   );
 
   /** Home's rows: the folder list, or upstream's flat list while searching. */
