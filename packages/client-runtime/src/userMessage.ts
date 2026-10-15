@@ -1,6 +1,8 @@
 import {
+  type InboxIssueId,
   type OrchestrationV2Actor,
   type OrchestrationV2CreationSource,
+  parseInboxDelivery,
   ScheduledTaskId,
 } from "@t3tools/contracts";
 
@@ -20,12 +22,29 @@ export function resolveUserMessagePresentation(message: {
   readonly scheduledTaskId?: ScheduledTaskId;
 }): {
   readonly text: string;
-  /** Who sent a user-role message the user did not type. */
-  readonly attribution: "automation" | "agent" | "t3code" | null;
+  /**
+   * Who sent a user-role message the user did not type. "inbox" (fork) is
+   * the owner's comment on an inbox issue, or a notice about one.
+   */
+  readonly attribution: "automation" | "agent" | "t3code" | "inbox" | null;
   readonly scheduledTaskId: ScheduledTaskId | undefined;
+  readonly inbox?: {
+    readonly issueId: InboxIssueId;
+    readonly title: string;
+    readonly kind: "comment" | "notice";
+  };
 } {
   if (message.role !== "user") {
     return { text: message.text, attribution: null, scheduledTaskId: undefined };
+  }
+  const inbox = parseInboxDelivery(message);
+  if (inbox !== null) {
+    return {
+      text: inbox.text,
+      attribution: "inbox",
+      scheduledTaskId: undefined,
+      inbox: { issueId: inbox.issueId, title: inbox.title, kind: inbox.kind },
+    };
   }
   if (message.scheduledTaskId !== undefined) {
     return {

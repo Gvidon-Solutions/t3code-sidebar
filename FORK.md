@@ -88,6 +88,54 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-15 — Agent inbox: issues agents raise and own
+
+- **What.** One place for everything agents need to tell the owner. One problem is one **issue**
+  with a description, a responsible thread and a full history; repeats and news about an open
+  problem update it instead of starting threads. The owner reads and comments on an issue (the
+  comment also reaches the responsible agent's thread, labelled "From inbox"), opens that
+  conversation, or closes it as not relevant with a reason. Agents run everything else through
+  MCP: they comment, keep the description and the "waiting for your answer" flag current, and
+  close an issue themselves once the fix is verified; a solved problem that comes back reopens
+  the same issue. The inbox icon shows two counters: blue for issues with unread news, red for
+  issues waiting for the owner's answer. An issue that waits a day rises to the top again. New
+  items raise a desktop notification with sound. One list covers every connected server, with
+  the machine on each card. Desktop, web and the phone; `t3ctl inbox`.
+- **How.** A standalone service with its own tables (`fork_inbox_issues`, `fork_inbox_entries`
+  in `statev2.sqlite`), not orchestration events: v2 events are keyed to a thread
+  (`thread_id NOT NULL`) and there is no other aggregate, and an issue is a notification with
+  its own lifecycle, not conversation history; scheduled tasks are built the same way. The
+  service creates its tables itself (`ensureSchema`, idempotent) instead of a numbered migration:
+  the migrator runs only ids above the newest one recorded, so a fork migration in upstream's
+  sequence would silently skip upstream's next migration with that number. Each entry carries
+  a sequence; an issue keeps `notableSequence` (unread when above `seenSequence`, which every
+  device shares), `alertSequence` (what clients announce) and `lastSequence`. Owner comments
+  and notices go into threads through `ThreadManagementService.sendToThread` in queue mode,
+  with message ids `inbox:<issue>:<entry>:<thread>` and a `[T3 inbox · issue …]` header the agent
+  reads and clients strip (`parseInboxDelivery`). When another thread resolves, reopens or takes
+  over an issue, or the owner dismisses it, the responsible and creating threads get a notice.
+  The server never changes `waitingForOwner` itself; an issue with no thread gets one launched
+  (issue's project or the scratch project, default model) on the owner's first comment. A
+  scheduler source adds a silent reminder entry once a day while an issue waits. Clients
+  subscribe per environment (`inbox.subscribe`, `inbox.subscribeIssue`) and merge the lists.
+  Push to the phone is not built: the existing push path needs upstream's T3 Connect relay and
+  sign-in. The planned route is the fork's own Firebase project: an FCM key on each server, the
+  app registering its token with every server it connects to, and the server sending `action`
+  news directly.
+- **Where.** Contracts `packages/contracts/src/inbox.ts` (seams: `index.ts`, the RPC group in
+  `rpc.ts`, `clientRpcPermissions.ts`); server `apps/server/src/inbox/InboxService.ts` (tests
+  next to it), MCP `apps/server/src/mcp/toolkits/inbox/` (seams: `McpHttpServer.ts`, `ws.ts`
+  handlers, `RpcAuthorization.ts`, `RpcInstrumentation.ts`, `runtimeLayer.ts`), agent guidance in
+  `packages/provider-core/src/server/orchestrationInstructions.ts`, tool labels in
+  `packages/shared/src/t3McpToolPresentation.ts` and `client-runtime/src/t3ToolSummary.ts`;
+  client logic `packages/client-runtime/src/inbox.ts`, `state/inbox.ts`, the "inbox" attribution
+  in `userMessage.ts`. Web: `apps/web/src/components/inbox/` (page, issue view, sidebar button,
+  notification coordinator, thread label), `state/inbox.ts`, route `routes/_chat.inbox.tsx`
+  (seams: `SidebarChrome.tsx`, `mainAppLocation.ts`, `__root.tsx`, `MessagesTimeline.tsx`). Phone:
+  `apps/mobile/src/features/inbox/` (seams: `Stack.tsx`, `MaterialThreadListToolbar.tsx`,
+  `ThreadFeed.tsx`, `AppSymbol.tsx`; no iOS toolbar button). `t3ctl inbox …` in the `t3` skill.
+  Needs the server running this build; older servers show no inbox.
+
 ### 2026-10-14 — Pinned threads in every workspace
 
 - **What.** Pinned shows every pinned thread in every workspace, whatever project it belongs to,

@@ -159,6 +159,7 @@ import type {
   KnownComposerContextRecord,
 } from "@t3tools/contracts";
 import { Button, InlineButton } from "../ui/button";
+import { InboxMessageAttribution, withInboxMessageText } from "../inbox/InboxMessageAttribution";
 import { MorphIcon } from "~/components/MorphIcon";
 import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets/assetUrls";
 import { MediaVideoPlayer } from "../media/MediaVideoPlayer";
@@ -2304,7 +2305,10 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
   const userMessage = resolveUserMessagePresentation(row.message);
-  const resolvedContext = useMemo(() => resolveUserMessageContext(row.message), [row.message]);
+  const resolvedContext = useMemo(
+    () => resolveUserMessageContext(withInboxMessageText(row.message)),
+    [row.message],
+  );
   const previewImages = useMemo(
     () => userImages.filter((image) => image.name.startsWith("preview-annotation-")),
     [userImages],
@@ -2464,6 +2468,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         >
           Sent by T3 Code
         </p>
+      ) : userMessage.inbox ? (
+        <InboxMessageAttribution
+          environmentId={ctx.activeThreadEnvironmentId}
+          inbox={userMessage.inbox}
+        />
       ) : userMessage.attribution === "agent" ? (
         <p className="me-1 text-2xs text-muted-foreground/70" data-user-message-attribution="agent">
           {senderThreadId ? (

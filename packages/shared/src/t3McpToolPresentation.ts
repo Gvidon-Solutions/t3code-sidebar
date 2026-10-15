@@ -64,7 +64,12 @@ export type T3McpToolSummaryAction =
   | "browser"
   | "device"
   | "html-preview"
-  | "html-render";
+  | "html-render"
+  | "inbox-post"
+  | "inbox-read"
+  | "inbox-comment"
+  | "inbox-update"
+  | "inbox-resolve";
 
 export interface T3McpToolDefinition {
   readonly displayName: string;
@@ -145,6 +150,16 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
     "schedule-delete",
   ),
   request_secret: tool(["Ask for", "Asking for", "Asked for", "a secret"], "secret-request"),
+  // Fork: agent inbox.
+  inbox_post: tool(["Post", "Posting", "Posted", "an inbox issue"], "inbox-post"),
+  inbox_get: tool(["Read", "Reading", "Read", "an inbox issue"], "inbox-read"),
+  inbox_list: tool(["List", "Listing", "Listed", "inbox issues"], "inbox-read"),
+  inbox_comment: tool(
+    ["Comment on", "Commenting on", "Commented on", "an inbox issue"],
+    "inbox-comment",
+  ),
+  inbox_update: tool(["Update", "Updating", "Updated", "an inbox issue"], "inbox-update"),
+  inbox_resolve: tool(["Resolve", "Resolving", "Resolved", "an inbox issue"], "inbox-resolve"),
   create_threads: tool(["Create", "Creating", "Created", "T3 threads"], "thread-create"),
   t3_thread_start: tool(["Start", "Starting", "Started", "a T3 thread"], "thread-create"),
   t3_thread_list: tool(["List", "Listing", "Listed", "T3 threads"], "thread-list"),

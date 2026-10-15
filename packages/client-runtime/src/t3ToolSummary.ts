@@ -440,6 +440,29 @@ export function summarizeT3ToolCalls(
     case "capabilities":
       label = phrase("Checked", "check", `orchestration capabilities ${times}`);
       break;
+    case "inbox-post":
+      label = phrase("Posted", "post", quantity(selected.length, "inbox issue"));
+      break;
+    case "inbox-read":
+      label = phrase("Checked", "check", `the inbox ${times}`);
+      break;
+    case "inbox-comment":
+      label = phrase(
+        "Commented on",
+        "comment on",
+        quantity(countEntities(entityIds("issueId")), "inbox issue"),
+      );
+      break;
+    case "inbox-update":
+      label = phrase(
+        "Updated",
+        "update",
+        quantity(countEntities(entityIds("issueId")), "inbox issue"),
+      );
+      break;
+    case "inbox-resolve":
+      label = phrase("Resolved", "resolve", quantity(selected.length, "inbox issue"));
+      break;
   }
   return { label, failedCount };
 }

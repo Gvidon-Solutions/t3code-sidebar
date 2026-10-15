@@ -24,6 +24,7 @@ import { useAndroidControlSizing } from "../../components/useAndroidControlSizin
 import { useMaterialToolbarLayout } from "../../components/useMaterialToolbarLayout";
 import { useWorkspaceDockHeight } from "../workspaces/workspaceDockInset";
 import { WorkspaceHeaderTitle } from "../workspaces/WorkspaceHeaderTitle";
+import { InboxHeaderButton } from "../inbox/InboxHeaderButton";
 
 /** One toolbar height for the compact list and expanded sidebar, including search. */
 export function MaterialThreadListToolbar(props: {
@@ -132,6 +133,8 @@ export function MaterialThreadListToolbar(props: {
                   }
                 />
               </View>
+              {/* Sidebar fork: the agent inbox. */}
+              <InboxHeaderButton />
               <AndroidHeaderIconButton
                 accessibilityLabel="Search threads"
                 icon="magnifyingglass"

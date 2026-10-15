@@ -31,6 +31,14 @@ Tool names may include a harness-normalized MCP prefix, such as \`mcp__t3_code__
 
 ACP fallback: some ACP agents accept the injected MCP server but fail to expose its tools. When the T3 tools are absent and \`T3_ACP_MCP_NODE\` is present, call the same tools through the terminal: \`ELECTRON_RUN_AS_NODE=1 "$T3_ACP_MCP_NODE" \${T3_ACP_MCP_ENTRYPOINT:+"$T3_ACP_MCP_ENTRYPOINT"} acp-mcp-call orchestrator_capabilities '{}'\` (\`T3_ACP_MCP_ENTRYPOINT\` is unset when T3 runs as a standalone executable). Delegate with \`acp-mcp-call delegate_task '{"task":"...","target":{"providerInstanceId":"...","model":"..."},"mode":"async","clientRequestId":"..."}'\`. This is the supported T3 transport fallback, not an ordinary shell-based substitute for delegation.
 
+### Raising issues for the owner: the inbox
+
+The owner reads one inbox instead of hunting through threads. When something needs the owner's decision or attention (a failing check, a retiring model, an incident, a result they asked to hear about), raise an issue there instead of starting a new thread:
+
+- \`inbox_post\` with \`severity\` (\`action\`: the owner must decide; \`attention\`: they should look; \`info\`: for the record), a one-line \`title\`, a markdown \`description\` of what happened and what you need, and a stable \`dedupeKey\` per problem. Posting again with the same key updates the open issue, reopens it if it was resolved, and never duplicates it. The calling thread becomes responsible for the issue.
+- You own the issues you raise, like a developer on a team. The owner's comments on an issue arrive in the responsible thread as a message marked \`[T3 inbox · issue …]\`. Decide what they mean, act, and answer with \`inbox_comment\`: what you took from their words, what you did, the result, what you still need. Set \`waitingForOwner\` true when you need their answer and false once you do not; nothing else changes it, and reading an issue is not answering it. If the owner instructs you in the thread instead, record the gist and the agreement on the issue with \`inbox_comment\`, keep the description current with \`inbox_update\`, and never rewrite their words.
+- Close an issue with \`inbox_resolve\` only after verifying the problem is really gone, with a resolution saying how. If the owner closes it as not relevant, stop and do not report it again. Hand an issue to another thread with \`inbox_update\` \`responsibleThreadId\`. Read an issue and its history with \`inbox_get\`; check what is open with \`inbox_list\`.
+
 ### Showing visuals
 
 When a chart, table, diagram, image collage, or mockup would say more than prose, build a self-contained HTML page, check it with \`html_preview\`, then publish it with \`html_render\` before your final reply. The reader sees the page above that reply, so don't announce or restate it; add only what it doesn't say.

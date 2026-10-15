@@ -1,4 +1,9 @@
-import { ORCHESTRATION_V2_WS_METHODS, WS_METHODS, type WsRpcGroup } from "@t3tools/contracts";
+import {
+  INBOX_WS_METHODS,
+  ORCHESTRATION_V2_WS_METHODS,
+  WS_METHODS,
+  type WsRpcGroup,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
@@ -94,6 +99,12 @@ const RPC_AGGREGATES = {
   [WS_METHODS.scheduledTasksRotateWebhookToken]: "scheduledTasks",
   [WS_METHODS.scheduledTasksListWebhookDeliveries]: "scheduledTasks",
   [WS_METHODS.scheduledTasksGetWebhookDelivery]: "scheduledTasks",
+  [INBOX_WS_METHODS.subscribe]: "inbox",
+  [INBOX_WS_METHODS.subscribeIssue]: "inbox",
+  [INBOX_WS_METHODS.comment]: "inbox",
+  [INBOX_WS_METHODS.markSeen]: "inbox",
+  [INBOX_WS_METHODS.dismiss]: "inbox",
+  [INBOX_WS_METHODS.undismiss]: "inbox",
   [WS_METHODS.secretsAnswerRequest]: "secrets",
   [WS_METHODS.cloudGetRelayClientStatus]: "cloud",
   [WS_METHODS.cloudInstallRelayClient]: "cloud",

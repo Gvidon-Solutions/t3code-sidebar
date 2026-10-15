@@ -58,6 +58,8 @@ import {
 } from "./toolkits/device/tools.ts";
 import * as HtmlHandlers from "./toolkits/html/handlers.ts";
 import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolkits/html/tools.ts";
+import * as InboxHandlers from "./toolkits/inbox/handlers.ts";
+import { InboxToolkit } from "./toolkits/inbox/tools.ts";
 
 /** Where an MCP client discovers how to sign in (RFC 9728), at this request's own origin. */
 const mcpResourceMetadataUrl = (request: HttpServerRequest.HttpServerRequest) =>
@@ -858,6 +860,9 @@ export const layerDeviceToolkit = Layer.mergeAll(
   layerDeviceScreenshotRegistration,
 );
 
+// Fork: agent inbox.
+export const layerInboxToolkit = toolkitRegistration(InboxToolkit, InboxHandlers.layer);
+
 export const layerMcpTransport = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
@@ -878,4 +883,5 @@ export const layer = Layer.mergeAll(
   layerPullRequestsToolkit,
   layerDeviceToolkit,
   layerHtmlToolkit,
+  layerInboxToolkit,
 ).pipe(Layer.provideMerge(layerMcpTransport));

@@ -123,6 +123,14 @@
       "types": "./src/relay/index.ts",
       "default": "./src/relay/index.ts"
     },
+    "./inbox": {
+      "types": "./src/inbox.ts",
+      "default": "./src/inbox.ts"
+    },
+    "./state/inbox": {
+      "types": "./src/state/inbox.ts",
+      "default": "./src/state/inbox.ts"
+    },
     "./state/auth": {
       "types": "./src/state/auth.ts",
       "default": "./src/state/auth.ts"

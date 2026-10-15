@@ -45,6 +45,8 @@ import {
   type RenderFailureProps,
 } from "./components/RenderErrorBoundary";
 import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
+import { InboxRouteScreen } from "./features/inbox/InboxRouteScreen";
+import { InboxIssueRouteScreen } from "./features/inbox/InboxIssueRouteScreen";
 import { useAgentNotificationNavigation } from "./features/agent-awareness/notificationNavigation";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { useConnectOnboardingNavigation } from "./features/cloud/connectOnboardingNavigation";
@@ -784,6 +786,17 @@ const RootStackConfig = createWorkspaceStackNavigator({
         sheetGrabberVisible: true,
         headerShown: false,
       },
+    }),
+    // Sidebar fork: the agent inbox.
+    Inbox: createNativeStackScreen({
+      screen: InboxRouteScreen,
+      linking: "inbox",
+      options: PULL_REQUEST_HEADER_OPTIONS,
+    }),
+    InboxIssue: createNativeStackScreen({
+      screen: InboxIssueRouteScreen,
+      linking: "inbox/:environmentId/:issueId",
+      options: PULL_REQUEST_HEADER_OPTIONS,
     }),
     Thread: createNativeStackScreen({
       screen: ThreadRouteScreen,

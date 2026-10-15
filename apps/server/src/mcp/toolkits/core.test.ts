@@ -66,6 +66,7 @@ const declaredFailure = (result: McpSchema.CallToolResult) => {
   return result.isError === true && text?.type === "text" ? JSON.parse(text.text) : undefined;
 };
 import { PullRequestsToolkit } from "./pullRequests/tools.ts";
+import { InboxToolkit } from "./inbox/tools.ts";
 import { HtmlToolkit } from "./html/tools.ts";
 import {
   resolveT3McpToolDefinition,
@@ -97,6 +98,7 @@ it("publishes unique tool names with reference-free object-root inputs", () => {
     DeviceToolkit,
     PullRequestsToolkit,
     HtmlToolkit,
+    InboxToolkit,
   ]) {
     for (const tool of Object.values(toolkit.tools)) {
       expect(names.has(tool.name)).toBe(false);

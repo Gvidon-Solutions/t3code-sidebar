@@ -633,6 +633,10 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
     case "attachment-prepare":
     case "attachment-discard":
     case "attachment-send":
+    case "inbox-post":
+    case "inbox-comment":
+    case "inbox-update":
+    case "inbox-resolve":
       return 0;
     case "other":
     case "update":

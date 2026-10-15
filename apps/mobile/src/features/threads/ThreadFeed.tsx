@@ -5,6 +5,7 @@ import { enrichedContextLinkPresentation } from "../../lib/enrichedLinkPresentat
 import { ThreadContextDivider } from "./thread-context-divider";
 import { ThreadHandoffRow } from "./thread-handoff-row";
 import { SecretRequestCard } from "./SecretRequestCard";
+import { InboxMessageAttribution } from "../inbox/InboxMessageAttribution";
 import { AppActivityIndicator } from "../../components/AppActivityIndicator";
 import {
   WorktreeWorkingHeader,
@@ -1160,6 +1161,11 @@ function renderFeedEntry(
             <AgentMessageAttribution
               environmentId={props.environmentId}
               senderThreadId={message.senderThreadId}
+            />
+          ) : presentation.attribution === "inbox" && presentation.inbox ? (
+            <InboxMessageAttribution
+              environmentId={props.environmentId}
+              inbox={presentation.inbox}
             />
           ) : null}
           <View

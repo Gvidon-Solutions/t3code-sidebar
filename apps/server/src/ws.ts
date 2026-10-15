@@ -54,6 +54,7 @@ import {
   OrchestrationSearchThreadsError,
   OrchestrationV2SearchThreadError,
   OrchestrationGetTurnDiffError,
+  INBOX_WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
   ORCHESTRATION_PROTOCOL_QUERY_PARAM,
   ORCHESTRATION_PROTOCOL_VERSION,
@@ -124,6 +125,7 @@ import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts"
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
+import * as InboxService from "./inbox/InboxService.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import {
   archivedShellStreamItemFromThreadShell,
@@ -1226,6 +1228,7 @@ const layerWsRpc = (
       const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
+      const inbox = yield* InboxService.InboxService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
@@ -2052,6 +2055,16 @@ const layerWsRpc = (
               Effect.andThen(subscribeOrchestrationV2Thread(input)),
             ),
           ),
+        // Fork: agent inbox. The owner's side; agents use the MCP tools.
+        [INBOX_WS_METHODS.subscribe]: (input) => inbox.subscribe(input),
+        [INBOX_WS_METHODS.subscribeIssue]: ({ issueId }) => inbox.subscribeIssue(issueId),
+        [INBOX_WS_METHODS.comment]: (input) => inbox.ownerComment(input),
+        [INBOX_WS_METHODS.markSeen]: (input) =>
+          inbox.markSeen(input).pipe(Effect.map((issue) => ({ issue }))),
+        [INBOX_WS_METHODS.dismiss]: (input) =>
+          inbox.dismiss(input).pipe(Effect.map((issue) => ({ issue }))),
+        [INBOX_WS_METHODS.undismiss]: ({ issueId }) =>
+          inbox.undismiss(issueId).pipe(Effect.map((issue) => ({ issue }))),
         [WS_METHODS.scheduledTasksList]: (_input) =>
           scheduledTasks.list().pipe(Effect.map(withVisibleWebhookUrls)),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
