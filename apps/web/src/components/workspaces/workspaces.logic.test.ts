@@ -114,7 +114,7 @@ describe("isProjectQuiet", () => {
   const base = { projectCreatedAt: "2026-01-01T00:00:00.000Z", quietAfterDays: 5, now: NOW };
 
   it("is quiet when every active thread is older than the horizon", () => {
-    expect(isProjectQuiet({ ...base, alwaysShow: false, threads: [makeThread()] })).toBe(true);
+    expect(isProjectQuiet({ ...base, foldMode: "auto", threads: [makeThread()] })).toBe(true);
   });
 
   it("stays loud for recent, pinned or blocked threads", () => {
@@ -122,7 +122,7 @@ describe("isProjectQuiet", () => {
     const pinned = makeThread({ pinnedAt: "2026-09-01T00:00:00.000Z" });
     const blocked = makeThread({ hasPendingApprovals: true });
     for (const thread of [recent, pinned, blocked]) {
-      expect(isProjectQuiet({ ...base, alwaysShow: false, threads: [thread] })).toBe(false);
+      expect(isProjectQuiet({ ...base, foldMode: "auto", threads: [thread] })).toBe(false);
     }
   });
 
@@ -131,7 +131,7 @@ describe("isProjectQuiet", () => {
       settledOverride: "settled",
       latestUserMessageAt: "2026-10-09T10:00:00.000Z",
     });
-    expect(isProjectQuiet({ ...base, alwaysShow: false, threads: [settled] })).toBe(true);
+    expect(isProjectQuiet({ ...base, foldMode: "auto", threads: [settled] })).toBe(true);
   });
 
   it("keeps a fresh empty project and always-show projects loud", () => {
@@ -139,11 +139,17 @@ describe("isProjectQuiet", () => {
       isProjectQuiet({
         ...base,
         projectCreatedAt: "2026-10-09T00:00:00.000Z",
-        alwaysShow: false,
+        foldMode: "auto",
         threads: [],
       }),
     ).toBe(false);
-    expect(isProjectQuiet({ ...base, alwaysShow: true, threads: [makeThread()] })).toBe(false);
+    expect(isProjectQuiet({ ...base, foldMode: "active", threads: [makeThread()] })).toBe(false);
+  });
+
+  it("keeps a project moved by hand where the user put it", () => {
+    const busy = makeThread({ hasPendingApprovals: true });
+    expect(isProjectQuiet({ ...base, foldMode: "quiet", threads: [busy] })).toBe(true);
+    expect(isProjectQuiet({ ...base, foldMode: "active", threads: [makeThread()] })).toBe(false);
   });
 });
 

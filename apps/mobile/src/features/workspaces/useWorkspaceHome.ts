@@ -1,6 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
-import { resolveProjectWorkspaceId } from "@t3tools/client-runtime/state/sidebar-workspaces";
+import {
+  projectFoldModeOf,
+  projectOrderOf,
+  resolveProjectWorkspaceIds,
+  sortWorkspaceProjects,
+  type WorkspaceProjectIdentity,
+} from "@t3tools/client-runtime/state/sidebar-workspaces";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
 import { useCallback, useMemo } from "react";
@@ -34,7 +40,12 @@ export function useWorkspaceHome(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
 }) {
   const workspaces = useSidebarWorkspaces();
-  const { config, currentWorkspaceId, toggles } = workspaces;
+  const {
+    config,
+    currentWorkspaceId,
+    toggles,
+    toggleProjectIn: toggleProjectInWorkspace,
+  } = workspaces;
   const serverConfigs = useServerConfigs();
   // Subagents, which the navigation list leaves out, hang under their thread.
   const agentThreads = useAtomValue(agentThreadShellsAtom);
@@ -51,40 +62,45 @@ export function useWorkspaceHome(input: {
     [serverConfigs],
   );
 
-  // "No project" belongs to no workspace (null): every workspace shows it.
+  const identityOf = useCallback(
+    (scope: HomeProjectScope): WorkspaceProjectIdentity => ({
+      projectKey: scope.key,
+      workspaceRoots: scope.projects.map((project) => project.workspaceRoot),
+      isScratch: isScratchScope(scope),
+    }),
+    [isScratchScope],
+  );
+
+  // A project can show in several workspaces ("No project": all, until placed).
   const scopeByProjectRef = useMemo(() => {
-    const map = new Map<
-      string,
-      { scope: HomeProjectScope; workspaceId: string | null; shared: boolean }
-    >();
+    const map = new Map<string, { scope: HomeProjectScope; workspaceIds: ReadonlyArray<string> }>();
     if (config === null) return map;
     for (const scope of input.projectScopes) {
-      const shared = isScratchScope(scope);
-      const workspaceId = shared
-        ? null
-        : resolveProjectWorkspaceId(
-            {
-              projectKey: scope.key,
-              workspaceRoots: scope.projects.map((project) => project.workspaceRoot),
-            },
-            config,
-          );
+      const workspaceIds = resolveProjectWorkspaceIds(identityOf(scope), config);
       for (const ref of scope.projectRefs) {
-        map.set(scopedProjectKey(ref.environmentId, ref.projectId), { scope, workspaceId, shared });
+        map.set(scopedProjectKey(ref.environmentId, ref.projectId), { scope, workspaceIds });
       }
     }
     return map;
-  }, [config, input.projectScopes, isScratchScope]);
+  }, [config, identityOf, input.projectScopes]);
+
+  const workspaceIdsOf = useCallback(
+    (scope: HomeProjectScope): ReadonlyArray<string> => {
+      const ref = scope.projectRefs[0];
+      if (ref === undefined) return [];
+      return (
+        scopeByProjectRef.get(scopedProjectKey(ref.environmentId, ref.projectId))?.workspaceIds ??
+        []
+      );
+    },
+    [scopeByProjectRef],
+  );
 
   /** Whether a project's folder shows in the open workspace. */
   const isInCurrentWorkspace = useCallback(
-    (scope: HomeProjectScope) => {
-      const ref = scope.projectRefs[0];
-      if (ref === undefined) return false;
-      const entry = scopeByProjectRef.get(scopedProjectKey(ref.environmentId, ref.projectId));
-      return entry !== undefined && (entry.shared || entry.workspaceId === currentWorkspaceId);
-    },
-    [currentWorkspaceId, scopeByProjectRef],
+    (scope: HomeProjectScope) =>
+      currentWorkspaceId !== null && workspaceIdsOf(scope).includes(currentWorkspaceId),
+    [currentWorkspaceId, workspaceIdsOf],
   );
 
   const projectRefs = useMemo((): ReadonlyArray<ScopedProjectRef> | null => {
@@ -111,15 +127,17 @@ export function useWorkspaceHome(input: {
     const map = new Map<string, { attention: number; working: number }>();
     for (const thread of input.threads) {
       if (thread.archivedAt !== null) continue;
-      const workspaceId = scopeByProjectRef.get(
+      const workspaceIds = scopeByProjectRef.get(
         scopedProjectKey(thread.environmentId, thread.projectId),
-      )?.workspaceId;
-      if (!workspaceId) continue;
+      )?.workspaceIds;
+      if (!workspaceIds) continue;
       const status = resolveThreadListV2Status(thread);
-      const entry = map.get(workspaceId) ?? { attention: 0, working: 0 };
-      if (status === "approval" || status === "input") entry.attention += 1;
-      else if (status === "working") entry.working += 1;
-      map.set(workspaceId, entry);
+      for (const workspaceId of workspaceIds) {
+        const entry = map.get(workspaceId) ?? { attention: 0, working: 0 };
+        if (status === "approval" || status === "input") entry.attention += 1;
+        else if (status === "working") entry.working += 1;
+        map.set(workspaceId, entry);
+      }
     }
     return map as ReadonlyMap<string, WorkspaceTileActivity>;
   }, [input.threads, scopeByProjectRef]);
@@ -139,10 +157,40 @@ export function useWorkspaceHome(input: {
           scopedProjectKey(member.environmentId, member.projectId),
         ),
         isScratch: isScratchScope(scope),
+        workspaceIds: workspaceIdsOf(scope),
       });
     }
     return { folders: own, otherFolders: other };
-  }, [input.projectScopes, isInCurrentWorkspace, isScratchScope]);
+  }, [input.projectScopes, isInCurrentWorkspace, isScratchScope, workspaceIdsOf]);
+
+  /** "Show in workspaces" from a folder's menu. */
+  const toggleProjectIn = useCallback(
+    (projectKey: string, workspaceId: string) => {
+      const scope = input.projectScopes.find((candidate) => candidate.key === projectKey);
+      if (!scope || config === null) return;
+      // A workspace's projects as it shows them, so the project lands on top there.
+      const sequenceOf = (id: string) =>
+        sortWorkspaceProjects(
+          input.projectScopes.filter(
+            (candidate) => !isScratchScope(candidate) && workspaceIdsOf(candidate).includes(id),
+          ),
+          projectOrderOf(config, id),
+          (candidate) => ({
+            projectKey: candidate.key,
+            createdAt: candidate.representative.createdAt ?? null,
+          }),
+        ).map((candidate) => candidate.key);
+      toggleProjectInWorkspace(identityOf(scope), workspaceId, sequenceOf);
+    },
+    [
+      config,
+      identityOf,
+      input.projectScopes,
+      isScratchScope,
+      toggleProjectInWorkspace,
+      workspaceIdsOf,
+    ],
+  );
 
   /** Home's rows: the folder list, or upstream's flat list while searching. */
   const buildItems = useCallback(
@@ -166,9 +214,9 @@ export function useWorkspaceHome(input: {
           otherFolders,
           threads: homeThreads,
           quietAfterDays: config.quietAfterDays,
-          alwaysShow: new Set(config.alwaysShow),
+          foldModeOf: (projectKey) => projectFoldModeOf(config, currentWorkspaceId, projectKey),
           toggles,
-          projectOrder: config.projectOrder,
+          projectOrder: projectOrderOf(config, currentWorkspaceId),
           settlementEnvironmentIds: list.settlementEnvironmentIds,
           snoozeEnvironmentIds: list.snoozeEnvironmentIds,
           queuedThreadKeys: list.queuedThreadKeys,
@@ -184,23 +232,24 @@ export function useWorkspaceHome(input: {
   /** The open workspace's folders for the long-press drag, read when a drag starts. */
   const arrangeFolders = useCallback(
     () =>
-      config === null
+      config === null || currentWorkspaceId === null
         ? []
         : arrangeWorkspaceFolders({
             folders,
             threads: input.threads,
             quietAfterDays: config.quietAfterDays,
-            alwaysShow: new Set(config.alwaysShow),
-            projectOrder: config.projectOrder,
+            foldModeOf: (projectKey) => projectFoldModeOf(config, currentWorkspaceId, projectKey),
+            projectOrder: projectOrderOf(config, currentWorkspaceId),
             now: Date.now(),
           }),
-    [config, folders, input.threads],
+    [config, currentWorkspaceId, folders, input.threads],
   );
 
   const workspace =
     config?.workspaces.find((candidate) => candidate.id === currentWorkspaceId) ?? null;
   return {
     ...workspaces,
+    toggleProjectIn,
     workspace,
     restrictProjectRefs,
     activity,

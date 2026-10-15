@@ -11,7 +11,10 @@ import {
   threadAgentsOpenByDefault,
 } from "@t3tools/client-runtime/state/thread-agents";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
-import { sortWorkspaceProjects } from "@t3tools/client-runtime/state/sidebar-workspaces";
+import {
+  sortWorkspaceProjects,
+  type ProjectFoldMode,
+} from "@t3tools/client-runtime/state/sidebar-workspaces";
 import {
   sortActiveThreadsByOrderKey,
   sortPinnedThreadsByOrderKey,
@@ -47,6 +50,8 @@ export interface WorkspaceFolderInput {
   readonly memberKeys: ReadonlyArray<string>;
   /** The environment's "No project" folder: never quiet, always last. */
   readonly isScratch: boolean;
+  /** Every workspace the project shows in, for the folder's "Show in workspaces". */
+  readonly workspaceIds?: ReadonlyArray<string>;
 }
 
 export type WorkspaceSectionKind = "pinned" | "quiet" | "snoozed";
@@ -71,7 +76,11 @@ export interface WorkspaceFolderListItem {
   readonly project: EnvironmentProject;
   readonly open: boolean;
   readonly quiet: boolean;
+  /** Whether the user moved it by hand ("active"/"quiet") or it folds by itself. */
+  readonly foldMode: ProjectFoldMode;
   readonly isScratch: boolean;
+  /** Every workspace the project shows in. */
+  readonly workspaceIds: ReadonlyArray<string>;
   readonly attention: number;
   readonly working: number;
 }
@@ -151,10 +160,11 @@ export function isFolderQuiet(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly projectCreatedAt: string | null;
   readonly quietAfterDays: number;
-  readonly alwaysShow: boolean;
+  /** A project the user moved by hand stays where they put it. */
+  readonly foldMode: ProjectFoldMode;
   readonly now: number;
 }): boolean {
-  if (input.alwaysShow) return false;
+  if (input.foldMode !== "auto") return input.foldMode === "quiet";
   const horizon = input.now - input.quietAfterDays * DAY_MS;
   const nowIso = new Date(input.now).toISOString();
   let live = 0;
@@ -190,7 +200,7 @@ export function arrangeWorkspaceFolders(input: {
   readonly folders: ReadonlyArray<WorkspaceFolderInput>;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly quietAfterDays: number;
-  readonly alwaysShow: ReadonlySet<string>;
+  readonly foldModeOf: (projectKey: string) => ProjectFoldMode;
   readonly projectOrder: ReadonlyArray<string>;
   readonly now: number;
 }): ArrangeableFolder[] {
@@ -214,7 +224,7 @@ export function arrangeWorkspaceFolders(input: {
       threads: folder.memberKeys.flatMap((memberKey) => threadsByMember.get(memberKey) ?? []),
       projectCreatedAt: folder.projectCreatedAt,
       quietAfterDays: input.quietAfterDays,
-      alwaysShow: input.alwaysShow.has(folder.projectKey),
+      foldMode: input.foldModeOf(folder.projectKey),
       now: input.now,
     }),
   }));
@@ -243,7 +253,7 @@ export function buildWorkspaceHomeItems(input: {
   readonly otherFolders?: ReadonlyArray<WorkspaceFolderInput>;
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
   readonly quietAfterDays: number;
-  readonly alwaysShow: ReadonlySet<string>;
+  readonly foldModeOf: (projectKey: string) => ProjectFoldMode;
   readonly toggles: ReadonlySet<string>;
   readonly projectOrder: ReadonlyArray<string>;
   readonly settlementEnvironmentIds: ReadonlySet<EnvironmentId>;
@@ -320,7 +330,7 @@ export function buildWorkspaceHomeItems(input: {
           threads: all,
           projectCreatedAt: folder.projectCreatedAt,
           quietAfterDays: input.quietAfterDays,
-          alwaysShow: input.alwaysShow.has(folder.projectKey),
+          foldMode: input.foldModeOf(folder.projectKey),
           now: input.now,
         }),
       active: sortActiveThreadsByOrderKey(active),
@@ -413,7 +423,9 @@ export function buildWorkspaceHomeItems(input: {
       project: model.input.project,
       open,
       quiet: model.quiet,
+      foldMode: input.foldModeOf(model.input.projectKey),
       isScratch: model.input.isScratch,
+      workspaceIds: model.input.workspaceIds ?? [],
       attention: model.all.filter(needsAttention).length,
       working: model.all.filter((thread) => resolveThreadListV2Status(thread) === "working").length,
     });
@@ -531,6 +543,9 @@ export function workspaceHomeItemsAreEqual(
         previous.title === item.title &&
         previous.project === item.project &&
         previous.open === item.open &&
+        previous.quiet === item.quiet &&
+        previous.foldMode === item.foldMode &&
+        previous.workspaceIds.join("\n") === item.workspaceIds.join("\n") &&
         previous.attention === item.attention &&
         previous.working === item.working
       );

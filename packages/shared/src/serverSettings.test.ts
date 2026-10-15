@@ -91,8 +91,12 @@ describe("serverSettings helpers", () => {
       workspaces,
       rules: [],
       defaultWorkspace: null,
+      placements: {},
       projectOrder: [],
+      workspaceProjectOrder: {},
+      workspaceFold: {},
       alwaysShow: [],
+      alwaysQuiet: [],
       quietAfterDays: 5,
     };
     const assigned = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {

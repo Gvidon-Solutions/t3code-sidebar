@@ -48,7 +48,7 @@ function build(
     ...(options.otherFolders ? { otherFolders: options.otherFolders } : {}),
     threads,
     quietAfterDays: 5,
-    alwaysShow: new Set(),
+    foldModeOf: () => "auto",
     toggles: new Set(toggles),
     projectOrder: options.projectOrder ?? [],
     settlementEnvironmentIds: new Set([environmentId]),

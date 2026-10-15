@@ -89,19 +89,32 @@ export interface WorkspaceProjectIdentity {
   readonly projectKey: string;
   /** Workspace roots of every member project (one per environment). */
   readonly workspaceRoots: readonly string[];
+  /** The "No project" folder: in every workspace until it is placed. */
+  readonly isScratch?: boolean;
+}
+
+/**
+ * The config key of "No project": one for every environment and client, since
+ * clients key the scratch folder differently.
+ */
+export const SCRATCH_WORKSPACE_PROJECT_KEY = "no-project";
+
+/** The key a project's assignment and placements are stored under. */
+export function workspaceConfigKeyOf(project: WorkspaceProjectIdentity): string {
+  return project.isScratch ? SCRATCH_WORKSPACE_PROJECT_KEY : project.projectKey;
 }
 
 /**
  * The workspace a project belongs to: explicit assignment, then the first
  * matching rule, then the default (or first) workspace. Null only when there
- * are no workspaces at all.
+ * are no workspaces at all. Ignores `placements`; see `resolveProjectWorkspaceIds`.
  */
 export function resolveProjectWorkspaceId(
   project: WorkspaceProjectIdentity,
   config: SidebarWorkspacesConfig,
 ): string | null {
   const known = new Set(config.workspaces.map((workspace) => workspace.id));
-  const assigned = config.assignments[project.projectKey];
+  const assigned = config.assignments[workspaceConfigKeyOf(project)];
   if (assigned !== undefined && known.has(assigned)) return assigned;
   for (const rule of config.rules) {
     if (!known.has(rule.workspace)) continue;
@@ -109,6 +122,171 @@ export function resolveProjectWorkspaceId(
     if (project.workspaceRoots.some((root) => pattern.test(root))) return rule.workspace;
   }
   return effectiveDefaultWorkspaceId(config);
+}
+
+/**
+ * Every workspace a project shows in, in tile order: its placements, else
+ * the one workspace `resolveProjectWorkspaceId` gives it ("No project": all
+ * of them). Empty only when there are no workspaces.
+ */
+export function resolveProjectWorkspaceIds(
+  project: WorkspaceProjectIdentity,
+  config: SidebarWorkspacesConfig,
+): string[] {
+  const placed = new Set(config.placements[workspaceConfigKeyOf(project)] ?? []);
+  const shown = config.workspaces
+    .map((workspace) => workspace.id)
+    .filter((workspaceId) => placed.has(workspaceId));
+  if (shown.length > 0) return shown;
+  if (project.isScratch) return config.workspaces.map((workspace) => workspace.id);
+  const single = resolveProjectWorkspaceId(project, config);
+  return single === null ? [] : [single];
+}
+
+/**
+ * A workspace's projects as it shows them now, "No project" left out; lets a
+ * project newly shown there land on top of what the user sees.
+ */
+export type WorkspaceSequenceOf = (workspaceId: string) => readonly string[];
+
+/**
+ * Shows a project in exactly `workspaceIds` (kept in tile order). A workspace
+ * that newly shows it gets it on top, above the projects `sequenceOf` says it
+ * shows. `assignments` keeps the first one for clients that predate
+ * placements. An empty list changes nothing: a project always shows somewhere.
+ */
+export function setProjectWorkspaces(
+  config: SidebarWorkspacesConfig,
+  project: WorkspaceProjectIdentity,
+  workspaceIds: readonly string[],
+  sequenceOf?: WorkspaceSequenceOf,
+): SidebarWorkspacesConfig {
+  const wanted = new Set(workspaceIds);
+  const next = config.workspaces
+    .map((workspace) => workspace.id)
+    .filter((workspaceId) => wanted.has(workspaceId));
+  if (next.length === 0) return config;
+  const before = new Set(resolveProjectWorkspaceIds(project, config));
+  const projectKey = workspaceConfigKeyOf(project);
+  const workspaceProjectOrder = { ...config.workspaceProjectOrder };
+  for (const workspaceId of next) {
+    // "No project" always sits last, outside the order.
+    if (before.has(workspaceId) || project.isScratch) continue;
+    const shown = sequenceOf?.(workspaceId) ?? [];
+    const order = moveProjectInOrder(
+      projectOrderOf(config, workspaceId),
+      shown,
+      projectKey,
+      null,
+    ).filter((key) => key !== projectKey);
+    workspaceProjectOrder[workspaceId] = [projectKey, ...order];
+  }
+  return {
+    ...config,
+    placements: { ...config.placements, [projectKey]: next },
+    assignments: { ...config.assignments, [projectKey]: next[0]! },
+    workspaceProjectOrder,
+  };
+}
+
+/** Shows a project in one more workspace, or stops showing it there (unless it is the last). */
+export function toggleProjectWorkspace(
+  config: SidebarWorkspacesConfig,
+  project: WorkspaceProjectIdentity,
+  workspaceId: string,
+  sequenceOf?: WorkspaceSequenceOf,
+): SidebarWorkspacesConfig {
+  const current = resolveProjectWorkspaceIds(project, config);
+  return setProjectWorkspaces(
+    config,
+    project,
+    current.includes(workspaceId)
+      ? current.filter((id) => id !== workspaceId)
+      : [...current, workspaceId],
+    sequenceOf,
+  );
+}
+
+/**
+ * A project folder dropped on a tile: it moves from `fromWorkspaceId` to
+ * `toWorkspaceId`, or with `add` (Ctrl-drag) shows there as well.
+ */
+export function dropProjectOnWorkspace(
+  config: SidebarWorkspacesConfig,
+  project: WorkspaceProjectIdentity,
+  input: {
+    readonly fromWorkspaceId: string | null;
+    readonly toWorkspaceId: string;
+    readonly add: boolean;
+    readonly sequenceOf?: WorkspaceSequenceOf;
+  },
+): SidebarWorkspacesConfig {
+  const current = resolveProjectWorkspaceIds(project, config);
+  if (input.fromWorkspaceId === input.toWorkspaceId) return config;
+  const kept = input.add ? current : current.filter((id) => id !== input.fromWorkspaceId);
+  if (input.add && current.includes(input.toWorkspaceId)) return config;
+  return setProjectWorkspaces(config, project, [...kept, input.toWorkspaceId], input.sequenceOf);
+}
+
+/**
+ * How a project folds into "Quiet projects" in one workspace: by itself once
+ * nothing in it needs a look ("auto"), never ("active"), or always, until
+ * moved back ("quiet"). Each workspace keeps its own choice.
+ */
+export type ProjectFoldMode = "auto" | "active" | "quiet";
+
+export function projectFoldModeOf(
+  config: SidebarWorkspacesConfig,
+  workspaceId: string,
+  projectKey: string,
+): ProjectFoldMode {
+  return config.workspaceFold[workspaceId]?.[projectKey] ?? "auto";
+}
+
+export function setProjectFoldMode(
+  config: SidebarWorkspacesConfig,
+  workspaceId: string,
+  projectKey: string,
+  mode: ProjectFoldMode,
+): SidebarWorkspacesConfig {
+  const { [projectKey]: _previous, ...rest } = config.workspaceFold[workspaceId] ?? {};
+  const inWorkspace = mode === "auto" ? rest : { ...rest, [projectKey]: mode };
+  const { [workspaceId]: _workspace, ...others } = config.workspaceFold;
+  return {
+    ...config,
+    workspaceFold:
+      Object.keys(inWorkspace).length > 0 ? { ...others, [workspaceId]: inWorkspace } : others,
+  };
+}
+
+/** A workspace's project order: its own once arranged, else the shared one. */
+export function projectOrderOf(config: SidebarWorkspacesConfig, workspaceId: string): string[] {
+  return [...(config.workspaceProjectOrder[workspaceId] ?? config.projectOrder)];
+}
+
+/**
+ * Moves `projectKey` before `beforeKey` (null: last) among `sequence`, the
+ * workspace's projects as shown, in that workspace's own order only.
+ */
+export function moveProjectInWorkspace(
+  config: SidebarWorkspacesConfig,
+  workspaceId: string,
+  sequence: readonly string[],
+  projectKey: string,
+  beforeKey: string | null,
+): SidebarWorkspacesConfig {
+  return {
+    ...config,
+    workspaceProjectOrder: {
+      ...config.workspaceProjectOrder,
+      [workspaceId]: moveProjectInOrder(
+        projectOrderOf(config, workspaceId),
+        sequence,
+        projectKey,
+        beforeKey,
+      ),
+    },
+  };
 }
 
 /**
@@ -241,8 +419,9 @@ export function updateWorkspace(
 }
 
 /**
- * Deletes a workspace; its projects fall back to the default workspace and no
- * threads are touched. The default itself can't be deleted (returned as is).
+ * Deletes a workspace; projects shown only there fall back to the default
+ * workspace and no threads are touched. The default itself can't be deleted
+ * (returned as is).
  */
 export function deleteWorkspace(
   config: SidebarWorkspacesConfig,
@@ -251,13 +430,29 @@ export function deleteWorkspace(
   // Pinning the default keeps it put when the first workspace goes.
   const defaultWorkspace = effectiveDefaultWorkspaceId(config);
   if (defaultWorkspace === workspaceId) return config;
+  const placements = Object.fromEntries(
+    Object.entries(config.placements).flatMap(([projectKey, placed]) => {
+      const kept = placed.filter((id) => id !== workspaceId);
+      return kept.length > 0 ? [[projectKey, kept] as const] : [];
+    }),
+  );
+  const assignments = Object.fromEntries(
+    Object.entries(config.assignments).filter(([, target]) => target !== workspaceId),
+  );
+  for (const [projectKey, placed] of Object.entries(placements))
+    assignments[projectKey] = placed[0]!;
   return {
     ...config,
     workspaces: config.workspaces.filter((workspace) => workspace.id !== workspaceId),
-    assignments: Object.fromEntries(
-      Object.entries(config.assignments).filter(([, target]) => target !== workspaceId),
-    ),
+    assignments,
     rules: config.rules.filter((rule) => rule.workspace !== workspaceId),
+    placements,
+    workspaceProjectOrder: Object.fromEntries(
+      Object.entries(config.workspaceProjectOrder).filter(([id]) => id !== workspaceId),
+    ),
+    workspaceFold: Object.fromEntries(
+      Object.entries(config.workspaceFold).filter(([id]) => id !== workspaceId),
+    ),
     defaultWorkspace,
   };
 }

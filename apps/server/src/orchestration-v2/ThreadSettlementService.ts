@@ -567,6 +567,9 @@ export const make = Effect.gen(function* () {
       const settled = yield* projections.getThread(threadId);
       if (settled.settledOverride !== "settled") return;
       yield* terminals.closeIdle({ threadId });
+      // Fork: a subagent thread works in its parent's checkout, which settles
+      // with the parent (ThreadSettlementCascade.ts) and runs the script once.
+      if (settled.lineage.relationshipToParent === "subagent") return;
       const worktreePath = settled.worktreePath;
       if (worktreePath === null || !(yield* fileSystem.exists(worktreePath))) return;
       // Closing and the worktree check wait on I/O. A thread re-engaged

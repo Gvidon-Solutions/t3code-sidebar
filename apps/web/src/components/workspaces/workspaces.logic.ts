@@ -1,3 +1,4 @@
+import type { ProjectFoldMode } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 
 import type { SidebarThreadSummary } from "../../types";
@@ -11,6 +12,13 @@ import {
 export {
   addWorkspace,
   deleteWorkspace,
+  dropProjectOnWorkspace,
+  moveProjectInWorkspace,
+  projectFoldModeOf,
+  projectOrderOf,
+  setProjectFoldMode,
+  resolveProjectWorkspaceIds,
+  toggleProjectWorkspace,
   updateWorkspace,
   WORKSPACE_COLORS,
   WORKSPACE_GLYPH_PREFIX,
@@ -25,6 +33,7 @@ export {
   sortWorkspaceProjects,
   workspaceColor,
   workspaceMark,
+  type ProjectFoldMode,
   type WorkspaceMarkSpec,
   type WorkspaceProjectIdentity,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
@@ -59,16 +68,17 @@ export function needsAttention(thread: SidebarThreadSummary): boolean {
 /**
  * A project is quiet when nothing in it asks for a look: no pinned, working
  * or blocked thread, and no active thread touched within `quietAfterDays`.
- * Settled and snoozed threads never keep a project loud.
+ * Settled and snoozed threads never keep a project loud. A project the user
+ * moved by hand stays where they put it (`foldMode`).
  */
 export function isProjectQuiet(input: {
   readonly threads: readonly SidebarThreadSummary[];
   readonly projectCreatedAt: string | null;
   readonly quietAfterDays: number;
-  readonly alwaysShow: boolean;
+  readonly foldMode: ProjectFoldMode;
   readonly now: number;
 }): boolean {
-  if (input.alwaysShow) return false;
+  if (input.foldMode !== "auto") return input.foldMode === "quiet";
   const horizon = input.now - input.quietAfterDays * DAY_MS;
   const nowIso = new Date(input.now).toISOString();
   let live = 0;

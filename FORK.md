@@ -136,6 +136,65 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `ThreadFeed.tsx`, `AppSymbol.tsx`; no iOS toolbar button). `t3ctl inbox …` in the `t3` skill.
   Needs the server running this build; older servers show no inbox.
 
+### 2026-10-15 — Settling a thread settles its agents
+
+- **What.** Settling a thread also settles the agents under it (Claude/Codex subagents and
+  delegated tasks), and theirs, so the project can fold into "Quiet projects" without settling
+  each agent by hand. Un-settling the thread un-settles them again. This works from every client,
+  from agents and `t3ctl`, and for automatic settlement. An agent that is still running, waiting
+  on an approval or has a queued message stays active, along with the agents under it; settling
+  the thread again later picks it up. Settling or un-settling an agent never touches its parent;
+  archived agents are left alone. A new message to a settled thread re-opens only that thread.
+- **How.** A server reactor on the committed `thread.settled` / `thread.unsettled` events (only an
+  explicit un-settle, not a re-engaging turn) walks the thread's subagent records, checks each
+  child's lineage, and dispatches `thread.settle` / `thread.unsettle` with a command id derived
+  from the parent event. Each child's own event carries the cascade one level further. A subagent
+  thread no longer runs the project's settle script: it shares its parent's checkout.
+- **Where.** `apps/server/src/orchestration-v2/ThreadSettlementCascade.ts` (tests in
+  `ThreadSettlementCascade.test.ts`). Seams: the reactor's layer in `apps/server/src/server.ts`;
+  one guard in `cleanUpSettledThread`, `ThreadSettlementService.ts` (test: "leaves the settle
+  script of a parent's worktree to the parent"). Needs the server running this build.
+
+### 2026-10-15 — Move projects into "Quiet projects" and back by hand, per workspace
+
+- **What.** A project's menu has "Move to quiet projects" / "Move to active projects", on the
+  desktop and the phone; on the desktop a folder can also be dragged onto the "Quiet projects"
+  header or among the other section's folders. The choice belongs to the open workspace: a project
+  can be quiet in one workspace and active in another. A project moved by hand stays where it was
+  put, even with new activity, until it is moved back; "Fold automatically" returns it to the
+  usual rule (it folds once nothing in it needs a look), which is the same in every workspace.
+  "Never fold into quiet projects" became "Move to active projects". Agents:
+  `t3ctl ws fold <P> quiet|active|auto [<W>]` (W required when P shows in several workspaces).
+- **How.** `sidebarWorkspaces.workspaceFold`: workspace id → project key → "quiet" | "active".
+  `alwaysShow` (and sidebar.22's `alwaysQuiet`) are legacy and no longer read; the owner's two
+  "Never fold" marks were moved into `workspaceFold` for the workspaces those projects showed in.
+  Old clients drop `workspaceFold` when they save the config.
+- **Where.** `packages/client-runtime/src/state/sidebarWorkspaces.ts` (`projectFoldModeOf`,
+  `setProjectFoldMode`), `isProjectQuiet` (`workspaces.logic.ts`) and `isFolderQuiet`
+  (`workspaceNavigator.ts`), the folder menus in `WorkspaceSidebar.tsx` and the mobile
+  `WorkspaceChrome.tsx`.
+
+### 2026-10-14 — A project in several workspaces
+
+- **What.** A project can show in several workspaces at once: the same project, the same threads.
+  Its menu's "Show in workspaces" ticks every workspace it shows in, on the desktop and on the
+  phone; the last one can't be unticked. Dropping a folder on a tile moves the project there;
+  with Ctrl held it shows there as well (the tile gets a "+"). "No project" works the same way and
+  shows in every workspace until it is placed; it still sits last and tiles now count its
+  activity. Each workspace keeps its own project order. Opening a thread stays in the open
+  workspace when that workspace shows its project, else goes to the first one that does. Pinned
+  threads still show everywhere. Agents: `t3ctl ws show|hide <P> <W>`.
+- **How.** `sidebarWorkspaces` gains `placements` (project key → workspace ids) and
+  `workspaceProjectOrder` (workspace id → its own order, seeded from `projectOrder`). "No project"
+  is stored under the key `no-project` (web and mobile key its folder differently).
+  `assignments` keeps a placed project's first workspace for clients that predate this; such a
+  client still drops `placements` when it saves the config, so update the phone app too. Needs
+  the server running this build (an older one drops the new fields).
+- **Where.** `packages/client-runtime/src/state/sidebarWorkspaces.ts`
+  (`resolveProjectWorkspaceIds`, `toggleProjectWorkspace`, `dropProjectOnWorkspace`,
+  `moveProjectInWorkspace`; tests in `sidebarWorkspaces.test.ts`), `WorkspaceSidebar.tsx`,
+  `WorkspaceChrome.tsx` (web and mobile), `useWorkspaceHome.ts`, `useSidebarWorkspaces.ts`.
+
 ### 2026-10-14 — Pinned threads in every workspace
 
 - **What.** Pinned shows every pinned thread in every workspace, whatever project it belongs to,

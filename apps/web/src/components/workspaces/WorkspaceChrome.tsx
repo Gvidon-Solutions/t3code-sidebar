@@ -283,7 +283,8 @@ export interface WorkspaceTileEntry {
 /**
  * Bottom dock: one square tile per workspace (Zen-style), a "+" tile and the
  * toggle that folds every workspace into one list. Tiles drag to reorder;
- * dropping a project folder on a tile moves the project there.
+ * dropping a project folder on a tile moves the project there, or with Ctrl
+ * held shows it there as well.
  */
 export function WorkspaceDock({
   entries,
@@ -305,16 +306,18 @@ export function WorkspaceDock({
   onTileContextMenu: (workspaceId: string, position: { x: number; y: number }) => void;
   onCreate: () => void;
   onToggleTiles: () => void;
-  onDropProject: (projectKey: string, workspaceId: string) => void;
+  /** `add`: Ctrl was held, so the project stays where it is too. */
+  onDropProject: (projectKey: string, workspaceId: string, add: boolean) => void;
   /** Moves a workspace before slot `beforeIndex` of the current order. */
   onReorder: (workspaceId: string, beforeIndex: number) => void;
 }) {
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ workspaceId: string; add: boolean } | null>(null);
   const [reorderSlot, setReorderSlot] = useState<number | null>(null);
   const clearDrag = () => {
     setDropTarget(null);
     setReorderSlot(null);
   };
+  const isAddDrag = (event: ReactDragEvent) => event.ctrlKey || event.metaKey;
   const handleDragOver = (event: ReactDragEvent<HTMLElement>, index: number) => {
     const types = event.dataTransfer.types;
     if (types.includes(WORKSPACE_TILE_DRAG_TYPE)) {
@@ -326,8 +329,12 @@ export function WorkspaceDock({
     }
     if (!types.includes(WORKSPACE_PROJECT_DRAG_TYPE)) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setDropTarget(entries[index]?.workspace.id ?? null);
+    const add = isAddDrag(event);
+    event.dataTransfer.dropEffect = add ? "copy" : "move";
+    const workspaceId = entries[index]?.workspace.id;
+    if (dropTarget?.workspaceId !== workspaceId || dropTarget?.add !== add) {
+      setDropTarget(workspaceId ? { workspaceId, add } : null);
+    }
   };
   const handleDrop = (event: ReactDragEvent, index: number) => {
     const tileId = event.dataTransfer.getData(WORKSPACE_TILE_DRAG_TYPE);
@@ -340,7 +347,7 @@ export function WorkspaceDock({
       onReorder(tileId, slot);
     } else if (projectKey && workspaceId) {
       event.preventDefault();
-      onDropProject(projectKey, workspaceId);
+      onDropProject(projectKey, workspaceId, isAddDrag(event));
     }
   };
 
@@ -378,7 +385,7 @@ export function WorkspaceDock({
                         isActive
                           ? "bg-(--ws-tile) text-white shadow-[0_1px_2px_rgb(0_0_0/0.18),inset_0_0_0_1px_rgb(255_255_255/0.2)]"
                           : "bg-[color-mix(in_oklab,var(--ws-tile)_14%,transparent)] text-(--ws-tile) hover:bg-[color-mix(in_oklab,var(--ws-tile)_24%,transparent)] dark:bg-[color-mix(in_oklab,var(--ws-tile)_24%,transparent)] dark:text-[color-mix(in_oklab,var(--ws-tile)_65%,white)] dark:hover:bg-[color-mix(in_oklab,var(--ws-tile)_34%,transparent)]",
-                        dropTarget === workspace.id &&
+                        dropTarget?.workspaceId === workspace.id &&
                           "ring-2 ring-(--ws-tile) ring-offset-2 ring-offset-sidebar",
                       )}
                       onClick={() => onSelect(workspace.id)}
@@ -399,6 +406,11 @@ export function WorkspaceDock({
                 >
                   <WorkspaceMark workspace={workspace} glyphClassName="size-4" />
                   <TileIndicator activity={activity} />
+                  {dropTarget?.workspaceId === workspace.id && dropTarget.add ? (
+                    <span className="absolute -right-1.5 -bottom-1.5 flex size-4 items-center justify-center rounded-full bg-(--ws-tile) text-white ring-2 ring-sidebar">
+                      <PlusIcon className="size-3" />
+                    </span>
+                  ) : null}
                   {isDefault ? (
                     <span className="absolute -bottom-1 left-1/2 h-0.5 w-2.5 -translate-x-1/2 rounded-full bg-sidebar-muted-foreground/60" />
                   ) : null}

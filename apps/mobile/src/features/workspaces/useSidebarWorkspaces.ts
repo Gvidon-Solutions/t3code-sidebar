@@ -3,9 +3,14 @@ import {
   addWorkspace,
   deleteWorkspace,
   effectiveDefaultWorkspaceId,
-  moveProjectInOrder,
+  moveProjectInWorkspace,
   reorderWorkspaces,
+  setProjectFoldMode,
+  toggleProjectWorkspace,
   updateWorkspace,
+  type WorkspaceProjectIdentity,
+  type WorkspaceSequenceOf,
+  type ProjectFoldMode,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import type { EnvironmentId, SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
@@ -84,22 +89,32 @@ export function useSidebarWorkspaces() {
     },
     [sources, updateSettings],
   );
-  const moveProject = useCallback(
-    (projectKey: string, workspaceId: string) =>
-      updateConfig((current) => ({
-        ...current,
-        assignments: { ...current.assignments, [projectKey]: workspaceId },
-      })),
+  /** "Show in workspaces": ticks or unticks one workspace (never the last). */
+  const toggleProjectIn = useCallback(
+    (project: WorkspaceProjectIdentity, workspaceId: string, sequenceOf?: WorkspaceSequenceOf) =>
+      updateConfig((current) => toggleProjectWorkspace(current, project, workspaceId, sequenceOf)),
     [updateConfig],
+  );
+  /**
+   * Moves a project into "Quiet projects" or out of it by hand in the open
+   * workspace, or back to folding by itself there.
+   */
+  const setFoldMode = useCallback(
+    (projectKey: string, mode: ProjectFoldMode) => {
+      if (currentWorkspaceId === null) return;
+      updateConfig((current) => setProjectFoldMode(current, currentWorkspaceId, projectKey, mode));
+    },
+    [currentWorkspaceId, updateConfig],
   );
   /** Drops `projectKey` before `beforeKey` (null: last) among `sequence`, the open workspace's folders. */
   const reorderProject = useCallback(
-    (projectKey: string, beforeKey: string | null, sequence: ReadonlyArray<string>) =>
-      updateConfig((current) => ({
-        ...current,
-        projectOrder: moveProjectInOrder(current.projectOrder, sequence, projectKey, beforeKey),
-      })),
-    [updateConfig],
+    (projectKey: string, beforeKey: string | null, sequence: ReadonlyArray<string>) => {
+      if (currentWorkspaceId === null) return;
+      updateConfig((current) =>
+        moveProjectInWorkspace(current, currentWorkspaceId, sequence, projectKey, beforeKey),
+      );
+    },
+    [currentWorkspaceId, updateConfig],
   );
   /** The workspace edits the desktop offers, writing to every server that has workspaces. */
   const edit = useMemo(
@@ -139,7 +154,8 @@ export function useSidebarWorkspaces() {
     toggles,
     openWorkspace,
     toggle,
-    moveProject,
+    toggleProjectIn,
+    setFoldMode,
     reorderProject,
     edit,
   } as const;

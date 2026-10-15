@@ -1156,6 +1156,38 @@ describe("ThreadSettlementServiceV2 terminals", () => {
     ),
   );
 
+  it.effect("leaves the settle script of a parent's worktree to the parent", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const parent = appThread("parent-thread", "settled", "/worktrees/parent");
+        const subagent: OrchestrationV2AppThread = {
+          ...appThread("subagent-thread", "settled", "/worktrees/parent"),
+          lineage: {
+            parentThreadId: parent.id,
+            relationshipToParent: "subagent",
+            rootThreadId: parent.id,
+          },
+        };
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([]),
+          currentThreads: [parent, subagent],
+          existingWorktreePaths: ["/worktrees/parent"],
+        });
+
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          // Events run in order: the first run is the parent's only if the
+          // subagent, settled first, skipped its script.
+          yield* fixture.publishEvent(settledEvent(subagent));
+          yield* fixture.publishEvent(settledEvent(parent));
+          assert.deepStrictEqual(yield* Queue.take(fixture.closedIdle), { threadId: subagent.id });
+          assert.strictEqual((yield* Queue.take(fixture.scriptRuns)).threadId, parent.id);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+
   it.effect("skips the settle script for a thread re-engaged while its shells close", () =>
     Effect.scoped(
       Effect.gen(function* () {
