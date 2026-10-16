@@ -21,7 +21,8 @@ Everything else is upstream.
 - **Base.** Last synced with upstream release `v0.1.0` (`81493efb71`, tagged 2026-10-15) on
   2026-10-16 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
-  upstream's version plus `-sidebar.<run>`.
+  the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
+  above: CI reads it from this line.
 - **Footprint in upstream files.** Small, about 16 files and 70 lines: the settings schema
   key, the shared-settings list, the sidebar switch in `AppSidebarLayout.tsx`, one Settings
   row, desktop identity and WSL paths, and the artifact build script. Everything else is in
@@ -76,7 +77,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `deploy/` excluded): JS bundle → Linux AppImage/deb + Linux CLI archive → Windows NSIS with
   the CLI archive embedded as the WSL runtime → GitHub release `sidebar-v<version>` marked
   latest, with `latest.yml` / `latest-linux.yml`. Version is `<upstream version>-sidebar.<run>`;
-  the core stays upstream's so version-skew checks against servers hold. Builds are unsigned.
+  the core stays upstream's so version-skew checks against servers hold. The core is the higher
+  of `apps/server/package.json` and the release tag in "Last synced with upstream release" above,
+  because upstream stamps a release's version only when it builds it. Builds are unsigned.
 - **Android.** The same workflow's `android` job prebuilds the sidebar variant, builds a release
   APK signed with the fork key and attaches `T3-Code-Sidebar-<version>.apk` to the release.
   Local builds: source `~/.local/share/t3-ws/android-signing.env`, then
@@ -88,6 +91,20 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 ## Feature log
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
+
+### 2026-10-16 — Fork builds carry the synced release's version
+
+- **What.** After the v0.1.0 sync, fork builds are `0.1.0-sidebar.<run>` instead of
+  `0.0.45-sidebar.<run>`, so the version in About and on the release matches the upstream
+  release they contain. Desktop and phone update to it as usual. Until the server is updated
+  too, a new client connected to a server on a `0.0.45-sidebar` build shows upstream's
+  "Version mismatch" notice; the protocol is the same, so everything keeps working.
+- **How.** Upstream's tag commit still has the previous version in `package.json` and stamps the
+  release version only at release time. The `version` step of the bundle job now takes the
+  higher core of `apps/server/package.json` and the tag in FORK.md's "Last synced with upstream
+  release" line (the checkout is shallow and the fork carries no upstream tags, so
+  `git describe` is not an option).
+- **Where.** `.github/workflows/sidebar-desktop.yml`, `FORK.md` (Base line).
 
 ### 2026-10-16 — Upstream release v0.1.0
 

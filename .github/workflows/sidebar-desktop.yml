@@ -40,10 +40,21 @@ jobs:
 
       # Upstream's version plus the run number: semver-ordered so electron-updater
       # sees each build as newer, while the core version stays upstream's so
-      # version-skew checks against servers hold.
+      # version-skew checks against servers hold. Upstream stamps a release's
+      # version only at release time (the tag commit keeps the previous one in
+      # package.json), so the core is the higher of package.json and the release
+      # tag recorded in FORK.md's "Last synced with upstream release" line.
       - id: version
         run: |
-          version="$(node -p "require('./apps/server/package.json').version")-sidebar.${{ github.run_number }}"
+          core="$(node -e '
+            const fs = require("node:fs");
+            const pkg = require("./apps/server/package.json").version;
+            const synced = /Last synced with upstream release `v(\d+\.\d+\.\d+)`/.exec(fs.readFileSync("FORK.md", "utf8"))?.[1];
+            const key = (v) => v.replace(/[-+].*$/, "").split(".").map(Number);
+            const newer = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+            console.log(synced && newer(synced, pkg) ? synced : pkg.replace(/[-+].*$/, ""));
+          ')"
+          version="$core-sidebar.${{ github.run_number }}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
