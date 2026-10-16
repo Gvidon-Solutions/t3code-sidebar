@@ -7,6 +7,10 @@
       "types": "./src/composerThreadItems.ts",
       "default": "./src/composerThreadItems.ts"
     },
+    "./image-attachment-size": {
+      "types": "./src/imageAttachmentSize.ts",
+      "default": "./src/imageAttachmentSize.ts"
+    },
     "./handoff": {
       "types": "./src/handoff.ts",
       "default": "./src/handoff.ts"
@@ -130,6 +134,14 @@
     "./state/inbox": {
       "types": "./src/state/inbox.ts",
       "default": "./src/state/inbox.ts"
+    },
+    "./ui-requests": {
+      "types": "./src/uiRequests.ts",
+      "default": "./src/uiRequests.ts"
+    },
+    "./state/ui-requests": {
+      "types": "./src/state/uiRequests.ts",
+      "default": "./src/state/uiRequests.ts"
     },
     "./state/auth": {
       "types": "./src/state/auth.ts",

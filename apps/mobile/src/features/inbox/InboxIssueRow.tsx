@@ -1,17 +1,13 @@
 import type { ScopedInboxIssue } from "@t3tools/client-runtime/inbox";
-import { isInboxIssueUnread, type InboxSeverity } from "@t3tools/contracts";
+import { isInboxIssueUnread } from "@t3tools/contracts";
 import { memo } from "react";
 import { Pressable, View } from "react-native";
 
+import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
-
-export const INBOX_SEVERITY_DOT: Record<InboxSeverity, string> = {
-  action: "bg-adaptive-rose-500-400",
-  attention: "bg-adaptive-amber-700-400",
-  info: "bg-adaptive-neutral-400-500",
-};
+import { INBOX_SEVERITY_DOT } from "./inboxList";
 
 export function inboxSourceLabel(item: ScopedInboxIssue): string {
   const { source } = item.issue;
@@ -24,7 +20,7 @@ export function inboxSourceLabel(item: ScopedInboxIssue): string {
   return kind && !source.label ? kind : source.label;
 }
 
-/** One issue card in the Inbox list. */
+/** One issue card in the Inbox list: a status mark, the title, and a quiet meta line. */
 export const InboxIssueRow = memo(function InboxIssueRow(props: {
   readonly item: ScopedInboxIssue;
   readonly onPress: (item: ScopedInboxIssue) => void;
@@ -32,57 +28,73 @@ export const InboxIssueRow = memo(function InboxIssueRow(props: {
   const { issue, environmentLabel } = props.item;
   const unread = isInboxIssueUnread(issue);
   const open = issue.state === "open";
+  const yourTurn = open && issue.waitingForOwner;
   const time = relativeTime(open ? issue.activityAt : (issue.closedAt ?? issue.updatedAt));
-  const meta = [environmentLabel, inboxSourceLabel(props.item)].filter(Boolean).join(" · ");
+  const meta = [
+    environmentLabel,
+    inboxSourceLabel(props.item),
+    issue.repeatCount > 0 ? `×${issue.repeatCount + 1}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${unread ? "Unread. " : ""}${issue.title}`}
+      accessibilityLabel={`${unread ? "Unread. " : ""}${yourTurn ? "Your turn. " : ""}${issue.title}`}
       onPress={() => props.onPress(props.item)}
       className="mb-2 flex-row gap-3 rounded-[18px] bg-grouped-card px-4 py-3 active:opacity-70"
     >
-      <View className={cn("mt-[7px] size-2.5 rounded-full", INBOX_SEVERITY_DOT[issue.severity])} />
-      <View className="min-w-0 flex-1 gap-1">
+      <View className="h-[22px] w-3.5 items-center justify-center">
+        {open ? (
+          <View className={cn("size-2 rounded-full", INBOX_SEVERITY_DOT[issue.severity])} />
+        ) : (
+          <SymbolView
+            name={issue.state === "resolved" ? "checkmark.circle" : "nosign"}
+            size={14}
+            tintColorClassName={
+              issue.state === "resolved"
+                ? "accent-adaptive-emerald-600-400"
+                : "accent-foreground-tertiary"
+            }
+            type="monochrome"
+          />
+        )}
+      </View>
+      <View className="min-w-0 flex-1 gap-0.5">
         <View className="flex-row items-start gap-2">
           <Text
             numberOfLines={2}
             className={cn(
-              "min-w-0 flex-1 text-base leading-snug text-foreground",
-              unread ? "font-t3-bold" : "font-t3-medium",
+              "min-w-0 flex-1 text-base leading-snug",
+              !open
+                ? "text-foreground-secondary"
+                : unread || yourTurn
+                  ? "font-t3-medium text-foreground"
+                  : "text-foreground",
             )}
           >
             {issue.title}
           </Text>
-          <View className="flex-row items-center gap-1.5 pt-0.5">
-            {unread ? <View className="size-2 rounded-full bg-adaptive-blue-500-400" /> : null}
-            <Text className="text-xs tabular-nums text-foreground-tertiary">{time}</Text>
-          </View>
+          <Text className="pt-0.5 text-xs tabular-nums text-foreground-tertiary">{time}</Text>
         </View>
-        {meta ? (
-          <Text numberOfLines={1} className="text-xs text-foreground-muted">
+        <View className="flex-row items-center gap-2">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-xs text-foreground-muted">
             {meta}
           </Text>
-        ) : null}
-        {(open && issue.waitingForOwner) || issue.repeatCount > 0 || !open ? (
-          <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
-            {open && issue.waitingForOwner ? (
-              <Text className="text-xs font-t3-bold text-adaptive-rose-600-400">
-                Needs your answer
-              </Text>
-            ) : null}
-            {issue.repeatCount > 0 ? (
-              <Text className="text-xs font-t3-medium tabular-nums text-foreground-muted">
-                ×{issue.repeatCount}
-              </Text>
-            ) : null}
-            {!open ? (
-              <Text numberOfLines={1} className="min-w-0 shrink text-xs text-foreground-muted">
-                {issue.state === "resolved" ? "Resolved" : "Closed as not relevant"}
-                {issue.closeNote ? `: ${issue.closeNote}` : ""}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
+          {yourTurn ? (
+            <View className="flex-row items-center gap-1">
+              <SymbolView
+                name="questionmark.bubble"
+                size={12}
+                tintColorClassName="accent-foreground"
+                type="monochrome"
+              />
+              <Text className="text-xs font-t3-medium text-foreground">Your turn</Text>
+            </View>
+          ) : unread ? (
+            <View className="size-2 rounded-full bg-adaptive-blue-500-400" />
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );

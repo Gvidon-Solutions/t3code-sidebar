@@ -463,6 +463,9 @@ export function summarizeT3ToolCalls(
     case "inbox-resolve":
       label = phrase("Resolved", "resolve", quantity(selected.length, "inbox issue"));
       break;
+    case "ui-open":
+      label = phrase("Opened", "open", `something on screen ${times}`);
+      break;
   }
   return { label, failedCount };
 }

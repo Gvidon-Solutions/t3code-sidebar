@@ -101,6 +101,8 @@ export interface Preferences {
   readonly workspaceToggles?: readonly string[];
   /** Sidebar fork: open file tabs per thread (`environmentId:threadId`). */
   readonly threadTabs?: ThreadTabsByThread;
+  /** Sidebar fork: where the voice bubble was left, as 0..1 of the safe area's free width and height. */
+  readonly voiceBubblePosition?: { readonly x: number; readonly y: number };
 }
 
 export class MobilePreferencesLoadError extends Schema.TaggedError<MobilePreferencesLoadError>()(
@@ -172,6 +174,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     sidebarWorkspaceId?: string;
     workspaceToggles?: readonly string[];
     threadTabs?: ThreadTabsByThread;
+    voiceBubblePosition?: { readonly x: number; readonly y: number };
   } = {};
 
   if (typeof parsed.pullRequestHideTestFiles === "boolean") {
@@ -245,6 +248,16 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   const threadTabs = sanitizeThreadTabs(parsed.threadTabs);
   if (threadTabs) preferences.threadTabs = threadTabs;
+  const bubble = parsed.voiceBubblePosition;
+  const isFraction = (value: unknown) => typeof value === "number" && value >= 0 && value <= 1;
+  if (
+    typeof bubble === "object" &&
+    bubble !== null &&
+    isFraction(bubble.x) &&
+    isFraction(bubble.y)
+  ) {
+    preferences.voiceBubblePosition = { x: bubble.x, y: bubble.y };
+  }
   if (parsed.composerEnterBehavior === "send" || parsed.composerEnterBehavior === "newline") {
     preferences.composerEnterBehavior = parsed.composerEnterBehavior;
   }

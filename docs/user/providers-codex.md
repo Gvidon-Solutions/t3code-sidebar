@@ -96,7 +96,8 @@ for command and file approvals.
 
 A Codex thread can hold a spoken conversation. You talk with
 a voice model that hands coding requests to Codex and reads its answers back to
-you. Send at least one message in the thread first.
+you. Any Codex thread can start one, including a new thread with no messages, and
+**Talk** next to the new-thread button starts a new thread with voice on.
 
 Start or stop it with the waveform button in the composer. On web and desktop you
 can also send `/voice` or press `F8`. While it runs, the strip above the composer shows whether it is
@@ -107,7 +108,20 @@ palette offers the same actions, and **Voice: Toggle Mute** can be bound in
 Choose the voice in **Settings > Providers > Codex > Voice**. The change applies
 to your next conversation.
 
-On mobile, the conversation stops when you leave the thread or the app. The mobile
+The conversation keeps running while you move around the app. Other threads show a
+small strip with the latest words, mute, stop and **Talk here**, which moves the
+conversation to the thread you're in; elsewhere a round voice button floats on screen,
+which you can drag anywhere and tap for the same controls. To get back to the
+conversation, click its words on web and desktop, or long-press the strip or the
+round button on mobile. The thread you're talking in sits at the top of the sidebar.
+A thread started with **Talk** is named after the first thing you say. Each device
+holds one conversation; starting the same thread on another device moves the
+conversation there.
+
+Ask to open something, such as a thread, the inbox, a file or the thread's changes,
+and it opens on the device you're talking from.
+
+On mobile, the conversation stops when you leave the app. The mobile
 app needs an update that includes voice support.
 
 Voice needs a microphone and permission to use it. When you open T3 Code from

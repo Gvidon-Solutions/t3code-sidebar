@@ -78,6 +78,10 @@ import {
 } from "../voice-input/ComposerDictationControl";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
+import { ComposerVoiceModeButton } from "../voice-mode/ComposerVoiceMode";
+import { useCreateVoiceThread } from "../voice-mode/useCreateVoiceThread";
+import { voiceMode, voiceModeSupported } from "../voice-mode/voiceMode";
+import { resolveVoiceModelSelection } from "../voice-mode/voiceThreads";
 import {
   useThreadSettingsSheetPresentation,
   type NavigationWithFinishTransitioning,
@@ -411,6 +415,7 @@ export function NewTaskDraftScreen(props: {
   const [isCancellingShareImport, setIsCancellingShareImport] = useState(false);
   const [cancelledIncomingShareId, setCancelledIncomingShareId] = useState<string | null>(null);
   const [isReturningToProjectPicker, setIsReturningToProjectPicker] = useState(false);
+  const createVoiceThread = useCreateVoiceThread();
   const [submitNavigationAction, setSubmitNavigationAction] = useState<NavigationAction | null>(
     null,
   );
@@ -1427,6 +1432,74 @@ export function NewTaskDraftScreen(props: {
     pendingPastedTextAttachmentCount === 0 &&
     !voiceInput.blocksSubmission &&
     !(flow.workspaceMode === "worktree" && !flow.selectedBranchName);
+  // Sidebar fork: talking from a draft first creates its thread on the
+  // server, with the draft's settings; a model that cannot talk becomes Codex's.
+  const offersVoiceConversation =
+    voiceModeSupported &&
+    flow.editingPendingTask === null &&
+    resolveVoiceModelSelection(
+      selectedEnvironmentServerConfig,
+      flow.selectedModel,
+      flow.selectedProject?.id ?? null,
+    ) !== null;
+  const canStartVoice =
+    environmentConnected &&
+    taskPermissionReason === null &&
+    !cloneBlocksStart &&
+    !flow.submitting &&
+    !voiceInput.isBusy;
+  async function handleStartVoice(): Promise<void> {
+    const project = flow.selectedProject;
+    const draftKey = flow.draftKey;
+    if (!project || !draftKey || !canStartVoice) return;
+    const draft = getComposerDraftSnapshot(draftKey);
+    const modelSelection = resolveVoiceModelSelection(
+      selectedEnvironmentServerConfig,
+      resolveSelectableModelSelection(
+        selectedEnvironmentServerConfig,
+        draft.modelSelection ?? null,
+        project.id,
+      ) ?? flow.selectedModel,
+      project.id,
+    );
+    if (!modelSelection) return;
+    const workspaceSelection = flow.canChooseWorkspace ? draft.workspaceSelection : undefined;
+    const workspaceMode = workspaceSelection?.mode ?? flow.workspaceMode;
+    if (workspaceMode === "worktree") {
+      Alert.alert(
+        "Voice needs a local checkout",
+        "A new worktree is set up by a thread's first message. Switch this draft to Local to talk here, or send a message first.",
+      );
+      return;
+    }
+    flow.setSubmitting(true);
+    let target: Awaited<ReturnType<typeof createVoiceThread>> = null;
+    try {
+      target = await createVoiceThread({
+        project,
+        modelSelection,
+        runtimeMode: flow.runtimeMode,
+        interactionMode: flow.interactionMode,
+        branch: resolveProjectThreadCreationBranch({
+          workspaceMode,
+          selectedBranch: workspaceSelection?.branch ?? null,
+          currentCheckoutBranch: flow.currentCheckoutBranchName,
+        }),
+        worktreePath: workspaceSelection?.worktreePath ?? null,
+      });
+    } finally {
+      flow.setSubmitting(false);
+    }
+    if (!target) return;
+    // The draft keeps its text: the conversation is a thread of its own.
+    setSubmitNavigationAction(
+      StackActions.replace("Thread", {
+        environmentId: String(target.environmentId),
+        threadId: String(target.threadId),
+      }),
+    );
+    void voiceMode.start(target);
+  }
   const openDraftDocument = (attachment: ComposerDocumentAttachment) => {
     // A draft attachment lives only in the draft. Without its key the screen would fall through
     // to a remote lookup for bytes the server has never seen.
@@ -1824,6 +1897,13 @@ export function NewTaskDraftScreen(props: {
                   </View>
                 </>
               )}
+              {offersVoiceConversation && !isVoiceInputPresented ? (
+                <ComposerVoiceModeButton
+                  phase="idle"
+                  disabled={!canStartVoice}
+                  onPress={() => void handleStartVoice()}
+                />
+              ) : null}
               <ComposerDictationPrimaryAction
                 state={voiceInput.state}
                 presentation={voicePresentation}

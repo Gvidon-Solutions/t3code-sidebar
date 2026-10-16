@@ -6,6 +6,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -30,6 +31,8 @@ const makeFakeClient = Effect.gen(function* () {
   const startRequested = yield* Deferred.make<void>();
   const speechRequested = yield* Deferred.make<void>();
   const stopRequested = yield* Deferred.make<void>();
+  /** Thread ids, in the order their realtime sessions were started. */
+  const startedThreads = yield* Queue.unbounded<string>();
   const client = {
     handleServerNotification: (
       method: string,
@@ -42,8 +45,10 @@ const makeFakeClient = Effect.gen(function* () {
       request: (method: string, params: unknown) =>
         Effect.gen(function* () {
           requests.push({ method, params });
-          if (method === "thread/realtime/start")
+          if (method === "thread/realtime/start") {
             yield* Deferred.succeed(startRequested, undefined);
+            yield* Queue.offer(startedThreads, (params as { threadId: string }).threadId);
+          }
           if (method === "thread/realtime/appendSpeech") {
             yield* Deferred.succeed(speechRequested, undefined);
           }
@@ -56,7 +61,15 @@ const makeFakeClient = Effect.gen(function* () {
     Effect.forEach(handlers.get(method) ?? [], (handler) => Effect.ignore(handler(payload)), {
       discard: true,
     });
-  return { client, requests, emit, startRequested, speechRequested, stopRequested };
+  return {
+    client,
+    requests,
+    emit,
+    startRequested,
+    speechRequested,
+    stopRequested,
+    startedThreads,
+  };
 });
 
 const startVoice = Effect.gen(function* () {
@@ -174,6 +187,41 @@ describe("makeCodexVoice", () => {
     }),
   );
 
+  it.effect("runs conversations on different threads side by side", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakeClient;
+      const scope = yield* Scope.make();
+      const voice = yield* makeCodexVoice(fake.client, scope);
+      const startOn = (threadId: string) =>
+        voice
+          .start({ providerThreadId: threadId, offerSdp: "v=offer\r\n" })
+          .pipe(Stream.runCollect, Effect.forkChild);
+      const first = yield* startOn("thread-a");
+      NodeAssert.equal(yield* Queue.take(fake.startedThreads), "thread-a");
+      const second = yield* startOn("thread-b");
+      NodeAssert.equal(yield* Queue.take(fake.startedThreads), "thread-b");
+      NodeAssert.ok(!fake.requests.some((request) => request.method === "thread/realtime/stop"));
+      NodeAssert.ok(yield* voice.isActive("thread-a"));
+      NodeAssert.ok(yield* voice.isActive("thread-b"));
+
+      yield* fake.emit("thread/realtime/closed", { threadId: "thread-a" });
+      NodeAssert.deepEqual(Array.from(yield* Fiber.join(first)), [{ type: "closed" }]);
+      NodeAssert.ok(!(yield* voice.isActive("thread-a")));
+      NodeAssert.ok(yield* voice.isActive());
+      yield* fake.emit("thread/realtime/transcript/done", {
+        threadId: "thread-b",
+        role: "assistant",
+        text: "still here",
+      });
+      yield* fake.emit("thread/realtime/closed", { threadId: "thread-b" });
+      NodeAssert.deepEqual(Array.from(yield* Fiber.join(second)), [
+        { type: "transcript.done", role: "assistant", text: "still here" },
+        { type: "closed" },
+      ]);
+      NodeAssert.ok(!(yield* voice.isActive()));
+    }),
+  );
+
   it.effect("fails the stream with Codex's realtime error", () =>
     Effect.gen(function* () {
       const voice = yield* startVoice;
@@ -199,7 +247,7 @@ describe("makeCodexVoice", () => {
         .pipe(Stream.runCollect, Effect.forkChild);
       yield* Deferred.await(fake.startRequested);
 
-      yield* voice.expectSpokenTurn("run the tests");
+      yield* voice.expectSpokenTurn(PROVIDER_THREAD, "run the tests");
       yield* fake.emit("item/started", {
         threadId: PROVIDER_THREAD,
         turnId: "resubmitted",

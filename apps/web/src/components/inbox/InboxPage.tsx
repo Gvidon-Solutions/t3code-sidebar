@@ -1,6 +1,7 @@
 import { inboxIssueKey, type ScopedInboxIssue } from "@t3tools/client-runtime/inbox";
 import { type EnvironmentId, type InboxIssueId, isInboxIssueUnread } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
+import { CircleCheckIcon, CircleSlashIcon, MessageCircleQuestionIcon } from "lucide-react";
 import { memo, useCallback, useMemo } from "react";
 
 import { isElectron } from "../../env";
@@ -11,7 +12,6 @@ import { showMoreClosedInboxIssues, useInboxState } from "../../state/inbox";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
 import { SidebarInset } from "../ui/sidebar";
@@ -185,7 +185,7 @@ function InboxIssueList(props: {
           }}
         >
           <Toggle value="open">Open{open.length > 0 ? ` · ${open.length}` : ""}</Toggle>
-          <Toggle value="closed">Resolved</Toggle>
+          <Toggle value="closed">Closed</Toggle>
         </ToggleGroup>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -202,13 +202,11 @@ function InboxIssueList(props: {
           ) : (
             groups.map((group) => (
               <section key={group.severity} aria-label={INBOX_SEVERITY_LABEL[group.severity]}>
-                <h2 className="flex items-center gap-2 px-2 pt-3 pb-1 text-2xs font-medium text-muted-foreground">
-                  <span
-                    aria-hidden
-                    className={cn("size-2 rounded-full", INBOX_SEVERITY_DOT_CLASS[group.severity])}
-                  />
+                <h2 className="flex items-center gap-1.5 px-2.5 pt-4 pb-1.5 text-2xs font-medium text-muted-foreground">
                   {INBOX_SEVERITY_LABEL[group.severity]}
-                  <span className="text-muted-foreground/60">{group.items.length}</span>
+                  <span className="font-normal text-muted-foreground/60 tabular-nums">
+                    {group.items.length}
+                  </span>
                 </h2>
                 <ul className="m-0 flex list-none flex-col gap-0.5 p-0">{group.items.map(row)}</ul>
               </section>
@@ -217,7 +215,7 @@ function InboxIssueList(props: {
         ) : closed.length === 0 ? (
           <Empty>
             <EmptyHeader>
-              <EmptyDescription>Nothing resolved yet.</EmptyDescription>
+              <EmptyDescription>Nothing closed yet.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -249,6 +247,7 @@ const InboxIssueRow = memo(function InboxIssueRow(props: {
   const { issue } = item;
   const unread = isInboxIssueUnread(issue);
   const open = issue.state === "open";
+  const waiting = open && issue.waitingForOwner;
   const time = formatRelativeTimeLabel(
     open ? issue.activityAt : (issue.closedAt ?? issue.activityAt),
   );
@@ -256,9 +255,9 @@ const InboxIssueRow = memo(function InboxIssueRow(props: {
     item.environmentLabel,
     projectTitle,
     issue.source.label,
-    open ? null : issue.state === "resolved" ? "Resolved" : "Not relevant",
-    time,
+    issue.repeatCount > 0 ? `×${issue.repeatCount + 1}` : null,
   ].filter((part): part is string => part !== null && part.length > 0);
+  const ClosedIcon = issue.state === "resolved" ? CircleCheckIcon : CircleSlashIcon;
 
   return (
     <li>
@@ -267,43 +266,54 @@ const InboxIssueRow = memo(function InboxIssueRow(props: {
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(item)}
         className={cn(
-          "flex w-full cursor-pointer flex-col gap-1 rounded-lg px-2.5 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          "group/inbox-row flex w-full cursor-pointer flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
           selected ? "bg-accent" : "hover:bg-accent/60",
         )}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span
-            aria-label={issue.severity}
-            className={cn("size-2 shrink-0 rounded-full", INBOX_SEVERITY_DOT_CLASS[issue.severity])}
-          />
+          {open ? (
+            <span
+              aria-label={INBOX_SEVERITY_LABEL[issue.severity]}
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                INBOX_SEVERITY_DOT_CLASS[issue.severity],
+              )}
+            />
+          ) : (
+            <ClosedIcon
+              aria-label={issue.state === "resolved" ? "Resolved" : "Closed as not relevant"}
+              className={cn(
+                "-mx-[3px] size-3 shrink-0",
+                issue.state === "resolved" ? "text-success" : "text-muted-foreground/70",
+              )}
+            />
+          )}
           <span
             className={cn(
               "min-w-0 flex-1 truncate text-sm",
-              unread ? "font-semibold text-foreground" : "text-foreground/80",
+              unread || waiting
+                ? "font-medium text-foreground"
+                : open
+                  ? "text-foreground/80 group-hover/inbox-row:text-foreground"
+                  : "text-secondary-label group-hover/inbox-row:text-foreground/80",
+              selected && "text-foreground",
             )}
           >
             {issue.title}
           </span>
-          {issue.repeatCount > 0 ? (
-            <span
-              className="shrink-0 text-2xs text-muted-foreground"
-              aria-label={`Reported ${issue.repeatCount + 1} times`}
-            >
-              ×{issue.repeatCount + 1}
-            </span>
-          ) : null}
-          {unread ? (
-            <span aria-label="New" className="size-2 shrink-0 rounded-full bg-info" />
-          ) : null}
+          <span className="shrink-0 text-2xs text-muted-foreground/70 tabular-nums">{time}</span>
         </span>
-        <span className="flex min-w-0 items-center gap-2 ps-4">
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-2 ps-3.5">
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/80">
             {meta.join(" · ")}
           </span>
-          {open && issue.waitingForOwner ? (
-            <Badge variant="error" size="sm">
-              Needs your answer
-            </Badge>
+          {waiting ? (
+            <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-medium text-foreground/80">
+              <MessageCircleQuestionIcon aria-hidden className="size-3" />
+              Your turn
+            </span>
+          ) : unread ? (
+            <span aria-label="New" className="size-1.5 shrink-0 rounded-full bg-info" />
           ) : null}
         </span>
       </button>

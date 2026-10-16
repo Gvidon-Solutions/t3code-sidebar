@@ -64,8 +64,8 @@ import {
 } from "../../state/use-composer-drafts";
 import { appAtomRegistry } from "../../state/atom-registry";
 import type { ComposerDocumentAttachment } from "../../lib/composerContext";
-import { useProject, useThreadShells } from "../../state/entities";
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { useProject, useThreadShell, useThreadShells } from "../../state/entities";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 
 import { AppText as Text } from "../../components/AppText";
 import { ComposerAttachmentButton } from "../../components/ComposerAttachmentButton";
@@ -117,8 +117,12 @@ import {
 } from "../voice-input/ComposerDictationControl";
 import { useVoiceInputController } from "../voice-input/useVoiceInputController";
 import { resolveVoiceComposerPresentation } from "../voice-input/voiceInputPresentation";
-import { ComposerVoiceModeButton, ComposerVoiceStrip } from "../voice-mode/ComposerVoiceMode";
-import { useVoiceModePhase, useVoiceModeThreadLifecycle } from "../voice-mode/useVoiceMode";
+import {
+  ComposerVoiceElsewhereStrip,
+  ComposerVoiceModeButton,
+  ComposerVoiceStrip,
+} from "../voice-mode/ComposerVoiceMode";
+import { useVoiceModePhase } from "../voice-mode/useVoiceMode";
 import { voiceMode, voiceModeSupported } from "../voice-mode/voiceMode";
 import {
   rememberModelOptions,
@@ -505,6 +509,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       ? (project?.id ?? null)
       : null,
     pullRequestRepository: project?.repositoryIdentity?.displayName ?? null,
+    threadPullRequests: props.selectedThread.pullRequests,
     selectedProviderStatus,
     hasThread: true,
     hasCompactableConversation: props.hasCompactableConversation,
@@ -523,7 +528,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     [props.environmentId, props.selectedThread.id],
   );
   const voicePhase = useVoiceModePhase(voiceTarget);
-  useVoiceModeThreadLifecycle(voiceTarget);
+  // Sidebar fork: the server starts the provider session for any thread it
+  // has, so only a queued creation (a stand-in with no server shell yet) waits.
+  const threadOnServer =
+    useThreadShell(scopeThreadRef(props.environmentId, props.selectedThread.id)) !== null;
   // Dictation and a voice conversation both need the microphone.
   const voiceConversationLive = voicePhase !== "idle";
   const voiceInput = useVoiceInputController({
@@ -538,13 +546,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   });
   const offersVoiceConversation =
     voiceModeSupported && selectedProviderStatus?.supportsVoice === true;
-  // The server attaches voice to the thread's provider thread, which the first
-  // run creates. An optimistic pending thread already has a message timestamp.
   const canToggleVoiceConversation =
     voiceConversationLive ||
-    (props.connectionState === "connected" &&
-      props.selectedThread.activeProviderThreadId !== null &&
-      !voiceInput.isBusy);
+    (props.connectionState === "connected" && threadOnServer && !voiceInput.isBusy);
   const toggleVoiceConversation = useCallback(() => voiceMode.toggle(voiceTarget), [voiceTarget]);
   const voiceModeButton = offersVoiceConversation ? (
     <ComposerVoiceModeButton
@@ -863,7 +867,17 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           </Text>
         ) : null}
 
-        {voiceConversationLive ? <ComposerVoiceStrip /> : null}
+        {voiceConversationLive ? (
+          <ComposerVoiceStrip />
+        ) : (
+          <ComposerVoiceElsewhereStrip
+            onTalkHere={
+              offersVoiceConversation && canToggleVoiceConversation
+                ? toggleVoiceConversation
+                : undefined
+            }
+          />
+        )}
 
         {modelUnavailable ? (
           <Pressable accessibilityRole="button" className="px-3 py-2" onPress={openSettings}>

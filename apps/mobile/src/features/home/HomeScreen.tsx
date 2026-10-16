@@ -851,7 +851,13 @@ export function HomeScreen(props: HomeScreenProps) {
       return (
         <ThreadListV2Row
           compact={
-            compact ? { projectLabel: item.projectLabel, nested: item.nested === true } : undefined
+            compact
+              ? {
+                  projectLabel: item.projectLabel,
+                  nested: item.nested === true,
+                  voice: item.voice === true,
+                }
+              : undefined
           }
           pane={primaryColumn ? "sidebar" : "screen"}
           selected={scopedThreadKey(thread.environmentId, thread.id) === selectedThreadKey}

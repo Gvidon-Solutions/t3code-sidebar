@@ -1,9 +1,10 @@
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   VoiceModeController,
   describeVoiceEnd,
   makeVoiceSessionOpener,
+  type VoiceCaption,
   type VoiceMediaStream,
   type VoiceModePhase,
   type VoiceModePlatform,
@@ -13,7 +14,7 @@ import {
 } from "@t3tools/client-runtime/voice-mode";
 import * as Effect from "effect/Effect";
 import { AtomRegistry } from "effect/reactivity";
-import { useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -95,50 +96,75 @@ export function useVoicePhaseFor(target: VoiceSessionTarget | null): VoiceModePh
   return useSyncExternalStore(voiceMode.subscribe, getPhase, getPhase);
 }
 
-/**
- * Starts or stops voice on `target`. An unavailable thread explains why
- * instead of failing on the server.
- */
+/** Starts or stops voice on `target`. */
 export function toggleThreadVoice(target: VoiceSessionTarget, availability: VoiceAvailability) {
   if (voiceMode.isActiveFor(target)) {
     voiceMode.stop();
     return;
   }
   if (availability.kind === "unsupported") return;
-  if (availability.kind === "unavailable") {
-    toastManager.add({ type: "info", title: availability.reason });
-    return;
-  }
   void voiceMode.start(target);
 }
 
-// Errors and provider-side ends surface once as a toast on the conversation's
-// thread. A user stop leaves neither set, so it stays silent.
+export function voiceTargetRef(target: VoiceSessionTarget): ScopedThreadRef {
+  return scopeThreadRef(EnvironmentId.make(target.environmentId), ThreadId.make(target.threadId));
+}
+
+const getEngagedTarget = () => {
+  const state = voiceMode.getState();
+  return state.phase === "idle" ? null : state.target;
+};
+
+/** The thread holding this client's conversation, or null while voice is off. */
+export function useVoiceThreadRef(): ScopedThreadRef | null {
+  const target = useSyncExternalStore(voiceMode.subscribe, getEngagedTarget, getEngagedTarget);
+  return useMemo(() => (target === null ? null : voiceTargetRef(target)), [target]);
+}
+
+const getMuted = () => voiceMode.getState().muted;
+
+export function useVoiceMuted(): boolean {
+  return useSyncExternalStore(voiceMode.subscribe, getMuted, getMuted);
+}
+
+const getCaptions = () => voiceMode.getState().captions;
+
+export function useVoiceCaptions(): ReadonlyArray<VoiceCaption> {
+  return useSyncExternalStore(voiceMode.subscribe, getCaptions, getCaptions);
+}
+
+/** Speaker loudness (WebRTC `audioLevel`, 0..1) above which the assistant counts as speaking. */
+export const SPEAKING_LEVEL = 0.02;
+
+/** Whether the assistant is talking right now; re-renders only when that flips. */
+export function useVoiceSpeaking(active: boolean): boolean {
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    return voiceMode.subscribeLevels((levels) => setSpeaking(levels.speaker > SPEAKING_LEVEL));
+  }, [active]);
+  return active && speaking;
+}
+
+// Errors and provider-side ends surface once as a toast wherever the user is:
+// the conversation follows them around the app. A user stop leaves neither
+// set, so it stays silent.
 let lastPhase: VoiceModePhase = "idle";
 voiceMode.subscribe((state) => {
   const previousPhase = lastPhase;
   lastPhase = state.phase;
   if (state.phase !== "idle" || state.target === null) return;
   if (state.error === null && state.endedReason === null) return;
-  const threadRef = scopeThreadRef(
-    EnvironmentId.make(state.target.environmentId),
-    ThreadId.make(state.target.threadId),
-  );
   if (state.error !== null) {
     toastManager.add(
       stackedThreadToast({
         type: "error",
         title: previousPhase === "active" ? "Voice conversation ended" : "Couldn't start voice",
         description: state.error,
-        data: { threadRef },
       }),
     );
   } else if (state.endedReason !== null) {
-    toastManager.add({
-      type: "info",
-      title: describeVoiceEnd(state.endedReason),
-      data: { threadRef },
-    });
+    toastManager.add({ type: "info", title: describeVoiceEnd(state.endedReason) });
   }
   voiceMode.dismiss();
 });

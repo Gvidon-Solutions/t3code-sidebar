@@ -119,15 +119,20 @@ export const makeCodexVoice = Effect.fn("makeCodexVoice")(function* (
   /** Outlives notification handlers, which must not block on requests. */
   runtimeScope: Scope.Scope,
 ) {
-  const activeRef = yield* Ref.make<ActiveVoice | undefined>(undefined);
+  /** Native thread id -> its conversation. Threads talk independently. */
+  const activeRef = yield* Ref.make<ReadonlyMap<string, ActiveVoice>>(new Map());
+
+  const activeFor = (threadId: string) =>
+    Effect.map(Ref.get(activeRef), (conversations) => {
+      const active = conversations.get(threadId);
+      return active && !active.closed ? active : undefined;
+    });
 
   const withActive = (
     threadId: string,
     f: (active: ActiveVoice) => Effect.Effect<void, never>,
   ): Effect.Effect<void, never> =>
-    Effect.flatMap(Ref.get(activeRef), (active) =>
-      active && !active.closed && active.providerThreadId === threadId ? f(active) : Effect.void,
-    );
+    Effect.flatMap(activeFor(threadId), (active) => (active ? f(active) : Effect.void));
 
   const offer = (active: ActiveVoice, event: ProviderVoiceSessionEvent) =>
     Queue.offer(active.queue, event).pipe(Effect.asVoid);
@@ -228,7 +233,12 @@ export const makeCodexVoice = Effect.fn("makeCodexVoice")(function* (
 
   const stop = (active: ActiveVoice) =>
     Effect.gen(function* () {
-      yield* Ref.update(activeRef, (current) => (current === active ? undefined : current));
+      yield* Ref.update(activeRef, (current) => {
+        if (current.get(active.providerThreadId) !== active) return current;
+        const updated = new Map(current);
+        updated.delete(active.providerThreadId);
+        return updated;
+      });
       if (active.closed) return;
       active.closed = true;
       yield* client.raw
@@ -259,7 +269,10 @@ export const makeCodexVoice = Effect.fn("makeCodexVoice")(function* (
           expectedHandoffs: [],
           closed: false,
         };
-        const previous = yield* Ref.getAndSet(activeRef, active);
+        const previous = yield* Ref.modify(activeRef, (current) => [
+          current.get(input.providerThreadId),
+          new Map(current).set(input.providerThreadId, active),
+        ]);
         if (previous && !previous.closed) {
           // One conversation per thread: a newer client takes over.
           yield* finish(previous, { type: "closed", reason: "replaced" });
@@ -285,10 +298,18 @@ export const makeCodexVoice = Effect.fn("makeCodexVoice")(function* (
    * Marks the next turn whose user message carries `text` as a voice handoff,
    * for hosts that resubmit Codex's delegation as their own run.
    */
-  const expectSpokenTurn = (text: string) =>
-    Effect.map(Ref.get(activeRef), (active) => {
-      if (active && !active.closed) active.expectedHandoffs.push(text);
+  const expectSpokenTurn = (threadId: string, text: string) =>
+    Effect.map(activeFor(threadId), (active) => {
+      active?.expectedHandoffs.push(text);
     });
 
-  return { start, expectSpokenTurn };
+  /** Whether a conversation is live on `threadId`, or on any thread when omitted. */
+  const isActive = (threadId?: string) =>
+    threadId === undefined
+      ? Effect.map(Ref.get(activeRef), (current) =>
+          Array.from(current.values()).some((active) => !active.closed),
+        )
+      : Effect.map(activeFor(threadId), (active) => active !== undefined);
+
+  return { start, expectSpokenTurn, isActive };
 });

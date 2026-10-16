@@ -157,6 +157,12 @@ export const ProviderVoiceTranscriptRole = Schema.Literals(["user", "assistant"]
 export type ProviderVoiceTranscriptRole = typeof ProviderVoiceTranscriptRole.Type;
 
 /**
+ * Title a thread started for voice carries until its first spoken phrase
+ * names it (sidebar fork).
+ */
+export const VOICE_THREAD_DEFAULT_TITLE = "Voice conversation";
+
+/**
  * Events for one voice conversation. Audio flows peer-to-peer between the
  * client and the provider's realtime backend; only signaling and captions
  * cross this stream. Unsubscribing stops the conversation.

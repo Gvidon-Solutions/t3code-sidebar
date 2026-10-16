@@ -10,7 +10,7 @@ import {
   type ScopedInboxIssue,
 } from "@t3tools/client-runtime/inbox";
 
-/** Closed issues per page of the Resolved tab, and the subscription's default. */
+/** Closed issues per page of the Closed tab, and the subscription's default. */
 export const INBOX_CLOSED_PAGE_SIZE = 30;
 
 /** One environment's inbox subscription as the aggregate sees it. */
@@ -71,9 +71,16 @@ export function mergeInboxSources(
 }
 
 export const INBOX_SEVERITY_LABELS: Record<InboxSeverity, string> = {
-  action: "🔴 Action",
-  attention: "🟡 Attention",
-  info: "⚪ Info",
+  action: "Needs action",
+  attention: "Needs attention",
+  info: "For the record",
+};
+
+/** Severity is a small dot, the thread list's status idiom; the words stay neutral. */
+export const INBOX_SEVERITY_DOT: Record<InboxSeverity, string> = {
+  action: "bg-adaptive-rose-500-400",
+  attention: "bg-adaptive-amber-700-400",
+  info: "bg-adaptive-neutral-400-500",
 };
 
 export type InboxListRow =
@@ -110,23 +117,28 @@ export function buildClosedInboxRows(items: ReadonlyArray<ScopedInboxIssue>): In
   return items.map((item) => ({ kind: "issue", key: inboxIssueKey(item), item }));
 }
 
+/** muted: bookkeeping; default: worth reading; outcome: how the issue ended, with its note. */
+export type InboxEventTone = "default" | "muted" | "outcome";
+
 export type InboxEntryPresentation =
   | { readonly kind: "comment"; readonly side: "owner" | "agent"; readonly text: string }
   | {
       readonly kind: "event";
       readonly label: string;
+      /** Extra text shown under the label, such as a resolution. */
       readonly detail: string | null;
-      readonly tone: "default" | "waiting" | "resolved" | "closed";
+      readonly tone: InboxEventTone;
     };
 
-/** How one history entry reads in the Issue screen's feed. */
+/** How one history entry reads in the Issue screen's feed; the web inbox reads the same. */
 export function presentInboxEntry(entry: InboxEntry): InboxEntryPresentation {
   const text = entry.text?.trim() ? entry.text.trim() : null;
-  const event = (
-    label: string,
-    detail: string | null = null,
-    tone: "default" | "waiting" | "resolved" | "closed" = "default",
-  ) => ({ kind: "event" as const, label, detail, tone });
+  const event = (label: string, detail: string | null, tone: InboxEventTone) => ({
+    kind: "event" as const,
+    label,
+    detail,
+    tone,
+  });
   switch (entry.kind) {
     case "comment":
       return {
@@ -135,31 +147,27 @@ export function presentInboxEntry(entry: InboxEntry): InboxEntryPresentation {
         text: text ?? "",
       };
     case "created":
-      return event("Opened", text);
+      return event("Issue raised", null, "muted");
     case "updated":
-      return event(text ? `Updated: ${text}` : "Updated");
+      return event(text ? `Updated: ${text}` : "Updated", null, "muted");
     case "waiting":
-      return event("Waiting for your answer", text, "waiting");
+      return event("Waiting for your answer", text, "default");
     case "waiting_cleared":
-      return event("No longer waiting", text);
+      return event("No longer waiting", null, "muted");
     case "reminder":
-      return event("Reminder: still waiting for your answer", null, "waiting");
+      return event("Reminder: still waiting for your answer", null, "default");
     case "handover":
-      return event(text ? `Handed over: ${text}` : "Handed over");
+      return event(text ? `Handed over: ${text}` : "Handed over", null, "muted");
     case "reopened":
-      return event("The problem came back", text);
+      return event("The problem came back", text, "default");
     case "repeated":
-      return event("Reported again");
+      return event("Reported again", null, "muted");
     case "resolved":
-      return event(text ? `Resolved: ${text}` : "Resolved", null, "resolved");
+      return event("Resolved", text, "outcome");
     case "dismissed":
-      return event(
-        text ? `Closed as not relevant: ${text}` : "Closed as not relevant",
-        null,
-        "closed",
-      );
+      return event("Closed as not relevant", text, "outcome");
     case "undismissed":
-      return event("Reopened");
+      return event("Reopened", null, "default");
   }
 }
 

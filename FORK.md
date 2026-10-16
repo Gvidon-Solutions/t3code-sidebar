@@ -18,9 +18,11 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream `main` at `9e552285ba` on 2026-10-12 (merge into `ws`).
+- **Base.** Last synced with upstream release `v0.1.0` (`81493efb71`, tagged 2026-10-15) on
+  2026-10-16 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
-  upstream's version plus `-sidebar.<run>`.
+  the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
+  above: CI reads it from this line.
 - **Footprint in upstream files.** Small, about 16 files and 70 lines: the settings schema
   key, the shared-settings list, the sidebar switch in `AppSidebarLayout.tsx`, one Settings
   row, desktop identity and WSL paths, and the artifact build script. Everything else is in
@@ -75,7 +77,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `deploy/` excluded): JS bundle → Linux AppImage/deb + Linux CLI archive → Windows NSIS with
   the CLI archive embedded as the WSL runtime → GitHub release `sidebar-v<version>` marked
   latest, with `latest.yml` / `latest-linux.yml`. Version is `<upstream version>-sidebar.<run>`;
-  the core stays upstream's so version-skew checks against servers hold. Builds are unsigned.
+  the core stays upstream's so version-skew checks against servers hold. The core is the higher
+  of `apps/server/package.json` and the release tag in "Last synced with upstream release" above,
+  because upstream stamps a release's version only when it builds it. Builds are unsigned.
 - **Android.** The same workflow's `android` job prebuilds the sidebar variant, builds a release
   APK signed with the fork key and attaches `T3-Code-Sidebar-<version>.apk` to the release.
   Local builds: source `~/.local/share/t3-ws/android-signing.env`, then
@@ -102,6 +106,123 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   mobile `workspaceNavigator.ts`. Seams: `show-agents` / `hide-agents` in
   `threadActionMenu.logic.ts`, an optional `agents` input to `useThreadActionMenu.ts`, a `bot`
   icon in `contextMenuFallback.ts`.
+
+### 2026-10-16 — Voice that follows you, starts anywhere and opens things
+
+- **What.** Voice starts in any Codex thread, even a new one with no message, or from **Talk**
+  next to the new-thread button (a new Codex thread on GPT-6 Astra). The conversation no longer
+  ends when you leave its thread: other threads show a compact strip above the composer
+  (the conversation's latest words, mute, stop, **Talk here** to move it), and away from threads a
+  round voice button floats on screen; drag it anywhere, tap it for the controls. Clicking the words
+  (web, desktop) or long-pressing the strip or the button (phone) opens the voice thread. A thread
+  started with **Talk** is named after the first phrase spoken in it. The thread holding the
+  conversation is the first row of the sidebar (and the phone's Home), above Pinned, with a wave
+  icon. One conversation per device; another device starting the same thread takes it over,
+  while different threads can talk at the same time on different devices. Ask to open something
+  (a thread, the inbox or an issue, a file, the diff, a workspace, home) and the device you're
+  talking from switches to it; any agent can do the same with `ui_open`, which opens files and
+  the diff beside the thread you're looking at and switches straight to the rest (devices not
+  showing that agent's thread ignore it). The phone
+  still stops voice when the app goes to the background.
+- **How.** `VoiceSessionService` opens the provider session and starts or resumes the Codex thread
+  without a turn when the thread has none loaded, and records the provider thread as a run
+  would, so the next run continues the same native conversation. `CodexVoice` and the Codex
+  adapter keep conversations per native thread, and report a live one as pending background work
+  so idle release leaves it alone. Codex's voice model has no tools, so navigation travels as an
+  ordinary delegated turn: the agent calls the MCP tool `ui_open`, `UiRequests` relays it over the
+  `uiRequests.subscribe` stream, and each client decides with `decideUiRequest` (voice holder →
+  navigate, thread shown → side panel for files and the diff, otherwise navigate; else ignore).
+- **Where.** Server: `orchestration-v2/VoiceSessionService.ts` (+ test), `provider/CodexVoice.ts`,
+  `Adapters/CodexAdapterV2.ts` (voice parts), `ThreadTitleRegenerationService.ts`
+  (`nameFromSpeech`, + test), `uiRequests/UiRequests.ts` (+ test),
+  `mcp/toolkits/ui/`, wiring in `ws.ts`, `runtimeLayer.ts`, `McpHttpServer.ts`,
+  `RpcAuthorization.ts`, `RpcInstrumentation.ts`; agent guidance in
+  `provider-core/.../orchestrationInstructions.ts`. Contracts: `packages/contracts/src/uiRequests.ts`.
+  Client runtime: `uiRequests.ts` (+ test), `state/uiRequests.ts`. Web: `voice/`
+  (`useStartVoiceThread.ts`, `useTalk.ts`), `components/voice/VoiceBubble.tsx`,
+  `components/voice/VoiceConversationPreview.tsx`,
+  `components/uiRequests/`, seams in `ChatComposer.tsx`, `ChatView.tsx`, `CommandPalette.tsx`,
+  `VoiceModeStrip.tsx`, `WorkspaceSidebar.tsx`, `WorkspaceThreadRow.tsx`, `routes/__root.tsx`.
+  Mobile: `features/voice-mode/` (`VoiceModeRootLayer`, `VoiceConversationBubble`,
+  `HomeTalkButton`, `UiRequestCoordinator`, `voiceThreads.ts`), seams in `Stack.tsx`,
+  `ThreadComposer.tsx`, `NewTaskDraftScreen.tsx`, Home and workspace navigator files. The voice
+  code started as upstream PR #14865, so these voice files are now fork seams too.
+
+### 2026-10-16 — Inbox: the chat's reply box and quiet states
+
+- **What.** The reply box on an issue is the chat composer: the same glass surface, editor,
+  paperclip and round send button. Images and files can be attached, pasted or dropped, and
+  reach the agent's thread with the comment. A comment may be a screenshot alone. "The agent is
+  waiting for your answer" sits on the box as a composer banner instead of a red badge.
+  States read like the rest of the app: severity is a small dot, a closed issue gets a quiet
+  status line ("Resolved by the agent · 2h ago", "Closed as not relevant · Reopen"), the
+  resolution is a quote in the activity. Green is kept for one thing, a resolved issue (its
+  status line, its check in the list, the "Resolved" event), like "Done" in the sidebar; there
+  are no colored badges. The owner's comments look like their thread messages, the agent's like
+  its answers. "Conversation" and the overflow menu ("Close as not relevant") sit beside the
+  title; the list's tab is "Closed".
+- **How.** `inbox.comment` takes optional `attachments` uploaded through the composer's upload
+  queue (`attachments.createUploadUrl`). The service delivers through `ThreadMessageIntake`, which
+  claims the uploads into the responsible thread (or the thread a first comment starts); the
+  entry then keeps the thread's copies in `attachments_json`, since staged uploads are swept.
+  The column is added in place on older databases. Empty text with no attachment is refused.
+- **Where.** `packages/contracts/src/inbox.ts`, `apps/server/src/inbox/InboxService.ts` (+ test),
+  `apps/web/src/components/inbox/InboxComposer.tsx` (new), `InboxIssueDetail.tsx`,
+  `InboxPage.tsx`, `inbox.logic.ts`.
+- **Phone.** The issue screen reads the same: severity dot and words, the full title in the
+  body, the quiet status line with the green resolved check, "Conversation" and a "⋯" menu, and
+  an "Activity" feed where the owner's comments are bubbles with their pictures and files and the
+  agent's are plain text under its thread's name. The list's tab is "Closed", open rows show a
+  severity dot and "Your turn", closed rows a green check or a ban sign. The reply box is the
+  thread composer's surface with its "+" (photos or files), attachment strip and round send
+  button; the waiting banner sits above it. The reply is a composer draft keyed
+  `<environment>:inbox-<issue>`, so it survives a restart and the background upload worker sends
+  its files while the owner types; send passes the uploaded ids to `inbox.comment`. Where:
+  `apps/mobile/src/features/inbox/` (`InboxComposer.tsx` new), `ThreadFeed.tsx` exports its
+  message attachment views, `AppSymbol.tsx` gains `nosign`.
+
+### 2026-10-16 — Fork builds carry the synced release's version
+
+- **What.** After the v0.1.0 sync, fork builds are `0.1.0-sidebar.<run>` instead of
+  `0.0.45-sidebar.<run>`, so the version in About and on the release matches the upstream
+  release they contain. Desktop and phone update to it as usual. Until the server is updated
+  too, a new client connected to a server on a `0.0.45-sidebar` build shows upstream's
+  "Version mismatch" notice; the protocol is the same, so everything keeps working.
+- **How.** Upstream's tag commit still has the previous version in `package.json` and stamps the
+  release version only at release time. The `version` step of the bundle job now takes the
+  higher core of `apps/server/package.json` and the tag in FORK.md's "Last synced with upstream
+  release" line (the checkout is shallow and the fork carries no upstream tags, so
+  `git describe` is not an option).
+- **Where.** `.github/workflows/sidebar-desktop.yml`, `FORK.md` (Base line).
+
+### 2026-10-16 — Upstream release v0.1.0
+
+- **What.** Brings in upstream's first stable Orchestrator V2 release, `v0.1.0` (204 commits
+  past the 2026-10-12 sync). The fork already ran V2, so nothing migrates. New in this step:
+  delegated tasks in their own worktrees, and a delegated task's question now wakes its parent.
+  Steering no longer ends running subagents. Opt-in cleanup of settled threads' worktrees
+  (Settings › Storage), branch deletion after a PR merges or closes, a timer on the Waiting
+  status, full-screen visual replies, and Effect 4.0.4 with OpenCode 2.0.28. Also a long list of
+  server performance and reliability fixes (SQLite checkpoints off the event loop, thread-list
+  reads on large databases, T3 Connect, SSH, Windows) and Claude/Codex/Cursor/ACP fixes. The
+  orchestration protocol stays 2, so new fork clients still talk to servers on the previous
+  fork build, and the other way round.
+- **How.** Conflicts: the desktop product name and its packaging test keep "T3 Code Sidebar"
+  (upstream renamed its own app to "T3 Code (Beta)"). "Fork from this response" in `ChatView.tsx`
+  keeps the fork's `useForkThread` on upstream's new callback form, without `useCallback`. The
+  composer's `/voice` item moved into upstream's rewritten `onSelectComposerItem`
+  (`ChatComposer.tsx`). `ThreadFeed.tsx` keeps upstream's new handoff import. Upstream bumped
+  Enriched Markdown to `t3.12` (nested list markers) without touching measurement, so the
+  Android height patch applies unchanged and is renamed to `t3.12`. Upstream dropped its
+  OpenCode and Effect patches; the lockfile is upstream's plus the fork's packages. Effect 4.0.4
+  turned `Crypto.randomUUIDv4` into a function, so the inbox calls `randomUUIDv4()`; the old
+  form no longer type-checks and would throw when the service is built. The opt-in worktree cleanup keeps a checkout shared by
+  several threads, so a parent's checkout survives when the cascade settles its subagents.
+- **Where.** `apps/desktop/package.json`, `scripts/build-desktop-artifact.test.ts`,
+  `apps/web/src/components/ChatView.tsx`, `apps/web/src/components/chat/ChatComposer.tsx`,
+  `apps/mobile/src/features/threads/ThreadFeed.tsx`, `pnpm-workspace.yaml`,
+  `patches/react-native-enriched-markdown@1.2.0-t3.12.patch`,
+  `apps/server/src/inbox/InboxService.ts`.
 
 ### 2026-10-15 — Agent inbox: issues agents raise and own
 
@@ -326,8 +447,8 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   live voice conversation. Captions show above the composer; what you ask lands in the thread as a
   message, the agent does the work, and its final answer is read aloud. `/voice` or the button
   again stops it. The voice is picked in Settings › Providers › Codex › Voice. Web, desktop and
-  the Android app; in a browser the microphone needs https or localhost. Codex only, and the
-  thread needs a started session (send one message first).
+  the Android app; in a browser the microphone needs https or localhost. Codex only. (Since
+  2026-10-16 no first message is needed; see the newer entry.)
 - **How.** Upstream's PR #14865 is merged as is, ahead of upstream: audio runs straight between
   the client and OpenAI over WebRTC, and the server only relays SDP, captions and lifecycle over
   the `provider.voice.session` stream (Codex app-server `thread/realtime/*`). Android gains

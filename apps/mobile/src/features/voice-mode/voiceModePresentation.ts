@@ -44,11 +44,8 @@ export function voiceMeterLevel(level: number): number {
   return Math.min(1, Math.sqrt(Math.max(0, level)) * 1.6);
 }
 
-/** Keeps the newest words of a live caption; native text only truncates multi-line text at the end. */
-export function voiceCaptionTail(text: string, maxChars = 160): string {
-  if (text.length <= maxChars) return text;
-  return `…${text.slice(-maxChars).trimStart()}`;
-}
+// Native text only truncates multi-line text at the end, so captions keep their tail.
+export { voiceCaptionTail } from "@t3tools/client-runtime/voice-mode";
 
 export interface VoiceModeNotice {
   readonly title: string;
@@ -60,9 +57,21 @@ export function resolveVoiceModeNotice(state: VoiceModeState): VoiceModeNotice |
   if (state.phase !== "idle") return null;
   if (state.error) return { title: "Voice conversation failed", message: state.error };
   if (state.endedReason) {
-    return state.endedReason === "ended"
-      ? { title: "Voice conversation ended" }
-      : { title: "Voice conversation ended", message: describeVoiceEnd(state.endedReason) };
+    if (state.endedReason === "ended") return { title: "Voice conversation ended" };
+    // The phone has no windows: another device started voice on the same thread.
+    const message =
+      state.endedReason === "replaced"
+        ? "The conversation moved to another device."
+        : describeVoiceEnd(state.endedReason);
+    return { title: "Voice conversation ended", message };
   }
   return null;
+}
+
+/** Keys a conversation's thread the way Home and the drawer key thread rows. */
+export function voiceTargetKey(target: {
+  readonly environmentId: string;
+  readonly threadId: string;
+}): string {
+  return `${target.environmentId}:${target.threadId}`;
 }

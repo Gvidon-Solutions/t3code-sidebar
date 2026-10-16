@@ -2,6 +2,7 @@ import * as Rpc from "effect/rpc/Rpc";
 import * as Schema from "effect/Schema";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
+import { ChatAttachment } from "./chatAttachment.ts";
 import {
   IsoDateTime,
   NonNegativeInt,
@@ -128,6 +129,8 @@ export const InboxEntry = Schema.Struct({
   createdAt: IsoDateTime,
   /** Where an owner comment or a notice to an agent went. */
   deliveries: Schema.Array(InboxDelivery),
+  /** Files the owner attached to a comment, as the responsible thread received them. */
+  attachments: Schema.optionalKey(Schema.Array(ChatAttachment)),
 });
 export type InboxEntry = typeof InboxEntry.Type;
 
@@ -166,9 +169,12 @@ export const InboxIssueDetail = Schema.Struct({
 });
 export type InboxIssueDetail = typeof InboxIssueDetail.Type;
 
+/** Text, attachments, or both: a comment may be only a screenshot. */
 export const InboxOwnerCommentInput = Schema.Struct({
   issueId: InboxIssueId,
-  text: CommentText,
+  text: Markdown,
+  /** Uploaded first through the attachment upload RPC, then referenced here by id. */
+  attachments: Schema.optionalKey(Schema.Array(ChatAttachment)),
 });
 export type InboxOwnerCommentInput = typeof InboxOwnerCommentInput.Type;
 

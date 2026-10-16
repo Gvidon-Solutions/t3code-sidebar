@@ -101,6 +101,8 @@ export interface WorkspaceThreadListItem extends Omit<ThreadListV2ThreadListItem
   readonly projectLabel: string | null;
   /** An agent drawn under the thread that started it. */
   readonly nested?: boolean;
+  /** The thread holding this device's voice conversation, drawn first with a wave. */
+  readonly voice?: boolean;
 }
 
 /** "5 agents · 4 working" under a thread that launched subagents; opens to list them. */
@@ -261,10 +263,18 @@ export function buildWorkspaceHomeItems(input: {
   readonly snoozeEnvironmentIds: ReadonlySet<EnvironmentId>;
   readonly queuedThreadKeys: ReadonlySet<string>;
   readonly selectedThreadKey: string | null;
+  /** `environmentId:threadId` of this device's voice conversation: shown first, only there. */
+  readonly voiceThreadKey?: string | null;
   readonly now: number;
   readonly toRow: (item: ThreadListV2Item) => ThreadListV2ThreadListItem;
 }): WorkspaceHomeListItem[] {
   const nowIso = new Date(input.now).toISOString();
+  const voiceThread =
+    input.voiceThreadKey == null
+      ? undefined
+      : input.threads.find(
+          (thread) => thread.archivedAt === null && threadKey(thread) === input.voiceThreadKey,
+        );
   const otherFolders = input.otherFolders ?? [];
   const folderByMember = new Map<string, WorkspaceFolderInput>();
   for (const folder of [...input.folders, ...otherFolders]) {
@@ -305,7 +315,7 @@ export function buildWorkspaceHomeItems(input: {
           : "active";
   for (const folder of otherFolders) {
     for (const thread of threadsByFolder.get(folder.projectKey) ?? []) {
-      if (shelfOf(thread) !== "pinned") continue;
+      if (thread === voiceThread || shelfOf(thread) !== "pinned") continue;
       titleByThread.set(threadKey(thread), folder.title);
       pinned.push(thread);
     }
@@ -316,6 +326,7 @@ export function buildWorkspaceHomeItems(input: {
     const settled: EnvironmentThreadShell[] = [];
     for (const thread of all) {
       titleByThread.set(threadKey(thread), folder.title);
+      if (thread === voiceThread) continue;
       const shelf = shelfOf(thread);
       if (shelf === "snoozed") snoozed.push(thread);
       else if (shelf === "settled") settled.push(thread);
@@ -352,7 +363,13 @@ export function buildWorkspaceHomeItems(input: {
   const rows: WorkspaceHomeListItem[] = [];
   const pushThread = (
     thread: EnvironmentThreadShell,
-    flags: { variant: "card" | "slim"; snoozed?: boolean; pinned?: boolean; nested?: boolean },
+    flags: {
+      variant: "card" | "slim";
+      snoozed?: boolean;
+      pinned?: boolean;
+      nested?: boolean;
+      voice?: boolean;
+    },
     projectLabel: string | null,
   ) => {
     const { type: _type, ...row } = input.toRow({
@@ -369,6 +386,7 @@ export function buildWorkspaceHomeItems(input: {
       timeLabel: row.snoozeWakeLabelText ?? compactAgo(threadActivityMs(thread), input.now),
       projectLabel,
       ...(flags.nested ? { nested: true } : {}),
+      ...(flags.voice ? { voice: true } : {}),
     });
     if (!flags.nested) pushAgents(thread);
   };
@@ -399,9 +417,19 @@ export function buildWorkspaceHomeItems(input: {
         state: summary.states[index] ?? "done",
       })),
     });
-    if (open) for (const agent of list) pushThread(agent, { variant: "card", nested: true }, null);
+    if (!open) return;
+    for (const agent of list) {
+      if (agent !== voiceThread) pushThread(agent, { variant: "card", nested: true }, null);
+    }
   };
 
+  if (voiceThread) {
+    pushThread(
+      voiceThread,
+      { variant: "card", voice: true },
+      folderByMember.get(`${voiceThread.environmentId}:${voiceThread.projectId}`)?.title ?? null,
+    );
+  }
   if (pinned.length > 0) {
     rows.push({
       type: "ws-section",
@@ -574,6 +602,7 @@ export function workspaceHomeItemsAreEqual(
         previous.type === "ws-thread" &&
         previous.projectLabel === item.projectLabel &&
         previous.nested === item.nested &&
+        previous.voice === item.voice &&
         threadListV2ListItemsAreEqual(
           { ...previous, type: "v2-thread" },
           { ...item, type: "v2-thread" },

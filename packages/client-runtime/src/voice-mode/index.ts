@@ -2,6 +2,7 @@ export {
   INITIAL_VOICE_MODE_STATE,
   VoiceModeController,
   describeVoiceEnd,
+  voiceCaptionTail,
   type VoiceCaption,
   type VoiceLevels,
   type VoiceMediaStream,

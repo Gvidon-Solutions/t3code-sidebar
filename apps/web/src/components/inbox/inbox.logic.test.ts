@@ -244,7 +244,7 @@ describe("inbox presentation", () => {
     ).toMatchObject({ label: "Updated: severity attention → action" });
     expect(
       describeInboxEvent(entry({ kind: "resolved", text: "Pinned the model; verified." })),
-    ).toEqual({ label: "Resolved", detail: "Pinned the model; verified.", tone: "success" });
+    ).toEqual({ label: "Resolved", detail: "Pinned the model; verified.", tone: "outcome" });
     expect(
       describeInboxEvent(entry({ kind: "reopened", text: "Previous resolution: x" })),
     ).toMatchObject({ label: "The problem came back", detail: "Previous resolution: x" });

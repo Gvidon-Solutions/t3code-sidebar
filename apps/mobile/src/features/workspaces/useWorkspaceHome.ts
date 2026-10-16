@@ -20,6 +20,7 @@ import {
   type ThreadListV2ListItem,
   type ThreadListV2ThreadListItem,
 } from "../threads/threadListV2";
+import { useLiveVoiceKey } from "../voice-mode/useVoiceMode";
 import { agentThreadShellsAtom } from "./agentThreadShells";
 import { useSidebarWorkspaces } from "./useSidebarWorkspaces";
 import type { WorkspaceTileActivity } from "./WorkspaceChrome";
@@ -47,6 +48,7 @@ export function useWorkspaceHome(input: {
     toggleProjectIn: toggleProjectInWorkspace,
   } = workspaces;
   const serverConfigs = useServerConfigs();
+  const voiceThreadKey = useLiveVoiceKey();
   // Subagents, which the navigation list leaves out, hang under their thread.
   const agentThreads = useAtomValue(agentThreadShellsAtom);
   const homeThreads = useMemo(
@@ -204,29 +206,31 @@ export function useWorkspaceHome(input: {
       readonly toRow: (item: ThreadListV2Item) => ThreadListV2ThreadListItem;
     }): ReadonlyArray<WorkspaceHomeListItem> => {
       if (config === null || currentWorkspaceId === null || list.searching) return list.base;
-      // Queued new threads stay on top, as in upstream's list.
+      // Queued new threads stay on top, as in upstream's list, under a voice conversation.
       const pending = list.base.filter((item) => item.type === "v2-pending");
-      return [
-        ...pending,
-        ...buildWorkspaceHomeItems({
-          workspaceId: currentWorkspaceId,
-          folders,
-          otherFolders,
-          threads: homeThreads,
-          quietAfterDays: config.quietAfterDays,
-          foldModeOf: (projectKey) => projectFoldModeOf(config, currentWorkspaceId, projectKey),
-          toggles,
-          projectOrder: projectOrderOf(config, currentWorkspaceId),
-          settlementEnvironmentIds: list.settlementEnvironmentIds,
-          snoozeEnvironmentIds: list.snoozeEnvironmentIds,
-          queuedThreadKeys: list.queuedThreadKeys,
-          selectedThreadKey: list.selectedThreadKey,
-          now: Date.now(),
-          toRow: list.toRow,
-        }),
-      ];
+      const [first, ...rest] = buildWorkspaceHomeItems({
+        workspaceId: currentWorkspaceId,
+        folders,
+        otherFolders,
+        threads: homeThreads,
+        quietAfterDays: config.quietAfterDays,
+        foldModeOf: (projectKey) => projectFoldModeOf(config, currentWorkspaceId, projectKey),
+        toggles,
+        projectOrder: projectOrderOf(config, currentWorkspaceId),
+        settlementEnvironmentIds: list.settlementEnvironmentIds,
+        snoozeEnvironmentIds: list.snoozeEnvironmentIds,
+        queuedThreadKeys: list.queuedThreadKeys,
+        selectedThreadKey: list.selectedThreadKey,
+        voiceThreadKey,
+        now: Date.now(),
+        toRow: list.toRow,
+      });
+      if (first === undefined) return pending;
+      return first.type === "ws-thread" && first.voice === true
+        ? [first, ...pending, ...rest]
+        : [...pending, first, ...rest];
     },
-    [config, currentWorkspaceId, folders, homeThreads, otherFolders, toggles],
+    [config, currentWorkspaceId, folders, homeThreads, otherFolders, toggles, voiceThreadKey],
   );
 
   /** The open workspace's folders for the long-press drag, read when a drag starts. */

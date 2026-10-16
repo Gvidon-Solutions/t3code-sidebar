@@ -60,6 +60,8 @@ import * as HtmlHandlers from "./toolkits/html/handlers.ts";
 import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolkits/html/tools.ts";
 import * as InboxHandlers from "./toolkits/inbox/handlers.ts";
 import { InboxToolkit } from "./toolkits/inbox/tools.ts";
+import * as UiHandlers from "./toolkits/ui/handlers.ts";
+import { UiToolkit } from "./toolkits/ui/tools.ts";
 
 /** Where an MCP client discovers how to sign in (RFC 9728), at this request's own origin. */
 const mcpResourceMetadataUrl = (request: HttpServerRequest.HttpServerRequest) =>
@@ -403,7 +405,7 @@ const saveScreenshot = Effect.fn("McpHttpServer.saveScreenshot")(function* (
   const millis = yield* Clock.currentTimeMillis;
   const crypto = yield* Crypto.Crypto;
   // Two saves in the same millisecond must not overwrite each other.
-  const unique = (yield* crypto.randomUUIDv4.pipe(Effect.orDie)).slice(0, 8);
+  const unique = (yield* crypto.randomUUIDv4().pipe(Effect.orDie)).slice(0, 8);
   const fileName = `browser-screenshot-${screenshotSiteSlug(pageUrl)}-${millis.toString(36)}-${unique}.png`;
   const screenshotPath = path.join(config.browserArtifactsDir, fileName);
   yield* fileSystem.makeDirectory(config.browserArtifactsDir, { recursive: true }).pipe(
@@ -863,6 +865,9 @@ export const layerDeviceToolkit = Layer.mergeAll(
 // Fork: agent inbox.
 export const layerInboxToolkit = toolkitRegistration(InboxToolkit, InboxHandlers.layer);
 
+// Fork: show things on the owner's screen.
+export const layerUiToolkit = toolkitRegistration(UiToolkit, UiHandlers.layer);
+
 export const layerMcpTransport = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
@@ -884,4 +889,5 @@ export const layer = Layer.mergeAll(
   layerDeviceToolkit,
   layerHtmlToolkit,
   layerInboxToolkit,
+  layerUiToolkit,
 ).pipe(Layer.provideMerge(layerMcpTransport));

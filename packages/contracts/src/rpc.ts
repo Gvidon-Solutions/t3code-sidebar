@@ -352,6 +352,7 @@ import {
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { INBOX_RPCS } from "./inbox.ts";
+import { UI_REQUESTS_RPCS } from "./uiRequests.ts";
 import {
   ProjectCloneActionInput,
   ProjectCloneActionResult,
@@ -2084,4 +2085,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeThreadRpc,
   // Fork: agent inbox.
   ...INBOX_RPCS,
+  // Fork: agents asking clients to show something.
+  ...UI_REQUESTS_RPCS,
 ).middleware(RpcScopeAuthorization);

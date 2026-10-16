@@ -156,6 +156,7 @@ export function WorkspaceDrawer(props: {
               hasQueuedMessages={false}
               selected={selected}
               nested={item.nested === true}
+              voice={item.voice === true}
             />
           </Pressable>
         );

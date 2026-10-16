@@ -98,6 +98,7 @@ import IconPencil from "@tabler/icons-react-native/IconPencil";
 import IconPlug from "@tabler/icons-react-native/IconPlug";
 import IconPhoto from "@tabler/icons-react-native/IconPhoto";
 import IconPin from "@tabler/icons-react-native/IconPin";
+import IconBan from "@tabler/icons-react-native/IconBan";
 import IconPinnedOff from "@tabler/icons-react-native/IconPinnedOff";
 import IconPlayerPlay from "@tabler/icons-react-native/IconPlayerPlay";
 import IconPlayerStopFilled from "@tabler/icons-react-native/IconPlayerStopFilled";
@@ -178,6 +179,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   circle: IconCircle,
   "circle.dashed": IconCircleDashed,
   "circle.inset.filled": IconCircleDot,
+  "circle.dashed.inset.filled": IconCircleDot,
   clock: IconClock,
   timer: IconClock,
   ticket: IconTicket,
@@ -235,6 +237,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   "person.badge.plus": IconUserPlus,
   photo: IconPhoto,
   pin: IconPin,
+  nosign: IconBan,
   "pin.slash": IconPinnedOff,
   play: IconPlayerPlay,
   plus: IconPlus,
