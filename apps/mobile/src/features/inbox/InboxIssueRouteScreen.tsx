@@ -1,39 +1,55 @@
 import { useAtomValue } from "@effect/atom-react";
+import type { MenuAction } from "@react-native-menu/menu";
 import { useIsFocused, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import {
   EnvironmentId,
   InboxIssueId,
   ThreadId,
+  type ChatFileAttachment,
   type InboxEntry,
   type InboxIssue,
 } from "@t3tools/contracts";
-import { useEffect, useRef, useState } from "react";
-import { Platform, ScrollView, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Platform, Pressable, ScrollView, View } from "react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AppActivityIndicator } from "../../components/AppActivityIndicator";
 import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
+import { AppText as Text } from "../../components/AppText";
 import { showTextInputDialog } from "../../components/ConfirmDialogHost";
-import { GlassSurface } from "../../components/GlassSurface";
-import { MaterialButton } from "../../components/MaterialButton";
-import { MaterialIconButton } from "../../components/MaterialIconButton";
+import { ControlPillMenu } from "../../components/ControlPill";
+import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
+import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
 import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
+import { attachmentVideoPreviewSource } from "../../lib/videoPreviewSource";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { PullRequestMarkdown } from "../pull-requests/PullRequestMarkdown";
-import { failedInboxDeliveries, INBOX_SEVERITY_LABELS, presentInboxEntry } from "./inboxList";
+import {
+  isFileAttachment,
+  isImageAttachment,
+  MessageAttachmentFile,
+  MessageAttachmentImage,
+  MessageAttachmentUnknown,
+} from "../threads/ThreadFeed";
+import { InboxComposer } from "./InboxComposer";
+import {
+  INBOX_SEVERITY_DOT,
+  INBOX_SEVERITY_LABELS,
+  failedInboxDeliveries,
+  presentInboxEntry,
+} from "./inboxList";
 import { inboxEnvironment } from "./useInbox";
 
 type InboxIssueParams = { readonly environmentId: string; readonly issueId: string };
 
-/** Fork: one inbox issue, its history and the owner's comment composer. */
+/** Fork: one inbox issue, its history and the owner's reply box. */
 export function InboxIssueRouteScreen({ route }: StaticScreenProps<InboxIssueParams>) {
   return (
     <InboxIssueScreen
@@ -42,6 +58,12 @@ export function InboxIssueRouteScreen({ route }: StaticScreenProps<InboxIssuePar
       issueId={InboxIssueId.make(route.params.issueId)}
     />
   );
+}
+
+/** Opens history attachments the way a thread's messages do. */
+interface AttachmentPreview {
+  readonly onPressPreview: (source: FilePreviewSource) => void;
+  readonly onPressVideo: (attachment: ChatFileAttachment, sourceIdentifier: string) => void;
 }
 
 function InboxIssueScreen(props: {
@@ -60,14 +82,13 @@ function InboxIssueScreen(props: {
     useWorkspaceEnvironments().find((environment) => environment.environmentId === environmentId)
       ?.environmentLabel ?? null;
   const canOperate = useAtomValue(inboxEnvironment.commentOnIssue.permissionAtom(environmentId));
-  const comment = useAtomCommand(inboxEnvironment.commentOnIssue);
   const dismiss = useAtomCommand(inboxEnvironment.dismissIssue);
   const undismiss = useAtomCommand(inboxEnvironment.undismissIssue);
   const markSeen = useAtomCommand(inboxEnvironment.markIssueSeen, { reportFailure: false });
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [composerHeight, setComposerHeight] = useState(64);
+  const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
+  const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
   const issue = detail.data?.issue ?? null;
   const entries = detail.data?.entries ?? [];
 
@@ -83,18 +104,6 @@ function InboxIssueScreen(props: {
     void markSeen({ environmentId, input: { issueId, sequence: lastSequence } });
   }, [canOperate, environmentId, focused, issueId, lastSequence, markSeen, seenSequence]);
 
-  const send = async () => {
-    const text = draft.trim();
-    if (!text || sending) return;
-    setSending(true);
-    try {
-      const result = await comment({ environmentId, input: { issueId, text } });
-      if (result._tag === "Success")
-        setDraft((current) => (current.trim() === text ? "" : current));
-    } finally {
-      setSending(false);
-    }
-  };
   const closeAsNotRelevant = () =>
     showTextInputDialog({
       title: "Close as not relevant",
@@ -116,17 +125,28 @@ function InboxIssueScreen(props: {
       environmentId: String(environmentId),
       threadId: String(threadId),
     });
+  const onPressPreview = useCallback((source: FilePreviewSource) => {
+    setPreviewFile((current) => current ?? source);
+  }, []);
+  const onPressVideo = useCallback(
+    (attachment: ChatFileAttachment, sourceIdentifier: string) => {
+      setPreviewVideo(
+        (current) =>
+          current ?? attachmentVideoPreviewSource(environmentId, attachment, sourceIdentifier),
+      );
+    },
+    [environmentId],
+  );
+  const preview: AttachmentPreview = { onPressPreview, onPressVideo };
 
-  const title = issue?.title ?? "Issue";
+  const showComposer = canOperate && issue !== null;
   return (
     <KeyboardAvoidingView automaticOffset behavior="height" className="flex-1 bg-screen">
-      <NativeStackScreenOptions
-        options={{ title, unstable_headerSubtitle: environmentLabel ?? undefined }}
-      />
+      {/* The title reads in full in the body, as in a mail app; the bar only carries the machine. */}
+      <NativeStackScreenOptions options={{ title: environmentLabel ?? "Issue" }} />
       {Platform.OS === "android" ? (
         <AndroidScreenHeader
-          title={title}
-          subtitle={environmentLabel}
+          title={environmentLabel ?? "Issue"}
           onBack={() => navigation.goBack()}
         />
       ) : null}
@@ -135,8 +155,9 @@ function InboxIssueScreen(props: {
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          padding: 16,
-          paddingBottom: canOperate ? composerHeight + bottomInset + 24 : bottomInset + 24,
+          paddingHorizontal: 20,
+          paddingTop: 16,
+          paddingBottom: showComposer ? composerHeight + 24 : bottomInset + 24,
         }}
       >
         {issue === null ? (
@@ -151,8 +172,7 @@ function InboxIssueScreen(props: {
           )
         ) : (
           <>
-            <IssueSummary issue={issue} environmentLabel={environmentLabel} />
-            <IssueActions
+            <IssueHeader
               issue={issue}
               environmentId={environmentId}
               canOperate={canOperate}
@@ -161,85 +181,55 @@ function InboxIssueScreen(props: {
               onClose={closeAsNotRelevant}
               onReopen={reopen}
             />
+            {issue.description.trim() ? (
+              <View className="pt-4">
+                <PullRequestMarkdown markdown={issue.description} />
+              </View>
+            ) : null}
             {entries.length > 0 ? (
-              <Text className="px-1 pb-2 pt-6 text-xs font-t3-medium uppercase tracking-[0.5px] text-foreground-muted">
-                History
-              </Text>
+              <View className="flex-row items-center gap-3 pb-3 pt-7">
+                <Text className="text-xs font-t3-medium text-foreground-muted">Activity</Text>
+                <View className="h-px flex-1 bg-border" />
+              </View>
             ) : null}
             {entries.map((entry) => (
-              <IssueEntry key={entry.id} entry={entry} />
+              <IssueEntry
+                key={entry.id}
+                entry={entry}
+                environmentId={environmentId}
+                preview={preview}
+                onOpenThread={openThread}
+              />
             ))}
           </>
         )}
       </ScrollView>
-      {canOperate && issue !== null ? (
-        <View className="absolute inset-x-3 bottom-0" style={{ paddingBottom: bottomInset }}>
-          <GlassSurface
-            chrome="none"
-            onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}
-            className="flex-row items-end gap-1 p-1"
-          >
-            <TextInput
-              accessibilityLabel="Comment on issue"
-              multiline
-              maxLength={20_000}
-              placeholder={
-                issue.responsibleThreadId === null ? "Comment to start a conversation…" : "Comment…"
-              }
-              placeholderTextColorClassName="accent-foreground-muted"
-              value={draft}
-              onChangeText={setDraft}
-              editable={!sending}
-              className="max-h-36 min-h-12 min-w-0 flex-1 rounded-[24px] border-0 bg-transparent px-4 py-3 text-base text-foreground"
-            />
-            <View className="pb-0.5 pr-0.5">
-              <MaterialIconButton
-                accessibilityLabel="Send comment"
-                icon="arrow.up"
-                variant="primary"
-                disabled={sending || draft.trim().length === 0}
-                onPress={() => void send()}
-              />
-            </View>
-          </GlassSurface>
-        </View>
+      {showComposer ? (
+        <InboxComposer
+          environmentId={environmentId}
+          issueId={issueId}
+          waitingForOwner={issue.state === "open" && issue.waitingForOwner}
+          startsConversation={issue.responsibleThreadId === null}
+          bottomInset={bottomInset}
+          onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}
+        />
       ) : null}
+      <FilePreviewModal source={previewFile} onRequestClose={() => setPreviewFile(null)} />
+      <VideoPreviewModal source={previewVideo} onRequestClose={() => setPreviewVideo(null)} />
     </KeyboardAvoidingView>
   );
 }
 
-function IssueSummary(props: {
-  readonly issue: InboxIssue;
-  readonly environmentLabel: string | null;
-}) {
-  const { issue } = props;
-  const meta = [INBOX_SEVERITY_LABELS[issue.severity], props.environmentLabel, issue.source.label]
-    .filter(Boolean)
-    .join(" · ");
-  return (
-    <View className="gap-3">
-      <Text className="text-xs font-t3-medium text-foreground-muted">{meta}</Text>
-      {issue.state !== "open" ? (
-        <Text className="text-sm font-t3-bold text-foreground-secondary">
-          {issue.state === "resolved" ? "Resolved" : "Closed as not relevant"}
-          {issue.closedAt ? ` · ${relativeTime(issue.closedAt)}` : ""}
-        </Text>
-      ) : issue.waitingForOwner ? (
-        <Text className="text-sm font-t3-bold text-adaptive-rose-600-400">Needs your answer</Text>
-      ) : null}
-      {issue.repeatCount > 0 ? (
-        <Text className="text-xs text-foreground-muted">Reported again ×{issue.repeatCount}</Text>
-      ) : null}
-      {issue.description.trim() ? (
-        <View className="rounded-[18px] bg-grouped-card px-4 py-3">
-          <PullRequestMarkdown markdown={issue.description} />
-        </View>
-      ) : null}
-    </View>
-  );
-}
+const CLOSE_ACTIONS: MenuAction[] = [
+  {
+    id: "close",
+    title: "Close as not relevant",
+    image: "nosign",
+    attributes: { destructive: true },
+  },
+];
 
-function IssueActions(props: {
+function IssueHeader(props: {
   readonly issue: InboxIssue;
   readonly environmentId: EnvironmentId;
   readonly canOperate: boolean;
@@ -249,24 +239,46 @@ function IssueActions(props: {
   readonly onReopen: () => void;
 }) {
   const { issue } = props;
+  const open = issue.state === "open";
   const responsible = issue.responsibleThreadId;
   const otherThreads = issue.threadIds.filter((threadId) => threadId !== responsible);
+  const eyebrow = [
+    issue.source.label,
+    issue.repeatCount > 0 ? `Reported ${issue.repeatCount + 1} times` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <View className="gap-3 pt-4">
-      {responsible !== null ? (
-        <MaterialButton
-          label="Open conversation"
-          tone="contrast"
-          onPress={() => props.onOpenThread(responsible)}
-        />
-      ) : (
-        <Text className="text-sm text-foreground-muted">
-          Your first comment starts a conversation with an agent.
+    <View className="gap-2.5">
+      <View className="flex-row flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <View className={cn("size-1.5 rounded-full", INBOX_SEVERITY_DOT[issue.severity])} />
+        <Text className="text-xs font-t3-medium text-foreground-secondary">
+          {INBOX_SEVERITY_LABELS[issue.severity]}
         </Text>
-      )}
+        {eyebrow ? (
+          <Text className="min-w-0 shrink text-xs text-foreground-muted" numberOfLines={1}>
+            · {eyebrow}
+          </Text>
+        ) : null}
+      </View>
+      <Text
+        selectable
+        className={cn(
+          "text-[22px] font-t3-bold leading-[28px]",
+          open ? "text-foreground" : "text-foreground-secondary",
+        )}
+      >
+        {issue.title}
+      </Text>
+      <IssueStatus
+        issue={issue}
+        canOperate={props.canOperate}
+        busy={props.busy}
+        onReopen={props.onReopen}
+      />
       {otherThreads.length > 0 ? (
-        <View className="gap-1">
-          <Text className="text-xs text-foreground-muted">Other threads</Text>
+        <View className="flex-row flex-wrap items-center gap-x-2">
+          <Text className="text-xs text-foreground-muted">Also worked on in</Text>
           {otherThreads.map((threadId) => (
             <ThreadLink
               key={threadId}
@@ -277,24 +289,101 @@ function IssueActions(props: {
           ))}
         </View>
       ) : null}
-      {props.canOperate && issue.state === "open" ? (
-        <MaterialButton
-          label="Close as not relevant"
-          tone="secondary"
-          disabled={props.busy}
-          onPress={props.onClose}
-        />
-      ) : null}
-      {props.canOperate && issue.state === "dismissed" ? (
-        <MaterialButton
-          label="Reopen"
-          tone="secondary"
-          disabled={props.busy}
-          onPress={props.onReopen}
-        />
+      {responsible !== null || (props.canOperate && open) ? (
+        <View className="flex-row items-center gap-2 pt-1">
+          {responsible !== null ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open the agent's conversation"
+              onPress={() => props.onOpenThread(responsible)}
+              className="h-9 flex-row items-center gap-1.5 rounded-full border border-border px-3.5 active:bg-subtle"
+            >
+              <SymbolView
+                name="bubble.left.and.bubble.right"
+                size={14}
+                tintColorClassName="accent-icon"
+                type="monochrome"
+              />
+              <Text className="text-sm font-t3-medium text-foreground">Conversation</Text>
+            </Pressable>
+          ) : null}
+          {props.canOperate && open ? (
+            <ControlPillMenu
+              accessibilityLabel="More actions"
+              actions={CLOSE_ACTIONS}
+              onPressAction={({ nativeEvent }) => {
+                if (nativeEvent.event === "close" && !props.busy) props.onClose();
+              }}
+            >
+              <View className="size-9 items-center justify-center rounded-full border border-border">
+                <SymbolView
+                  name="ellipsis"
+                  size={15}
+                  tintColorClassName="accent-icon"
+                  type="monochrome"
+                />
+              </View>
+            </ControlPillMenu>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
+}
+
+/** A closed issue says how it ended in one quiet line; resolved is the one green outcome. */
+function IssueStatus(props: {
+  readonly issue: InboxIssue;
+  readonly canOperate: boolean;
+  readonly busy: boolean;
+  readonly onReopen: () => void;
+}) {
+  const { issue } = props;
+  const ago = issue.closedAt ? ` · ${relativeTime(issue.closedAt)}` : "";
+  if (issue.state === "resolved") {
+    return (
+      <View className="flex-row items-center gap-1.5">
+        <SymbolView
+          name="checkmark.circle"
+          size={15}
+          tintColorClassName="accent-adaptive-emerald-600-400"
+          type="monochrome"
+        />
+        <Text className="text-sm font-t3-medium text-adaptive-emerald-700-300">
+          Resolved by the agent
+          <Text className="text-sm font-sans text-foreground-muted">{ago}</Text>
+        </Text>
+      </View>
+    );
+  }
+  if (issue.state === "dismissed") {
+    return (
+      <View className="flex-row flex-wrap items-center gap-1.5">
+        <SymbolView
+          name="nosign"
+          size={14}
+          tintColorClassName="accent-foreground-muted"
+          type="monochrome"
+        />
+        <Text className="text-sm text-foreground-secondary">
+          Closed as not relevant
+          <Text className="text-sm text-foreground-muted">{ago}</Text>
+        </Text>
+        {props.canOperate ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={props.busy}
+            hitSlop={8}
+            onPress={props.onReopen}
+            className="active:opacity-60"
+          >
+            <Text className="text-sm font-t3-medium text-primary-text">· Reopen</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
+  return null;
 }
 
 function ThreadLink(props: {
@@ -308,17 +397,99 @@ function ThreadLink(props: {
       accessibilityRole="link"
       onPress={() => props.onPress(props.threadId)}
       numberOfLines={1}
-      className="py-1 text-sm font-t3-medium text-primary-text"
+      className="py-0.5 text-xs font-t3-medium text-primary-text"
     >
       {thread?.title ?? "Untitled thread"}
     </Text>
   );
 }
 
-function IssueEntry(props: { readonly entry: InboxEntry }) {
-  const presentation = presentInboxEntry(props.entry);
-  const failures = failedInboxDeliveries(props.entry);
-  const time = relativeTime(props.entry.createdAt);
+function EntryAttachments(props: {
+  readonly entry: InboxEntry;
+  readonly environmentId: EnvironmentId;
+  readonly preview: AttachmentPreview;
+}) {
+  const attachments = props.entry.attachments ?? [];
+  if (attachments.length === 0) return null;
+  return (
+    <View className="gap-2">
+      {attachments.map((attachment) =>
+        isImageAttachment(attachment) ? (
+          <MessageAttachmentImage
+            key={attachment.id}
+            environmentId={props.environmentId}
+            attachmentId={attachment.id}
+            name={attachment.name}
+            mimeType={attachment.mimeType}
+            className="aspect-[1.3] w-full rounded-[14px] bg-user-bubble-foreground/15"
+            onPressPreview={props.preview.onPressPreview}
+          />
+        ) : isFileAttachment(attachment) ? (
+          <MessageAttachmentFile
+            key={attachment.id}
+            environmentId={props.environmentId}
+            attachment={attachment}
+            onPressPreview={props.preview.onPressPreview}
+            onPressVideo={props.preview.onPressVideo}
+          />
+        ) : (
+          <MessageAttachmentUnknown key={attachment.id} name={attachment.name} />
+        ),
+      )}
+    </View>
+  );
+}
+
+function AgentName(props: {
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId | null;
+  readonly onOpenThread: (threadId: ThreadId) => void;
+}) {
+  const thread = useThreadShell(
+    props.threadId === null
+      ? null
+      : { environmentId: props.environmentId, threadId: props.threadId },
+  );
+  const { threadId } = props;
+  if (threadId === null || thread === null) {
+    return <Text className="text-xs font-t3-medium text-foreground-secondary">Agent</Text>;
+  }
+  return (
+    <Text
+      accessibilityRole="link"
+      numberOfLines={1}
+      onPress={() => props.onOpenThread(threadId)}
+      className="min-w-0 shrink text-xs font-t3-medium text-foreground-secondary"
+    >
+      {thread.title}
+    </Text>
+  );
+}
+
+const EVENT_ICON: Partial<Record<InboxEntry["kind"], Parameters<typeof SymbolView>[0]["name"]>> = {
+  created: "circle.dashed",
+  updated: "pencil",
+  waiting: "questionmark.bubble",
+  waiting_cleared: "bubble.left",
+  reminder: "bell.badge",
+  handover: "arrow.right.circle",
+  reopened: "arrow.uturn.backward",
+  repeated: "arrow.clockwise",
+  resolved: "checkmark.circle",
+  dismissed: "nosign",
+  undismissed: "arrow.uturn.backward",
+};
+
+function IssueEntry(props: {
+  readonly entry: InboxEntry;
+  readonly environmentId: EnvironmentId;
+  readonly preview: AttachmentPreview;
+  readonly onOpenThread: (threadId: ThreadId) => void;
+}) {
+  const { entry } = props;
+  const presentation = presentInboxEntry(entry);
+  const failures = failedInboxDeliveries(entry);
+  const time = relativeTime(entry.createdAt);
   const warnings = failures.map((failure) => (
     <View key={failure} className="flex-row items-center gap-1.5 pt-1">
       <SymbolView
@@ -327,73 +498,96 @@ function IssueEntry(props: { readonly entry: InboxEntry }) {
         tintColorClassName="accent-warning-foreground"
         type="monochrome"
       />
-      <Text selectable className="min-w-0 flex-1 text-xs text-warning-foreground">
+      <Text selectable className="min-w-0 shrink text-xs text-warning-foreground">
         {failure}
       </Text>
     </View>
   ));
 
-  if (presentation.kind === "comment") {
-    const owner = presentation.side === "owner";
+  if (presentation.kind === "comment" && presentation.side === "owner") {
+    const hasAttachments = (entry.attachments?.length ?? 0) > 0;
     return (
-      <View className={cn("mb-3 max-w-[88%]", owner ? "self-end items-end" : "self-start")}>
+      <View className="mb-5 items-end">
         <View
           className={cn(
-            "rounded-[18px] px-3.5 py-2.5",
-            owner ? "bg-user-bubble" : "bg-grouped-card",
+            "max-w-[85%] gap-2 rounded-[20px] bg-user-bubble px-3.5 py-2.5",
+            hasAttachments && "w-[85%]",
           )}
         >
-          {owner ? (
+          <EntryAttachments
+            entry={entry}
+            environmentId={props.environmentId}
+            preview={props.preview}
+          />
+          {presentation.text ? (
             <Text selectable className="text-base text-user-bubble-foreground">
               {presentation.text}
             </Text>
-          ) : (
-            <PullRequestMarkdown markdown={presentation.text} />
-          )}
+          ) : null}
         </View>
-        <Text className="px-1 pt-1 text-2xs text-foreground-tertiary">
-          {owner ? "You" : "Agent"} · {time}
+        <Text className="pr-0.5 pt-1 text-xs tabular-nums text-foreground-tertiary">
+          You · {time}
         </Text>
         {warnings}
       </View>
     );
   }
 
-  if (presentation.tone === "resolved") {
+  if (presentation.kind === "comment") {
     return (
-      <View className="mb-3 gap-1 rounded-[16px] bg-adaptive-emerald-500-a12-a16 px-3.5 py-3">
-        <Text selectable className="text-sm font-t3-bold text-adaptive-emerald-700-300">
-          {presentation.label}
-        </Text>
-        <Text className="text-2xs text-foreground-tertiary">{time}</Text>
+      <View className="mb-5 gap-1">
+        <View className="flex-row items-center gap-1.5">
+          <AgentName
+            environmentId={props.environmentId}
+            threadId={entry.threadId}
+            onOpenThread={props.onOpenThread}
+          />
+          <Text className="text-xs tabular-nums text-foreground-tertiary">· {time}</Text>
+        </View>
+        <PullRequestMarkdown markdown={presentation.text} />
         {warnings}
       </View>
     );
   }
 
+  const resolved = entry.kind === "resolved";
   return (
-    <View className="mb-2 px-1">
-      <View className="flex-row items-start gap-2">
-        <View className="mt-[6px] size-1.5 rounded-full bg-foreground-tertiary" />
+    <View className="mb-3">
+      <View className="flex-row items-center gap-2">
+        <SymbolView
+          name={EVENT_ICON[entry.kind] ?? "circle"}
+          size={14}
+          tintColorClassName={
+            resolved ? "accent-adaptive-emerald-600-400" : "accent-foreground-tertiary"
+          }
+          type="monochrome"
+        />
         <Text
           selectable
           className={cn(
-            "min-w-0 flex-1 text-sm",
-            presentation.tone === "waiting"
-              ? "font-t3-medium text-adaptive-rose-600-400"
-              : presentation.tone === "closed"
-                ? "font-t3-medium text-foreground-secondary"
-                : "text-foreground-muted",
+            "min-w-0 shrink text-sm",
+            resolved
+              ? "font-t3-medium text-adaptive-emerald-700-300"
+              : presentation.tone === "muted"
+                ? "text-foreground-muted"
+                : "font-t3-medium text-foreground-secondary",
           )}
         >
           {presentation.label}
         </Text>
-        <Text className="text-2xs tabular-nums text-foreground-tertiary">{time}</Text>
+        <Text className="text-xs tabular-nums text-foreground-tertiary">{time}</Text>
       </View>
       {presentation.detail ? (
-        <Text selectable className="pl-3.5 pt-0.5 text-xs text-foreground-tertiary">
-          {presentation.detail}
-        </Text>
+        <View
+          className={cn(
+            "ml-[6px] mt-1.5 border-l-2 pl-4",
+            resolved ? "border-adaptive-emerald-600-400" : "border-border",
+          )}
+        >
+          <Text selectable className="text-sm text-foreground">
+            {presentation.detail}
+          </Text>
+        </View>
       ) : null}
       {warnings}
     </View>

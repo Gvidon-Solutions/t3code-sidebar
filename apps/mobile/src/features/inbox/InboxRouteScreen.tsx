@@ -26,7 +26,7 @@ type InboxTab = "open" | "closed";
 
 const TAB_OPTIONS = [
   { value: "open" as const, label: "Open" },
-  { value: "closed" as const, label: "Resolved" },
+  { value: "closed" as const, label: "Closed" },
 ];
 
 /** Fork: every connected machine's agent inbox in one list. */
@@ -51,9 +51,12 @@ export function InboxRouteScreen() {
   const renderItem = useCallback(
     ({ item }: { item: InboxListRow }) =>
       item.kind === "section" ? (
-        <Text className="px-1 pb-2 pt-4 text-xs font-t3-medium uppercase tracking-[0.5px] text-foreground-muted">
-          {INBOX_SEVERITY_LABELS[item.severity]} · {item.count}
-        </Text>
+        <View className="flex-row items-baseline gap-1.5 px-1 pb-2 pt-4">
+          <Text className="text-xs font-t3-medium text-foreground-secondary">
+            {INBOX_SEVERITY_LABELS[item.severity]}
+          </Text>
+          <Text className="text-xs tabular-nums text-foreground-tertiary">{item.count}</Text>
+        </View>
       ) : (
         <InboxIssueRow item={item.item} onPress={openIssue} />
       ),
@@ -81,7 +84,9 @@ export function InboxRouteScreen() {
         keyExtractor={(item) => item.key}
         renderItem={renderItem}
         ListHeaderComponent={
-          <SegmentedControl options={TAB_OPTIONS} selected={tab} onSelect={setTab} role="tab" />
+          <View className={tab === "closed" ? "pb-3" : undefined}>
+            <SegmentedControl options={TAB_OPTIONS} selected={tab} onSelect={setTab} role="tab" />
+          </View>
         }
         ListEmptyComponent={
           inbox.isLoading ? (

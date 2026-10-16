@@ -1,12 +1,19 @@
 import {
   EnvironmentId,
+  InboxEntryId,
   InboxIssueId,
+  type InboxEntry,
   type InboxIssue,
   type InboxSeverity,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildOpenInboxRows, mergeInboxSources, type InboxSource } from "./inboxList";
+import {
+  buildOpenInboxRows,
+  mergeInboxSources,
+  presentInboxEntry,
+  type InboxSource,
+} from "./inboxList";
 
 const gvidon = EnvironmentId.make("gvidon");
 const gor = EnvironmentId.make("gor");
@@ -119,5 +126,46 @@ describe("buildOpenInboxRows", () => {
         row.kind === "section" ? `${row.severity}:${row.count}` : row.item.issue.id,
       ),
     ).toEqual(["action:2", "a2", "a1", "info:1", "i1"]);
+  });
+});
+
+describe("presentInboxEntry", () => {
+  const entry = (kind: InboxEntry["kind"], text: string | null = null): InboxEntry => ({
+    id: InboxEntryId.make(`e-${kind}`),
+    issueId: InboxIssueId.make("i"),
+    sequence: 1,
+    kind,
+    author: kind === "comment" ? "owner" : "agent",
+    threadId: null,
+    text,
+    createdAt: "2026-10-01T00:00:00.000Z",
+    deliveries: [],
+  });
+
+  it("reads how an issue ended as an outcome, with its note under the label", () => {
+    expect(presentInboxEntry(entry("resolved", " Renewed the certificate. "))).toEqual({
+      kind: "event",
+      label: "Resolved",
+      detail: "Renewed the certificate.",
+      tone: "outcome",
+    });
+    expect(presentInboxEntry(entry("dismissed", "Moved to gor"))).toMatchObject({
+      label: "Closed as not relevant",
+      detail: "Moved to gor",
+      tone: "outcome",
+    });
+  });
+
+  it("keeps bookkeeping quiet and an attachments-only comment empty", () => {
+    expect(presentInboxEntry(entry("created", "Disk at 92%"))).toMatchObject({
+      label: "Issue raised",
+      detail: null,
+      tone: "muted",
+    });
+    expect(presentInboxEntry(entry("comment"))).toEqual({
+      kind: "comment",
+      side: "owner",
+      text: "",
+    });
   });
 });

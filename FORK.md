@@ -148,7 +148,18 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   The column is added in place on older databases. Empty text with no attachment is refused.
 - **Where.** `packages/contracts/src/inbox.ts`, `apps/server/src/inbox/InboxService.ts` (+ test),
   `apps/web/src/components/inbox/InboxComposer.tsx` (new), `InboxIssueDetail.tsx`,
-  `InboxPage.tsx`, `inbox.logic.ts`. The phone keeps its old screens and text-only replies.
+  `InboxPage.tsx`, `inbox.logic.ts`.
+- **Phone.** The issue screen reads the same: severity dot and words, the full title in the
+  body, the quiet status line with the green resolved check, "Conversation" and a "⋯" menu, and
+  an "Activity" feed where the owner's comments are bubbles with their pictures and files and the
+  agent's are plain text under its thread's name. The list's tab is "Closed", open rows show a
+  severity dot and "Your turn", closed rows a green check or a ban sign. The reply box is the
+  thread composer's surface with its "+" (photos or files), attachment strip and round send
+  button; the waiting banner sits above it. The reply is a composer draft keyed
+  `<environment>:inbox-<issue>`, so it survives a restart and the background upload worker sends
+  its files while the owner types; send passes the uploaded ids to `inbox.comment`. Where:
+  `apps/mobile/src/features/inbox/` (`InboxComposer.tsx` new), `ThreadFeed.tsx` exports its
+  message attachment views, `AppSymbol.tsx` gains `nosign`.
 
 ### 2026-10-16 — Fork builds carry the synced release's version
 

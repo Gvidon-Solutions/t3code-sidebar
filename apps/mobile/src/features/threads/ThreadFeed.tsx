@@ -402,7 +402,7 @@ function AssistantForkButton(props: {
   );
 }
 
-function MessageAttachmentImage(props: {
+export function MessageAttachmentImage(props: {
   readonly environmentId: EnvironmentId;
   readonly attachmentId: string;
   readonly name: string;
@@ -480,17 +480,17 @@ function MessageAttachmentImage(props: {
 // The attachment union has an open member (`type: string` for attachment
 // types from newer servers), so literal comparisons do not narrow it. Split
 // with guards and render unknown types as inert rows, never crash.
-function isImageAttachment(attachment: ChatAttachment): attachment is ChatImageAttachment {
+export function isImageAttachment(attachment: ChatAttachment): attachment is ChatImageAttachment {
   // Messages sent before pictures were typed by content carry `file`; they are still
   // pictures, and reading them as such is what lets them keep their thumbnail.
   return attachment.type === "image" || imageMimeType(attachment) !== null;
 }
 
-function isFileAttachment(attachment: ChatAttachment): attachment is ChatFileAttachment {
+export function isFileAttachment(attachment: ChatAttachment): attachment is ChatFileAttachment {
   return attachment.type === "file";
 }
 
-function MessageAttachmentFile(props: {
+export function MessageAttachmentFile(props: {
   readonly environmentId: EnvironmentId;
   readonly attachment: ChatFileAttachment;
   readonly onPressPreview: (source: FilePreviewSource) => void;
@@ -675,7 +675,7 @@ function MessageAttachmentFile(props: {
  * An attachment type this build does not know (newer server). Rendered as an
  * inert row: the name is still useful, but there is nothing to open.
  */
-function MessageAttachmentUnknown(props: { readonly name: string }) {
+export function MessageAttachmentUnknown(props: { readonly name: string }) {
   return (
     <View className="flex-row items-center gap-2 py-1">
       <PierreEntryIcon path={props.name} kind="file" size={16} />
