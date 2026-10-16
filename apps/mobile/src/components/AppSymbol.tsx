@@ -129,6 +129,7 @@ import IconUserX from "@tabler/icons-react-native/IconUserX";
 import IconUserQuestion from "@tabler/icons-react-native/IconUserQuestion";
 import IconUserPlus from "@tabler/icons-react-native/IconUserPlus";
 import IconUsers from "@tabler/icons-react-native/IconUsers";
+import IconVolume from "@tabler/icons-react-native/IconVolume";
 import IconWifi from "@tabler/icons-react-native/IconWifi";
 import IconWaveSine from "@tabler/icons-react-native/IconWaveSine";
 import IconWifiOff from "@tabler/icons-react-native/IconWifiOff";
@@ -276,6 +277,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   tray: IconInbox,
   "tray.and.arrow.up": IconUpload,
   trash: IconTrash,
+  "speaker.wave.2": IconVolume,
   wifi: IconWifi,
   waveform: IconWaveSine,
   "wifi.slash": IconWifiOff,

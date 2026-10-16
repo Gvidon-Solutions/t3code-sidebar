@@ -662,6 +662,8 @@ export interface ProviderAdapterV2SessionRuntime {
   readonly startVoiceSession?: (input: {
     readonly providerThread: OrchestrationV2ProviderThread;
     readonly offerSdp: string;
+    /** Fork: what the voice knows before anyone speaks, e.g. a conversation moved here. */
+    readonly initialItems?: ReadonlyArray<VoiceInitialItem>;
   }) => Stream.Stream<ProviderVoiceSessionEvent, ProviderAdapterV2Error>;
   readonly rollbackThread: (
     input: ProviderAdapterV2RollbackThreadInput,
@@ -669,6 +671,12 @@ export interface ProviderAdapterV2SessionRuntime {
   readonly forkThread: (
     input: ProviderAdapterV2ForkThreadInput,
   ) => Effect.Effect<OrchestrationV2ProviderThread, ProviderAdapterV2Error>;
+}
+
+/** Fork: one line of a voice conversation's starting history. */
+export interface VoiceInitialItem {
+  readonly role: "user" | "assistant" | "developer";
+  readonly text: string;
 }
 
 export class ProviderAdapterV2 extends Context.Service<

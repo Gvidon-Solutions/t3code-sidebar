@@ -205,7 +205,7 @@ function FloatingVoiceBubble({ voiceThreadRef }: { voiceThreadRef: ScopedThreadR
                 />
               }
             >
-              <VoiceConversationPreview lines={2} maxChars={160} />
+              <VoiceConversationPreview captions={2} linesPerCaption={2} maxChars={160} />
             </TooltipTrigger>
             <TooltipPopup side="top">Open the voice conversation</TooltipPopup>
           </Tooltip>

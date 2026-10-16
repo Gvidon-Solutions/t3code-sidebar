@@ -1,5 +1,5 @@
 import { createUiRequestAtoms } from "@t3tools/client-runtime/state/ui-requests";
-import type { EnvironmentId, UiRequest } from "@t3tools/contracts";
+import type { EnvironmentId, UiRequest, VoiceCommand } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/reactivity";
 
@@ -28,3 +28,19 @@ export const latestUiRequestsAtom = Atom.make((get): ReadonlyArray<EnvironmentUi
     ),
   })),
 ).pipe(Atom.withLabel("web-ui-requests-latest"));
+
+export interface EnvironmentVoiceCommand {
+  readonly environmentId: EnvironmentId;
+  /** The latest voice command since this client subscribed; null before the first. */
+  readonly request: VoiceCommand | null;
+}
+
+/** Fork: every connected environment's latest spoken command for a voice conversation. */
+export const latestVoiceCommandsAtom = Atom.make((get): ReadonlyArray<EnvironmentVoiceCommand> =>
+  get(environmentSummaries.connectedEnvironmentIdsAtom).map((environmentId) => ({
+    environmentId,
+    request: Option.getOrNull(
+      AsyncResult.value(get(uiRequestAtoms.latestVoiceCommand({ environmentId, input: {} }))),
+    ),
+  })),
+).pipe(Atom.withLabel("web-voice-commands-latest"));

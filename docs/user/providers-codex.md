@@ -109,10 +109,10 @@ Choose the voice in **Settings > Providers > Codex > Voice**. The change applies
 to your next conversation.
 
 The conversation keeps running while you move around the app. Other threads show a
-small strip with the latest words, mute, stop and **Talk here**, which moves the
+small panel with the latest words, mute, stop and **Talk here**, which moves the
 conversation to the thread you're in; elsewhere a round voice button floats on screen,
 which you can drag anywhere and tap for the same controls. To get back to the
-conversation, click its words on web and desktop, or long-press the strip or the
+conversation, click its words on web and desktop, or long-press the panel or the
 round button on mobile. The thread you're talking in sits at the top of the sidebar.
 A thread started with **Talk** is named after the first thing you say. Each device
 holds one conversation; starting the same thread on another device moves the
@@ -120,6 +120,20 @@ conversation there.
 
 Ask to open something, such as a thread, the inbox, a file or the thread's changes,
 and it opens on the device you're talking from.
+
+You can steer the call out loud. Say "end the call" to hang up; the thread and its
+history stay. Say "turn off the mic" to mute while the call stays open; turn the
+microphone back on with its button. Ask to continue in another thread, a fork of
+this one or a new thread in another project, and the call moves there: the device
+you're talking from opens that thread and the conversation carries on, knowing what
+was said.
+
+On mobile, the panel above the composer shows the latest words with mute and stop on
+the right. Long-press the words for more: go back to the conversation's thread, move
+it to the thread you're in, or choose where the call plays (a Bluetooth or wired
+headset, the speaker, the earpiece). A headset you connect during the call takes
+it over; connect it from the quick settings shade, since leaving the app ends the
+call.
 
 On mobile, the conversation stops when you leave the app. The mobile
 app needs an update that includes voice support.

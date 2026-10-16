@@ -15,3 +15,4 @@ export {
   type VoiceSessionTarget,
 } from "./controller.ts";
 export { makeVoiceSessionOpener } from "./session.ts";
+export { VOICE_SPEAKING_LEVEL, applyVoiceCommand, whenVoiceQuiet } from "./commands.ts";

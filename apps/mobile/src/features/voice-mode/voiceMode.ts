@@ -14,6 +14,11 @@ import type * as WebRTC from "react-native-webrtc";
 
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { appAtomRegistry } from "../../state/atom-registry";
+import {
+  startVoiceAudioRouting,
+  stopVoiceAudioRouting,
+  voiceAudioRoutingSupported,
+} from "./voiceAudioRoute";
 
 /**
  * False on binaries built before react-native-webrtc was added. Importing the
@@ -62,8 +67,9 @@ export const voiceMode = new VoiceModeController({
  * WebRTC's iOS audio session uses voice-chat mode, which plays through the
  * earpiece. Once the call is live, re-apply play-and-record with the speaker
  * as the default route (headphones and Bluetooth still win). WebRTC only sets
- * its category when its audio unit starts, which has happened by then. On
- * Android the same call turns the speakerphone on.
+ * its category when its audio unit starts, which has happened by then.
+ * Android does not use this: expo-audio forces the speakerphone on there,
+ * over any headset, so the T3VoiceAudio module routes the call instead.
  */
 async function routeVoiceToSpeaker(): Promise<void> {
   await setAudioModeAsync({
@@ -92,7 +98,14 @@ let keepAwake: Promise<void> | null = null;
 voiceMode.subscribe(({ phase }) => {
   if (phase === previousPhase) return;
   previousPhase = phase;
-  if (phase === "active" && !routedAudio) {
+  if (voiceAudioRoutingSupported) {
+    // Communication mode and the headset are set before WebRTC opens the
+    // microphone, so the first words already go through the headset.
+    if (phase !== "idle" && !routedAudio) {
+      routedAudio = true;
+      startVoiceAudioRouting();
+    }
+  } else if (phase === "active" && !routedAudio) {
     routedAudio = true;
     routeVoiceToSpeaker().catch(() => undefined);
   }
@@ -103,7 +116,8 @@ voiceMode.subscribe(({ phase }) => {
   if (phase === "idle") {
     if (routedAudio) {
       routedAudio = false;
-      releaseVoiceAudio().catch(() => undefined);
+      if (voiceAudioRoutingSupported) stopVoiceAudioRouting();
+      else releaseVoiceAudio().catch(() => undefined);
     }
     const activation = keepAwake;
     keepAwake = null;
@@ -115,8 +129,9 @@ voiceMode.subscribe(({ phase }) => {
 });
 
 // iOS cuts the microphone in the background (the app has no background audio
-// mode), and Android restricts background capture without a foreground
-// service. End the conversation rather than leave it silently deaf.
+// mode), and Android takes the microphone and the network a few seconds after
+// the app leaves the screen unless a foreground service holds them. End the
+// conversation rather than leave it silently deaf.
 AppState.addEventListener("change", (state) => {
   if (state === "background") voiceMode.stop();
 });

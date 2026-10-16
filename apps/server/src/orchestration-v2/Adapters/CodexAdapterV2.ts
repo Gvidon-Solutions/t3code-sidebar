@@ -7323,6 +7323,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   .start({
                     providerThreadId: nativeThreadId,
                     offerSdp: voiceInput.offerSdp,
+                    ...(voiceInput.initialItems ? { initialItems: voiceInput.initialItems } : {}),
                     ...(adapterOptions.settings.voice
                       ? { voice: adapterOptions.settings.voice }
                       : {}),

@@ -1,8 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { decideUiRequest } from "@t3tools/client-runtime/ui-requests";
+import { appliesVoiceCommand, decideUiRequest } from "@t3tools/client-runtime/ui-requests";
+import { applyVoiceCommand } from "@t3tools/client-runtime/voice-mode";
 import {
   InboxIssueId,
+  ThreadId,
   type EnvironmentId,
   type ScopedThreadRef,
   type UiRequest,
@@ -14,7 +16,7 @@ import { useComposerDraftStore } from "../../composerDraftStore";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { environmentServerConfigsAtom } from "../../state/server";
-import { latestUiRequestsAtom } from "../../state/uiRequests";
+import { latestUiRequestsAtom, latestVoiceCommandsAtom } from "../../state/uiRequests";
 import {
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
@@ -47,6 +49,14 @@ function showWorkspace(environmentId: EnvironmentId, nameOrId: string) {
   view.setActiveWorkspace(workspace.id);
 }
 
+/** The thread a client holds a voice conversation in on `environmentId`, if any. */
+function heldVoiceThreadId(environmentId: EnvironmentId): string | null {
+  const voice = voiceMode.getState();
+  return voice.phase !== "idle" && voice.target?.environmentId === environmentId
+    ? voice.target.threadId
+    : null;
+}
+
 /**
  * Fork: acts on agents' `ui_open` requests from every connected environment.
  * What a request does here depends on this client (see `decideUiRequest`):
@@ -57,8 +67,30 @@ function showWorkspace(environmentId: EnvironmentId, nameOrId: string) {
  */
 export function UiRequestCoordinator() {
   const entries = useAtomValue(latestUiRequestsAtom);
+  const voiceCommands = useAtomValue(latestVoiceCommandsAtom);
   const router = useRouter();
   const seen = useRef(new Map<EnvironmentId, string | null>());
+  const seenVoiceCommands = useRef(new Map<EnvironmentId, string | null>());
+
+  // Spoken commands for the conversation this client holds: end, mute, move.
+  useEffect(() => {
+    for (const { environmentId, request: command } of takeNewUiRequests(
+      seenVoiceCommands.current,
+      voiceCommands,
+    )) {
+      if (!appliesVoiceCommand({ command, voiceThreadId: heldVoiceThreadId(environmentId) })) {
+        continue;
+      }
+      void applyVoiceCommand(voiceMode, command.action, (target) => {
+        void router.navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(
+            scopeThreadRef(environmentId, ThreadId.make(target.threadId)),
+          ),
+        });
+      });
+    }
+  }, [voiceCommands, router]);
 
   useEffect(() => {
     const fresh = takeNewUiRequests(seen.current, entries);
@@ -110,14 +142,10 @@ export function UiRequestCoordinator() {
     };
 
     for (const { environmentId, request } of fresh) {
-      const voice = voiceMode.getState();
       const shown = shownThreadRef();
       const decision = decideUiRequest({
         request,
-        voiceThreadId:
-          voice.phase !== "idle" && voice.target?.environmentId === environmentId
-            ? voice.target.threadId
-            : null,
+        voiceThreadId: heldVoiceThreadId(environmentId),
         shownThreadId: shown?.environmentId === environmentId ? shown.threadId : null,
       });
       const askingRef = scopeThreadRef(environmentId, request.threadId);

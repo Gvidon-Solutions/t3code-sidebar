@@ -18,7 +18,9 @@ import {
  */
 export function VoiceConversationPreview(props: {
   /** How many of the latest captions to show. */
-  readonly lines: number;
+  readonly captions: number;
+  /** Lines each caption wraps to before it is cut. */
+  readonly linesPerCaption: number;
   /** Characters kept from the end of each caption. */
   readonly maxChars: number;
 }) {
@@ -33,7 +35,7 @@ export function VoiceConversationPreview(props: {
     });
   }, []);
 
-  const captions = state.captions.slice(-props.lines);
+  const captions = state.captions.slice(-props.captions);
   if (captions.length === 0) {
     const status = resolveVoiceStripStatus({ phase: state.phase, muted: state.muted, speaking });
     return (
@@ -55,7 +57,7 @@ export function VoiceConversationPreview(props: {
         "text-sm",
         caption.role === "user" ? "italic text-foreground-muted" : "text-foreground",
       )}
-      numberOfLines={props.lines === 1 ? 1 : 2}
+      numberOfLines={props.linesPerCaption}
     >
       {voiceCaptionTail(caption.text, props.maxChars)}
     </Text>

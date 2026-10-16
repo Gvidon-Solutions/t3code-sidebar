@@ -1,4 +1,4 @@
-import type { UiRequest } from "@t3tools/contracts";
+import type { UiRequest, VoiceCommand } from "@t3tools/contracts";
 
 /**
  * Fork: what this client does with an agent's request to show something.
@@ -24,4 +24,17 @@ export function decideUiRequest(input: {
   if (input.voiceThreadId === request.threadId) return "navigate";
   if (input.shownThreadId !== request.threadId) return "ignore";
   return request.target.kind === "file" || request.target.kind === "diff" ? "panel" : "navigate";
+}
+
+/**
+ * Fork: a spoken command for a voice conversation (`voice_control`,
+ * `voice_move`) applies only on the client holding that thread's
+ * conversation; every other client ignores it.
+ */
+export function appliesVoiceCommand(input: {
+  readonly command: VoiceCommand;
+  /** The thread whose voice conversation this client holds, if any. */
+  readonly voiceThreadId: string | null;
+}): boolean {
+  return input.voiceThreadId !== null && input.voiceThreadId === input.command.threadId;
 }

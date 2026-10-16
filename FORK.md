@@ -92,6 +92,42 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-17 — Voice: steer the call out loud, move it, hear it in a headset
+
+- **What.** Say "end the call" or "turn off the mic" and the device holding the call hangs up or
+  mutes; the thread stays, and the microphone button turns the mic back on. Ask to continue in
+  another thread ("fork this and carry on there", "move this to project X") and the agent forks
+  or creates the thread; the device hangs up, opens it and calls again there, and the new call
+  starts knowing what was said. On Android the call goes through a connected Bluetooth or wired
+  headset instead of the loudspeaker, and follows headsets as they connect. The voice panel above
+  the composer is the same on the conversation's thread and on others: four lines of the latest
+  words, mute and stop on the right; a long press swaps the words for a short menu (back, open
+  the conversation, talk here, the device the call goes through).
+- **How.** Two MCP tools, `voice_control` (`end`, `mute`) and `voice_move` (`threadId`), relay a
+  `VoiceCommand` over a separate `uiRequests.subscribeVoiceCommands` stream (older clients never
+  see it); only the client holding that thread's conversation acts (`appliesVoiceCommand`), after
+  the assistant finishes its sentence (`applyVoiceCommand`). `VoiceSessionService` keeps the
+  lines of each live conversation; `voice_move` waits for the target to finish preparing, then
+  `carryOver` hands the newest lines (with a note) to the next call there as Codex realtime
+  `initialItems`. A call on a thread still preparing waits up to 12 s instead of failing. On
+  Android the local Expo module `t3-voice-audio` puts the call in communication mode and picks
+  the device with `setCommunicationDevice` (SCO before Android 12); expo-audio's speakerphone
+  switch, which overrode headsets, is no longer used there. The panel opens its menu when the
+  finger lifts, so the next tap is not swallowed. Leaving the app still ends the call: Android
+  takes the microphone and network from a background app without a foreground service, so the
+  menu has no link to system settings; connect a headset from the quick settings shade.
+- **Where.** Contracts: `uiRequests.ts`. Server: `mcp/toolkits/ui/` (tools + handlers),
+  `uiRequests/UiRequests.ts`, `orchestration-v2/VoiceSessionService.ts` (+ test),
+  `provider/CodexVoice.ts`, `Adapters/CodexAdapterV2.ts`, wiring in `ws.ts`,
+  `RpcAuthorization.ts`, `RpcInstrumentation.ts`; `provider-core/.../ProviderAdapter.ts`
+  (`initialItems`), `orchestrationInstructions.ts` (voice steering);
+  `shared/.../t3McpToolPresentation.ts`. Client runtime: `voice-mode/commands.ts` (+ test),
+  `uiRequests.ts`, `state/uiRequests.ts`, `t3ToolSummary.ts`, `work-log/presentation.ts`. Web:
+  `components/uiRequests/`, `state/uiRequests.ts`, `VoiceModeStrip.tsx`, `components/voice/`.
+  Mobile: `modules/t3-voice-audio/` (Kotlin + unit tests), `features/voice-mode/`
+  (`voiceAudioRoute.ts`, `voiceMode.ts`, `ComposerVoiceMode.tsx`, `UiRequestCoordinator.tsx`,
+  `VoiceConversationPreview.tsx`, `VoiceConversationBubble.tsx`), `AppSymbol.tsx`.
+
 ### 2026-10-16 — Finished agents leave the thread list
 
 - **What.** The "7 agents · done" line under a thread goes away once all its agents finish; while

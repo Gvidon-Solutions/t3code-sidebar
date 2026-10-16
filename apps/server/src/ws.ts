@@ -2085,6 +2085,7 @@ const layerWsRpc = (
           inbox.dismiss(input).pipe(Effect.map((issue) => ({ issue }))),
         // Fork: agents asking clients to show something.
         [UI_REQUESTS_WS_METHODS.subscribe]: () => uiRequests.stream,
+        [UI_REQUESTS_WS_METHODS.subscribeVoiceCommands]: () => uiRequests.voiceStream,
         [INBOX_WS_METHODS.undismiss]: ({ issueId }) =>
           inbox.undismiss(issueId).pipe(Effect.map((issue) => ({ issue }))),
         [WS_METHODS.scheduledTasksList]: (_input) =>

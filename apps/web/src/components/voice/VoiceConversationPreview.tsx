@@ -3,6 +3,13 @@ import { voiceCaptionTail } from "@t3tools/client-runtime/voice-mode";
 import { cn } from "~/lib/utils";
 import { useVoiceCaptions, useVoiceModeState, useVoiceSpeaking } from "~/voice/voiceMode";
 
+const LINE_CLAMP = {
+  1: "truncate",
+  2: "line-clamp-2 break-words",
+  3: "line-clamp-3 break-words",
+  4: "line-clamp-4 break-words",
+} as const;
+
 /** What the conversation is doing when nobody's words are on screen. */
 export function useVoiceStatus(): string {
   const state = useVoiceModeState();
@@ -18,17 +25,20 @@ export function useVoiceStatus(): string {
  * italic, the answer plain; before anyone speaks it shows the state.
  */
 export function VoiceConversationPreview({
-  lines,
+  captions: count,
+  linesPerCaption,
   maxChars,
   className,
 }: {
   /** How many of the latest captions to show. */
-  lines: number;
+  captions: number;
+  /** Lines each caption wraps to before it is cut. */
+  linesPerCaption: keyof typeof LINE_CLAMP;
   /** Characters kept from the end of each caption. */
   maxChars: number;
   className?: string;
 }) {
-  const captions = useVoiceCaptions().slice(-lines);
+  const captions = useVoiceCaptions().slice(-count);
   const status = useVoiceStatus();
   if (captions.length === 0) {
     return (
@@ -46,7 +56,7 @@ export function VoiceConversationPreview({
           key={index}
           className={cn(
             "min-w-0",
-            lines === 1 ? "truncate" : "line-clamp-2 break-words",
+            LINE_CLAMP[linesPerCaption],
             caption.role === "user" ? "text-muted-foreground italic" : "text-foreground",
           )}
         >

@@ -139,7 +139,7 @@ function ElsewhereVoiceStripRow({
                 />
               }
             >
-              <VoiceConversationPreview lines={1} maxChars={120} />
+              <VoiceConversationPreview captions={1} linesPerCaption={4} maxChars={480} />
             </TooltipTrigger>
             <TooltipPopup side="top">Open the voice conversation</TooltipPopup>
           </Tooltip>

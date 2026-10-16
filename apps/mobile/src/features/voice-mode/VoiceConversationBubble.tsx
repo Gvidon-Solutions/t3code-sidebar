@@ -142,7 +142,7 @@ function Bubble(props: {
               delayLongPress={VOICE_OPEN_LONG_PRESS_MS}
               onLongPress={openThread}
             >
-              <VoiceConversationPreview lines={2} maxChars={120} />
+              <VoiceConversationPreview captions={2} linesPerCaption={2} maxChars={120} />
             </Pressable>
             <VoiceStripButton
               accessibilityLabel={muted ? "Unmute microphone" : "Mute microphone"}

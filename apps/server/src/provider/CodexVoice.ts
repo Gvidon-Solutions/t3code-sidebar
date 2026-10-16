@@ -112,6 +112,11 @@ export interface CodexVoiceStartInput {
   readonly providerThreadId: string;
   readonly offerSdp: string;
   readonly voice?: string | undefined;
+  /** Fork: the conversation's starting history (realtime v3 `initialItems`). */
+  readonly initialItems?: ReadonlyArray<{
+    readonly role: "user" | "assistant" | "developer";
+    readonly text: string;
+  }>;
 }
 
 export const makeCodexVoice = Effect.fn("makeCodexVoice")(function* (
@@ -288,6 +293,7 @@ export const makeCodexVoice = Effect.fn("makeCodexVoice")(function* (
           version: "v3",
           clientManagedHandoffs: true,
           includeStartupContext: false,
+          ...(input.initialItems?.length ? { initialItems: input.initialItems } : {}),
           ...(input.voice ? { voice: input.voice } : {}),
         });
         return Stream.fromQueue(queue);

@@ -70,7 +70,8 @@ export type T3McpToolSummaryAction =
   | "inbox-comment"
   | "inbox-update"
   | "inbox-resolve"
-  | "ui-open";
+  | "ui-open"
+  | "voice-control";
 
 export interface T3McpToolDefinition {
   readonly displayName: string;
@@ -163,6 +164,8 @@ const T3_MCP_TOOLS: Readonly<Record<string, T3McpToolDefinition>> = {
   inbox_resolve: tool(["Resolve", "Resolving", "Resolved", "an inbox issue"], "inbox-resolve"),
   // Fork: showing things on the owner's screen.
   ui_open: tool(["Open", "Opening", "Opened", "on screen"], "ui-open"),
+  voice_control: tool(["Control", "Controlling", "Controlled", "the voice call"], "voice-control"),
+  voice_move: tool(["Move", "Moving", "Moved", "the voice call"], "voice-control"),
   create_threads: tool(["Create", "Creating", "Created", "T3 threads"], "thread-create"),
   t3_thread_start: tool(["Start", "Starting", "Started", "a T3 thread"], "thread-create"),
   t3_thread_list: tool(["List", "Listing", "Listed", "T3 threads"], "thread-list"),

@@ -1,35 +1,34 @@
 import { useNavigation } from "@react-navigation/native";
-import * as Haptics from "expo-haptics";
 import type { VoiceModePhase } from "@t3tools/client-runtime/voice-mode";
-import { memo, useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
-import Animated, {
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  type SharedValue,
-} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { useRef, useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/AppSymbol";
 import { cn } from "../../lib/cn";
-import { useLiveVoiceThread, useVoiceModeMuted, useVoiceModeState } from "./useVoiceMode";
+import { useLiveVoiceThread, useVoiceModeMuted } from "./useVoiceMode";
+import {
+  selectVoiceAudioDevice,
+  useVoiceAudioState,
+  type VoiceAudioDevice,
+} from "./voiceAudioRoute";
 import { VoiceConversationPreview } from "./VoiceConversationPreview";
 import { voiceMode } from "./voiceMode";
-import {
-  createSpeakingDetector,
-  resolveVoiceStripStatus,
-  VOICE_STRIP_STATUS_LABEL,
-  voiceCaptionTail,
-  voiceMeterLevel,
-} from "./voiceModePresentation";
+import { describeVoiceAudioDevice } from "./voiceModePresentation";
 
-const LEVEL_TIMING = { duration: 100, reduceMotion: ReduceMotion.System } as const;
-const METER_HEIGHT = 16;
-const VISIBLE_CAPTIONS = 2;
-/** How long to hold the strip or the bubble to open the voice thread. */
+/** How long to hold the panel's words, or the bubble, for more. */
 export const VOICE_OPEN_LONG_PRESS_MS = 400;
+/** The panel keeps this many lines of the conversation, so it never jumps as words stream in. */
+const PANEL_LINES = 4;
+const PANEL_LINE_HEIGHT = 20;
+
+const DEVICE_ICON: Record<VoiceAudioDevice["route"], AppSymbolName> = {
+  bluetooth: "headphones",
+  wired: "headphones",
+  speaker: "speaker.wave.2",
+  earpiece: "iphone",
+};
 
 /** Starts or ends a voice conversation on the thread. Lit while one is live there. */
 export function ComposerVoiceModeButton(props: {
@@ -65,22 +64,6 @@ export function ComposerVoiceModeButton(props: {
   );
 }
 
-const LevelBar = memo(function LevelBar(props: {
-  readonly level: SharedValue<number>;
-  readonly className: string;
-}) {
-  const { level } = props;
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleY: 0.15 + level.value * 0.85 }],
-  }));
-  return (
-    <Animated.View
-      className={cn("w-1 rounded-full", props.className)}
-      style={[{ height: METER_HEIGHT }, animatedStyle]}
-    />
-  );
-});
-
 /** A round icon control in the voice strips and the bubble's panel. */
 export function VoiceStripButton(props: {
   readonly accessibilityLabel: string;
@@ -100,112 +83,172 @@ export function VoiceStripButton(props: {
   );
 }
 
-/**
- * Sidebar fork: above the composer of every other thread while a conversation
- * runs elsewhere on this device. It shows the conversation's newest words; a
- * long press opens its thread (a plain tap does nothing, so scrolling past
- * never leaves). "Talk here" moves the conversation to this thread (shown
- * only where voice can start). Renders nothing while no conversation runs.
- */
-export function ComposerVoiceElsewhereStrip(props: { readonly onTalkHere?: () => void }) {
-  const navigation = useNavigation();
-  const live = useLiveVoiceThread();
-  const muted = useVoiceModeMuted();
-  if (live === null) return null;
+/** A rounded choice in the panel's menu. */
+function VoiceMenuChip(props: {
+  readonly label: string;
+  readonly icon?: AppSymbolName;
+  readonly selected?: boolean;
+  readonly accessibilityHint?: string;
+  readonly onPress: () => void;
+}) {
+  const selected = props.selected === true;
   return (
-    <View className="mb-2 flex-row items-center gap-1 rounded-2xl border border-composer-border bg-card py-0.5 pr-1 pl-3">
-      <Pressable
-        accessibilityHint="Long press to open the thread you are talking in"
-        accessibilityLabel={`Voice conversation: ${live.title}`}
-        accessibilityRole="button"
-        className="min-w-0 flex-1 flex-row items-center gap-2 py-1.5 active:opacity-70"
-        delayLongPress={VOICE_OPEN_LONG_PRESS_MS}
-        onLongPress={() => {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          navigation.navigate("Thread", {
-            environmentId: live.target.environmentId,
-            threadId: live.target.threadId,
-          });
-        }}
+    <Pressable
+      accessibilityHint={props.accessibilityHint}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      className={cn(
+        "h-8 flex-row items-center gap-1.5 rounded-full border px-3 active:opacity-70",
+        selected ? "border-primary bg-subtle" : "border-border",
+      )}
+      hitSlop={2}
+      onPress={props.onPress}
+    >
+      {props.icon ? (
+        <SymbolView
+          name={props.icon}
+          size={14}
+          tintColorClassName={selected ? "accent-primary" : "accent-icon"}
+          type="monochrome"
+        />
+      ) : null}
+      <Text
+        className={cn("text-sm", selected ? "font-t3-medium text-primary" : "text-foreground")}
+        numberOfLines={1}
       >
-        <SymbolView name="waveform" size={14} tintColorClassName="accent-primary" />
-        <View className="min-w-0 flex-1">
-          <VoiceConversationPreview lines={1} maxChars={80} />
-        </View>
-      </Pressable>
-      <VoiceStripButton
-        accessibilityLabel={muted ? "Unmute microphone" : "Mute microphone"}
-        icon={muted ? "mic.slash" : "mic"}
-        onPress={() => voiceMode.toggleMuted()}
-      />
-      <VoiceStripButton
-        accessibilityLabel="End voice conversation"
-        icon="stop.fill"
-        onPress={() => voiceMode.stop()}
-      />
-      {props.onTalkHere ? (
-        <Pressable
-          accessibilityHint="Moves the voice conversation to this thread"
-          accessibilityRole="button"
-          className="h-9 justify-center rounded-full px-2.5 active:bg-subtle"
-          onPress={props.onTalkHere}
+        {props.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** Where the conversation runs, when the panel sits on another thread. */
+interface ElsewhereConversation {
+  readonly title: string;
+  readonly onOpen: () => void;
+  /** Moves the conversation to the thread on screen; absent where voice cannot start. */
+  readonly onTalkHere?: () => void;
+}
+
+/**
+ * What a long press on the words swaps in: going to the conversation (from
+ * another thread) and the device the call goes through. A headset connected
+ * from the quick settings shade joins the list and takes the call by itself;
+ * there is no way to system settings, since leaving the app ends the
+ * conversation. "Back" or any action that leaves returns to the words;
+ * picking a device keeps the menu so the check mark shows where sound went.
+ */
+function VoicePanelMenu(props: {
+  readonly elsewhere: ElsewhereConversation | null;
+  readonly onClose: () => void;
+}) {
+  const audio = useVoiceAudioState();
+  const closeAnd = (action: () => void) => () => {
+    props.onClose();
+    action();
+  };
+  return (
+    <View className="min-w-0 flex-1 justify-center gap-2 py-1">
+      <View className="flex-row flex-wrap items-center gap-1.5">
+        <VoiceMenuChip icon="chevron.left" label="Back" onPress={props.onClose} />
+        {props.elsewhere ? (
+          <VoiceMenuChip
+            accessibilityHint={`Opens ${props.elsewhere.title}`}
+            icon="arrow.up.right"
+            label="Open conversation"
+            onPress={closeAnd(props.elsewhere.onOpen)}
+          />
+        ) : null}
+        {props.elsewhere?.onTalkHere ? (
+          <VoiceMenuChip label="Talk here" onPress={closeAnd(props.elsewhere.onTalkHere)} />
+        ) : null}
+      </View>
+      {audio.devices.length > 0 ? (
+        <ScrollView
+          horizontal
+          contentContainerClassName="items-center gap-1.5"
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
         >
-          <Text className="text-sm font-t3-medium text-primary">Talk here</Text>
-        </Pressable>
+          {audio.devices.map((device) => (
+            <VoiceMenuChip
+              key={device.id}
+              accessibilityHint="Plays the conversation here and listens through it"
+              icon={DEVICE_ICON[device.route]}
+              label={describeVoiceAudioDevice(device)}
+              selected={device.selected}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                selectVoiceAudioDevice(device.id);
+              }}
+            />
+          ))}
+        </ScrollView>
       ) : null}
     </View>
   );
 }
 
 /**
- * The live conversation's status, levels, controls, and newest captions.
- * Render only while this thread's conversation is connecting or active.
+ * Sidebar fork: the voice panel above the composer, the same on the
+ * conversation's own thread and on every other one. Mute and stop are always
+ * one tap away on the right. The rest shows the newest words, four lines
+ * tall so it holds still while they stream; a long press swaps them for a
+ * short menu (VoicePanelMenu) in the same place.
  */
-export function ComposerVoiceStrip() {
-  const state = useVoiceModeState();
-  const microphoneLevel = useSharedValue(0);
-  const speakerLevel = useSharedValue(0);
-  const [speaking, setSpeaking] = useState(false);
-
-  // Levels arrive at 10Hz; they drive shared values directly, and the
-  // speaking flag only re-renders when it flips.
-  useEffect(() => {
-    const isSpeaking = createSpeakingDetector();
-    const unsubscribe = voiceMode.subscribeLevels((levels) => {
-      microphoneLevel.value = withTiming(voiceMeterLevel(levels.microphone), LEVEL_TIMING);
-      speakerLevel.value = withTiming(voiceMeterLevel(levels.speaker), LEVEL_TIMING);
-      setSpeaking(isSpeaking(levels.speaker, Date.now()));
-    });
-    return () => {
-      unsubscribe();
-    };
-  }, [microphoneLevel, speakerLevel]);
-
-  const status = resolveVoiceStripStatus({ phase: state.phase, muted: state.muted, speaking });
-  const captions = state.captions.slice(-VISIBLE_CAPTIONS);
-
+function VoicePanel(props: { readonly elsewhere: ElsewhereConversation | null }) {
+  const muted = useVoiceModeMuted();
+  const [menuOpen, setMenuOpen] = useState(false);
+  // The menu replaces the words only once the finger lifts: swapping out the
+  // pressed view mid-touch leaves the responder stale and eats the next tap.
+  const heldLong = useRef(false);
+  const openMenu = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMenuOpen(true);
+  };
   return (
-    <View className="mb-2 gap-1 rounded-2xl border border-composer-border bg-card px-3 py-1.5">
-      <View className="flex-row items-center gap-2">
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          className="flex-row items-center gap-0.5"
-          style={{ height: METER_HEIGHT }}
+    <View className="mb-2 flex-row items-center gap-1 rounded-2xl border border-composer-border bg-card py-1 pr-1 pl-3">
+      {menuOpen ? (
+        <VoicePanelMenu elsewhere={props.elsewhere} onClose={() => setMenuOpen(false)} />
+      ) : (
+        <Pressable
+          accessibilityActions={[{ name: "longpress", label: "Voice options" }]}
+          accessibilityHint="Long press for voice options"
+          accessibilityLabel={
+            props.elsewhere ? `Voice conversation: ${props.elsewhere.title}` : "Voice conversation"
+          }
+          className="min-w-0 flex-1 flex-row gap-2 py-1"
+          delayLongPress={VOICE_OPEN_LONG_PRESS_MS}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === "longpress") openMenu();
+          }}
+          onLongPress={() => {
+            heldLong.current = true;
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          }}
+          onPressOut={() => {
+            if (!heldLong.current) return;
+            heldLong.current = false;
+            setMenuOpen(true);
+          }}
+          style={{ minHeight: PANEL_LINES * PANEL_LINE_HEIGHT }}
         >
-          <LevelBar level={microphoneLevel} className="bg-foreground" />
-          <LevelBar level={speakerLevel} className="bg-primary" />
-        </View>
-        <Text
-          accessibilityLiveRegion="polite"
-          className="min-w-0 flex-1 text-sm font-t3-medium text-foreground"
-          numberOfLines={1}
-        >
-          {VOICE_STRIP_STATUS_LABEL[status]}
-        </Text>
+          <View className="pt-0.5">
+            <SymbolView
+              name="waveform"
+              size={14}
+              tintColorClassName={muted ? "accent-icon" : "accent-primary"}
+            />
+          </View>
+          <View className="min-w-0 flex-1">
+            <VoiceConversationPreview captions={1} linesPerCaption={PANEL_LINES} maxChars={320} />
+          </View>
+        </Pressable>
+      )}
+      <View className="self-stretch justify-center gap-0.5">
         <VoiceStripButton
-          accessibilityLabel={state.muted ? "Unmute microphone" : "Mute microphone"}
-          icon={state.muted ? "mic.slash" : "mic"}
+          accessibilityLabel={muted ? "Unmute microphone" : "Mute microphone"}
+          icon={muted ? "mic.slash" : "mic"}
           onPress={() => voiceMode.toggleMuted()}
         />
         <VoiceStripButton
@@ -214,20 +257,36 @@ export function ComposerVoiceStrip() {
           onPress={() => voiceMode.stop()}
         />
       </View>
-      {captions.map((caption, index) => (
-        <Text
-          // Captions have no identity; the open one keeps its slot while it streams.
-          // oxlint-disable-next-line react/no-array-index-key
-          key={index}
-          className={cn(
-            "text-sm",
-            caption.role === "user" ? "italic text-foreground-muted" : "text-foreground",
-          )}
-          numberOfLines={2}
-        >
-          {voiceCaptionTail(caption.text)}
-        </Text>
-      ))}
     </View>
   );
+}
+
+/**
+ * Above the composer of every other thread while a conversation runs
+ * elsewhere on this device; its menu opens the conversation or moves it here
+ * (`onTalkHere`, only where voice can start). Renders nothing while no
+ * conversation runs.
+ */
+export function ComposerVoiceElsewhereStrip(props: { readonly onTalkHere?: () => void }) {
+  const navigation = useNavigation();
+  const live = useLiveVoiceThread();
+  if (live === null) return null;
+  return (
+    <VoicePanel
+      elsewhere={{
+        title: live.title,
+        onOpen: () =>
+          navigation.navigate("Thread", {
+            environmentId: live.target.environmentId,
+            threadId: live.target.threadId,
+          }),
+        ...(props.onTalkHere ? { onTalkHere: props.onTalkHere } : {}),
+      }}
+    />
+  );
+}
+
+/** The panel on the conversation's own thread. Render only while it is connecting or active. */
+export function ComposerVoiceStrip() {
+  return <VoicePanel elsewhere={null} />;
 }

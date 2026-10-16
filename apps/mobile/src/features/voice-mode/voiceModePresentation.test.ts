@@ -5,6 +5,7 @@ import {
   createSpeakingDetector,
   resolveVoiceModeNotice,
   resolveVoiceStripStatus,
+  describeVoiceAudioDevice,
   voiceCaptionTail,
 } from "./voiceModePresentation";
 
@@ -66,5 +67,17 @@ describe("resolveVoiceModeNotice", () => {
       title: "Voice conversation ended",
       message: "The conversation moved to another device.",
     });
+  });
+});
+
+describe("describeVoiceAudioDevice", () => {
+  it("names headsets by their product and the phone's parts by role", () => {
+    expect(describeVoiceAudioDevice({ route: "bluetooth", name: "Galaxy Buds2" })).toBe(
+      "Galaxy Buds2",
+    );
+    expect(describeVoiceAudioDevice({ route: "bluetooth", name: " " })).toBe("Bluetooth headset");
+    // The speaker reports the phone's model, which says nothing about where sound goes.
+    expect(describeVoiceAudioDevice({ route: "speaker", name: "Pixel 8" })).toBe("Speaker");
+    expect(describeVoiceAudioDevice({ route: "earpiece", name: "Pixel 8" })).toBe("Earpiece");
   });
 });

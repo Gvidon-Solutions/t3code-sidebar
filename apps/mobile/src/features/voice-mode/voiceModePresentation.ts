@@ -3,6 +3,7 @@ import {
   type VoiceModePhase,
   type VoiceModeState,
 } from "@t3tools/client-runtime/voice-mode";
+import type { VoiceAudioRoute } from "./voiceAudioRoute";
 
 export type VoiceStripStatus = "connecting" | "listening" | "speaking" | "muted";
 
@@ -12,6 +13,23 @@ export const VOICE_STRIP_STATUS_LABEL: Record<VoiceStripStatus, string> = {
   speaking: "Speaking",
   muted: "Muted",
 };
+
+const VOICE_AUDIO_ROUTE_LABEL: Record<VoiceAudioRoute, string> = {
+  bluetooth: "Bluetooth headset",
+  wired: "Wired headset",
+  speaker: "Speaker",
+  earpiece: "Earpiece",
+};
+
+/** A device in the voice menu: a headset by its own name, the phone's parts by what they are. */
+export function describeVoiceAudioDevice(device: {
+  readonly route: VoiceAudioRoute;
+  readonly name: string;
+}): string {
+  const name = device.name.trim();
+  const isHeadset = device.route === "bluetooth" || device.route === "wired";
+  return isHeadset && name.length > 0 ? name : VOICE_AUDIO_ROUTE_LABEL[device.route];
+}
 
 /** The assistant's voice outranks mute: while it talks, that is what the user hears. */
 export function resolveVoiceStripStatus(input: {

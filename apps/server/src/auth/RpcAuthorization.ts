@@ -63,6 +63,7 @@ export const RPC_REQUIRED_SCOPES = {
   [INBOX_WS_METHODS.subscribe]: AuthOrchestrationReadScope,
   [INBOX_WS_METHODS.subscribeIssue]: AuthOrchestrationReadScope,
   [UI_REQUESTS_WS_METHODS.subscribe]: AuthOrchestrationReadScope,
+  [UI_REQUESTS_WS_METHODS.subscribeVoiceCommands]: AuthOrchestrationReadScope,
   [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsMutate]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,

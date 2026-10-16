@@ -63,6 +63,7 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof INBOX_WS_METHODS.subscribe
   | typeof INBOX_WS_METHODS.subscribeIssue
   | typeof UI_REQUESTS_WS_METHODS.subscribe
+  | typeof UI_REQUESTS_WS_METHODS.subscribeVoiceCommands
   | typeof WS_METHODS.serverGetStorageCleanupReport
   | typeof WS_METHODS.subscribeTerminalEvents
   | typeof WS_METHODS.subscribeTerminalMetadata

@@ -107,6 +107,7 @@ const RPC_AGGREGATES = {
   [INBOX_WS_METHODS.dismiss]: "inbox",
   [INBOX_WS_METHODS.undismiss]: "inbox",
   [UI_REQUESTS_WS_METHODS.subscribe]: "uiRequests",
+  [UI_REQUESTS_WS_METHODS.subscribeVoiceCommands]: "uiRequests",
   [WS_METHODS.secretsAnswerRequest]: "secrets",
   [WS_METHODS.cloudGetRelayClientStatus]: "cloud",
   [WS_METHODS.cloudInstallRelayClient]: "cloud",

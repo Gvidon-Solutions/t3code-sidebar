@@ -466,6 +466,9 @@ export function summarizeT3ToolCalls(
     case "ui-open":
       label = phrase("Opened", "open", `something on screen ${times}`);
       break;
+    case "voice-control":
+      label = phrase("Steered", "steer", `the voice call ${times}`);
+      break;
   }
   return { label, failedCount };
 }
