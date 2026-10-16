@@ -100,9 +100,11 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   waiting for your answer" sits on the box as a composer banner instead of a red badge.
   States read like the rest of the app: severity is a small dot, a closed issue gets a quiet
   status line ("Resolved by the agent · 2h ago", "Closed as not relevant · Reopen"), the
-  resolution is a quote in the activity, and nothing is green. The owner's comments look like
-  their thread messages, the agent's like its answers. "Conversation" and the overflow menu
-  ("Close as not relevant") sit beside the title; the list's tab is "Closed".
+  resolution is a quote in the activity. Green is kept for one thing, a resolved issue (its
+  status line, its check in the list, the "Resolved" event), like "Done" in the sidebar; there
+  are no colored badges. The owner's comments look like their thread messages, the agent's like
+  its answers. "Conversation" and the overflow menu ("Close as not relevant") sit beside the
+  title; the list's tab is "Closed".
 - **How.** `inbox.comment` takes optional `attachments` uploaded through the composer's upload
   queue (`attachments.createUploadUrl`). The service delivers through `ThreadMessageIntake`, which
   claims the uploads into the responsible thread (or the thread a first comment starts); the

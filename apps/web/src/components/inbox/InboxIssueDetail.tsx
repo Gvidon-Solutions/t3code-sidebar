@@ -423,9 +423,11 @@ function InboxIssueStatus({
     <>
       {issue.state === "resolved"
         ? line(
-            <CircleCheckIcon />,
+            <CircleCheckIcon className="text-success" />,
             <>
-              <span>Resolved{issue.closedBy === "agent" ? " by the agent" : ""}</span>
+              <span className="font-medium text-success-foreground">
+                Resolved{issue.closedBy === "agent" ? " by the agent" : ""}
+              </span>
               {closedAgo ? (
                 <>
                   <MetaSeparator />
@@ -738,6 +740,8 @@ function InboxEntryView({
 
   const event = describeInboxEvent(entry);
   const Icon = EVENT_ICON[entry.kind];
+  // The one colored outcome: the problem is fixed, as "Done" reads in the sidebar.
+  const resolved = entry.kind === "resolved";
   return (
     <div className="flex flex-col gap-1.5">
       <p
@@ -745,20 +749,30 @@ function InboxEntryView({
           "flex min-w-0 items-center gap-2 text-xs",
           event.tone === "muted" ? "text-muted-foreground" : "text-foreground/85",
           event.tone === "outcome" && "font-medium",
+          resolved && "text-success-foreground",
         )}
       >
         <Icon
           aria-hidden
           className={cn(
             "size-3.5 shrink-0",
-            event.tone === "muted" ? "text-muted-foreground/70" : "text-muted-foreground",
+            resolved
+              ? "text-success"
+              : event.tone === "muted"
+                ? "text-muted-foreground/70"
+                : "text-muted-foreground",
           )}
         />
         <span className="min-w-0 truncate">{event.label}</span>
         <span className="shrink-0 text-2xs font-normal text-muted-foreground/70">{time}</span>
       </p>
       {event.detail ? (
-        <div className="ms-1.5 border-s-2 border-border ps-4 text-sm text-foreground/85">
+        <div
+          className={cn(
+            "ms-1.5 border-s-2 ps-4 text-sm text-foreground/85",
+            resolved ? "border-success/45" : "border-border",
+          )}
+        >
           <ChatMarkdown text={event.detail} cwd={cwd} environmentId={environmentId} />
         </div>
       ) : null}

@@ -282,7 +282,10 @@ const InboxIssueRow = memo(function InboxIssueRow(props: {
           ) : (
             <ClosedIcon
               aria-label={issue.state === "resolved" ? "Resolved" : "Closed as not relevant"}
-              className="-mx-[3px] size-3 shrink-0 text-muted-foreground/70"
+              className={cn(
+                "-mx-[3px] size-3 shrink-0",
+                issue.state === "resolved" ? "text-success" : "text-muted-foreground/70",
+              )}
             />
           )}
           <span
