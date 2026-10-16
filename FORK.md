@@ -18,7 +18,8 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream `main` at `9e552285ba` on 2026-10-12 (merge into `ws`).
+- **Base.** Last synced with upstream release `v0.1.0` (`81493efb71`, tagged 2026-10-15) on
+  2026-10-16 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   upstream's version plus `-sidebar.<run>`.
 - **Footprint in upstream files.** Small, about 16 files and 70 lines: the settings schema
@@ -87,6 +88,35 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 ## Feature log
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
+
+### 2026-10-16 — Upstream release v0.1.0
+
+- **What.** Brings in upstream's first stable Orchestrator V2 release, `v0.1.0` (204 commits
+  past the 2026-10-12 sync). The fork already ran V2, so nothing migrates. New in this step:
+  delegated tasks in their own worktrees, and a delegated task's question now wakes its parent.
+  Steering no longer ends running subagents. Opt-in cleanup of settled threads' worktrees
+  (Settings › Storage), branch deletion after a PR merges or closes, a timer on the Waiting
+  status, full-screen visual replies, and Effect 4.0.4 with OpenCode 2.0.28. Also a long list of
+  server performance and reliability fixes (SQLite checkpoints off the event loop, thread-list
+  reads on large databases, T3 Connect, SSH, Windows) and Claude/Codex/Cursor/ACP fixes. The
+  orchestration protocol stays 2, so new fork clients still talk to servers on the previous
+  fork build, and the other way round.
+- **How.** Conflicts: the desktop product name and its packaging test keep "T3 Code Sidebar"
+  (upstream renamed its own app to "T3 Code (Beta)"). "Fork from this response" in `ChatView.tsx`
+  keeps the fork's `useForkThread` on upstream's new callback form, without `useCallback`. The
+  composer's `/voice` item moved into upstream's rewritten `onSelectComposerItem`
+  (`ChatComposer.tsx`). `ThreadFeed.tsx` keeps upstream's new handoff import. Upstream bumped
+  Enriched Markdown to `t3.12` (nested list markers) without touching measurement, so the
+  Android height patch applies unchanged and is renamed to `t3.12`. Upstream dropped its
+  OpenCode and Effect patches; the lockfile is upstream's plus the fork's packages. Effect 4.0.4
+  turned `Crypto.randomUUIDv4` into a function, so the inbox calls `randomUUIDv4()`; the old
+  form no longer type-checks and would throw when the service is built. The opt-in worktree cleanup keeps a checkout shared by
+  several threads, so a parent's checkout survives when the cascade settles its subagents.
+- **Where.** `apps/desktop/package.json`, `scripts/build-desktop-artifact.test.ts`,
+  `apps/web/src/components/ChatView.tsx`, `apps/web/src/components/chat/ChatComposer.tsx`,
+  `apps/mobile/src/features/threads/ThreadFeed.tsx`, `pnpm-workspace.yaml`,
+  `patches/react-native-enriched-markdown@1.2.0-t3.12.patch`,
+  `apps/server/src/inbox/InboxService.ts`.
 
 ### 2026-10-15 — Agent inbox: issues agents raise and own
 

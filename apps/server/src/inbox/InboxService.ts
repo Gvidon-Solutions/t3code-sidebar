@@ -299,7 +299,7 @@ export const layer = Layer.effect(
       fail(`Inbox storage failed: ${cause instanceof Error ? cause.message : String(cause)}`);
 
     const nowIso = DateTime.now.pipe(Effect.map((now) => DateTime.formatIso(now)));
-    const newId = crypto.randomUUIDv4.pipe(Effect.orDie);
+    const newId = crypto.randomUUIDv4().pipe(Effect.orDie);
 
     const findIssue = (issueId: InboxIssueId) =>
       sql<IssueRow>`SELECT * FROM fork_inbox_issues WHERE issue_id = ${issueId}`.pipe(
