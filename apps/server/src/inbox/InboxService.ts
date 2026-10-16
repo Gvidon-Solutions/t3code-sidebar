@@ -16,6 +16,7 @@ import {
   ProviderInstanceId,
   ScheduledTaskId,
   ThreadId,
+  ChatAttachment,
   type InboxAgentCommentInput,
   type InboxAuthor,
   type InboxDelivery,
@@ -41,6 +42,7 @@ import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
@@ -48,8 +50,10 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import * as ServerConfig from "../config.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as ThreadMessageIntake from "../orchestration-v2/ThreadMessageIntake.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -139,11 +143,13 @@ interface EntryRow {
   readonly text: string | null;
   readonly created_at: string;
   readonly deliveries_json: string;
+  readonly attachments_json: string;
 }
 
 const decodeIssue = Schema.decodeUnknownEffect(InboxIssue);
 const isInboxError = Schema.is(InboxError);
 const decodeEntry = Schema.decodeUnknownEffect(InboxEntry);
+const encodeAttachments = Schema.encodeSync(Schema.fromJsonString(Schema.Array(ChatAttachment)));
 const parseJson = (text: string): unknown => {
   try {
     return JSON.parse(text);
@@ -183,8 +189,9 @@ const issueFromRow = (row: IssueRow): Effect.Effect<InboxIssue, InboxError> =>
     seenSequence: row.seen_sequence,
   }).pipe(Effect.mapError(corrupt("issue")));
 
-const entryFromRow = (row: EntryRow): Effect.Effect<InboxEntry, InboxError> =>
-  decodeEntry({
+const entryFromRow = (row: EntryRow): Effect.Effect<InboxEntry, InboxError> => {
+  const attachments = parseJson(row.attachments_json);
+  return decodeEntry({
     id: row.entry_id,
     issueId: row.issue_id,
     sequence: row.sequence,
@@ -194,7 +201,9 @@ const entryFromRow = (row: EntryRow): Effect.Effect<InboxEntry, InboxError> =>
     text: row.text,
     createdAt: row.created_at,
     deliveries: parseJson(row.deliveries_json) ?? [],
+    ...(Array.isArray(attachments) && attachments.length > 0 ? { attachments } : {}),
   }).pipe(Effect.mapError(corrupt("entry")));
+};
 
 /**
  * The inbox keeps its own tables instead of a numbered migration: the
@@ -254,9 +263,19 @@ export const ensureSchema = Effect.gen(function* () {
       text TEXT,
       created_at TEXT NOT NULL,
       deliveries_json TEXT NOT NULL DEFAULT '[]',
+      attachments_json TEXT NOT NULL DEFAULT '[]',
       UNIQUE (issue_id, sequence)
     )
   `;
+  // Added after the first release: databases from then lack the column.
+  const entryColumns = yield* sql<{ readonly name: string }>`
+    PRAGMA table_info(fork_inbox_entries)
+  `;
+  if (!entryColumns.some((column) => column.name === "attachments_json")) {
+    yield* sql`
+      ALTER TABLE fork_inbox_entries ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'
+    `;
+  }
 });
 
 /** How an entry changes the issue's read and alert markers. */
@@ -280,10 +299,16 @@ export const layer = Layer.effect(
     const sql = yield* SqlClient.SqlClient;
     const crypto = yield* Crypto.Crypto;
     const threadManagement = yield* ThreadManagementService.ThreadManagementService;
-    const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
     const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
     const settings = yield* ServerSettings.ServerSettingsService;
     const scheduler = yield* Scheduler.Scheduler;
+    // Owner comments go through the same intake as the composer, which claims uploaded files.
+    const intakeContext = yield* Effect.context<
+      | ThreadManagementService.ThreadManagementService
+      | ThreadLaunchService.ThreadLaunchService
+      | FileSystem.FileSystem
+      | ServerConfig.ServerConfig
+    >();
 
     yield* ensureSchema.pipe(Effect.orDie);
 
@@ -379,6 +404,7 @@ export const layer = Layer.effect(
         readonly author: InboxAuthor;
         readonly threadId: ThreadId | null;
         readonly text: string | null;
+        readonly attachments?: ReadonlyArray<ChatAttachment>;
       },
       effect: EntryEffect,
       now: string,
@@ -405,10 +431,23 @@ export const layer = Layer.effect(
           text: entry.text,
           created_at: now,
           deliveries_json: "[]",
+          attachments_json: encodeAttachments(entry.attachments ?? []),
         })}
       `.pipe(Effect.mapError(storageError));
       return id;
     });
+
+    /** Swaps the pending upload refs for the copies the thread received, which outlive the uploads. */
+    const recordAttachments = (
+      entryId: InboxEntryId,
+      attachments: ReadonlyArray<ChatAttachment>,
+    ) =>
+      attachments.length === 0
+        ? Effect.void
+        : sql`
+            UPDATE fork_inbox_entries SET attachments_json = ${encodeAttachments(attachments)}
+            WHERE entry_id = ${entryId}
+          `.pipe(Effect.mapError(storageError), Effect.asVoid);
 
     const recordDeliveries = (entryId: InboxEntryId, deliveries: ReadonlyArray<InboxDelivery>) =>
       deliveries.length === 0
@@ -418,13 +457,17 @@ export const layer = Layer.effect(
             WHERE entry_id = ${entryId}
           `.pipe(Effect.mapError(storageError), Effect.asVoid);
 
-    /** Sends a message into a thread; a failure is recorded on the entry, never raised. */
+    /**
+     * Sends a message into a thread; a failure is recorded on the entry, never
+     * raised. Also returns the attachments as the thread received them.
+     */
     const deliver = Effect.fn("InboxService.deliver")(function* (input: {
       readonly issue: InboxIssue;
       readonly entryId: InboxEntryId;
       readonly threadId: ThreadId;
       readonly kind: "comment" | "notice";
       readonly text: string;
+      readonly attachments?: ReadonlyArray<ChatAttachment>;
       readonly createdBy: OrchestrationV2Actor;
     }) {
       const exit = yield* Effect.exit(
@@ -433,7 +476,7 @@ export const layer = Layer.effect(
           if (shell === null || shell.deletedAt !== null) {
             return yield* Effect.fail(fail("The thread no longer exists."));
           }
-          yield* threadManagement.sendToThread({
+          const sent = yield* ThreadMessageIntake.sendToThread({
             projectId: shell.projectId,
             commandId: CommandId.make(`inbox:${input.entryId}:${input.threadId}`),
             threadId: input.threadId,
@@ -446,21 +489,28 @@ export const layer = Layer.effect(
               kind: input.kind,
               text: input.text,
             }),
-            attachments: [],
+            attachments: input.attachments ?? [],
             // Wait for a running turn instead of interrupting the agent's tools.
             mode: "queue",
             createdBy: input.createdBy,
             creationSource: "server",
-          });
+          }).pipe(Effect.provide(intakeContext));
+          return sent.message.attachments;
         }),
       );
       return Exit.isSuccess(exit)
-        ? ({ threadId: input.threadId, status: "delivered" } satisfies InboxDelivery)
-        : ({
-            threadId: input.threadId,
-            status: "failed",
-            error: describeCause(exit.cause),
-          } satisfies InboxDelivery);
+        ? {
+            delivery: { threadId: input.threadId, status: "delivered" } satisfies InboxDelivery,
+            attachments: exit.value,
+          }
+        : {
+            delivery: {
+              threadId: input.threadId,
+              status: "failed",
+              error: describeCause(exit.cause),
+            } satisfies InboxDelivery,
+            attachments: [],
+          };
     });
 
     /** Tells the issue's threads about something another party did, skipping that party. */
@@ -479,7 +529,9 @@ export const layer = Layer.effect(
         ),
       ];
       const deliveries = yield* Effect.forEach(targets, (threadId) =>
-        deliver({ issue, entryId, threadId, kind: "notice", text, createdBy: "system" }),
+        deliver({ issue, entryId, threadId, kind: "notice", text, createdBy: "system" }).pipe(
+          Effect.map((outcome) => outcome.delivery),
+        ),
       );
       yield* recordDeliveries(entryId, deliveries);
     });
@@ -927,6 +979,7 @@ export const layer = Layer.effect(
       issue: InboxIssue,
       entryId: InboxEntryId,
       text: string,
+      attachments: ReadonlyArray<ChatAttachment>,
     ) {
       const projectId =
         issue.projectId ??
@@ -936,44 +989,59 @@ export const layer = Layer.effect(
       const current = yield* settings.getSettings.pipe(Effect.mapError(storageError));
       const resolved = resolveProjectSettings(current, projectId, null).settings;
       const threadId = ThreadId.make(`inbox-${yield* newId}`);
-      const launched = yield* threadLaunch
-        .launch({
-          commandId: CommandId.make(`inbox:${entryId}:launch`),
-          threadId,
-          projectId,
-          title: issue.title,
-          modelSelection: resolved.defaultModelSelection ?? {
-            instanceId: ProviderInstanceId.make("codex"),
-            model: DEFAULT_MODEL,
-          },
-          runtimeMode: resolved.defaultRuntimeMode,
-          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-          workspaceStrategy: { type: "root" },
-          initialMessage: {
-            messageId: MessageId.make(inboxDeliveryMessageId(issue.id, entryId, threadId)),
-            text: formatInboxDelivery({
-              issueId: issue.id,
-              title: issue.title,
-              kind: "comment",
-              text: `${text}${INBOX_CONTEXT_SEPARATOR}${issue.description}`,
-            }),
-            attachments: [],
-          },
-          createdBy: "user",
-          creationSource: "server",
-        })
-        .pipe(Effect.exit);
+      const messageId = MessageId.make(inboxDeliveryMessageId(issue.id, entryId, threadId));
+      const launched = yield* ThreadMessageIntake.launchThread({
+        commandId: CommandId.make(`inbox:${entryId}:launch`),
+        threadId,
+        projectId,
+        title: issue.title,
+        modelSelection: resolved.defaultModelSelection ?? {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: DEFAULT_MODEL,
+        },
+        runtimeMode: resolved.defaultRuntimeMode,
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        workspaceStrategy: { type: "root" },
+        initialMessage: {
+          messageId,
+          text: formatInboxDelivery({
+            issueId: issue.id,
+            title: issue.title,
+            kind: "comment",
+            text: `${text}${INBOX_CONTEXT_SEPARATOR}${issue.description}`,
+          }),
+          attachments,
+        },
+        createdBy: "user",
+        creationSource: "server",
+      }).pipe(Effect.provide(intakeContext), Effect.exit);
       return Exit.isSuccess(launched)
-        ? ({ threadId: launched.value.threadId, status: "delivered" } satisfies InboxDelivery)
-        : ({
-            threadId,
-            status: "failed",
-            error: describeCause(launched.cause),
-          } satisfies InboxDelivery);
+        ? {
+            delivery: {
+              threadId: launched.value.threadId,
+              status: "delivered",
+            } satisfies InboxDelivery,
+            attachments:
+              launched.value.projection.messages.find((message) => message.id === messageId)
+                ?.attachments ?? [],
+          }
+        : {
+            delivery: {
+              threadId,
+              status: "failed",
+              error: describeCause(launched.cause),
+            } satisfies InboxDelivery,
+            attachments: [],
+          };
     });
 
     const ownerComment: InboxService["Service"]["ownerComment"] = (input) =>
       Effect.gen(function* () {
+        const text = input.text.trim();
+        const attachments = input.attachments ?? [];
+        if (text.length === 0 && attachments.length === 0) {
+          return yield* Effect.fail(fail("A comment needs text or an attachment.", input.issueId));
+        }
         const written = yield* commit(
           Effect.gen(function* () {
             const now = yield* nowIso;
@@ -981,7 +1049,13 @@ export const layer = Layer.effect(
             const reminderAt = yield* readReminderAt(issue.id);
             const entryId = yield* appendEntry(
               issue,
-              { kind: "comment", author: "owner", threadId: null, text: input.text },
+              {
+                kind: "comment",
+                author: "owner",
+                threadId: null,
+                text: text.length > 0 ? text : null,
+                attachments,
+              },
               SILENT,
               now,
             );
@@ -990,19 +1064,29 @@ export const layer = Layer.effect(
           }),
         );
         const { issue, entryId } = written;
+        const deliveredText = text.length > 0 ? text : "(Attachments only.)";
         if (issue.responsibleThreadId !== null) {
-          const delivery = yield* deliver({
+          const outcome = yield* deliver({
             issue,
             entryId,
             threadId: issue.responsibleThreadId,
             kind: "comment",
-            text: input.text,
+            text: deliveredText,
+            attachments,
             createdBy: "user",
           });
-          yield* recordDeliveries(entryId, [delivery]);
+          yield* recordDeliveries(entryId, [outcome.delivery]);
+          yield* recordAttachments(entryId, outcome.attachments);
         } else {
-          const delivery = yield* launchResponsibleThread(issue, entryId, input.text);
+          const outcome = yield* launchResponsibleThread(
+            issue,
+            entryId,
+            deliveredText,
+            attachments,
+          );
+          const delivery = outcome.delivery;
           yield* recordDeliveries(entryId, [delivery]);
+          yield* recordAttachments(entryId, outcome.attachments);
           if (delivery.status === "delivered") {
             yield* commit(
               Effect.gen(function* () {

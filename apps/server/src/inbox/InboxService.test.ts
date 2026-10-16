@@ -1,6 +1,13 @@
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
+  type ChatAttachment,
+  ChatAttachmentId,
   type InboxIssueId,
   isInboxIssueUnread,
   type OrchestrationV2ThreadShell,
@@ -13,6 +20,8 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as TestClock from "effect/testing/TestClock";
 
+import { createPendingAttachmentId } from "../attachmentStore.ts";
+import * as ServerConfig from "../config.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
@@ -31,6 +40,7 @@ interface Sent {
   readonly threadId: ThreadId;
   readonly messageId: string;
   readonly text: string;
+  readonly attachments: ReadonlyArray<ChatAttachment>;
   readonly createdBy: string;
 }
 
@@ -58,9 +68,14 @@ const harness = Effect.gen(function* () {
                     threadId: input.threadId,
                     messageId: input.messageId,
                     text: input.text,
+                    attachments: input.attachments,
                     createdBy: input.createdBy,
                   },
-                ]).pipe(Effect.as({} as ThreadManagementService.ThreadManagementSendResult)),
+                ]).pipe(
+                  Effect.as({
+                    message: { attachments: input.attachments },
+                  } as unknown as ThreadManagementService.ThreadManagementSendResult),
+                ),
         }),
         Layer.mock(ThreadLaunchService.ThreadLaunchService)({
           launch: (input) =>
@@ -68,7 +83,15 @@ const harness = Effect.gen(function* () {
               Effect.as({
                 threadId: input.threadId!,
                 resumed: false,
-              } as ThreadLaunchService.ThreadLaunchResult),
+                projection: {
+                  messages: [
+                    {
+                      id: input.initialMessage?.messageId,
+                      attachments: input.initialMessage?.attachments ?? [],
+                    },
+                  ],
+                },
+              } as unknown as ThreadLaunchService.ThreadLaunchResult),
             ),
         }),
         Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
@@ -80,6 +103,8 @@ const harness = Effect.gen(function* () {
         Scheduler.layer,
       ),
     ),
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-inbox-" })),
+    Layer.provideMerge(NodeServices.layer),
   );
   return { sent, launched, layer };
 });
@@ -368,4 +393,47 @@ it.effect("rejects comments on unknown issues with a message the agent can act o
       assert.equal(error.message, "Inbox issue issue-missing was not found.");
     }).pipe(Effect.provide(layer));
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+);
+
+it.effect(
+  "an owner comment carries uploaded files to the thread and keeps the thread's copies",
+  () =>
+    Effect.gen(function* () {
+      const { layer, sent } = yield* harness;
+      yield* Effect.gen(function* () {
+        const inbox = yield* InboxService.InboxService;
+        const config = yield* ServerConfig.ServerConfig;
+        const pendingId = createPendingAttachmentId()!;
+        const bytes = new Uint8Array([137, 80, 78, 71]);
+        yield* Effect.sync(() => {
+          NodeFS.mkdirSync(config.attachmentsDir, { recursive: true });
+          NodeFS.writeFileSync(NodePath.join(config.attachmentsDir, `${pendingId}.png`), bytes);
+        });
+        const upload: ChatAttachment = {
+          type: "image",
+          id: ChatAttachmentId.make(pendingId),
+          name: "screenshot.png",
+          mimeType: "image/png",
+          sizeBytes: bytes.byteLength,
+        };
+        const { issueId } = yield* inbox.post(fromThread(cron), {
+          severity: "action",
+          title: "Banner service: layout broken",
+          description: "Which one is right?",
+        });
+
+        const rejected = yield* inbox.ownerComment({ issueId, text: "  " }).pipe(Effect.flip);
+        assert.equal(rejected.message, "A comment needs text or an attachment.");
+
+        // A screenshot alone is a comment.
+        const detail = yield* inbox.ownerComment({ issueId, text: "", attachments: [upload] });
+        const [message] = yield* Ref.get(sent);
+        const delivered = message?.attachments[0];
+        assert.equal(delivered?.name, "screenshot.png");
+        assert.notEqual(delivered?.id, upload.id);
+        const comment = detail.entries.at(-1)!;
+        assert.isNull(comment.text);
+        assert.deepEqual(comment.attachments, [delivered!]);
+      }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );

@@ -1,30 +1,43 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ScopedInboxIssue } from "@t3tools/client-runtime/inbox";
+import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type {
+  ChatAttachment,
   EnvironmentId,
   InboxEntry,
+  InboxEntryKind,
   InboxIssue,
   InboxIssueId,
-  InboxSeverity,
   ThreadId,
 } from "@t3tools/contracts";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  ArrowRightLeftIcon,
+  BellIcon,
+  CircleCheckIcon,
+  CircleDotIcon,
+  CircleSlashIcon,
+  EllipsisIcon,
+  type LucideIcon,
+  MessageCircleIcon,
+  MessageCircleQuestionIcon,
   MessageSquareIcon,
+  PencilLineIcon,
+  Repeat2Icon,
   RotateCcwIcon,
-  SendIcon,
   TriangleAlertIcon,
-  XIcon,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { useAssetUrls } from "../../assets/assetUrls";
 import { usePrimarySettings } from "../../hooks/useSettings";
+import { useTheme } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils";
 import { useProject, useThreadShell } from "../../state/entities";
 import { useEnvironment } from "../../state/environments";
@@ -32,9 +45,15 @@ import { inboxAtoms } from "../../state/inbox";
 import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
-import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
+import {
+  formatChatTimestampTooltip,
+  formatDayAwareTimestamp,
+  formatRelativeTimeLabel,
+} from "../../timestampFormat";
 import ChatMarkdown from "../ChatMarkdown";
-import { Badge } from "../ui/badge";
+import { ExpandedImageDialog } from "../chat/ExpandedImageDialog";
+import { type ExpandedImagePreview, expandedImageKey } from "../chat/ExpandedImagePreview";
+import { PierreEntryIcon } from "../chat/PierreEntryIcon";
 import { Button, InlineButton } from "../ui/button";
 import {
   Dialog,
@@ -45,18 +64,30 @@ import {
   DialogPopup,
   DialogTitle,
 } from "../ui/dialog";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { describeInboxEvent, INBOX_SEVERITY_DOT_CLASS, inboxDeliveryFailure } from "./inbox.logic";
+import { InboxComposer } from "./InboxComposer";
+import {
+  describeInboxEvent,
+  INBOX_SEVERITY_DOT_CLASS,
+  INBOX_SEVERITY_LABEL,
+  inboxDeliveryFailure,
+} from "./inbox.logic";
 
-const SEVERITY_BADGE: Record<
-  InboxSeverity,
-  { label: string; variant: "error" | "warning" | "secondary" }
-> = {
-  action: { label: "Action", variant: "error" },
-  attention: { label: "Attention", variant: "warning" },
-  info: { label: "Info", variant: "secondary" },
+const EVENT_ICON: Record<Exclude<InboxEntryKind, "comment">, LucideIcon> = {
+  created: CircleDotIcon,
+  updated: PencilLineIcon,
+  waiting: MessageCircleQuestionIcon,
+  waiting_cleared: MessageCircleIcon,
+  handover: ArrowRightLeftIcon,
+  reopened: RotateCcwIcon,
+  repeated: Repeat2Icon,
+  reminder: BellIcon,
+  resolved: CircleCheckIcon,
+  dismissed: CircleSlashIcon,
+  undismissed: RotateCcwIcon,
 };
 
 function reportFailure(title: string, result: Parameters<typeof squashAtomCommandFailure>[0]) {
@@ -110,7 +141,15 @@ function useMarkIssueSeen(
   }, [enabled, environmentId, issueId, lastSequence, markSeen, seenSequence]);
 }
 
-/** Fork: one inbox issue: its description, history, actions and the owner's comment box. */
+function MetaSeparator() {
+  return (
+    <span aria-hidden className="text-muted-foreground/40">
+      ·
+    </span>
+  );
+}
+
+/** Fork: one inbox issue: its description, history, actions and the owner's reply box. */
 export function InboxIssueDetail(props: {
   environmentId: EnvironmentId;
   issueId: InboxIssueId;
@@ -133,6 +172,7 @@ export function InboxIssueDetail(props: {
   const canMarkSeen = useAtomValue(inboxAtoms.markIssueSeen.permissionAtom(environmentId));
   useMarkIssueSeen(environmentId, issue, connected && canMarkSeen);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
 
   if (issue === null) {
     return (
@@ -154,56 +194,64 @@ export function InboxIssueDetail(props: {
     );
   }
 
-  const severity = SEVERITY_BADGE[issue.severity];
-  const meta = [machine, project?.title ?? null, issue.source.label].filter(
-    (part): part is string => part !== null && part.length > 0,
-  );
+  const open = issue.state === "open";
+  const meta = [
+    machine,
+    project?.title ?? null,
+    issue.source.label,
+    issue.repeatCount > 0 ? `Reported ${issue.repeatCount + 1} times` : null,
+  ].filter((part): part is string => part !== null && part.length > 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={scrollRef} className="scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-5 pt-4 pb-8 sm:px-6">
-          <div className="-ms-2 md:hidden">
+        <div className="mx-auto flex w-full max-w-3xl flex-col px-5 pt-4 pb-10 sm:px-8 sm:pt-8">
+          <div className="-ms-2 mb-3 md:hidden">
             <Button variant="ghost" size="sm" onClick={onBack}>
               <ArrowLeftIcon />
               Issues
             </Button>
           </div>
-          <header className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant={severity.variant} size="sm">
-                <span
-                  aria-hidden
-                  className={cn("size-1.5 rounded-full", INBOX_SEVERITY_DOT_CLASS[issue.severity])}
-                />
-                {severity.label}
-              </Badge>
-              {issue.state === "open" && issue.waitingForOwner ? (
-                <Badge variant="error" size="sm">
-                  Needs your answer
-                </Badge>
-              ) : null}
-              {issue.state === "resolved" ? (
-                <Badge variant="success" size="sm">
-                  Resolved
-                </Badge>
-              ) : issue.state === "dismissed" ? (
-                <Badge variant="secondary" size="sm">
-                  Closed as not relevant
-                </Badge>
-              ) : null}
-              {issue.repeatCount > 0 ? (
-                <Badge variant="outline" size="sm">
-                  Reported {issue.repeatCount + 1} times
-                </Badge>
-              ) : null}
+          <header className="flex flex-col gap-3">
+            <div className="flex items-start gap-4">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-foreground/80">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        open ? INBOX_SEVERITY_DOT_CLASS[issue.severity] : "bg-muted-foreground/35",
+                      )}
+                    />
+                    {INBOX_SEVERITY_LABEL[issue.severity]}
+                  </span>
+                  {meta.map((part) => (
+                    <span key={part} className="contents">
+                      <MetaSeparator />
+                      <span className="min-w-0 truncate">{part}</span>
+                    </span>
+                  ))}
+                </p>
+                <h2
+                  className={cn(
+                    "text-xl leading-snug font-semibold tracking-tight text-balance",
+                    open ? "text-foreground" : "text-foreground/70",
+                  )}
+                >
+                  {issue.title}
+                </h2>
+              </div>
+              <InboxIssueActions
+                environmentId={environmentId}
+                issue={issue}
+                connected={connected}
+              />
             </div>
-            <h2 className="text-lg font-semibold text-foreground">{issue.title}</h2>
-            <p className="text-xs text-muted-foreground">{meta.join(" · ")}</p>
+            <InboxIssueStatus environmentId={environmentId} issue={issue} connected={connected} />
           </header>
-          <InboxIssueActions environmentId={environmentId} issue={issue} connected={connected} />
           {issue.description.trim().length > 0 ? (
-            <div className="text-sm">
+            <div className="mt-6 text-sm">
               <ChatMarkdown
                 text={issue.description}
                 cwd={project?.workspaceRoot}
@@ -211,7 +259,10 @@ export function InboxIssueDetail(props: {
               />
             </div>
           ) : null}
-          <section aria-label="History" className="flex flex-col gap-3 border-t border-border pt-4">
+          <section aria-label="Activity" className="mt-8 flex flex-col gap-5">
+            <h3 className="flex items-center gap-3 text-xs font-medium text-muted-foreground after:h-px after:flex-1 after:bg-border/70">
+              Activity
+            </h3>
             {entries === null ? (
               <p className="text-xs text-muted-foreground">
                 {detail.error !== null
@@ -225,22 +276,34 @@ export function InboxIssueDetail(props: {
                   environmentId={environmentId}
                   entry={entry}
                   cwd={project?.workspaceRoot}
+                  onExpandImage={setExpandedImage}
                 />
               ))
             )}
           </section>
         </div>
       </div>
-      <InboxCommentComposer
-        environmentId={environmentId}
-        issueId={issue.id}
-        connected={connected}
-        onSent={() => {
-          const scroller = scrollRef.current;
-          if (scroller)
-            requestAnimationFrame(() => scroller.scrollTo({ top: scroller.scrollHeight }));
-        }}
-      />
+      <div className="shrink-0 px-3 pb-3 [--chat-content-max-width:44rem] sm:px-6 sm:pb-5">
+        <InboxComposer
+          environmentId={environmentId}
+          issueId={issue.id}
+          connected={connected}
+          waitingForOwner={open && issue.waitingForOwner}
+          startsConversation={issue.responsibleThreadId === null}
+          onSent={() => {
+            const scroller = scrollRef.current;
+            if (scroller)
+              requestAnimationFrame(() => scroller.scrollTo({ top: scroller.scrollHeight }));
+          }}
+        />
+      </div>
+      {expandedImage ? (
+        <ExpandedImageDialog
+          key={expandedImageKey(expandedImage)}
+          preview={expandedImage}
+          onClose={() => setExpandedImage(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -266,6 +329,7 @@ function InboxThreadLink({
   );
 }
 
+/** The conversation button and the overflow menu, beside the title. */
 function InboxIssueActions({
   environmentId,
   issue,
@@ -277,12 +341,67 @@ function InboxIssueActions({
 }) {
   const navigate = useNavigate();
   const canDismiss = useAtomValue(inboxAtoms.dismissIssue.permissionAtom(environmentId));
+  const [dismissOpen, setDismissOpen] = useState(false);
+  const responsible = issue.responsibleThreadId;
+
+  return (
+    <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+      {responsible !== null ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: buildThreadRouteParams(scopeThreadRef(environmentId, responsible)),
+            })
+          }
+        >
+          <MessageSquareIcon />
+          Conversation
+        </Button>
+      ) : null}
+      {issue.state === "open" ? (
+        <Menu>
+          <MenuTrigger
+            render={<Button aria-label="Issue actions" size="icon-sm" variant="ghost" />}
+          >
+            <EllipsisIcon aria-hidden="true" />
+          </MenuTrigger>
+          <MenuPopup align="end">
+            <MenuItem disabled={!connected || !canDismiss} onClick={() => setDismissOpen(true)}>
+              <CircleSlashIcon />
+              Close as not relevant
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+      ) : null}
+      {dismissOpen ? (
+        <InboxDismissDialog
+          environmentId={environmentId}
+          issueId={issue.id}
+          onClose={() => setDismissOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Quiet lines under the title: how a closed issue ended, and which other threads took part. */
+function InboxIssueStatus({
+  environmentId,
+  issue,
+  connected,
+}: {
+  environmentId: EnvironmentId;
+  issue: InboxIssue;
+  connected: boolean;
+}) {
   const canUndismiss = useAtomValue(inboxAtoms.undismissIssue.permissionAtom(environmentId));
   const undismiss = useAtomCommand(inboxAtoms.undismissIssue, { label: "inbox reopen" });
-  const [dismissOpen, setDismissOpen] = useState(false);
   const [reopening, setReopening] = useState(false);
   const otherThreads = issue.threadIds.filter((threadId) => threadId !== issue.responsibleThreadId);
-  const responsible = issue.responsibleThreadId;
+  const closedAgo = issue.closedAt === null ? "" : formatRelativeTimeLabel(issue.closedAt);
 
   const reopen = async () => {
     setReopening(true);
@@ -293,72 +412,70 @@ function InboxIssueActions({
     }
   };
 
+  const line = (icon: ReactNode, children: ReactNode) => (
+    <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground [&_svg]:size-3.5 [&_svg]:shrink-0">
+      {icon}
+      {children}
+    </p>
+  );
+
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {responsible !== null ? (
-          <Button
-            size="sm"
-            onClick={() =>
-              void navigate({
-                to: "/$environmentId/$threadId",
-                params: buildThreadRouteParams(scopeThreadRef(environmentId, responsible)),
-              })
-            }
-          >
-            <MessageSquareIcon />
-            Open conversation
-          </Button>
-        ) : null}
-        {issue.state === "open" ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!connected || !canDismiss}
-            onClick={() => setDismissOpen(true)}
-          >
-            <XIcon />
-            Close as not relevant
-          </Button>
-        ) : null}
-        {issue.state === "dismissed" ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!connected || !canUndismiss || reopening}
-            onClick={() => void reopen()}
-          >
-            <RotateCcwIcon />
-            Reopen
-          </Button>
-        ) : null}
-      </div>
-      {responsible === null ? (
-        <p className="text-xs text-muted-foreground">
-          Your first comment starts a conversation with an agent.
-        </p>
-      ) : null}
-      {otherThreads.length > 0 ? (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span>Also worked on in</span>
-          {otherThreads.map((threadId) => (
-            <InboxThreadLink
-              key={threadId}
-              environmentId={environmentId}
-              threadId={threadId}
-              fallback="a thread"
-            />
-          ))}
-        </p>
-      ) : null}
-      {dismissOpen ? (
-        <InboxDismissDialog
-          environmentId={environmentId}
-          issueId={issue.id}
-          onClose={() => setDismissOpen(false)}
-        />
-      ) : null}
-    </div>
+    <>
+      {issue.state === "resolved"
+        ? line(
+            <CircleCheckIcon />,
+            <>
+              <span>Resolved{issue.closedBy === "agent" ? " by the agent" : ""}</span>
+              {closedAgo ? (
+                <>
+                  <MetaSeparator />
+                  <span>{closedAgo}</span>
+                </>
+              ) : null}
+            </>,
+          )
+        : null}
+      {issue.state === "dismissed"
+        ? line(
+            <CircleSlashIcon />,
+            <>
+              <span>Closed as not relevant</span>
+              {closedAgo ? (
+                <>
+                  <MetaSeparator />
+                  <span>{closedAgo}</span>
+                </>
+              ) : null}
+              <MetaSeparator />
+              <InlineButton
+                tone="muted"
+                disabled={!connected || !canUndismiss || reopening}
+                onClick={() => void reopen()}
+              >
+                Reopen
+              </InlineButton>
+            </>,
+          )
+        : null}
+      {otherThreads.length > 0
+        ? line(
+            <ArrowRightLeftIcon />,
+            <>
+              <span>Also worked on in</span>
+              {otherThreads.map((threadId, index) => (
+                <span key={threadId} className="contents">
+                  {index > 0 ? <MetaSeparator /> : null}
+                  <InboxThreadLink
+                    environmentId={environmentId}
+                    threadId={threadId}
+                    fallback="a thread"
+                  />
+                </span>
+              ))}
+            </>,
+          )
+        : null}
+    </>
   );
 }
 
@@ -439,14 +556,111 @@ function InboxDismissDialog({
   );
 }
 
+/** Files on an owner comment: thumbnails that open the image viewer, then file rows. */
+function InboxEntryAttachments({
+  environmentId,
+  attachments,
+  onExpandImage,
+}: {
+  environmentId: EnvironmentId;
+  attachments: ReadonlyArray<ChatAttachment>;
+  onExpandImage: (preview: ExpandedImagePreview) => void;
+}) {
+  const { resolvedTheme } = useTheme();
+  const resources = useMemo(
+    () =>
+      attachments.map((attachment) => ({
+        _tag: "attachment" as const,
+        attachmentId: attachment.id,
+      })),
+    [attachments],
+  );
+  const urls = useAssetUrls(environmentId, resources);
+  const items = attachments.map((attachment, index) => ({ attachment, url: urls[index] ?? null }));
+  const images = items.filter((item) => item.attachment.type === "image");
+  const files = items.filter((item) => item.attachment.type !== "image");
+  const viewable = images.flatMap((item) =>
+    item.url === null ? [] : [{ src: item.url, name: item.attachment.name }],
+  );
+
+  return (
+    <>
+      {images.length > 0 ? (
+        <div className="mb-2 grid max-w-[210px] grid-cols-2 gap-2">
+          {images.map(({ attachment, url }) => (
+            <div
+              key={attachment.id}
+              className="aspect-[4/3] overflow-hidden rounded-lg border border-border/80 bg-background/70"
+            >
+              {url !== null ? (
+                <button
+                  type="button"
+                  className="block h-full w-full cursor-zoom-in"
+                  aria-label={`Preview ${attachment.name}`}
+                  onClick={() =>
+                    onExpandImage({
+                      images: viewable,
+                      index: Math.max(
+                        0,
+                        viewable.findIndex((image) => image.src === url),
+                      ),
+                    })
+                  }
+                >
+                  <img src={url} alt={attachment.name} className="h-full w-full object-cover" />
+                </button>
+              ) : (
+                <span className="flex h-full items-center justify-center px-1 text-center text-3xs text-secondary-label">
+                  {attachment.name}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {files.length > 0 ? (
+        <div className="mb-2 flex flex-col gap-1">
+          {files.map(({ attachment, url }) => (
+            <div key={attachment.id} className="flex min-w-0 items-center gap-2 text-sm">
+              <PierreEntryIcon
+                pathValue={attachment.name}
+                kind="file"
+                mimeType={attachment.mimeType}
+                theme={resolvedTheme}
+              />
+              {url !== null ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 truncate hover:underline focus-visible:outline-2"
+                >
+                  {attachment.name}
+                </a>
+              ) : (
+                <span className="min-w-0 flex-1 truncate">{attachment.name}</span>
+              )}
+              <span className="shrink-0 text-xs opacity-60 tabular-nums">
+                {formatAttachmentSize(attachment.sizeBytes)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function InboxEntryView({
   environmentId,
   entry,
   cwd,
+  onExpandImage,
 }: {
   environmentId: EnvironmentId;
   entry: InboxEntry;
   cwd: string | undefined;
+  onExpandImage: (preview: ExpandedImagePreview) => void;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const failure = inboxDeliveryFailure(entry);
@@ -460,20 +674,45 @@ function InboxEntryView({
   );
   const warning =
     failure === null ? null : (
-      <p className="flex items-center gap-1 text-2xs text-warning-foreground">
+      <p className="flex items-center gap-1 px-1 text-2xs text-warning-foreground">
         <TriangleAlertIcon aria-hidden className="size-3 shrink-0" />
         Not delivered to the agent: {failure}
       </p>
     );
 
   if (entry.kind === "comment") {
-    const owner = entry.author === "owner";
+    const attachments = entry.attachments ?? [];
+    const text = entry.text?.trim() ?? "";
+    if (entry.author === "owner") {
+      // The owner's words look like their messages in a thread.
+      return (
+        <article className="flex flex-col items-end gap-1">
+          <p className="me-1 text-2xs text-muted-foreground/70">
+            You <MetaSeparator /> {time}
+          </p>
+          <div className="max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground">
+            {attachments.length > 0 ? (
+              <InboxEntryAttachments
+                environmentId={environmentId}
+                attachments={attachments}
+                onExpandImage={onExpandImage}
+              />
+            ) : null}
+            {text.length > 0 ? (
+              <div className="text-sm">
+                <ChatMarkdown text={text} cwd={cwd} environmentId={environmentId} lineBreaks />
+              </div>
+            ) : null}
+          </div>
+          {warning}
+        </article>
+      );
+    }
+    // An agent's words look like an answer in a thread: no bubble.
     return (
-      <article className={cn("flex flex-col gap-1", owner ? "items-end" : "items-start")}>
-        <div className="flex items-center gap-1.5 px-1 text-2xs text-muted-foreground">
-          {owner ? (
-            "You"
-          ) : entry.author === "agent" ? (
+      <article className="flex flex-col gap-1">
+        <p className="flex items-center gap-1.5 text-2xs text-muted-foreground/70">
+          {entry.author === "agent" ? (
             entry.threadId !== null ? (
               <InboxThreadLink
                 environmentId={environmentId}
@@ -486,21 +725,11 @@ function InboxEntryView({
           ) : (
             "T3 Code"
           )}
-          <span aria-hidden>·</span>
+          <MetaSeparator />
           {time}
-        </div>
-        <div
-          className={cn(
-            "max-w-[85%] rounded-2xl px-3 py-2 text-sm",
-            owner ? "bg-message text-message-foreground" : "border border-border bg-card",
-          )}
-        >
-          <ChatMarkdown
-            text={entry.text ?? ""}
-            cwd={cwd}
-            environmentId={environmentId}
-            lineBreaks={owner}
-          />
+        </p>
+        <div className="text-sm text-foreground">
+          <ChatMarkdown text={text} cwd={cwd} environmentId={environmentId} />
         </div>
         {warning}
       </article>
@@ -508,105 +737,32 @@ function InboxEntryView({
   }
 
   const event = describeInboxEvent(entry);
+  const Icon = EVENT_ICON[entry.kind];
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-1",
-        event.tone === "success" && "rounded-lg border border-success/30 bg-success/8 px-3 py-2",
-      )}
-    >
+    <div className="flex flex-col gap-1.5">
       <p
         className={cn(
-          "flex flex-wrap items-baseline gap-x-2 text-xs",
-          event.tone === "success"
-            ? "font-medium text-success-foreground"
-            : event.tone === "muted"
-              ? "text-muted-foreground"
-              : "text-foreground/80",
+          "flex min-w-0 items-center gap-2 text-xs",
+          event.tone === "muted" ? "text-muted-foreground" : "text-foreground/85",
+          event.tone === "outcome" && "font-medium",
         )}
       >
-        <span>{event.label}</span>
-        <span className="text-2xs text-muted-foreground">{time}</span>
+        <Icon
+          aria-hidden
+          className={cn(
+            "size-3.5 shrink-0",
+            event.tone === "muted" ? "text-muted-foreground/70" : "text-muted-foreground",
+          )}
+        />
+        <span className="min-w-0 truncate">{event.label}</span>
+        <span className="shrink-0 text-2xs font-normal text-muted-foreground/70">{time}</span>
       </p>
       {event.detail ? (
-        <div className="text-sm text-foreground/80">
+        <div className="ms-1.5 border-s-2 border-border ps-4 text-sm text-foreground/85">
           <ChatMarkdown text={event.detail} cwd={cwd} environmentId={environmentId} />
         </div>
       ) : null}
       {warning}
     </div>
-  );
-}
-
-function InboxCommentComposer({
-  environmentId,
-  issueId,
-  connected,
-  onSent,
-}: {
-  environmentId: EnvironmentId;
-  issueId: InboxIssueId;
-  connected: boolean;
-  onSent: () => void;
-}) {
-  const canComment = useAtomValue(inboxAtoms.commentOnIssue.permissionAtom(environmentId));
-  const comment = useAtomCommand(inboxAtoms.commentOnIssue, { label: "inbox comment" });
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const trimmed = text.trim();
-  const disabled = !connected || !canComment;
-
-  const send = async () => {
-    if (trimmed.length === 0 || sending || disabled) return;
-    setSending(true);
-    const result = await comment({ environmentId, input: { issueId, text: trimmed } });
-    setSending(false);
-    if (result._tag === "Success") {
-      setText("");
-      onSent();
-    } else if (!isAtomCommandInterrupted(result)) {
-      reportFailure("Could not send the comment", result);
-    }
-  };
-
-  return (
-    <form
-      className="shrink-0 border-t border-border bg-background px-5 py-3 sm:px-6"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void send();
-      }}
-    >
-      <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
-        <Textarea
-          size="sm"
-          aria-label="Comment"
-          aria-description="Enter to send; Shift+Enter for a new line."
-          maxLength={20_000}
-          placeholder={
-            disabled ? "You cannot comment from here right now" : "Write a comment for the agent"
-          }
-          disabled={disabled}
-          readOnly={sending}
-          value={text}
-          onChange={(event) => setText(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.nativeEvent.isComposing &&
-              event.keyCode !== 229
-            ) {
-              event.preventDefault();
-              void send();
-            }
-          }}
-        />
-        <Button type="submit" size="sm" disabled={disabled || sending || trimmed.length === 0}>
-          <SendIcon />
-          Send
-        </Button>
-      </div>
-    </form>
   );
 }

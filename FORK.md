@@ -92,6 +92,26 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-16 — Inbox: the chat's reply box and quiet states
+
+- **What.** The reply box on an issue is the chat composer: the same glass surface, editor,
+  paperclip and round send button. Images and files can be attached, pasted or dropped, and
+  reach the agent's thread with the comment. A comment may be a screenshot alone. "The agent is
+  waiting for your answer" sits on the box as a composer banner instead of a red badge.
+  States read like the rest of the app: severity is a small dot, a closed issue gets a quiet
+  status line ("Resolved by the agent · 2h ago", "Closed as not relevant · Reopen"), the
+  resolution is a quote in the activity, and nothing is green. The owner's comments look like
+  their thread messages, the agent's like its answers. "Conversation" and the overflow menu
+  ("Close as not relevant") sit beside the title; the list's tab is "Closed".
+- **How.** `inbox.comment` takes optional `attachments` uploaded through the composer's upload
+  queue (`attachments.createUploadUrl`). The service delivers through `ThreadMessageIntake`, which
+  claims the uploads into the responsible thread (or the thread a first comment starts); the
+  entry then keeps the thread's copies in `attachments_json`, since staged uploads are swept.
+  The column is added in place on older databases. Empty text with no attachment is refused.
+- **Where.** `packages/contracts/src/inbox.ts`, `apps/server/src/inbox/InboxService.ts` (+ test),
+  `apps/web/src/components/inbox/InboxComposer.tsx` (new), `InboxIssueDetail.tsx`,
+  `InboxPage.tsx`, `inbox.logic.ts`. The phone keeps its old screens and text-only replies.
+
 ### 2026-10-16 — Fork builds carry the synced release's version
 
 - **What.** After the v0.1.0 sync, fork builds are `0.1.0-sidebar.<run>` instead of

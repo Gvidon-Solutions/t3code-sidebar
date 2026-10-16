@@ -158,10 +158,11 @@ export const INBOX_SEVERITY_LABEL: Record<InboxSeverity, string> = {
   info: "For the record",
 };
 
+/** Severity is a small dot, the sidebar's status idiom; the words stay neutral. */
 export const INBOX_SEVERITY_DOT_CLASS: Record<InboxSeverity, string> = {
-  action: "bg-destructive",
-  attention: "bg-warning",
-  info: "bg-muted-foreground/40",
+  action: "bg-destructive/90",
+  attention: "bg-warning/90",
+  info: "bg-muted-foreground/35",
 };
 
 export function inboxButtonLabel(counts: InboxCounts): string {
@@ -172,7 +173,8 @@ export function inboxButtonLabel(counts: InboxCounts): string {
   return parts.join(" · ");
 }
 
-export type InboxEventTone = "default" | "success" | "muted";
+/** muted: bookkeeping; default: worth reading; outcome: how the issue ended, with its note. */
+export type InboxEventTone = "default" | "muted" | "outcome";
 
 export interface InboxEventPresentation {
   readonly label: string;
@@ -209,9 +211,9 @@ export function describeInboxEvent(entry: InboxEntry): InboxEventPresentation {
     case "repeated":
       return { label: "Reported again", detail: null, tone: "muted" };
     case "resolved":
-      return { label: "Resolved", detail: entry.text, tone: "success" };
+      return { label: "Resolved", detail: entry.text, tone: "outcome" };
     case "dismissed":
-      return { label: "Closed as not relevant", detail: entry.text, tone: "default" };
+      return { label: "Closed as not relevant", detail: entry.text, tone: "outcome" };
     case "undismissed":
       return { label: "Reopened", detail: null, tone: "default" };
     case "comment":
