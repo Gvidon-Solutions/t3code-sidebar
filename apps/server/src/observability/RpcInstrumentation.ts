@@ -1,5 +1,6 @@
 import {
   INBOX_WS_METHODS,
+  UI_REQUESTS_WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
   WS_METHODS,
   type WsRpcGroup,
@@ -105,6 +106,7 @@ const RPC_AGGREGATES = {
   [INBOX_WS_METHODS.markSeen]: "inbox",
   [INBOX_WS_METHODS.dismiss]: "inbox",
   [INBOX_WS_METHODS.undismiss]: "inbox",
+  [UI_REQUESTS_WS_METHODS.subscribe]: "uiRequests",
   [WS_METHODS.secretsAnswerRequest]: "secrets",
   [WS_METHODS.cloudGetRelayClientStatus]: "cloud",
   [WS_METHODS.cloudInstallRelayClient]: "cloud",

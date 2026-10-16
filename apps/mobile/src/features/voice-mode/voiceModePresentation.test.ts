@@ -64,7 +64,7 @@ describe("resolveVoiceModeNotice", () => {
       resolveVoiceModeNotice({ ...INITIAL_VOICE_MODE_STATE, target, endedReason: "replaced" }),
     ).toEqual({
       title: "Voice conversation ended",
-      message: "Voice conversation moved to another window or device.",
+      message: "The conversation moved to another device.",
     });
   });
 });

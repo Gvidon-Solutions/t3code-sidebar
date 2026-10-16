@@ -34,6 +34,7 @@ import {
 } from "@t3tools/contracts";
 import { useParams, useRouter } from "@tanstack/react-router";
 import {
+  AudioLinesIcon,
   ChevronRightIcon,
   EllipsisIcon,
   FolderPlusIcon,
@@ -96,6 +97,8 @@ import {
 } from "../../threadRoutes";
 import type { SidebarThreadSummary } from "../../types";
 import { useUiStateStore } from "../../uiStateStore";
+import { useTalk } from "../../voice/useTalk";
+import { useVoiceThreadRef } from "../../voice/voiceMode";
 import { ProjectFavicon } from "../ProjectFavicon";
 import {
   resolveAdjacentThreadId,
@@ -247,6 +250,8 @@ export default function WorkspaceSidebar() {
     reportFailure: false,
   });
   const handleNewThread = useNewThreadHandler();
+  const talk = useTalk();
+  const voiceThreadRef = useVoiceThreadRef();
 
   // ── Config ────────────────────────────────────────────────────────────
   // Edits go to every server that syncs shared settings. Reads prefer a
@@ -456,6 +461,17 @@ export default function WorkspaceSidebar() {
     [threads],
   );
   const routeThread = routeThreadKey ? (threadByKey.get(routeThreadKey) ?? null) : null;
+  // The thread holding this client's voice conversation sits on top of the
+  // list, in every view, instead of in its usual place.
+  const voiceThread = (() => {
+    const thread = voiceThreadRef ? threadByKey.get(scopedThreadKey(voiceThreadRef)) : undefined;
+    return thread && thread.archivedAt === null ? thread : null;
+  })();
+  const voiceThreadKey = voiceThread ? threadKeyOf(voiceThread) : null;
+  const withoutVoiceThread = (threads: SidebarThreadSummary[]) =>
+    voiceThreadKey === null
+      ? threads
+      : threads.filter((thread) => threadKeyOf(thread) !== voiceThreadKey);
   const routeTargetThread = routeThread ?? routeDraftThread;
   const routePinned = routeThread?.pinnedAt != null;
   const routeWorkspaceIds = routeTargetThread ? workspacesOfThread(routeTargetThread) : [];
@@ -925,7 +941,7 @@ export default function WorkspaceSidebar() {
   const orderedThreadKeys = useMemo(() => {
     if (isSearching) return searchResults.map(({ thread }) => threadKeyOf(thread));
     // A Set: in the all-workspaces list a project can show more than once.
-    const keys = new Set<string>();
+    const keys = new Set<string>(voiceThreadKey === null ? [] : [voiceThreadKey]);
     for (const bucket of visibleWorkspaces) {
       for (const thread of bucket.pinned) keys.add(threadKeyOf(thread));
       for (const folder of bucket.folders) {
@@ -945,6 +961,7 @@ export default function WorkspaceSidebar() {
     view.tilesVisible,
     view.folderOpen,
     withPinned,
+    voiceThreadKey,
   ]);
   const jumpLabelByKey = useMemo(
     () => new Map(orderedThreadKeys.slice(0, 9).map((key, index) => [key, String(index + 1)])),
@@ -1094,6 +1111,7 @@ export default function WorkspaceSidebar() {
     projectLabel?: string | null,
   ) => {
     const key = threadKeyOf(thread);
+    if (key === voiceThreadKey && variant !== "voice") return null;
     const agents = model.agentsByRoot.get(key);
     if (!agents) return renderRow(thread, variant, projectLabel);
     const summary = summarizeThreadAgents(agents);
@@ -1119,6 +1137,11 @@ export default function WorkspaceSidebar() {
     if (!group) return null;
     return model.scratchProjectKeys.has(group.projectKey) ? SCRATCH_LABEL : group.displayName;
   };
+  const voiceRow = voiceThread ? (
+    <div className="mb-1 flex flex-col">
+      {renderThread(voiceThread, "voice", labelOfThread(voiceThread))}
+    </div>
+  ) : null;
 
   /** Drops the dragged folder next to `target`, in that workspace's own order. */
   const dropFolder = (target: FolderModel, after: boolean) => {
@@ -1342,11 +1365,13 @@ export default function WorkspaceSidebar() {
     const snoozedKey = `snoozed:${bucket.workspace.id}`;
     const snoozedOpen = view.sectionOpen[snoozedKey] ?? false;
     const quietDrop = quietDropOf(bucket);
+    const pinned = withoutVoiceThread(bucket.pinned);
     return (
       <div className="flex flex-col gap-0.5">
-        {!nested && bucket.pinned.length > 0 ? (
+        {nested ? null : voiceRow}
+        {!nested && pinned.length > 0 ? (
           <Section icon={<PinIcon className="size-3" />} label="Pinned">
-            {bucket.pinned.map((thread) => renderThread(thread, "pinned", labelOfThread(thread)))}
+            {pinned.map((thread) => renderThread(thread, "pinned", labelOfThread(thread)))}
           </Section>
         ) : null}
         {loud.length === 0 && quiet.length === 0 ? (
@@ -1389,7 +1414,7 @@ export default function WorkspaceSidebar() {
   };
 
   const renderAllWorkspaces = () => {
-    const allPinned = model.pinned;
+    const allPinned = withoutVoiceThread(model.pinned);
     const allSnoozed = sortSnoozedThreads([
       ...new Map(
         [...model.byWorkspace.values()]
@@ -1400,6 +1425,7 @@ export default function WorkspaceSidebar() {
     const snoozedOpen = view.sectionOpen["snoozed:all"] ?? false;
     return (
       <div className="flex flex-col gap-1">
+        {voiceRow}
         {allPinned.length > 0 ? (
           <Section icon={<PinIcon className="size-3" />} label="Pinned">
             {allPinned.map((thread) => renderThread(thread, "pinned", labelOfThread(thread)))}
@@ -1511,6 +1537,17 @@ export default function WorkspaceSidebar() {
             >
               <FolderPlusIcon />
             </SidebarHeaderIconButton>
+            {talk ? (
+              <SidebarHeaderIconButton
+                label="Talk in a new thread"
+                onClick={() => {
+                  if (isMobile) setOpenMobile(false);
+                  talk();
+                }}
+              >
+                <AudioLinesIcon />
+              </SidebarHeaderIconButton>
+            ) : null}
             <SidebarHeaderIconButton
               label="New thread"
               onClick={() => {

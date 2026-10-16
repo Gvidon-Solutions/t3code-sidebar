@@ -35,6 +35,8 @@ import { NightlyMobileBetaNotice } from "../components/NightlyMobileBeta";
 import { LegacyThreadMigrationToast } from "../components/LegacyThreadMigrationToast";
 import { ThreadNotificationCoordinator } from "../components/ThreadNotificationCoordinator";
 import { InboxNotificationCoordinator } from "../components/inbox/InboxNotificationCoordinator";
+import { UiRequestCoordinator } from "../components/uiRequests/UiRequestCoordinator";
+import { VoiceBubble } from "../components/voice/VoiceBubble";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { PullRequestGuideRunCoordinator } from "../components/pullRequest/guide/PullRequestGuideRunCoordinator";
@@ -255,6 +257,8 @@ function RootRouteView() {
           <SnapShotCoordinator />
           <ThreadNotificationCoordinator />
           <InboxNotificationCoordinator />
+          <UiRequestCoordinator />
+          <VoiceBubble />
           <ReopenClosedViewShortcut />
           <ConfirmDialogHost />
           <CustomSnoozeDialogHost />

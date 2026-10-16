@@ -1,10 +1,22 @@
 import type { VoiceSessionTarget } from "@t3tools/client-runtime/voice-mode";
+import type { ScopedThreadRef } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import { AudioLinesIcon, MicIcon, MicOffIcon, SquareIcon } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { cn } from "~/lib/utils";
-import { isVoiceTargetFor, useVoiceModeState, voiceMode } from "~/voice/voiceMode";
+import { useThreadShell } from "~/state/entities";
+import { buildThreadRouteParams } from "~/threadRoutes";
+import { VOICE_THREAD_TITLE } from "~/voice/voiceAvailability";
+import {
+  isVoiceTargetFor,
+  useVoiceModeState,
+  useVoiceMuted,
+  useVoicePhaseFor,
+  useVoiceThreadRef,
+  voiceMode,
+} from "~/voice/voiceMode";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { ComposerBanner } from "./ComposerBanner";
@@ -64,16 +76,96 @@ function LevelMeter({
 }
 
 /**
+ * The voice strip above a thread's composer: the full strip on the thread that
+ * holds this client's conversation, a compact one on every other thread.
+ */
+export const VoiceModeStrip = memo(function VoiceModeStrip({
+  target,
+  onTalkHere,
+}: {
+  target: VoiceSessionTarget;
+  /** Moves the conversation to this thread; null when this thread has no voice. */
+  onTalkHere: (() => void) | null;
+}) {
+  const onThread = useVoicePhaseFor(target) !== "idle";
+  return onThread ? (
+    <ThreadVoiceStrip target={target} />
+  ) : (
+    <ElsewhereVoiceStrip onTalkHere={onTalkHere} />
+  );
+});
+
+/**
+ * A conversation held on another thread: where it is, mute, stop, and a way
+ * to bring it here.
+ */
+function ElsewhereVoiceStrip({ onTalkHere }: { onTalkHere: (() => void) | null }) {
+  const voiceThreadRef = useVoiceThreadRef();
+  if (voiceThreadRef === null) return null;
+  return <ElsewhereVoiceStripRow voiceThreadRef={voiceThreadRef} onTalkHere={onTalkHere} />;
+}
+
+function ElsewhereVoiceStripRow({
+  voiceThreadRef,
+  onTalkHere,
+}: {
+  voiceThreadRef: ScopedThreadRef;
+  onTalkHere: (() => void) | null;
+}) {
+  const muted = useVoiceMuted();
+  const title = useThreadShell(voiceThreadRef)?.title ?? VOICE_THREAD_TITLE;
+  const navigate = useNavigate();
+  return (
+    <ComposerBanner.Root data-chat-composer-voice-strip="elsewhere">
+      <ComposerBanner.Row>
+        <ComposerBanner.Icon>
+          <AudioLinesIcon />
+        </ComposerBanner.Icon>
+        <ComposerBanner.Content>
+          <button
+            type="button"
+            className="min-w-0 truncate text-left text-muted-foreground hover:text-foreground"
+            onClick={() =>
+              void navigate({
+                to: "/$environmentId/$threadId",
+                params: buildThreadRouteParams(voiceThreadRef),
+              })
+            }
+          >
+            Voice: <span className="text-foreground">{title}</span>
+          </button>
+        </ComposerBanner.Content>
+        <ComposerBanner.Actions>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label={muted ? "Unmute microphone" : "Mute microphone"}
+            onClick={() => voiceMode.toggleMuted()}
+          >
+            {muted ? <MicOffIcon aria-hidden /> : <MicIcon aria-hidden />}
+          </Button>
+          <Button size="xs" variant="ghost" onClick={() => voiceMode.stop()}>
+            <SquareIcon className="size-3" aria-hidden />
+            Stop
+          </Button>
+          {onTalkHere ? (
+            <Button size="xs" variant="ghost" onClick={onTalkHere}>
+              Talk here
+            </Button>
+          ) : null}
+        </ComposerBanner.Actions>
+      </ComposerBanner.Row>
+    </ComposerBanner.Root>
+  );
+}
+
+/**
  * Live status for the thread's voice conversation: state, mic and speaker
  * meters, mute and stop, and the latest captions. Meters are written straight
  * to the DOM from the controller's level samples so the composer never
  * re-renders per sample.
  */
-export const VoiceModeStrip = memo(function VoiceModeStrip({
-  target,
-}: {
-  target: VoiceSessionTarget;
-}) {
+function ThreadVoiceStrip({ target }: { target: VoiceSessionTarget }) {
   const state = useVoiceModeState();
   const isOnThread = isVoiceTargetFor(state, target) && state.phase !== "idle";
   const isActive = isOnThread && state.phase === "active";
@@ -169,4 +261,4 @@ export const VoiceModeStrip = memo(function VoiceModeStrip({
       ) : null}
     </ComposerBanner.Root>
   );
-});
+}

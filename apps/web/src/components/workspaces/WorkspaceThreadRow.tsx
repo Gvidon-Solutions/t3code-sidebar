@@ -2,6 +2,7 @@ import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environ
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import {
   AlarmClockOffIcon,
+  AudioLinesIcon,
   CheckIcon,
   CircleAlertIcon,
   CircleCheckIcon,
@@ -31,8 +32,11 @@ import { resolveSidebarThreadStatus, resolveWorkingStartedAt } from "../Sidebar.
 import { useWorkspaceViewStore } from "./workspaceViewStore";
 import { compactAgo, isThreadUnread, threadActivityMs } from "./workspaces.logic";
 
-/** `agent`: a subagent under the thread that started it (WorkspaceAgentGroup). */
-export type WorkspaceRowVariant = "active" | "pinned" | "settled" | "snoozed" | "agent";
+/**
+ * `agent`: a subagent under the thread that started it (WorkspaceAgentGroup).
+ * `voice`: the thread holding this client's voice conversation, on top of the list.
+ */
+export type WorkspaceRowVariant = "active" | "pinned" | "settled" | "snoozed" | "agent" | "voice";
 
 export interface WorkspaceThreadRowProps {
   thread: SidebarThreadSummary;
@@ -219,7 +223,17 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
       onKeyDown={handleKeyDown}
       onContextMenu={handleContextMenu}
     >
-      <StatusGlyph thread={thread} isUnread={isUnread} isAgent={variant === "agent"} />
+      {variant === "voice" ? (
+        <span
+          className="flex size-3.5 shrink-0 items-center justify-center"
+          role="img"
+          aria-label="Voice conversation"
+        >
+          <AudioLinesIcon className="size-3.5 text-sidebar-foreground" />
+        </span>
+      ) : (
+        <StatusGlyph thread={thread} isUnread={isUnread} isAgent={variant === "agent"} />
+      )}
       {props.isRenaming ? (
         <RenameInput
           initialTitle={thread.title}

@@ -168,6 +168,7 @@ import { buildThreadRouteParams, resolveThreadRouteTarget } from "../threadRoute
 import { useAvailableSettingsSearchItems } from "./settings/useAvailableSettingsSearchItems";
 import { resolveThreadVoiceAvailability } from "../voice/voiceAvailability";
 import { toggleThreadVoice, useVoiceModeState, voiceMode } from "../voice/voiceMode";
+import { useTalk } from "../voice/useTalk";
 import {
   applyWslEnvironmentConfiguration,
   parseWslUncPath,
@@ -671,6 +672,7 @@ function OpenCommandPaletteDialog(props: {
     activeThread?.environmentId ?? ("" as EnvironmentId),
   );
   const voiceState = useVoiceModeState();
+  const talk = useTalk();
   const activeThreadReferenceCopyTarget =
     referenceThreadRef === null || (pathname === "/pull-requests" && !openPanelPullRequestUrl)
       ? null
@@ -2028,10 +2030,7 @@ function OpenCommandPaletteDialog(props: {
         kind: "action",
         value: "action:voice-start",
         searchTerms: ["voice", "talk", "speak", "conversation", "microphone", "realtime"],
-        title: "Start voice conversation",
-        description:
-          voiceAvailability.kind === "unavailable" ? voiceAvailability.reason : undefined,
-        disabled: voiceAvailability.kind === "unavailable",
+        title: voiceEngaged ? "Move voice conversation here" : "Start voice conversation",
         icon: <AudioLinesIcon className={ITEM_ICON_CLASS} />,
         shortcutCommand: "voice.toggle",
         run: async () => {
@@ -2039,6 +2038,18 @@ function OpenCommandPaletteDialog(props: {
         },
       });
     }
+  }
+  if (talk) {
+    actionItems.push({
+      kind: "action",
+      value: "action:voice-talk",
+      searchTerms: ["talk", "voice", "speak", "conversation", "new thread", "microphone"],
+      title: "Talk in a new thread",
+      icon: <AudioLinesIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        talk();
+      },
+    });
   }
   // Stop and mute act on the one conversation, wherever it runs.
   if (voiceEngaged) {

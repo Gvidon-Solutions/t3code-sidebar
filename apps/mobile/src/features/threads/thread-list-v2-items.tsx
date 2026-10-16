@@ -499,7 +499,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly thread: EnvironmentThreadShell;
   readonly variant: "card" | "slim";
   /** Sidebar fork: draw as one line in a workspace folder (same menu and swipes). */
-  readonly compact?: { readonly projectLabel: string | null; readonly nested?: boolean };
+  readonly compact?: {
+    readonly projectLabel: string | null;
+    readonly nested?: boolean;
+    readonly voice?: boolean;
+  };
   /** A message for this thread is waiting in the outbox. */
   readonly hasQueuedMessages?: boolean;
   /** Snoozed-shelf row: shows its wake time and offers Wake. */
@@ -1223,6 +1227,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           showPin={thread.pinnedAt != null && !pinnedRow}
           projectLabel={props.compact.projectLabel}
           nested={props.compact.nested === true}
+          voice={props.compact.voice === true}
           timeLabel={props.timeLabel}
           working={status === "working"}
           hasQueuedMessages={props.hasQueuedMessages === true}

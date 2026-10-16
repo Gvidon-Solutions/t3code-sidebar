@@ -47,6 +47,7 @@ import {
 import { ArchivedThreadsRouteScreen } from "./features/archive/ArchivedThreadsRouteScreen";
 import { InboxRouteScreen } from "./features/inbox/InboxRouteScreen";
 import { InboxIssueRouteScreen } from "./features/inbox/InboxIssueRouteScreen";
+import { VoiceModeRootLayer } from "./features/voice-mode/VoiceModeRootLayer";
 import { useAgentNotificationNavigation } from "./features/agent-awareness/notificationNavigation";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { useConnectOnboardingNavigation } from "./features/cloud/connectOnboardingNavigation";
@@ -603,9 +604,11 @@ function workspaceLocationFromState(state: NavigationState) {
       ? ({ ...state, routes, index: routes.length - 1 } as NavigationState)
       : state;
   const path = getPathFromState(effectiveState, navigationPathConfig);
+  const route = effectiveState.routes[effectiveState.index];
   return {
     pathname: path.startsWith("/") ? path : `/${path}`,
-    routeKey: effectiveState.routes[effectiveState.index]?.key,
+    routeKey: route?.key,
+    route,
   };
 }
 
@@ -666,6 +669,8 @@ function RootStackLayout(props: {
             {props.children}
             <HardwareKeyboardCommandOverlay />
           </AdaptiveWorkspaceLayout>
+          {/* Sidebar fork: voice notices, the voice bubble and agents' ui requests. */}
+          <VoiceModeRootLayer route={workspaceLocation.route} />
         </AndroidWorkspaceTabsProvider>
       </ExistingThreadSettingsRouteProvider>
     </HardwareKeyboardCommandProvider>

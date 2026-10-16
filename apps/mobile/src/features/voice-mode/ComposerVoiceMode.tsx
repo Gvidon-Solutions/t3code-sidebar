@@ -1,3 +1,4 @@
+import { useNavigation } from "@react-navigation/native";
 import type { VoiceModePhase } from "@t3tools/client-runtime/voice-mode";
 import { memo, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -12,7 +13,7 @@ import Animated, {
 import { AppText as Text } from "../../components/AppText";
 import { SymbolView, type AppSymbolName } from "../../components/AppSymbol";
 import { cn } from "../../lib/cn";
-import { useVoiceModeState } from "./useVoiceMode";
+import { useLiveVoiceThread, useVoiceModeMuted, useVoiceModeState } from "./useVoiceMode";
 import { voiceMode } from "./voiceMode";
 import {
   createSpeakingDetector,
@@ -76,7 +77,8 @@ const LevelBar = memo(function LevelBar(props: {
   );
 });
 
-function StripButton(props: {
+/** A round icon control in the voice strips and the bubble's panel. */
+export function VoiceStripButton(props: {
   readonly accessibilityLabel: string;
   readonly icon: AppSymbolName;
   readonly onPress: () => void;
@@ -91,6 +93,60 @@ function StripButton(props: {
     >
       <SymbolView name={props.icon} size={16} tintColorClassName="accent-icon" type="monochrome" />
     </Pressable>
+  );
+}
+
+/**
+ * Sidebar fork: above the composer of every other thread while a conversation
+ * runs elsewhere on this device. Its thread's title opens it; "Talk here"
+ * moves the conversation to this thread (shown only where voice can start).
+ * Renders nothing while no conversation runs.
+ */
+export function ComposerVoiceElsewhereStrip(props: { readonly onTalkHere?: () => void }) {
+  const navigation = useNavigation();
+  const live = useLiveVoiceThread();
+  const muted = useVoiceModeMuted();
+  if (live === null) return null;
+  return (
+    <View className="mb-2 flex-row items-center gap-1 rounded-2xl border border-composer-border bg-card py-0.5 pr-1 pl-3">
+      <Pressable
+        accessibilityHint="Opens the thread you are talking in"
+        accessibilityRole="button"
+        className="min-w-0 flex-1 flex-row items-center gap-2 py-1.5 active:opacity-70"
+        onPress={() =>
+          navigation.navigate("Thread", {
+            environmentId: live.target.environmentId,
+            threadId: live.target.threadId,
+          })
+        }
+      >
+        <SymbolView name="waveform" size={14} tintColorClassName="accent-primary" />
+        <Text className="min-w-0 flex-1 text-sm text-foreground" numberOfLines={1}>
+          <Text className="text-sm font-t3-medium text-foreground">Voice: </Text>
+          {live.title}
+        </Text>
+      </Pressable>
+      <VoiceStripButton
+        accessibilityLabel={muted ? "Unmute microphone" : "Mute microphone"}
+        icon={muted ? "mic.slash" : "mic"}
+        onPress={() => voiceMode.toggleMuted()}
+      />
+      <VoiceStripButton
+        accessibilityLabel="End voice conversation"
+        icon="stop.fill"
+        onPress={() => voiceMode.stop()}
+      />
+      {props.onTalkHere ? (
+        <Pressable
+          accessibilityHint="Moves the voice conversation to this thread"
+          accessibilityRole="button"
+          className="h-9 justify-center rounded-full px-2.5 active:bg-subtle"
+          onPress={props.onTalkHere}
+        >
+          <Text className="text-sm font-t3-medium text-primary">Talk here</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -140,12 +196,12 @@ export function ComposerVoiceStrip() {
         >
           {VOICE_STRIP_STATUS_LABEL[status]}
         </Text>
-        <StripButton
+        <VoiceStripButton
           accessibilityLabel={state.muted ? "Unmute microphone" : "Mute microphone"}
           icon={state.muted ? "mic.slash" : "mic"}
           onPress={() => voiceMode.toggleMuted()}
         />
-        <StripButton
+        <VoiceStripButton
           accessibilityLabel="End voice conversation"
           icon="stop.fill"
           onPress={() => voiceMode.stop()}

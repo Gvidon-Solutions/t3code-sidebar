@@ -40,6 +40,7 @@ function build(
     folders?: ReturnType<typeof folder>[];
     otherFolders?: ReturnType<typeof folder>[];
     projectOrder?: ReadonlyArray<string>;
+    voiceThreadKey?: string;
   } = {},
 ): WorkspaceHomeListItem[] {
   return buildWorkspaceHomeItems({
@@ -55,6 +56,7 @@ function build(
     snoozeEnvironmentIds: new Set([environmentId]),
     queuedThreadKeys: new Set(),
     selectedThreadKey: null,
+    ...(options.voiceThreadKey ? { voiceThreadKey: options.voiceThreadKey } : {}),
     now: NOW,
     toRow: (item: ThreadListV2Item) => ({
       type: "v2-thread",
@@ -80,13 +82,30 @@ const outline = (items: WorkspaceHomeListItem[]) =>
         : item.type === "ws-more"
           ? `more ${item.label}`
           : item.type === "ws-thread"
-            ? `${item.nested ? "  agent" : "thread"} ${item.item.thread.title}${item.projectLabel ? ` [${item.projectLabel}]` : ""}`
+            ? `${item.nested ? "  agent" : item.voice ? "voice" : "thread"} ${item.item.thread.title}${item.projectLabel ? ` [${item.projectLabel}]` : ""}`
             : item.type === "ws-agents"
               ? `agents ${item.label}${item.open ? "" : " (closed)"}`
               : item.type,
   );
 
 describe("buildWorkspaceHomeItems", () => {
+  it("puts this device's voice conversation first, and only there", () => {
+    const threads = [
+      thread("pinned", "a", { pinnedAt: hoursAgo(1) }),
+      thread("talking", "b", { pinnedAt: hoursAgo(1) }),
+      thread("active", "a"),
+    ];
+    expect(outline(build(threads, [], { voiceThreadKey: `${environmentId}:talking` }))).toEqual([
+      "voice talking [Beta]",
+      "section pinned 1",
+      "thread pinned [Alpha]",
+      "folder Alpha",
+      "thread active",
+      "folder Beta",
+      "more New thread",
+    ]);
+  });
+
   it("shows threads pinned in other workspaces, and nothing else of theirs", () => {
     const items = build(
       [

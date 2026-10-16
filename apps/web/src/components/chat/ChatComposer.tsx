@@ -360,8 +360,14 @@ import {
 } from "./composerScrollGesture";
 import { prepareVideoFirstFrame } from "../../lib/videoFirstFrame";
 import { observeResize } from "~/lib/observeResize";
-import { resolveVoiceAvailability } from "../../voice/voiceAvailability";
-import { toggleThreadVoice, useVoicePhaseFor, voiceMode } from "../../voice/voiceMode";
+import { useStartVoiceThread } from "../../voice/useStartVoiceThread";
+import { findVoiceProvider, resolveVoiceAvailability } from "../../voice/voiceAvailability";
+import {
+  toggleThreadVoice,
+  useVoicePhaseFor,
+  useVoiceThreadRef,
+  voiceMode,
+} from "../../voice/voiceMode";
 import { VoiceModeStrip } from "./VoiceModeStrip";
 
 function ComposerVideoThumbnail({ file }: { file: File }) {
@@ -1537,6 +1543,8 @@ export interface ChatComposerHandle {
   /** Validate the fully composed text immediately before a provider turn starts. */
   validateProviderInput: (providerInput: string) => boolean;
   setMultipleModelSelections: (selections: ReadonlyArray<ModelSelection>) => void;
+  /** `/voice` sent as a message: false when the thread has no voice, so it goes out as text. */
+  toggleVoice: () => boolean;
 }
 
 // --------------------------------------------------------------------------
@@ -1759,7 +1767,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeThreadEnvironmentId: _activeThreadEnvironmentId,
     activeThread,
     promptHistoryMessages,
-    isServerThread: _isServerThread,
+    isServerThread,
     isLocalDraftThread: _isLocalDraftThread,
     forceExpandedOnMobile,
     projectSelectionRequired,
@@ -2269,33 +2277,58 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [selectedProviderEntry],
   );
   const compactCommandAvailable = providerSupportsManualCompaction(selectedProviderEntry);
-  // Voice follows the provider that owns the thread; a draft without a thread
-  // shell follows the composer's selection and waits for its first message.
+  // Voice follows the provider that owns a server thread. A draft is not on
+  // the server yet: voice first creates its thread, on the draft's model when
+  // that provider holds voice, otherwise on the voice provider.
   const voiceThread = activeThread ?? props.activeThreadShell ?? null;
   const voiceProviderInstanceId = voiceThread?.providerInstanceId ?? selectedInstanceId;
-  const voiceThreadHasMessages = voiceThread?.latestUserMessageAt != null;
-  const voiceThreadHasSession = voiceThread?.activeProviderThreadId != null;
   const voiceAvailability = useMemo(
     () =>
-      resolveVoiceAvailability({
-        provider: providerStatuses.find(
-          (provider) => provider.instanceId === voiceProviderInstanceId,
-        ),
-        hasMessages: voiceThreadHasMessages,
-        hasSession: voiceThreadHasSession,
-      }),
-    [providerStatuses, voiceProviderInstanceId, voiceThreadHasMessages, voiceThreadHasSession],
+      isServerThread
+        ? resolveVoiceAvailability(
+            providerStatuses.find((provider) => provider.instanceId === voiceProviderInstanceId),
+          )
+        : resolveVoiceAvailability(findVoiceProvider(providerStatuses)),
+    [isServerThread, providerStatuses, voiceProviderInstanceId],
   );
   const voicePhase = useVoicePhaseFor(routeThreadRef);
   const voiceEngaged = voicePhase !== "idle";
+  const voiceElsewhere = useVoiceThreadRef() !== null && !voiceEngaged;
   // A conversation stays stoppable here even if its provider stopped offering voice.
   const voiceSupported = voiceAvailability.kind !== "unsupported" || voiceEngaged;
-  const toggleVoice = useCallback(
-    () => toggleThreadVoice(routeThreadRef, voiceAvailability),
-    [routeThreadRef, voiceAvailability],
-  );
-  const voiceButtonDisabledReason =
-    voiceAvailability.kind === "unavailable" && !voiceEngaged ? voiceAvailability.reason : null;
+  const startVoiceThread = useStartVoiceThread();
+  const draftVoiceThread =
+    !isServerThread && activeThread
+      ? {
+          environmentId,
+          projectId: activeThread.projectId,
+          branch: activeThread.branch,
+          worktreePath: activeThread.worktreePath,
+        }
+      : null;
+  const draftVoiceThreadRef = useRef(draftVoiceThread);
+  draftVoiceThreadRef.current = draftVoiceThread;
+  const voiceModelSelectionRef = useRef<ModelSelection | null>(null);
+  const voiceRuntimeModeRef = useRef(runtimeMode);
+  voiceRuntimeModeRef.current = runtimeMode;
+  // True when this press is handled as voice; false leaves "/voice" a normal message.
+  const toggleVoice = useCallback((): boolean => {
+    const draft = draftVoiceThreadRef.current;
+    if (draft !== null && !voiceMode.isActiveFor(routeThreadRef)) {
+      if (voiceAvailability.kind === "unsupported") return false;
+      void startVoiceThread({
+        ...draft,
+        modelSelection: voiceModelSelectionRef.current,
+        runtimeMode: voiceRuntimeModeRef.current,
+      });
+      return true;
+    }
+    if (voiceAvailability.kind === "unsupported" && !voiceMode.isActiveFor(routeThreadRef)) {
+      return false;
+    }
+    toggleThreadVoice(routeThreadRef, voiceAvailability);
+    return true;
+  }, [routeThreadRef, startVoiceThread, voiceAvailability]);
   const voiceButtonLabel = voiceEngaged ? "Stop voice conversation" : "Start voice conversation";
   // Memoized so the composer menu memo below can cache between renders.
   const selectedProviderSkills = useMemo(
@@ -2444,6 +2477,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     () => createModelSelection(selectedInstanceId, selectedModel, selectedModelOptionsForDispatch),
     [selectedInstanceId, selectedModel, selectedModelOptionsForDispatch],
   );
+  voiceModelSelectionRef.current = selectedModelSelection;
   const selectedModelForPicker = selectedModel;
   // Instance-keyed option list so the picker can show each configured
   // instance (built-in + custom) as a first-class sidebar entry. The
@@ -6611,6 +6645,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         setProviderInputSubmissionError(validationMessage);
         return validationMessage === null;
       },
+      toggleVoice,
     }),
     [
       activeThread,
@@ -6662,6 +6697,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       getTimelineScrollableNode,
       isTimelineAtLogicalEnd,
       setIsComposerScrollCollapsed,
+      toggleVoice,
     ],
   );
 
@@ -6778,9 +6814,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               </ComposerBanner.Root>
             </ComposerBanner.Attachment>
           ) : null}
-          {voiceEngaged ? (
+          {voiceEngaged || voiceElsewhere ? (
             <ComposerBanner.Attachment>
-              <VoiceModeStrip target={routeThreadRef} />
+              <VoiceModeStrip
+                target={routeThreadRef}
+                onTalkHere={voiceAvailability.kind === "ready" ? toggleVoice : null}
+              />
             </ComposerBanner.Attachment>
           ) : null}
           {showComposerTopDrawer && (!isTasksDrawerOpen || hasBlockingComposerTopDrawer) ? (
@@ -7690,24 +7729,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                           <Toggle
                             variant="ghost"
                             size="sm"
-                            // aria-disabled rather than disabled keeps the tooltip explaining why.
-                            className="aria-disabled:cursor-not-allowed"
                             pressed={voiceEngaged}
                             onPointerDown={(event) => event.preventDefault()}
                             onPressedChange={() => {
-                              if (voiceButtonDisabledReason === null) toggleVoice();
+                              toggleVoice();
                             }}
-                            aria-disabled={voiceButtonDisabledReason !== null || undefined}
                             aria-label={voiceButtonLabel}
                           />
                         }
                       >
-                        {/* Dim the glyph, not the Toggle, which owns its own disabled styling. */}
-                        <AudioLinesIcon
-                          className={voiceButtonDisabledReason === null ? undefined : "opacity-50"}
-                        />
+                        <AudioLinesIcon />
                       </TooltipTrigger>
-                      <TooltipPopup>{voiceButtonDisabledReason ?? voiceButtonLabel}</TooltipPopup>
+                      <TooltipPopup>{voiceButtonLabel}</TooltipPopup>
                     </Tooltip>
                   ) : null}
                   <ComposerFooterPrimaryActions

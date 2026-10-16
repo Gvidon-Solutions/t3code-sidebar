@@ -1,0 +1,172 @@
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useNavigation } from "@react-navigation/native";
+import { AsyncResult } from "effect/reactivity";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { SymbolView } from "../../components/AppSymbol";
+import { AppText as Text } from "../../components/AppText";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { VoiceStripButton } from "./ComposerVoiceMode";
+import { useLiveVoiceThread, useVoiceModeMuted } from "./useVoiceMode";
+import { voiceMode } from "./voiceMode";
+
+const BUBBLE_SIZE = 52;
+const EDGE = 8;
+const PANEL_WIDTH = 260;
+/** Right edge, a little below the middle: clear of the header and the new-thread button. */
+const DEFAULT_POSITION = { x: 1, y: 0.62 };
+
+/**
+ * Sidebar fork: while a voice conversation runs, a round wave button floats
+ * over every screen but the thread chat (which has the full strip). Drag it
+ * anywhere inside the safe area; where it is left is remembered. A tap opens
+ * a small panel: the thread's title (opens it), mute and stop. Static: it
+ * draws nothing on its own between touches.
+ */
+export function VoiceConversationBubble(props: { readonly hidden: boolean }) {
+  const live = useLiveVoiceThread();
+  if (props.hidden || live === null) return null;
+  return <Bubble target={live.target} title={live.title} />;
+}
+
+function Bubble(props: {
+  readonly target: { readonly environmentId: string; readonly threadId: string };
+  readonly title: string;
+}) {
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const muted = useVoiceModeMuted();
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const [expanded, setExpanded] = useState(false);
+
+  const stored = AsyncResult.isSuccess(preferences)
+    ? preferences.value.voiceBubblePosition
+    : undefined;
+  const position = stored ?? DEFAULT_POSITION;
+  const minX = insets.left + EDGE;
+  const minY = insets.top + EDGE;
+  const spanX = Math.max(0, width - insets.right - EDGE - BUBBLE_SIZE - minX);
+  const spanY = Math.max(0, height - insets.bottom - EDGE - BUBBLE_SIZE - minY);
+  const left = minX + position.x * spanX;
+  const top = minY + position.y * spanY;
+
+  const x = useSharedValue(left);
+  const y = useSharedValue(top);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  // Follows a restored position, a rotation, or the keyboard-free safe area changing.
+  useEffect(() => {
+    x.value = left;
+    y.value = top;
+  }, [left, top, x, y]);
+
+  const persist = useCallback(
+    (nextX: number, nextY: number) => {
+      savePreferences({
+        voiceBubblePosition: {
+          x: spanX > 0 ? Math.min(1, Math.max(0, (nextX - minX) / spanX)) : 0,
+          y: spanY > 0 ? Math.min(1, Math.max(0, (nextY - minY) / spanY)) : 0,
+        },
+      });
+    },
+    [minX, minY, savePreferences, spanX, spanY],
+  );
+  const toggleExpanded = useCallback(() => setExpanded((open) => !open), []);
+  const collapse = useCallback(() => setExpanded(false), []);
+
+  const pan = Gesture.Pan()
+    .minDistance(6)
+    .onStart(() => {
+      startX.value = x.value;
+      startY.value = y.value;
+      runOnJS(collapse)();
+    })
+    .onUpdate((event) => {
+      x.value = Math.min(minX + spanX, Math.max(minX, startX.value + event.translationX));
+      y.value = Math.min(minY + spanY, Math.max(minY, startY.value + event.translationY));
+    })
+    .onEnd(() => {
+      runOnJS(persist)(x.value, y.value);
+    });
+  const tap = Gesture.Tap().onEnd((_event, success) => {
+    if (success) runOnJS(toggleExpanded)();
+  });
+  const gesture = Gesture.Race(pan, tap);
+  const bubbleStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: x.value }, { translateY: y.value }],
+  }));
+
+  // The panel opens toward the middle of the screen from where the bubble sits.
+  const panelWidth = Math.min(PANEL_WIDTH, width - 2 * EDGE);
+  const panelHorizontal = position.x > 0.5 ? { right: 0 } : { left: 0 };
+  const panelVertical = position.y > 0.5 ? { bottom: BUBBLE_SIZE + 8 } : { top: BUBBLE_SIZE + 8 };
+
+  return (
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      <Animated.View
+        pointerEvents="box-none"
+        style={[{ position: "absolute", width: BUBBLE_SIZE, height: BUBBLE_SIZE }, bubbleStyle]}
+      >
+        {expanded ? (
+          <View
+            className="absolute flex-row items-center gap-1 rounded-2xl border border-border bg-card py-1 pr-1 pl-3 shadow-lg"
+            style={[{ width: panelWidth }, panelHorizontal, panelVertical]}
+          >
+            <Pressable
+              accessibilityHint="Opens the thread you are talking in"
+              accessibilityRole="button"
+              className="min-w-0 flex-1 py-2 active:opacity-70"
+              onPress={() => {
+                setExpanded(false);
+                navigation.navigate("Thread", {
+                  environmentId: props.target.environmentId,
+                  threadId: props.target.threadId,
+                });
+              }}
+            >
+              <Text className="text-sm font-t3-medium text-foreground" numberOfLines={1}>
+                {props.title}
+              </Text>
+            </Pressable>
+            <VoiceStripButton
+              accessibilityLabel={muted ? "Unmute microphone" : "Mute microphone"}
+              icon={muted ? "mic.slash" : "mic"}
+              onPress={() => voiceMode.toggleMuted()}
+            />
+            <VoiceStripButton
+              accessibilityLabel="End voice conversation"
+              icon="stop.fill"
+              onPress={() => voiceMode.stop()}
+            />
+          </View>
+        ) : null}
+        <GestureDetector gesture={gesture}>
+          <View
+            accessible
+            accessibilityHint="Shows the voice conversation's controls. Drag to move."
+            accessibilityLabel={`Voice conversation: ${props.title}`}
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            className="items-center justify-center rounded-full bg-primary shadow-lg"
+            collapsable={false}
+            onAccessibilityTap={toggleExpanded}
+            style={{ width: BUBBLE_SIZE, height: BUBBLE_SIZE }}
+          >
+            <SymbolView
+              name={muted ? "mic.slash" : "waveform"}
+              size={22}
+              tintColorClassName="accent-primary-foreground"
+              type="monochrome"
+            />
+          </View>
+        </GestureDetector>
+      </Animated.View>
+    </View>
+  );
+}

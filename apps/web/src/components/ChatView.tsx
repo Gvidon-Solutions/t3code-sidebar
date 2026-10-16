@@ -191,8 +191,6 @@ import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
-import { resolveThreadVoiceAvailability } from "../voice/voiceAvailability";
-import { toggleThreadVoice, voiceMode } from "../voice/voiceMode";
 import {
   derivePendingApprovals,
   derivePendingUserInputs,
@@ -9031,17 +9029,13 @@ export default function ChatView(props: ChatViewProps) {
       multipleModelSelections === null
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
-    if (parsedSlashCommand === "voice") {
-      // Providers without voice receive "/voice" as a normal message.
-      const voiceAvailability = resolveThreadVoiceAvailability(activeThread, providerStatuses);
-      // An active conversation always stops, even if the provider stopped offering voice.
-      if (voiceAvailability.kind !== "unsupported" || voiceMode.isActiveFor(routeThreadRef)) {
-        toggleThreadVoice(routeThreadRef, voiceAvailability);
-        promptRef.current = "";
-        clearComposerDraftContent(composerDraftTarget);
-        composerRef.current?.resetCursorState();
-        return;
-      }
+    // Providers without voice receive "/voice" as a normal message. A draft
+    // starts its conversation in a new thread (see the composer's toggleVoice).
+    if (parsedSlashCommand === "voice" && composerRef.current?.toggleVoice()) {
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
     }
     // Providers without the legacy toggle receive their native commands unchanged.
     const standaloneSlashCommand =

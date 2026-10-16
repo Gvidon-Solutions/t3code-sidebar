@@ -41,6 +41,8 @@ export function WorkspaceThreadLine(props: {
   readonly selected: boolean;
   /** An agent under the thread that started it: indented on the guide, a check once done. */
   readonly nested?: boolean;
+  /** Holds this device's voice conversation: a wave before the time. */
+  readonly voice?: boolean;
 }) {
   return (
     <View
@@ -81,6 +83,14 @@ export function WorkspaceThreadLine(props: {
       {props.hasQueuedMessages ? <QueuedMessageIcon selected={props.selected} /> : null}
       {props.showPin ? (
         <SymbolView name="pin" size={11} tintColorClassName="accent-foreground-muted" />
+      ) : null}
+      {props.voice ? (
+        <SymbolView
+          accessibilityLabel="Voice conversation"
+          name="waveform"
+          size={13}
+          tintColorClassName="accent-primary"
+        />
       ) : null}
       <Text
         className={cn(

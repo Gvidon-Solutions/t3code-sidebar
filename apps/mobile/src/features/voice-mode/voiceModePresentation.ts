@@ -60,9 +60,21 @@ export function resolveVoiceModeNotice(state: VoiceModeState): VoiceModeNotice |
   if (state.phase !== "idle") return null;
   if (state.error) return { title: "Voice conversation failed", message: state.error };
   if (state.endedReason) {
-    return state.endedReason === "ended"
-      ? { title: "Voice conversation ended" }
-      : { title: "Voice conversation ended", message: describeVoiceEnd(state.endedReason) };
+    if (state.endedReason === "ended") return { title: "Voice conversation ended" };
+    // The phone has no windows: another device started voice on the same thread.
+    const message =
+      state.endedReason === "replaced"
+        ? "The conversation moved to another device."
+        : describeVoiceEnd(state.endedReason);
+    return { title: "Voice conversation ended", message };
   }
   return null;
+}
+
+/** Keys a conversation's thread the way Home and the drawer key thread rows. */
+export function voiceTargetKey(target: {
+  readonly environmentId: string;
+  readonly threadId: string;
+}): string {
+  return `${target.environmentId}:${target.threadId}`;
 }

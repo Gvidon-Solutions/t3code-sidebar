@@ -92,6 +92,42 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-16 — Voice that follows you, starts anywhere and opens things
+
+- **What.** Voice starts in any Codex thread, even a new one with no message, or from **Talk**
+  next to the new-thread button (a new Codex thread on GPT-6 Astra). The conversation no longer
+  ends when you leave its thread: other threads show a compact strip above the composer
+  ("Voice: <thread>", mute, stop, **Talk here** to move it), and away from threads a round voice
+  button floats on screen; drag it anywhere, tap it for the controls. The thread holding the
+  conversation is the first row of the sidebar (and the phone's Home), above Pinned, with a wave
+  icon. One conversation per device; another device starting the same thread takes it over,
+  while different threads can talk at the same time on different devices. Ask to open something
+  (a thread, the inbox or an issue, a file, the diff, a workspace, home) and the device you're
+  talking from switches to it; any agent can do the same with `ui_open`, which opens files and
+  the diff beside the thread you're looking at and offers a "Go" button for the rest. The phone
+  still stops voice when the app goes to the background.
+- **How.** `VoiceSessionService` opens the provider session and starts or resumes the Codex thread
+  without a turn when the thread has none loaded, and records the provider thread as a run
+  would, so the next run continues the same native conversation. `CodexVoice` and the Codex
+  adapter keep conversations per native thread, and report a live one as pending background work
+  so idle release leaves it alone. Codex's voice model has no tools, so navigation travels as an
+  ordinary delegated turn: the agent calls the MCP tool `ui_open`, `UiRequests` relays it over the
+  `uiRequests.subscribe` stream, and each client decides with `decideUiRequest` (voice holder →
+  navigate, thread shown → side panel or offer, else ignore).
+- **Where.** Server: `orchestration-v2/VoiceSessionService.ts` (+ test), `provider/CodexVoice.ts`,
+  `Adapters/CodexAdapterV2.ts` (voice parts), `uiRequests/UiRequests.ts` (+ test),
+  `mcp/toolkits/ui/`, wiring in `ws.ts`, `runtimeLayer.ts`, `McpHttpServer.ts`,
+  `RpcAuthorization.ts`, `RpcInstrumentation.ts`; agent guidance in
+  `provider-core/.../orchestrationInstructions.ts`. Contracts: `packages/contracts/src/uiRequests.ts`.
+  Client runtime: `uiRequests.ts` (+ test), `state/uiRequests.ts`. Web: `voice/`
+  (`useStartVoiceThread.ts`, `useTalk.ts`), `components/voice/VoiceBubble.tsx`,
+  `components/uiRequests/`, seams in `ChatComposer.tsx`, `ChatView.tsx`, `CommandPalette.tsx`,
+  `VoiceModeStrip.tsx`, `WorkspaceSidebar.tsx`, `WorkspaceThreadRow.tsx`, `routes/__root.tsx`.
+  Mobile: `features/voice-mode/` (`VoiceModeRootLayer`, `VoiceConversationBubble`,
+  `HomeTalkButton`, `UiRequestCoordinator`, `voiceThreads.ts`), seams in `Stack.tsx`,
+  `ThreadComposer.tsx`, `NewTaskDraftScreen.tsx`, Home and workspace navigator files. The voice
+  code started as upstream PR #14865, so these voice files are now fork seams too.
+
 ### 2026-10-16 — Inbox: the chat's reply box and quiet states
 
 - **What.** The reply box on an issue is the chat composer: the same glass surface, editor,
@@ -380,8 +416,8 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   live voice conversation. Captions show above the composer; what you ask lands in the thread as a
   message, the agent does the work, and its final answer is read aloud. `/voice` or the button
   again stops it. The voice is picked in Settings › Providers › Codex › Voice. Web, desktop and
-  the Android app; in a browser the microphone needs https or localhost. Codex only, and the
-  thread needs a started session (send one message first).
+  the Android app; in a browser the microphone needs https or localhost. Codex only. (Since
+  2026-10-16 no first message is needed; see the newer entry.)
 - **How.** Upstream's PR #14865 is merged as is, ahead of upstream: audio runs straight between
   the client and OpenAI over WebRTC, and the server only relays SDP, captions and lifecycle over
   the `provider.voice.session` stream (Codex app-server `thread/realtime/*`). Android gains

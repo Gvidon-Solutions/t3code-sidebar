@@ -637,6 +637,7 @@ function summaryActionPriority(action: ToolGroupAction | T3McpToolSummaryAction)
     case "inbox-comment":
     case "inbox-update":
     case "inbox-resolve":
+    case "ui-open":
       return 0;
     case "other":
     case "update":

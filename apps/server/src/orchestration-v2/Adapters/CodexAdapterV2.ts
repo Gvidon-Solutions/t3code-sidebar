@@ -1945,10 +1945,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         const offeredContinuationItemsByTurn = yield* Ref.make(new Map<string, Set<string>>());
         const sessionScope = yield* Effect.scope;
         const voice = yield* makeCodexVoice(client, sessionScope);
-        /** The provider thread holding the voice conversation, while one runs. */
-        const voiceProviderThread = yield* Ref.make<OrchestrationV2ProviderThread | undefined>(
-          undefined,
-        );
+        /** Native thread id -> the provider thread holding its voice conversation. */
+        const voiceProviderThreads = yield* Ref.make<
+          ReadonlyMap<string, OrchestrationV2ProviderThread>
+        >(new Map());
         /** Native turns Codex started for a voice handoff -> the request and its thread. */
         const voiceResubmits = yield* Ref.make(
           new Map<
@@ -4711,11 +4711,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           Effect.gen(function* () {
             if (payload.item.type === "userMessage") {
               const handoff = readRealtimeDelegationFromItem(payload.item);
-              const voiceThread = yield* Ref.get(voiceProviderThread);
+              const voiceThread = (yield* Ref.get(voiceProviderThreads)).get(payload.threadId);
               if (
                 handoff !== undefined &&
                 voiceThread !== undefined &&
-                voiceThread.nativeThreadRef?.nativeId === payload.threadId &&
                 !(yield* Ref.get(activeTurns)).has(payload.turnId) &&
                 !(yield* Ref.get(pendingRootTurns)).has(payload.threadId)
               ) {
@@ -6129,7 +6128,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 (payload.turn.status === "interrupted" || payload.turn.status === "failed") &&
                 continuationRequests !== undefined
               ) {
-                yield* voice.expectSpokenTurn(voiceResubmit.text);
+                const voiceNativeThreadId = voiceResubmit.providerThread.nativeThreadRef?.nativeId;
+                if (voiceNativeThreadId != null) {
+                  yield* voice.expectSpokenTurn(voiceNativeThreadId, voiceResubmit.text);
+                }
                 yield* continuationRequests.offer({
                   threadId: voiceResubmit.providerThread.appThreadId ?? input.threadId,
                   providerThreadId: voiceResubmit.providerThread.id,
@@ -6588,6 +6590,8 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           // against a long-delayed resume. Codex emits no resume-expected
           // signal to pin on.
           hasPendingBackgroundWork: Effect.gen(function* () {
+            // A voice conversation keeps its runtime, though it may run no turn.
+            if (yield* voice.isActive()) return true;
             for (const items of (yield* Ref.get(runningCommandItemsByTurn)).values()) {
               if (items.size > 0) {
                 return true;
@@ -6610,6 +6614,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           }),
           hasPendingBackgroundWorkForThread: (providerThread) =>
             Effect.gen(function* () {
+              const voiceNativeThreadId = providerThread.nativeThreadRef?.nativeId;
+              if (voiceNativeThreadId != null && (yield* voice.isActive(voiceNativeThreadId))) {
+                return true;
+              }
               const contexts = [
                 ...(yield* Ref.get(activeTurns)).values(),
                 ...(yield* Ref.get(settledTurns)).values(),
@@ -7308,22 +7316,32 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               Effect.gen(function* () {
                 const nativeThreadId = yield* getNativeThreadId(voiceInput.providerThread);
                 yield* ensureInitialized;
-                yield* Ref.set(voiceProviderThread, voiceInput.providerThread);
-                return voice.start({
-                  providerThreadId: nativeThreadId,
-                  offerSdp: voiceInput.offerSdp,
-                  ...(adapterOptions.settings.voice
-                    ? { voice: adapterOptions.settings.voice }
-                    : {}),
-                });
+                yield* Ref.update(voiceProviderThreads, (current) =>
+                  new Map(current).set(nativeThreadId, voiceInput.providerThread),
+                );
+                return voice
+                  .start({
+                    providerThreadId: nativeThreadId,
+                    offerSdp: voiceInput.offerSdp,
+                    ...(adapterOptions.settings.voice
+                      ? { voice: adapterOptions.settings.voice }
+                      : {}),
+                  })
+                  .pipe(
+                    // A replaced conversation must not clear its successor's thread.
+                    Stream.ensuring(
+                      Ref.update(voiceProviderThreads, (current) => {
+                        if (current.get(nativeThreadId) !== voiceInput.providerThread) {
+                          return current;
+                        }
+                        const updated = new Map(current);
+                        updated.delete(nativeThreadId);
+                        return updated;
+                      }),
+                    ),
+                  );
               }),
             ).pipe(
-              // A replaced conversation must not clear its successor's thread.
-              Stream.ensuring(
-                Ref.update(voiceProviderThread, (current) =>
-                  current === voiceInput.providerThread ? undefined : current,
-                ),
-              ),
               Stream.mapError((cause) =>
                 cause._tag === "ProviderAdapterProtocolError"
                   ? cause

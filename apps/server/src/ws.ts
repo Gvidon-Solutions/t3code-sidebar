@@ -55,6 +55,7 @@ import {
   OrchestrationV2SearchThreadError,
   OrchestrationGetTurnDiffError,
   INBOX_WS_METHODS,
+  UI_REQUESTS_WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
   ORCHESTRATION_PROTOCOL_QUERY_PARAM,
   ORCHESTRATION_PROTOCOL_VERSION,
@@ -121,11 +122,13 @@ import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
 import * as McpAppRequests from "./mcpApps/McpAppRequests.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
+import * as VoiceSessionService from "./orchestration-v2/VoiceSessionService.ts";
 import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as InboxService from "./inbox/InboxService.ts";
+import * as UiRequests from "./uiRequests/UiRequests.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import {
   archivedShellStreamItemFromThreadShell,
@@ -1226,6 +1229,7 @@ const layerWsRpc = (
       const threadSearch = yield* ThreadSearch.ThreadSearch;
 
       const providerSessionsV2 = yield* ProviderSessionManager.ProviderSessionManagerV2;
+      const voiceSessions = yield* VoiceSessionService.VoiceSessionServiceV2;
       const mcpAppRequests = yield* McpAppRequests.McpAppRequests;
       const analytics = yield* AnalyticsService.AnalyticsService;
       // Client-origin attribution (#7774): every thread/turn the connecting
@@ -1244,6 +1248,7 @@ const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const inbox = yield* InboxService.InboxService;
+      const uiRequests = yield* UiRequests.UiRequests;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
@@ -2078,6 +2083,8 @@ const layerWsRpc = (
           inbox.markSeen(input).pipe(Effect.map((issue) => ({ issue }))),
         [INBOX_WS_METHODS.dismiss]: (input) =>
           inbox.dismiss(input).pipe(Effect.map((issue) => ({ issue }))),
+        // Fork: agents asking clients to show something.
+        [UI_REQUESTS_WS_METHODS.subscribe]: () => uiRequests.stream,
         [INBOX_WS_METHODS.undismiss]: ({ issueId }) =>
           inbox.undismiss(issueId).pipe(Effect.map((issue) => ({ issue }))),
         [WS_METHODS.scheduledTasksList]: (_input) =>
@@ -2336,49 +2343,7 @@ const layerWsRpc = (
                   }),
             ),
           ),
-        [WS_METHODS.providerVoiceSession]: (input) =>
-          Stream.unwrap(
-            Effect.gen(function* () {
-              const voiceError = (detail: string) =>
-                new ProviderVoiceSessionError({ threadId: input.threadId, detail });
-              const projection = yield* threadManagement.getThreadRecords(input.threadId, [
-                "providerThreads",
-              ]);
-              const providerThread =
-                projection.providerThreads.find(
-                  (candidate) => candidate.id === projection.thread.activeProviderThreadId,
-                ) ?? projection.providerThreads.at(-1);
-              const providerSessionId = providerThread?.providerSessionId ?? null;
-              if (providerThread === undefined || providerSessionId === null) {
-                return yield* voiceError("Send a message before starting voice.");
-              }
-              const runtime = Option.getOrNull(yield* providerSessionsV2.get(providerSessionId));
-              if (runtime === null) {
-                return yield* voiceError(
-                  "The provider session is no longer running. Send a message first.",
-                );
-              }
-              if (runtime.startVoiceSession === undefined) {
-                return yield* voiceError(
-                  `Provider '${runtime.driver}' does not support voice conversations.`,
-                );
-              }
-              return runtime.startVoiceSession({ providerThread, offerSdp: input.offerSdp });
-            }),
-          ).pipe(
-            Stream.mapError((cause) =>
-              cause._tag === "ProviderVoiceSessionError"
-                ? cause
-                : new ProviderVoiceSessionError({
-                    threadId: input.threadId,
-                    detail:
-                      "detail" in cause && typeof cause.detail === "string"
-                        ? cause.detail
-                        : cause.message,
-                    cause,
-                  }),
-            ),
-          ),
+        [WS_METHODS.providerVoiceSession]: (input) => voiceSessions.start(input),
         [WS_METHODS.serverUpdateProvider]: (input) =>
           providerMaintenanceRunner.updateProvider(input),
         [WS_METHODS.providerConsumeResetCredit]: (input) =>
