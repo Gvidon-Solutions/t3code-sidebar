@@ -106,9 +106,37 @@ export function summarizeThreadAgents(
   };
 }
 
-/** Open while any agent still works or needs the user; folded once all are done. */
-export function threadAgentsOpenByDefault(summary: ThreadAgentsSummary): boolean {
+export type ThreadAgentsDisplay = "hidden" | "folded" | "open";
+
+/** Some agent still works or needs the user. */
+export function threadAgentsLive(summary: ThreadAgentsSummary): boolean {
   return summary.working > 0 || summary.attention > 0;
+}
+
+/**
+ * How the agents line shows under a thread. Open while any agent works or
+ * needs the user, or while the user reads one of them; `choice: false` folds
+ * it. Once all are done the line goes away (the thread itself still lists its
+ * agents), except that failed agents leave it folded. A `choice` shows it
+ * (`true`) or hides it (`false`) then.
+ */
+export function threadAgentsDisplay(
+  summary: ThreadAgentsSummary,
+  input: { readonly holdsRoute: boolean; readonly choice: boolean | undefined },
+): ThreadAgentsDisplay {
+  if (threadAgentsLive(summary) || input.holdsRoute)
+    return input.choice === false ? "folded" : "open";
+  if (input.choice !== undefined) return input.choice ? "open" : "hidden";
+  return summary.failed > 0 ? "folded" : "hidden";
+}
+
+/**
+ * Where the user's choice for a thread's agents line is kept. It names the
+ * state and the agent count, so the choice lapses once the agents finish or
+ * the thread launches more: finished agents fold away again.
+ */
+export function threadAgentsChoiceKey(rootKey: string, summary: ThreadAgentsSummary): string {
+  return `agents:${rootKey}:${threadAgentsLive(summary) ? "live" : "done"}:${summary.total}`;
 }
 
 /** "5 agents · 4 working", "5 agents · 1 needs you", "5 agents · done". */

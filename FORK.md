@@ -88,6 +88,21 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-16 — Finished agents leave the thread list
+
+- **What.** The "7 agents · done" line under a thread goes away once all its agents finish; while
+  any agent works or needs the owner it shows as before. Failed agents leave the line folded, as
+  a warning. The thread's menu offers "Show agents (N)" / "Hide agents" to bring finished agents
+  back or put them away; the choice lapses when the thread launches more agents. Opening one of
+  the agents still shows the line. Inside the thread, its agents stay listed as before. Mobile
+  hides finished agents the same way but has no menu item.
+- **How.** One shared rule, `threadAgentsDisplay` (hidden / folded / open), with the user's
+  choice stored under a key naming the agents' state and count (`threadAgentsChoiceKey`).
+- **Where.** `packages/client-runtime/src/state/threadAgents.ts`, `WorkspaceSidebar.tsx`,
+  mobile `workspaceNavigator.ts`. Seams: `show-agents` / `hide-agents` in
+  `threadActionMenu.logic.ts`, an optional `agents` input to `useThreadActionMenu.ts`, a `bot`
+  icon in `contextMenuFallback.ts`.
+
 ### 2026-10-15 — Agent inbox: issues agents raise and own
 
 - **What.** One place for everything agents need to tell the owner. One problem is one **issue**

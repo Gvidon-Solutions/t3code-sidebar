@@ -24,6 +24,8 @@ export type ThreadActionMenuId =
   | "rename"
   | "regenerate-title"
   | "mark-unread"
+  | "show-agents"
+  | "hide-agents"
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -82,6 +84,11 @@ export interface ThreadActionMenuState {
     /** True when the list is already scoped to this thread's project. */
     readonly isActive: boolean;
   } | null;
+  /**
+   * Sidebar fork: the subagents the thread launched, when the agents line
+   * under its row can be shown or hidden by hand. Null elsewhere.
+   */
+  readonly agents?: { readonly count: number; readonly shown: boolean } | null;
   /** Sidebar fork: offer "Fork" (Codex and Claude threads with a run). */
   readonly canFork?: boolean;
   readonly isPinned: boolean;
@@ -110,6 +117,8 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "new-thread-on-branch",
     "project-settings",
     "mark-unread",
+    "show-agents",
+    "hide-agents",
     "copy",
     "copy-path",
     "copy-branch",
@@ -184,6 +193,17 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
+    ...(state.agents
+      ? [
+          state.agents.shown
+            ? { id: "hide-agents" as const, label: "Hide agents", icon: "bot" }
+            : {
+                id: "show-agents" as const,
+                label: `Show agents (${state.agents.count})`,
+                icon: "bot",
+              },
+        ]
+      : []),
     ...(state.projectFilter
       ? [
           {

@@ -8,7 +8,8 @@ import {
   groupThreadAgents,
   summarizeThreadAgents,
   threadAgentsLabel,
-  threadAgentsOpenByDefault,
+  threadAgentsChoiceKey,
+  threadAgentsDisplay,
 } from "@t3tools/client-runtime/state/thread-agents";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
@@ -377,10 +378,16 @@ export function buildWorkspaceHomeItems(input: {
     const list = agents.agentsByRoot.get(rootKey);
     if (!list) return;
     const summary = summarizeThreadAgents(list);
-    const byDefault = threadAgentsOpenByDefault(summary) || selectedRootKey === rootKey;
-    // A flip is remembered per default, so finished agents fold away again.
-    const toggleKey = `agents:${rootKey}:${byDefault ? "open" : "closed"}`;
-    const open = byDefault !== has(toggleKey);
+    const holdsRoute = selectedRootKey === rootKey;
+    const toggleKey = threadAgentsChoiceKey(rootKey, summary);
+    // A stored toggle flips the line from what it does by default.
+    const byDefault = threadAgentsDisplay(summary, { holdsRoute, choice: undefined });
+    const display = threadAgentsDisplay(summary, {
+      holdsRoute,
+      choice: has(toggleKey) ? byDefault !== "open" : undefined,
+    });
+    if (display === "hidden") return;
+    const open = display === "open";
     rows.push({
       type: "ws-agents",
       key: `ws-agents:${rootKey}`,

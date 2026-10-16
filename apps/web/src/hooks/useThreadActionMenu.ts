@@ -76,8 +76,14 @@ export function useThreadActionMenu(input: {
   /** Fallback for "Copy path" when the thread has no worktree. */
   readonly projectCwd: string | null;
   readonly onStartRename: () => void;
+  /** Sidebar fork: the thread's finished agents, which the sidebar can show or hide. */
+  readonly agents?: {
+    readonly count: number;
+    readonly shown: boolean;
+    readonly setShown: (shown: boolean) => void;
+  } | null;
 }) {
-  const { threadRef, projectCwd, onStartRename } = input;
+  const { threadRef, projectCwd, onStartRename, agents } = input;
   const router = useRouter();
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -160,6 +166,7 @@ export function useThreadActionMenu(input: {
             serverConfigs.get(threadRef.environmentId)?.providers,
           ),
           projectFilter: null,
+          agents: agents ? { count: agents.count, shown: agents.shown } : null,
           isPinned: thread.pinnedAt != null,
           isSettled: supports.settlement && thread.settledOverride === "settled",
           autoSettleEnabled: thread.autoSettleDisabledAt == null,
@@ -276,6 +283,10 @@ export function useThreadActionMenu(input: {
               }),
             );
             return;
+          case "show-agents":
+          case "hide-agents":
+            agents?.setShown(action === "show-agents");
+            return;
           case "mark-unread":
             markThreadUnread(threadRef);
             return;
@@ -355,6 +366,7 @@ export function useThreadActionMenu(input: {
       })();
     },
     [
+      agents,
       archiveThread,
       confirmThreadArchive,
       confirmThreadDelete,

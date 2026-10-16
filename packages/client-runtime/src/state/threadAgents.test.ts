@@ -4,8 +4,9 @@ import {
   type AgentThreadInput,
   groupThreadAgents,
   summarizeThreadAgents,
+  threadAgentsChoiceKey,
+  threadAgentsDisplay,
   threadAgentsLabel,
-  threadAgentsOpenByDefault,
 } from "./threadAgents.ts";
 
 function thread(
@@ -66,13 +67,11 @@ describe("summarizeThreadAgents", () => {
     ]);
     expect(summary.states).toEqual(["working", "done", "attention", "failed"]);
     expect(threadAgentsLabel(summary)).toBe("4 agents · 1 needs you · 1 working · 1 failed");
-    expect(threadAgentsOpenByDefault(summary)).toBe(true);
   });
 
-  it("folds away once every agent is done", () => {
+  it("labels agents that are all done", () => {
     const summary = summarizeThreadAgents([thread("a"), thread("b", { status: "completed" })]);
     expect(threadAgentsLabel(summary)).toBe("2 agents · done");
-    expect(threadAgentsOpenByDefault(summary)).toBe(false);
   });
 
   it("reads a runless subagent from the server shell status", () => {
@@ -82,5 +81,44 @@ describe("summarizeThreadAgents", () => {
     ]);
     expect(summary.states).toEqual(["working", "done"]);
     expect(threadAgentsLabel(summary)).toBe("2 agents · 1 working");
+  });
+});
+
+describe("threadAgentsDisplay", () => {
+  const working = summarizeThreadAgents([thread("a", { status: "running" }), thread("b")]);
+  const done = summarizeThreadAgents([thread("a"), thread("b", { status: "completed" })]);
+  const failed = summarizeThreadAgents([thread("a"), thread("b", { status: "failed" })]);
+  const show = (
+    summary: ReturnType<typeof summarizeThreadAgents>,
+    choice?: boolean,
+    holdsRoute = false,
+  ) => threadAgentsDisplay(summary, { holdsRoute, choice });
+
+  it("stays open while an agent works, folding on request", () => {
+    expect(show(working)).toBe("open");
+    expect(show(working, false)).toBe("folded");
+  });
+
+  it("goes away once every agent is done, unless shown on request", () => {
+    expect(show(done)).toBe("hidden");
+    expect(show(done, true)).toBe("open");
+    expect(show(done, false)).toBe("hidden");
+  });
+
+  it("leaves failed agents folded until shown or hidden", () => {
+    expect(show(failed)).toBe("folded");
+    expect(show(failed, true)).toBe("open");
+    expect(show(failed, false)).toBe("hidden");
+  });
+
+  it("opens while the user reads one of the agents", () => {
+    expect(show(done, undefined, true)).toBe("open");
+    expect(show(done, false, true)).toBe("folded");
+  });
+
+  it("lets a choice lapse once the agents finish or more start", () => {
+    const more = summarizeThreadAgents([thread("a"), thread("b"), thread("c")]);
+    const keys = [working, done, more].map((summary) => threadAgentsChoiceKey("env:t", summary));
+    expect(new Set(keys).size).toBe(3);
   });
 });

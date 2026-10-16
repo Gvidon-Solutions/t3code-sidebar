@@ -21,7 +21,9 @@ import {
 import {
   groupThreadAgents,
   summarizeThreadAgents,
-  threadAgentsOpenByDefault,
+  threadAgentsChoiceKey,
+  threadAgentsDisplay,
+  threadAgentsLive,
 } from "@t3tools/client-runtime/state/thread-agents";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
@@ -587,7 +589,35 @@ export default function WorkspaceSidebar() {
       )?.workspaceRoot ?? null
     );
   }
+  // The top-level thread whose agents hold the open route, so its group opens.
+  const routeRootKey = (() => {
+    if (!routeThreadKey) return null;
+    for (const [rootKey, agents] of model.agentsByRoot) {
+      if (agents.some((agent) => threadKeyOf(agent) === routeThreadKey)) return rootKey;
+    }
+    return null;
+  })();
+  // "Show agents" / "Hide agents" once a thread's agents are all done.
+  const menuAgents = (() => {
+    if (!menuRequest) return null;
+    const rootKey = scopedThreadKey(menuRequest.ref);
+    const agents = model.agentsByRoot.get(rootKey);
+    if (!agents || rootKey === routeRootKey) return null;
+    const summary = summarizeThreadAgents(agents);
+    if (threadAgentsLive(summary)) return null;
+    const choiceKey = threadAgentsChoiceKey(rootKey, summary);
+    const display = threadAgentsDisplay(summary, {
+      holdsRoute: false,
+      choice: view.sectionOpen[choiceKey],
+    });
+    return {
+      count: summary.total,
+      shown: display !== "hidden",
+      setShown: (shown: boolean) => view.setSectionOpen(choiceKey, shown),
+    };
+  })();
   const { openMenu } = useThreadActionMenu({
+    agents: menuAgents,
     threadRef: menuRequest?.ref ?? null,
     projectCwd: menuThread,
     onStartRename: () => {
@@ -1075,14 +1105,6 @@ export default function WorkspaceSidebar() {
       />
     );
   };
-  // The top-level thread whose agents hold the open route, so its group opens.
-  const routeRootKey = (() => {
-    if (!routeThreadKey) return null;
-    for (const [rootKey, agents] of model.agentsByRoot) {
-      if (agents.some((agent) => threadKeyOf(agent) === routeThreadKey)) return rootKey;
-    }
-    return null;
-  })();
   const holdsRoute = (thread: SidebarThreadSummary) => {
     const key = threadKeyOf(thread);
     return key === routeThreadKey || key === routeRootKey;
@@ -1097,9 +1119,13 @@ export default function WorkspaceSidebar() {
     const agents = model.agentsByRoot.get(key);
     if (!agents) return renderRow(thread, variant, projectLabel);
     const summary = summarizeThreadAgents(agents);
-    const toggleKey = `agents:${key}`;
-    const open =
-      view.sectionOpen[toggleKey] ?? (threadAgentsOpenByDefault(summary) || routeRootKey === key);
+    const choiceKey = threadAgentsChoiceKey(key, summary);
+    const display = threadAgentsDisplay(summary, {
+      holdsRoute: routeRootKey === key,
+      choice: view.sectionOpen[choiceKey],
+    });
+    if (display === "hidden") return renderRow(thread, variant, projectLabel);
+    const open = display === "open";
     return (
       <Fragment key={key}>
         {renderRow(thread, variant, projectLabel)}
@@ -1107,7 +1133,7 @@ export default function WorkspaceSidebar() {
           summary={summary}
           dotKeys={agents.map(threadKeyOf)}
           open={open}
-          onToggle={() => view.setSectionOpen(toggleKey, !open)}
+          onToggle={() => view.setSectionOpen(choiceKey, !open)}
         >
           {agents.map((agent) => renderRow(agent, "agent"))}
         </WorkspaceAgentGroup>

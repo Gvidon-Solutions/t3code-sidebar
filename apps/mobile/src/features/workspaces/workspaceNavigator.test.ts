@@ -148,7 +148,7 @@ describe("buildWorkspaceHomeItems", () => {
     ]);
   });
 
-  it("hangs a thread's subagents under it, open while they work", () => {
+  it("hangs a thread's subagents under it while they work, and drops them once done", () => {
     const agent = (id: string, parent: string, status: string) =>
       thread(id, "a", {
         lineage: { relationshipToParent: "subagent", parentThreadId: parent, rootThreadId: "lead" },
@@ -171,10 +171,16 @@ describe("buildWorkspaceHomeItems", () => {
       [],
       { folders: [folder("a", "Alpha")] },
     );
-    expect(outline(done)).toEqual([
+    expect(outline(done)).toEqual(["folder Alpha", "thread lead"]);
+    const failed = build(
+      [thread("lead", "a"), agent("one", "lead", "completed"), agent("two", "lead", "failed")],
+      [],
+      { folders: [folder("a", "Alpha")] },
+    );
+    expect(outline(failed)).toEqual([
       "folder Alpha",
       "thread lead",
-      "agents 2 agents · done (closed)",
+      "agents 2 agents · 1 failed (closed)",
     ]);
   });
 

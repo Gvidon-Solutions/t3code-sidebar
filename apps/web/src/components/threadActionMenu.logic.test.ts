@@ -138,6 +138,20 @@ describe("buildThreadActionMenuItems", () => {
     expect(items[filterIndex + 1]?.id).toBe("auto-settle");
   });
 
+  it("shows or hides finished agents, also on a read-only connection", () => {
+    expect(ids(baseState)).not.toContain("show-agents");
+    const find = (state: ThreadActionMenuState) =>
+      buildThreadActionMenuItems(state).find((item) => item.id.endsWith("-agents"));
+    expect(find({ ...baseState, agents: { count: 7, shown: false } })).toMatchObject({
+      id: "show-agents",
+      label: "Show agents (7)",
+    });
+    expect(find({ ...baseState, agents: { count: 7, shown: true } })?.id).toBe("hide-agents");
+    expect(
+      find({ ...baseState, canOperate: false, agents: { count: 7, shown: false } })?.disabled,
+    ).toBeFalsy();
+  });
+
   it("includes branch items only for threads with a branch", () => {
     const withBranch = allIds({ ...baseState, branch: "feat/menu" });
     expect(withBranch).toContain("new-thread-on-branch");
