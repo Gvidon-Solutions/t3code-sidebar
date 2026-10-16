@@ -109,11 +109,14 @@ Choose the voice in **Settings > Providers > Codex > Voice**. The change applies
 to your next conversation.
 
 The conversation keeps running while you move around the app. Other threads show a
-small strip with mute, stop and **Talk here**, which moves the conversation to the
-thread you're in; elsewhere a round voice button floats on screen, which you can drag
-anywhere and tap for the same controls. The thread you're talking in sits at the top
-of the sidebar. Each device holds one conversation; starting the same thread on
-another device moves the conversation there.
+small strip with the latest words, mute, stop and **Talk here**, which moves the
+conversation to the thread you're in; elsewhere a round voice button floats on screen,
+which you can drag anywhere and tap for the same controls. To get back to the
+conversation, click its words on web and desktop, or long-press the strip or the
+round button on mobile. The thread you're talking in sits at the top of the sidebar.
+A thread started with **Talk** is named after the first thing you say. Each device
+holds one conversation; starting the same thread on another device moves the
+conversation there.
 
 Ask to open something, such as a thread, the inbox, a file or the thread's changes,
 and it opens on the device you're talking from.

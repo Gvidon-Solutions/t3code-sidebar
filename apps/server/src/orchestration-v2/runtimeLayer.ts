@@ -170,19 +170,6 @@ const layerProviderTurnStartServiceProvided = ProviderTurnStartService.layer.pip
   ),
 );
 
-const layerVoiceSessionServiceProvided = VoiceSessionService.layer.pipe(
-  Layer.provide(
-    Layer.mergeAll(
-      layerEventSinkProvided,
-      IdAllocator.layer,
-      ProjectionStore.layer,
-      layerProviderAdapterRegistryProvided,
-      layerProviderSessionManagerProvided,
-      layerRuntimePolicyProvided,
-    ),
-  ),
-);
-
 const layerProviderTurnControlServiceProvided = ProviderTurnControlService.layer.pipe(
   Layer.provide(Layer.merge(ProjectionStore.layer, layerProviderSessionManagerProvided)),
 );
@@ -320,6 +307,20 @@ const layerProviderContinuationWorkerProvided = ProviderContinuationService.laye
 const layerThreadTitleRegenerationProvided = ThreadTitleRegenerationService.layer.pipe(
   Layer.provide(
     Layer.mergeAll(layerThreadManagementProvided, ProjectStore.layer, TextGeneration.layer),
+  ),
+);
+
+const layerVoiceSessionServiceProvided = VoiceSessionService.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      layerThreadTitleRegenerationProvided,
+      layerEventSinkProvided,
+      IdAllocator.layer,
+      ProjectionStore.layer,
+      layerProviderAdapterRegistryProvided,
+      layerProviderSessionManagerProvided,
+      layerRuntimePolicyProvided,
+    ),
   ),
 );
 const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(

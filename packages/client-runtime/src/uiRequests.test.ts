@@ -29,14 +29,14 @@ describe("decideUiRequest", () => {
     }
   });
 
-  it("only offers to leave the thread the owner is looking at", () => {
+  it("switches at once on the device showing the asking thread", () => {
     expect(
       decideUiRequest({
         request: request({ kind: "thread", threadId: "thread-other" as ThreadId }),
         voiceThreadId: null,
         shownThreadId: asking,
       }),
-    ).toBe("offer");
+    ).toBe("navigate");
   });
 
   it("ignores requests from threads not in front of the owner", () => {

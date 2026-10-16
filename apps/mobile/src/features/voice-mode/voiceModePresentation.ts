@@ -44,11 +44,8 @@ export function voiceMeterLevel(level: number): number {
   return Math.min(1, Math.sqrt(Math.max(0, level)) * 1.6);
 }
 
-/** Keeps the newest words of a live caption; native text only truncates multi-line text at the end. */
-export function voiceCaptionTail(text: string, maxChars = 160): string {
-  if (text.length <= maxChars) return text;
-  return `…${text.slice(-maxChars).trimStart()}`;
-}
+// Native text only truncates multi-line text at the end, so captions keep their tail.
+export { voiceCaptionTail } from "@t3tools/client-runtime/voice-mode";
 
 export interface VoiceModeNotice {
   readonly title: string;

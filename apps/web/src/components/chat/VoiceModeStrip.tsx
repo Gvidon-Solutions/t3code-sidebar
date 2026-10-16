@@ -10,6 +10,7 @@ import { useThreadShell } from "~/state/entities";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { VOICE_THREAD_TITLE } from "~/voice/voiceAvailability";
 import {
+  SPEAKING_LEVEL,
   isVoiceTargetFor,
   useVoiceModeState,
   useVoiceMuted,
@@ -18,11 +19,11 @@ import {
   voiceMode,
 } from "~/voice/voiceMode";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Spinner } from "../ui/spinner";
+import { VoiceConversationPreview } from "../voice/VoiceConversationPreview";
 import { ComposerBanner } from "./ComposerBanner";
 
-/** Speaker loudness (WebRTC `audioLevel`, 0..1) above which the assistant counts as speaking. */
-const SPEAKING_LEVEL = 0.02;
 const VISIBLE_CAPTIONS = 2;
 // Per-bar gain so a meter reads as a small waveform rather than one block.
 const METER_BARS = [
@@ -96,8 +97,8 @@ export const VoiceModeStrip = memo(function VoiceModeStrip({
 });
 
 /**
- * A conversation held on another thread: where it is, mute, stop, and a way
- * to bring it here.
+ * A conversation held on another thread: its newest words, mute, stop, and a
+ * way to bring it here. Clicking the words opens its thread.
  */
 function ElsewhereVoiceStrip({ onTalkHere }: { onTalkHere: (() => void) | null }) {
   const voiceThreadRef = useVoiceThreadRef();
@@ -122,18 +123,26 @@ function ElsewhereVoiceStripRow({
           <AudioLinesIcon />
         </ComposerBanner.Icon>
         <ComposerBanner.Content>
-          <button
-            type="button"
-            className="min-w-0 truncate text-left text-muted-foreground hover:text-foreground"
-            onClick={() =>
-              void navigate({
-                to: "/$environmentId/$threadId",
-                params: buildThreadRouteParams(voiceThreadRef),
-              })
-            }
-          >
-            Voice: <span className="text-foreground">{title}</span>
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Open the voice conversation: ${title}`}
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() =>
+                    void navigate({
+                      to: "/$environmentId/$threadId",
+                      params: buildThreadRouteParams(voiceThreadRef),
+                    })
+                  }
+                />
+              }
+            >
+              <VoiceConversationPreview lines={1} maxChars={120} />
+            </TooltipTrigger>
+            <TooltipPopup side="top">Open the voice conversation</TooltipPopup>
+          </Tooltip>
         </ComposerBanner.Content>
         <ComposerBanner.Actions>
           <Button

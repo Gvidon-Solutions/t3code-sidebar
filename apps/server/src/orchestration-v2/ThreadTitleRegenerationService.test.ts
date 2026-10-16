@@ -2,6 +2,7 @@ import { assert, describe, it, vi } from "@effect/vitest";
 import {
   type ChatAttachment,
   CommandId,
+  VOICE_THREAD_DEFAULT_TITLE,
   MessageId,
   ProjectId,
   ProviderDriverKind,
@@ -107,7 +108,11 @@ function makeHarness(
   };
 }
 
-function createThread(input: { readonly command: string; readonly thread: string }) {
+function createThread(input: {
+  readonly command: string;
+  readonly thread: string;
+  readonly title?: string;
+}) {
   return Effect.gen(function* () {
     const threads = yield* ThreadManagement.ThreadManagementService;
     const threadId = ThreadId.make(input.thread);
@@ -116,7 +121,7 @@ function createThread(input: { readonly command: string; readonly thread: string
       commandId: CommandId.make(input.command),
       threadId,
       projectId,
-      title: "Seed title",
+      title: input.title ?? "Seed title",
       modelSelection,
       runtimeMode: "full-access",
       interactionMode: "default",
@@ -418,6 +423,66 @@ describe("ThreadTitleRegenerationService", () => {
         const projection = yield* threads.getThreadProjection(threadId);
         assert.equal(projection.thread.title, "Seed title");
         assert.isNotOk(projection.thread.titleRegeneration);
+      }).pipe(Effect.provide(harness.layer));
+    }),
+  );
+
+  it.effect("names a voice thread after its first phrase and leaves named threads alone", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness();
+      yield* Effect.gen(function* () {
+        const threads = yield* ThreadManagement.ThreadManagementService;
+        const titles = yield* ThreadTitleRegeneration.ThreadTitleRegenerationService;
+        const voiceThreadId = yield* createThread({
+          command: "command:title:voice:create",
+          thread: "thread:title:voice",
+          title: VOICE_THREAD_DEFAULT_TITLE,
+        });
+        const namedThreadId = yield* createThread({
+          command: "command:title:voice-named:create",
+          thread: "thread:title:voice-named",
+        });
+
+        yield* titles.nameFromSpeech({ threadId: voiceThreadId, text: "  Open the inbox  " });
+        yield* titles.nameFromSpeech({ threadId: namedThreadId, text: "Open the inbox" });
+
+        assert.equal(harness.generateThreadTitle.mock.calls.length, 1);
+        assert.equal(harness.generateThreadTitle.mock.calls[0]?.[0]?.message, "Open the inbox");
+        assert.equal(
+          (yield* threads.getThreadProjection(voiceThreadId)).thread.title,
+          "Generated title",
+        );
+        assert.equal(
+          (yield* threads.getThreadProjection(namedThreadId)).thread.title,
+          "Seed title",
+        );
+      }).pipe(Effect.provide(harness.layer));
+    }),
+  );
+
+  it.effect("names a voice thread with the phrase itself when generation fails", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({
+        generateTitle: () => Effect.die(new Error("model unavailable")),
+      });
+      yield* Effect.gen(function* () {
+        const threads = yield* ThreadManagement.ThreadManagementService;
+        const titles = yield* ThreadTitleRegeneration.ThreadTitleRegenerationService;
+        const threadId = yield* createThread({
+          command: "command:title:voice-fallback:create",
+          thread: "thread:title:voice-fallback",
+          title: VOICE_THREAD_DEFAULT_TITLE,
+        });
+
+        yield* titles.nameFromSpeech({
+          threadId,
+          text: `Let's plan the release ${"and more ".repeat(10)}`,
+        });
+
+        const title = (yield* threads.getThreadProjection(threadId)).thread.title;
+        assert.isTrue(title.startsWith("Let's plan the release and more"));
+        assert.isTrue(title.endsWith("…"));
+        assert.isAtMost(title.length, 61);
       }).pipe(Effect.provide(harness.layer));
     }),
   );

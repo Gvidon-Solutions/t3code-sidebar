@@ -4,7 +4,8 @@
  * away (server restart, idle release), gets one here first: the session is
  * opened and the native thread started or resumed without a user turn. The
  * provider thread is recorded like a run would record it, so the thread's next
- * run continues the same native conversation the voice talks into.
+ * run continues the same native conversation the voice talks into. A thread
+ * still titled for voice is named after the first phrase spoken in it.
  */
 import {
   type OrchestrationV2DomainEvent,
@@ -19,6 +20,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 
@@ -27,6 +29,7 @@ import { ProviderAdapterRegistryV2 } from "./ProviderAdapterRegistry.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 
 export interface VoiceSessionServiceV2Shape {
   /** The conversation's signaling stream; interrupting it stops the conversation. */
@@ -58,6 +61,7 @@ export const layer = Layer.effect(
     const eventSink = yield* EventSink.EventSinkV2;
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+    const titles = yield* ThreadTitleRegenerationService.ThreadTitleRegenerationService;
     const providerAdapters = yield* ProviderAdapterRegistryV2;
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
@@ -229,7 +233,28 @@ export const layer = Layer.effect(
               detail: `Provider '${runtime.driver}' does not support voice conversations.`,
             });
           }
-          return runtime.startVoiceSession({ providerThread, offerSdp: input.offerSdp });
+          const named = yield* Ref.make(false);
+          return runtime
+            .startVoiceSession({ providerThread, offerSdp: input.offerSdp })
+            .pipe(
+              Stream.tap((event) =>
+                event.type === "transcript.done" && event.role === "user" && event.text.trim()
+                  ? Ref.getAndSet(named, true).pipe(
+                      Effect.flatMap((alreadyNamed) =>
+                        alreadyNamed
+                          ? Effect.void
+                          : titles
+                              .nameFromSpeech({ threadId: input.threadId, text: event.text })
+                              .pipe(
+                                Effect.ignoreCause({ log: true }),
+                                Effect.forkDetach,
+                                Effect.asVoid,
+                              ),
+                      ),
+                    )
+                  : Effect.void,
+              ),
+            );
         }),
       ).pipe(
         Stream.mapError((cause) =>

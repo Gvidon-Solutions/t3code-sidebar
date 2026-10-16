@@ -41,7 +41,7 @@ The owner reads one inbox instead of hunting through threads. When something nee
 
 ### Opening things on the owner's screen
 
-When the owner asks to open, show or go to something (a thread, the inbox or an issue, a file, this thread's diff, a sidebar workspace, the home screen), call \`ui_open\` right away and confirm in one short sentence. In a voice conversation their device switches at once; otherwise the device showing this thread opens files and the diff in its side panel and offers a button for the rest. Look up thread ids with the thread tools first.
+When the owner asks to open, show or go to something (a thread, the inbox or an issue, a file, this thread's diff, a sidebar workspace, the home screen), call \`ui_open\` right away and confirm in one short sentence. In a voice conversation their device switches at once; otherwise the device showing this thread opens files and the diff in its side panel and switches to the rest. Look up thread ids with the thread tools first.
 
 ### Showing visuals
 

@@ -1,4 +1,9 @@
-import type { ModelSelection, ProviderInstanceId, ServerProvider } from "@t3tools/contracts";
+import {
+  VOICE_THREAD_DEFAULT_TITLE,
+  type ModelSelection,
+  type ProviderInstanceId,
+  type ServerProvider,
+} from "@t3tools/contracts";
 
 /**
  * Whether a thread can hold a voice conversation. `unsupported` hides every
@@ -12,7 +17,7 @@ const VOICE_READY: VoiceAvailability = { kind: "ready" };
 
 /** The model a new voice thread runs when nothing better is selected. */
 export const VOICE_THREAD_MODEL = "gpt-6-astra";
-export const VOICE_THREAD_TITLE = "Voice conversation";
+export const VOICE_THREAD_TITLE = VOICE_THREAD_DEFAULT_TITLE;
 
 export function resolveVoiceAvailability(
   /** The provider instance that runs (or will run) the thread's turns. */

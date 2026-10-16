@@ -1,5 +1,6 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigation } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
@@ -8,9 +9,9 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-nativ
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
-import { VoiceStripButton } from "./ComposerVoiceMode";
+import { VOICE_OPEN_LONG_PRESS_MS, VoiceStripButton } from "./ComposerVoiceMode";
+import { VoiceConversationPreview } from "./VoiceConversationPreview";
 import { useLiveVoiceThread, useVoiceModeMuted } from "./useVoiceMode";
 import { voiceMode } from "./voiceMode";
 
@@ -24,8 +25,9 @@ const DEFAULT_POSITION = { x: 1, y: 0.62 };
  * Sidebar fork: while a voice conversation runs, a round wave button floats
  * over every screen but the thread chat (which has the full strip). Drag it
  * anywhere inside the safe area; where it is left is remembered. A tap opens
- * a small panel: the thread's title (opens it), mute and stop. Static: it
- * draws nothing on its own between touches.
+ * a small panel: the conversation's newest words, mute and stop. A long press
+ * on the bubble or the words opens its thread. Static: it draws nothing on its
+ * own between touches.
  */
 export function VoiceConversationBubble(props: { readonly hidden: boolean }) {
   const live = useLiveVoiceThread();
@@ -79,6 +81,14 @@ function Bubble(props: {
   );
   const toggleExpanded = useCallback(() => setExpanded((open) => !open), []);
   const collapse = useCallback(() => setExpanded(false), []);
+  const openThread = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setExpanded(false);
+    navigation.navigate("Thread", {
+      environmentId: props.target.environmentId,
+      threadId: props.target.threadId,
+    });
+  }, [navigation, props.target.environmentId, props.target.threadId]);
 
   const pan = Gesture.Pan()
     .minDistance(6)
@@ -94,10 +104,16 @@ function Bubble(props: {
     .onEnd(() => {
       runOnJS(persist)(x.value, y.value);
     });
+  const longPress = Gesture.LongPress()
+    .minDuration(VOICE_OPEN_LONG_PRESS_MS)
+    .onStart(() => {
+      runOnJS(openThread)();
+    });
   const tap = Gesture.Tap().onEnd((_event, success) => {
     if (success) runOnJS(toggleExpanded)();
   });
-  const gesture = Gesture.Race(pan, tap);
+  // Whichever is recognized first wins: a drag, a hold, or a quick tap.
+  const gesture = Gesture.Race(pan, longPress, tap);
   const bubbleStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }, { translateY: y.value }],
   }));
@@ -119,20 +135,14 @@ function Bubble(props: {
             style={[{ width: panelWidth }, panelHorizontal, panelVertical]}
           >
             <Pressable
-              accessibilityHint="Opens the thread you are talking in"
+              accessibilityHint="Long press to open the thread you are talking in"
+              accessibilityLabel={`Voice conversation: ${props.title}`}
               accessibilityRole="button"
-              className="min-w-0 flex-1 py-2 active:opacity-70"
-              onPress={() => {
-                setExpanded(false);
-                navigation.navigate("Thread", {
-                  environmentId: props.target.environmentId,
-                  threadId: props.target.threadId,
-                });
-              }}
+              className="min-w-0 flex-1 gap-0.5 py-1.5 active:opacity-70"
+              delayLongPress={VOICE_OPEN_LONG_PRESS_MS}
+              onLongPress={openThread}
             >
-              <Text className="text-sm font-t3-medium text-foreground" numberOfLines={1}>
-                {props.title}
-              </Text>
+              <VoiceConversationPreview lines={2} maxChars={120} />
             </Pressable>
             <VoiceStripButton
               accessibilityLabel={muted ? "Unmute microphone" : "Mute microphone"}
@@ -149,12 +159,16 @@ function Bubble(props: {
         <GestureDetector gesture={gesture}>
           <View
             accessible
-            accessibilityHint="Shows the voice conversation's controls. Drag to move."
+            accessibilityActions={[{ name: "longpress", label: "Open the voice thread" }]}
+            accessibilityHint="Shows the voice conversation's controls. Long press opens its thread; drag to move."
             accessibilityLabel={`Voice conversation: ${props.title}`}
             accessibilityRole="button"
             accessibilityState={{ expanded }}
             className="items-center justify-center rounded-full bg-primary shadow-lg"
             collapsable={false}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === "longpress") openThread();
+            }}
             onAccessibilityTap={toggleExpanded}
             style={{ width: BUBBLE_SIZE, height: BUBBLE_SIZE }}
           >

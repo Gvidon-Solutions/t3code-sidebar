@@ -1,6 +1,7 @@
 import * as NodeAssert from "node:assert/strict";
 
 import type {
+  ProviderVoiceSessionEvent,
   OrchestrationV2DomainEvent,
   OrchestrationV2ProviderThread,
   ProviderInstanceId,
@@ -11,6 +12,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -20,6 +22,7 @@ import { ProviderAdapterRegistryV2 } from "./ProviderAdapterRegistry.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import * as ThreadTitleRegenerationService from "./ThreadTitleRegenerationService.ts";
 import * as VoiceSessionService from "./VoiceSessionService.ts";
 
 const threadId = "thread-voice" as ThreadId;
@@ -29,6 +32,8 @@ const epoch = DateTime.makeUnsafe(0);
 interface Scenario {
   readonly providerThreads: ReadonlyArray<OrchestrationV2ProviderThread>;
   readonly resumeFails?: boolean;
+  /** What the conversation streams after it starts. */
+  readonly conversation?: ReadonlyArray<ProviderVoiceSessionEvent>;
 }
 
 /** Runs one voice start against fakes and reports what reached the provider and the log. */
@@ -36,6 +41,7 @@ const startVoice = (scenario: Scenario) =>
   Effect.gen(function* () {
     const calls: Array<string> = [];
     const written: Array<OrchestrationV2DomainEvent> = [];
+    const spokenNames = yield* Queue.unbounded<string>();
     let voiceThread: OrchestrationV2ProviderThread | undefined;
     const loaded = (
       row: OrchestrationV2ProviderThread,
@@ -71,7 +77,10 @@ const startVoice = (scenario: Scenario) =>
             }),
       startVoiceSession: (input: { providerThread: OrchestrationV2ProviderThread }) => {
         voiceThread = input.providerThread;
-        return Stream.make({ type: "started" as const });
+        return Stream.fromIterable<ProviderVoiceSessionEvent>([
+          { type: "started" },
+          ...(scenario.conversation ?? []),
+        ]);
       },
     };
     const layer = VoiceSessionService.layer.pipe(
@@ -116,6 +125,9 @@ const startVoice = (scenario: Scenario) =>
               }),
             get: () => Effect.succeed(Option.none()),
           }),
+          Layer.mock(ThreadTitleRegenerationService.ThreadTitleRegenerationService)({
+            nameFromSpeech: ({ text }) => Queue.offer(spokenNames, text).pipe(Effect.asVoid),
+          }),
           Layer.mock(RuntimePolicy.RuntimePolicyV2)({
             resolve: () => Effect.succeed({ cwd: null } as never),
           }),
@@ -129,7 +141,7 @@ const startVoice = (scenario: Scenario) =>
     const recorded = written.find((event) => event.type === "provider-thread.updated")?.payload as
       | OrchestrationV2ProviderThread
       | undefined;
-    return { calls, events: Array.from(events), recorded, voiceThread };
+    return { calls, events: Array.from(events), recorded, voiceThread, spokenNames };
   });
 
 const existingRow: OrchestrationV2ProviderThread = {
@@ -179,5 +191,23 @@ it.effect("replaces a native thread that cannot resume", () =>
     NodeAssert.deepEqual(result.calls, ["open", "resumeThread", "ensureThread"]);
     NodeAssert.equal(result.recorded?.id, existingRow.id);
     NodeAssert.equal(result.recorded?.nativeThreadRef?.nativeId, "native-new");
+  }),
+);
+
+it.effect("names the thread once, after the first phrase the owner says", () =>
+  Effect.gen(function* () {
+    const result = yield* startVoice({
+      providerThreads: [existingRow],
+      conversation: [
+        { type: "transcript.done", role: "assistant", text: "Hi, how can I help?" },
+        { type: "transcript.done", role: "user", text: " " },
+        { type: "transcript.done", role: "user", text: "Plan the release" },
+        { type: "transcript.done", role: "user", text: "And the changelog" },
+      ],
+    });
+    // Naming runs detached so captions never wait for it.
+    NodeAssert.equal(yield* Queue.take(result.spokenNames), "Plan the release");
+    yield* Effect.yieldNow;
+    NodeAssert.equal(yield* Queue.size(result.spokenNames), 0);
   }),
 );

@@ -106,6 +106,12 @@ export const INITIAL_VOICE_MODE_STATE: VoiceModeState = {
   endedReason: null,
 };
 
+/** Keeps the newest words of a live caption, for views that only fit its end. */
+export function voiceCaptionTail(text: string, maxChars = 160): string {
+  if (text.length <= maxChars) return text;
+  return `…${text.slice(-maxChars).trimStart()}`;
+}
+
 /** Appends a streaming caption delta, continuing the speaker's open caption. */
 export function appendVoiceCaption(
   captions: ReadonlyArray<VoiceCaption>,

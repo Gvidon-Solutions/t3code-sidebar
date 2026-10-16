@@ -9,7 +9,9 @@ import { buildThreadRouteParams, resolveThreadRouteTarget } from "~/threadRoutes
 import { VOICE_THREAD_TITLE } from "~/voice/voiceAvailability";
 import { useVoiceMuted, useVoicePhaseFor, useVoiceThreadRef, voiceMode } from "~/voice/voiceMode";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Spinner } from "../ui/spinner";
+import { VoiceConversationPreview } from "./VoiceConversationPreview";
 
 const POSITION_STORAGE_KEY = "t3code:voice-bubble:v1";
 /** The bubble's footprint (Button size icon-lg) plus the gap kept to the window edge. */
@@ -62,7 +64,7 @@ function writeStoredPosition(position: BubblePosition) {
 /**
  * Fork: while this client holds a voice conversation and no thread is open
  * (inbox, settings, home), a small bubble keeps it in reach. Drag it anywhere;
- * a tap opens the thread link, mute and stop. Thread routes have the voice
+ * a tap opens its newest words (click them for the thread), mute and stop. Thread routes have the voice
  * strip above the composer instead. Mounted once at the app root.
  */
 export function VoiceBubble() {
@@ -147,7 +149,6 @@ function FloatingVoiceBubble({ voiceThreadRef }: { voiceThreadRef: ScopedThreadR
     writeStoredPosition(drag.last);
   };
 
-  const status = phase === "connecting" ? "Connecting…" : muted ? "Muted" : "Listening";
   // The panel opens toward the larger part of the window.
   const opensUp = position.y > window.innerHeight / 2;
   const alignsRight = position.x > window.innerWidth / 2;
@@ -187,22 +188,27 @@ function FloatingVoiceBubble({ voiceThreadRef }: { voiceThreadRef: ScopedThreadR
             "rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg",
           )}
         >
-          <button
-            type="button"
-            className="flex min-w-0 flex-col rounded-md px-2 py-1 text-left hover:bg-accent"
-            onClick={() => {
-              setOpen(false);
-              void navigate({
-                to: "/$environmentId/$threadId",
-                params: buildThreadRouteParams(voiceThreadRef),
-              });
-            }}
-          >
-            <span className="truncate text-sm font-medium">{title}</span>
-            <span className="text-xs text-muted-foreground" role="status">
-              {status}
-            </span>
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`Open the voice conversation: ${title}`}
+                  className="flex min-w-0 flex-col gap-0.5 rounded-md px-2 py-1 text-left text-sm hover:bg-accent"
+                  onClick={() => {
+                    setOpen(false);
+                    void navigate({
+                      to: "/$environmentId/$threadId",
+                      params: buildThreadRouteParams(voiceThreadRef),
+                    });
+                  }}
+                />
+              }
+            >
+              <VoiceConversationPreview lines={2} maxChars={160} />
+            </TooltipTrigger>
+            <TooltipPopup side="top">Open the voice conversation</TooltipPopup>
+          </Tooltip>
           <div className="flex items-center gap-1">
             <Button size="xs" variant="ghost" onClick={() => voiceMode.toggleMuted()}>
               {muted ? <MicIcon aria-hidden /> : <MicOffIcon aria-hidden />}

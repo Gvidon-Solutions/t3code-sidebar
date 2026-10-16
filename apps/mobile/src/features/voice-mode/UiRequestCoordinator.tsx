@@ -1,12 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { createUiRequestAtoms } from "@t3tools/client-runtime/state/ui-requests";
-import { decideUiRequest, describeUiTarget } from "@t3tools/client-runtime/ui-requests";
+import { decideUiRequest } from "@t3tools/client-runtime/ui-requests";
 import { EnvironmentId, ThreadId, type UiRequest } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback, useEffect, useRef } from "react";
-import { Alert } from "react-native";
 
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { useWorkspaceEnvironments } from "../../state/workspace";
@@ -63,7 +62,7 @@ function UiRequestWatcher(props: {
  * Root-mounted (sidebar fork): acts on agents' requests to show something,
  * as `decideUiRequest` rules for this phone. The thread holding this device's
  * voice conversation is obeyed at once; the thread on screen opens files and
- * its diff directly (the phone has no side panel) and offers anything else.
+ * its diff directly (the phone has no side panel) and switches for the rest.
  * `shownThread` is the thread whose screen is in front, if any.
  */
 export function UiRequestCoordinator(props: { readonly shownThread: ShownThread | null }) {
@@ -133,13 +132,6 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
         shownThreadId: shown?.environmentId === environmentId ? shown.threadId : null,
       });
       if (decision === "ignore") return;
-      if (decision === "offer") {
-        Alert.alert(`Agent wants to open ${describeUiTarget(request.target)}`, undefined, [
-          { text: "Later", style: "cancel" },
-          { text: "Go", onPress: () => open(environmentId, request) },
-        ]);
-        return;
-      }
       open(environmentId, request);
     },
     [open],

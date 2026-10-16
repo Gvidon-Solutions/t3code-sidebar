@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { decideUiRequest, describeUiTarget } from "@t3tools/client-runtime/ui-requests";
+import { decideUiRequest } from "@t3tools/client-runtime/ui-requests";
 import {
   InboxIssueId,
   type EnvironmentId,
@@ -21,7 +21,6 @@ import {
   resolveThreadRouteTarget,
 } from "../../threadRoutes";
 import { voiceMode } from "../../voice/voiceMode";
-import { toastManager } from "../ui/toast";
 import { useWorkspaceViewStore } from "../workspaces/workspaceViewStore";
 import { findSidebarWorkspace, takeNewUiRequests } from "./uiRequests.logic";
 
@@ -52,7 +51,8 @@ function showWorkspace(environmentId: EnvironmentId, nameOrId: string) {
  * Fork: acts on agents' `ui_open` requests from every connected environment.
  * What a request does here depends on this client (see `decideUiRequest`):
  * the voice thread's agent navigates at once, the shown thread's agent opens
- * files and diffs beside it or offers the rest, other threads are ignored.
+ * files and diffs beside it and navigates for the rest, other threads are
+ * ignored.
  * Mounted once at the app root.
  */
 export function UiRequestCoordinator() {
@@ -125,19 +125,6 @@ export function UiRequestCoordinator() {
         go(environmentId, request);
       } else if (decision === "panel") {
         openInPanel(askingRef, request.target);
-      } else if (decision === "offer") {
-        const toastId = toastManager.add({
-          type: "info",
-          title: `Agent wants to open ${describeUiTarget(request.target)}`,
-          data: { threadRef: askingRef, hideCopyButton: true },
-          actionProps: {
-            children: "Go",
-            onClick: () => {
-              toastManager.close(toastId);
-              go(environmentId, request);
-            },
-          },
-        });
       }
     }
   }, [entries, router]);

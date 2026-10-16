@@ -1,10 +1,15 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import type { ModelSelection, ProjectId, ServerConfig as T3ServerConfig } from "@t3tools/contracts";
+import {
+  VOICE_THREAD_DEFAULT_TITLE,
+  type ModelSelection,
+  type ProjectId,
+  type ServerConfig as T3ServerConfig,
+} from "@t3tools/contracts";
 
 import { resolveSelectableModelSelection } from "../../lib/modelOptions";
 
-/** Sidebar fork: the title of a thread started to talk, until the agent renames it. */
-export const VOICE_THREAD_TITLE = "Voice conversation";
+/** Sidebar fork: the title of a thread started to talk, until its first phrase names it. */
+export const VOICE_THREAD_TITLE = VOICE_THREAD_DEFAULT_TITLE;
 /** Codex's realtime model, used when the draft's model cannot hold a conversation. */
 export const VOICE_DEFAULT_MODEL = "gpt-6-astra";
 

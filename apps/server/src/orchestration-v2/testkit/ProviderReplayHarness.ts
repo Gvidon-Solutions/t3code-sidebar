@@ -435,6 +435,7 @@ export function layerWithRegistry<Error>(
     ThreadTitleRegenerationService.ThreadTitleRegenerationService,
     ThreadTitleRegenerationService.ThreadTitleRegenerationService.of({
       execute: () => Effect.void,
+      nameFromSpeech: () => Effect.void,
     }),
   );
   const layerOrchestratorProvided = Orchestrator.layer.pipe(

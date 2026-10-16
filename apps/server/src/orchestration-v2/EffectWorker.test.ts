@@ -146,6 +146,7 @@ function layerExecutorFor(input: {
       ThreadTitleRegenerationService.ThreadTitleRegenerationService,
       ThreadTitleRegenerationService.ThreadTitleRegenerationService.of({
         execute: () => Effect.void,
+        nameFromSpeech: () => Effect.void,
       }),
     ),
   );

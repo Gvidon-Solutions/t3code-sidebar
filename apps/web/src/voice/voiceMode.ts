@@ -4,6 +4,7 @@ import {
   VoiceModeController,
   describeVoiceEnd,
   makeVoiceSessionOpener,
+  type VoiceCaption,
   type VoiceMediaStream,
   type VoiceModePhase,
   type VoiceModePlatform,
@@ -13,7 +14,7 @@ import {
 } from "@t3tools/client-runtime/voice-mode";
 import * as Effect from "effect/Effect";
 import { AtomRegistry } from "effect/reactivity";
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -124,6 +125,25 @@ const getMuted = () => voiceMode.getState().muted;
 
 export function useVoiceMuted(): boolean {
   return useSyncExternalStore(voiceMode.subscribe, getMuted, getMuted);
+}
+
+const getCaptions = () => voiceMode.getState().captions;
+
+export function useVoiceCaptions(): ReadonlyArray<VoiceCaption> {
+  return useSyncExternalStore(voiceMode.subscribe, getCaptions, getCaptions);
+}
+
+/** Speaker loudness (WebRTC `audioLevel`, 0..1) above which the assistant counts as speaking. */
+export const SPEAKING_LEVEL = 0.02;
+
+/** Whether the assistant is talking right now; re-renders only when that flips. */
+export function useVoiceSpeaking(active: boolean): boolean {
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    return voiceMode.subscribeLevels((levels) => setSpeaking(levels.speaker > SPEAKING_LEVEL));
+  }, [active]);
+  return active && speaking;
 }
 
 // Errors and provider-side ends surface once as a toast wherever the user is:
