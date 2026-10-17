@@ -92,6 +92,18 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-17 — Open files stay current on the phone
+
+- **What.** A file open on the phone (Markdown preview or source) shows the agent's edits as they
+  land, and again after coming back to the screen or the app. Its menu gains Refresh for text
+  files. Before, the screen kept the copy from its first visit and only a reopen much later or a
+  pull-down showed the change.
+- **How.** The read stays a cached query; `useWorkspaceFileRefresh` re-reads it after each settled
+  `file_change` or `command_execution` item or checkpoint of the thread (the same signal web's
+  `workspaceMutationId` uses), on focus and when the app returns to the foreground.
+- **Where.** `apps/mobile/src/features/files/useWorkspaceFileRefresh.ts` (new); seam:
+  `ThreadFileView` in `ThreadFilesRouteScreen.tsx`.
+
 ### 2026-10-17 — Voice: steer the call out loud, move it, hear it in a headset
 
 - **What.** Say "end the call" or "turn off the mic" and the device holding the call hangs up or

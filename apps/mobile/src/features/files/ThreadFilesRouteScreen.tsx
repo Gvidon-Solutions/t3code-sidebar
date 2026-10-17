@@ -74,6 +74,7 @@ import {
   isVideoPreviewFile,
 } from "./filePath";
 import { useWorkspaceFileAssetUrlState } from "./workspaceFileAssetUrl";
+import { useWorkspaceFileRefresh } from "./useWorkspaceFileRefresh";
 
 function FilesBrowserHeader(props: {
   readonly projectName: string;
@@ -797,6 +798,13 @@ export function ThreadFileView(
       : null,
   );
   const fileData = fileQuery.data as ProjectReadFileResult | null;
+  useWorkspaceFileRefresh({
+    enabled: canReadFiles && cwd !== null && relativePath !== null && needsFileContents,
+    environmentId,
+    threadId,
+    resourceKey: JSON.stringify([environmentId, cwd, relativePath]),
+    refresh: fileQuery.refresh,
+  });
 
   const handleSelectFile = useCallback(
     (path: string) => {
@@ -960,6 +968,15 @@ export function ThreadFileView(
             },
           } as const)
         : null,
+      needsFileContents
+        ? ({
+            id: "refresh",
+            title: "Refresh",
+            icon: "arrow.clockwise",
+            inline: false,
+            onPress: () => fileQuery.refresh(),
+          } as const)
+        : null,
     ].filter((action) => action !== null);
   }, [
     appearance.codeWordBreak,
@@ -979,6 +996,8 @@ export function ThreadFileView(
     fileData?.contents,
     fileData?.truncated,
     tabPosition.setMode,
+    needsFileContents,
+    fileQuery.refresh,
   ]);
 
   const handleReturnToThread = useCallback(() => {
