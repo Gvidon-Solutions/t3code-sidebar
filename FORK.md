@@ -94,15 +94,20 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 
 ### 2026-10-17 — Open files stay current on the phone
 
-- **What.** A file open on the phone (Markdown preview or source) shows the agent's edits as they
-  land, and again after coming back to the screen or the app. Its menu gains Refresh for text
-  files. Before, the screen kept the copy from its first visit and only a reopen much later or a
-  pull-down showed the change.
-- **How.** The read stays a cached query; `useWorkspaceFileRefresh` re-reads it after each settled
-  `file_change` or `command_execution` item or checkpoint of the thread (the same signal web's
-  `workspaceMutationId` uses), on focus and when the app returns to the foreground.
-- **Where.** `apps/mobile/src/features/files/useWorkspaceFileRefresh.ts` (new); seam:
-  `ThreadFileView` in `ThreadFilesRouteScreen.tsx`.
+- **What.** A file open on the phone shows edits within about two seconds, whoever makes them:
+  the agent, an editor, another thread. Markdown preview and source re-read the file; a PDF (a
+  LaTeX rebuild, say) swaps in the new pages and stays where the reader had scrolled. Text files
+  gain Refresh in the menu. Before, the screen kept the copy from its first visit.
+- **How.** While the file screen is focused and the app is in the foreground it polls every 2 s
+  (`OPEN_FILE_POLL_MS`). Text re-reads the cached `readFile` query (files up to 512 KB; larger
+  ones only on the other triggers), and re-reads at once after each settled `file_change` or
+  `command_execution` item or checkpoint of the thread (web's `workspaceMutationId` signal) and
+  on every return to the screen or the app. The pdf.js page reads the file's ETag from a GET it
+  aborts after the headers, renders a changed PDF off-screen and swaps it in at the same scroll;
+  an expired signed URL (404) is re-minted by the app and injected without reloading the page.
+- **Where.** `apps/mobile/src/features/files/useWorkspaceFileRefresh.ts` (new),
+  `WorkspaceFilePdfPreview.tsx`; seam: `ThreadFileView` and `FileContent` in
+  `ThreadFilesRouteScreen.tsx`.
 
 ### 2026-10-17 — Voice: steer the call out loud, move it, hear it in a headset
 

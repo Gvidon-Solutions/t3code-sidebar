@@ -74,7 +74,7 @@ import {
   isVideoPreviewFile,
 } from "./filePath";
 import { useWorkspaceFileAssetUrlState } from "./workspaceFileAssetUrl";
-import { useWorkspaceFileRefresh } from "./useWorkspaceFileRefresh";
+import { OPEN_FILE_POLL_MAX_BYTES, useWorkspaceFileRefresh } from "./useWorkspaceFileRefresh";
 
 function FilesBrowserHeader(props: {
   readonly projectName: string;
@@ -308,6 +308,7 @@ function FileContent(props: {
       return (
         <WorkspaceFilePdfPreview
           uri={props.previewUri}
+          onUrlExpired={() => void props.resolveVideoUri()}
           restoreScrollY={props.restorePosition}
           onScrollSettle={props.onPositionChange}
         />
@@ -800,6 +801,8 @@ export function ThreadFileView(
   const fileData = fileQuery.data as ProjectReadFileResult | null;
   useWorkspaceFileRefresh({
     enabled: canReadFiles && cwd !== null && relativePath !== null && needsFileContents,
+    poll:
+      fileData !== null && !fileData.truncated && fileData.byteLength <= OPEN_FILE_POLL_MAX_BYTES,
     environmentId,
     threadId,
     resourceKey: JSON.stringify([environmentId, cwd, relativePath]),

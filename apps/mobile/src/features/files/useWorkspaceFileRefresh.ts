@@ -1,7 +1,7 @@
 import { useIsFocused } from "@react-navigation/native";
 import { deriveThreadCheckpointSummaries } from "@t3tools/client-runtime/state/thread-checkpoints";
 import type { EnvironmentId, OrchestrationV2ThreadProjection, ThreadId } from "@t3tools/contracts";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 import { useThreadProjection, useThreadVisibleTurnItems } from "../../state/use-thread-detail";
@@ -31,20 +31,39 @@ export function workspaceMutationId(
     : JSON.stringify([itemId, latestCheckpointCompletedAt]);
 }
 
+/** How often an open file on screen re-checks the disk, so edits from anywhere show up. */
+export const OPEN_FILE_POLL_MS = 2_000;
+/** Text files above this are not re-read on every poll. */
+export const OPEN_FILE_POLL_MAX_BYTES = 512 * 1024;
+
+/** True while the file screen is focused and the app is in the foreground. */
+export function useOpenFileScreenActive(enabled: boolean): boolean {
+  const focused = useIsFocused();
+  const [appState, setAppState] = useState(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", setAppState);
+    return () => subscription.remove();
+  }, []);
+  return enabled && focused && appState === "active";
+}
+
 /**
  * Keeps an open workspace file current (sidebar fork). The read is cached, so
- * without this the screen kept showing the copy from its first visit while the
- * agent edited the file. Re-reads after each workspace mutation of the thread,
- * when the screen regains focus and when the app returns to the foreground.
+ * without this the screen kept showing the copy from its first visit. Re-reads
+ * at once after each workspace mutation of the thread and on every return to
+ * the screen or the app, and polls while it is on screen so edits made outside
+ * the thread (an editor, another thread) show up within a poll.
  */
 export function useWorkspaceFileRefresh(input: {
   readonly enabled: boolean;
+  /** Polling re-reads the whole file, so large files rely on the other triggers. */
+  readonly poll: boolean;
   readonly environmentId: EnvironmentId | null;
   readonly threadId: ThreadId | null;
   readonly resourceKey: string;
   readonly refresh: () => void;
 }): void {
-  const { enabled, environmentId, threadId, resourceKey } = input;
+  const { environmentId, threadId, resourceKey, poll } = input;
   const refreshRef = useRef(input.refresh);
   refreshRef.current = input.refresh;
 
@@ -58,10 +77,9 @@ export function useWorkspaceFileRefresh(input: {
     [thread],
   );
   const mutationId = workspaceMutationId(visibleTurnItems, latestCheckpointCompletedAt);
-  const focused = useIsFocused();
-  const active = enabled && focused;
+  const active = useOpenFileScreenActive(input.enabled);
 
-  // The first run also re-reads on open and on refocus, so a cached copy never survives a visit.
+  // The first run also re-reads on open and on each return, so a cached copy never survives.
   const handledRef = useRef<string | null>(null);
   useEffect(() => {
     if (!active) {
@@ -75,12 +93,8 @@ export function useWorkspaceFileRefresh(input: {
   }, [active, mutationId, resourceKey]);
 
   useEffect(() => {
-    if (!active) return;
-    let state = AppState.currentState;
-    const subscription = AppState.addEventListener("change", (next) => {
-      if (state !== "active" && next === "active") refreshRef.current();
-      state = next;
-    });
-    return () => subscription.remove();
-  }, [active]);
+    if (!active || !poll) return;
+    const timer = setInterval(() => refreshRef.current(), OPEN_FILE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [active, poll]);
 }
