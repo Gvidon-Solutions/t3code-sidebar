@@ -129,6 +129,7 @@ export function ComposerEditor({
   onFocus,
   onBlur,
   onSubmit,
+  onContentHeightChange,
   contentInsetVertical = 0,
   ...props
 }: ComposerEditorProps) {
@@ -364,7 +365,10 @@ export function ComposerEditor({
       }}
       onComposerFocus={onFocus}
       onComposerBlur={onBlur}
-      onComposerContentSizeChange={(event) => setContentHeight(event.nativeEvent.height)}
+      onComposerContentSizeChange={(event) => {
+        setContentHeight(event.nativeEvent.height);
+        onContentHeightChange?.(event.nativeEvent.height);
+      }}
       onComposerSubmit={
         onSubmit === undefined
           ? undefined

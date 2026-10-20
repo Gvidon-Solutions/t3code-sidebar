@@ -96,6 +96,24 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-21 — Full-screen draft editor; terminal tabs and keys on every screen
+
+- **What.** Once a draft wraps to three lines, ⤢ appears in the composer toolbar next to "+",
+  as in ChatGPT. It grows the same draft over the screen with only the text, ⤡ and send; ⤡,
+  Back or sending returns to the normal composer. In a thread, a new thread and an inbox reply.
+  The terminal's tab strip, the two rows of extra keys and "Attach output to chat" in its menu
+  now also apply where there is no thread pager (tablets, unfolded foldables, iOS): the
+  terminal screen shows Chat, the open files and every shell of the thread as tabs.
+- **How.** The editors report their text height (`onContentHeightChange`);
+  `useComposerFullScreen` turns it into lines and owns the full-screen state and Back.
+  Full screen lifts the editor's cap by the thread glimpse a focused composer keeps. The
+  `ThreadTerminal` route renders `ThreadTerminalTabsRouteScreen`, which gives the terminal the
+  pager's controls: a terminal tab swaps the route's shell, Chat goes back, closing kills.
+- **Where.** `apps/mobile/src/features/composer-fullscreen/`, seams in
+  `features/threads/{ThreadComposer,NewTaskDraftScreen}.tsx`, `features/inbox/InboxComposer.tsx`
+  and `native/T3ComposerEditor*.tsx`; `features/terminal/ThreadTerminalTabsRouteScreen.tsx` and
+  the `ThreadTerminal` entry in `Stack.tsx`.
+
 ### 2026-10-21 — Terminals are tabs on the phone, with Termux-style keys; PDF and SVG stay sharp
 
 - **What.** On an Android phone every terminal of the thread is a tab next to Chat and the open

@@ -81,6 +81,11 @@ import {
   EXPANDED_EDITOR_MIN_HEIGHT,
   expandedEditorMaxHeight,
 } from "./ThreadComposer";
+import {
+  COMPOSER_FULL_SCREEN_EXTRA_HEIGHT,
+  ComposerFullScreenButton,
+  useComposerFullScreen,
+} from "../composer-fullscreen/ComposerFullScreen";
 import { ComposerCommandPopover } from "./ComposerCommandPopover";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
 import {
@@ -771,6 +776,8 @@ export function NewTaskDraftScreen(props: {
   const foregroundColor = theme["--color-foreground"];
   const regularFontFamily = useFontFamily("regular");
   const bodyText = useScaledTextRole("body");
+  const fullScreenEditor = useComposerFullScreen(bodyText.lineHeight);
+  const fullScreenEditorHeight = editorMaxHeight + COMPOSER_FULL_SCREEN_EXTRA_HEIGHT;
 
   // A new navigation to this mounted screen delivers a fresh initialProjectRef
   // reference — treat it as a new request and let it apply again.
@@ -1647,16 +1654,26 @@ export function NewTaskDraftScreen(props: {
         onSelectionChange={composerMenu.onSelectionChange}
         onFocus={() => setIsComposerFocused(true)}
         onBlur={() => setIsComposerFocused(false)}
+        onContentHeightChange={fullScreenEditor.onContentHeightChange}
         onPasteImages={(uris) => void handleNativePasteImages(uris)}
         onPasteText={(paste) => void handleNativePasteText(paste)}
         placeholder="Ask anything…"
         singleLineCentered={false}
         contentInsetVertical={0}
-        style={{
-          minHeight: EXPANDED_EDITOR_MIN_HEIGHT,
-          maxHeight: editorMaxHeight,
-          paddingVertical: 4,
-        }}
+        style={
+          fullScreenEditor.fullScreen
+            ? {
+                minHeight: fullScreenEditorHeight,
+                maxHeight: fullScreenEditorHeight,
+                paddingVertical: 4,
+                paddingRight: 40,
+              }
+            : {
+                minHeight: EXPANDED_EDITOR_MIN_HEIGHT,
+                maxHeight: editorMaxHeight,
+                paddingVertical: 4,
+              }
+        }
         textStyle={{ ...bodyText, color: foregroundColor, fontFamily: regularFontFamily }}
       />
     </>
@@ -1880,7 +1897,12 @@ export function NewTaskDraftScreen(props: {
           paddingTop: 10,
         }}
       >
-        {stripAttachments.length > 0 ? (
+        {fullScreenEditor.fullScreen ? (
+          <View className="absolute right-1 top-1 z-10">
+            <ComposerFullScreenButton fullScreen onPress={fullScreenEditor.close} />
+          </View>
+        ) : null}
+        {stripAttachments.length > 0 && !fullScreenEditor.fullScreen ? (
           <View className="px-[14px] pb-2.5">
             <ComposerAttachmentStrip
               environmentId={selectedProject.environmentId}
@@ -1935,6 +1957,8 @@ export function NewTaskDraftScreen(props: {
                   presentation={voicePresentation}
                   onDismissError={voiceInput.cancel}
                 />
+              ) : fullScreenEditor.fullScreen ? (
+                <View className="flex-1" />
               ) : (
                 <>
                   <ComposerAttachmentButton
@@ -1945,6 +1969,9 @@ export function NewTaskDraftScreen(props: {
                     onPickMedia={handlePickMedia}
                     onPickFiles={handlePickFiles}
                   />
+                  {fullScreenEditor.offersFullScreen ? (
+                    <ComposerFullScreenButton fullScreen={false} onPress={fullScreenEditor.open} />
+                  ) : null}
                   <View className="min-w-0 flex-1 flex-row items-center justify-end gap-2">
                     <View className="min-w-0 shrink">
                       <ComposerInlineControl
@@ -1991,22 +2018,24 @@ export function NewTaskDraftScreen(props: {
                   </View>
                 </>
               )}
-              {offersVoiceConversation && !isVoiceInputPresented ? (
+              {offersVoiceConversation && !isVoiceInputPresented && !fullScreenEditor.fullScreen ? (
                 <ComposerVoiceModeButton
                   phase="idle"
                   disabled={!canStartVoice}
                   onPress={() => void handleStartVoice()}
                 />
               ) : null}
-              <ComposerDictationPrimaryAction
-                state={voiceInput.state}
-                presentation={voicePresentation}
-                isAvailable={voiceInput.isAvailable}
-                disabled={isIncomingShareTransferPending || isImportingShare || flow.submitting}
-                onStart={voiceInput.start}
-                onConfirm={voiceInput.stop}
-                onCancel={voiceInput.cancel}
-              />
+              {fullScreenEditor.fullScreen && !isVoiceInputPresented ? null : (
+                <ComposerDictationPrimaryAction
+                  state={voiceInput.state}
+                  presentation={voicePresentation}
+                  isAvailable={voiceInput.isAvailable}
+                  disabled={isIncomingShareTransferPending || isImportingShare || flow.submitting}
+                  onStart={voiceInput.start}
+                  onConfirm={voiceInput.stop}
+                  onCancel={voiceInput.cancel}
+                />
+              )}
               {voicePresentation.showsSend ? (
                 <ComposerActionButton
                   accessibilityLabel={

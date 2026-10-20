@@ -86,6 +86,11 @@ import {
 import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
 import { GlassSurface } from "../../components/GlassSurface";
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
+import {
+  COMPOSER_FULL_SCREEN_EXTRA_HEIGHT,
+  ComposerFullScreenButton,
+  useComposerFullScreen,
+} from "../composer-fullscreen/ComposerFullScreen";
 import { fileRoutePathSegments } from "../files/filePath";
 import {
   ComposerActionButton,
@@ -432,6 +437,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const fallbackInputRef = useRef<ComposerEditorHandle>(null);
   const inputRef = props.editorRef ?? fallbackInputRef;
   const [isFocused, setIsFocused] = useState(false);
+  const fullScreenEditor = useComposerFullScreen(bodyText.lineHeight);
   const pendingPastedTextAttachmentCountRef = useRef(0);
   const [pendingPastedTextAttachmentCount, setPendingPastedTextAttachmentCount] = useState(0);
   const settingsSheetPresentation = useThreadSettingsSheetPresentation({
@@ -602,7 +608,8 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   );
   const isVoiceInputPresented = voicePresentation.statusLabel !== null;
   // An open draft stays visible; only a collapsed composer becomes a voice strip.
-  const isExpanded = isFocused || settingsSheetPresentation.keepsComposerExpanded;
+  const isExpanded =
+    isFocused || settingsSheetPresentation.keepsComposerExpanded || fullScreenEditor.fullScreen;
   const { height: windowHeight } = useWindowDimensions();
   const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
   const safeAreaInsets = useSafeAreaInsets();
@@ -612,6 +619,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     topInset: safeAreaInsets.top,
     bottomInset: props.bottomInset ?? 0,
   });
+  // Full screen gives the editor the thread's glimpse too: only the header and tabs stay above.
+  // A resting composer sits the safe-area inset higher than the cap allows for.
+  const fullScreenEditorHeight =
+    editorMaxHeight +
+    COMPOSER_FULL_SCREEN_EXTRA_HEIGHT -
+    (keyboardHeight > 0 ? 0 : safeAreaInsets.bottom);
   const showsCompactDictation = isVoiceInputPresented && !isExpanded;
   const isToolbarVisible = isExpanded || isVoiceInputPresented;
   const attachmentBlockReason = composerAttachmentUploadBlockReason({
@@ -709,6 +722,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         if (messageId === null) {
           return;
         }
+        fullScreenEditor.close();
         // Sending a prompt starts agent work: arm the lock-screen card while the
         // app is foregrounded and the activity token can be registered. Armed
         // after the send so its preference read and native Activity start don't
@@ -725,6 +739,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     [
       props.draftMessage,
       props.draftAttachments.length,
+      fullScreenEditor.close,
       onChangeDraftMessage,
       openUsageLimits,
       usageLimitsOffered,
@@ -994,7 +1009,15 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 onPickFiles={props.onPickDraftFiles}
               />
             ) : null}
-            {isExpanded && queuedEdit !== null && queuedEdit.existingAttachments.length > 0 ? (
+            {fullScreenEditor.fullScreen ? (
+              <View className="absolute right-1 top-0 z-10">
+                <ComposerFullScreenButton fullScreen onPress={fullScreenEditor.close} />
+              </View>
+            ) : null}
+            {isExpanded &&
+            !fullScreenEditor.fullScreen &&
+            queuedEdit !== null &&
+            queuedEdit.existingAttachments.length > 0 ? (
               <Animated.View
                 className="px-[14px] pb-2.5"
                 entering={COMPOSER_ATTACHMENT_ENTERING}
@@ -1008,7 +1031,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 />
               </Animated.View>
             ) : null}
-            {isExpanded && stripAttachments.length > 0 ? (
+            {isExpanded && !fullScreenEditor.fullScreen && stripAttachments.length > 0 ? (
               <Animated.View
                 className="px-[14px] pb-2.5"
                 entering={COMPOSER_ATTACHMENT_ENTERING}
@@ -1136,6 +1159,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 placeholder={props.placeholder}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
+                onContentHeightChange={fullScreenEditor.onContentHeightChange}
                 // Command-Return sends the other way, matching web's Mod+Enter.
                 onSubmit={(alternate) =>
                   void handleSend(
@@ -1156,15 +1180,22 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 singleLineCentered={!isExpanded}
                 contentInsetVertical={isExpanded || Platform.OS === "android" ? 0 : 6}
                 style={
-                  isExpanded
+                  fullScreenEditor.fullScreen
                     ? {
-                        minHeight: EXPANDED_EDITOR_MIN_HEIGHT,
-                        maxHeight: editorMaxHeight,
+                        minHeight: fullScreenEditorHeight,
+                        maxHeight: fullScreenEditorHeight,
                         paddingVertical: 4,
+                        paddingRight: 40,
                       }
-                    : {
-                        height: 36,
-                      }
+                    : isExpanded
+                      ? {
+                          minHeight: EXPANDED_EDITOR_MIN_HEIGHT,
+                          maxHeight: editorMaxHeight,
+                          paddingVertical: 4,
+                        }
+                      : {
+                          height: 36,
+                        }
                 }
                 textStyle={{
                   ...bodyText,
@@ -1265,14 +1296,27 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                   />
                 ) : (
                   <View className="min-w-0 flex-1 flex-row items-center justify-between">
-                    <ComposerAttachmentButton
-                      supportsFiles={Boolean(
-                        props.serverConfig?.environment.capabilities.fileAttachments,
-                      )}
-                      onPickMedia={props.onPickDraftMedia}
-                      onPickFiles={props.onPickDraftFiles}
-                    />
-                    <View className="min-w-0 shrink">
+                    {fullScreenEditor.fullScreen ? (
+                      <View />
+                    ) : (
+                      <ComposerAttachmentButton
+                        supportsFiles={Boolean(
+                          props.serverConfig?.environment.capabilities.fileAttachments,
+                        )}
+                        onPickMedia={props.onPickDraftMedia}
+                        onPickFiles={props.onPickDraftFiles}
+                      />
+                    )}
+                    {fullScreenEditor.offersFullScreen && !fullScreenEditor.fullScreen ? (
+                      <ComposerFullScreenButton
+                        fullScreen={false}
+                        onPress={fullScreenEditor.open}
+                      />
+                    ) : null}
+                    <View
+                      className="min-w-0 shrink"
+                      style={fullScreenEditor.fullScreen ? { display: "none" } : undefined}
+                    >
                       <ComposerInlineControl
                         accessibilityLabel={
                           currentModelDisplay.effort
@@ -1296,16 +1340,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                   </View>
                 )}
                 <View className="shrink-0 flex-row items-center">
-                  {isVoiceInputPresented ? null : voiceModeButton}
-                  <ComposerDictationPrimaryAction
-                    state={voiceInput.state}
-                    presentation={voicePresentation}
-                    isAvailable={voiceInput.isAvailable}
-                    disabled={voiceConversationLive}
-                    onStart={voiceInput.start}
-                    onConfirm={voiceInput.stop}
-                    onCancel={voiceInput.cancel}
-                  />
+                  {isVoiceInputPresented || fullScreenEditor.fullScreen ? null : voiceModeButton}
+                  {fullScreenEditor.fullScreen && !isVoiceInputPresented ? null : (
+                    <ComposerDictationPrimaryAction
+                      state={voiceInput.state}
+                      presentation={voicePresentation}
+                      isAvailable={voiceInput.isAvailable}
+                      disabled={voiceConversationLive}
+                      onStart={voiceInput.start}
+                      onConfirm={voiceInput.stop}
+                      onCancel={voiceInput.cancel}
+                    />
+                  )}
                   {showStopAction ? (
                     <ComposerActionButton
                       accessibilityLabel="Stop agent"

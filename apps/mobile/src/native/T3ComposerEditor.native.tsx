@@ -127,6 +127,7 @@ export function ComposerEditor({
   onPasteText,
   onFocus,
   onBlur,
+  onContentHeightChange,
   contentInsetVertical = 0,
   ...props
 }: ComposerEditorProps) {
@@ -369,7 +370,10 @@ export function ComposerEditor({
         }}
         onComposerFocus={onFocus}
         onComposerBlur={onBlur}
-        onComposerContentSizeChange={(event) => setContentHeight(event.nativeEvent.height)}
+        onComposerContentSizeChange={(event) => {
+          setContentHeight(event.nativeEvent.height);
+          onContentHeightChange?.(event.nativeEvent.height);
+        }}
       />
     </TextInputWrapper>
   );

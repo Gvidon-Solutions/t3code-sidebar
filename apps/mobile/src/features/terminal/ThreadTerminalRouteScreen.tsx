@@ -615,8 +615,8 @@ export function ThreadTerminalRouteScreen(
     height: state.height,
     isVisible: state.isVisible,
   }));
-  // Android shows its extra keys whether or not the keyboard is up.
-  const usesExtraKeys = Platform.OS === "android" && canOperateTerminal;
+  // The extra keys stay up whether or not the keyboard is (sidebar fork, all platforms).
+  const usesExtraKeys = canOperateTerminal;
   const isAccessoryVisible =
     pageActive &&
     canOperateTerminal &&
@@ -635,7 +635,9 @@ export function ThreadTerminalRouteScreen(
     (keyboardState.isVisible && pageActive ? keyboardState.height : 0) +
     (isAccessoryVisible
       ? usesExtraKeys
-        ? TERMINAL_EXTRA_KEYS_HEIGHT
+        ? TERMINAL_EXTRA_KEYS_HEIGHT +
+          // Android pads the whole body by the inset already; iOS lifts only the keys.
+          (Platform.OS === "ios" && !keyboardState.isVisible ? insets.bottom : 0)
         : TERMINAL_ACCESSORY_HEIGHT
       : 0);
 
@@ -1274,8 +1276,13 @@ export function ThreadTerminalRouteScreen(
         onIncreaseFontSize={handleIncreaseFontSize}
         onOpenNewTerminal={handleOpenNewTerminal}
         onSelectTerminal={handleSelectTerminal}
-        {...(Platform.OS === "android" && hasNativeTerminalSurface()
-          ? { onAttachOutput: () => setCaptureRequest((value) => value + 1) }
+        {...(hasNativeTerminalSurface()
+          ? {
+              onAttachOutput: () => {
+                KeyboardController.dismiss();
+                setCaptureRequest((value) => value + 1);
+              },
+            }
           : {})}
       />
       {props.embedded ? (
@@ -1414,18 +1421,6 @@ export function ThreadTerminalRouteScreen(
                   />
                 </KeyboardStickyView>
               ) : null}
-              {Platform.OS !== "android" && selectedThread && hasNativeTerminalSurface() ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    KeyboardController.dismiss();
-                    setCaptureRequest((value) => value + 1);
-                  }}
-                  className="px-4 py-2"
-                >
-                  <Text style={{ color: terminalTheme.foreground }}>Attach visible output</Text>
-                </Pressable>
-              ) : null}
               {isAccessoryVisible && !usesExtraKeys ? (
                 <KeyboardStickyView
                   style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
@@ -1476,7 +1471,10 @@ export function ThreadTerminalRouteScreen(
                     </ComposerToolbarRow>
                   </View>
                 </KeyboardStickyView>
-              ) : canOperateTerminal && !keyboardState.isVisible && Platform.OS !== "android" ? (
+              ) : canOperateTerminal &&
+                !usesExtraKeys &&
+                !keyboardState.isVisible &&
+                Platform.OS !== "android" ? (
                 <Pressable
                   accessibilityLabel="Show keyboard"
                   accessibilityRole="button"

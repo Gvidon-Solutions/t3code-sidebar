@@ -8,7 +8,9 @@ import {
 } from "@t3tools/contracts";
 import { TextInputWrapper } from "expo-paste-input";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Platform, View, type LayoutChangeEvent } from "react-native";
+import { Alert, Platform, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
+import { useKeyboardState } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
@@ -44,7 +46,13 @@ import {
 } from "../../state/use-composer-drafts";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useRemoteConnectionStatus } from "../../state/use-remote-environment-registry";
-import { ComposerSurface } from "../threads/ThreadComposer";
+import { ComposerSurface, expandedEditorMaxHeight } from "../threads/ThreadComposer";
+import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
+import {
+  COMPOSER_FULL_SCREEN_EXTRA_HEIGHT,
+  ComposerFullScreenButton,
+  useComposerFullScreen,
+} from "../composer-fullscreen/ComposerFullScreen";
 import { inboxEnvironment } from "./useInbox";
 
 /**
@@ -92,6 +100,18 @@ export function InboxComposer(props: {
       environment.environmentId === environmentId && environment.connectionState === "connected",
   );
   const [sending, setSending] = useState(false);
+  const bodyText = useScaledTextRole("body");
+  const fullScreenEditor = useComposerFullScreen(bodyText.lineHeight);
+  const { height: windowHeight } = useWindowDimensions();
+  const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
+  const safeAreaInsets = useSafeAreaInsets();
+  const fullScreenEditorHeight =
+    expandedEditorMaxHeight({
+      windowHeight,
+      keyboardHeight,
+      topInset: safeAreaInsets.top,
+      bottomInset: props.bottomInset,
+    }) + COMPOSER_FULL_SCREEN_EXTRA_HEIGHT;
   const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
   const mounted = useRef(true);
@@ -171,6 +191,7 @@ export function InboxComposer(props: {
         input: { issueId, text, ...(wire.length > 0 ? { attachments: wire } : {}) },
       });
       if (result._tag !== "Success") return;
+      fullScreenEditor.close();
       // The server now owns the files; drop only what was sent, keep anything typed meanwhile.
       for (const attachment of sent) removeComposerDraftAttachment(draftKey, attachment.id);
       const current = appAtomRegistry.get(composerDraftsAtom)[draftKey]?.text ?? "";
@@ -214,7 +235,12 @@ export function InboxComposer(props: {
           paddingVertical: 2,
         }}
       >
-        {attachments.length > 0 ? (
+        {fullScreenEditor.fullScreen ? (
+          <View className="absolute right-1 top-1 z-10">
+            <ComposerFullScreenButton fullScreen onPress={fullScreenEditor.close} />
+          </View>
+        ) : null}
+        {attachments.length > 0 && !fullScreenEditor.fullScreen ? (
           <View className="px-[14px] pb-1 pt-3">
             <ComposerAttachmentStrip
               environmentId={environmentId}
@@ -240,7 +266,7 @@ export function InboxComposer(props: {
           </View>
         ) : null}
         <View className="flex-row items-end">
-          {canAttach ? (
+          {canAttach && !fullScreenEditor.fullScreen ? (
             <ComposerAttachmentButton
               disabled={sending}
               supportsFiles={Boolean(capabilities?.fileAttachments)}
@@ -261,10 +287,25 @@ export function InboxComposer(props: {
                 value={draft.text}
                 onChangeText={(value) => setComposerDraftText(draftKey, value)}
                 editable={!sending}
-                className="max-h-36 min-h-[44px] border-0 bg-transparent px-1 py-2.5 text-base text-foreground"
+                onContentSizeChange={(event) =>
+                  // Minus the py-2.5 padding: the hook counts lines of text.
+                  fullScreenEditor.onContentHeightChange(event.nativeEvent.contentSize.height - 20)
+                }
+                className={cn(
+                  "min-h-[44px] border-0 bg-transparent px-1 py-2.5 text-base text-foreground",
+                  !fullScreenEditor.fullScreen && "max-h-36",
+                )}
+                style={
+                  fullScreenEditor.fullScreen
+                    ? { height: fullScreenEditorHeight, paddingRight: 40, textAlignVertical: "top" }
+                    : undefined
+                }
               />
             </TextInputWrapper>
           </View>
+          {fullScreenEditor.offersFullScreen && !fullScreenEditor.fullScreen ? (
+            <ComposerFullScreenButton fullScreen={false} onPress={fullScreenEditor.open} />
+          ) : null}
           <ComposerActionButton
             accessibilityLabel={blockReason ?? (uploading ? "Uploading attachments" : "Send reply")}
             icon="arrow.up"
