@@ -211,9 +211,11 @@ function normalizeRouteLine(value: string | null): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function defaultViewMode(path: string | null): FileViewMode {
+/** Markdown opens rendered unless a link points at one of its lines. */
+function defaultViewMode(path: string | null, targetLine: number | null): FileViewMode {
   return path !== null &&
-    (isWorkspaceBrowserPreviewPath(path) ||
+    ((isMarkdownPreviewFile(path) && targetLine === null) ||
+      isWorkspaceBrowserPreviewPath(path) ||
       isWorkspaceImagePreviewPath(path) ||
       isVideoPreviewFile(path) ||
       isAudioPreviewFile(path))
@@ -709,7 +711,7 @@ export function ThreadFileView(
   const activeMode =
     relativePath !== null && modeOverride?.path === relativePath
       ? modeOverride.mode
-      : (tabPosition.mode ?? defaultViewMode(relativePath));
+      : (tabPosition.mode ?? defaultViewMode(relativePath, targetLine));
   const resolvedActiveMode =
     isVideoFile || isAudioFile ? "preview" : canPreview ? activeMode : "source";
   const assetPreviewPath =

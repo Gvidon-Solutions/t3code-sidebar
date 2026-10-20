@@ -96,6 +96,20 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-21 — Markdown opens rendered on the phone; composer no longer hides behind the keyboard
+
+- **What.** A Markdown file opened on the phone shows its rendered preview first; a link to a
+  specific line still opens the source at that line, and a tab switched to source stays source.
+  On Android the message field no longer stays hidden under an open keyboard after quick
+  back-and-forth between threads and apps.
+- **How.** `defaultViewMode` treats Markdown like images and PDFs unless the route carries a
+  line. The keyboard fix is upstream's #20803 and #19980, cherry-picked ahead of the next
+  upstream merge: the composer follows the keyboard from its first frame instead of waiting
+  for a visibility render, and an input that kept focus through an app switch is no longer
+  quarantined.
+- **Where.** `apps/mobile/src/features/files/ThreadFilesRouteScreen.tsx`; the cherry-picks touch
+  `features/threads/{ThreadDetailScreen,ThreadFeed,QuestionAttachments}.tsx`.
+
 ### 2026-10-20 — Phone composer grows with the prompt, shared PDFs show up, "+" menu whole
 
 - **What.** On the phone the message field grows line by line as you type, up to the space
