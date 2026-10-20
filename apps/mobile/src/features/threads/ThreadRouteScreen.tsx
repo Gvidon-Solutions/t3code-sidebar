@@ -5,6 +5,7 @@ import { useWorktreeSetup } from "./use-worktree-setup";
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 import { ScreenHeader } from "../../components/ScreenHeader";
 import {
+  CommonActions,
   StackActions,
   useFocusEffect,
   useNavigation,
@@ -17,6 +18,7 @@ import {
   AuthTerminalOperateScope,
   AuthTerminalReadScope,
   DEFAULT_SERVER_SETTINGS,
+  DEFAULT_TERMINAL_ID,
   EnvironmentId,
   ThreadId,
   type ProjectScript,
@@ -91,6 +93,9 @@ import { ThreadHeader } from "./ThreadHeader";
 import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
 import { ThreadPager } from "../panels/ThreadPager";
 import { ThreadFileView } from "../files/ThreadFilesRouteScreen";
+import { terminalTabKey } from "../panels/terminalTabs";
+import { ThreadTerminalRouteScreen } from "../terminal/ThreadTerminalRouteScreen";
+import { terminalEnvironment } from "../../state/terminal";
 import {
   useAndroidWorkspaceBack,
   useWorkspaceListNavigation,
@@ -475,6 +480,54 @@ function ThreadRouteContent(
       }),
     [knownTerminalSessions, selectedThreadProject?.workspaceRoot],
   );
+  // Sidebar fork: Android phones show terminals as tabs of the thread pager.
+  const usesThreadPager = Platform.OS === "android" && !fileInspector.supported;
+  const showTerminal = useCallback(
+    (terminalId: string | null) => {
+      if (!selectedThread) return;
+      if (usesThreadPager) {
+        navigation.dispatch(
+          CommonActions.setParams({
+            tab: terminalTabKey(
+              terminalId ?? terminalMenuSessions[0]?.terminalId ?? DEFAULT_TERMINAL_ID,
+            ),
+            tabAt: Date.now(),
+            line: undefined,
+          }),
+        );
+        return;
+      }
+      void navigation.navigate("ThreadTerminal", {
+        environmentId: String(selectedThread.environmentId),
+        threadId: String(selectedThread.id),
+        ...(terminalId ? { terminalId } : {}),
+      });
+    },
+    [navigation, selectedThread, terminalMenuSessions, usesThreadPager],
+  );
+  const closeTerminalCommand = useAtomCommand(terminalEnvironment.close, "terminal close");
+  const killTerminal = useCallback(
+    (terminalId: string) => {
+      if (
+        !selectedThread ||
+        !readEnvironmentScope(selectedThread.environmentId, AuthTerminalOperateScope)
+      )
+        return;
+      void closeTerminalCommand({
+        environmentId: selectedThread.environmentId,
+        input: { threadId: selectedThread.id, terminalId, deleteHistory: true },
+      });
+    },
+    [closeTerminalCommand, selectedThread],
+  );
+  const pagerTerminals = useMemo(
+    () =>
+      terminalMenuSessions.map((session) => ({
+        terminalId: session.terminalId,
+        label: session.displayLabel,
+      })),
+    [terminalMenuSessions],
+  );
   const selectedThreadDetailWorktreePath = selectedThreadDetail?.thread.worktreePath ?? null;
   const handleReconnectEnvironment = useCallback(() => {
     if (!environmentId) {
@@ -671,13 +724,9 @@ function ThreadRouteContent(
         return;
       }
 
-      void navigation.navigate("ThreadTerminal", {
-        environmentId: String(selectedThread.environmentId),
-        threadId: String(selectedThread.id),
-        ...(nextTerminalId ? { terminalId: nextTerminalId } : {}),
-      });
+      showTerminal(nextTerminalId ?? null);
     },
-    [navigation, selectedThread, selectedThreadProject?.workspaceRoot],
+    [selectedThread, selectedThreadProject?.workspaceRoot, showTerminal],
   );
 
   const handleOpenNewTerminal = useCallback(() => {
@@ -702,16 +751,12 @@ function ThreadRouteContent(
         ? { uniqueSuffix: uuidv4() }
         : {}),
     });
-    void navigation.navigate("ThreadTerminal", {
-      environmentId: String(selectedThread.environmentId),
-      threadId: String(selectedThread.id),
-      terminalId: nextId,
-    });
+    showTerminal(nextId);
   }, [
     knownTerminalSessions,
-    navigation,
     selectedThread,
     selectedThreadProject?.workspaceRoot,
+    showTerminal,
     terminalMenuSessions,
   ]);
 
@@ -778,14 +823,10 @@ function ThreadRouteContent(
         worktreePath: preferredWorktreePath,
       });
 
-      void navigation.navigate("ThreadTerminal", {
-        environmentId: String(selectedThread.environmentId),
-        threadId: String(selectedThread.id),
-        terminalId: targetTerminalId,
-      });
+      showTerminal(targetTerminalId);
     },
     [
-      navigation,
+      showTerminal,
       selectedThread,
       selectedThreadDetailWorktreePath,
       selectedThreadProject,
@@ -1133,6 +1174,14 @@ function ThreadRouteContent(
           : null
       }
       chat={chat}
+      terminals={pagerTerminals}
+      onCloseTerminal={killTerminal}
+      renderTerminal={(terminalId, active) => (
+        <ThreadTerminalRouteScreen
+          embedded={{ active }}
+          route={{ params: { ...threadParams, terminalId } }}
+        />
+      )}
       renderFile={(path, line) => (
         <ThreadFileView
           embedded

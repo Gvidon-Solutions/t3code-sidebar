@@ -96,6 +96,30 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-21 — Terminals are tabs on the phone, with Termux-style keys; PDF and SVG stay sharp
+
+- **What.** On an Android phone every terminal of the thread is a tab next to Chat and the open
+  files (`>_ Terminal 1`, `>_ Terminal 2`…), swiped to like a file. The tabs are the server's
+  shells, so a terminal opened on the desktop shows up on the phone and the other way round.
+  "Open new terminal" in the menu adds a tab; long-pressing a tab asks, then ends that shell.
+  Under the terminal sit two fixed rows of keys: ESC, ^C, /, HOME, END, PGUP/PGDN, TAB, PASTE,
+  CTRL and ALT (tap for the next key, hold to lock), arrows that repeat while held, and a
+  keyboard toggle. Swiping or scrolling the terminal no longer pops the keyboard; a tap does.
+  "Attach output to chat" moved to the terminal's menu. PDFs re-render the visible pages at the
+  zoom level once a pinch settles, and SVG files (blank before) render and zoom as vectors.
+- **How.** A terminal page is keyed by `terminalTabKey(id)`, a string no path can be, so the
+  pager, tab strip and route `tab` param carry it like a file. The pager lists the live sessions
+  from `useKnownTerminalSessions` plus ids this device just asked for; closing runs the terminal
+  close command with `deleteHistory`. The native canvas claims the touch from the pager only
+  after a vertical move, selection drag or handle grab. The PDF viewer redraws visible pages at
+  `devicePixelRatio × zoom` (capped at 16 Mpx) on `visualViewport` changes. SVG is shown through
+  an `<img>` in our own page because the server's sandbox CSP blanks it as a document.
+- **Where.** `apps/mobile/src/features/panels/{terminalTabs.ts,ThreadPager.tsx}`,
+  `features/tabs/ThreadTabStrip.tsx`, `features/terminal/{TerminalExtraKeys,ThreadTerminalRouteScreen}.tsx`,
+  `features/threads/ThreadRouteScreen.tsx`, `features/files/{WorkspaceFilePdfPreview,WorkspaceFileWebPreview,ThreadFilesRouteScreen}.tsx`,
+  `modules/t3-terminal/android/.../{TerminalCanvasView,T3TerminalView}.kt`. Tablets and iOS keep
+  the separate terminal screen.
+
 ### 2026-10-21 — Markdown opens rendered on the phone; composer no longer hides behind the keyboard
 
 - **What.** A Markdown file opened on the phone shows its rendered preview first; a link to a

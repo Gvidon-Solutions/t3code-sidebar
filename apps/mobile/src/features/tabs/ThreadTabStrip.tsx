@@ -1,8 +1,9 @@
 import { StackActions, useNavigation } from "@react-navigation/native";
-import { Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
+import { terminalTabKey } from "../panels/terminalTabs";
 import { useThreadPager } from "../panels/threadPagerContext";
 import { useThreadTabs } from "./useThreadTabs";
 
@@ -12,19 +13,22 @@ const basename = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path
  * Thread tabs (sidebar fork): Chat plus the files this thread has open. Inside
  * the thread pager a tab flips to its page; on a standalone file screen Chat
  * pops back to the thread and a file tab swaps the file in. A file restores
- * its tab's mode and scroll. Long-press closes a file tab. Hidden on the chat
- * while no file is open.
+ * its tab's mode and scroll. Long-press closes a file tab. Inside the pager the
+ * thread's live terminals come first; long-pressing one kills its shell.
+ * Hidden on the chat while nothing is open.
  */
 export function ThreadTabStrip(props: {
   readonly environmentId: string;
   readonly threadId: string;
-  /** The file shown on this screen; null on the chat. */
+  /** The file (or `terminalTabKey`) shown on this screen; null on the chat. */
   readonly activePath: string | null;
 }) {
   const navigation = useNavigation();
   const pager = useThreadPager();
   const threadTabs = useThreadTabs(`${props.environmentId}:${props.threadId}`);
-  if (threadTabs.tabs.length === 0 && props.activePath === null) return null;
+  const terminals = pager?.terminals ?? [];
+  if (threadTabs.tabs.length === 0 && terminals.length === 0 && props.activePath === null)
+    return null;
 
   const threadParams = { environmentId: props.environmentId, threadId: props.threadId };
   const openChat = () => {
@@ -45,6 +49,12 @@ export function ThreadTabStrip(props: {
         ? StackActions.push("ThreadFile", params)
         : StackActions.replace("ThreadFile", params),
     );
+  };
+  const closeTerminal = (terminalId: string, label: string) => {
+    Alert.alert(`Close ${label}?`, "This ends the shell and anything running in it.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Close", style: "destructive", onPress: () => pager?.closeTerminal(terminalId) },
+    ]);
   };
   const closeFile = (path: string) => {
     threadTabs.close(path);
@@ -89,6 +99,16 @@ export function ThreadTabStrip(props: {
         contentContainerStyle={{ gap: 8, paddingHorizontal: 12, paddingVertical: 8 }}
       >
         {chip("chat", "Chat", props.activePath === null, openChat)}
+        {terminals.map((terminal) => {
+          const key = terminalTabKey(terminal.terminalId);
+          return chip(
+            key,
+            `>_ ${terminal.label}`,
+            key === props.activePath,
+            () => openFile(key),
+            () => closeTerminal(terminal.terminalId, terminal.label),
+          );
+        })}
         {threadTabs.tabs.map((tab) =>
           chip(
             tab.path,

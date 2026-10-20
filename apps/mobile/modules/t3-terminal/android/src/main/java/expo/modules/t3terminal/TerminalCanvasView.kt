@@ -16,7 +16,9 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.OverScroller
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -128,6 +130,13 @@ internal class TerminalCanvasView(context: Context) : View(context) {
   private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
   private var selectionActive = false
   private var dragSelecting = false
+  private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+  private var touchDownX = 0f
+  private var touchDownY = 0f
+  // Set once a drag turns vertical (scrollback) or starts a selection; until
+  // then the parent may take the touch, so a horizontal swipe turns the
+  // phone's thread-tab pager instead of being swallowed here.
+  private var claimedParent = false
   private var draggingHandle = false
   private var anchorCol = 0
   private var anchorRow = 0
@@ -253,14 +262,24 @@ internal class TerminalCanvasView(context: Context) : View(context) {
 
   override fun onTouchEvent(event: MotionEvent): Boolean {
     if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-      parent?.requestDisallowInterceptTouchEvent(true)
+      touchDownX = event.x
+      touchDownY = event.y
+      claimedParent = false
       // Touch-down always stops momentum, even when the event is consumed by
       // a selection-handle grab and never reaches the gesture detector.
       scroller.forceFinished(true)
       removeCallbacks(flingRunnable)
+    } else if (event.actionMasked == MotionEvent.ACTION_MOVE && !claimedParent) {
+      val deltaX = event.x - touchDownX
+      val deltaY = event.y - touchDownY
+      if (dragSelecting || (abs(deltaY) > touchSlop && abs(deltaY) >= abs(deltaX))) {
+        claimedParent = true
+        parent?.requestDisallowInterceptTouchEvent(true)
+      }
     } else if (event.actionMasked == MotionEvent.ACTION_UP ||
       event.actionMasked == MotionEvent.ACTION_CANCEL
     ) {
+      claimedParent = false
       parent?.requestDisallowInterceptTouchEvent(false)
     }
     return when {
@@ -274,7 +293,11 @@ internal class TerminalCanvasView(context: Context) : View(context) {
         }
         true
       }
-      event.actionMasked == MotionEvent.ACTION_DOWN && grabHandleAt(event.x, event.y) -> true
+      event.actionMasked == MotionEvent.ACTION_DOWN && grabHandleAt(event.x, event.y) -> {
+        claimedParent = true
+        parent?.requestDisallowInterceptTouchEvent(true)
+        true
+      }
       else -> gestureDetector.onTouchEvent(event) || super.onTouchEvent(event)
     }
   }
@@ -581,14 +604,16 @@ internal class TerminalCanvasView(context: Context) : View(context) {
     override fun onDown(event: MotionEvent): Boolean {
       scroller.forceFinished(true)
       removeCallbacks(flingRunnable)
-      onRequestKeyboard?.invoke()
       return true
     }
 
+    // The keyboard comes up on a tap, not on every touch, so scrolling and
+    // swiping between tabs leave it down.
     override fun onSingleTapUp(event: MotionEvent): Boolean {
       if (selectionActive) {
         clearSelection()
       } else {
+        onRequestKeyboard?.invoke()
         performClick()
       }
       return true

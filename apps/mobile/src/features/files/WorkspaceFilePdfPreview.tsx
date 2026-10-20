@@ -14,7 +14,7 @@ const PDFJS_CDN = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/";
 function pdfViewerHtml(pdfUrl: string, restoreScrollY: number, pollMs: number): string {
   return `<!doctype html>
 <html><head>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=8">
 <style>
   html, body { margin: 0; background: #525659; }
   .pages { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0; }
@@ -62,6 +62,57 @@ const withVersion = (version) => url + (url.includes("?") ? "&" : "?") + "pdf-ve
 
 let pdfjs = null;
 let doc = null;
+// Pages of the shown document; each canvas keeps the pixel ratio it was last drawn at.
+let entries = [];
+// Zoomed pages are re-drawn at the zoom's resolution once the pinch settles, so
+// vector art and text stay sharp; pages off screen fall back to the base ratio.
+const MAX_PAGE_PIXELS = 16_000_000;
+let sharpenGeneration = 0;
+const sharpen = async () => {
+  if (entries.length === 0) return;
+  const generation = ++sharpenGeneration;
+  const view = window.visualViewport;
+  const zoom = view ? view.scale : 1;
+  const base = window.devicePixelRatio || 1;
+  const top = view ? view.pageTop : window.scrollY;
+  const bottom = top + (view ? view.height : window.innerHeight);
+  for (const entry of entries) {
+    if (generation !== sharpenGeneration) return;
+    const rect = entry.canvas.getBoundingClientRect();
+    const pageTop = rect.top + window.scrollY;
+    const visible = pageTop < bottom && pageTop + rect.height > top;
+    const cssWidth = rect.width;
+    const cssHeight = rect.height;
+    let res = visible ? base * Math.max(1, zoom) : base;
+    res = Math.min(res, Math.sqrt(MAX_PAGE_PIXELS / Math.max(1, cssWidth * cssHeight)));
+    if (Math.abs(res - entry.res) < 0.25) continue;
+    const viewport = entry.page.getViewport({ scale: entry.fit * res });
+    const scratch = document.createElement("canvas");
+    scratch.width = Math.round(viewport.width);
+    scratch.height = Math.round(viewport.height);
+    try {
+      entry.task?.cancel();
+      entry.task = entry.page.render({ canvasContext: scratch.getContext("2d"), viewport });
+      await entry.task.promise;
+    } catch {
+      continue;
+    } finally {
+      entry.task = null;
+    }
+    if (generation !== sharpenGeneration) return;
+    entry.canvas.width = scratch.width;
+    entry.canvas.height = scratch.height;
+    entry.canvas.getContext("2d").drawImage(scratch, 0, 0);
+    entry.res = res;
+  }
+};
+let sharpenTimer = null;
+const scheduleSharpen = () => {
+  clearTimeout(sharpenTimer);
+  sharpenTimer = setTimeout(() => void sharpen(), 250);
+};
+window.visualViewport?.addEventListener("resize", scheduleSharpen);
+window.visualViewport?.addEventListener("scroll", scheduleSharpen);
 // Renders into a detached container, so a reload swaps whole pages in at the reader's scroll.
 const render = async (source) => {
   const next = await pdfjs.getDocument({ url: source }).promise;
@@ -70,6 +121,7 @@ const render = async (source) => {
   const width = document.documentElement.clientWidth - 16;
   const ratio = window.devicePixelRatio || 1;
   const shown = document.getElementById("pages");
+  const nextEntries = [];
   const first = doc === null;
   if (first) { status.remove(); pages.id = "pages"; shown.replaceWith(pages); }
   for (let number = 1; number <= next.numPages; number += 1) {
@@ -83,6 +135,7 @@ const render = async (source) => {
     canvas.style.height = viewport.height / ratio + "px";
     pages.appendChild(canvas);
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    nextEntries.push({ page, canvas, fit: scale, res: ratio, task: null });
     if (first && restoreY > 0 && document.documentElement.scrollHeight >= restoreY + window.innerHeight) {
       window.scrollTo(0, restoreY);
       restoreY = 0;
@@ -99,6 +152,8 @@ const render = async (source) => {
     doc.destroy();
   }
   doc = next;
+  entries = nextEntries;
+  scheduleSharpen();
 };
 
 let version = null;

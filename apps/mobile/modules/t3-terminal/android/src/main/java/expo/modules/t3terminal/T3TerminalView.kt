@@ -259,7 +259,9 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
         onInput(mapOf("data" to "\r"))
         true
       } else {
-        false
+        // Swallow the hardware Enter's key-up too: left unhandled, Android moves focus to
+        // the next field, such as the chat composer on the thread pager's neighbouring page.
+        event?.keyCode == KeyEvent.KEYCODE_ENTER
       }
     }
     inputView.setOnKeyListener { _, keyCode, event ->

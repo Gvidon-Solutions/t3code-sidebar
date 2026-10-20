@@ -23,7 +23,9 @@ import {
   ThreadPagerContext,
   type PageEdges,
   type ThreadPagerControls,
+  type ThreadPagerTerminal,
 } from "./threadPagerContext";
+import { mergeTerminalTabIds, terminalIdFromTabKey, terminalTabKey } from "./terminalTabs";
 import { ThreadFilesDrawer } from "./ThreadFilesDrawer";
 import { WorkspaceDrawer } from "./WorkspaceDrawer";
 
@@ -51,13 +53,49 @@ export function ThreadPager(props: {
   } | null;
   readonly chat: ReactNode;
   readonly renderFile: (path: string, line: string | null) => ReactNode;
+  /** Live shells of the thread, from the server, so desktop terminals show up too. */
+  readonly terminals: ReadonlyArray<ThreadPagerTerminal>;
+  readonly renderTerminal: (terminalId: string, active: boolean) => ReactNode;
+  /** Kills a shell on the server. */
+  readonly onCloseTerminal: (terminalId: string) => void;
 }) {
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const panelWidth = Math.min(width * 0.86, 420);
   const threadKey = `${props.environmentId}:${props.threadId}`;
   const threadTabs = useThreadTabs(threadKey);
-  const paths = useMemo(() => threadTabs.tabs.map((tab) => tab.path), [threadTabs.tabs]);
+  // Shells this device opened that the server has not listed yet.
+  const [requestedTerminals, setRequestedTerminals] = useState<ReadonlyArray<string>>([]);
+  const liveTerminalIds = useMemo(
+    () => props.terminals.map((terminal) => terminal.terminalId),
+    [props.terminals],
+  );
+  useEffect(() => {
+    setRequestedTerminals((current) =>
+      current.some((id) => liveTerminalIds.includes(id))
+        ? current.filter((id) => !liveTerminalIds.includes(id))
+        : current,
+    );
+  }, [liveTerminalIds]);
+  const terminals = useMemo<ReadonlyArray<ThreadPagerTerminal>>(
+    () =>
+      mergeTerminalTabIds(liveTerminalIds, requestedTerminals).map(
+        (terminalId) =>
+          props.terminals.find((terminal) => terminal.terminalId === terminalId) ?? {
+            terminalId,
+            label: "Terminal",
+          },
+      ),
+    [liveTerminalIds, props.terminals, requestedTerminals],
+  );
+  // Pages after the chat: terminals first, then the file tabs.
+  const paths = useMemo(
+    () => [
+      ...terminals.map((terminal) => terminalTabKey(terminal.terminalId)),
+      ...threadTabs.tabs.map((tab) => tab.path),
+    ],
+    [terminals, threadTabs.tabs],
+  );
 
   const [active, setActive] = useState<{ path: string | null; line: string | null }>({
     path: null,
@@ -125,11 +163,32 @@ export function ThreadPager(props: {
   const openTabRef = useRef(threadTabs.open);
   openTabRef.current = threadTabs.open;
   const goTo = useCallback((path: string | null, line: string | null = null) => {
-    if (path !== null) openTabRef.current(path);
+    const terminalId = terminalIdFromTabKey(path);
+    if (terminalId !== null) {
+      setRequestedTerminals((current) =>
+        current.includes(terminalId) ? current : [...current, terminalId],
+      );
+    } else if (path !== null) openTabRef.current(path);
     activeSeen.current = false;
     setActive({ path, line });
   }, []);
-  const controls = useMemo<ThreadPagerControls>(() => ({ goTo }), [goTo]);
+  const onCloseTerminal = props.onCloseTerminal;
+  const forgetTerminal = useCallback((terminalId: string) => {
+    setRequestedTerminals((current) => current.filter((id) => id !== terminalId));
+  }, []);
+  const closeTerminal = useCallback(
+    (terminalId: string) => {
+      forgetTerminal(terminalId);
+      if (activePathRef.current === terminalTabKey(terminalId))
+        setActive({ path: null, line: null });
+      onCloseTerminal(terminalId);
+    },
+    [forgetTerminal, onCloseTerminal],
+  );
+  const controls = useMemo<ThreadPagerControls>(
+    () => ({ goTo, terminals, closeTerminal, forgetTerminal }),
+    [closeTerminal, forgetTerminal, goTo, terminals],
+  );
 
   const requestAt = props.request?.at;
   const requestRef = useRef(props.request);
@@ -303,6 +362,7 @@ export function ThreadPager(props: {
             {paths.map((path, position) => {
               const page = position + 1;
               if (Math.abs(page - index) > 1) return null;
+              const terminalId = terminalIdFromTabKey(path);
               return (
                 <View
                   key={path}
@@ -310,7 +370,9 @@ export function ThreadPager(props: {
                   testID={`thread-page-${page}`}
                 >
                   <ThreadPageEdgesContext.Provider value={edgeReporter(path)}>
-                    {props.renderFile(path, path === active.path ? active.line : null)}
+                    {terminalId !== null
+                      ? props.renderTerminal(terminalId, page === index)
+                      : props.renderFile(path, path === active.path ? active.line : null)}
                   </ThreadPageEdgesContext.Provider>
                 </View>
               );

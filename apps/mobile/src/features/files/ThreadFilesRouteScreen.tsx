@@ -60,7 +60,7 @@ import { ScreenHeader } from "../../components/ScreenHeader";
 import { WorkspaceFileImagePreview } from "./WorkspaceFileImagePreview";
 import { WorkspaceFilePreviewError } from "./WorkspaceFilePreviewError";
 import { WorkspaceFileVideoPreview } from "./WorkspaceFileVideoPreview";
-import { WorkspaceFileWebPreview } from "./WorkspaceFileWebPreview";
+import { WorkspaceFileSvgPreview, WorkspaceFileWebPreview } from "./WorkspaceFileWebPreview";
 import { WorkspaceFilePdfPreview } from "./WorkspaceFilePdfPreview";
 import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
 import { useThreadPager } from "../panels/threadPagerContext";
@@ -293,7 +293,7 @@ function FileContent(props: {
 
   if (props.activeMode === "preview" && isImageFile) {
     if (isSvgImagePreviewFile(props.relativePath)) {
-      return <WorkspaceFileWebPreview uri={props.previewUri} />;
+      return <WorkspaceFileSvgPreview uri={props.previewUri} />;
     }
     return (
       <WorkspaceFileImagePreview

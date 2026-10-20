@@ -35,8 +35,6 @@ import { EmptyState } from "../../components/EmptyState";
 import { GlassSurface } from "../../components/GlassSurface";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { MaterialScreenContent } from "../../components/MaterialScreenContent";
-import { MaterialButton } from "../../components/MaterialButton";
-import { MaterialIconButton } from "../../components/MaterialIconButton";
 import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironmentPresentation } from "../../state/presentation";
 import { terminalEnvironment } from "../../state/terminal";
@@ -92,6 +90,10 @@ import { createTerminalPasteSession } from "./terminalPaste";
 import { cacheTerminalGridSize, getCachedTerminalGridSize } from "./terminalUiState";
 import { useTerminalGridSync } from "./useTerminalGridSync";
 import { useTerminalLifecycle } from "./useTerminalLifecycle";
+import { TERMINAL_EXTRA_KEYS_HEIGHT, TerminalExtraKeys } from "./TerminalExtraKeys";
+import { terminalTabKey } from "../panels/terminalTabs";
+import { useThreadPager } from "../panels/threadPagerContext";
+import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
 
 function TerminalHeader(props: {
   readonly subtitle: string;
@@ -107,6 +109,7 @@ function TerminalHeader(props: {
   readonly onIncreaseFontSize: () => void;
   readonly onOpenNewTerminal: () => void;
   readonly onSelectTerminal: (terminalId: string) => void;
+  readonly onAttachOutput?: () => void;
 }) {
   return (
     <ScreenHeader
@@ -161,6 +164,16 @@ function TerminalHeader(props: {
                     selected: session.terminalId === props.terminalId,
                     onPress: () => props.onSelectTerminal(session.terminalId),
                   })),
+                  ...(props.onAttachOutput
+                    ? [
+                        {
+                          id: "terminal-attach-output",
+                          title: "Attach output to chat",
+                          icon: "paperclip" as const,
+                          onPress: props.onAttachOutput,
+                        },
+                      ]
+                    : []),
                   {
                     id: "terminal-new",
                     disabled: !props.canOperateTerminal,
@@ -253,8 +266,16 @@ type ThreadTerminalRouteScreenProps = StaticScreenProps<{
   readonly terminalId?: string;
 }>;
 
-export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps) {
+export function ThreadTerminalRouteScreen(
+  props: ThreadTerminalRouteScreenProps & {
+    /** Sidebar fork: a page of the Android thread pager; `active` while it is on screen. */
+    readonly embedded?: { readonly active: boolean };
+  },
+) {
   const insets = useSafeAreaInsets();
+  const pager = useThreadPager();
+  const embeddedPager = props.embedded ? pager : null;
+  const pageActive = props.embedded?.active ?? true;
   const nativeColumnMetrics = useNativeColumnLayoutMetrics();
   const navigation = useNavigation();
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
@@ -382,6 +403,8 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
   const [pendingModifierState, setPendingModifierState] = useState<{
     readonly terminalId: string;
     readonly value: PendingModifier | null;
+    /** A locked modifier stays armed across keys until tapped again. */
+    readonly locked?: boolean;
   }>({
     terminalId,
     value: null,
@@ -558,6 +581,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
   const terminalTheme = getMobileTerminalTheme(themeId, appearanceScheme);
   const pendingModifier =
     pendingModifierState.terminalId === terminalId ? pendingModifierState.value : null;
+  const pendingModifierLocked = pendingModifier !== null && pendingModifierState.locked === true;
   const headerSubtitle = selectedThreadProject?.title ?? "";
   const terminalToolbarActions = useMemo<ReadonlyArray<TerminalToolbarAction>>(() => {
     const modifierActions: ReadonlyArray<TerminalToolbarAction> =
@@ -591,16 +615,29 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
     height: state.height,
     isVisible: state.isVisible,
   }));
-  const isAccessoryVisible = canOperateTerminal && keyboardState.isVisible && !isAccessoryDismissed;
+  // Android shows its extra keys whether or not the keyboard is up.
+  const usesExtraKeys = Platform.OS === "android" && canOperateTerminal;
+  const isAccessoryVisible =
+    pageActive &&
+    canOperateTerminal &&
+    (usesExtraKeys || (keyboardState.isVisible && !isAccessoryDismissed));
   // Android's terminal owns an EditText; turning off autoFocus also clears its native focus.
+  // A pager page waits for a tap: neighbours are mounted too and must not take the keyboard.
   const terminalAutoFocus =
     Platform.OS === "android"
-      ? !isAccessoryDismissed &&
-        (!SHOWCASE_ENABLED || keyboardFocusRequest > 0 || keyboardState.isVisible)
+      ? pageActive &&
+        !isAccessoryDismissed &&
+        (props.embedded
+          ? keyboardFocusRequest > 0 || keyboardState.isVisible
+          : !SHOWCASE_ENABLED || keyboardFocusRequest > 0 || keyboardState.isVisible)
       : !SHOWCASE_ENABLED;
   const terminalBottomInset =
-    (keyboardState.isVisible ? keyboardState.height : 0) +
-    (isAccessoryVisible ? TERMINAL_ACCESSORY_HEIGHT : 0);
+    (keyboardState.isVisible && pageActive ? keyboardState.height : 0) +
+    (isAccessoryVisible
+      ? usesExtraKeys
+        ? TERMINAL_EXTRA_KEYS_HEIGHT
+        : TERMINAL_ACCESSORY_HEIGHT
+      : 0);
 
   useEffect(() => {
     const keyboardWillShow = KeyboardEvents.addListener("keyboardWillShow", () => {
@@ -846,7 +883,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
         return;
       }
 
-      setPendingModifierState({ terminalId, value: null });
+      if (!pendingModifierLocked) setPendingModifierState({ terminalId, value: null });
       const resolved = resolveModifiedTerminalInput({
         data,
         modifier: pendingModifier,
@@ -858,7 +895,14 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
       }
       void writeInput(resolved.data);
     },
-    [hostPlatform, pasteFromClipboard, pendingModifier, terminalId, writeInput],
+    [
+      hostPlatform,
+      pasteFromClipboard,
+      pendingModifier,
+      pendingModifierLocked,
+      terminalId,
+      writeInput,
+    ],
   );
 
   const handleInput = useCallback(
@@ -917,6 +961,10 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
       if (!selectedThread || nextTerminalId === terminalId) {
         return;
       }
+      if (embeddedPager) {
+        embeddedPager.goTo(terminalTabKey(nextTerminalId));
+        return;
+      }
 
       navigation.dispatch(
         StackActions.replace("ThreadTerminal", {
@@ -926,10 +974,14 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
         }),
       );
     },
-    [navigation, selectedThread, terminalId],
+    [embeddedPager, navigation, selectedThread, terminalId],
   );
 
   const handleCloseTerminal = useCallback(() => {
+    if (embeddedPager) {
+      embeddedPager.goTo(null);
+      return;
+    }
     if (navigation.canGoBack()) {
       navigation.goBack();
       return;
@@ -940,7 +992,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
         threadId: params.threadId,
       }),
     );
-  }, [navigation, params.environmentId, params.threadId]);
+  }, [embeddedPager, navigation, params.environmentId, params.threadId]);
 
   const navigateAwayAfterExit = useCallback(() => {
     // With other shells still live, fall through to the previous one instead
@@ -949,6 +1001,13 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
       sessions: terminalMenuSessions,
       exitedTerminalId: terminalId,
     });
+    if (embeddedPager) {
+      embeddedPager.forgetTerminal(terminalId);
+      if (pageActive) {
+        embeddedPager.goTo(fallbackTerminalId === null ? null : terminalTabKey(fallbackTerminalId));
+      }
+      return;
+    }
     if (fallbackTerminalId !== null && selectedThread) {
       navigation.dispatch(
         StackActions.replace("ThreadTerminal", {
@@ -973,7 +1032,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
         }),
       );
     }
-  }, [navigation, selectedThread, terminalId, terminalMenuSessions]);
+  }, [embeddedPager, navigation, pageActive, selectedThread, terminalId, terminalMenuSessions]);
 
   useTerminalLifecycle({
     terminalKey,
@@ -1015,7 +1074,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
         environmentId: selectedThread.environmentId,
         input: { threadId: selectedThread.id, terminalId },
       });
-      if (navigation.isFocused()) {
+      if (embeddedPager || navigation.isFocused()) {
         navigateAwayAfterExit();
         return;
       }
@@ -1044,21 +1103,29 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
       return;
     }
 
+    const nextTerminalId = nextOpenTerminalId({
+      listedTerminalIds: [
+        ...terminalMenuSessions.map((session) => session.terminalId),
+        ...(embeddedPager?.terminals.map((terminal) => terminal.terminalId) ?? []),
+      ],
+      activeRouteTerminalId: terminalId,
+      ...(knownSessions === null ||
+      !readEnvironmentScope(selectedThread.environmentId, AuthTerminalReadScope)
+        ? { uniqueSuffix: uuidv4() }
+        : {}),
+    });
+    if (embeddedPager) {
+      embeddedPager.goTo(terminalTabKey(nextTerminalId));
+      return;
+    }
     navigation.dispatch(
       StackActions.replace("ThreadTerminal", {
         environmentId: String(selectedThread.environmentId),
         threadId: String(selectedThread.id),
-        terminalId: nextOpenTerminalId({
-          listedTerminalIds: terminalMenuSessions.map((session) => session.terminalId),
-          activeRouteTerminalId: terminalId,
-          ...(knownSessions === null ||
-          !readEnvironmentScope(selectedThread.environmentId, AuthTerminalReadScope)
-            ? { uniqueSuffix: uuidv4() }
-            : {}),
-        }),
+        terminalId: nextTerminalId,
       }),
     );
-  }, [knownSessions, navigation, selectedThread, terminalId, terminalMenuSessions]);
+  }, [embeddedPager, knownSessions, navigation, selectedThread, terminalId, terminalMenuSessions]);
 
   const handleDecreaseFontSize = useCallback(() => {
     setTerminalFontSize(stepTerminalFontSize(fontSize, -1));
@@ -1113,6 +1180,18 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
       writeModifiedInput(action.data);
     },
     [handleClearTerminal, pasteFromClipboard, terminalId, writeModifiedInput],
+  );
+
+  const handleExtraKeyModifier = useCallback(
+    (modifier: PendingModifier, lock: boolean) => {
+      setPendingModifierState((current) => {
+        const armed = current.terminalId === terminalId ? current.value : null;
+        // Tapping an armed modifier disarms it; a long press (re)arms it locked.
+        if (!lock && armed === modifier) return { terminalId, value: null };
+        return { terminalId, value: modifier, locked: lock };
+      });
+    },
+    [terminalId],
   );
 
   const handleDismissKeyboard = useCallback(() => {
@@ -1173,7 +1252,8 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
           onClose={() => setCapturedOutput(null)}
           onAttach={() => {
             setCapturedOutput(null);
-            if (navigation.canGoBack()) navigation.goBack();
+            if (embeddedPager) embeddedPager.goTo(null);
+            else if (navigation.canGoBack()) navigation.goBack();
           }}
         />
       ) : null}
@@ -1194,7 +1274,17 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
         onIncreaseFontSize={handleIncreaseFontSize}
         onOpenNewTerminal={handleOpenNewTerminal}
         onSelectTerminal={handleSelectTerminal}
+        {...(Platform.OS === "android" && hasNativeTerminalSurface()
+          ? { onAttachOutput: () => setCaptureRequest((value) => value + 1) }
+          : {})}
       />
+      {props.embedded ? (
+        <ThreadTabStrip
+          environmentId={String(selectedThread.environmentId)}
+          threadId={String(selectedThread.id)}
+          activePath={terminalTabKey(terminalId)}
+        />
+      ) : null}
 
       <MaterialScreenContent>
         <View
@@ -1293,24 +1383,38 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
                 />
               </View>
 
-              {Platform.OS === "android" && !keyboardState.isVisible ? (
-                <View className="min-h-14 flex-row items-center gap-2 bg-card-alt px-2">
-                  {selectedThread && hasNativeTerminalSurface() ? (
-                    <MaterialButton
-                      label="Attach output"
-                      tone="text"
-                      onPress={() => setCaptureRequest((value) => value + 1)}
-                    />
-                  ) : null}
-                  <View className="flex-1" />
-                  <MaterialIconButton
-                    accessibilityLabel="Show keyboard"
-                    disabled={!canOperateTerminal}
-                    icon="keyboard"
-                    onPress={handleShowKeyboard}
+              {usesExtraKeys && isAccessoryVisible ? (
+                <KeyboardStickyView
+                  style={{
+                    position: "absolute",
+                    bottom: keyboardState.isVisible ? 0 : insets.bottom,
+                    left: 0,
+                    right: 0,
+                  }}
+                  offset={{ closed: 0, opened: 0 }}
+                >
+                  <TerminalExtraKeys
+                    hostPlatform={hostPlatform}
+                    modifier={pendingModifier}
+                    modifierLocked={pendingModifierLocked}
+                    keyboardVisible={keyboardState.isVisible}
+                    colors={{
+                      background: terminalTheme.background,
+                      foreground: terminalTheme.foreground,
+                      border: terminalTheme.border,
+                    }}
+                    onSend={writeModifiedInput}
+                    onModifier={handleExtraKeyModifier}
+                    onPaste={() => {
+                      void pasteFromClipboard();
+                    }}
+                    onToggleKeyboard={
+                      keyboardState.isVisible ? handleDismissKeyboard : handleShowKeyboard
+                    }
                   />
-                </View>
-              ) : Platform.OS !== "android" && selectedThread && hasNativeTerminalSurface() ? (
+                </KeyboardStickyView>
+              ) : null}
+              {Platform.OS !== "android" && selectedThread && hasNativeTerminalSurface() ? (
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => {
@@ -1322,7 +1426,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
                   <Text style={{ color: terminalTheme.foreground }}>Attach visible output</Text>
                 </Pressable>
               ) : null}
-              {isAccessoryVisible ? (
+              {isAccessoryVisible && !usesExtraKeys ? (
                 <KeyboardStickyView
                   style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
                   offset={{ closed: 0, opened: 0 }}

@@ -55,3 +55,34 @@ export function WorkspaceFileWebPreview(props: { readonly uri: string | null }) 
     </View>
   );
 }
+
+function svgViewerHtml(uri: string): string {
+  return `<!doctype html>
+<html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=10">
+<style>
+  html, body { margin: 0; background: #fff; }
+  img { display: block; width: 100%; height: auto; }
+</style></head>
+<body><img alt="" src=${JSON.stringify(uri)}></body></html>`;
+}
+
+/**
+ * SVG preview (sidebar fork). The server sends SVG with a sandboxing CSP that
+ * leaves Android's WebView blank when the file is the document, so the image
+ * is shown from a page of our own, where pinch-zoom re-draws it as vectors.
+ */
+export function WorkspaceFileSvgPreview(props: { readonly uri: string | null }) {
+  const origin = props.uri?.match(/^https?:\/\/[^/]+/)?.[0] ?? null;
+  if (props.uri === null || origin === null) {
+    return <FilePreviewLoading message="Preparing preview..." background="card" />;
+  }
+  return (
+    <WebView
+      source={{ html: svgViewerHtml(props.uri), baseUrl: origin }}
+      originWhitelist={["*"]}
+      setSupportMultipleWindows={false}
+      style={{ flex: 1, backgroundColor: "transparent" }}
+    />
+  );
+}
