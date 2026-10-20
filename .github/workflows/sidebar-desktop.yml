@@ -296,18 +296,30 @@ jobs:
           java-version: 17
 
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          # `ws` is not the repository's default branch, and the action defaults
+          # to read-only caches there. Without this, no Gradle build cache is
+          # ever saved, so every mobile push recompiles the native modules.
+          cache-read-only: false
 
-      # The generated project and its native build outputs are the expensive
-      # part. Keep them between runs; the key changes only when native inputs
-      # change, so JavaScript-only pushes reuse the compiled modules.
+      # The generated project and the native build outputs are the expensive
+      # part. The app's outputs live under `android/`; autolinked modules build
+      # inside their own package directories, so cache those too. The key
+      # changes only when native inputs change, so JavaScript-only pushes reuse
+      # the compiled modules.
       - name: Restore native Android project
         id: android-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: apps/mobile/android
-          key: sidebar-android-v2-${{ hashFiles('apps/mobile/app.config.ts', 'apps/mobile/app.json', 'apps/mobile/plugins/**', 'apps/mobile/modules/**', 'patches/**', 'pnpm-lock.yaml') }}
+          path: |
+            apps/mobile/android
+            apps/mobile/modules/**/android/build
+            apps/mobile/modules/**/android/.cxx
+            node_modules/.pnpm/**/android/build
+            node_modules/.pnpm/**/android/.cxx
+          key: sidebar-android-v3-${{ hashFiles('apps/mobile/app.config.ts', 'apps/mobile/app.json', 'apps/mobile/plugins/**', 'apps/mobile/modules/**', 'patches/**', 'pnpm-lock.yaml') }}
           restore-keys: |
-            sidebar-android-v2-
+            sidebar-android-v3-
 
       - name: Prebuild Android project
         if: steps.android-cache.outputs.cache-hit != 'true'
