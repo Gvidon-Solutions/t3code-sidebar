@@ -87,6 +87,7 @@ import {
   composerStripAttachments,
   type DraftComposerAttachment,
   type DraftComposerFileAttachment,
+  type ComposerMediaSource,
 } from "../../lib/composerImages";
 import {
   buildModelOptions,
@@ -196,7 +197,7 @@ export interface ThreadComposerProps {
   readonly canSteerActiveTurn: boolean;
   readonly editorRef?: RefObject<ComposerEditorHandle | null>;
   readonly onChangeDraftMessage: (value: string) => void;
-  readonly onPickDraftMedia: () => Promise<void>;
+  readonly onPickDraftMedia: (source: ComposerMediaSource) => Promise<void>;
   readonly onPickDraftFiles: () => Promise<void>;
   readonly onNativePasteImages: (uris: ReadonlyArray<string>) => Promise<void>;
   readonly onNativePasteText: (paste: ComposerTextPaste) => Promise<void>;

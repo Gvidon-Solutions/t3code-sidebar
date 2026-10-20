@@ -102,6 +102,47 @@ describe("mobile model display", () => {
   });
 });
 
+describe("model nicknames", () => {
+  it("shows the nickname and keeps the effort from the catalog name", () => {
+    const option = {
+      ...modelOption("deepseek/deepseek-flash", {
+        label: "DeepSeek V4.1 Flash 1017 (High)",
+        provider: "opencode",
+      }),
+      nickname: "V4.1 Flash 1017",
+    };
+
+    expect(modelOptionDisplay(option)).toEqual({ name: "V4.1 Flash 1017", effort: "High" });
+  });
+
+  it("still groups a renamed variant with its siblings", () => {
+    const low = modelOption("gemini-3.8-flash-low", {
+      label: "Gemini 3.8 Flash (Low)",
+      provider: "antigravity",
+    });
+    const high = {
+      ...modelOption("gemini-3.8-flash-high", {
+        label: "Gemini 3.8 Flash (High)",
+        provider: "antigravity",
+      }),
+      nickname: "Flash",
+    };
+    const groups: ProviderGroup[] = [
+      { providerKey: "antigravity", providerLabel: "Antigravity", models: [low, high] },
+    ];
+
+    const result = effortChoicesFor({
+      option: high,
+      descriptors: [],
+      selection: high.selection,
+      reportedSelection: null,
+      groups,
+    });
+
+    expect(result?.choices.map((choice) => choice.label)).toEqual(["Low", "High"]);
+  });
+});
+
 describe("reasoning choices", () => {
   const option = modelOption("claude-opus-4-5", {
     label: "Claude Opus 4.5",
@@ -207,5 +248,19 @@ describe("quick switch", () => {
       "Claude Opus 4.5",
       "Claude Sonnet 4.5",
     ]);
+  });
+
+  it("shows every pinned model without a quick-switch cap", () => {
+    const pinnedModels = Array.from({ length: 8 }, (_, index) =>
+      modelOption(`claude-model-${index}`, { label: `Claude Model ${index}` }),
+    );
+    const result = quickSwitchModels({
+      groups: [{ ...groups[0]!, models: pinnedModels }],
+      favoriteKeys: new Set(pinnedModels.map((model) => model.key)),
+      current: pinnedModels[0]!,
+    });
+
+    expect(result.source).toBe("pinned");
+    expect(result.models).toHaveLength(8);
   });
 });

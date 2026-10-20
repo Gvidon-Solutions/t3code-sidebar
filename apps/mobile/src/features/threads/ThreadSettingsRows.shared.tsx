@@ -13,6 +13,8 @@ export type ModelRowProps = {
   readonly detail?: string | null;
   readonly selected: boolean;
   readonly onPress: () => void;
+  /** Opens the rename prompt; the row then shows the catalog name beneath the nickname. */
+  readonly onLongPress?: () => void;
   readonly isFavorite: boolean;
   readonly favoritesLoaded: boolean;
   readonly onToggleFavorite: () => void;
@@ -36,6 +38,11 @@ type RowSelectionProps = {
   readonly minimumHeight?: number;
 };
 
+/** The catalog name under a nickname, so a renamed model is never mistaken for another. */
+function modelRowSubtitle(option: ModelOption): string {
+  return [option.nickname ? option.label : null, option.subtitle].filter(Boolean).join(" · ");
+}
+
 export function ModelRowContent(
   props: ModelRowProps &
     RowSelectionProps & {
@@ -43,6 +50,7 @@ export function ModelRowContent(
       readonly selectedClassName?: string;
     },
 ) {
+  const subtitle = modelRowSubtitle(props.option);
   return (
     <View
       style={props.minimumHeight === undefined ? undefined : { minHeight: props.minimumHeight }}
@@ -54,11 +62,7 @@ export function ModelRowContent(
       )}
     >
       <Pressable
-        accessibilityLabel={[
-          props.displayLabel ?? props.option.label,
-          props.detail,
-          props.option.subtitle,
-        ]
+        accessibilityLabel={[props.displayLabel ?? props.option.label, props.detail, subtitle]
           .filter(Boolean)
           .join(", ")}
         accessibilityRole="radio"
@@ -69,6 +73,9 @@ export function ModelRowContent(
         className="min-h-11 min-w-0 flex-1 flex-row items-center gap-2 active:opacity-70"
         disabled={props.option.isUnavailable || props.option.isHidden}
         onPress={props.onPress}
+        {...(props.onLongPress
+          ? { onLongPress: props.onLongPress, accessibilityHint: "Long press to rename" }
+          : {})}
       >
         {props.leadingSelection}
         <View className="min-w-0 flex-1">
@@ -101,12 +108,12 @@ export function ModelRowContent(
               <Text className="text-xs text-foreground">Unavailable</Text>
             ) : null}
           </View>
-          {props.option.subtitle ? (
+          {subtitle ? (
             <Text
               className="text-xs text-foreground-muted"
               numberOfLines={props.labelNumberOfLines}
             >
-              {props.option.subtitle}
+              {subtitle}
             </Text>
           ) : null}
         </View>

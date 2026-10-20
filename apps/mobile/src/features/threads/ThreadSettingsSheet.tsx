@@ -49,6 +49,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanim
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SymbolView } from "../../components/AppSymbol";
+import { showTextInputDialog } from "../../components/ConfirmDialogHost";
 import { AppText as Text } from "../../components/AppText";
 import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { AndroidAnchoredMenu } from "../../components/AndroidAnchoredMenu";
@@ -316,6 +317,7 @@ type ThreadSettingsSessionValue = {
   readonly favoritesLoaded: boolean;
   readonly toggleFavorite: (option: ModelOption) => void;
   readonly toggleHidden: (option: ModelOption) => void;
+  readonly renameModel: (option: ModelOption) => void;
   readonly pendingHiddenKeys: ReadonlySet<string>;
   readonly manageHidden: boolean;
   readonly setManageHidden: (value: boolean) => void;
@@ -472,6 +474,55 @@ export function ThreadSettingsSessionProvider(
       }
     },
     [favoritesLoaded, legacyFavorites, props.environmentId, registry, saveSettings],
+  );
+  const renameModel = useCallback(
+    (option: ModelOption) => {
+      const environmentId = props.environmentId;
+      if (!environmentId) return;
+      const commit = (value: string) => {
+        const name = value.trim();
+        if (name === (option.nickname ?? "")) return;
+        void Haptics.selectionAsync();
+        void saveSettings({
+          environmentId,
+          input: {
+            patch: {
+              setModelNicknames: [
+                {
+                  provider: option.selection.instanceId,
+                  model: option.selection.model,
+                  name: name === option.label ? "" : name,
+                },
+              ],
+            },
+          },
+        }).then((result) => {
+          if (!AsyncResult.isSuccess(result)) {
+            Alert.alert("Could not rename model", "Update the T3 server and try again.");
+          }
+        });
+      };
+      // The catalog name stays in the title, so the model is clear while renaming.
+      // An empty name restores it.
+      const title = `Rename ${option.label}`;
+      if (Platform.OS === "ios") {
+        Alert.prompt(
+          title,
+          "Leave empty to use the original name.",
+          commit,
+          "plain-text",
+          option.nickname ?? option.label,
+        );
+        return;
+      }
+      showTextInputDialog({
+        title,
+        initialValue: option.nickname ?? option.label,
+        confirmText: "Rename",
+        onConfirm: commit,
+      });
+    },
+    [props.environmentId, saveSettings],
   );
   const toggleHidden = useCallback(
     (option: ModelOption) => {
@@ -636,6 +687,7 @@ export function ThreadSettingsSessionProvider(
       manageHidden,
       setManageHidden,
       toggleHidden,
+      renameModel,
       pendingHiddenKeys,
       runtimeMode: compatibleRuntimeMode,
       runtimeModeChoices,
@@ -688,6 +740,7 @@ export function ThreadSettingsSessionProvider(
       providerGroups,
       manageHidden,
       toggleHidden,
+      renameModel,
       pendingHiddenKeys,
       runtimeModeChoices,
       searchQuery,
@@ -744,10 +797,6 @@ type ThreadSettingsCatalogItem =
   | {
       readonly kind: "empty";
       readonly key: "empty";
-    }
-  | {
-      readonly kind: "options";
-      readonly key: "options";
     };
 
 function ThreadSettingsModelListRow(props: {
@@ -769,6 +818,7 @@ function ThreadSettingsModelListRow(props: {
       isFirst={props.isFirst}
       isLast={props.isLast}
       onPress={onPress}
+      onLongPress={() => session.renameModel(props.option)}
       isFavorite={session.favoriteKeys.has(props.option.key)}
       favoritesLoaded={session.favoritesLoaded}
       onToggleFavorite={() => session.toggleFavorite(props.option)}
@@ -916,7 +966,6 @@ function ThreadSettingsOptionsItem(props: {
   readonly animationsReady: boolean;
   readonly onOpenSubmenu: (submenu: ThreadSettingsSubmenuPage) => void;
 }) {
-  const insets = useSafeAreaInsets();
   const session = useThreadSettingsSession();
   const configs = useAtomValue(environmentServerConfigsAtom);
   const selectedProvider = session.environmentId
@@ -924,13 +973,9 @@ function ThreadSettingsOptionsItem(props: {
         .get(session.environmentId)
         ?.providers.find((provider) => provider.instanceId === session.providerInstanceId) ?? null)
     : null;
-  const usesNativeMailSearchToolbar = useNativeMailSearchToolbar();
-  const bottomToolbarInset = usesNativeMailSearchToolbar
-    ? NATIVE_MAIL_SEARCH_TOOLBAR_CONTENT_INSET
-    : 0;
 
   return (
-    <View style={{ paddingBottom: insets.bottom + bottomToolbarInset + 12 }}>
+    <View className="pb-3">
       <ChatGptSharingStatus provider={selectedProvider} />
       <Text className="px-5 pb-2 pt-2 text-sm font-t3-medium text-foreground-muted">Options</Text>
       <Animated.View
@@ -1036,15 +1081,13 @@ function ThreadSettingsMainContent(props: {
   const hasActiveCatalogFilter =
     session.providerFilter !== null || session.searchQuery.trim().length > 0;
   const listItems = useMemo<ReadonlyArray<ThreadSettingsCatalogItem>>(
-    () => [
-      // Reasoning and Runtime sit above the catalog: they are the settings
-      // people change most, and burying them after hundreds of models made
-      // the phone picker require a full scroll before every effort change.
-      { kind: "options", key: "options" },
-      ...(catalogItems.length === 0 ? ([{ kind: "empty", key: "empty" }] as const) : catalogItems),
-    ],
+    () => (catalogItems.length === 0 ? [{ kind: "empty", key: "empty" }] : catalogItems),
     [catalogItems],
   );
+  const insets = useSafeAreaInsets();
+  const bottomToolbarInset = useNativeMailSearchToolbar()
+    ? NATIVE_MAIL_SEARCH_TOOLBAR_CONTENT_INSET
+    : 0;
   const renderCatalogItem = useCallback(
     (itemProps: LegendListRenderItemProps<ThreadSettingsCatalogItem>) => {
       const item = itemProps.item;
@@ -1062,7 +1105,7 @@ function ThreadSettingsMainContent(props: {
         );
       } else if (item.kind === "notice") {
         content = <Text className="mx-8 mt-2 text-xs text-foreground-muted">{item.text}</Text>;
-      } else if (item.kind === "empty") {
+      } else {
         content = (
           <View className="items-center px-8 py-14">
             <Text className="text-center text-sm text-foreground-muted">
@@ -1074,13 +1117,6 @@ function ThreadSettingsMainContent(props: {
                   : "No available models"}
             </Text>
           </View>
-        );
-      } else {
-        content = (
-          <ThreadSettingsOptionsItem
-            animationsReady={animationsReady}
-            onOpenSubmenu={props.onOpenSubmenu}
-          />
         );
       }
 
@@ -1113,7 +1149,10 @@ function ThreadSettingsMainContent(props: {
           ? { width: "100%", maxWidth: 720, alignSelf: "center" }
           : undefined
       }
-      contentContainerStyle={{ paddingTop: 4 }}
+      contentContainerStyle={{
+        paddingTop: 4,
+        paddingBottom: insets.bottom + bottomToolbarInset + 12,
+      }}
       contentInsetAdjustmentBehavior="automatic"
       data={listItems}
       estimatedItemSize={Platform.OS === "android" ? 56 : 48}
@@ -1163,6 +1202,14 @@ function ThreadSettingsMainContent(props: {
               </View>
             </View>
           ) : null}
+          {/* Reasoning and Runtime sit above the catalog: people change them
+              most. They live in the header rather than a recycled item because
+              their height changes as options load and animate, which threw off
+              the list's measured content height and stopped scrolling short. */}
+          <ThreadSettingsOptionsItem
+            animationsReady={animationsReady}
+            onOpenSubmenu={props.onOpenSubmenu}
+          />
         </>
       }
       recycleItems

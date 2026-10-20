@@ -60,6 +60,12 @@ export function reasoningEffortDescriptor(
 
 /** Model rows and the composer share the same short name and effort token. */
 export function modelOptionDisplay(option: ModelOption): ModelDisplay {
+  const display = catalogModelDisplay(option);
+  return option.nickname ? { ...display, name: option.nickname } : display;
+}
+
+/** The catalog's short name, ignoring any nickname; effort variants group by it. */
+function catalogModelDisplay(option: ModelOption): ModelDisplay {
   const descriptors = option.capabilities
     ? getProviderOptionDescriptors({
         caps: option.capabilities,
@@ -131,7 +137,7 @@ export function effortChoicesFor(input: {
   }
 
   if (!input.option) return null;
-  const current = modelOptionDisplay(input.option);
+  const current = catalogModelDisplay(input.option);
   if (!current.effort) return null;
   const base = current.name.toLocaleLowerCase();
   const variants = input.groups
@@ -141,7 +147,7 @@ export function effortChoicesFor(input: {
         candidate.key === input.option!.key ||
         (!candidate.isHidden && !candidate.isUnavailable && !candidate.isLegacy),
     )
-    .map((candidate) => ({ option: candidate, display: modelOptionDisplay(candidate) }))
+    .map((candidate) => ({ option: candidate, display: catalogModelDisplay(candidate) }))
     .filter(
       (candidate) =>
         candidate.display.effort !== null && candidate.display.name.toLocaleLowerCase() === base,
@@ -174,24 +180,25 @@ export function quickSwitchModels(input: {
   readonly groups: ReadonlyArray<ProviderGroup>;
   readonly favoriteKeys: ReadonlySet<string>;
   readonly current: ModelOption | null;
-  readonly limit?: number;
+  /** Suggested models are capped; pinned models are the user's own list. */
+  readonly suggestedLimit?: number;
 }): {
   readonly source: "pinned" | "suggested";
   readonly models: ReadonlyArray<ModelOption>;
 } {
-  const limit = input.limit ?? 6;
+  const suggestedLimit = input.suggestedLimit ?? 6;
   const usable = input.groups
     .flatMap((group) => group.models)
     .filter((option) => !option.isHidden && !option.isUnavailable && !option.isLegacy);
   const pinned = usable.filter((option) => input.favoriteKeys.has(option.key));
   if (pinned.length > 0) {
-    return { source: "pinned", models: pinned.slice(0, limit) };
+    return { source: "pinned", models: pinned };
   }
   const currentProvider = input.current?.providerKey ?? null;
   return {
     source: "suggested",
     models: usable
       .filter((option) => currentProvider === null || option.providerKey === currentProvider)
-      .slice(0, limit),
+      .slice(0, suggestedLimit),
   };
 }

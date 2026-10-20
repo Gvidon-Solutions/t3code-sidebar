@@ -307,6 +307,12 @@ export const ModelFavorite = Schema.Struct({
   model: TrimmedNonEmptyString,
 });
 export const ModelFavorites = Schema.Array(ModelFavorite);
+/** A name the user gave a model; it replaces the catalog label in every picker. */
+export const ModelNickname = Schema.Struct({
+  ...ModelFavorite.fields,
+  name: TrimmedNonEmptyString,
+});
+export const ModelNicknames = Schema.Array(ModelNickname);
 export const ProviderModelPreferences = Schema.Record(
   ProviderInstanceId,
   Schema.Struct({
@@ -1152,6 +1158,7 @@ export const ServerSettings = Schema.Struct({
   providerModelPreferences: Schema.NullOr(ProviderModelPreferences).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
+  modelNicknames: ModelNicknames.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   worktreeCleanup: WorktreeCleanup.pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   storageCleanup: StorageCleanupSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(Schema.decodeSync(StorageCleanupSettings)({}))),
@@ -1547,6 +1554,10 @@ export const ServerSettingsPatch = Schema.Struct({
   ),
   setProviderModelOrder: Schema.optionalKey(
     Schema.Struct({ provider: ProviderInstanceId, modelOrder: Schema.Array(TrimmedString) }),
+  ),
+  // An empty name drops the nickname and restores the catalog label.
+  setModelNicknames: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ ...ModelFavorite.fields, name: TrimmedString })),
   ),
   favorites: Schema.optionalKey(ModelFavorites),
   providerModelPreferences: Schema.optionalKey(ProviderModelPreferences),

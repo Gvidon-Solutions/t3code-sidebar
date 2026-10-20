@@ -31,6 +31,7 @@ export function modelMatchesCatalogQuery(input: {
 
   return [
     input.model.label,
+    input.model.nickname ?? "",
     input.model.subtitle,
     input.model.selection.model,
     input.providerLabel,

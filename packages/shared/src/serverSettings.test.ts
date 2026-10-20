@@ -1055,6 +1055,28 @@ describe("synchronized model preferences", () => {
     ).toEqual({ hiddenModels: ["luna", "sol"], modelOrder: [] });
   });
 
+  it("renames a model per provider and restores the catalog name on an empty one", () => {
+    const otherProvider = ProviderInstanceId.make("claude_work");
+    const named = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      setModelNicknames: [
+        { provider, model: "sol", name: "Сол" },
+        { provider: otherProvider, model: "sol", name: "Other" },
+      ],
+    });
+    const renamed = applyServerSettingsPatch(named, {
+      setModelNicknames: [{ provider, model: "sol", name: "Sun" }],
+    });
+    expect(renamed.modelNicknames).toEqual([
+      { provider: otherProvider, model: "sol", name: "Other" },
+      { provider, model: "sol", name: "Sun" },
+    ]);
+    expect(
+      applyServerSettingsPatch(renamed, {
+        setModelNicknames: [{ provider, model: "sol", name: "" }],
+      }).modelNicknames,
+    ).toEqual([{ provider: otherProvider, model: "sol", name: "Other" }]);
+  });
+
   it("migrates saved lists independently without claiming empty legacy lists", () => {
     expect(modelPreferencesMigrationPatch(DEFAULT_SERVER_SETTINGS, {})).toBeNull();
     const patch = modelPreferencesMigrationPatch(DEFAULT_SERVER_SETTINGS, legacy)!;

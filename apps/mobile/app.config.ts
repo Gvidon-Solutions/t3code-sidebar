@@ -232,7 +232,8 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 
 const MICROPHONE_PERMISSION =
   "Allow T3 Code to use your microphone for voice input and voice conversations.";
-const CAMERA_PERMISSION = "Allow T3 Code to access your camera so you can scan pairing QR codes.";
+const CAMERA_PERMISSION =
+  "Allow T3 Code to access your camera so you can take photos for chats and scan pairing QR codes.";
 
 // These aliases match the fonts' PostScript names on iOS. Register the same
 // names on Android so React Native and the native composer use one set of

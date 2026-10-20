@@ -25,6 +25,7 @@ import {
   pickComposerFiles,
   pickComposerMedia,
   type DraftComposerAttachment,
+  type ComposerMediaSource,
 } from "../../lib/composerImages";
 import { useNativePaste } from "../../lib/useNativePaste";
 import { appAtomRegistry } from "../../state/atom-registry";
@@ -114,7 +115,7 @@ export function InboxComposer(props: {
     appendComposerDraftAttachments(draftKey, picked, {
       maxAttachments: PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
     });
-  const pick = async (kind: "media" | "files") => {
+  const pick = async (kind: "media" | "files", source?: ComposerMediaSource) => {
     try {
       const result =
         kind === "files"
@@ -123,6 +124,7 @@ export function InboxComposer(props: {
               maxBytes: capabilities?.fileAttachments?.maxUploadBytes,
             })
           : await pickComposerMedia({
+              source,
               existingCount: existingCount(),
               maxVideoBytes: capabilities?.fileAttachments?.maxUploadBytes,
             });
@@ -242,7 +244,7 @@ export function InboxComposer(props: {
             <ComposerAttachmentButton
               disabled={sending}
               supportsFiles={Boolean(capabilities?.fileAttachments)}
-              onPickMedia={() => pick("media")}
+              onPickMedia={(source) => pick("media", source)}
               onPickFiles={() => pick("files")}
             />
           ) : (

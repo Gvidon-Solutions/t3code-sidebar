@@ -15,6 +15,8 @@ import {
 export type ModelOption = {
   readonly key: string;
   readonly label: string;
+  /** The user's own name for the model, shown instead of `label` everywhere. */
+  readonly nickname?: string;
   readonly subtitle: string;
   readonly providerKey: string;
   readonly providerLabel: string;
@@ -276,6 +278,12 @@ export function buildModelOptions(
   includeHidden = false,
 ): ReadonlyArray<ModelOption> {
   const options = new Map<string, ModelOption>();
+  const nicknames = new Map(
+    (config?.settings?.modelNicknames ?? []).map((nickname) => [
+      `${nickname.provider}:${nickname.model}`,
+      nickname.name,
+    ]),
+  );
 
   for (const provider of config?.providers ?? []) {
     if (
@@ -302,9 +310,11 @@ export function buildModelOptions(
       models.sort((a, b) => (order.get(a.slug) ?? Infinity) - (order.get(b.slug) ?? Infinity));
     for (const model of models) {
       const key = `${provider.instanceId}:${model.slug}`;
+      const nickname = nicknames.get(key);
       options.set(key, {
         key,
         label: model.name,
+        ...(nickname ? { nickname } : {}),
         subtitle: model.subProvider ?? "",
         providerKey: provider.instanceId,
         providerLabel,
@@ -366,9 +376,11 @@ export function buildModelOptions(
         displayName: provider?.displayName ?? instanceConfig?.displayName,
         instanceId: fallbackModelSelection.instanceId,
       });
+      const nickname = nicknames.get(key);
       options.set(key, {
         key,
         label: model?.name ?? fallbackModelSelection.model,
+        ...(nickname ? { nickname } : {}),
         subtitle: model?.subProvider ?? "",
         providerKey: fallbackModelSelection.instanceId,
         providerLabel,

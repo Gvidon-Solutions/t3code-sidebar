@@ -407,6 +407,7 @@ export function applyServerSettingsPatch(
     setModelFavorites,
     setModelsHidden,
     setProviderModelOrder,
+    setModelNicknames,
     providerModelPreferences,
     automaticGitFetchInterval,
     providerHealthRefreshInterval,
@@ -508,10 +509,23 @@ export function applyServerSettingsPatch(
       },
     };
   }
+  const modelNicknames =
+    setModelNicknames?.reduce(
+      (nicknames, change) => [
+        ...nicknames.filter(
+          (nickname) => nickname.provider !== change.provider || nickname.model !== change.model,
+        ),
+        ...(change.name.length > 0
+          ? [{ provider: change.provider, model: change.model, name: change.name }]
+          : []),
+      ],
+      current.modelNicknames,
+    ) ?? current.modelNicknames;
   const next = deepMerge(current, patchForMerge);
   const nextWithReplacementsBase = {
     ...next,
     favorites,
+    modelNicknames,
     providerModelPreferences: nextModelPreferences,
     ...(worktreeCleanupPatch === undefined
       ? {}

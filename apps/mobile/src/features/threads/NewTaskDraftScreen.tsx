@@ -94,6 +94,7 @@ import {
   pickComposerMedia,
   removePersistedComposerAttachmentFile,
   type DraftComposerFileAttachment,
+  type ComposerMediaSource,
 } from "../../lib/composerImages";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import {
@@ -1123,13 +1124,14 @@ export function NewTaskDraftScreen(props: {
   });
   const showBranchLoading = flow.branchesLoading && flow.availableBranches.length === 0;
 
-  async function handlePickMedia(): Promise<void> {
+  async function handlePickMedia(source: ComposerMediaSource): Promise<void> {
     if (isComposerInteractionLocked || voiceInput.isBusy) {
       return;
     }
     const capabilities = selectedEnvironmentServerConfig?.environment.capabilities;
     const insertion = flow.draftKey ? captureComposerDraftInsertion(flow.draftKey) : undefined;
     const result = await pickComposerMedia({
+      source,
       existingCount:
         flow.draftKey && insertion
           ? countComposerDraftAttachmentsAfterSelection(flow.draftKey, insertion)

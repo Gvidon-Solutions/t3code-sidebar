@@ -96,6 +96,25 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-20 — Your own model names, every pin in quick switch, camera in "+"
+
+- **What.** Long-press a model in "All models" on the phone to rename it (`Sol 6.1` for
+  `GPT-6.1-Sol`); the row keeps the catalog name underneath so models are never confused, and an
+  empty name restores it. Names apply in the composer chip, quick switch and catalog search, and
+  sync to every phone on the environment. Quick switch shows every pinned model, not the first
+  six. The full catalog scrolls to its last provider again: Reasoning/Runtime moved into the
+  list header and the bottom safe-area padding is back at the end. The composer "+" menu gains
+  "Take Photo", which attaches a camera shot straight to the message.
+- **How.** `ServerSettings.modelNicknames` (per provider instance and model), patched with
+  `setModelNicknames`; `ModelOption.nickname` overrides the display name while effort and
+  sibling grouping still read the catalog label. The camera uses `expo-image-picker`'s
+  `launchCameraAsync` through the same attachment path as the library. Web does not read
+  nicknames yet.
+- **Where.** `packages/contracts/src/settings.ts`, `packages/shared/src/serverSettings.ts`,
+  `apps/mobile/src/lib/modelOptions.ts`, `features/threads/modelDisplay.ts`,
+  `ThreadSettingsSheet.tsx`, `ThreadSettingsRows.shared.tsx`, `lib/composerImages.ts`,
+  `components/ComposerAttachmentButton.tsx`.
+
 ### 2026-10-20 — Model and reasoning on the phone: one tap, effort visible
 
 - **What.** The composer chip reads `Opus 4.5 · High` (or `Gemini 3.8 Flash · High`) instead of
