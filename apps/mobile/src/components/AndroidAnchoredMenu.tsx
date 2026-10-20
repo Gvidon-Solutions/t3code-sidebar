@@ -55,7 +55,7 @@ export type AndroidAnchoredMenuProps = {
  * menus use the native popup for placement, animation and dismissal.
  */
 export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
-  const { scale, menuWidth: desiredMenuWidth } = useAndroidControlSizing();
+  const { scale, menuItemHeight, menuWidth: desiredMenuWidth } = useAndroidControlSizing();
   const [anchor, setAnchor] = useState<AnchorSnapshot | null>(null);
   const [path, setPath] = useState<readonly MenuAction[]>([]);
   // Height of the modal's root view, in the modal's own coordinate space.
@@ -151,7 +151,18 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
       ? 0
       : usableBottom - (local.y + local.height) - ANCHOR_GAP - SCREEN_MARGIN;
   const spaceAbove = local === null ? 0 : local.y - ANCHOR_GAP - SCREEN_MARGIN;
-  const opensDown = spaceBelow >= 280 || spaceBelow >= spaceAbove;
+  // In-window rows get an explicit height: the native Host measured a short
+  // column inside the ScrollView and clipped the last rows (the composer "+"
+  // menu showed one and a half of its three items while the keyboard was up).
+  const rowsHeight =
+    (parent !== null || props.title ? menuItemHeight : 0) +
+    levelActions.reduce(
+      (height, action) => height + menuItemHeight + (action.subtitle ? Math.round(20 * scale) : 0),
+      0,
+    );
+  const menuPadding = 7 * scale;
+  const contentHeight = rowsHeight + 2 * menuPadding;
+  const opensDown = spaceBelow >= Math.min(contentHeight, 280) || spaceBelow >= spaceAbove;
   const maxHeight = Math.min(opensDown ? spaceBelow : spaceAbove, 480);
   // The menu needs the overlay frame before it can be placed; it stays
   // unmounted for that first frame so the fade-in plays at the final position.
@@ -217,7 +228,7 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
                 className="absolute overflow-hidden bg-card-alt shadow-md"
                 style={{
                   left,
-                  maxHeight,
+                  height: Math.min(contentHeight, maxHeight),
                   width: menuWidth,
                   borderRadius: 4 * scale,
                   ...(opensDown
@@ -232,13 +243,14 @@ export function AndroidAnchoredMenu(props: AndroidAnchoredMenuProps) {
                   active editor; the first item tap must act, not just
                   dismiss the keyboard. */}
                 <ScrollView
-                  contentContainerStyle={{ paddingVertical: 7 * scale }}
+                  contentContainerStyle={{ paddingVertical: menuPadding }}
                   bounces={false}
                   keyboardShouldPersistTaps="always"
                   showsVerticalScrollIndicator={false}
                 >
                   <MaterialMenuPopup
                     inline
+                    inlineHeight={rowsHeight}
                     anchor={local}
                     menuWidth={menuWidth}
                     actions={levelActions}

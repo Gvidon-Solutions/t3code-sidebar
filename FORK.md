@@ -96,6 +96,27 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 
+### 2026-10-20 — Phone composer grows with the prompt, shared PDFs show up, "+" menu whole
+
+- **What.** On the phone the message field grows line by line as you type, up to the space
+  above the keyboard, then scrolls inside, as in ChatGPT; the card sits closer to the screen
+  edges and the toolbar closer to the text. A file shared into T3 from another app (Files,
+  a browser) now appears as its chip in the draft right away, named `report.pdf` rather than
+  `primary:Download/report.pdf`, including when a new-task draft is already open or the app
+  was cold-started by the share. The "+" menu shows all its rows with the keyboard open or
+  closed.
+- **How.** The native editors already emitted `onComposerContentSizeChange`; the wrappers now
+  size themselves from it within the style's `minHeight`/`maxHeight`, and the cap is computed
+  from the window, keyboard and insets. Share merges run `restoreMissingComposerFileReferences`
+  so documents get their inline chip; the share sheet is presented a frame later so a
+  cold-start navigation is not dropped, and a share arriving while the sheet is open is
+  routed into it. The in-window Android menu gets an explicit height instead of Compose
+  `matchContents`, which measured a short column.
+- **Where.** `apps/mobile/src/native/composerEditorGrowth.ts`, `T3ComposerEditor.{native,ios}.tsx`,
+  `features/threads/{ThreadComposer,NewTaskDraftScreen,NewTaskRouteScreen}.tsx`,
+  `state/use-composer-drafts.ts`, `features/sharing/incoming-share-{model,presentation}.ts`,
+  `Stack.tsx`, `components/AndroidAnchoredMenu.tsx`, `MaterialMenuPopup*.tsx`.
+
 ### 2026-10-20 — Your own model names, every pin in quick switch, camera in "+"
 
 - **What.** Long-press a model in "All models" on the phone to rename it (`Sol 6.1` for

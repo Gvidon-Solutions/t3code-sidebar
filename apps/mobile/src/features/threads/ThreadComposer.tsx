@@ -33,7 +33,17 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { Alert, Keyboard, Platform, Pressable, View, type ViewStyle } from "react-native";
+import {
+  Alert,
+  Keyboard,
+  Platform,
+  Pressable,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from "react-native";
+import { useKeyboardState } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { composerImageGallery } from "../../lib/composerImageGallery";
 import { filePreviewGallery } from "../../lib/filePreviewGallery";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
@@ -152,6 +162,31 @@ export const COMPOSER_COLLAPSED_CHROME = 60;
  * Used by the parent to compute the larger feed bottom inset when the composer is focused.
  */
 export const COMPOSER_EXPANDED_CHROME = 156;
+
+/** The focused editor's smallest height: about two lines before it starts to grow. */
+export const EXPANDED_EDITOR_MIN_HEIGHT = 48;
+/** Header, toolbar, card padding and a glimpse of the thread kept visible above the editor. */
+const EXPANDED_EDITOR_RESERVED_HEIGHT = 56 + 48 + 16 + 16 + 96;
+
+/**
+ * The focused editor grows with its text up to the space above the keyboard,
+ * leaving room for the header, the toolbar and a strip of the thread, then
+ * scrolls inside, the way chat apps let a long prompt take the screen.
+ */
+export function expandedEditorMaxHeight(input: {
+  readonly windowHeight: number;
+  readonly keyboardHeight: number;
+  readonly topInset: number;
+  readonly bottomInset: number;
+}): number {
+  const available =
+    input.windowHeight -
+    input.keyboardHeight -
+    input.topInset -
+    input.bottomInset -
+    EXPANDED_EDITOR_RESERVED_HEIGHT;
+  return Math.max(160, Math.round(available));
+}
 
 export interface ThreadComposerProps {
   readonly canOperateThread: boolean;
@@ -568,6 +603,15 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const isVoiceInputPresented = voicePresentation.statusLabel !== null;
   // An open draft stays visible; only a collapsed composer becomes a voice strip.
   const isExpanded = isFocused || settingsSheetPresentation.keepsComposerExpanded;
+  const { height: windowHeight } = useWindowDimensions();
+  const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
+  const safeAreaInsets = useSafeAreaInsets();
+  const editorMaxHeight = expandedEditorMaxHeight({
+    windowHeight,
+    keyboardHeight,
+    topInset: safeAreaInsets.top,
+    bottomInset: props.bottomInset ?? 0,
+  });
   const showsCompactDictation = isVoiceInputPresented && !isExpanded;
   const isToolbarVisible = isExpanded || isVoiceInputPresented;
   const attachmentBlockReason = composerAttachmentUploadBlockReason({
@@ -841,10 +885,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
 
   return (
     <Animated.View
-      className="px-[12px]"
+      className="px-[6px]"
       style={{
-        paddingTop: isExpanded ? 8 : 6,
-        paddingBottom: (props.bottomInset ?? 0) + (isExpanded ? 8 : 6),
+        paddingTop: 6,
+        paddingBottom: (props.bottomInset ?? 0) + 6,
         backgroundColor:
           Platform.OS === "android" ? themeColorWithAlpha(composerPanel, 1) : undefined,
       }}
@@ -923,10 +967,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
             isExpanded
               ? {
                   borderRadius: 26,
-                  minHeight: 140,
                   overflow: "hidden" as const,
-                  paddingBottom: 6,
-                  paddingTop: 14,
+                  paddingBottom: 0,
+                  paddingTop: 10,
                 }
               : {
                   // Keep the numeric radius close to the expanded card so the
@@ -1115,8 +1158,8 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 style={
                   isExpanded
                     ? {
-                        minHeight: 72,
-                        maxHeight: 160,
+                        minHeight: EXPANDED_EDITOR_MIN_HEIGHT,
+                        maxHeight: editorMaxHeight,
                         paddingVertical: 4,
                       }
                     : {
@@ -1180,7 +1223,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                 )}
               </View>
             ) : null}
-            {isExpanded ? <View className="h-1" /> : null}
           </ComposerDictationDraftContent>
           <Animated.View
             accessibilityElementsHidden={!isToolbarVisible}

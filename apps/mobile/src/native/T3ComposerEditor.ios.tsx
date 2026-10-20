@@ -31,6 +31,7 @@ import {
   type ComposerNativeEventSnapshot,
 } from "./composerEditorRevision";
 import { DEFAULT_COMPOSER_ENTER_BEHAVIOR } from "../lib/composerEnterBehavior";
+import { composerEditorGrowHeight } from "./composerEditorGrowth";
 import type { ComposerEditorProps, ComposerEditorSelection } from "./T3ComposerEditor.types";
 
 const NATIVE_MODULE_NAME = "T3ComposerEditor";
@@ -98,6 +99,9 @@ interface NativeComposerEditorProps extends ViewProps {
   readonly onComposerPasteText?: (event: NativePasteTextEvent) => void;
   readonly onComposerFocus?: () => void;
   readonly onComposerBlur?: () => void;
+  readonly onComposerContentSizeChange?: (
+    event: NativeSyntheticEvent<{ readonly height: number }>,
+  ) => void;
   readonly onComposerSubmit?: (event: NativeSyntheticEvent<{ alternate: boolean }>) => void;
 }
 
@@ -132,6 +136,8 @@ export function ComposerEditor({
   const mostRecentEventCountRef = useRef(0);
   const [mostRecentEventCount, setMostRecentEventCount] = useState(0);
   const [, forceNativeEventRender] = useState(0);
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
+  const growHeight = composerEditorGrowHeight(style, contentHeight);
   // The native editor mounts empty, so the snapshot history starts empty: the
   // first controlled payload must be a non-echo so a restored draft (or a
   // recycled native view) is applied rather than skipped.
@@ -290,7 +296,10 @@ export function ComposerEditor({
       spellCheck={props.spellCheck ?? true}
       textPasteThresholdBytes={onPasteText ? PASTED_TEXT_ATTACHMENT_THRESHOLD_BYTES : 0}
       maxInputChars={PROVIDER_SEND_TURN_MAX_INPUT_CHARS}
-      style={style as StyleProp<ViewStyle>}
+      style={[
+        style as StyleProp<ViewStyle>,
+        growHeight === undefined ? null : { height: growHeight },
+      ]}
       onComposerChange={(event) => {
         const acknowledgedEventCount = acceptNativeEvent(
           event.nativeEvent.eventCount,
@@ -355,6 +364,7 @@ export function ComposerEditor({
       }}
       onComposerFocus={onFocus}
       onComposerBlur={onBlur}
+      onComposerContentSizeChange={(event) => setContentHeight(event.nativeEvent.height)}
       onComposerSubmit={
         onSubmit === undefined
           ? undefined

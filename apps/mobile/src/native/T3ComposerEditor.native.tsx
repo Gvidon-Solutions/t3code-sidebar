@@ -20,6 +20,7 @@ import { markdownFileIconSource, markdownIconAssetUri } from "../lib/markdownFil
 import { composerChipSizeSuffix, contextChipPresentation } from "../lib/composerChipPresentation";
 import { resolveMarkdownFileIcon } from "../lib/markdownLinks";
 import { MOBILE_TYPOGRAPHY } from "../lib/typography";
+import { composerEditorGrowHeight } from "./composerEditorGrowth";
 import { useNativePaste } from "../lib/useNativePaste";
 import { useFontFamily } from "../lib/useFontFamily";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
@@ -98,6 +99,9 @@ interface NativeComposerEditorProps extends ViewProps {
   readonly onComposerPasteText?: (event: NativePasteTextEvent) => void;
   readonly onComposerFocus?: () => void;
   readonly onComposerBlur?: () => void;
+  readonly onComposerContentSizeChange?: (
+    event: NativeSyntheticEvent<{ readonly height: number }>,
+  ) => void;
 }
 
 const NativeView = requireNativeView<NativeComposerEditorProps>(NATIVE_MODULE_NAME);
@@ -130,6 +134,8 @@ export function ComposerEditor({
   const mostRecentEventCountRef = useRef(0);
   const [mostRecentEventCount, setMostRecentEventCount] = useState(0);
   const [, forceNativeEventRender] = useState(0);
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
+  const growHeight = composerEditorGrowHeight(style, contentHeight);
   // The native editor mounts empty, so the snapshot history starts empty: the
   // first controlled payload must be a non-echo so a restored draft (or a
   // recycled native view) is applied rather than skipped.
@@ -262,7 +268,10 @@ export function ComposerEditor({
   const resolvedTextStyle = StyleSheet.flatten(textStyle) ?? {};
   const regularFontFamily = useFontFamily("regular");
   return (
-    <TextInputWrapper onPaste={handlePaste} style={[{ minHeight: 0 }, style]}>
+    <TextInputWrapper
+      onPaste={handlePaste}
+      style={[{ minHeight: 0 }, style, growHeight === undefined ? null : { height: growHeight }]}
+    >
       <NativeView
         ref={nativeRef}
         controlledDocumentJson={controlledDocumentJson}
@@ -360,6 +369,7 @@ export function ComposerEditor({
         }}
         onComposerFocus={onFocus}
         onComposerBlur={onBlur}
+        onComposerContentSizeChange={(event) => setContentHeight(event.nativeEvent.height)}
       />
     </TextInputWrapper>
   );

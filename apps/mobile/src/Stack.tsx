@@ -645,14 +645,22 @@ function RootStackLayout(props: {
       isShareSheetPresented: topRouteName === "NewTaskSheet",
       pendingShareId: pendingShare?.id ?? null,
     });
-    sharePresentationRef.current = transition.state;
-    if (!transition.shareIdToPresent) {
+    const shareIdToPresent = transition.shareIdToPresent;
+    if (!shareIdToPresent) {
+      sharePresentationRef.current = transition.state;
       return;
     }
-    navigation.navigate("NewTaskSheet", {
-      screen: "NewTask",
-      params: { incomingShareId: transition.shareIdToPresent },
+    // The navigator registers its focus listener in its own effects, after
+    // this layout's. A cold start from a share would navigate too early, get
+    // dropped, and then count as dismissed, so present on the next frame.
+    const frame = requestAnimationFrame(() => {
+      sharePresentationRef.current = transition.state;
+      navigation.navigate("NewTaskSheet", {
+        screen: "NewTask",
+        params: { incomingShareId: shareIdToPresent },
+      });
     });
+    return () => cancelAnimationFrame(frame);
   }, [navigation, pendingShare, props.state]);
 
   return (

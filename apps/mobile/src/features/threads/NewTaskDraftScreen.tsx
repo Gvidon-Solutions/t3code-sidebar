@@ -17,7 +17,15 @@ import {
   type NavigationAction,
 } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Keyboard, Platform, Pressable, ScrollView, View } from "react-native";
+import {
+  Alert,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import {
   KeyboardController,
   KeyboardStickyView,
@@ -67,7 +75,12 @@ import { ProviderIcon } from "../../components/ProviderIcon";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { hasProviderUsageLimits, isUsageLimitsCommand } from "@t3tools/shared/usageLimits";
-import { COMPOSER_LAYOUT_TRANSITION, ComposerSurface } from "./ThreadComposer";
+import {
+  COMPOSER_LAYOUT_TRANSITION,
+  ComposerSurface,
+  EXPANDED_EDITOR_MIN_HEIGHT,
+  expandedEditorMaxHeight,
+} from "./ThreadComposer";
 import { ComposerCommandPopover } from "./ComposerCommandPopover";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
 import {
@@ -221,6 +234,14 @@ export function NewTaskDraftScreen(props: {
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const controlsBottomPadding = Math.max(insets.bottom, 10);
+  const { height: windowHeight } = useWindowDimensions();
+  const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
+  const editorMaxHeight = expandedEditorMaxHeight({
+    windowHeight,
+    keyboardHeight,
+    topInset: insets.top,
+    bottomInset: controlsBottomPadding,
+  });
   const keyboardOpenedOffset = Math.max(0, controlsBottomPadding - 8);
   const { projectScopes, selectedProject, selectedProjectKey, setProject } = flow;
   // The picker and sidebar name a project by its repository scope; a workspace
@@ -1632,8 +1653,8 @@ export function NewTaskDraftScreen(props: {
         singleLineCentered={false}
         contentInsetVertical={0}
         style={{
-          minHeight: 72,
-          maxHeight: 160,
+          minHeight: EXPANDED_EDITOR_MIN_HEIGHT,
+          maxHeight: editorMaxHeight,
           paddingVertical: 4,
         }}
         textStyle={{ ...bodyText, color: foregroundColor, fontFamily: regularFontFamily }}
@@ -1791,7 +1812,7 @@ export function NewTaskDraftScreen(props: {
   const composerDock = (
     <View
       className={
-        Platform.OS === "android" ? "bg-sheet-solid px-[12px] pt-1" : "bg-sheet px-[12px] pt-1"
+        Platform.OS === "android" ? "bg-sheet-solid px-[6px] pt-1" : "bg-sheet px-[6px] pt-1"
       }
       style={{ paddingBottom: controlsBottomPadding }}
     >
@@ -1854,10 +1875,9 @@ export function NewTaskDraftScreen(props: {
       <ComposerSurface
         style={{
           borderRadius: 26,
-          minHeight: 140,
           overflow: "hidden",
-          paddingBottom: 6,
-          paddingTop: 14,
+          paddingBottom: 0,
+          paddingTop: 10,
         }}
       >
         {stripAttachments.length > 0 ? (
@@ -1894,7 +1914,6 @@ export function NewTaskDraftScreen(props: {
         ) : null}
 
         <View className="px-[14px]">{promptEditor}</View>
-        <View className="h-1" />
 
         <Animated.View layout={COMPOSER_LAYOUT_TRANSITION} collapsable={false}>
           <ComposerDictationToolbar showsDictation={isVoiceInputPresented}>

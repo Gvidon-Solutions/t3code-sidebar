@@ -222,7 +222,14 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
     }
     const state = navigation.getState();
     const previousRoute = state?.routes[state.index - 1];
-    if (previousRoute?.name === "NewTaskDraft") {
+    // Reusing the draft underneath would drop a share it was not opened for:
+    // the share then waited in the inbox and never reached a composer.
+    const previousShareId = (previousRoute?.params as { incomingShareId?: string } | undefined)
+      ?.incomingShareId;
+    if (
+      previousRoute?.name === "NewTaskDraft" &&
+      (!incomingShare || previousShareId === incomingShare.id)
+    ) {
       setProject(project);
       navigation.goBack();
       return;

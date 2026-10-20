@@ -132,8 +132,8 @@ export function MaterialMenuPopup(props: MaterialMenuPopupProps) {
       <Host
         colorScheme={themeAppearance}
         ignoreSafeAreaKeyboardInsets
-        matchContents
-        style={{ width: props.menuWidth }}
+        matchContents={props.inlineHeight === undefined}
+        style={{ width: props.menuWidth, height: props.inlineHeight }}
       >
         <Column>{items}</Column>
       </Host>

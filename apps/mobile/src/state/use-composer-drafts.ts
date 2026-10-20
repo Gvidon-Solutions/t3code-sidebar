@@ -1640,13 +1640,15 @@ export function mergeComposerDraftContentState(
   }
   return {
     ...current,
-    [draftKey]: {
+    // A shared document is visible only as its inline chip; without one it
+    // would ride along unseen until the next app launch restored it.
+    [draftKey]: restoreMissingComposerFileReferences({
       ...existing,
       text,
       attachments,
       context,
       ...(importedShareIds ? { importedShareIds } : {}),
-    },
+    }),
   };
 }
 

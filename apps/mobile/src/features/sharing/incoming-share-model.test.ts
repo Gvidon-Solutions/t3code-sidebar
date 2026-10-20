@@ -12,6 +12,7 @@ import {
   isShareFileUriUnderOwnedRoots,
   selectIncomingShareAttachments,
   selectIncomingShareAttachmentsForServer,
+  sharedDisplayName,
 } from "./incoming-share-model";
 
 describe("incoming native shares", () => {
@@ -684,6 +685,14 @@ describe("incoming native shares", () => {
     expect(result.attachments).toEqual([]);
     expect(result.warnings).toEqual(["read failed"]);
     expect(removeOwnedFile.mock.calls.map(([uri]) => uri)).toContain(persistedUri);
+  });
+});
+
+describe("shared file names", () => {
+  it("keeps only the file name from a document provider path", () => {
+    expect(sharedDisplayName("primary:Download/report-test.pdf")).toBe("report-test.pdf");
+    expect(sharedDisplayName("report.pdf")).toBe("report.pdf");
+    expect(sharedDisplayName("msf:42")).toBe("42");
   });
 });
 

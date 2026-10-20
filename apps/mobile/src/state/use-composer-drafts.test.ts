@@ -531,6 +531,26 @@ describe("mobile composer drafts", () => {
     ]);
   });
 
+  it("gives a shared document the inline chip that makes it visible", () => {
+    const merged = mergeComposerDraftContentState({}, "key", {
+      text: "",
+      attachments: [
+        {
+          id: "share-1:file:0",
+          type: "file",
+          name: "report.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 1362,
+          fileUri: "file:///attachments/report.pdf",
+        },
+      ],
+      sourceShareId: "share-1",
+    });
+    const record = merged.key?.context?.records[0];
+    expect(record).toMatchObject({ kind: "file", attachmentId: "share-1:file:0" });
+    expect(merged.key?.text).toContain("t3-context://v1/file/");
+  });
+
   it("restores and persists both full cloud and live context drafts", async () => {
     const load = vi.spyOn(threadOutboxManager, "load").mockResolvedValue(true);
     onTestFinished(() => load.mockRestore());

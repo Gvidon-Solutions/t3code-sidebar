@@ -81,12 +81,20 @@ describe("incoming share presentation", () => {
       isShareSheetPresented: true,
       pendingShareId: "share-1",
     });
-    expect(replacementWhileOpen.shareIdToPresent).toBeNull();
+    expect(replacementWhileOpen.shareIdToPresent).toBe("share-1");
+  });
+
+  it("routes a share into a new-task sheet the user already opened", () => {
+    const shared = transitionIncomingSharePresentation(EMPTY_INCOMING_SHARE_PRESENTATION_STATE, {
+      isShareSheetPresented: true,
+      pendingShareId: "share-2",
+    });
+    expect(shared.shareIdToPresent).toBe("share-2");
     expect(
-      transitionIncomingSharePresentation(replacementWhileOpen.state, {
-        isShareSheetPresented: false,
-        pendingShareId: "share-1",
+      transitionIncomingSharePresentation(shared.state, {
+        isShareSheetPresented: true,
+        pendingShareId: "share-2",
       }).shareIdToPresent,
-    ).toBe("share-1");
+    ).toBeNull();
   });
 });

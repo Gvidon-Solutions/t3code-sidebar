@@ -16,6 +16,8 @@ export interface MaterialMenuPopupProps {
   readonly onClose: () => void;
   /** Keep the editor's window focus and keyboard while showing native menu rows. */
   readonly inline?: boolean;
+  /** Explicit height for inline rows; Compose's own measurement can come back short. */
+  readonly inlineHeight?: number;
 }
 
 export function MaterialMenuPopup(_props: MaterialMenuPopupProps) {

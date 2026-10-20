@@ -233,6 +233,19 @@ async function releaseOwnedFiles(
   }
 }
 
+/**
+ * Android document providers can report a path such as
+ * `primary:Download/report.pdf` as the display name; keep only the file name.
+ */
+export function sharedDisplayName(name: string): string {
+  const base = name
+    .split(/[\/]/)
+    .pop()
+    ?.replace(/^[^:]*:/, "")
+    .trim();
+  return base && base.length > 0 ? base : name;
+}
+
 function fallbackName(uri: string, index: number, mimeType: string): string {
   try {
     const pathName = new URL(uri).pathname.split("/").findLast((segment) => segment.length > 0);
@@ -300,7 +313,9 @@ export async function buildIncomingShareDraft(input: {
         typeof payload.originalName === "string" && payload.originalName.trim().length > 0
           ? payload.originalName
           : undefined;
-      const name = resolved?.originalName ?? sharedFileName ?? fallbackName(uri, index, mimeType);
+      const name = sharedDisplayName(
+        resolved?.originalName ?? sharedFileName ?? fallbackName(uri, index, mimeType),
+      );
       if (!uri) {
         warnings.push("One shared file could not be read.");
         continue;
