@@ -328,6 +328,69 @@ export function formatModelSlugName(slug: string): string {
   );
 }
 
+/**
+ * Effort words a provider may bake into a model's display name, as
+ * Antigravity does with "Gemini 3.8 Flash (High)" and some custom catalogs do
+ * with a trailing "Max". The picker lifts them into a separate effort token so
+ * the name and the effort never read as one long label.
+ */
+const MODEL_EFFORT_WORD = "extra[\\s-]+high|x[\\s-]?high|high|medium|med|low|minimal|max|thinking";
+const TRAILING_PAREN_EFFORT = new RegExp(
+  `\\s*[\\(\\[]\\s*(${MODEL_EFFORT_WORD})\\s*[\\)\\]]\\s*$`,
+  "i",
+);
+const TRAILING_BARE_EFFORT = new RegExp(`\\s+(${MODEL_EFFORT_WORD})\\s*$`, "i");
+
+function canonicalModelEffort(token: string): string {
+  const word = token
+    .toLocaleLowerCase()
+    .replace(/[\s-]+/g, " ")
+    .trim();
+  if (word === "extra high" || word === "x high" || word === "xhigh") return "Extra High";
+  if (word === "med") return "Medium";
+  return word.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
+
+/**
+ * Splits a provider-authored model name into its base name and a baked effort.
+ * Only a known effort word at the very end is removed; version numbers, dates
+ * and other qualifiers stay in the name because the app cannot know which of
+ * them are meaningless.
+ */
+export function splitModelNameAndEffort(name: string): {
+  readonly name: string;
+  readonly effort: string | null;
+} {
+  const trimmed = name.trim().replace(/\s+/g, " ");
+  for (const pattern of [TRAILING_PAREN_EFFORT, TRAILING_BARE_EFFORT]) {
+    const match = pattern.exec(trimmed);
+    if (!match) continue;
+    const base = trimmed.slice(0, match.index).trim();
+    // A model literally named "High" is a name, not an effort suffix.
+    if (base.length === 0) continue;
+    return { name: base, effort: canonicalModelEffort(match[1]!) };
+  }
+  return { name: trimmed, effort: null };
+}
+
+/**
+ * The provider's own icon and name already identify the vendor, so the chip
+ * says "Opus 4.5" rather than repeating "Claude". Only an exact leading
+ * provider word is removed; the catalog keeps the full name for search.
+ */
+export function stripModelProviderPrefix(name: string, providerLabel?: string | null): string {
+  const trimmed = name.trim();
+  const prefixes = new Set<string>(["claude", "anthropic"]);
+  const label = providerLabel?.trim().toLocaleLowerCase();
+  if (label) prefixes.add(label);
+  for (const prefix of prefixes) {
+    if (!trimmed.toLocaleLowerCase().startsWith(`${prefix} `)) continue;
+    const rest = trimmed.slice(prefix.length).trim();
+    if (rest.length > 0) return rest;
+  }
+  return trimmed;
+}
+
 export function normalizeModelSlug(
   model: string | null | undefined,
   provider: ProviderDriverKind = DEFAULT_PROVIDER_DRIVER_KIND,

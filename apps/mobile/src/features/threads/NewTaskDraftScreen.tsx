@@ -17,7 +17,7 @@ import {
   type NavigationAction,
 } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
+import { Alert, Keyboard, Platform, Pressable, ScrollView, View } from "react-native";
 import {
   KeyboardController,
   KeyboardStickyView,
@@ -120,6 +120,11 @@ import {
   isModelSelectionUnavailable,
   resolveSelectableModelSelection,
 } from "../../lib/modelOptions";
+import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
+import { QuickModelSheet } from "./QuickModelSheet";
+import { modelOptionDisplay, resolveModelDisplay } from "./modelDisplay";
+import type { ThreadSettingsSessionProps } from "./ThreadSettingsSheet";
+import { formatModelSlugName } from "@t3tools/shared/model";
 import { armAgentAwarenessLiveActivityForLocalWork } from "../agent-awareness/remoteRegistration";
 import { enqueueThreadOutboxMessage } from "../../state/thread-outbox";
 import { useRemoteConnectionStatus } from "../../state/use-remote-environment-registry";
@@ -368,6 +373,69 @@ export function NewTaskDraftScreen(props: {
     editorRef: promptInputRef,
     isEditorFocused: isComposerFocused,
   });
+  const quickModelOptionDescriptors = useMemo(
+    () =>
+      resolveProviderOptionDescriptors({
+        capabilities: flow.selectedModelOption?.capabilities,
+        selections: flow.selectedModel?.options,
+      }),
+    [flow.selectedModel?.options, flow.selectedModelOption?.capabilities],
+  );
+  const quickModelSession = useMemo<ThreadSettingsSessionProps>(
+    () => ({
+      environmentId: flow.selectedEnvironmentId,
+      projectId: flow.selectedProject?.id ?? null,
+      ...(flow.selectedModel ? { providerInstanceId: flow.selectedModel.instanceId } : {}),
+      providerGroups: flow.providerGroups,
+      selectedModel: flow.selectedModel,
+      onSelectModel: (option) => flow.setSelectedModelKey(option.key, option.selection.options),
+      optionDescriptors: quickModelOptionDescriptors,
+      onUpdateOptionSelections: flow.setSelectedModelOptions,
+      runtimeMode: flow.runtimeMode,
+      onUpdateRuntimeMode: flow.setRuntimeMode,
+    }),
+    [
+      flow.providerGroups,
+      flow.runtimeMode,
+      flow.selectedEnvironmentId,
+      flow.selectedModel,
+      flow.selectedProject?.id,
+      flow.setRuntimeMode,
+      flow.setSelectedModelKey,
+      flow.setSelectedModelOptions,
+      quickModelOptionDescriptors,
+    ],
+  );
+  const quickModelDisplay = useMemo(
+    () =>
+      flow.selectedModelOption
+        ? modelOptionDisplay(flow.selectedModelOption)
+        : resolveModelDisplay({
+            name: flow.selectedModel
+              ? formatModelSlugName(flow.selectedModel.model)
+              : "Choose model",
+          }),
+    [flow.selectedModel, flow.selectedModelOption],
+  );
+  const [isQuickModelSheetOpen, setQuickModelSheetOpen] = useState(false);
+  const restoreFocusAfterQuickSheetRef = useRef(false);
+  const openQuickModelSheet = useCallback(() => {
+    restoreFocusAfterQuickSheetRef.current = isComposerFocused;
+    Keyboard.dismiss();
+    promptInputRef.current?.blur();
+    setQuickModelSheetOpen(true);
+  }, [isComposerFocused]);
+  const closeQuickModelSheet = useCallback(() => {
+    setQuickModelSheetOpen(false);
+    if (!restoreFocusAfterQuickSheetRef.current) return;
+    restoreFocusAfterQuickSheetRef.current = false;
+    setTimeout(() => promptInputRef.current?.focus(), 120);
+  }, []);
+  const openAllModels = useCallback(() => {
+    setQuickModelSheetOpen(false);
+    restoreFocusAfterQuickSheetRef.current = false;
+    requestAnimationFrame(settingsSheetPresentation.open);
+  }, [settingsSheetPresentation.open]);
   useEffect(() => {
     if (Platform.OS !== "ios") {
       return;
@@ -1859,7 +1927,12 @@ export function NewTaskDraftScreen(props: {
                   <View className="min-w-0 flex-1 flex-row items-center justify-end gap-2">
                     <View className="min-w-0 shrink">
                       <ComposerInlineControl
-                        accessibilityLabel="Model and reasoning settings"
+                        accessibilityLabel={
+                          quickModelDisplay.effort
+                            ? `Model: ${quickModelDisplay.name}, reasoning ${quickModelDisplay.effort}`
+                            : `Model: ${quickModelDisplay.name}`
+                        }
+                        detail={quickModelDisplay.effort}
                         disabled={isComposerInteractionLocked}
                         emphasized
                         renderIcon={(size) => (
@@ -1869,9 +1942,9 @@ export function NewTaskDraftScreen(props: {
                             size={size}
                           />
                         )}
-                        label={flow.selectedModelOption?.label ?? "Choose model"}
+                        label={quickModelDisplay.name}
                         maxWidth="100%"
-                        onPress={settingsSheetPresentation.open}
+                        onPress={openQuickModelSheet}
                       />
                     </View>
                     {flow.planModeEnabled ? (
@@ -1942,6 +2015,13 @@ export function NewTaskDraftScreen(props: {
           </ComposerDictationToolbar>
         </Animated.View>
       </ComposerSurface>
+      {isQuickModelSheetOpen ? (
+        <QuickModelSheet
+          {...quickModelSession}
+          onClose={closeQuickModelSheet}
+          onOpenAllModels={openAllModels}
+        />
+      ) : null}
       <VideoPreviewModal source={previewVideo} onRequestClose={closeMediaPreview} />
       <FilePreviewModal source={previewFile} onRequestClose={closeMediaPreview} />
     </View>

@@ -7,6 +7,10 @@ import type { ModelOption } from "../../lib/modelOptions";
 
 export type ModelRowProps = {
   readonly option: ModelOption;
+  /** Short name shown instead of the provider's raw catalog label. */
+  readonly displayLabel?: string;
+  /** Reasoning effort lifted out of the model name, shown as a separate badge. */
+  readonly detail?: string | null;
   readonly selected: boolean;
   readonly onPress: () => void;
   readonly isFavorite: boolean;
@@ -50,7 +54,13 @@ export function ModelRowContent(
       )}
     >
       <Pressable
-        accessibilityLabel={[props.option.label, props.option.subtitle].filter(Boolean).join(", ")}
+        accessibilityLabel={[
+          props.displayLabel ?? props.option.label,
+          props.detail,
+          props.option.subtitle,
+        ]
+          .filter(Boolean)
+          .join(", ")}
         accessibilityRole="radio"
         accessibilityState={{
           checked: props.selected,
@@ -67,8 +77,13 @@ export function ModelRowContent(
               className="min-w-0 shrink text-base font-t3-medium text-foreground"
               numberOfLines={props.labelNumberOfLines}
             >
-              {props.option.label}
+              {props.displayLabel ?? props.option.label}
             </Text>
+            {props.detail ? (
+              <View className="rounded-md bg-subtle px-1.5 py-0.5">
+                <Text className="text-3xs font-t3-bold text-foreground-muted">{props.detail}</Text>
+              </View>
+            ) : null}
             {props.option.isDefault ? (
               <View className="rounded-md bg-subtle-strong px-1.5 py-0.5">
                 <Text className="text-3xs font-t3-bold text-foreground-muted">Default</Text>

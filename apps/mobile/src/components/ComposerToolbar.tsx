@@ -35,6 +35,8 @@ export function ComposerInlineControl(props: {
   readonly icon?: ComponentProps<typeof SymbolView>["name"];
   readonly renderIcon?: (size: number) => ReactNode;
   readonly label: string;
+  /** Secondary token such as a reasoning effort, kept visible while the label truncates. */
+  readonly detail?: string | null;
   readonly maxWidth?: ViewStyle["maxWidth"];
   readonly onPress?: () => void;
   readonly selected?: boolean;
@@ -45,7 +47,9 @@ export function ComposerInlineControl(props: {
   const { scale, smallIconSize } = useAndroidControlSizing();
   return (
     <Pressable
-      accessibilityLabel={props.accessibilityLabel ?? props.label}
+      accessibilityLabel={
+        props.accessibilityLabel ?? (props.detail ? `${props.label}, ${props.detail}` : props.label)
+      }
       accessibilityHint={props.accessibilityHint}
       accessibilityRole={props.static ? undefined : "button"}
       accessibilityState={
@@ -82,6 +86,11 @@ export function ComposerInlineControl(props: {
       >
         {props.label}
       </Text>
+      {props.detail ? (
+        <Text className="shrink-0 text-sm font-t3-medium text-foreground-muted" numberOfLines={1}>
+          {props.detail}
+        </Text>
+      ) : null}
       {props.showChevron === false ? null : (
         <SymbolView
           name={props.chevronDirection === "right" ? "chevron.right" : "chevron.down"}

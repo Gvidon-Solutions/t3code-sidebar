@@ -15,6 +15,14 @@ on:
     branches: [ws]
     paths-ignore: ["deploy/**", "docs/**", "**/*.md"]
   workflow_dispatch:
+    inputs:
+      android_arch:
+        description: "Android ABI(s) to build"
+        type: choice
+        default: arm64-v8a
+        options:
+          - arm64-v8a
+          - arm64-v8a,x86_64
 
 permissions:
   contents: read
@@ -24,18 +32,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  bundle:
-    name: Build JS bundle
+  # Version is all the desktop bundle and the Android APK share. Computing it
+  # in its own job lets both start at once instead of the APK waiting for the
+  # desktop build just to learn its number.
+  version:
+    name: Version
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
           sparse-checkout: |
-            /*
-            !/.repos/
+            FORK.md
+            apps/server/package.json
           sparse-checkout-cone-mode: false
 
       # Upstream's version plus the run number: semver-ordered so electron-updater
@@ -54,9 +65,24 @@ jobs:
             const newer = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
             console.log(synced && newer(synced, pkg) ? synced : pkg.replace(/[-+].*$/, ""));
           ')"
-          version="$core-sidebar.${{ github.run_number }}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "version=$core-sidebar.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  bundle:
+    name: Build JS bundle
+    needs: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    outputs:
+      version: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
 
       - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
         with:
@@ -238,10 +264,11 @@ jobs:
 
   android:
     name: Build Android APK
-    needs: bundle
+    needs: version
     runs-on: ubuntu-24.04
     env:
-      VERSION: ${{ needs.bundle.outputs.version }}
+      VERSION: ${{ needs.version.outputs.version }}
+      ANDROID_ARCH: ${{ inputs.android_arch || 'arm64-v8a' }}
       APP_VARIANT: sidebar
       EXPO_NO_GIT_STATUS: "1"
       NODE_ENV: production
@@ -270,9 +297,30 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
+      # The generated project and its native build outputs are the expensive
+      # part. Keep them between runs; the key changes only when native inputs
+      # change, so JavaScript-only pushes reuse the compiled modules.
+      - name: Restore native Android project
+        id: android-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: apps/mobile/android
+          key: sidebar-android-v2-${{ hashFiles('apps/mobile/app.config.ts', 'apps/mobile/app.json', 'apps/mobile/plugins/**', 'apps/mobile/modules/**', 'patches/**', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            sidebar-android-v2-
+
+      - name: Prebuild Android project
+        if: steps.android-cache.outputs.cache-hit != 'true'
+        run: |
+          cd apps/mobile
+          npx expo prebuild --platform android --no-install
+
+      # Fork sideload builds are not store builds: one ABI for phones, no R8,
+      # no PNG crunching, no lintVital. Those gates cost minutes and are
+      # re-enabled by the EAS store profiles, not here.
       - name: Build signed APK
         env:
-          T3_SIDEBAR_VERSION: ${{ needs.bundle.outputs.version }}
+          T3_SIDEBAR_VERSION: ${{ needs.version.outputs.version }}
           T3_ANDROID_KEYSTORE_BASE64: ${{ secrets.T3_ANDROID_KEYSTORE_BASE64 }}
           T3_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.T3_ANDROID_KEYSTORE_PASSWORD }}
           T3_ANDROID_KEY_ALIAS: ${{ secrets.T3_ANDROID_KEY_ALIAS }}
@@ -280,10 +328,13 @@ jobs:
           set -euo pipefail
           export T3_ANDROID_KEYSTORE="$RUNNER_TEMP/release.keystore"
           printf '%s' "$T3_ANDROID_KEYSTORE_BASE64" | base64 -d > "$T3_ANDROID_KEYSTORE"
-          cd apps/mobile
-          npx expo prebuild --platform android --no-install
-          cd android
-          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
+          cd apps/mobile/android
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures="$ANDROID_ARCH" \
+            -Pandroid.enableMinifyInReleaseBuilds=false \
+            -Pandroid.enablePngCrunchInReleaseBuilds=false \
+            -x lintVitalRelease \
+            --build-cache --parallel --max-workers=4
           mkdir -p "$GITHUB_WORKSPACE/release-android"
           cp app/build/outputs/apk/release/app-release.apk \
             "$GITHUB_WORKSPACE/release-android/T3-Code-Sidebar-$VERSION.apk"

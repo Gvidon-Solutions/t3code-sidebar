@@ -81,16 +81,37 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   of `apps/server/package.json` and the release tag in "Last synced with upstream release" above,
   because upstream stamps a release's version only when it builds it. Builds are unsigned.
 - **Android.** The same workflow's `android` job prebuilds the sidebar variant, builds a release
-  APK signed with the fork key and attaches `T3-Code-Sidebar-<version>.apk` to the release.
-  Local builds: source `~/.local/share/t3-ws/android-signing.env`, then
-  `APP_VARIANT=sidebar npx expo prebuild --platform android` and `./gradlew assembleRelease`.
-  E2E helpers for the emulator are in `scripts/sidebar-mobile-e2e/`.
+  APK signed with the fork key and attaches `T3-Code-Sidebar-<version>.apk` to the release. The
+  generated `android/` project and its native build outputs live in an Actions cache keyed by
+  native inputs, so JavaScript-only pushes reuse them; the job builds `arm64-v8a` only by default
+  (manual dispatch can add `x86_64`) and skips R8, PNG crunching and lintVital for this sideload
+  APK. Local equivalent: `pnpm mobile:apk` (first build compiles native modules, later builds are
+  usually a minute or two; it auto-loads `~/.local/share/t3-ws/android-signing.env` when present,
+  so the APK updates an installed fork build). E2E helpers for the emulator are in
+  `scripts/sidebar-mobile-e2e/`.
 - **Self-hosted web.** `deploy/t3-ws/` builds a Docker image of `t3 serve` and runs it on the
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 
 ## Feature log
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
+
+### 2026-10-20 — Model and reasoning on the phone: one tap, effort visible
+
+- **What.** The composer chip reads `Opus 4.5 · High` (or `Gemini 3.8 Flash · High`) instead of
+  hiding reasoning behind settings. Tapping it opens a compact sheet over the thread with
+  Reasoning first, pinned or suggested models for one-tap switching, Runtime inline, and
+  "All models" for the full catalog. The full picker also puts Reasoning and Runtime above the
+  catalog instead of after every model. New-task drafts use the same sheet.
+- **How.** A display layer splits the provider's name into a short name and an effort, lifts
+  effort baked into names like `Gemini 3.8 Flash (High)`, dedupes a descriptor effort, and
+  groups sibling effort variants. Quick switching applies the model immediately instead of
+  staging it behind Save; the sheet is an in-app Modal and "All models" hands off to the
+  existing native catalog route. Rows show the same short name plus an effort badge.
+- **Where.** `apps/mobile/src/features/threads/QuickModelSheet.tsx`, `modelDisplay.ts`,
+  `ThreadSettingsSheet.tsx`, `ThreadComposer.tsx`, `NewTaskDraftScreen.tsx`,
+  `ComposerToolbar.tsx`, `ThreadSettingsRows.shared.tsx`; shared name split in
+  `packages/shared/src/model.ts`. Local APK: `scripts/mobile-android-apk.mjs` (`pnpm mobile:apk`).
 
 ### 2026-10-17 — Open files stay current on the phone
 

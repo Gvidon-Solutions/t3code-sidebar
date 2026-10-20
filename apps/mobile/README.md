@@ -119,6 +119,29 @@ node ../../scripts/mobile-native-static-check.ts
 
 The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin. Missing native tools are reported as warnings and skipped locally. CI installs the default toolset from `apps/mobile/Brewfile` before running the native checks.
 
+## Fast local Android APK
+
+The release APK used to mean a clean prebuild plus four ABIs, R8 and PNG crunching — roughly half
+an hour. The local script keeps the generated `android/` project, builds only `arm64-v8a`, and
+turns off R8 and PNG crunching for preview builds:
+
+```bash
+pnpm mobile:apk            # dist/mobile/t3-sidebar.apk
+pnpm mobile:apk:install    # also adb install -r
+```
+
+The first run still compiles the native modules and can take a while. Later runs reuse the Gradle
+build cache and the generated project, so a JavaScript change usually rebuilds in a minute or two.
+It builds the fork's `sidebar` variant (`com.gvidon.t3codesidebar`), runs `expo prebuild` without
+`--clean` only when the native config changed or `android/` is missing, and uses a clean prebuild
+when the app variant changes. When `~/.local/share/t3-ws/android-signing.env` exists, it signs with
+the fork's release keystore so the APK installs over a released build; otherwise it falls back to
+the debug keystore. `T3_ANDROID_ARCH` selects another ABI; `T3_ANDROID_WORKERS` caps Gradle workers.
+
+For UI iteration, skip the APK entirely: install the dev client once and run Metro
+(`vp run dev:client`); JavaScript edits then arrive through Fast Refresh. EAS stays the path for
+store builds and OTA updates.
+
 ## EAS Builds
 
 Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.

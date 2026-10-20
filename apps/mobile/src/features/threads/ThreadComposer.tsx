@@ -132,6 +132,9 @@ import {
   type ExistingThreadSettingsRouteSession,
   useExistingThreadSettingsRoutePresentation,
 } from "./ThreadSettingsSheet";
+import { QuickModelSheet } from "./QuickModelSheet";
+import { modelOptionDisplay, resolveModelDisplay } from "./modelDisplay";
+import { formatModelSlugName } from "@t3tools/shared/model";
 import {
   useThreadSettingsSheetPresentation,
   type NavigationWithFinishTransitioning,
@@ -717,6 +720,13 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         option.selection.instanceId === currentModelSelection.instanceId &&
         option.selection.model === currentModelSelection.model,
     ) ?? null;
+  const currentModelDisplay = useMemo(
+    () =>
+      currentModelOption
+        ? modelOptionDisplay(currentModelOption)
+        : resolveModelDisplay({ name: formatModelSlugName(currentModelSelection.model) }),
+    [currentModelOption, currentModelSelection.model],
+  );
   const providerOptionDescriptors = useMemo(
     () =>
       resolveProviderOptionDescriptors({
@@ -767,6 +777,28 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     settingsRoutePresentation.present(settingsRouteSession);
     settingsSheetPresentation.open();
   }, [settingsRoutePresentation.present, settingsRouteSession, settingsSheetPresentation.open]);
+  // The quick sheet is an in-app overlay, so it keeps the thread visible and
+  // applies a picked model immediately. "All models" hands off to the native
+  // catalog route, which still owns search, providers and legacy models.
+  const [isQuickModelSheetOpen, setQuickModelSheetOpen] = useState(false);
+  const restoreFocusAfterQuickSheetRef = useRef(false);
+  const openQuickModelSheet = useCallback(() => {
+    restoreFocusAfterQuickSheetRef.current = isFocused;
+    Keyboard.dismiss();
+    inputRef.current?.blur();
+    setQuickModelSheetOpen(true);
+  }, [inputRef, isFocused]);
+  const closeQuickModelSheet = useCallback(() => {
+    setQuickModelSheetOpen(false);
+    if (!restoreFocusAfterQuickSheetRef.current) return;
+    restoreFocusAfterQuickSheetRef.current = false;
+    setTimeout(() => inputRef.current?.focus(), 120);
+  }, [inputRef]);
+  const openAllModels = useCallback(() => {
+    setQuickModelSheetOpen(false);
+    restoreFocusAfterQuickSheetRef.current = false;
+    requestAnimationFrame(openSettings);
+  }, [openSettings]);
 
   useEffect(() => {
     if (settingsSheetPresentation.isActive) {
@@ -1199,7 +1231,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     />
                     <View className="min-w-0 shrink">
                       <ComposerInlineControl
-                        accessibilityLabel="Model and reasoning settings"
+                        accessibilityLabel={
+                          currentModelDisplay.effort
+                            ? `Model: ${currentModelDisplay.name}, reasoning ${currentModelDisplay.effort}`
+                            : `Model: ${currentModelDisplay.name}`
+                        }
+                        detail={currentModelDisplay.effort}
                         emphasized
                         renderIcon={(size) => (
                           <ProviderIcon
@@ -1208,9 +1245,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                             size={size}
                           />
                         )}
-                        label={currentModelOption?.label ?? currentModelSelection.model}
+                        label={currentModelDisplay.name}
                         maxWidth="100%"
-                        onPress={openSettings}
+                        onPress={openQuickModelSheet}
                       />
                     </View>
                   </View>
@@ -1255,6 +1292,13 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         ) : null}
       </Animated.View>
 
+      {isQuickModelSheetOpen ? (
+        <QuickModelSheet
+          {...settingsRouteSession}
+          onClose={closeQuickModelSheet}
+          onOpenAllModels={openAllModels}
+        />
+      ) : null}
       <VideoPreviewModal source={previewVideo} onRequestClose={closePreview} />
       <FilePreviewModal source={previewFile} onRequestClose={closePreview} />
     </Animated.View>

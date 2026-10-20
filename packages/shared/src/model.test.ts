@@ -20,6 +20,8 @@ import {
   normalizeCustomModelSlug,
   normalizeModelSlug,
   modelSelectionsEqual,
+  splitModelNameAndEffort,
+  stripModelProviderPrefix,
 } from "./model.ts";
 
 it("keeps the Codex catalog display formatting", () => {
@@ -39,6 +41,32 @@ it.each([
   ["My Custom Model", "My Custom Model"],
 ])("formats a known model ID without losing its qualifiers: %s", (slug, expected) => {
   expect(formatModelSlugName(slug)).toBe(expected);
+});
+
+describe("model display name and effort", () => {
+  it.each([
+    ["Claude Opus 4.5 (High)", "Claude Opus 4.5", "High"],
+    ["Gemini 3.8 Flash (Medium)", "Gemini 3.8 Flash", "Medium"],
+    ["Gemini 3.8 Flash [Low]", "Gemini 3.8 Flash", "Low"],
+    ["Astra V4.1Flash 1017 Max", "Astra V4.1Flash 1017", "Max"],
+    ["GPT-5.4 High", "GPT-5.4", "High"],
+    ["GPT-5.4 x-high", "GPT-5.4", "Extra High"],
+    ["Claude Sonnet 4.5 Extra High", "Claude Sonnet 4.5", "Extra High"],
+    ["GPT-6.1 Sol", "GPT-6.1 Sol", null],
+    ["Claude Sonnet 4 20250514", "Claude Sonnet 4 20250514", null],
+    ["High", "High", null],
+  ])("splits %s", (name, expectedName, expectedEffort) => {
+    expect(splitModelNameAndEffort(name)).toEqual({ name: expectedName, effort: expectedEffort });
+  });
+
+  it.each([
+    ["Claude Opus 4.5", "Claude", "Opus 4.5"],
+    ["Anthropic Claude Sonnet 5.5", "OpenRouter", "Claude Sonnet 5.5"],
+    ["Claude", "Claude", "Claude"],
+    ["GPT-6 Astra", "Codex", "GPT-6 Astra"],
+  ])("strips the provider prefix from %s with %s", (name, provider, expected) => {
+    expect(stripModelProviderPrefix(name, provider)).toBe(expected);
+  });
 });
 
 const codexCaps: ModelCapabilities = createModelCapabilities({

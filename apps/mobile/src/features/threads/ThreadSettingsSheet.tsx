@@ -89,6 +89,7 @@ import {
 } from "../layout/native-mail-search-toolbar";
 import { useNativeMailSearchToolbar } from "../../native/use-native-mail-search-toolbar";
 import { ModelRow, ChoiceRow } from "./ThreadSettingsRows";
+import { modelOptionDisplay } from "./modelDisplay";
 import {
   compatibleRuntimeModeForChoices,
   runtimeModeChoicesForSupportedModes,
@@ -251,7 +252,7 @@ type ThreadSettingsSubmenuPage =
   | { readonly kind: "descriptor"; readonly id: string }
   | { readonly kind: "runtime" };
 
-type ThreadSettingsSessionProps = {
+export type ThreadSettingsSessionProps = {
   readonly environmentId: EnvironmentId | null;
   readonly projectId: ProjectId | null;
   readonly providerInstanceId?: ProviderInstanceId;
@@ -322,6 +323,7 @@ type ThreadSettingsSessionValue = {
   readonly runtimeModeChoices: ReturnType<typeof runtimeModeChoicesForSupportedModes>;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
   readonly displayedDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
+  readonly displayedModel: ModelOption | null;
   readonly displayedModelSelection: ModelSelection | null;
   readonly reportedModelSelection: ModelSelection | null;
   readonly providerExpansionOverrides: ReadonlySet<string>;
@@ -335,6 +337,7 @@ type ThreadSettingsSessionValue = {
   readonly isApplied: (option: ModelOption) => boolean;
   readonly isDisplayed: (option: ModelOption) => boolean;
   readonly pressModel: (option: ModelOption) => void;
+  readonly selectModelNow: (option: ModelOption) => void;
   readonly setProviderFilter: (providerKey: string | null) => void;
   readonly setSearchQuery: (query: string) => void;
   readonly setShowLegacy: (showLegacy: boolean) => void;
@@ -344,7 +347,7 @@ type ThreadSettingsSessionValue = {
 const ThreadSettingsSessionContext = createContext<ThreadSettingsSessionValue | null>(null);
 
 /** Owns the staged model and option state for one picker presentation. */
-function ThreadSettingsSessionProvider(
+export function ThreadSettingsSessionProvider(
   props: ThreadSettingsSessionProps & { readonly children: ReactNode },
 ) {
   const registry = use(RegistryContext);
@@ -614,6 +617,17 @@ function ThreadSettingsSessionProvider(
     [isApplied],
   );
 
+  /** Quick switching skips the Save button: model and remembered options apply at once. */
+  const selectModelNow = useCallback(
+    (option: ModelOption) => {
+      if (option.isHidden || option.isUnavailable) return;
+      void Haptics.selectionAsync();
+      setPendingModel(null);
+      props.onSelectModel(option);
+    },
+    [props.onSelectModel],
+  );
+
   const value = useMemo<ThreadSettingsSessionValue>(
     () => ({
       environmentId: props.environmentId,
@@ -627,6 +641,7 @@ function ThreadSettingsSessionProvider(
       runtimeModeChoices,
       onUpdateRuntimeMode: props.onUpdateRuntimeMode,
       displayedDescriptors,
+      displayedModel,
       displayedModelSelection: pendingModel?.selection ?? props.selectedModel,
       reportedModelSelection: pendingModel ? null : (props.reportedModelSelection ?? null),
       favoriteKeys,
@@ -642,6 +657,7 @@ function ThreadSettingsSessionProvider(
       isApplied,
       isDisplayed,
       pressModel,
+      selectModelNow,
       setProviderFilter,
       setSearchQuery,
       setShowLegacy: setShowLegacyToggle,
@@ -653,6 +669,7 @@ function ThreadSettingsSessionProvider(
       commitPendingModel,
       compatibleRuntimeMode,
       displayedDescriptors,
+      displayedModel,
       favoriteKeys,
       favoritesLoaded,
       providerExpansionOverrides,
@@ -665,6 +682,7 @@ function ThreadSettingsSessionProvider(
       props.providerInstanceId,
       pendingModel,
       pressModel,
+      selectModelNow,
       providerFilter,
       props.onUpdateRuntimeMode,
       providerGroups,
@@ -686,7 +704,7 @@ function ThreadSettingsSessionProvider(
   );
 }
 
-function useThreadSettingsSession() {
+export function useThreadSettingsSession() {
   const value = use(ThreadSettingsSessionContext);
   if (!value) {
     throw new Error("useThreadSettingsSession must be used inside ThreadSettingsSessionProvider.");
@@ -738,6 +756,7 @@ function ThreadSettingsModelListRow(props: {
   readonly isLast: boolean;
 }) {
   const session = useThreadSettingsSession();
+  const display = modelOptionDisplay(props.option);
   const onPress = useCallback(
     () => session.pressModel(props.option),
     [props.option, session.pressModel],
@@ -745,6 +764,8 @@ function ThreadSettingsModelListRow(props: {
 
   return (
     <ModelRow
+      detail={display.effort}
+      displayLabel={display.name}
       isFirst={props.isFirst}
       isLast={props.isLast}
       onPress={onPress}
@@ -1016,8 +1037,11 @@ function ThreadSettingsMainContent(props: {
     session.providerFilter !== null || session.searchQuery.trim().length > 0;
   const listItems = useMemo<ReadonlyArray<ThreadSettingsCatalogItem>>(
     () => [
-      ...(catalogItems.length === 0 ? ([{ kind: "empty", key: "empty" }] as const) : catalogItems),
+      // Reasoning and Runtime sit above the catalog: they are the settings
+      // people change most, and burying them after hundreds of models made
+      // the phone picker require a full scroll before every effort change.
       { kind: "options", key: "options" },
+      ...(catalogItems.length === 0 ? ([{ kind: "empty", key: "empty" }] as const) : catalogItems),
     ],
     [catalogItems],
   );
