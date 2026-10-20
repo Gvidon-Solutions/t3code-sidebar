@@ -8,7 +8,7 @@ name: Sidebar fork iOS build
 # bundled in), uploaded as a zipped .app artifact. It proves the native project,
 # pods and the fork's native modules (modules/*, e.g. t3-terminal's
 # GhosttyKit) compile for iOS. Install on a Mac with:
-#   unzip T3-Code-Sidebar-*-simulator.zip && xcrun simctl install booted "T3 Code Sidebar.app"
+#   unzip T3-Code-Sidebar-*-simulator.zip && xcrun simctl install booted T3CodeSidebar.app
 #
 # `device`: a signed IPA + TestFlight upload, disabled until the owner picks a
 # signing route. See the comments on that job.
