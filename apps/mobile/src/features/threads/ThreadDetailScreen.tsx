@@ -452,19 +452,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const [anchorMessageId, setAnchorMessageId] = useState<MessageId | null>(null);
   const [submittedMessageId, setSubmittedMessageId] = useState<MessageId | null>(null);
   const [endFollowEnabled, setEndFollowEnabled] = useState(true);
-  // Android keys the safe-area padding on keyboard visibility (#5988): the
-  // back gesture closes the keyboard while the editor stays focused, and a
-  // focus-keyed inset would leave the toolbar under the gesture bar. iOS must
-  // NOT use visibility — it only flips on keyboardDidHide, after the hide
-  // animation, so the composer would ride down flush to the screen edge and
-  // then snap up into the inset. On iOS blur precedes the hide, so the
-  // focus-keyed inset is already in place while the composer rides down.
-  // Dictation keeps that focus while the composer switches to its compact pill.
-  const composerBottomInset = (
-    Platform.OS === "android" ? isKeyboardVisible : composerExpanded || composerFocused
-  )
-    ? 0
-    : Math.max(insets.bottom, 12);
+  // Android Back hides the keyboard without blurring. Keep its safe-area padding
+  // fixed through the animation and cancel it with matching composer/list offsets.
+  const composerBottomInset =
+    Platform.OS === "ios" && (composerExpanded || composerFocused)
+      ? 0
+      : Math.max(insets.bottom, 12);
+  const composerKeyboardOffset = Platform.OS === "android" ? composerBottomInset : 0;
   const contentPresentationKind = props.contentPresentation.kind;
   // The raw sync status enters "synchronizing" on every full fetch, cached or
   // not. Whether messages are already on screen decides the pill label: no
@@ -1182,6 +1176,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               anchorMessageId={anchorMessageId}
               submittedMessageId={submittedMessageId}
               contentInsetEndAdjustment={combinedContentInsetEndAdjustment}
+              keyboardOffset={composerKeyboardOffset}
               contentTopInset={0}
               contentBottomInset={
                 estimatedOverlayHeight +
@@ -1218,13 +1213,11 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
       {/* Floating composer — sticks to keyboard via KeyboardStickyView */}
       {showContent ? (
         <KeyboardStickyView
-          // iOS emits a native animated height target on both will-show and
-          // will-hide, so stay subscribed for the full transition. Android
-          // retains its background/resume stale-state quarantine.
-          enabled={Platform.OS === "ios" || (isKeyboardVisible && !keyboardStateSuspect)}
+          // Waiting for a visibility render misses the first keyboard frames.
+          enabled={Platform.OS === "ios" || !keyboardStateSuspect}
           pointerEvents="box-none"
           style={{ position: "absolute", bottom: 0, left: 0, right: 0, top: 0 }}
-          offset={{ closed: 0, opened: 0 }}
+          offset={{ closed: 0, opened: composerKeyboardOffset }}
         >
           <ComposerPopoverHost hidden={composerSlotHidden}>
             {/* The fixed sticky host gives this bottom-anchored child a stable
