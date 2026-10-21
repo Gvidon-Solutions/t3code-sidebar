@@ -18,8 +18,8 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream release `v0.1.0` (`81493efb71`, tagged 2026-10-15) on
-  2026-10-16 (merge into `ws`); from now on only stable upstream releases are merged.
+- **Base.** Last synced with upstream release `v0.1.1` (`fe27e8e3dc`, tagged 2026-10-20) on
+  2026-10-21 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
   above: CI reads it from this line.
@@ -95,6 +95,63 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 ## Feature log
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
+
+### 2026-10-21 — Upstream release v0.1.1
+
+- **What.** Brings in upstream's `v0.1.1` (1486 commits past the v0.1.0 sync). The phone app
+  moves onto a shared design system: themed native Android app bars, dialogs, menus, toasts and
+  progress, and a composer that is one line until the text wraps. The web app now compiles with
+  the React Compiler almost everywhere (fewer re-renders). Also: `t3 doctor` reclaims database
+  space and can drop the pre-0.1.0 database; a linked pull request can be dragged into the
+  composer; reasoning effort steps from the keyboard; pull requests can be linked and watched
+  from the phone; servers bound to `::1` work through T3 Connect and Tailscale Serve; superseded
+  history compacts in the background; worktrees shared by subagents are cleaned up; telemetry
+  goes through `ingest.t3.codes` and counts product features and T3 MCP tools used. Plus several
+  hundred fixes and performance changes. The orchestration protocol is unchanged.
+- **How.** Mobile: components moved to `components/ui/` and lost their `Material*` names
+  (`ControlPillMenu` → `Menu`, `MaterialButton` → `Button`, `showTextInputDialog` →
+  `Dialog.prompt`), so the fork's mobile files import from there. Home's toolbar became
+  `ThreadListToolbar` plus the shared `WorkspaceListToolbarRow`: the workspace title and the
+  inbox button sit in the row (the pull request tab's toolbar gets them too), the filter still
+  hides while the workspace dock shows. The inbox screens use upstream's `DETAIL_HEADER_OPTIONS`.
+  The fork's composer growth, full-screen editor and model/effort chip sit on upstream's
+  line/card composer; the card grows up to the space above the keyboard instead of upstream's
+  four lines, and the native editors report both the fork's height and upstream's size events.
+  Upstream's share merge now restores file chips itself, so that fork seam is gone; the
+  cherry-picked keyboard fixes (#20803, #19980) are upstream's own code now. The terminal keeps
+  the fork's extra keys in place of upstream's "Attach output" bar and attaches through
+  upstream's new `requestCapture`. Enriched Markdown went to `t3.15` without a laid-out height,
+  so the Android height patch is re-created as `t3.15`. Server: upstream turned service methods
+  into `Effect.fn`; the voice check in Codex's background-work probe, Codex's voice session, the
+  Claude fork retry (now passing upstream's `environment`) and the fork's never-pinned forks sit
+  on the new forms, and the fork's own services follow the new `prefer-effect-fn` rule. Web:
+  `useServerConfigs` no longer carries providers, so fork-from-menu, Talk and the palette's
+  voice item read upstream's providers-by-environment atom; the inbox composer uses upstream's
+  software-keyboard check; `WorkspaceSidebar`, the inbox, voice hooks and `useForkThread` drop
+  manual memoization so the React Compiler compiles them (route following, the menu nonce and
+  hotkeys go through `useEffectEvent`). Desktop: the updater's base state takes a disabled
+  reason; upstream now declares the macOS microphone itself. Tests: `ws.test.ts` mocks the
+  fork's inbox, UI-request and voice services; `pair.test.ts` turns off the effect plugin's
+  `anyUnknownInErrorContext`, which with the fork's server types gives up on `cli` there although
+  the resolved requirements match upstream's. Upstream now checks that every phone and web file
+  compiles under the React Compiler, so the fork's files do too: Reanimated values go through
+  `get()`/`set()`, "latest value" refs became `useEffectEvent` or layout-effect updates,
+  gestures are built once, and `try`/`finally` became `.finally()` or `settlePromise`.
+  Upstream also caps each Codex instruction entry at 4,000 bytes, so the fork's inbox and
+  ui_open/voice instructions are separate sections of `T3_CODE_ORCHESTRATION_SECTIONS`.
+- **Where.** `apps/mobile/src/features/{home/ThreadListToolbar,workspace/WorkspaceListToolbarRow}.tsx`,
+  `features/threads/{ThreadComposer,NewTaskDraftScreen,ThreadSettingsSheet,ThreadFeed,ThreadDetailScreen,ThreadRouteScreen}.tsx`,
+  `features/home/{HomeScreen,AndroidHomeFab.android}.tsx`, `features/terminal/ThreadTerminalRouteScreen.tsx`,
+  `native/T3ComposerEditor*.tsx`, `Stack.tsx`, the fork's `features/{inbox,workspaces,voice-mode,…}`
+  imports; `patches/react-native-enriched-markdown@1.2.0-t3.15.patch`, `pnpm-workspace.yaml`;
+  `apps/server/src/orchestration-v2/{Adapters/CodexAdapterV2,Adapters/ClaudeAdapterV2,ThreadForkService,ProviderContinuationService}.ts`,
+  `inbox/InboxService.ts`, `uiRequests/UiRequests.ts`, `ws.test.ts`, `cli/pair.test.ts`;
+  `apps/web/src/components/workspaces/WorkspaceSidebar.tsx`, `chat/ChatComposer.tsx`,
+  `hooks/useThreadActionMenu.ts`, `CommandPalette.tsx`, `voice/useTalk.ts`,
+  `components/inbox/`, `components/workspaces/WorkspaceUpdateStrip.tsx`,
+  `voice/useStartVoiceThread.ts`; `apps/mobile/src/features/{panels/ThreadPager,files/WorkspaceFilePdfPreview,workspaces/WorkspaceFolderDrag,workspaces/WorkspaceChrome,voice-mode/VoiceConversationBubble}.tsx`;
+  `packages/provider-core/src/server/orchestrationInstructions.ts`;
+  `apps/desktop/src/updates/DesktopUpdates.ts`, `scripts/build-desktop-artifact.ts`.
 
 ### 2026-10-21 — Full-screen draft editor; terminal tabs and keys on every screen
 

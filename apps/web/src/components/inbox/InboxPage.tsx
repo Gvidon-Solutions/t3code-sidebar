@@ -2,7 +2,7 @@ import { inboxIssueKey, type ScopedInboxIssue } from "@t3tools/client-runtime/in
 import { type EnvironmentId, type InboxIssueId, isInboxIssueUnread } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CircleCheckIcon, CircleSlashIcon, MessageCircleQuestionIcon } from "lucide-react";
-import { memo, useCallback, useMemo } from "react";
+import { memo } from "react";
 
 import { isElectron } from "../../env";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -32,10 +32,8 @@ export interface InboxSearch {
 /** Project titles by `environmentId:projectId`, for the cards' project label. */
 function useProjectTitles(): ReadonlyMap<string, string> {
   const projects = useProjects();
-  return useMemo(
-    () =>
-      new Map(projects.map((project) => [`${project.environmentId}:${project.id}`, project.title])),
-    [projects],
+  return new Map(
+    projects.map((project) => [`${project.environmentId}:${project.id}`, project.title]),
   );
 }
 
@@ -48,38 +46,27 @@ export function InboxPage({ search }: { search: InboxSearch }) {
     search.environmentId !== undefined && search.issueId !== undefined
       ? `${search.environmentId}:${search.issueId}`
       : null;
-  const selected = useMemo(
-    () =>
-      selectedKey === null
-        ? null
-        : (state.items.find((item) => inboxIssueKey(item) === selectedKey) ?? null),
-    [selectedKey, state.items],
-  );
-  const onSelect = useCallback(
-    (item: ScopedInboxIssue) =>
-      void navigate({
-        to: "/inbox",
-        search: (previous) => ({
-          ...previous,
-          environmentId: item.environmentId,
-          issueId: item.issue.id,
-        }),
+  const selected =
+    selectedKey === null
+      ? null
+      : (state.items.find((item) => inboxIssueKey(item) === selectedKey) ?? null);
+  const onSelect = (item: ScopedInboxIssue) =>
+    void navigate({
+      to: "/inbox",
+      search: (previous) => ({
+        ...previous,
+        environmentId: item.environmentId,
+        issueId: item.issue.id,
       }),
-    [navigate],
-  );
-  const onView = useCallback(
-    (next: "open" | "closed") =>
-      void navigate({
-        to: "/inbox",
-        search: (previous) => ({ ...previous, view: next }),
-        replace: true,
-      }),
-    [navigate],
-  );
-  const onBack = useCallback(
-    () => void navigate({ to: "/inbox", search: search.view ? { view: search.view } : {} }),
-    [navigate, search.view],
-  );
+    });
+  const onView = (next: "open" | "closed") =>
+    void navigate({
+      to: "/inbox",
+      search: (previous) => ({ ...previous, view: next }),
+      replace: true,
+    });
+  const onBack = () =>
+    void navigate({ to: "/inbox", search: search.view ? { view: search.view } : {} });
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
@@ -150,7 +137,7 @@ function InboxIssueList(props: {
   onView: (view: "open" | "closed") => void;
 }) {
   const { open, closed, closedTotal, view, selectedKey, onSelect, onView } = props;
-  const groups = useMemo(() => groupInboxIssuesBySeverity(open), [open]);
+  const groups = groupInboxIssuesBySeverity(open);
   const projectTitles = useProjectTitles();
   // Re-renders the relative times once a minute; rows are memoized on their props.
   const now = useNowMinute();

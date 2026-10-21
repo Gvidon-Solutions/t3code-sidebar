@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { Pressable, View } from "react-native";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 import type { HostPlatform, PendingModifier } from "./terminalInput";
 
 /** Two rows of 40 pt keys plus padding. */
@@ -70,12 +70,12 @@ export function TerminalExtraKeys(props: {
     }
   };
   useEffect(() => stopRepeat, []);
-  const onSendRef = useRef(props.onSend);
-  onSendRef.current = props.onSend;
+  // Repeats fire from timers, so an effect event sends through the latest handler.
+  const sendRepeat = useEffectEvent((data: string) => props.onSend(data));
   const startRepeat = (data: string) => {
     stopRepeat();
     const tick = () => {
-      onSendRef.current(data);
+      sendRepeat(data);
       repeatRef.current = setTimeout(tick, REPEAT_INTERVAL_MS);
     };
     repeatRef.current = setTimeout(tick, REPEAT_DELAY_MS);

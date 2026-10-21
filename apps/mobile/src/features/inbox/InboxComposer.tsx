@@ -12,9 +12,9 @@ import { Alert, Platform, View, useWindowDimensions, type LayoutChangeEvent } fr
 import { useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
-import { ComposerAttachmentButton } from "../../components/ComposerAttachmentButton";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/AppText";
+import { ComposerAttachmentButton } from "../threads/ComposerAttachmentButton";
 import { ComposerAttachmentStrip } from "../../components/ComposerAttachmentStrip";
 import { ComposerActionButton } from "../../components/ComposerToolbar";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
@@ -136,7 +136,7 @@ export function InboxComposer(props: {
       maxAttachments: PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
     });
   const pick = async (kind: "media" | "files", source?: ComposerMediaSource) => {
-    try {
+    const attach = async () => {
       const result =
         kind === "files"
           ? await pickComposerFiles({
@@ -151,9 +151,11 @@ export function InboxComposer(props: {
       const rejected = append("files" in result ? result.files : result.attachments);
       if (result.error || rejected > 0)
         Alert.alert("Could not attach file", result.error ?? "Too many attachments.");
-    } catch (error) {
-      Alert.alert("Could not attach file", error instanceof Error ? error.message : "Try again.");
-    }
+    };
+    // Promise handlers instead of try blocks, which the React Compiler cannot lower here.
+    await attach().catch((error) =>
+      Alert.alert("Could not attach file", error instanceof Error ? error.message : "Try again."),
+    );
   };
   const paste = useNativePaste((uris) => {
     if (!canAttach) return;
@@ -184,8 +186,7 @@ export function InboxComposer(props: {
       );
       return;
     }
-    setSending(true);
-    try {
+    const deliver = async () => {
       const result = await comment({
         environmentId,
         input: { issueId, text, ...(wire.length > 0 ? { attachments: wire } : {}) },
@@ -196,9 +197,11 @@ export function InboxComposer(props: {
       for (const attachment of sent) removeComposerDraftAttachment(draftKey, attachment.id);
       const current = appAtomRegistry.get(composerDraftsAtom)[draftKey]?.text ?? "";
       if (current.trim() === text) setComposerDraftText(draftKey, "");
-    } finally {
+    };
+    setSending(true);
+    await deliver().finally(() => {
       if (mounted.current) setSending(false);
-    }
+    });
   };
 
   const placeholder = props.startsConversation

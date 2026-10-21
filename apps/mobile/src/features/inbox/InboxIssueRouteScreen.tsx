@@ -14,12 +14,12 @@ import { Platform, Pressable, ScrollView, View } from "react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
-import { AppActivityIndicator } from "../../components/AppActivityIndicator";
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
-import { showTextInputDialog } from "../../components/ConfirmDialogHost";
-import { ControlPillMenu } from "../../components/ControlPill";
+import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
+import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
+import * as Dialog from "../../components/ui/Dialog";
+import { Menu } from "../../components/ui/Menu";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
 import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
 import { cn } from "../../lib/cn";
@@ -105,7 +105,7 @@ function InboxIssueScreen(props: {
   }, [canOperate, environmentId, focused, issueId, lastSequence, markSeen, seenSequence]);
 
   const closeAsNotRelevant = () =>
-    showTextInputDialog({
+    Dialog.prompt({
       title: "Close as not relevant",
       initialValue: "",
       confirmText: "Close issue",
@@ -308,7 +308,7 @@ function IssueHeader(props: {
             </Pressable>
           ) : null}
           {props.canOperate && open ? (
-            <ControlPillMenu
+            <Menu
               accessibilityLabel="More actions"
               actions={CLOSE_ACTIONS}
               onPressAction={({ nativeEvent }) => {
@@ -323,7 +323,7 @@ function IssueHeader(props: {
                   type="monochrome"
                 />
               </View>
-            </ControlPillMenu>
+            </Menu>
           ) : null}
         </View>
       ) : null}

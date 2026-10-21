@@ -1,6 +1,7 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
+  settlePromise,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import {
@@ -12,7 +13,6 @@ import {
 } from "@t3tools/contracts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useRouter } from "@tanstack/react-router";
-import { useCallback } from "react";
 
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { newThreadId } from "../lib/utils";
@@ -47,64 +47,61 @@ let launching = false;
 export function useStartVoiceThread() {
   const createThread = useOrchestrationCommand(threadEnvironment.create, { reportFailure: false });
   const router = useRouter();
-  return useCallback(
-    async (input: VoiceThreadInput): Promise<void> => {
-      if (launching) return;
-      const serverConfig = appAtomRegistry
-        .get(environmentServerConfigsAtom)
-        .get(input.environmentId);
-      const modelSelection = resolveVoiceThreadModelSelection(
-        input.modelSelection,
-        serverConfig?.providers ?? [],
-      );
-      if (modelSelection === null) return;
-      launching = true;
-      try {
-        const threadId = newThreadId();
-        const result = await createThread({
-          environmentId: input.environmentId,
-          input: {
-            threadId,
-            projectId: input.projectId,
-            title: VOICE_THREAD_TITLE,
-            modelSelection,
-            runtimeMode:
-              input.runtimeMode ??
-              resolveProjectSettings(
-                serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS,
-                input.projectId,
-              ).settings.defaultRuntimeMode,
-            interactionMode: "default",
-            branch: input.branch,
-            worktreePath: input.worktreePath,
-            createdAt: new Date().toISOString(),
-          },
-        });
-        if (result._tag === "Failure") {
-          if (!isAtomCommandInterrupted(result)) {
-            const error = squashAtomCommandFailure(result);
-            toastManager.add(
-              stackedThreadToast({
-                type: "error",
-                title: "Couldn't start voice",
-                description: error instanceof Error ? error.message : "Could not create a thread.",
-              }),
-            );
-          }
-          return;
+  return async (input: VoiceThreadInput): Promise<void> => {
+    if (launching) return;
+    const serverConfig = appAtomRegistry.get(environmentServerConfigsAtom).get(input.environmentId);
+    const modelSelection = resolveVoiceThreadModelSelection(
+      input.modelSelection,
+      serverConfig?.providers ?? [],
+    );
+    if (modelSelection === null) return;
+    launching = true;
+    // No try/finally: the React Compiler can't compile it. settlePromise catches
+    // any throw so `launching` resets before the error goes on to the caller.
+    const launched = await settlePromise(async () => {
+      const threadId = newThreadId();
+      const result = await createThread({
+        environmentId: input.environmentId,
+        input: {
+          threadId,
+          projectId: input.projectId,
+          title: VOICE_THREAD_TITLE,
+          modelSelection,
+          runtimeMode:
+            input.runtimeMode ??
+            resolveProjectSettings(
+              serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS,
+              input.projectId,
+            ).settings.defaultRuntimeMode,
+          interactionMode: "default",
+          branch: input.branch,
+          worktreePath: input.worktreePath,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      if (result._tag === "Failure") {
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Couldn't start voice",
+              description: error instanceof Error ? error.message : "Could not create a thread.",
+            }),
+          );
         }
-        const threadRef = scopeThreadRef(input.environmentId, threadId);
-        // The thread route sends a thread it cannot find back home, so wait for the shell.
-        await waitForThreadShell(threadRef);
-        await router.navigate({
-          to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams(threadRef),
-        });
-        void voiceMode.start(threadRef);
-      } finally {
-        launching = false;
+        return;
       }
-    },
-    [createThread, router],
-  );
+      const threadRef = scopeThreadRef(input.environmentId, threadId);
+      // The thread route sends a thread it cannot find back home, so wait for the shell.
+      await waitForThreadShell(threadRef);
+      await router.navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(threadRef),
+      });
+      void voiceMode.start(threadRef);
+    });
+    launching = false;
+    if (launched._tag === "Failure") throw squashAtomCommandFailure(launched);
+  };
 }

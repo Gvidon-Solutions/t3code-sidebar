@@ -76,27 +76,34 @@ export const make = Effect.gen(function* () {
    */
   const cascade = Effect.fn("ThreadSettlementCascadeV2.cascade")(function* (input: Cascade) {
     const visited = new Set<ThreadId>([input.threadId]);
-    const walk = (parentId: ThreadId): Effect.Effect<void> =>
-      Effect.gen(function* () {
+    const walk: (parentId: ThreadId) => Effect.Effect<void> = Effect.fn(
+      "ThreadSettlementCascadeV2.walk",
+    )(
+      function* (parentId: ThreadId) {
         const { subagents } = yield* orchestrator.getThreadRecords(parentId, ["subagents"]);
         for (const childId of childThreadIds(subagents)) {
           if (visited.has(childId)) continue;
           visited.add(childId);
           yield* visit(parentId, childId);
         }
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : Effect.logWarning("settlement cascade could not read subagent threads", {
-                threadId: parentId,
-                cause: Cause.pretty(cause),
-              }),
+      },
+      (effect, parentId) =>
+        effect.pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.interrupt
+              : Effect.logWarning("settlement cascade could not read subagent threads", {
+                  threadId: parentId,
+                  cause: Cause.pretty(cause),
+                }),
+          ),
         ),
-      );
+    );
 
-    const visit = (parentId: ThreadId, childId: ThreadId): Effect.Effect<void> =>
-      Effect.gen(function* () {
+    const visit: (parentId: ThreadId, childId: ThreadId) => Effect.Effect<void> = Effect.fn(
+      "ThreadSettlementCascadeV2.visit",
+    )(
+      function* (parentId: ThreadId, childId: ThreadId) {
         const { thread: child } = yield* orchestrator.getThreadRecords(childId, []);
         // Subagent records can be copied into forks; only the thread's own
         // lineage makes it a child. Archived and deleted threads stay put.
@@ -121,18 +128,21 @@ export const make = Effect.gen(function* () {
             ? { type: "thread.settle", commandId, threadId: childId }
             : { type: "thread.unsettle", commandId, threadId: childId, reason: "user" },
         );
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : Effect.logInfo("subagent thread left as it was by the settlement cascade", {
-                parentThreadId: parentId,
-                threadId: childId,
-                direction: input.direction,
-                cause: Cause.pretty(cause),
-              }),
+      },
+      (effect, parentId, childId) =>
+        effect.pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.interrupt
+              : Effect.logInfo("subagent thread left as it was by the settlement cascade", {
+                  parentThreadId: parentId,
+                  threadId: childId,
+                  direction: input.direction,
+                  cause: Cause.pretty(cause),
+                }),
+          ),
         ),
-      );
+    );
 
     yield* walk(input.threadId);
   });

@@ -1,7 +1,7 @@
 import { useIsFocused } from "@react-navigation/native";
 import { deriveThreadCheckpointSummaries } from "@t3tools/client-runtime/state/thread-checkpoints";
 import type { EnvironmentId, OrchestrationV2ThreadProjection, ThreadId } from "@t3tools/contracts";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 import { useThreadProjection, useThreadVisibleTurnItems } from "../../state/use-thread-detail";
@@ -64,8 +64,7 @@ export function useWorkspaceFileRefresh(input: {
   readonly refresh: () => void;
 }): void {
   const { environmentId, threadId, resourceKey, poll } = input;
-  const refreshRef = useRef(input.refresh);
-  refreshRef.current = input.refresh;
+  const refresh = useEffectEvent(input.refresh);
 
   const thread = useThreadProjection({ environmentId, threadId });
   const visibleTurnItems = useThreadVisibleTurnItems({ environmentId, threadId });
@@ -89,12 +88,12 @@ export function useWorkspaceFileRefresh(input: {
     const token = `${resourceKey}\u0000${mutationId ?? ""}`;
     if (token === handledRef.current) return;
     handledRef.current = token;
-    refreshRef.current();
+    refresh();
   }, [active, mutationId, resourceKey]);
 
   useEffect(() => {
     if (!active || !poll) return;
-    const timer = setInterval(() => refreshRef.current(), OPEN_FILE_POLL_MS);
+    const timer = setInterval(() => refresh(), OPEN_FILE_POLL_MS);
     return () => clearInterval(timer);
   }, [active, poll]);
 }

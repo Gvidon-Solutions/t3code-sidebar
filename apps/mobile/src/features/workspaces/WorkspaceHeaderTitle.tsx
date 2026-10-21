@@ -1,10 +1,10 @@
 import { normalizeWorkspaceLabel } from "@t3tools/client-runtime/state/sidebar-workspaces";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { Keyboard, Pressable, TextInput, View } from "react-native";
 
-import { AppText as Text } from "../../components/AppText";
-import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
-import { ControlPillMenu } from "../../components/ControlPillMenu";
+import { AppText as Text } from "../../components/ui/AppText";
+import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
+import { Menu } from "../../components/ui/Menu";
 import { useSidebarWorkspaces } from "./useSidebarWorkspaces";
 import { WorkspaceAvatar } from "./WorkspaceChrome";
 import {
@@ -26,12 +26,12 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
   const { scale } = useAndroidControlSizing();
   const [editing, setEditing] = useState<WorkspaceEditMode | null>(null);
   const [draft, setDraft] = useState("");
+  // Mirrors `editing` for `commit`: submit and the blur after it land before a re-render.
   const editingRef = useRef(editing);
-  editingRef.current = editing;
-
   const startEdit = (mode: WorkspaceEditMode) => {
     if (workspace === null) return;
     setDraft(mode === "name" ? workspace.name : (workspace.icon ?? ""));
+    editingRef.current = mode;
     setEditing(mode);
   };
   const request = useWorkspaceEditRequest();
@@ -39,18 +39,9 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
     if (request === null || workspace === null || request.workspaceId !== workspace.id) return;
     clearWorkspaceEditRequest();
     setDraft(request.mode === "name" ? workspace.name : (workspace.icon ?? ""));
+    editingRef.current = request.mode;
     setEditing(request.mode);
   }, [request, workspace]);
-
-  // Android's Back hides the keyboard without blurring the field; that ends the edit too.
-  const commitRef = useRef<() => void>(() => undefined);
-  useEffect(() => {
-    if (editing === null) return;
-    const subscription = Keyboard.addListener("keyboardDidHide", () => commitRef.current());
-    return () => subscription.remove();
-  }, [editing]);
-
-  if (config === null || workspace === null) return <>{props.fallback}</>;
 
   // Submit and the blur that follows it both land here; only the first counts.
   const commit = () => {
@@ -58,6 +49,7 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
     if (mode === null) return;
     editingRef.current = null;
     setEditing(null);
+    if (workspace === null) return;
     if (mode === "name") {
       const name = draft.trim();
       if (name.length > 0 && name !== workspace.name) edit.update(workspace.id, { name });
@@ -65,7 +57,17 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
       edit.update(workspace.id, { icon: normalizeWorkspaceLabel(draft) });
     }
   };
-  commitRef.current = commit;
+
+  // Android's Back hides the keyboard without blurring the field; that ends the edit too.
+  const commitOnKeyboardHide = useEffectEvent(commit);
+  useEffect(() => {
+    if (editing === null) return;
+    const subscription = Keyboard.addListener("keyboardDidHide", () => commitOnKeyboardHide());
+    return () => subscription.remove();
+  }, [editing]);
+
+  if (config === null || workspace === null) return <>{props.fallback}</>;
+
   const menu = workspaceMenu(workspace, config, workspaces);
   const fontSize = 21 * scale;
 
@@ -92,7 +94,7 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
           testID="workspace-title-input"
         />
       ) : (
-        <ControlPillMenu
+        <Menu
           actions={menu.actions}
           onPressAction={menu.onPressAction}
           shouldOpenOnLongPress
@@ -114,7 +116,7 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
               {workspace.name}
             </Text>
           </Pressable>
-        </ControlPillMenu>
+        </Menu>
       )}
     </View>
   );

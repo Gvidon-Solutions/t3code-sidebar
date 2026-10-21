@@ -622,8 +622,8 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.tap(() => notifyChanged));
 
-    const post: InboxService["Service"]["post"] = (caller, input) =>
-      Effect.gen(function* () {
+    const post: InboxService["Service"]["post"] = Effect.fn("InboxService.post")(
+      function* (caller, input) {
         const { source, projectId: callerProjectId } = yield* sourceFor(caller);
         const result = yield* commit(
           Effect.gen(function* () {
@@ -807,7 +807,8 @@ export const layer = Layer.effect(
           yield* notifyChanged;
         }
         return result.result;
-      });
+      },
+    );
 
     const agentComment: InboxService["Service"]["agentComment"] = (caller, input) =>
       commit(
@@ -827,8 +828,8 @@ export const layer = Layer.effect(
         }),
       ).pipe(Effect.andThen(get(input.issueId)));
 
-    const update: InboxService["Service"]["update"] = (caller, input) =>
-      Effect.gen(function* () {
+    const update: InboxService["Service"]["update"] = Effect.fn("InboxService.update")(
+      function* (caller, input) {
         const handover = yield* commit(
           Effect.gen(function* () {
             const now = yield* nowIso;
@@ -912,7 +913,8 @@ export const layer = Layer.effect(
           yield* notifyChanged;
         }
         return yield* get(input.issueId);
-      });
+      },
+    );
 
     const findResolveTarget = (input: InboxResolveInput): Effect.Effect<InboxIssue, InboxError> => {
       if (input.issueId !== undefined) return requireIssue(input.issueId);
@@ -930,8 +932,8 @@ export const layer = Layer.effect(
       );
     };
 
-    const resolve: InboxService["Service"]["resolve"] = (caller, input) =>
-      Effect.gen(function* () {
+    const resolve: InboxService["Service"]["resolve"] = Effect.fn("InboxService.resolve")(
+      function* (caller, input) {
         const resolved = yield* commit(
           Effect.gen(function* () {
             const now = yield* nowIso;
@@ -972,7 +974,8 @@ export const layer = Layer.effect(
         );
         yield* notifyChanged;
         return yield* get(resolved.issue.id);
-      });
+      },
+    );
 
     /** A thread for an issue nobody owns yet, in its project or the scratch project. */
     const launchResponsibleThread = Effect.fn("InboxService.launchResponsibleThread")(function* (
@@ -1035,85 +1038,81 @@ export const layer = Layer.effect(
           };
     });
 
-    const ownerComment: InboxService["Service"]["ownerComment"] = (input) =>
-      Effect.gen(function* () {
-        const text = input.text.trim();
-        const attachments = input.attachments ?? [];
-        if (text.length === 0 && attachments.length === 0) {
-          return yield* Effect.fail(fail("A comment needs text or an attachment.", input.issueId));
-        }
-        const written = yield* commit(
-          Effect.gen(function* () {
-            const now = yield* nowIso;
-            const issue: Mutable<InboxIssue> = { ...(yield* requireIssue(input.issueId)) };
-            const reminderAt = yield* readReminderAt(issue.id);
-            const entryId = yield* appendEntry(
-              issue,
-              {
-                kind: "comment",
-                author: "owner",
-                threadId: null,
-                text: text.length > 0 ? text : null,
-                attachments,
-              },
-              SILENT,
-              now,
-            );
-            yield* writeIssue(issue, reminderAt);
-            return { issue: issue as InboxIssue, entryId };
-          }),
-        );
-        const { issue, entryId } = written;
-        const deliveredText = text.length > 0 ? text : "(Attachments only.)";
-        if (issue.responsibleThreadId !== null) {
-          const outcome = yield* deliver({
+    const ownerComment: InboxService["Service"]["ownerComment"] = Effect.fn(
+      "InboxService.ownerComment",
+    )(function* (input) {
+      const text = input.text.trim();
+      const attachments = input.attachments ?? [];
+      if (text.length === 0 && attachments.length === 0) {
+        return yield* Effect.fail(fail("A comment needs text or an attachment.", input.issueId));
+      }
+      const written = yield* commit(
+        Effect.gen(function* () {
+          const now = yield* nowIso;
+          const issue: Mutable<InboxIssue> = { ...(yield* requireIssue(input.issueId)) };
+          const reminderAt = yield* readReminderAt(issue.id);
+          const entryId = yield* appendEntry(
             issue,
-            entryId,
-            threadId: issue.responsibleThreadId,
-            kind: "comment",
-            text: deliveredText,
-            attachments,
-            createdBy: "user",
-          });
-          yield* recordDeliveries(entryId, [outcome.delivery]);
-          yield* recordAttachments(entryId, outcome.attachments);
-        } else {
-          const outcome = yield* launchResponsibleThread(
-            issue,
-            entryId,
-            deliveredText,
-            attachments,
+            {
+              kind: "comment",
+              author: "owner",
+              threadId: null,
+              text: text.length > 0 ? text : null,
+              attachments,
+            },
+            SILENT,
+            now,
           );
-          const delivery = outcome.delivery;
-          yield* recordDeliveries(entryId, [delivery]);
-          yield* recordAttachments(entryId, outcome.attachments);
-          if (delivery.status === "delivered") {
-            yield* commit(
-              Effect.gen(function* () {
-                const now = yield* nowIso;
-                const current: Mutable<InboxIssue> = { ...(yield* requireIssue(issue.id)) };
-                const reminderAt = yield* readReminderAt(issue.id);
-                current.responsibleThreadId = delivery.threadId;
-                current.threadIds = withThread(current.threadIds, delivery.threadId);
-                yield* appendEntry(
-                  current,
-                  {
-                    kind: "handover",
-                    author: "system",
-                    threadId: delivery.threadId,
-                    text: "A thread was started for the owner's comment and is now responsible.",
-                  },
-                  SILENT,
-                  now,
-                );
-                yield* writeIssue(current, reminderAt);
-              }),
-            );
-          }
+          yield* writeIssue(issue, reminderAt);
+          return { issue: issue as InboxIssue, entryId };
+        }),
+      );
+      const { issue, entryId } = written;
+      const deliveredText = text.length > 0 ? text : "(Attachments only.)";
+      if (issue.responsibleThreadId !== null) {
+        const outcome = yield* deliver({
+          issue,
+          entryId,
+          threadId: issue.responsibleThreadId,
+          kind: "comment",
+          text: deliveredText,
+          attachments,
+          createdBy: "user",
+        });
+        yield* recordDeliveries(entryId, [outcome.delivery]);
+        yield* recordAttachments(entryId, outcome.attachments);
+      } else {
+        const outcome = yield* launchResponsibleThread(issue, entryId, deliveredText, attachments);
+        const delivery = outcome.delivery;
+        yield* recordDeliveries(entryId, [delivery]);
+        yield* recordAttachments(entryId, outcome.attachments);
+        if (delivery.status === "delivered") {
+          yield* commit(
+            Effect.gen(function* () {
+              const now = yield* nowIso;
+              const current: Mutable<InboxIssue> = { ...(yield* requireIssue(issue.id)) };
+              const reminderAt = yield* readReminderAt(issue.id);
+              current.responsibleThreadId = delivery.threadId;
+              current.threadIds = withThread(current.threadIds, delivery.threadId);
+              yield* appendEntry(
+                current,
+                {
+                  kind: "handover",
+                  author: "system",
+                  threadId: delivery.threadId,
+                  text: "A thread was started for the owner's comment and is now responsible.",
+                },
+                SILENT,
+                now,
+              );
+              yield* writeIssue(current, reminderAt);
+            }),
+          );
         }
-        yield* notifyChanged;
-        return yield* get(issue.id);
-      });
+      }
+      yield* notifyChanged;
+      return yield* get(issue.id);
+    });
 
     const markSeen: InboxService["Service"]["markSeen"] = (input) =>
       commit(
@@ -1124,8 +1123,8 @@ export const layer = Layer.effect(
         `,
       ).pipe(Effect.andThen(requireIssue(input.issueId)));
 
-    const dismiss: InboxService["Service"]["dismiss"] = (input) =>
-      Effect.gen(function* () {
+    const dismiss: InboxService["Service"]["dismiss"] = Effect.fn("InboxService.dismiss")(
+      function* (input) {
         const written = yield* commit(
           Effect.gen(function* () {
             const now = yield* nowIso;
@@ -1160,10 +1159,11 @@ export const layer = Layer.effect(
         );
         yield* notifyChanged;
         return yield* requireIssue(input.issueId);
-      });
+      },
+    );
 
-    const undismiss: InboxService["Service"]["undismiss"] = (issueId) =>
-      Effect.gen(function* () {
+    const undismiss: InboxService["Service"]["undismiss"] = Effect.fn("InboxService.undismiss")(
+      function* (issueId) {
         const written = yield* commit(
           Effect.gen(function* () {
             const now = yield* nowIso;
@@ -1196,7 +1196,8 @@ export const layer = Layer.effect(
         );
         yield* notifyChanged;
         return yield* requireIssue(issueId);
-      });
+      },
+    );
 
     const remindDue: InboxService["Service"]["remindDue"] = Effect.gen(function* () {
       const now = yield* DateTime.now;
@@ -1230,11 +1231,10 @@ export const layer = Layer.effect(
       );
     });
 
-    const queryIssues = (input: InboxListInput) =>
-      Effect.gen(function* () {
-        const state = input.state ?? "open";
-        const limit = input.limit ?? 200;
-        const rows = yield* sql<IssueRow>`
+    const queryIssues = Effect.fn("InboxService.queryIssues")(function* (input: InboxListInput) {
+      const state = input.state ?? "open";
+      const limit = input.limit ?? 200;
+      const rows = yield* sql<IssueRow>`
           SELECT * FROM fork_inbox_issues
           WHERE (${state} = 'all' OR state = ${state})
             AND (${input.severity ?? null} IS NULL OR severity = ${input.severity ?? null})
@@ -1243,27 +1243,26 @@ export const layer = Layer.effect(
           ORDER BY activity_at DESC
           LIMIT ${limit}
         `;
-        return yield* Effect.forEach(rows, issueFromRow);
-      }).pipe(Effect.mapError(storageError));
+      return yield* Effect.forEach(rows, issueFromRow);
+    }, Effect.mapError(storageError));
 
-    const snapshot = (input: InboxSubscribeInput) =>
-      Effect.gen(function* () {
-        const closedLimit = input.closedLimit ?? DEFAULT_CLOSED_LIMIT;
-        const open = yield* sql<IssueRow>`
+    const snapshot = Effect.fn("InboxService.snapshot")(function* (input: InboxSubscribeInput) {
+      const closedLimit = input.closedLimit ?? DEFAULT_CLOSED_LIMIT;
+      const open = yield* sql<IssueRow>`
           SELECT * FROM fork_inbox_issues WHERE state = 'open' ORDER BY activity_at DESC
         `;
-        const closed = yield* sql<IssueRow>`
+      const closed = yield* sql<IssueRow>`
           SELECT * FROM fork_inbox_issues WHERE state != 'open'
           ORDER BY closed_at DESC LIMIT ${closedLimit}
         `;
-        const total = yield* sql<{ readonly count: number }>`
+      const total = yield* sql<{ readonly count: number }>`
           SELECT COUNT(*) AS count FROM fork_inbox_issues WHERE state != 'open'
         `;
-        return {
-          issues: yield* Effect.forEach([...open, ...closed], issueFromRow),
-          closedTotal: total[0]?.count ?? 0,
-        } satisfies InboxSnapshot;
-      }).pipe(Effect.mapError(storageError));
+      return {
+        issues: yield* Effect.forEach([...open, ...closed], issueFromRow),
+        closedTotal: total[0]?.count ?? 0,
+      } satisfies InboxSnapshot;
+    }, Effect.mapError(storageError));
 
     const live = <A>(read: Effect.Effect<A, InboxError>) =>
       Stream.unwrap(

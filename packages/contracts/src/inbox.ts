@@ -146,8 +146,6 @@ const Title = TrimmedNonEmptyString.check(Schema.isMaxLength(200)).annotate({
 const Markdown = Schema.String.check(Schema.isMaxLength(20_000));
 const CommentText = TrimmedNonEmptyString.check(Schema.isMaxLength(20_000));
 
-// --- Client RPC -------------------------------------------------------------
-
 export const InboxSubscribeInput = Schema.Struct({
   /** Closed issues to include, newest first. Open issues always come in full. */
   closedLimit: Schema.optional(NonNegativeInt),
@@ -251,8 +249,6 @@ export const INBOX_RPCS = [
   WsInboxUndismissRpc,
 ] as const;
 
-// --- MCP --------------------------------------------------------------------
-
 const WaitingForOwner = Schema.Boolean.annotate({
   description:
     "true when the issue now needs the owner's answer or decision; false once it does not. You manage this flag: the owner reading or commenting never changes it.",
@@ -347,8 +343,6 @@ export const InboxResolveInput = Schema.Struct({
   }),
 });
 export type InboxResolveInput = typeof InboxResolveInput.Type;
-
-// --- Messages delivered into threads -----------------------------------------
 
 /** Message ids of inbox deliveries; clients use them to label the message. */
 export const INBOX_MESSAGE_ID_PREFIX = "inbox:";

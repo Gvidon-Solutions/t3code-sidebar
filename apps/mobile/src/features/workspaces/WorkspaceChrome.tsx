@@ -24,14 +24,14 @@ import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { SidebarWorkspace } from "@t3tools/contracts";
 import type { MenuAction, NativeActionEvent } from "@react-native-menu/menu";
 import * as Haptics from "expo-haptics";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
-import { AndroidAnchoredMenu } from "../../components/AndroidAnchoredMenu";
-import { ControlPillMenu } from "../../components/ControlPillMenu";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
+import { AndroidAnchoredMenu } from "../../components/ui/AndroidAnchoredMenu";
+import { Menu } from "../../components/ui/Menu";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
 import type {
@@ -148,26 +148,24 @@ export function WorkspaceDock(props: {
   const [barWidth, setBarWidth] = useState(0);
   const [tilesWidth, setTilesWidth] = useState(0);
   const tilesFit = barWidth > 0 && tilesWidth <= barWidth;
-  const latest = useRef(props);
-  latest.current = props;
-  const swipe = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(tilesFit)
-        .activeOffsetX([-16, 16])
-        .failOffsetY([-14, 14])
-        .runOnJS(true)
-        .onEnd((event) => {
-          if (Math.abs(event.translationX) < 40 && Math.abs(event.velocityX) < 500) return;
-          const { workspaces, currentWorkspaceId, onOpen } = latest.current;
-          const index = workspaces.findIndex((workspace) => workspace.id === currentWorkspaceId);
-          const next = workspaces[index + (event.translationX < 0 ? 1 : -1)];
-          if (index < 0 || !next) return;
-          void Haptics.selectionAsync();
-          onOpen(next.id);
-        }),
-    [tilesFit],
-  );
+  // The pan callback fires outside render, so an effect event reads the latest props.
+  const openNeighbour = useEffectEvent((translationX: number) => {
+    const { workspaces, currentWorkspaceId, onOpen } = props;
+    const index = workspaces.findIndex((workspace) => workspace.id === currentWorkspaceId);
+    const next = workspaces[index + (translationX < 0 ? 1 : -1)];
+    if (index < 0 || !next) return;
+    void Haptics.selectionAsync();
+    onOpen(next.id);
+  });
+  const swipe = Gesture.Pan()
+    .enabled(tilesFit)
+    .activeOffsetX([-16, 16])
+    .failOffsetY([-14, 14])
+    .runOnJS(true)
+    .onEnd((event) => {
+      if (Math.abs(event.translationX) < 40 && Math.abs(event.velocityX) < 500) return;
+      openNeighbour(event.translationX);
+    });
   return (
     <View
       className="border-t border-border bg-screen"
@@ -220,14 +218,14 @@ export function WorkspaceDock(props: {
             );
             const menu = props.menuFor?.(workspace);
             return menu ? (
-              <ControlPillMenu
+              <Menu
                 key={workspace.id}
                 actions={menu.actions}
                 onPressAction={menu.onPressAction}
                 shouldOpenOnLongPress
               >
                 {tile}
-              </ControlPillMenu>
+              </Menu>
             ) : (
               tile
             );
@@ -382,9 +380,9 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     );
   }
   return (
-    <ControlPillMenu actions={actions} onPressAction={handleAction} shouldOpenOnLongPress>
+    <Menu actions={actions} onPressAction={handleAction} shouldOpenOnLongPress>
       {row}
-    </ControlPillMenu>
+    </Menu>
   );
 });
 

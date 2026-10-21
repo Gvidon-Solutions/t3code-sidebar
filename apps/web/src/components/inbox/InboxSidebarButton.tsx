@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { InboxIcon } from "lucide-react";
-import { memo, useCallback } from "react";
+import { memo } from "react";
 
 import { useInboxState } from "../../state/inbox";
 import { SidebarMenuButton, SidebarMenuItem, useSidebar } from "../ui/sidebar";
@@ -31,10 +31,10 @@ export const InboxSidebarButton = memo(function InboxSidebarButton() {
   const { isMobile, setOpenMobile } = useSidebar();
   const counts = useInboxState().counts;
   const label = inboxButtonLabel(counts);
-  const onClick = useCallback(() => {
+  const onClick = () => {
     if (isMobile) setOpenMobile(false);
     void navigate({ to: "/inbox" });
-  }, [isMobile, navigate, setOpenMobile]);
+  };
 
   return (
     <SidebarMenuItem className="shrink-0">

@@ -1,8 +1,6 @@
-import { useMemo } from "react";
-
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { resolveThreadActionProjectRef } from "../lib/chatThreadActions";
-import { useServerConfigs } from "../state/entities";
+import { useEnvironmentProviders } from "../state/environments";
 import { useStartVoiceThread } from "./useStartVoiceThread";
 import { findVoiceProvider } from "./voiceAvailability";
 
@@ -14,7 +12,7 @@ import { findVoiceProvider } from "./voiceAvailability";
 export function useTalk(): (() => void) | null {
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
-  const serverConfigs = useServerConfigs();
+  const providersByEnvironment = useEnvironmentProviders();
   const startVoiceThread = useStartVoiceThread();
   const projectRef = resolveThreadActionProjectRef({
     activeDraftThread,
@@ -26,19 +24,15 @@ export function useTalk(): (() => void) | null {
   const projectId = projectRef?.projectId ?? null;
   const hasVoice =
     environmentId !== null &&
-    findVoiceProvider(serverConfigs.get(environmentId)?.providers ?? []) !== undefined;
-  return useMemo(
-    () =>
-      environmentId !== null && projectId !== null && hasVoice
-        ? () =>
-            void startVoiceThread({
-              environmentId,
-              projectId,
-              modelSelection: null,
-              branch: null,
-              worktreePath: null,
-            })
-        : null,
-    [environmentId, hasVoice, projectId, startVoiceThread],
-  );
+    findVoiceProvider(providersByEnvironment.get(environmentId) ?? []) !== undefined;
+  return environmentId !== null && projectId !== null && hasVoice
+    ? () =>
+        void startVoiceThread({
+          environmentId,
+          projectId,
+          modelSelection: null,
+          branch: null,
+          worktreePath: null,
+        })
+    : null;
 }

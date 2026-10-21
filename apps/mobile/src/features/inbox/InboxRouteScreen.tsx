@@ -5,12 +5,12 @@ import { useCallback, useMemo, useState } from "react";
 import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
-import { AppActivityIndicator } from "../../components/AppActivityIndicator";
-import { AppText as Text } from "../../components/AppText";
-import { EmptyState } from "../../components/EmptyState";
-import { MaterialButton } from "../../components/MaterialButton";
-import { SegmentedControl } from "../../components/SegmentedControl";
+import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
+import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
+import { AppText as Text } from "../../components/ui/AppText";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { Button } from "../../components/ui/Button";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import {
   buildClosedInboxRows,
@@ -110,7 +110,7 @@ export function InboxRouteScreen() {
         ListFooterComponent={
           hasMoreClosed ? (
             <View className="items-center pt-2">
-              <MaterialButton
+              <Button
                 label="Show more"
                 onPress={() => setClosedLimit((limit) => limit + INBOX_CLOSED_PAGE_SIZE)}
               />

@@ -1,3 +1,5 @@
+import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
+import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { resolveFilesystemReadAccess } from "@t3tools/client-runtime/state/filesystem";
 import { environmentSession } from "../../state/session";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
@@ -8,7 +10,7 @@ import {
   useRoute,
   type StaticScreenProps,
 } from "@react-navigation/native";
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
@@ -21,9 +23,9 @@ import {
 } from "@t3tools/shared/filePreview";
 import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
 
-import { MaterialScreenContent } from "../../components/MaterialScreenContent";
-import { AudioFilePreview } from "../../components/AudioFilePreview";
-import { EmptyState } from "../../components/EmptyState";
+import { ScreenContent } from "../../components/ui/ScreenContent";
+import { AudioFilePreview } from "./AudioFilePreview";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { resolveFileSelectionNavigationAction } from "../../lib/adaptive-navigation";
@@ -56,7 +58,7 @@ import { preloadWorkspaceFileContents } from "./preload-workspace-file";
 import { SourceFileSurface } from "./SourceFileSurface";
 import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { ThreadFileNavigatorPane } from "./thread-file-navigator-pane";
-import { ScreenHeader } from "../../components/ScreenHeader";
+import { AppBar } from "../../components/ui/AppBar";
 import { WorkspaceFileImagePreview } from "./WorkspaceFileImagePreview";
 import { WorkspaceFilePreviewError } from "./WorkspaceFilePreviewError";
 import { WorkspaceFileVideoPreview } from "./WorkspaceFileVideoPreview";
@@ -84,7 +86,7 @@ function FilesBrowserHeader(props: {
   readonly onBack: () => void;
 }) {
   return (
-    <ScreenHeader
+    <AppBar
       title="Files"
       subtitle={props.projectName}
       onBack={props.onBack}
@@ -131,7 +133,7 @@ function FileHeader(props: {
   const { panes, toggleAuxiliaryPane } = useAdaptiveWorkspaceLayout();
   const modes = props.actions.filter(({ inline }) => inline);
   return (
-    <ScreenHeader
+    <AppBar
       title={props.title}
       subtitle={props.subtitle}
       onBack={props.onBack}
@@ -188,8 +190,6 @@ function FileHeader(props: {
 
 type FileViewMode = "preview" | "source";
 
-// A blank param (a hand-typed deep link) is treated as missing, since branded
-// IDs reject whitespace-only values.
 function firstRouteParam(value: string | string[] | undefined): string | null {
   const first = Array.isArray(value) ? value[0] : value;
   return first === undefined || first.trim().length === 0 ? null : first;
@@ -255,7 +255,6 @@ function FileContent(props: {
   const isImageFile = isWorkspaceImagePreviewPath(props.relativePath);
   const isVideoFile = isVideoPreviewFile(props.relativePath);
   const isAudioFile = isAudioPreviewFile(props.relativePath);
-  // Only the surfaces that wait on a signed asset URL can be blocked by one.
   const needsAssetUrl =
     isVideoFile ||
     isAudioFile ||
@@ -371,11 +370,9 @@ type ThreadFilesRouteScreenProps = StaticScreenProps<{
 
 type ThreadFileRouteScreenProps = StaticScreenProps<{
   readonly environmentId: string;
-  /** Absent for a project draft, which has no thread yet. */
   readonly threadId?: string;
   readonly path: string[];
   readonly line?: string;
-  /** Supplied when there is no thread to resolve the workspace from. */
   readonly cwd?: string;
   readonly projectName?: string;
 }>;
@@ -388,7 +385,6 @@ function useThreadFilesWorkspace(params: {
 }) {
   const routeEnvironmentId = firstRouteParam(params.environmentId);
   const routeThreadId = firstRouteParam(params.threadId);
-  // A project draft has no thread to resolve a workspace from, so it names one itself.
   const routeCwd = firstRouteParam(params.cwd);
   const routeProjectName = firstRouteParam(params.projectName);
   const { selectedThread, selectedThreadProject } = useThreadSelection();
@@ -479,7 +475,7 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
     cwd: !canReadFiles || fileInspector.supported ? null : cwd,
     searchQuery,
   });
-  const handleReturnToThread = useCallback(() => {
+  const handleReturnToThread = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
       return;
@@ -492,57 +488,48 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
         }),
       );
     }
-  }, [environmentId, navigation, threadId]);
+  };
 
-  const handleSelectFile = useCallback(
-    (path: string) => {
-      if (environmentId === null || threadId === null) {
-        return;
-      }
-      const params = {
-        environmentId: String(environmentId),
-        threadId: String(threadId),
-        path: path.split("/").filter((segment) => segment.length > 0),
-      };
-      const navigationAction = resolveFileSelectionNavigationAction({
-        hasPersistentFileInspector: fileInspector.supported,
-      });
-      if (navigationAction === "replace") {
-        navigation.dispatch(StackActions.replace("ThreadFile", params));
-        return;
-      }
-      navigation.navigate("ThreadFile", params);
-    },
-    [environmentId, fileInspector.supported, navigation, threadId],
-  );
-  const renderInspector = useCallback(
-    (headerInset: number) =>
-      environmentId !== null && cwd !== null ? (
-        <ThreadFileNavigatorPane
-          cwd={cwd}
-          environmentId={environmentId}
-          headerInset={headerInset}
-          projectName={projectName}
-          selectedPath={null}
-          onSelectFile={handleSelectFile}
-        />
-      ) : null,
-    [cwd, environmentId, handleSelectFile, projectName],
-  );
-  const handlePreviewFile = useCallback(
-    (relativePath: string) => {
-      if (environmentId === null || cwd === null) {
-        return;
-      }
-      preloadWorkspaceFileContents({
-        cwd,
-        environmentId,
-        relativePath,
-        theme: highlightTheme,
-      });
-    },
-    [cwd, environmentId, highlightTheme],
-  );
+  const handleSelectFile = (path: string) => {
+    if (environmentId === null || threadId === null) {
+      return;
+    }
+    const params = {
+      environmentId: String(environmentId),
+      threadId: String(threadId),
+      path: path.split("/").filter((segment) => segment.length > 0),
+    };
+    const navigationAction = resolveFileSelectionNavigationAction({
+      hasPersistentFileInspector: fileInspector.supported,
+    });
+    if (navigationAction === "replace") {
+      navigation.dispatch(StackActions.replace("ThreadFile", params));
+      return;
+    }
+    navigation.navigate("ThreadFile", params);
+  };
+  const renderInspector = (headerInset: number) =>
+    environmentId !== null && cwd !== null ? (
+      <ThreadFileNavigatorPane
+        cwd={cwd}
+        environmentId={environmentId}
+        headerInset={headerInset}
+        projectName={projectName}
+        selectedPath={null}
+        onSelectFile={handleSelectFile}
+      />
+    ) : null;
+  const handlePreviewFile = (relativePath: string) => {
+    if (environmentId === null || cwd === null) {
+      return;
+    }
+    preloadWorkspaceFileContents({
+      cwd,
+      environmentId,
+      relativePath,
+      theme: highlightTheme,
+    });
+  };
   useEffect(() => {
     if (fileInspector.supported && cwd !== null && !revealedInspectorRef.current) {
       revealedInspectorRef.current = true;
@@ -594,7 +581,7 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
         onRefresh={entriesQuery.refresh}
         onBack={handleReturnToThread}
       />
-      <MaterialScreenContent insetHorizontal={layout.usesSplitView}>
+      <ScreenContent insetHorizontal={layout.usesSplitView}>
         <FileTreeBrowser
           key={JSON.stringify([environmentId, cwd])}
           entries={entriesQuery.entries}
@@ -604,6 +591,7 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
           isPending={entriesQuery.isPending}
           isRefreshing={entriesQuery.isRefreshing}
           searchQuery={searchQuery}
+          searchResultPaths={entriesQuery.searchResultPaths}
           searchTruncated={entriesQuery.searchTruncated}
           selectedPath={null}
           onPreviewFile={handlePreviewFile}
@@ -611,7 +599,7 @@ export function ThreadFilesTreeScreen(props: ThreadFilesRouteScreenProps) {
           onSelectFile={handleSelectFile}
         />
         <FilesToolbarBottomFade />
-      </MaterialScreenContent>
+      </ScreenContent>
     </>
   );
 
@@ -721,49 +709,42 @@ export function ThreadFileView(
     environmentId,
     relativePath: assetPreviewPath,
     threadId,
-    // A project draft names its workspace root explicitly: there is no thread to resolve one.
     draftCwd: threadId === null ? cwd : null,
   });
   const assetPreviewUri = assetPreview._tag === "Success" ? assetPreview.url : null;
-  const mediaSource = useMemo<MediaActionsSource | undefined>(
-    () =>
-      environmentId !== null &&
-      relativePath !== null &&
-      assetPreview.resource !== null &&
-      "path" in assetPreview.resource &&
-      typeof assetPreview.resource.path === "string" &&
-      (isImageFile || isVideoFile)
-        ? {
-            reference: mediaFileReference(assetPreview.resource.path, cwd),
-            name: basename(relativePath),
-            mimeType:
-              mediaMimeTypeFromExtension(relativePath.slice(relativePath.lastIndexOf("."))) ??
-              "application/octet-stream",
-            environmentId,
-            ...(threadId === null ? {} : { threadId }),
-            resource: assetPreview.resource,
-          }
-        : undefined,
-    [assetPreview.resource, cwd, environmentId, isImageFile, isVideoFile, relativePath, threadId],
-  );
+  const mediaSource: MediaActionsSource | undefined =
+    environmentId !== null &&
+    relativePath !== null &&
+    assetPreview.resource !== null &&
+    "path" in assetPreview.resource &&
+    typeof assetPreview.resource.path === "string" &&
+    (isImageFile || isVideoFile)
+      ? {
+          reference: mediaFileReference(assetPreview.resource.path, cwd),
+          name: basename(relativePath),
+          mimeType:
+            mediaMimeTypeFromExtension(relativePath.slice(relativePath.lastIndexOf("."))) ??
+            "application/octet-stream",
+          environmentId,
+          ...(threadId === null ? {} : { threadId }),
+          resource: assetPreview.resource,
+        }
+      : undefined;
   const mediaActions = useMediaActions(mediaSource);
-  const videoSource = useMemo<MediaVideoPreviewSource | null>(
-    () =>
-      environmentId !== null &&
-      relativePath !== null &&
-      (assetPreview.resource?._tag === "media-file" ||
-        assetPreview.resource?._tag === "draft-workspace-file")
-        ? {
-            type: "media",
-            environmentId,
-            resource: assetPreview.resource,
-            name: basename(relativePath),
-            mimeType: videoMimeType({ name: relativePath, mimeType: "" }) ?? "video/mp4",
-            actionsSource: mediaSource,
-          }
-        : null,
-    [assetPreview.resource, environmentId, relativePath, mediaSource],
-  );
+  const videoSource: MediaVideoPreviewSource | null =
+    environmentId !== null &&
+    relativePath !== null &&
+    (assetPreview.resource?._tag === "media-file" ||
+      assetPreview.resource?._tag === "draft-workspace-file")
+      ? {
+          type: "media",
+          environmentId,
+          resource: assetPreview.resource,
+          name: basename(relativePath),
+          mimeType: videoMimeType({ name: relativePath, mimeType: "" }) ?? "video/mp4",
+          actionsSource: mediaSource,
+        }
+      : null;
   const previewUri =
     assetPreviewUri === null || previewRevision === 0
       ? assetPreviewUri
@@ -811,64 +792,50 @@ export function ThreadFileView(
     refresh: fileQuery.refresh,
   });
 
-  const handleSelectFile = useCallback(
-    (path: string) => {
-      const segments = path.split("/").filter(Boolean);
-      // A draft has no thread. `ThreadFile` would stringify null and then wait forever for a
-      // thread to resolve, so a draft stays on its own route and carries its workspace along.
-      if (threadId === null) {
-        navigation.dispatch(
-          StackActions.push("NewTaskFile", {
-            environmentId: String(environmentId),
-            ...(cwd === null ? {} : { cwd }),
-            projectName,
-            path: segments,
-          }),
-        );
-        return;
-      }
-      navigation.navigate("ThreadFile", {
-        environmentId: String(environmentId),
-        threadId: String(threadId),
-        path: segments,
-      });
-    },
-    [cwd, environmentId, navigation, projectName, threadId],
-  );
-  const renderInspector = useCallback(
-    (headerInset: number) =>
-      fileInspector.supported && environmentId !== null && cwd !== null ? (
-        <ThreadFileNavigatorPane
-          cwd={cwd}
-          environmentId={environmentId}
-          headerInset={headerInset}
-          projectName={projectName}
-          selectedPath={relativePath}
-          onSelectFile={handleSelectFile}
-        />
-      ) : undefined,
-    [cwd, environmentId, fileInspector.supported, handleSelectFile, projectName, relativePath],
-  );
-  // The workspace inspector column spans the full window height. On iOS the
-  // pane brings its own nested native header; elsewhere it pads itself below
-  // the top inset.
+  const handleSelectFile = (path: string) => {
+    const segments = path.split("/").filter(Boolean);
+    // A draft has no thread. `ThreadFile` would stringify null and then wait forever for a
+    // thread to resolve, so a draft stays on its own route and carries its workspace along.
+    if (threadId === null) {
+      navigation.dispatch(
+        StackActions.push("NewTaskFile", {
+          environmentId: String(environmentId),
+          ...(cwd === null ? {} : { cwd }),
+          projectName,
+          path: segments,
+        }),
+      );
+      return;
+    }
+    navigation.navigate("ThreadFile", {
+      environmentId: String(environmentId),
+      threadId: String(threadId),
+      path: segments,
+    });
+  };
+  const renderInspector = (headerInset: number) =>
+    fileInspector.supported && environmentId !== null && cwd !== null ? (
+      <ThreadFileNavigatorPane
+        cwd={cwd}
+        environmentId={environmentId}
+        headerInset={headerInset}
+        projectName={projectName}
+        selectedPath={relativePath}
+        onSelectFile={handleSelectFile}
+      />
+    ) : undefined;
   const safeAreaInsets = useSafeAreaInsets();
   const inspectorHeaderInset = Platform.OS === "ios" ? 0 : safeAreaInsets.top;
-  // Hand the file navigator to the workspace so it renders beside the
-  // navigator, outside this screen's native header.
-  const renderWorkspaceInspector = useCallback(
-    () => (
-      <ThreadInspectorContentStack
-        mode="files"
-        resetKeys={[threadId, cwd]}
-        renderFiles={() => renderInspector(inspectorHeaderInset)}
-      />
-    ),
-    [cwd, inspectorHeaderInset, renderInspector, threadId],
+  const renderWorkspaceInspector = () => (
+    <ThreadInspectorContentStack
+      mode="files"
+      resetKeys={[threadId, cwd]}
+      renderFiles={() => renderInspector(inspectorHeaderInset)}
+    />
   );
   useRegisterWorkspaceInspector(fileInspector.supported ? renderWorkspaceInspector : undefined);
 
-  const fileMenuActions = useMemo(() => {
+  const fileMenuActions = (() => {
     if (relativePath === null) return [];
     const canToggleMode = canPreview && !isImageFile && !isVideoFile && !isAudioFile;
     return [
@@ -896,7 +863,6 @@ export function ThreadFileView(
             },
           } as const)
         : null,
-      // Only the source body wraps; a rendered preview lays itself out.
       resolvedActiveMode === "source"
         ? ({
             id: "word-wrap",
@@ -923,11 +889,15 @@ export function ThreadFileView(
               title: "Copy path",
               icon: "doc.on.doc",
               inline: false,
-              onPress: () => copyTextWithHaptic(relativePath),
+              onPress: () =>
+                copyTextWithHaptic(
+                  formatFilePathForClipboard(
+                    relativePath,
+                    resolvePathLinkTarget(relativePath, cwd ?? ""),
+                  ),
+                ),
             } as const,
           ]),
-      // Selecting a long file by hand is painful on a phone, so copying the whole thing is
-      // the action most readers actually want. The attachment screen already offers it.
       fileData?.contents != null
         ? ({
             id: "copy-contents",
@@ -983,29 +953,9 @@ export function ThreadFileView(
           } as const)
         : null,
     ].filter((action) => action !== null);
-  }, [
-    appearance.codeWordBreak,
-    setCodeWordBreak,
-    assetPreviewUri,
-    assetPreview.refresh,
-    previewUri,
-    canPreview,
-    isAudioFile,
-    isBrowserFile,
-    isImageFile,
-    isVideoFile,
-    relativePath,
-    resolvedActiveMode,
-    mediaSource,
-    mediaActions.actions,
-    fileData?.contents,
-    fileData?.truncated,
-    tabPosition.setMode,
-    needsFileContents,
-    fileQuery.refresh,
-  ]);
+  })();
 
-  const handleReturnToThread = useCallback(() => {
+  const handleReturnToThread = () => {
     if (props.embedded && pager) {
       pager.goTo(null);
       return;
@@ -1018,8 +968,8 @@ export function ThreadFileView(
         }),
       );
     }
-  }, [environmentId, navigation, pager, props.embedded, threadId]);
-  const handleBack = useCallback(() => {
+  };
+  const handleBack = () => {
     if (props.embedded) {
       handleReturnToThread();
       return;
@@ -1029,11 +979,8 @@ export function ThreadFileView(
       return;
     }
     handleReturnToThread();
-  }, [handleReturnToThread, navigation, props.embedded]);
+  };
 
-  // A file opened from a project draft has no thread, and needs none: the thread only supplies
-  // the workspace to read from and the target to navigate back to, both of which a draft names
-  // for itself. Wait only for what this file actually cannot render without.
   if (environmentId === null || (threadId !== null && selectedThread === null)) {
     return <LoadingScreen message="Opening file..." messagePlacement="above-spinner" />;
   }
@@ -1080,7 +1027,7 @@ export function ThreadFileView(
           activePath={relativePath}
         />
       ) : null}
-      <MaterialScreenContent>
+      <ScreenContent>
         <FileContent
           key={previewKey}
           activeMode={resolvedActiveMode}
@@ -1102,7 +1049,7 @@ export function ThreadFileView(
           restorePosition={tabPosition.restorePosition(resolvedActiveMode)}
           onPositionChange={(position) => tabPosition.savePosition(resolvedActiveMode, position)}
         />
-      </MaterialScreenContent>
+      </ScreenContent>
       <FilePreviewModal
         source={fullScreenPreview}
         onRequestClose={() => setFullScreenPreview(null)}

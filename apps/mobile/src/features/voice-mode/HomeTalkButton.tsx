@@ -14,7 +14,7 @@ import {
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable } from "react-native";
 
-import { SymbolView } from "../../components/AppSymbol";
+import { SymbolView } from "../../components/ui/AppSymbol";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { useProjects, useServerConfigs } from "../../state/entities";
@@ -140,7 +140,7 @@ export function HomeTalkButton() {
     if (startingRef.current) return;
     startingRef.current = true;
     setStarting(true);
-    try {
+    const start = async () => {
       const project = await resolveProject();
       if (!project) return;
       const serverConfig = serverConfigs.get(project.environmentId);
@@ -160,10 +160,12 @@ export function HomeTalkButton() {
         threadId: target.threadId,
       });
       void voiceMode.start(target);
-    } finally {
+    };
+    // Promise.finally, not try/finally: the React Compiler cannot lower the latter.
+    await start().finally(() => {
       startingRef.current = false;
       setStarting(false);
-    }
+    });
   }, [createVoiceThread, navigation, resolveProject, serverConfigs]);
 
   if (!voiceModeSupported || voiceEnvironmentIds.size === 0) return null;

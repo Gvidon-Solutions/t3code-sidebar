@@ -14,7 +14,7 @@ import {
 } from "@t3tools/client-runtime/voice-mode";
 import * as Effect from "effect/Effect";
 import { AtomRegistry } from "effect/reactivity";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -118,7 +118,7 @@ const getEngagedTarget = () => {
 /** The thread holding this client's conversation, or null while voice is off. */
 export function useVoiceThreadRef(): ScopedThreadRef | null {
   const target = useSyncExternalStore(voiceMode.subscribe, getEngagedTarget, getEngagedTarget);
-  return useMemo(() => (target === null ? null : voiceTargetRef(target)), [target]);
+  return target === null ? null : voiceTargetRef(target);
 }
 
 const getMuted = () => voiceMode.getState().muted;

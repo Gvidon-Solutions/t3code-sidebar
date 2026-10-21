@@ -1,3 +1,4 @@
+import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { DownloadIcon, RotateCwIcon, TriangleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -28,7 +29,8 @@ export function WorkspaceUpdateStrip() {
   const act = async () => {
     if (pending || progress.kind === "downloading") return;
     setPending(true);
-    try {
+    // settlePromise instead of try/catch/finally, which the React Compiler can't compile.
+    const outcome = await settlePromise(async () => {
       if (retriesDownload) {
         await bridge.downloadUpdate();
         return;
@@ -40,7 +42,9 @@ export function WorkspaceUpdateStrip() {
       const result = await bridge.installUpdate();
       const error = getDesktopUpdateActionError(result);
       if (error) throw new Error(error);
-    } catch (error) {
+    });
+    if (outcome._tag === "Failure") {
+      const error = squashAtomCommandFailure(outcome);
       toastManager.add(
         stackedThreadToast({
           type: "error",
@@ -48,9 +52,8 @@ export function WorkspaceUpdateStrip() {
           description: error instanceof Error ? error.message : "Something went wrong.",
         }),
       );
-    } finally {
-      setPending(false);
     }
+    setPending(false);
   };
 
   const Icon =

@@ -8,7 +8,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SymbolView } from "../../components/AppSymbol";
+import { SymbolView } from "../../components/ui/AppSymbol";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { VOICE_OPEN_LONG_PRESS_MS, VoiceStripButton } from "./ComposerVoiceMode";
 import { VoiceConversationPreview } from "./VoiceConversationPreview";
@@ -64,8 +64,8 @@ function Bubble(props: {
   const startY = useSharedValue(0);
   // Follows a restored position, a rotation, or the keyboard-free safe area changing.
   useEffect(() => {
-    x.value = left;
-    y.value = top;
+    x.set(left);
+    y.set(top);
   }, [left, top, x, y]);
 
   const persist = useCallback(
@@ -93,16 +93,16 @@ function Bubble(props: {
   const pan = Gesture.Pan()
     .minDistance(6)
     .onStart(() => {
-      startX.value = x.value;
-      startY.value = y.value;
+      startX.set(x.get());
+      startY.set(y.get());
       runOnJS(collapse)();
     })
     .onUpdate((event) => {
-      x.value = Math.min(minX + spanX, Math.max(minX, startX.value + event.translationX));
-      y.value = Math.min(minY + spanY, Math.max(minY, startY.value + event.translationY));
+      x.set(Math.min(minX + spanX, Math.max(minX, startX.get() + event.translationX)));
+      y.set(Math.min(minY + spanY, Math.max(minY, startY.get() + event.translationY)));
     })
     .onEnd(() => {
-      runOnJS(persist)(x.value, y.value);
+      runOnJS(persist)(x.get(), y.get());
     });
   const longPress = Gesture.LongPress()
     .minDuration(VOICE_OPEN_LONG_PRESS_MS)
@@ -115,7 +115,7 @@ function Bubble(props: {
   // Whichever is recognized first wins: a drag, a hold, or a quick tap.
   const gesture = Gesture.Race(pan, longPress, tap);
   const bubbleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: x.value }, { translateY: y.value }],
+    transform: [{ translateX: x.get() }, { translateY: y.get() }],
   }));
 
   // The panel opens toward the middle of the screen from where the bubble sits.

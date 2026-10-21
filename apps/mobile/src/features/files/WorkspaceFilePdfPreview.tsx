@@ -201,6 +201,22 @@ try {
 </script></body></html>`;
 }
 
+interface PageMessage {
+  readonly type?: string;
+  readonly y?: unknown;
+  readonly prev?: unknown;
+  readonly next?: unknown;
+}
+
+// Messages come only from the page above; anything unparsable is ignored.
+function parsePageMessage(data: string): PageMessage | null {
+  try {
+    return JSON.parse(data) as PageMessage;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * PDF preview that keeps its scroll position for thread tabs (sidebar fork).
  * While on screen it re-checks the file every poll and swaps in a changed PDF
@@ -243,23 +259,15 @@ export function WorkspaceFilePdfPreview(props: {
   }
 
   const handleMessage = (event: WebViewMessageEvent) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data) as {
-        type?: string;
-        y?: unknown;
-        prev?: unknown;
-        next?: unknown;
-      };
-      if (message.type === "scroll" && typeof message.y === "number") {
-        props.onScrollSettle?.(message.y);
-      }
-      if (message.type === "edges") {
-        reportEdges?.({ prev: message.prev === true, next: message.next === true });
-      }
-      if (message.type === "expired") props.onUrlExpired?.();
-    } catch {
-      // Messages come only from the page above; anything else is ignored.
+    const message = parsePageMessage(event.nativeEvent.data);
+    if (message === null) return;
+    if (message.type === "scroll" && typeof message.y === "number") {
+      props.onScrollSettle?.(message.y);
     }
+    if (message.type === "edges") {
+      reportEdges?.({ prev: message.prev === true, next: message.next === true });
+    }
+    if (message.type === "expired") props.onUrlExpired?.();
   };
 
   return (

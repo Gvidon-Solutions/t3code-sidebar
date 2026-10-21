@@ -51,9 +51,8 @@ import {
   Fragment,
   lazy,
   Suspense,
-  useCallback,
   useEffect,
-  useMemo,
+  useEffectEvent,
   useRef,
   useState,
   type CSSProperties,
@@ -243,7 +242,7 @@ export default function WorkspaceSidebar() {
   const updatePrimarySettings = useUpdatePrimarySettings();
   const lastVisitedById = useUiStateStore((s) => s.threadLastVisitedAtById);
   const nowMinute = useNowMinute();
-  const now = Date.parse(nowMinute) || Date.now();
+  const now = Date.parse(nowMinute);
 
   const view = useWorkspaceViewStore();
   const { settleThread, unsettleThread, unsnoozeThread, pinThread, confirmAndUnpinThread } =
@@ -260,76 +259,60 @@ export default function WorkspaceSidebar() {
   // connected remote that has workspaces (first by id, as the phone picks),
   // so a desktop paired with the user's server shows what the phone shows
   // rather than its own bundled server's copy.
-  const storedConfig = useMemo(() => {
-    const remote = [...serverConfigs]
-      .filter(
-        ([environmentId, serverConfig]) =>
-          environmentId !== primaryEnvironmentId &&
-          serverConfig.settings.sidebarWorkspaces.workspaces.length > 0,
-      )
-      .sort(([left], [right]) => left.localeCompare(right))[0];
-    return remote?.[1].settings.sidebarWorkspaces ?? primaryConfig;
-  }, [primaryConfig, primaryEnvironmentId, serverConfigs]);
-  const config: SidebarWorkspacesConfig = useMemo(() => {
-    const base = storedConfig ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
-    return base.workspaces.length > 0
-      ? base
-      : { ...base, workspaces: [IMPLICIT_WORKSPACE], defaultWorkspace: IMPLICIT_WORKSPACE.id };
-  }, [storedConfig]);
-  const configRef = useRef(config);
-  configRef.current = config;
-  const writeConfig = useCallback(
-    (update: (current: SidebarWorkspacesConfig) => SidebarWorkspacesConfig) => {
-      updatePrimarySettings({ sidebarWorkspaces: update(configRef.current) });
-    },
-    [updatePrimarySettings],
-  );
+  const remoteConfig = [...serverConfigs]
+    .filter(
+      ([environmentId, serverConfig]) =>
+        environmentId !== primaryEnvironmentId &&
+        serverConfig.settings.sidebarWorkspaces.workspaces.length > 0,
+    )
+    .sort(([left], [right]) => left.localeCompare(right))[0];
+  const storedConfig = remoteConfig?.[1].settings.sidebarWorkspaces ?? primaryConfig;
+  const baseConfig = storedConfig ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
+  const config: SidebarWorkspacesConfig =
+    baseConfig.workspaces.length > 0
+      ? baseConfig
+      : {
+          ...baseConfig,
+          workspaces: [IMPLICIT_WORKSPACE],
+          defaultWorkspace: IMPLICIT_WORKSPACE.id,
+        };
+  const writeConfig = (update: (current: SidebarWorkspacesConfig) => SidebarWorkspacesConfig) => {
+    updatePrimarySettings({ sidebarWorkspaces: update(config) });
+  };
 
-  // ── Route ─────────────────────────────────────────────────────────────
   const routeTarget = useParams({ strict: false, select: resolveThreadRouteTarget });
   const routeDraftThread = useComposerDraftStore((store) =>
     routeTarget?.kind === "draft" ? store.getDraftSession(routeTarget.draftId) : null,
   );
-  const routeThreadRef = useMemo(
-    () => resolveActiveThreadRouteRef(routeTarget, routeDraftThread),
-    [routeDraftThread, routeTarget],
-  );
+  const routeThreadRef = resolveActiveThreadRouteRef(routeTarget, routeDraftThread);
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
   const routeProjectKey = routeDraftThread
     ? `${routeDraftThread.environmentId}:${routeDraftThread.projectId}`
     : null;
 
   // ── Projects → workspaces ─────────────────────────────────────────────
-  const scratchRoots = useMemo(
-    () =>
-      new Set(
-        environments.flatMap((environment) =>
-          environment.serverConfig?.scratchWorkspaceRoot
-            ? [environment.serverConfig.scratchWorkspaceRoot]
-            : [],
-        ),
-      ),
-    [environments],
+  const scratchRoots = new Set(
+    environments.flatMap((environment) =>
+      environment.serverConfig?.scratchWorkspaceRoot
+        ? [environment.serverConfig.scratchWorkspaceRoot]
+        : [],
+    ),
   );
-  const projectGroups = useMemo(() => {
-    const labels = new Map(environments.map((env) => [env.environmentId, env.label] as const));
-    const groups = buildSidebarProjectSnapshots({
+  const environmentLabels = new Map(
+    environments.map((env) => [env.environmentId, env.label] as const),
+  );
+  const projectGroups = sortLogicalProjectsForSidebar(
+    buildSidebarProjectSnapshots({
       projects,
       settings: projectGroupingSettings,
       primaryEnvironmentId,
-      resolveEnvironmentLabel: (environmentId) => labels.get(environmentId) ?? null,
-    });
-    return sortLogicalProjectsForSidebar(groups, threads, sidebarProjectSortOrder);
-  }, [
-    environments,
-    primaryEnvironmentId,
-    projectGroupingSettings,
-    projects,
-    sidebarProjectSortOrder,
+      resolveEnvironmentLabel: (environmentId) => environmentLabels.get(environmentId) ?? null,
+    }),
     threads,
-  ]);
+    sidebarProjectSortOrder,
+  );
 
-  const model = useMemo(() => {
+  const model = (() => {
     const nowIso = new Date(now).toISOString();
     const groupByPhysical = new Map<string, SidebarProjectSnapshot>();
     for (const group of projectGroups) {
@@ -441,27 +424,20 @@ export default function WorkspaceSidebar() {
       groupByPhysical,
       agentsByRoot: agents.agentsByRoot,
     };
-  }, [config, now, projectGroups, scratchRoots, serverConfigs, threads]);
+  })();
 
   /** Every workspace that shows the thread's project. */
-  const workspacesOfThread = useCallback(
-    (thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">): readonly string[] => {
-      const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
-      return group ? (model.workspaceIdsByProjectKey.get(group.projectKey) ?? []) : [];
-    },
-    [model],
-  );
+  const workspacesOfThread = (
+    thread: Pick<SidebarThreadSummary, "environmentId" | "projectId">,
+  ): readonly string[] => {
+    const group = model.groupByPhysical.get(`${thread.environmentId}:${thread.projectId}`);
+    return group ? (model.workspaceIdsByProjectKey.get(group.projectKey) ?? []) : [];
+  };
   /** Whether a workspace shows the thread: pinned threads show everywhere. */
-  const isShownIn = useCallback(
-    (thread: SidebarThreadSummary, workspaceId: string) =>
-      thread.pinnedAt != null || workspacesOfThread(thread).includes(workspaceId),
-    [workspacesOfThread],
-  );
+  const isShownIn = (thread: SidebarThreadSummary, workspaceId: string) =>
+    thread.pinnedAt != null || workspacesOfThread(thread).includes(workspaceId);
 
-  const threadByKey = useMemo(
-    () => new Map(threads.map((thread) => [threadKeyOf(thread), thread] as const)),
-    [threads],
-  );
+  const threadByKey = new Map(threads.map((thread) => [threadKeyOf(thread), thread] as const));
   const routeThread = routeThreadKey ? (threadByKey.get(routeThreadKey) ?? null) : null;
   // The thread holding this client's voice conversation sits on top of the
   // list, in every view, instead of in its usual place.
@@ -494,7 +470,7 @@ export default function WorkspaceSidebar() {
   // Opening one from elsewhere (notification, palette, phone) follows it into
   // the first workspace that shows it.
   const lastFollowedRouteRef = useRef<string | null>(null);
-  useEffect(() => {
+  const followRoute = useEffectEvent(() => {
     if (!routeTargetThread) return;
     const followKey = routeThreadKey ?? routeProjectKey;
     if (routePinned || routeWorkspaceIds.includes(activeWorkspaceId)) {
@@ -508,43 +484,45 @@ export default function WorkspaceSidebar() {
     if (followKey === lastFollowedRouteRef.current) return;
     lastFollowedRouteRef.current = followKey;
     view.setActiveWorkspace(target);
-    // Only route changes drive this; switching tiles must not bounce back.
-  }, [routeThreadKey, routeProjectKey, routeWorkspacesKey, routePinned]);
+  });
+  useEffect(() => {
+    followRoute();
+  }, [
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Only route changes drive this; switching tiles must not bounce back.
+    routeThreadKey,
+    routeProjectKey,
+    routeWorkspacesKey,
+    routePinned,
+  ]);
 
-  const navigateToThread = useCallback(
-    (threadRef: ScopedThreadRef) => {
-      if (isMobile) setOpenMobile(false);
+  const navigateToThread = (threadRef: ScopedThreadRef) => {
+    if (isMobile) setOpenMobile(false);
+    void router.navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(threadRef),
+    });
+  };
+
+  const switchWorkspace = (workspaceId: string) => {
+    if (workspaceId === activeWorkspaceId) return;
+    view.setActiveWorkspace(workspaceId);
+    lastFollowedRouteRef.current = routeThreadKey ?? routeProjectKey;
+    const remembered = view.lastThreadByWorkspace[workspaceId];
+    const thread = remembered ? threadByKey.get(remembered) : undefined;
+    if (thread && thread.archivedAt === null && isShownIn(thread, workspaceId)) {
+      lastFollowedRouteRef.current = remembered ?? null;
       void router.navigate({
         to: "/$environmentId/$threadId",
-        params: buildThreadRouteParams(threadRef),
+        params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
       });
-    },
-    [isMobile, router, setOpenMobile],
-  );
-
-  const switchWorkspace = useCallback(
-    (workspaceId: string) => {
-      if (workspaceId === activeWorkspaceId) return;
-      view.setActiveWorkspace(workspaceId);
-      lastFollowedRouteRef.current = routeThreadKey ?? routeProjectKey;
-      const remembered = view.lastThreadByWorkspace[workspaceId];
-      const thread = remembered ? threadByKey.get(remembered) : undefined;
-      if (thread && thread.archivedAt === null && isShownIn(thread, workspaceId)) {
-        lastFollowedRouteRef.current = remembered ?? null;
-        void router.navigate({
-          to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
-        });
-      }
-    },
-    [activeWorkspaceId, routeProjectKey, routeThreadKey, router, threadByKey, view, isShownIn],
-  );
+    }
+  };
 
   /** A workspace as shown on its own: all pinned threads, then its folders. */
-  const withPinned = useCallback(
-    (bucket: WorkspaceModel): WorkspaceModel => ({ ...bucket, pinned: model.pinned }),
-    [model],
-  );
+  const withPinned = (bucket: WorkspaceModel): WorkspaceModel => ({
+    ...bucket,
+    pinned: model.pinned,
+  });
 
   // ── Search ────────────────────────────────────────────────────────────
   // Folder drag within a workspace: the lifted folder and the line it would land on.
@@ -556,7 +534,7 @@ export default function WorkspaceSidebar() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isSearching = searchQuery.trim().length > 0;
   const searchScopeAll = !view.tilesVisible;
-  const searchResults = useMemo(() => {
+  const searchResults = (() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
     const results: { thread: SidebarThreadSummary; folder: FolderModel }[] = [];
@@ -585,7 +563,7 @@ export default function WorkspaceSidebar() {
     return results.toSorted(
       (left, right) => threadActivityMs(right.thread) - threadActivityMs(left.thread),
     );
-  }, [activeWorkspaceId, model, searchQuery, searchScopeAll]);
+  })();
 
   // ── Thread actions ────────────────────────────────────────────────────
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
@@ -640,326 +618,269 @@ export default function WorkspaceSidebar() {
       if (menuRequest) setRenamingKey(scopedThreadKey(menuRequest.ref));
     },
   });
-  useEffect(() => {
+  const openRequestedMenu = useEffectEvent(() => {
     if (menuRequest) openMenu(menuRequest.position);
-    // A new request (nonce) opens the menu once; openMenu identity churns.
+  });
+  useEffect(() => {
+    openRequestedMenu();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A new request (nonce) opens the menu once.
   }, [menuRequest?.nonce]);
-  const handleThreadContextMenu = useCallback(
-    (ref: ScopedThreadRef, position: { x: number; y: number }) => {
-      setMenuRequest((previous) => ({ ref, position, nonce: (previous?.nonce ?? 0) + 1 }));
-    },
-    [],
-  );
-  const handleTogglePin = useCallback(
-    (thread: SidebarThreadSummary) => {
-      const ref = scopeThreadRef(thread.environmentId, thread.id);
-      void (thread.pinnedAt != null
-        ? reportFailure("Failed to unpin thread", () => confirmAndUnpinThread(ref))
-        : reportFailure("Failed to pin thread", () => pinThread(ref)));
-    },
-    [confirmAndUnpinThread, pinThread],
-  );
-  const handleSettle = useCallback(
-    (ref: ScopedThreadRef) =>
-      void reportFailure("Failed to settle thread", () => settleThread(ref)),
-    [settleThread],
-  );
-  const handleUnsettle = useCallback(
-    (ref: ScopedThreadRef) =>
-      void reportFailure("Failed to un-settle thread", () => unsettleThread(ref)),
-    [unsettleThread],
-  );
-  const handleWake = useCallback(
-    (ref: ScopedThreadRef) =>
-      void reportFailure("Failed to wake thread", () => unsnoozeThread(ref)),
-    [unsnoozeThread],
-  );
-  const handleCommitRename = useCallback(
-    (ref: ScopedThreadRef, title: string | null) => {
-      setRenamingKey(null);
-      const thread = threadByKey.get(scopedThreadKey(ref));
-      const trimmed = title?.trim();
-      if (!thread || !trimmed || trimmed === thread.title) return;
-      void reportFailure("Failed to rename thread", () =>
-        updateThreadMetadata({
-          environmentId: ref.environmentId,
-          input: { threadId: ref.threadId, title: trimmed },
-        }),
-      );
-    },
-    [threadByKey, updateThreadMetadata],
-  );
-  const startThreadInFolder = useCallback(
-    (folder: FolderModel) => {
-      const member =
-        folder.group.memberProjects.find(
-          (project) => project.environmentId === primaryEnvironmentId,
-        ) ?? folder.group.memberProjects[0];
-      if (!member) return;
-      if (isMobile) setOpenMobile(false);
-      void handleNewThread(scopeProjectRef(member.environmentId, member.id)).catch((error) =>
-        failureToast("Could not create thread", error),
-      );
-    },
-    [handleNewThread, isMobile, primaryEnvironmentId, setOpenMobile],
-  );
+  const handleThreadContextMenu = (ref: ScopedThreadRef, position: { x: number; y: number }) => {
+    setMenuRequest((previous) => ({ ref, position, nonce: (previous?.nonce ?? 0) + 1 }));
+  };
+  const handleTogglePin = (thread: SidebarThreadSummary) => {
+    const ref = scopeThreadRef(thread.environmentId, thread.id);
+    void (thread.pinnedAt != null
+      ? reportFailure("Failed to unpin thread", () => confirmAndUnpinThread(ref))
+      : reportFailure("Failed to pin thread", () => pinThread(ref)));
+  };
+  const handleSettle = (ref: ScopedThreadRef) =>
+    void reportFailure("Failed to settle thread", () => settleThread(ref));
+  const handleUnsettle = (ref: ScopedThreadRef) =>
+    void reportFailure("Failed to un-settle thread", () => unsettleThread(ref));
+  const handleWake = (ref: ScopedThreadRef) =>
+    void reportFailure("Failed to wake thread", () => unsnoozeThread(ref));
+  const handleCommitRename = (ref: ScopedThreadRef, title: string | null) => {
+    setRenamingKey(null);
+    const thread = threadByKey.get(scopedThreadKey(ref));
+    const trimmed = title?.trim();
+    if (!thread || !trimmed || trimmed === thread.title) return;
+    void reportFailure("Failed to rename thread", () =>
+      updateThreadMetadata({
+        environmentId: ref.environmentId,
+        input: { threadId: ref.threadId, title: trimmed },
+      }),
+    );
+  };
+  const startThreadInFolder = (folder: FolderModel) => {
+    const member =
+      folder.group.memberProjects.find(
+        (project) => project.environmentId === primaryEnvironmentId,
+      ) ?? folder.group.memberProjects[0];
+    if (!member) return;
+    if (isMobile) setOpenMobile(false);
+    void handleNewThread(scopeProjectRef(member.environmentId, member.id)).catch((error) =>
+      failureToast("Could not create thread", error),
+    );
+  };
 
   // ── Workspace edits ───────────────────────────────────────────────────
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceTitleEditing>(null);
-  const createWorkspace = useCallback(() => {
-    const added = addWorkspace(configRef.current).config.workspaces;
+  const createWorkspace = () => {
+    const added = addWorkspace(config).config.workspaces;
     const workspace = added[added.length - 1]!;
     const { id } = workspace;
     writeConfig((config) => ({ ...config, workspaces: [...config.workspaces, workspace] }));
     view.setActiveWorkspace(id);
     setEditingWorkspace("name");
-  }, [view, writeConfig]);
-  const renameWorkspace = useCallback(
-    (workspaceId: string, name: string | null) => {
-      setEditingWorkspace(null);
-      const trimmed = name?.trim();
-      if (!trimmed) return;
-      writeConfig((config) => updateWorkspace(config, workspaceId, { name: trimmed }));
-    },
-    [writeConfig],
-  );
+  };
+  const renameWorkspace = (workspaceId: string, name: string | null) => {
+    setEditingWorkspace(null);
+    const trimmed = name?.trim();
+    if (!trimmed) return;
+    writeConfig((config) => updateWorkspace(config, workspaceId, { name: trimmed }));
+  };
   /** `undefined` resets the tile to the name's first letter. */
-  const setWorkspaceIcon = useCallback(
-    (workspaceId: string, icon: string | undefined) => {
-      writeConfig((config) => updateWorkspace(config, workspaceId, { icon: icon ?? null }));
-    },
-    [writeConfig],
-  );
-  const commitWorkspaceLabel = useCallback(
-    (workspaceId: string, label: string | null) => {
-      setEditingWorkspace(null);
-      if (label === null) return;
-      setWorkspaceIcon(workspaceId, normalizeWorkspaceLabel(label) ?? undefined);
-    },
-    [setWorkspaceIcon],
-  );
-  const reorderWorkspace = useCallback(
-    (workspaceId: string, beforeIndex: number) => {
-      writeConfig((config) => ({
-        ...config,
-        workspaces: [...reorderWorkspaces(config.workspaces, workspaceId, beforeIndex)],
-      }));
-    },
-    [writeConfig],
-  );
-  const identityOfProject = useCallback(
-    (projectKey: string) => {
-      const group = projectGroups.find((candidate) => candidate.projectKey === projectKey);
-      return group ? projectIdentity(group, model.scratchProjectKeys.has(projectKey)) : null;
-    },
-    [model, projectGroups],
-  );
+  const setWorkspaceIcon = (workspaceId: string, icon: string | undefined) => {
+    writeConfig((config) => updateWorkspace(config, workspaceId, { icon: icon ?? null }));
+  };
+  const commitWorkspaceLabel = (workspaceId: string, label: string | null) => {
+    setEditingWorkspace(null);
+    if (label === null) return;
+    setWorkspaceIcon(workspaceId, normalizeWorkspaceLabel(label) ?? undefined);
+  };
+  const reorderWorkspace = (workspaceId: string, beforeIndex: number) => {
+    writeConfig((config) => ({
+      ...config,
+      workspaces: [...reorderWorkspaces(config.workspaces, workspaceId, beforeIndex)],
+    }));
+  };
+  const identityOfProject = (projectKey: string) => {
+    const group = projectGroups.find((candidate) => candidate.projectKey === projectKey);
+    return group ? projectIdentity(group, model.scratchProjectKeys.has(projectKey)) : null;
+  };
   /** A workspace's projects as shown, so a project added there lands on top. */
-  const sequenceOf = useCallback(
-    (workspaceId: string) =>
-      (model.byWorkspace.get(workspaceId)?.folders ?? [])
-        .filter((folder) => !folder.isScratch)
-        .map((folder) => folder.group.projectKey),
-    [model],
-  );
+  const sequenceOf = (workspaceId: string) =>
+    (model.byWorkspace.get(workspaceId)?.folders ?? [])
+      .filter((folder) => !folder.isScratch)
+      .map((folder) => folder.group.projectKey);
   /** "Show in workspaces": ticks or unticks one workspace (never the last). */
-  const toggleProjectIn = useCallback(
-    (projectKey: string, workspaceId: string) => {
-      const project = identityOfProject(projectKey);
-      if (project) {
-        writeConfig((config) => toggleProjectWorkspace(config, project, workspaceId, sequenceOf));
-      }
-    },
-    [identityOfProject, sequenceOf, writeConfig],
-  );
-  const openWorkspaceMenu = useCallback(
-    async (workspaceId: string, position: { x: number; y: number }) => {
-      const api = readLocalApi();
-      const current = configRef.current;
-      const index = current.workspaces.findIndex((entry) => entry.id === workspaceId);
-      const workspace = current.workspaces[index];
-      if (!api || !workspace) return;
-      const isDefault = effectiveDefaultWorkspaceId(current) === workspaceId;
-      const currentIcon = workspace.icon ?? "";
-      const items: ContextMenuItem[] = [
-        { id: "rename", label: "Rename", icon: "pencil" },
-        {
-          id: "icon",
-          label: "Icon",
-          children: [
-            { id: "icon:label", label: "Letters or emoji…" },
-            ...Object.entries(WORKSPACE_GLYPHS).map(([key, glyph], glyphIndex) => ({
-              id: `icon:glyph:${key}`,
-              label: glyph.label,
-              checked: currentIcon === `${WORKSPACE_GLYPH_PREFIX}${key}`,
-              separatorBefore: glyphIndex === 0,
-            })),
-            {
-              id: "icon:reset",
-              label: "First letter of the name",
-              checked: currentIcon === "",
-              separatorBefore: true,
-            },
-          ],
-        },
-        {
-          id: "color",
-          label: "Color",
-          children: WORKSPACE_COLORS.map((color, colorIndex) => ({
-            id: `color:${color}`,
-            label:
-              ["Blue", "Coral", "Green", "Violet", "Amber", "Teal", "Rose", "Olive"][colorIndex] ??
-              color,
-            checked: workspaceColor(workspace) === color,
+  const toggleProjectIn = (projectKey: string, workspaceId: string) => {
+    const project = identityOfProject(projectKey);
+    if (project) {
+      writeConfig((config) => toggleProjectWorkspace(config, project, workspaceId, sequenceOf));
+    }
+  };
+  const openWorkspaceMenu = async (workspaceId: string, position: { x: number; y: number }) => {
+    const api = readLocalApi();
+    const current = config;
+    const index = current.workspaces.findIndex((entry) => entry.id === workspaceId);
+    const workspace = current.workspaces[index];
+    if (!api || !workspace) return;
+    const isDefault = effectiveDefaultWorkspaceId(current) === workspaceId;
+    const currentIcon = workspace.icon ?? "";
+    const items: ContextMenuItem[] = [
+      { id: "rename", label: "Rename", icon: "pencil" },
+      {
+        id: "icon",
+        label: "Icon",
+        children: [
+          { id: "icon:label", label: "Letters or emoji…" },
+          ...Object.entries(WORKSPACE_GLYPHS).map(([key, glyph], glyphIndex) => ({
+            id: `icon:glyph:${key}`,
+            label: glyph.label,
+            checked: currentIcon === `${WORKSPACE_GLYPH_PREFIX}${key}`,
+            separatorBefore: glyphIndex === 0,
           })),
-        },
-        {
-          id: "move-left",
-          label: "Move left",
-          disabled: index === 0,
-          separatorBefore: true,
-        },
-        {
-          id: "move-right",
-          label: "Move right",
-          disabled: index === current.workspaces.length - 1,
-        },
-        {
-          id: "default",
-          label: "Default for new projects",
-          checked: isDefault,
-          separatorBefore: true,
-        },
-        isDefault
-          ? {
-              id: "delete-blocked",
-              label: "Default workspace can't be deleted",
-              disabled: true,
-              separatorBefore: true,
-            }
-          : {
-              id: "delete",
-              label: "Delete workspace",
-              icon: "trash",
-              destructive: true,
-              separatorBefore: true,
-            },
-      ];
-      const clicked = await api.contextMenu.show(items, position);
-      if (!clicked) return;
-      if (clicked === "rename" || clicked === "icon:label") {
-        view.setActiveWorkspace(workspaceId);
-        setEditingWorkspace(clicked === "rename" ? "name" : "label");
-      } else if (clicked.startsWith("icon:glyph:")) {
-        setWorkspaceIcon(
-          workspaceId,
-          `${WORKSPACE_GLYPH_PREFIX}${clicked.slice("icon:glyph:".length)}`,
-        );
-      } else if (clicked === "icon:reset") {
-        setWorkspaceIcon(workspaceId, undefined);
-      } else if (clicked.startsWith("color:")) {
-        const color = clicked.slice("color:".length);
-        writeConfig((config) => updateWorkspace(config, workspaceId, { color }));
-      } else if (clicked === "move-left") {
-        reorderWorkspace(workspaceId, index - 1);
-      } else if (clicked === "move-right") {
-        reorderWorkspace(workspaceId, index + 2);
-      } else if (clicked === "default") {
-        writeConfig((config) => ({ ...config, defaultWorkspace: workspaceId }));
-      } else if (clicked === "delete") {
-        const confirmed = await api.dialogs.confirm(
-          `Delete workspace "${workspace.name}"? Its projects move to the default workspace; no threads are deleted.`,
-        );
-        if (!confirmed) return;
-        writeConfig((config) => deleteWorkspace(config, workspaceId));
-        if (activeWorkspaceId === workspaceId) view.setActiveWorkspace(null);
-      }
-    },
-    [activeWorkspaceId, reorderWorkspace, setWorkspaceIcon, view, writeConfig],
-  );
+          {
+            id: "icon:reset",
+            label: "First letter of the name",
+            checked: currentIcon === "",
+            separatorBefore: true,
+          },
+        ],
+      },
+      {
+        id: "color",
+        label: "Color",
+        children: WORKSPACE_COLORS.map((color, colorIndex) => ({
+          id: `color:${color}`,
+          label:
+            ["Blue", "Coral", "Green", "Violet", "Amber", "Teal", "Rose", "Olive"][colorIndex] ??
+            color,
+          checked: workspaceColor(workspace) === color,
+        })),
+      },
+      {
+        id: "move-left",
+        label: "Move left",
+        disabled: index === 0,
+        separatorBefore: true,
+      },
+      {
+        id: "move-right",
+        label: "Move right",
+        disabled: index === current.workspaces.length - 1,
+      },
+      {
+        id: "default",
+        label: "Default for new projects",
+        checked: isDefault,
+        separatorBefore: true,
+      },
+      isDefault
+        ? {
+            id: "delete-blocked",
+            label: "Default workspace can't be deleted",
+            disabled: true,
+            separatorBefore: true,
+          }
+        : {
+            id: "delete",
+            label: "Delete workspace",
+            icon: "trash",
+            destructive: true,
+            separatorBefore: true,
+          },
+    ];
+    const clicked = await api.contextMenu.show(items, position);
+    if (!clicked) return;
+    if (clicked === "rename" || clicked === "icon:label") {
+      view.setActiveWorkspace(workspaceId);
+      setEditingWorkspace(clicked === "rename" ? "name" : "label");
+    } else if (clicked.startsWith("icon:glyph:")) {
+      setWorkspaceIcon(
+        workspaceId,
+        `${WORKSPACE_GLYPH_PREFIX}${clicked.slice("icon:glyph:".length)}`,
+      );
+    } else if (clicked === "icon:reset") {
+      setWorkspaceIcon(workspaceId, undefined);
+    } else if (clicked.startsWith("color:")) {
+      const color = clicked.slice("color:".length);
+      writeConfig((config) => updateWorkspace(config, workspaceId, { color }));
+    } else if (clicked === "move-left") {
+      reorderWorkspace(workspaceId, index - 1);
+    } else if (clicked === "move-right") {
+      reorderWorkspace(workspaceId, index + 2);
+    } else if (clicked === "default") {
+      writeConfig((config) => ({ ...config, defaultWorkspace: workspaceId }));
+    } else if (clicked === "delete") {
+      const confirmed = await api.dialogs.confirm(
+        `Delete workspace "${workspace.name}"? Its projects move to the default workspace; no threads are deleted.`,
+      );
+      if (!confirmed) return;
+      writeConfig((config) => deleteWorkspace(config, workspaceId));
+      if (activeWorkspaceId === workspaceId) view.setActiveWorkspace(null);
+    }
+  };
   // Project icons are the project's own setting (same as Project settings ›
   // Icon), written to every checkout of the folder.
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const [iconPickerFolder, setIconPickerFolder] = useState<FolderModel | null>(null);
-  const setFolderIcon = useCallback(
-    async (folder: FolderModel, projectIcon: ProjectIconOverride | null) => {
-      for (const member of folder.group.memberProjects) {
-        await reportFailure("Failed to update project icon", () =>
-          updateProject({
-            environmentId: member.environmentId,
-            input: { projectId: member.id, faviconPath: null, projectIcon },
-          }),
-        );
-      }
-    },
-    [updateProject],
-  );
-  const openFolderMenu = useCallback(
-    async (folder: FolderModel, position: { x: number; y: number }) => {
-      const api = readLocalApi();
-      if (!api) return;
-      const projectKey = folder.group.projectKey;
-      const foldMode = projectFoldModeOf(configRef.current, folder.workspaceId, projectKey);
-      const hasCustomIcon = folder.group.memberProjects.some(
-        (member) => member.projectIcon != null || member.faviconPath != null,
+  const setFolderIcon = async (folder: FolderModel, projectIcon: ProjectIconOverride | null) => {
+    for (const member of folder.group.memberProjects) {
+      await reportFailure("Failed to update project icon", () =>
+        updateProject({
+          environmentId: member.environmentId,
+          input: { projectId: member.id, faviconPath: null, projectIcon },
+        }),
       );
-      const shownIn = model.workspaceIdsByProjectKey.get(projectKey) ?? [];
-      const placement: ContextMenuItem[] = [
-        {
-          id: "show-in",
-          label: "Show in workspaces",
-          icon: "folder",
-          // The last workspace can't be unticked: a project always shows somewhere.
-          children: configRef.current.workspaces.map((workspace) => ({
-            id: `show:${workspace.id}`,
-            label: workspace.name,
-            checked: shownIn.includes(workspace.id),
-            disabled: shownIn.length === 1 && shownIn[0] === workspace.id,
-          })),
-        },
-        // "No project" is never quiet.
-        ...(folder.isScratch
-          ? []
-          : [
-              folder.quiet
-                ? { id: "fold:active", label: "Move to active projects" }
-                : { id: "fold:quiet", label: "Move to quiet projects" },
-              ...(foldMode === "auto" ? [] : [{ id: "fold:auto", label: "Fold automatically" }]),
-            ]),
-      ];
-      const items: ContextMenuItem[] = [
-        { id: "new-thread", label: "New thread", icon: "message-square-plus" },
-        ...placement,
-        { id: "icon", label: "Icon…", icon: "smile", separatorBefore: true },
-        ...(hasCustomIcon ? [{ id: "icon-reset", label: "Reset icon" }] : []),
-        { id: "settings", label: "Project settings", icon: "settings", separatorBefore: true },
-      ];
-      const clicked = await api.contextMenu.show(items, position);
-      if (!clicked) return;
-      if (clicked === "new-thread") startThreadInFolder(folder);
-      else if (clicked === "icon") setIconPickerFolder(folder);
-      else if (clicked === "icon-reset") void setFolderIcon(folder, null);
-      else if (clicked.startsWith("show:"))
-        toggleProjectIn(projectKey, clicked.slice("show:".length));
-      else if (clicked.startsWith("fold:")) {
-        const mode = clicked.slice("fold:".length) as ProjectFoldMode;
-        writeConfig((config) => setProjectFoldMode(config, folder.workspaceId, projectKey, mode));
-      } else if (clicked === "settings") {
-        if (isMobile) setOpenMobile(false);
-        void router.navigate({ to: "/projects/$projectKey", params: { projectKey } });
-      }
-    },
-    [
-      isMobile,
-      model,
-      router,
-      setFolderIcon,
-      setOpenMobile,
-      startThreadInFolder,
-      toggleProjectIn,
-      writeConfig,
-    ],
-  );
+    }
+  };
+  const openFolderMenu = async (folder: FolderModel, position: { x: number; y: number }) => {
+    const api = readLocalApi();
+    if (!api) return;
+    const projectKey = folder.group.projectKey;
+    const foldMode = projectFoldModeOf(config, folder.workspaceId, projectKey);
+    const hasCustomIcon = folder.group.memberProjects.some(
+      (member) => member.projectIcon != null || member.faviconPath != null,
+    );
+    const shownIn = model.workspaceIdsByProjectKey.get(projectKey) ?? [];
+    const placement: ContextMenuItem[] = [
+      {
+        id: "show-in",
+        label: "Show in workspaces",
+        icon: "folder",
+        // The last workspace can't be unticked: a project always shows somewhere.
+        children: config.workspaces.map((workspace) => ({
+          id: `show:${workspace.id}`,
+          label: workspace.name,
+          checked: shownIn.includes(workspace.id),
+          disabled: shownIn.length === 1 && shownIn[0] === workspace.id,
+        })),
+      },
+      // "No project" is never quiet.
+      ...(folder.isScratch
+        ? []
+        : [
+            folder.quiet
+              ? { id: "fold:active", label: "Move to active projects" }
+              : { id: "fold:quiet", label: "Move to quiet projects" },
+            ...(foldMode === "auto" ? [] : [{ id: "fold:auto", label: "Fold automatically" }]),
+          ]),
+    ];
+    const items: ContextMenuItem[] = [
+      { id: "new-thread", label: "New thread", icon: "message-square-plus" },
+      ...placement,
+      { id: "icon", label: "Icon…", icon: "smile", separatorBefore: true },
+      ...(hasCustomIcon ? [{ id: "icon-reset", label: "Reset icon" }] : []),
+      { id: "settings", label: "Project settings", icon: "settings", separatorBefore: true },
+    ];
+    const clicked = await api.contextMenu.show(items, position);
+    if (!clicked) return;
+    if (clicked === "new-thread") startThreadInFolder(folder);
+    else if (clicked === "icon") setIconPickerFolder(folder);
+    else if (clicked === "icon-reset") void setFolderIcon(folder, null);
+    else if (clicked.startsWith("show:"))
+      toggleProjectIn(projectKey, clicked.slice("show:".length));
+    else if (clicked.startsWith("fold:")) {
+      const mode = clicked.slice("fold:".length) as ProjectFoldMode;
+      writeConfig((config) => setProjectFoldMode(config, folder.workspaceId, projectKey, mode));
+    } else if (clicked === "settings") {
+      if (isMobile) setOpenMobile(false);
+      void router.navigate({ to: "/projects/$projectKey", params: { projectKey } });
+    }
+  };
 
   // ── Ordered rows for jump / traversal shortcuts ───────────────────────
   const activeBucket = model.byWorkspace.get(activeWorkspaceId);
@@ -968,7 +889,7 @@ export default function WorkspaceSidebar() {
       ? [withPinned(activeBucket)]
       : []
     : [{ pinned: model.pinned, folders: [] }, ...model.byWorkspace.values()];
-  const orderedThreadKeys = useMemo(() => {
+  const orderedThreadKeys = (() => {
     if (isSearching) return searchResults.map(({ thread }) => threadKeyOf(thread));
     // A Set: in the all-workspaces list a project can show more than once.
     const keys = new Set<string>(voiceThreadKey === null ? [] : [voiceThreadKey]);
@@ -983,66 +904,57 @@ export default function WorkspaceSidebar() {
       }
     }
     return [...keys];
-  }, [
-    isSearching,
-    searchResults,
-    model,
-    activeWorkspaceId,
-    view.tilesVisible,
-    view.folderOpen,
-    withPinned,
-    voiceThreadKey,
-  ]);
-  const jumpLabelByKey = useMemo(
-    () => new Map(orderedThreadKeys.slice(0, 9).map((key, index) => [key, String(index + 1)])),
-    [orderedThreadKeys],
+  })();
+  const jumpLabelByKey = new Map(
+    orderedThreadKeys.slice(0, 9).map((key, index) => [key, String(index + 1)]),
   );
   const [showJumpHints, setShowJumpHints] = useState(false);
 
   // ── Keyboard ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isCommandPaletteOpen() || isModelPickerOpen()) return;
-      if (event.altKey && !event.ctrlKey && !event.metaKey && /^Digit[0-9]$/.test(event.code)) {
-        const digit = Number(event.code.slice(5));
-        event.preventDefault();
-        if (digit === 0) {
-          view.toggleTiles();
-          return;
-        }
-        const target = configRef.current.workspaces[digit - 1];
-        if (target) {
-          if (!view.tilesVisible) view.toggleTiles();
-          switchWorkspace(target.id);
-        }
+  const onShortcutKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || isCommandPaletteOpen() || isModelPickerOpen()) return;
+    if (event.altKey && !event.ctrlKey && !event.metaKey && /^Digit[0-9]$/.test(event.code)) {
+      const digit = Number(event.code.slice(5));
+      event.preventDefault();
+      if (digit === 0) {
+        view.toggleTiles();
         return;
       }
-      if (event.repeat) return;
-      const command = resolveShortcutCommand(event, keybindings, {
-        platform: navigator.platform,
-        context: { terminalFocus: isTerminalFocused(), modelPickerOpen: isModelPickerOpen() },
-      });
-      const go = (key: string | null | undefined) => {
-        const thread = key ? threadByKey.get(key) : undefined;
-        if (!thread) return;
-        event.preventDefault();
-        event.stopPropagation();
-        navigateToThread(scopeThreadRef(thread.environmentId, thread.id));
-      };
-      const direction = threadTraversalDirectionFromCommand(command);
-      if (direction !== null) {
-        go(
-          resolveAdjacentThreadId({
-            threadIds: orderedThreadKeys,
-            currentThreadId: routeThreadKey,
-            direction,
-          }),
-        );
-        return;
+      const target = config.workspaces[digit - 1];
+      if (target) {
+        if (!view.tilesVisible) view.toggleTiles();
+        switchWorkspace(target.id);
       }
-      const jumpIndex = threadJumpIndexFromCommand(command ?? "");
-      if (jumpIndex !== null) go(orderedThreadKeys[jumpIndex]);
+      return;
+    }
+    if (event.repeat) return;
+    const command = resolveShortcutCommand(event, keybindings, {
+      platform: navigator.platform,
+      context: { terminalFocus: isTerminalFocused(), modelPickerOpen: isModelPickerOpen() },
+    });
+    const go = (key: string | null | undefined) => {
+      const thread = key ? threadByKey.get(key) : undefined;
+      if (!thread) return;
+      event.preventDefault();
+      event.stopPropagation();
+      navigateToThread(scopeThreadRef(thread.environmentId, thread.id));
     };
+    const direction = threadTraversalDirectionFromCommand(command);
+    if (direction !== null) {
+      go(
+        resolveAdjacentThreadId({
+          threadIds: orderedThreadKeys,
+          currentThreadId: routeThreadKey,
+          direction,
+        }),
+      );
+      return;
+    }
+    const jumpIndex = threadJumpIndexFromCommand(command ?? "");
+    if (jumpIndex !== null) go(orderedThreadKeys[jumpIndex]);
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => onShortcutKeyDown(event);
     const onModifier = (event: KeyboardEvent) => {
       setShowJumpHints((event.ctrlKey || event.metaKey) && event.type === "keydown");
     };
@@ -1057,38 +969,23 @@ export default function WorkspaceSidebar() {
       window.removeEventListener("keyup", onModifier);
       window.removeEventListener("blur", onBlur);
     };
-  }, [
-    keybindings,
-    navigateToThread,
-    orderedThreadKeys,
-    routeThreadKey,
-    switchWorkspace,
-    threadByKey,
-    view,
-  ]);
+  }, []);
 
   // ── Activity per workspace (tiles) ────────────────────────────────────
   const seenBaselineAt = useWorkspaceViewStore((state) => state.seenBaselineAt);
   const ensureSeenBaseline = useWorkspaceViewStore((state) => state.ensureSeenBaseline);
   useEffect(ensureSeenBaseline, [ensureSeenBaseline]);
-  const isUnreadThread = useCallback(
-    (thread: SidebarThreadSummary) =>
-      isThreadUnread(thread, lastVisitedById[threadKeyOf(thread)], seenBaselineAt),
-    [lastVisitedById, seenBaselineAt],
-  );
-  const tileEntries: WorkspaceTileEntry[] = useMemo(
-    () =>
-      config.workspaces.map((workspace) => {
-        const bucket = model.byWorkspace.get(workspace.id);
-        return {
-          workspace,
-          activity: bucket
-            ? summarizeWorkspaceActivity(bucket.threads, isUnreadThread)
-            : EMPTY_WORKSPACE_ACTIVITY,
-        };
-      }),
-    [config.workspaces, isUnreadThread, model],
-  );
+  const isUnreadThread = (thread: SidebarThreadSummary) =>
+    isThreadUnread(thread, lastVisitedById[threadKeyOf(thread)], seenBaselineAt);
+  const tileEntries: WorkspaceTileEntry[] = config.workspaces.map((workspace) => {
+    const bucket = model.byWorkspace.get(workspace.id);
+    return {
+      workspace,
+      activity: bucket
+        ? summarizeWorkspaceActivity(bucket.threads, isUnreadThread)
+        : EMPTY_WORKSPACE_ACTIVITY,
+    };
+  });
 
   // ── Render ────────────────────────────────────────────────────────────
   const capabilitiesOf = (thread: SidebarThreadSummary) =>

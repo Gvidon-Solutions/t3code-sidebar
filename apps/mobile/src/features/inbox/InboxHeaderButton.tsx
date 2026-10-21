@@ -1,8 +1,8 @@
 import { useNavigation } from "@react-navigation/native";
 import { View } from "react-native";
 
-import { AndroidHeaderIconButton } from "../../components/AndroidScreenHeader";
-import { AppText as Text } from "../../components/AppText";
+import { AndroidHeaderIconButton } from "../../components/ui/AndroidScreenHeader";
+import { AppText as Text } from "../../components/ui/AppText";
 import { cn } from "../../lib/cn";
 import { useInboxCounts } from "./useInbox";
 

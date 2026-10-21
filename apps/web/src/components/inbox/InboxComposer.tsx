@@ -11,11 +11,11 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
 } from "@t3tools/contracts";
 import { MessageCircleQuestionIcon, PaperclipIcon, XIcon } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { composerSubmissionIntentForKey } from "../../composer-logic";
 import type { ComposerFileAttachment, ComposerImageAttachment } from "../../composerDraftStore";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useSoftwareKeyboardOpen } from "../../hooks/useSoftwareKeyboardOpen";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
@@ -88,7 +88,7 @@ export function InboxComposer(props: {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const richTextEnabled = usePrimarySettings((settings) => settings.composerRichTextEnabled);
   const sendShortcut = usePrimarySettings((settings) => settings.sendShortcut);
-  const isMobileViewport = useMediaQuery("max-sm");
+  const isSoftwareKeyboardOpen = useSoftwareKeyboardOpen();
   const { resolvedTheme } = useTheme();
   const serverConfig = useEnvironment(environmentId)?.serverConfig ?? null;
   const supportsUploads = serverConfig?.environment.capabilities.attachmentUploads === true;
@@ -128,79 +128,76 @@ export function InboxComposer(props: {
   const hasContent = trimmed.length > 0 || attachments.length > 0;
   const canSend = !disabled && !sending && hasContent && uploadBlockReason === null;
 
-  const addFiles = useCallback(
-    async (files: ReadonlyArray<File>) => {
-      if (files.length === 0 || disabled) return;
-      if (!supportsUploads) {
-        reportError("This server does not accept attachments.");
-        return;
+  const addFiles = async (files: ReadonlyArray<File>) => {
+    if (files.length === 0 || disabled) return;
+    if (!supportsUploads) {
+      reportError("This server does not accept attachments.");
+      return;
+    }
+    let room = PROVIDER_SEND_TURN_MAX_ATTACHMENTS - attachmentsRef.current.length;
+    const added: InboxComposerAttachment[] = [];
+    for (const file of files) {
+      if (room <= 0) {
+        reportError(`You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} files.`);
+        break;
       }
-      let room = PROVIDER_SEND_TURN_MAX_ATTACHMENTS - attachmentsRef.current.length;
-      const added: InboxComposerAttachment[] = [];
-      for (const file of files) {
-        if (room <= 0) {
-          reportError(`You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} files.`);
-          break;
-        }
-        const kind = classifyComposerAttachmentFile(file);
-        if (kind === "unsupported-image") {
+      const kind = classifyComposerAttachmentFile(file);
+      if (kind === "unsupported-image") {
+        reportError(
+          `'${file.name}' is not a supported image type.`,
+          "Attach GIF, HEIC, HEIF, JPEG, PNG, or WebP images.",
+        );
+        continue;
+      }
+      if (kind === "image") {
+        const prepared = await prepareImageForAttachment(
+          normalizeComposerImageFileMimeType(file),
+          PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
+        );
+        if (!prepared.ok) {
           reportError(
-            `'${file.name}' is not a supported image type.`,
-            "Attach GIF, HEIC, HEIF, JPEG, PNG, or WebP images.",
+            prepared.reason === "unreadable"
+              ? `'${file.name}' could not be read as an image.`
+              : `'${file.name}' is too large to attach, even after compression.`,
           );
           continue;
         }
-        if (kind === "image") {
-          const prepared = await prepareImageForAttachment(
-            normalizeComposerImageFileMimeType(file),
-            PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-          );
-          if (!prepared.ok) {
-            reportError(
-              prepared.reason === "unreadable"
-                ? `'${file.name}' could not be read as an image.`
-                : `'${file.name}' is too large to attach, even after compression.`,
-            );
-            continue;
-          }
-          added.push({
-            type: "image",
-            id: randomUUID(),
-            name: prepared.file.name || "image",
-            mimeType: prepared.file.type,
-            sizeBytes: prepared.file.size,
-            previewUrl: URL.createObjectURL(prepared.file),
-            file: prepared.file,
-          });
-        } else {
-          if (file.size <= 0) {
-            reportError(`'${file.name}' is empty or could not be read.`);
-            continue;
-          }
-          if (fileLimit === null || file.size > fileLimit) {
-            reportError(
-              `'${file.name}' is too large to attach.`,
-              fileLimit === null ? undefined : `The limit is ${formatAttachmentSize(fileLimit)}.`,
-            );
-            continue;
-          }
-          added.push({
-            type: "file",
-            id: randomUUID(),
-            name: file.name || "file",
-            mimeType: file.type || "application/octet-stream",
-            sizeBytes: file.size,
-            file,
-          });
+        added.push({
+          type: "image",
+          id: randomUUID(),
+          name: prepared.file.name || "image",
+          mimeType: prepared.file.type,
+          sizeBytes: prepared.file.size,
+          previewUrl: URL.createObjectURL(prepared.file),
+          file: prepared.file,
+        });
+      } else {
+        if (file.size <= 0) {
+          reportError(`'${file.name}' is empty or could not be read.`);
+          continue;
         }
-        room -= 1;
+        if (fileLimit === null || file.size > fileLimit) {
+          reportError(
+            `'${file.name}' is too large to attach.`,
+            fileLimit === null ? undefined : `The limit is ${formatAttachmentSize(fileLimit)}.`,
+          );
+          continue;
+        }
+        added.push({
+          type: "file",
+          id: randomUUID(),
+          name: file.name || "file",
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          file,
+        });
       }
-      if (added.length === 0) return;
-      for (const attachment of added) startAttachmentUpload({ environmentId, image: attachment });
-      setAttachments((current) => [...current, ...added]);
-    },
-    [disabled, environmentId, fileLimit, supportsUploads],
-  );
+      room -= 1;
+    }
+    if (added.length === 0) return;
+    for (const attachment of added) startAttachmentUpload({ environmentId, image: attachment });
+    setAttachments((current) => [...current, ...added]);
+  };
 
   const remove = (id: string) => {
     const attachment = attachments.find((candidate) => candidate.id === id);
@@ -238,23 +235,20 @@ export function InboxComposer(props: {
     }
   });
 
-  const onCommandKeyDown = useCallback(
-    (key: string, event: KeyboardEvent, isListItem?: boolean) => {
-      if (key !== "Enter" || isListItem) return false;
-      const intent = composerSubmissionIntentForKey({
-        event,
-        keybindings,
-        isMobileViewport,
-        isDraftThread: false,
-        sendShortcut,
-        prompt: editorRef.current?.readSnapshot().value ?? "",
-      });
-      if (intent === null) return false;
-      void send();
-      return true;
-    },
-    [isMobileViewport, keybindings, send, sendShortcut],
-  );
+  const onCommandKeyDown = (key: string, event: KeyboardEvent, isListItem?: boolean) => {
+    if (key !== "Enter" || isListItem) return false;
+    const intent = composerSubmissionIntentForKey({
+      event,
+      keybindings,
+      isSoftwareKeyboardOpen,
+      isDraftThread: false,
+      sendShortcut,
+      prompt: editorRef.current?.readSnapshot().value ?? "",
+    });
+    if (intent === null) return false;
+    void send();
+    return true;
+  };
 
   const placeholder = !connected
     ? "This issue's machine is not connected"

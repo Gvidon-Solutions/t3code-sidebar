@@ -302,34 +302,36 @@ export const layer = Layer.effect(
     const nextConversationId = yield* Ref.make(0);
 
     /** Takes what a conversation carried to the thread, if it is still fresh. */
-    const takeCarried = (threadId: ThreadId) =>
-      Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis;
-        const entry = yield* Ref.modify(carried, (current) => {
-          const next = new Map(current);
-          next.delete(threadId);
-          return [current.get(threadId), next];
-        });
-        return entry !== undefined && entry.expiresAtMs > now ? entry.items : [];
+    const takeCarried = Effect.fn("VoiceSessionServiceV2.takeCarried")(function* (
+      threadId: ThreadId,
+    ) {
+      const now = yield* Clock.currentTimeMillis;
+      const entry = yield* Ref.modify(carried, (current) => {
+        const next = new Map(current);
+        next.delete(threadId);
+        return [current.get(threadId), next];
       });
+      return entry !== undefined && entry.expiresAtMs > now ? entry.items : [];
+    });
 
     const isLive: VoiceSessionServiceV2Shape["isLive"] = (threadId) =>
       Effect.map(Ref.get(live), (current) => current.has(threadId));
 
-    const carryOver: VoiceSessionServiceV2Shape["carryOver"] = ({ from, fromTitle, to }) =>
-      Effect.gen(function* () {
-        const conversation = (yield* Ref.get(live)).get(from);
-        if (conversation === undefined) return false;
-        const now = yield* Clock.currentTimeMillis;
-        const items = [
-          carriedConversationNote(fromTitle),
-          ...trimCarriedTranscript(conversation.transcript),
-        ];
-        yield* Ref.update(carried, (current) =>
-          new Map(current).set(to, { items, expiresAtMs: now + CARRY_OVER_TTL_MS }),
-        );
-        return true;
-      });
+    const carryOver: VoiceSessionServiceV2Shape["carryOver"] = Effect.fn(
+      "VoiceSessionServiceV2.carryOver",
+    )(function* ({ from, fromTitle, to }) {
+      const conversation = (yield* Ref.get(live)).get(from);
+      if (conversation === undefined) return false;
+      const now = yield* Clock.currentTimeMillis;
+      const items = [
+        carriedConversationNote(fromTitle),
+        ...trimCarriedTranscript(conversation.transcript),
+      ];
+      yield* Ref.update(carried, (current) =>
+        new Map(current).set(to, { items, expiresAtMs: now + CARRY_OVER_TTL_MS }),
+      );
+      return true;
+    });
 
     const isBusy = (threadId: ThreadId) =>
       projectionStore
@@ -340,14 +342,18 @@ export const layer = Layer.effect(
           ),
         );
 
-    const whenReady: VoiceSessionServiceV2Shape["whenReady"] = (threadId) =>
-      Effect.gen(function* () {
+    const whenReady: VoiceSessionServiceV2Shape["whenReady"] = Effect.fn(
+      "VoiceSessionServiceV2.whenReady",
+    )(
+      function* (threadId) {
         for (let attempt = 0; ; attempt += 1) {
           if (!(yield* isBusy(threadId))) return true;
           if (attempt >= MOVE_READY_WAIT_TIMES) return false;
           yield* Effect.sleep("1 second");
         }
-      }).pipe(Effect.orElseSucceed(() => false));
+      },
+      Effect.orElseSucceed(() => false),
+    );
 
     const start: VoiceSessionServiceV2Shape["start"] = (input) =>
       Stream.unwrap(

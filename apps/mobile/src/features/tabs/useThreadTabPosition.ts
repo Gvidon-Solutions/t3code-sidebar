@@ -1,5 +1,5 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 import type { ThreadTabMode } from "../../lib/threadTabs";
 import { useThreadTabs } from "./useThreadTabs";
@@ -25,8 +25,11 @@ export function useThreadTabPosition(input: {
       ? undefined
       : threadTabs.tabs.find((entry) => entry.path === relativePath);
 
+  // The tab actions change with every tab write; callbacks read them through a ref to stay stable.
   const tabsRef = useRef(threadTabs);
-  tabsRef.current = threadTabs;
+  useLayoutEffect(() => {
+    tabsRef.current = threadTabs;
+  }, [threadTabs]);
   useEffect(() => {
     if (threadKey !== null && relativePath !== null) tabsRef.current.open(relativePath);
   }, [relativePath, threadKey]);

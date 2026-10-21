@@ -1,12 +1,16 @@
 import { useMemo } from "react";
 import { View } from "react-native";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
-import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
-import { EmptyState } from "../../components/EmptyState";
-import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
+import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { HomeRouteScreen } from "../home/HomeRouteScreen";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { WorkspaceTabsContext, useWorkspaceTabs } from "./WorkspaceTabsContext";
+import { WorkspaceTabPanes } from "./WorkspaceTabPanes";
+import type { WorkspaceTab } from "./workspace-tabs-state";
+
+const TABS: readonly WorkspaceTab[] = ["threads", "pullRequests"];
 
 export function WorkspaceRootScreen() {
   const { layout } = useAdaptiveWorkspaceLayout();
@@ -19,23 +23,31 @@ export function WorkspaceRootScreen() {
     }),
     [workspace, fabClearance],
   );
+  const tab = workspace.state.selectedTab;
 
-  // Split lists live beside the navigator; Home remains an empty detail pane.
   if (layout.usesSplitView) {
-    return workspace.state.selectedTab === "threads" ? (
-      <HomeRouteScreen />
-    ) : (
-      <>
-        <NativeStackScreenOptions options={{ headerShown: false }} />
-        <AndroidScreenHeader title="Pull requests" />
-        <View className="flex-1 items-center justify-center px-10">
-          <EmptyState
-            title="Select a pull request"
-            detail="Choose a pull request from the sidebar to review it."
-            variant="plain"
-          />
-        </View>
-      </>
+    return (
+      <WorkspaceTabPanes
+        tabs={TABS}
+        selected={tab}
+        renderTab={(tab) =>
+          tab === "threads" ? (
+            <HomeRouteScreen />
+          ) : (
+            <>
+              <NativeStackScreenOptions options={{ headerShown: false }} />
+              <AndroidScreenHeader title="Pull requests" />
+              <View className="flex-1 items-center justify-center px-10">
+                <EmptyState
+                  title="Select a pull request"
+                  detail="Choose a pull request from the sidebar to review it."
+                  variant="plain"
+                />
+              </View>
+            </>
+          )
+        }
+      />
     );
   }
 

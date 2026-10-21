@@ -3,7 +3,7 @@ import {
   createContext,
   useContext,
   useEffect,
-  useMemo,
+  useEffectEvent,
   useRef,
   useState,
   type ReactNode,
@@ -12,8 +12,8 @@ import { View, type ViewInstance } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
 import type { ArrangeableFolder } from "./workspaceNavigator";
@@ -63,77 +63,78 @@ export function FolderDragHost(props: {
   readonly children: ReactNode;
 }) {
   const frameRef = useRef<ViewInstance>(null);
-  const latest = useRef(props);
-  latest.current = props;
   const drag = useRef<{ projectKey: string; startY: number; lifted: boolean } | null>(null);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [listTop, setListTop] = useState(0);
   const [fingerY, setFingerY] = useState(0);
-  const state = useRef({ overlay, listTop, fingerY });
-  state.current = { overlay, listTop, fingerY };
 
-  const api = useMemo<FolderDragApi>(
-    () => ({
-      begin: (projectKey, windowY) => {
-        drag.current = { projectKey, startY: windowY, lifted: false };
-      },
-      move: (windowY) => {
-        const current = drag.current;
-        if (!current) return;
-        setFingerY(windowY);
-        if (current.lifted || Math.abs(windowY - current.startY) < LIFT_SLOP) return;
-        const entries = latest.current.getFolders();
-        const from = entries.findIndex((entry) => entry.projectKey === current.projectKey);
-        if (from < 0 || entries.length < 2) return;
-        current.lifted = true;
-        frameRef.current?.measureInWindow((_x, frameY, _width, frameHeight) => {
-          if (drag.current !== current) return;
-          const total = entries.length * ROW_HEIGHT;
-          // The lifted row starts under the finger; the rest fits the frame when it can.
-          const top = current.startY - frameY - ROW_HEIGHT / 2 - from * ROW_HEIGHT;
-          setListTop(
-            total <= frameHeight
-              ? clamp(top, 0, frameHeight - total)
-              : clamp(top, frameHeight - total, 0),
-          );
-          setOverlay({ entries, from, frameY, frameHeight });
-        });
-      },
-      end: (projectKey, commit) => {
-        const current = drag.current;
-        if (!current || current.projectKey !== projectKey) return false;
-        drag.current = null;
-        const shown = state.current.overlay;
-        setOverlay(null);
-        if (!current.lifted) return false;
-        if (commit && shown) {
-          const target = targetIndex(shown, state.current.listTop, state.current.fingerY);
-          if (target !== shown.from) {
-            const sequence = shown.entries.map((entry) => entry.projectKey);
-            const rest = sequence.filter((key) => key !== projectKey);
-            latest.current.onDrop(projectKey, rest[target] ?? null, sequence);
-            void Haptics.selectionAsync();
-          }
-        }
-        return true;
-      },
-    }),
-    [],
-  );
+  // Gestures and the edge scroll run after render, so effect events read the
+  // latest props and drag state while the context value stays the same.
+  const getFolders = useEffectEvent(() => props.getFolders());
+  const readFingerY = useEffectEvent(() => fingerY);
+  const drop = useEffectEvent((projectKey: string) => {
+    if (!overlay) return;
+    const target = targetIndex(overlay, listTop, fingerY);
+    if (target === overlay.from) return;
+    const sequence = overlay.entries.map((entry) => entry.projectKey);
+    const rest = sequence.filter((key) => key !== projectKey);
+    props.onDrop(projectKey, rest[target] ?? null, sequence);
+    void Haptics.selectionAsync();
+  });
+
+  const [api] = useState<FolderDragApi>(() => ({
+    begin: (projectKey, windowY) => {
+      drag.current = { projectKey, startY: windowY, lifted: false };
+    },
+    move: (windowY) => {
+      const current = drag.current;
+      if (!current) return;
+      setFingerY(windowY);
+      if (current.lifted || Math.abs(windowY - current.startY) < LIFT_SLOP) return;
+      const entries = getFolders();
+      const from = entries.findIndex((entry) => entry.projectKey === current.projectKey);
+      if (from < 0 || entries.length < 2) return;
+      current.lifted = true;
+      frameRef.current?.measureInWindow((_x, frameY, _width, frameHeight) => {
+        if (drag.current !== current) return;
+        const total = entries.length * ROW_HEIGHT;
+        // The lifted row starts under the finger; the rest fits the frame when it can.
+        const top = current.startY - frameY - ROW_HEIGHT / 2 - from * ROW_HEIGHT;
+        setListTop(
+          total <= frameHeight
+            ? clamp(top, 0, frameHeight - total)
+            : clamp(top, frameHeight - total, 0),
+        );
+        setOverlay({ entries, from, frameY, frameHeight });
+      });
+    },
+    end: (projectKey, commit) => {
+      const current = drag.current;
+      if (!current || current.projectKey !== projectKey) return false;
+      drag.current = null;
+      // `drop` still sees the overlay of the last render; this only clears the next one.
+      setOverlay(null);
+      if (!current.lifted) return false;
+      if (commit) drop(projectKey);
+      return true;
+    },
+  }));
 
   // Holding the finger near an edge of a list taller than the screen scrolls it.
   useEffect(() => {
     if (!overlay) return;
     const total = overlay.entries.length * ROW_HEIGHT;
     if (total <= overlay.frameHeight) return;
-    let frame = requestAnimationFrame(function step() {
-      const y = state.current.fingerY - overlay.frameY;
+    let frame = 0;
+    const step = () => {
+      const y = readFingerY() - overlay.frameY;
       const delta = y < EDGE ? EDGE_STEP : y > overlay.frameHeight - EDGE ? -EDGE_STEP : 0;
       if (delta !== 0) {
         setListTop((top) => clamp(top + delta, overlay.frameHeight - total, 0));
       }
       frame = requestAnimationFrame(step);
-    });
+    };
+    frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
   }, [overlay]);
 
@@ -234,24 +235,25 @@ export function FolderDragHandle(props: {
   readonly children: ReactNode;
 }) {
   const api = useContext(FolderDragContext);
-  const latest = useRef({ ...props, api });
-  latest.current = { ...props, api };
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activateAfterLongPress(LONG_PRESS_MS)
-        .shouldCancelWhenOutside(false)
-        .runOnJS(true)
-        .onStart((event) => {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          latest.current.api?.begin(latest.current.projectKey, event.absoluteY);
-        })
-        .onUpdate((event) => latest.current.api?.move(event.absoluteY))
-        .onFinalize((_event, success) => {
-          const dragged = latest.current.api?.end(latest.current.projectKey, success) ?? false;
-          if (success && !dragged) latest.current.onMenu();
-        }),
-    [],
+  // Gesture callbacks fire after render, so effect events read the latest
+  // props while the row keeps one gesture for its lifetime.
+  const onStart = useEffectEvent((windowY: number) => api?.begin(props.projectKey, windowY));
+  const onMove = useEffectEvent((windowY: number) => api?.move(windowY));
+  const onFinalize = useEffectEvent((success: boolean) => {
+    const dragged = api?.end(props.projectKey, success) ?? false;
+    if (success && !dragged) props.onMenu();
+  });
+  const [gesture] = useState(() =>
+    Gesture.Pan()
+      .activateAfterLongPress(LONG_PRESS_MS)
+      .shouldCancelWhenOutside(false)
+      .runOnJS(true)
+      .onStart((event) => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onStart(event.absoluteY);
+      })
+      .onUpdate((event) => onMove(event.absoluteY))
+      .onFinalize((_event, success) => onFinalize(success)),
   );
   return (
     <GestureDetector gesture={gesture}>

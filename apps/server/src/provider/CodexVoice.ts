@@ -236,20 +236,19 @@ export const makeCodexVoice = Effect.fn("makeCodexVoice")(function* (
     ),
   );
 
-  const stop = (active: ActiveVoice) =>
-    Effect.gen(function* () {
-      yield* Ref.update(activeRef, (current) => {
-        if (current.get(active.providerThreadId) !== active) return current;
-        const updated = new Map(current);
-        updated.delete(active.providerThreadId);
-        return updated;
-      });
-      if (active.closed) return;
-      active.closed = true;
-      yield* client.raw
-        .request("thread/realtime/stop", { threadId: active.providerThreadId })
-        .pipe(Effect.ignore);
+  const stop = Effect.fn("CodexVoice.stop")(function* (active: ActiveVoice) {
+    yield* Ref.update(activeRef, (current) => {
+      if (current.get(active.providerThreadId) !== active) return current;
+      const updated = new Map(current);
+      updated.delete(active.providerThreadId);
+      return updated;
     });
+    if (active.closed) return;
+    active.closed = true;
+    yield* client.raw
+      .request("thread/realtime/stop", { threadId: active.providerThreadId })
+      .pipe(Effect.ignore);
+  });
 
   /**
    * Starts a voice conversation. The stream ends when Codex closes the

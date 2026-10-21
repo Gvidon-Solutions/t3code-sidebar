@@ -52,27 +52,30 @@ export const layer = Layer.effect(
     const sequence = yield* Ref.make(0);
 
     // Unique across restarts: clients remember the last id they handled.
-    const nextId = (prefix: string) =>
-      Effect.gen(function* () {
-        const at = yield* Clock.currentTimeMillis;
-        return `${prefix}:${at}:${yield* Ref.updateAndGet(sequence, (value) => value + 1)}`;
-      });
+    const nextId = Effect.fn("UiRequests.nextId")(function* (prefix: string) {
+      const at = yield* Clock.currentTimeMillis;
+      return `${prefix}:${at}:${yield* Ref.updateAndGet(sequence, (value) => value + 1)}`;
+    });
 
-    const open: UiRequestsShape["open"] = ({ threadId, target }) =>
-      Effect.gen(function* () {
-        yield* PubSub.publish(pubsub, { id: yield* nextId("ui-request"), threadId, target });
-        return yield* Ref.get(subscribers);
-      });
+    const open: UiRequestsShape["open"] = Effect.fn("UiRequests.open")(function* ({
+      threadId,
+      target,
+    }) {
+      yield* PubSub.publish(pubsub, { id: yield* nextId("ui-request"), threadId, target });
+      return yield* Ref.get(subscribers);
+    });
 
-    const voice: UiRequestsShape["voice"] = ({ threadId, action }) =>
-      Effect.gen(function* () {
-        yield* PubSub.publish(voicePubsub, {
-          id: yield* nextId("voice-command"),
-          threadId,
-          action,
-        });
-        return yield* Ref.get(voiceSubscribers);
+    const voice: UiRequestsShape["voice"] = Effect.fn("UiRequests.voice")(function* ({
+      threadId,
+      action,
+    }) {
+      yield* PubSub.publish(voicePubsub, {
+        id: yield* nextId("voice-command"),
+        threadId,
+        action,
       });
+      return yield* Ref.get(voiceSubscribers);
+    });
 
     const subscribe = Effect.gen(function* () {
       const subscription = yield* PubSub.subscribe(pubsub);

@@ -10,32 +10,30 @@ import { unavailable } from "../../threadAccess.ts";
 import { UiToolkit } from "./tools.ts";
 
 /** The calling thread, which must hold a live voice conversation. */
-const requireLiveVoice = (operation: string) =>
-  Effect.gen(function* () {
-    const scope = yield* McpInvocationContext.McpInvocationContext;
-    const { thread } = yield* McpInvocationContext.requireThreadScope(scope, operation);
-    const voiceSessions = yield* VoiceSessionService.VoiceSessionServiceV2;
-    if (!(yield* voiceSessions.isLive(thread.threadId))) {
-      return yield* new OrchestratorMcpFailure({
-        code: "invalid_request",
-        message: "No voice conversation is live in this thread.",
-      });
-    }
-    return thread.threadId;
-  });
+const requireLiveVoice = Effect.fn("UiToolkit.requireLiveVoice")(function* (operation: string) {
+  const scope = yield* McpInvocationContext.McpInvocationContext;
+  const { thread } = yield* McpInvocationContext.requireThreadScope(scope, operation);
+  const voiceSessions = yield* VoiceSessionService.VoiceSessionServiceV2;
+  if (!(yield* voiceSessions.isLive(thread.threadId))) {
+    return yield* new OrchestratorMcpFailure({
+      code: "invalid_request",
+      message: "No voice conversation is live in this thread.",
+    });
+  }
+  return thread.threadId;
+});
 
-const readLiveThread = (threadId: ThreadId) =>
-  Effect.gen(function* () {
-    const threads = yield* ThreadManagementService.ThreadManagementService;
-    const shell = yield* threads.getThreadShell(threadId).pipe(Effect.mapError(unavailable));
-    if (shell === null || shell.deletedAt !== null) {
-      return yield* new OrchestratorMcpFailure({
-        code: "thread_not_found",
-        message: "The thread was not found.",
-      });
-    }
-    return shell;
-  });
+const readLiveThread = Effect.fn("UiToolkit.readLiveThread")(function* (threadId: ThreadId) {
+  const threads = yield* ThreadManagementService.ThreadManagementService;
+  const shell = yield* threads.getThreadShell(threadId).pipe(Effect.mapError(unavailable));
+  if (shell === null || shell.deletedAt !== null) {
+    return yield* new OrchestratorMcpFailure({
+      code: "thread_not_found",
+      message: "The thread was not found.",
+    });
+  }
+  return shell;
+});
 
 export const layer = McpToolAccess.toLayer(UiToolkit, {
   // A request belongs to the calling thread: clients act on it only where that

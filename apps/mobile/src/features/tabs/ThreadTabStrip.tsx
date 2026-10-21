@@ -1,7 +1,7 @@
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { Alert, Pressable, ScrollView, View } from "react-native";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 import { cn } from "../../lib/cn";
 import { terminalTabKey } from "../panels/terminalTabs";
 import { useThreadPager } from "../panels/threadPagerContext";

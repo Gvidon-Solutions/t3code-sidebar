@@ -3,8 +3,8 @@ import { isInboxIssueUnread } from "@t3tools/contracts";
 import { memo } from "react";
 import { Pressable, View } from "react-native";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { AppText as Text } from "../../components/AppText";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppText as Text } from "../../components/ui/AppText";
 import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
 import { INBOX_SEVERITY_DOT } from "./inboxList";

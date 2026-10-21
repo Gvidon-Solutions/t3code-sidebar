@@ -1,6 +1,15 @@
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   BackHandler,
   Keyboard,
@@ -104,12 +113,11 @@ export function ThreadPager(props: {
   // A requested tab may not be stored yet; once it has been, its closing returns to the chat.
   const activeSeen = useRef(false);
   const activeIndex = active.path === null ? -1 : paths.indexOf(active.path);
-  if (activeIndex >= 0) activeSeen.current = true;
+  // Keyed on the whole state: goTo clears activeSeen even when it re-selects the same tab.
   useEffect(() => {
-    if (active.path !== null && activeIndex < 0 && activeSeen.current) {
-      setActive({ path: null, line: null });
-    }
-  }, [active.path, activeIndex]);
+    if (activeIndex >= 0) activeSeen.current = true;
+    else if (active.path !== null && activeSeen.current) setActive({ path: null, line: null });
+  }, [active, activeIndex]);
   const index = activeIndex + 1;
   const last = paths.length;
 
@@ -126,13 +134,15 @@ export function ThreadPager(props: {
   const decided = useSharedValue(false);
   const edges = useSharedValue<PageEdges>(FREE_EDGES);
   const widthValue = useSharedValue(width);
+  const panelWidthValue = useSharedValue(panelWidth);
 
   useEffect(() => {
-    indexValue.value = index;
-    lastValue.value = last;
-    widthValue.value = width;
-    x.value = withTiming(-index * width, { duration: DURATION_MS });
-  }, [index, indexValue, last, lastValue, width, widthValue, x]);
+    indexValue.set(index);
+    lastValue.set(last);
+    widthValue.set(width);
+    panelWidthValue.set(panelWidth);
+    x.set(withTiming(-index * width, { duration: DURATION_MS }));
+  }, [index, indexValue, last, lastValue, panelWidth, panelWidthValue, width, widthValue, x]);
 
   // Leaving the chat takes the keyboard down with it.
   useEffect(() => {
@@ -141,27 +151,27 @@ export function ThreadPager(props: {
 
   const edgesByPath = useRef(new Map<string, PageEdges>());
   useEffect(() => {
-    edges.value =
-      active.path === null ? FREE_EDGES : (edgesByPath.current.get(active.path) ?? FREE_EDGES);
+    edges.set(
+      active.path === null ? FREE_EDGES : (edgesByPath.current.get(active.path) ?? FREE_EDGES),
+    );
   }, [active.path, edges]);
-  const reportersByPath = useRef(new Map<string, (next: PageEdges) => void>());
   const activePathRef = useRef(active.path);
-  activePathRef.current = active.path;
-  const edgeReporter = (path: string) => {
-    let reporter = reportersByPath.current.get(path);
-    if (!reporter) {
-      reporter = (next: PageEdges) => {
-        edgesByPath.current.set(path, next);
-        if (activePathRef.current === path) edges.value = next;
-      };
-      reportersByPath.current.set(path, reporter);
-    }
-    return reporter;
-  };
+  useLayoutEffect(() => {
+    activePathRef.current = active.path;
+  }, [active.path]);
+  const reportEdges = useCallback(
+    (path: string, next: PageEdges) => {
+      edgesByPath.current.set(path, next);
+      if (activePathRef.current === path) edges.set(next);
+    },
+    [edges],
+  );
 
   // Opening a tab rewrites the tabs, so goTo reads them through a ref to stay stable.
   const openTabRef = useRef(threadTabs.open);
-  openTabRef.current = threadTabs.open;
+  useLayoutEffect(() => {
+    openTabRef.current = threadTabs.open;
+  }, [threadTabs.open]);
   const goTo = useCallback((path: string | null, line: string | null = null) => {
     const terminalId = terminalIdFromTabKey(path);
     if (terminalId !== null) {
@@ -191,31 +201,35 @@ export function ThreadPager(props: {
   );
 
   const requestAt = props.request?.at;
-  const requestRef = useRef(props.request);
-  requestRef.current = props.request;
+  const openRequest = useEffectEvent(() => {
+    if (props.request) goTo(props.request.path, props.request.line);
+  });
   useEffect(() => {
-    const request = requestRef.current;
-    if (request) goTo(request.path, request.line);
-  }, [goTo, requestAt]);
+    if (requestAt !== undefined) openRequest();
+  }, [requestAt]);
 
   const closePanel = useCallback(() => {
-    panelProgress.value = withTiming(0, { duration: DURATION_MS }, (finished) => {
-      if (finished) runOnJS(setPanel)(false);
-    });
+    panelProgress.set(
+      withTiming(0, { duration: DURATION_MS }, (finished) => {
+        if (finished) runOnJS(setPanel)(false);
+      }),
+    );
   }, [panelProgress]);
 
-  const goHome = useCallback(() => {
+  const goHome = useEffectEvent(() => {
     // Home already slid in under the finger; the stack swaps without its own animation.
     navigation.setOptions({ animation: "none" });
     requestAnimationFrame(() => {
       if (navigation.canGoBack()) navigation.goBack();
       else navigation.dispatch(StackActions.replace("Home"));
     });
-  }, [navigation]);
+  });
 
   // Back walks the same way the swipes do: panel, then file tabs, then Home.
   const backState = useRef({ panel, index });
-  backState.current = { panel, index };
+  useLayoutEffect(() => {
+    backState.current = { panel, index };
+  }, [index, panel]);
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -233,110 +247,112 @@ export function ThreadPager(props: {
     }, [closePanel]),
   );
 
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .manualActivation(true)
-        .onTouchesDown((event) => {
-          const touch = event.allTouches[0];
-          if (touch) touchStart.value = { x: touch.absoluteX, y: touch.absoluteY };
-          decided.value = false;
-        })
-        .onTouchesMove((event, state) => {
-          if (decided.value) return;
-          const touch = event.allTouches[0];
-          if (!touch || event.numberOfTouches > 1) {
-            decided.value = true;
-            state.fail();
-            return;
-          }
-          const dx = touch.absoluteX - touchStart.value.x;
-          const dy = touch.absoluteY - touchStart.value.y;
-          if (Math.abs(dy) > FAIL_Y_PX && Math.abs(dy) > Math.abs(dx)) {
-            decided.value = true;
-            state.fail();
-            return;
-          }
-          if (Math.abs(dx) < ACTIVATE_PX) return;
-          // A page that still scrolls sideways keeps the swipe (open panel aside).
-          decided.value = true;
-          if (panelProgress.value === 0 && !(dx > 0 ? edges.value.prev : edges.value.next)) {
-            state.fail();
-            return;
-          }
-          state.activate();
-        })
-        .onStart(() => {
-          startIndex.value = indexValue.value;
-          startPanelOpen.value = panelProgress.value > 0.5;
-        })
-        .onUpdate((event) => {
-          const w = widthValue.value;
-          const dx = event.translationX;
-          const base = -startIndex.value * w;
-          if (startPanelOpen.value) {
-            panelProgress.value = Math.min(1, Math.max(0, 1 - dx / panelWidth));
-            return;
-          }
-          if (dx > 0 && startIndex.value === 0) {
-            if (x.value <= 0) runOnJS(setUnderlay)(true);
-            x.value = dx;
-            return;
-          }
-          if (dx < 0 && startIndex.value === lastValue.value) {
-            if (panelProgress.value === 0) runOnJS(setPanel)(true);
-            x.value = base;
-            panelProgress.value = Math.min(1, -dx / panelWidth);
-            return;
-          }
-          x.value = base + Math.max(-w, Math.min(w, dx));
-        })
-        .onEnd((event) => {
-          const w = widthValue.value;
-          const projected = event.translationX + event.velocityX * 0.15;
-          if (startPanelOpen.value || panelProgress.value > 0) {
-            const open = startPanelOpen.value
-              ? projected < panelWidth * 0.4
-              : -projected > panelWidth * 0.4;
-            panelProgress.value = withTiming(open ? 1 : 0, { duration: DURATION_MS }, (done) => {
+  // The gesture outlives renders, so an effect event reads the latest paths.
+  const goToIndex = useEffectEvent((target: number) => {
+    const path = target === 0 ? null : (paths[target - 1] ?? null);
+    setActive({ path, line: null });
+  });
+
+  // Built once: everything it reads changes through shared values or effect events.
+  const [gesture] = useState(() =>
+    Gesture.Pan()
+      .manualActivation(true)
+      .onTouchesDown((event) => {
+        const touch = event.allTouches[0];
+        if (touch) touchStart.set({ x: touch.absoluteX, y: touch.absoluteY });
+        decided.set(false);
+      })
+      .onTouchesMove((event, state) => {
+        if (decided.get()) return;
+        const touch = event.allTouches[0];
+        if (!touch || event.numberOfTouches > 1) {
+          decided.set(true);
+          state.fail();
+          return;
+        }
+        const dx = touch.absoluteX - touchStart.get().x;
+        const dy = touch.absoluteY - touchStart.get().y;
+        if (Math.abs(dy) > FAIL_Y_PX && Math.abs(dy) > Math.abs(dx)) {
+          decided.set(true);
+          state.fail();
+          return;
+        }
+        if (Math.abs(dx) < ACTIVATE_PX) return;
+        // A page that still scrolls sideways keeps the swipe (open panel aside).
+        decided.set(true);
+        if (panelProgress.get() === 0 && !(dx > 0 ? edges.get().prev : edges.get().next)) {
+          state.fail();
+          return;
+        }
+        state.activate();
+      })
+      .onStart(() => {
+        startIndex.set(indexValue.get());
+        startPanelOpen.set(panelProgress.get() > 0.5);
+      })
+      .onUpdate((event) => {
+        const w = widthValue.get();
+        const panelW = panelWidthValue.get();
+        const dx = event.translationX;
+        const base = -startIndex.get() * w;
+        if (startPanelOpen.get()) {
+          panelProgress.set(Math.min(1, Math.max(0, 1 - dx / panelW)));
+          return;
+        }
+        if (dx > 0 && startIndex.get() === 0) {
+          if (x.get() <= 0) runOnJS(setUnderlay)(true);
+          x.set(dx);
+          return;
+        }
+        if (dx < 0 && startIndex.get() === lastValue.get()) {
+          if (panelProgress.get() === 0) runOnJS(setPanel)(true);
+          x.set(base);
+          panelProgress.set(Math.min(1, -dx / panelW));
+          return;
+        }
+        x.set(base + Math.max(-w, Math.min(w, dx)));
+      })
+      .onEnd((event) => {
+        const w = widthValue.get();
+        const panelW = panelWidthValue.get();
+        const projected = event.translationX + event.velocityX * 0.15;
+        if (startPanelOpen.get() || panelProgress.get() > 0) {
+          const open = startPanelOpen.get() ? projected < panelW * 0.4 : -projected > panelW * 0.4;
+          panelProgress.set(
+            withTiming(open ? 1 : 0, { duration: DURATION_MS }, (done) => {
               if (done && !open) runOnJS(setPanel)(false);
-            });
-            return;
-          }
-          if (startIndex.value === 0 && x.value > 0) {
-            const leave = projected > w * 0.35;
-            x.value = withTiming(leave ? w : 0, { duration: DURATION_MS }, (done) => {
+            }),
+          );
+          return;
+        }
+        if (startIndex.get() === 0 && x.get() > 0) {
+          const leave = projected > w * 0.35;
+          x.set(
+            withTiming(leave ? w : 0, { duration: DURATION_MS }, (done) => {
               if (!done) return;
               if (leave) runOnJS(goHome)();
               else runOnJS(setUnderlay)(false);
-            });
-            return;
-          }
-          let target = startIndex.value;
-          if (projected < -w * 0.35) target = Math.min(lastValue.value, target + 1);
-          else if (projected > w * 0.35) target = Math.max(0, target - 1);
-          x.value = withTiming(-target * w, { duration: DURATION_MS });
-          if (target !== startIndex.value) {
-            runOnJS(goToIndex)(target);
-          }
-        }),
-    // goToIndex reads the latest paths through a ref.
-    [goHome, panelWidth],
+            }),
+          );
+          return;
+        }
+        let target = startIndex.get();
+        if (projected < -w * 0.35) target = Math.min(lastValue.get(), target + 1);
+        else if (projected > w * 0.35) target = Math.max(0, target - 1);
+        x.set(withTiming(-target * w, { duration: DURATION_MS }));
+        if (target !== startIndex.get()) {
+          runOnJS(goToIndex)(target);
+        }
+      }),
   );
-  const pathsRef = useRef(paths);
-  pathsRef.current = paths;
-  function goToIndex(target: number) {
-    const path = target === 0 ? null : (pathsRef.current[target - 1] ?? null);
-    setActive({ path, line: null });
-  }
 
-  const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
+  const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }] }));
   const underlayDimStyle = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 0.35 * (1 - x.value / widthValue.value)),
+    opacity: Math.max(0, 0.35 * (1 - x.get() / widthValue.get())),
   }));
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: panelProgress.value * 0.45 }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: panelProgress.get() * 0.45 }));
   const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: (1 - panelProgress.value) * panelWidth }],
+    transform: [{ translateX: (1 - panelProgress.get()) * panelWidth }],
   }));
 
   return (
@@ -369,11 +385,11 @@ export function ThreadPager(props: {
                   style={[styles.page, { left: page * width, width }]}
                   testID={`thread-page-${page}`}
                 >
-                  <ThreadPageEdgesContext.Provider value={edgeReporter(path)}>
+                  <PageEdgesProvider path={path} onEdges={reportEdges}>
                     {terminalId !== null
                       ? props.renderTerminal(terminalId, page === index)
                       : props.renderFile(path, path === active.path ? active.line : null)}
-                  </ThreadPageEdgesContext.Provider>
+                  </PageEdgesProvider>
                 </View>
               );
             })}
@@ -406,6 +422,21 @@ export function ThreadPager(props: {
         </View>
       </GestureDetector>
     </ThreadPagerContext.Provider>
+  );
+}
+
+/** Hands a page a reporter that stays the same while the page keeps its path. */
+function PageEdgesProvider(props: {
+  readonly path: string;
+  readonly onEdges: (path: string, next: PageEdges) => void;
+  readonly children: ReactNode;
+}) {
+  const { path, onEdges } = props;
+  const report = useCallback((next: PageEdges) => onEdges(path, next), [onEdges, path]);
+  return (
+    <ThreadPageEdgesContext.Provider value={report}>
+      {props.children}
+    </ThreadPageEdgesContext.Provider>
   );
 }
 

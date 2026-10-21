@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { BackHandler, Pressable } from "react-native";
 
-import { SymbolView } from "../../components/AppSymbol";
-import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
 import { composerOffersFullScreen } from "./fullScreenLines";
 
 /**

@@ -33,7 +33,7 @@ import {
   RotateCcwIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { useAssetUrls } from "../../assets/assetUrls";
 import { usePrimarySettings } from "../../hooks/useSettings";
@@ -569,14 +569,10 @@ function InboxEntryAttachments({
   onExpandImage: (preview: ExpandedImagePreview) => void;
 }) {
   const { resolvedTheme } = useTheme();
-  const resources = useMemo(
-    () =>
-      attachments.map((attachment) => ({
-        _tag: "attachment" as const,
-        attachmentId: attachment.id,
-      })),
-    [attachments],
-  );
+  const resources = attachments.map((attachment) => ({
+    _tag: "attachment" as const,
+    attachmentId: attachment.id,
+  }));
   const urls = useAssetUrls(environmentId, resources);
   const items = attachments.map((attachment, index) => ({ attachment, url: urls[index] ?? null }));
   const images = items.filter((item) => item.attachment.type === "image");

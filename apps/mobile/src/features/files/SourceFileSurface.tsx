@@ -1,7 +1,8 @@
+import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import type { ComponentType } from "react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -12,8 +13,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppText as Text } from "../../components/AppText";
-import { LoadingStrip } from "../../components/LoadingStrip";
+import { AppText as Text } from "../../components/ui/AppText";
+import { LoadingStrip } from "../../components/ui/LoadingStrip";
 import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import {
   type NativeReviewDiffViewProps,
@@ -40,14 +41,10 @@ import { sourceHighlightAtom } from "./sourceHighlightingState";
 interface SourceFileSurfaceProps {
   readonly contents: string;
   readonly path: string;
-  /** The enclosing sheet or card already reserves its own chrome and safe area. */
   readonly embedded?: boolean;
   readonly initialLine?: number | null;
-  /** Override when a fixed notice already reserves the native header. */
   readonly headerInsetTop?: number;
-  /** Keep the entire document in one native text-selection scope. */
   readonly selectable?: boolean;
-  /** Enables native pull-to-refresh on the source surface. */
   readonly onRefresh?: () => Promise<void> | void;
   /** Thread tabs (sidebar fork): first line to show again, and where reading is now. */
   readonly restoreRow?: number | null;
@@ -56,7 +53,7 @@ interface SourceFileSurfaceProps {
 
 type SourceHighlightStatus = "highlighting" | "ready" | "error";
 
-const HighlightedSourceLine = memo(function HighlightedSourceLine(props: {
+const HighlightedSourceLine = function HighlightedSourceLine(props: {
   readonly codeSurface: ResolvedMobileCodeSurface;
   readonly index: number;
   readonly line: string;
@@ -131,20 +128,21 @@ const HighlightedSourceLine = memo(function HighlightedSourceLine(props: {
       </NativeText>
     </View>
   );
-});
+};
 
 function useSourceFileModel(props: SourceFileSurfaceProps) {
   const { themeAppearance: theme } = useAppearancePreferences();
-  const document = useMemo(() => prepareSourceFileDocument(props.contents), [props.contents]);
+  const document = prepareSourceFileDocument(props.contents);
   const { contents: normalizedContents, lines, rowsJson } = document;
   const targetIndex =
     props.initialLine !== null && props.initialLine !== undefined && props.initialLine > 0
       ? Math.min(Math.floor(props.initialLine) - 1, Math.max(0, lines.length - 1))
       : null;
-  const highlightAtom = useMemo(
-    () => sourceHighlightAtom({ path: props.path, contents: normalizedContents, theme }),
-    [normalizedContents, props.path, theme],
-  );
+  const highlightAtom = sourceHighlightAtom({
+    path: props.path,
+    contents: normalizedContents,
+    theme,
+  });
   const highlightResult = useAtomValue(highlightAtom);
   const tokens = AsyncResult.isSuccess(highlightResult) ? highlightResult.value : null;
   const status: SourceHighlightStatus = AsyncResult.isFailure(highlightResult)
@@ -172,17 +170,15 @@ function SourceHighlightStatusView(props: { readonly status: SourceHighlightStat
 
 function useSourceFileRefresh(onRefresh: SourceFileSurfaceProps["onRefresh"]) {
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
-  const handlePullToRefresh = useCallback(async () => {
+  const handlePullToRefresh = async () => {
     if (!onRefresh) {
       return;
     }
     setIsPullRefreshing(true);
-    try {
-      await onRefresh();
-    } finally {
-      setIsPullRefreshing(false);
-    }
-  }, [onRefresh]);
+    // RefreshControl only needs the spinner cleared; the caller surfaces its own errors.
+    await settlePromise(async () => onRefresh());
+    setIsPullRefreshing(false);
+  };
   return { isPullRefreshing, handlePullToRefresh };
 }
 
@@ -203,16 +199,12 @@ function NativeSourceFileSurface(
   const { isPullRefreshing, handlePullToRefresh } = useSourceFileRefresh(onRefresh);
   // Read once: a changed initial row would scroll the canvas again on every save.
   const [restoreRow] = useState(props.restoreRow ?? null);
-  const tokensJson = useMemo(() => JSON.stringify(buildNativeSourceTokens(tokens)), [tokens]);
-  const selectedRowIdsJson = useMemo(
-    () => JSON.stringify(targetIndex === null ? [] : [nativeSourceRowId(targetIndex)]),
-    [targetIndex],
+  const tokensJson = JSON.stringify(buildNativeSourceTokens(tokens));
+  const selectedRowIdsJson = JSON.stringify(
+    targetIndex === null ? [] : [nativeSourceRowId(targetIndex)],
   );
-  const themeJson = useMemo(
-    () => JSON.stringify(createNativeReviewDiffTheme(themeAppearance, themeId, appTheme)),
-    [appTheme, themeAppearance, themeId],
-  );
-  const styleJson = useMemo(() => JSON.stringify(nativeSourceStyle), [nativeSourceStyle]);
+  const themeJson = JSON.stringify(createNativeReviewDiffTheme(themeAppearance, themeId, appTheme));
+  const styleJson = JSON.stringify(nativeSourceStyle);
   const contentWidth = codeWordBreak
     ? Math.max(240, viewportWidth - codeSurface.gutterWidth - 24)
     : NATIVE_SOURCE_CONTENT_WIDTH;
@@ -262,10 +254,7 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
   const foreground = useUniwindTheme()["--color-foreground"];
   const { codeSurface, codeWordBreak } = useAppearanceCodeSurface();
   const { normalizedContents, lines, status, targetIndex, tokens } = useSourceFileModel(props);
-  const selectableTokens = useMemo(
-    () => (props.selectable ? boundedSelectableSourceTokens(tokens) : null),
-    [props.selectable, tokens],
-  );
+  const selectableTokens = props.selectable ? boundedSelectableSourceTokens(tokens) : null;
   const listRef = useRef<FlatList<string>>(null);
   const { isPullRefreshing, handlePullToRefresh } = useSourceFileRefresh(props.onRefresh);
   const refreshControl = props.onRefresh ? (
@@ -299,33 +288,31 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
     return () => cancelAnimationFrame(frame);
   }, [lines.length]);
   const onVisibleRowChange = props.onVisibleRowChange;
-  const handleViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ReadonlyArray<{ readonly index?: number | null }> }) => {
-      const first = viewableItems[0]?.index;
-      if (typeof first === "number") onVisibleRowChange?.(first);
-    },
-    [onVisibleRowChange],
+  const handleViewableItemsChanged = ({
+    viewableItems,
+  }: {
+    viewableItems: ReadonlyArray<{ readonly index?: number | null }>;
+  }) => {
+    const first = viewableItems[0]?.index;
+    if (typeof first === "number") onVisibleRowChange?.(first);
+  };
+
+  const renderLine = ({ item, index }: { item: string; index: number }) => (
+    <HighlightedSourceLine
+      codeSurface={codeSurface}
+      index={index}
+      line={item}
+      tokens={tokens?.[index] ?? null}
+      highlighted={index === targetIndex}
+      wordBreak={codeWordBreak}
+    />
   );
 
-  const renderLine = useCallback(
-    ({ item, index }: { item: string; index: number }) => (
-      <HighlightedSourceLine
-        codeSurface={codeSurface}
-        index={index}
-        line={item}
-        tokens={tokens?.[index] ?? null}
-        highlighted={index === targetIndex}
-        wordBreak={codeWordBreak}
-      />
-    ),
-    [codeSurface, codeWordBreak, targetIndex, tokens],
-  );
-
-  // One selectable text for the whole file. On iOS `uiTextView` renders a real `UITextView`,
-  // which selects across every line, wraps, and lays out long documents through TextKit; on
-  // Android the primitive is an RN `Text`, which selects across its nested children. Either
-  // way "select all" takes the file rather than a line, which a `FlatList` row can never do
-  // because each row is its own selection scope.
+  // On iOS `uiTextView` renders a real `UITextView`, which selects across every line,
+  // wraps, and lays out long documents through TextKit; on Android the primitive is an RN
+  // `Text`, which selects across its nested children. Either way "select all" takes the
+  // file rather than a line, which a `FlatList` row can never do because each row is its
+  // own selection scope.
   const selectableBlock = props.selectable ? (
     <SourceText
       selectable
@@ -406,8 +393,6 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
     />
   );
 
-  // Workspace files retain their numbered, virtualized rows, with or without a line target.
-  // Attachments opt into one selection scope for the entire document.
   const usesLineList = !props.selectable;
   const padded = (
     <ScrollView
@@ -439,7 +424,6 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
       ) : codeWordBreak ? (
         padded
       ) : (
-        // Without wrapping the text keeps its natural width and the reader pans to it.
         <ScrollView horizontal bounces={false} className="flex-1">
           {padded}
         </ScrollView>
@@ -451,9 +435,6 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
 export function SourceFileSurface(props: SourceFileSurfaceProps) {
   const NativeView = resolveNativeReviewDiffView();
   const { codeWordBreak } = useAppearanceCodeSurface();
-  // The native canvas draws source lines without text selection or wrapping. Attachments
-  // need one selectable text view in either wrap mode; workspace line navigation can still
-  // use the canvas when wrapping is disabled.
   const surface =
     NativeView && !codeWordBreak && !props.selectable ? (
       <NativeSourceFileSurface {...props} NativeView={NativeView} />

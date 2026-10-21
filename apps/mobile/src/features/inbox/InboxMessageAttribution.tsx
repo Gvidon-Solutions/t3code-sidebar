@@ -2,7 +2,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { EnvironmentId, InboxIssueId } from "@t3tools/contracts";
 import { Pressable } from "react-native";
 
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 
 /**
  * Fork: the label over a user-role message the inbox delivered into a
