@@ -13,8 +13,12 @@ Everything else is upstream.
   kept in its own files so merges stay small; the seams into upstream files are listed per
   feature below. Re-check those seams after every upstream merge.
 - **No upstream PRs** from this fork unless the owner asks for one.
-- **Tests.** The packaging tests assert the fork's app name, id and missing URL schemes; upstream
-  CI does not run here (it triggers on `main`).
+- **Tests.** The fork keeps the whole suite green: `vp lint` has no errors and every package's
+  tests pass on Node 24 (the version `package.json` pins; Node 22 fails sqlite, WSL and lint-plugin
+  tests). Upstream tests that check desktop identity (app name, id, profile, `~/.t3-sidebar`, WSL
+  runtime dir) expect the fork's values, marked `// Sidebar fork:`. When a merge breaks a test,
+  fix the fork code or the test; an upstream test that is broken upstream too is dropped or
+  fixed the way upstream later did. Upstream CI does not run here (it triggers on `main`).
 
 ## Relation to upstream
 
@@ -98,6 +102,31 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 
 ## Feature log
+
+### 2026-10-21 — A clean fork: lint and tests green
+
+- **What.** `vp lint` reports no errors (47 before) and the full test suite passes. The sidebar's
+  hover hints are now the app's own tooltips instead of the browser's, focus rings sit inside
+  the rows, the status colours use the theme's info/success/error/warning tokens, and thread and
+  folder titles are 14px like upstream's rows (they were 13px).
+- **How.** The three web sidebar files follow upstream's UI rules (no raw colours or arbitrary
+  values, `Tooltip` instead of `title`, inset focus rings, no restyled `SidebarContent`).
+  Desktop identity tests expect the fork's identity. `pickSharedServerSettings` lists
+  `sidebarWorkspaces`; the thread-menu test mocks the fork-from-menu seam. The phone's thread
+  pager loads the file page lazily, which breaks the import cycle between the thread and files
+  screens. The packaging test no longer imports desktop source outside its tsconfig project, so
+  typecheck is clean too. Tests that are flaky on upstream's own `v0.1.1` and that upstream
+  deleted right after it (#22557) are gone here as well: the Claude "move foreground subagents
+  to the background before a steer" case, `useTheme`, `useEnvironmentThemeSync`, and the
+  `HtmlRenderDialog`, `UsageLimitsPooled`, `StyledDiffCodeView` and `DiffPanel` browser tests.
+  Upstream's later browser-test fix is taken too: Playwright's mouse is parked off the page
+  before each test (`apps/web/test/browserSetup.ts`), so no test starts hovered.
+- **Where.** `apps/web/src/components/workspaces/{WorkspaceChrome,WorkspaceSidebar,WorkspaceThreadRow}.tsx`,
+  `apps/web/src/hooks/useThreadActionMenu.test.ts`, `apps/desktop/src/**/*.test.ts`,
+  `packages/client-runtime/src/state/sharedSettings.test.ts`,
+  `apps/mobile/src/features/threads/ThreadRouteScreen.tsx`,
+  `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts`,
+  `scripts/build-desktop-artifact.test.ts`.
 
 Newest first. Each entry: what it does for the user, how it works, where it lives.
 

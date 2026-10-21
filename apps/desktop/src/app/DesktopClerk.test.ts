@@ -135,8 +135,9 @@ describe("DesktopClerk", () => {
         ],
       ]);
       assert.equal(cleanup.mock.calls.length, 1);
+      // Sidebar fork: the fork's own dev profile (upstream: t3code-dev).
       assert.deepEqual(events, [
-        "setPath:userData:/tmp/app-data/t3code-dev",
+        "setPath:userData:/tmp/app-data/t3code-sidebar-dev",
         "requestSingleInstanceLock",
         "on:second-instance",
         "createClerkBridge",
@@ -146,30 +147,31 @@ describe("DesktopClerk", () => {
     });
   });
 
+  // Sidebar fork: the fork's own profiles (upstream: t3code-v2, t3code-dev).
   it.each([
     {
       name: "packaged macOS",
       isDevelopment: false,
       platform: "darwin" as const,
-      userData: "/tmp/app-data/t3code-v2",
+      userData: "/tmp/app-data/t3code-sidebar-v2",
     },
     {
       name: "packaged Linux",
       isDevelopment: false,
       platform: "linux" as const,
-      userData: "/tmp/app-data/t3code-v2",
+      userData: "/tmp/app-data/t3code-sidebar-v2",
     },
     {
       name: "packaged Windows",
       isDevelopment: false,
       platform: "win32" as const,
-      userData: "/tmp/app-data/t3code-v2",
+      userData: "/tmp/app-data/t3code-sidebar-v2",
     },
     {
       name: "development",
       isDevelopment: true,
       platform: "win32" as const,
-      userData: "/tmp/app-data/t3code-dev",
+      userData: "/tmp/app-data/t3code-sidebar-dev",
     },
   ])(
     "creates the bridge before startup can yield to the event loop ($name)",
@@ -353,8 +355,9 @@ describe("DesktopClerk", () => {
         const exit = yield* Effect.exit(Effect.scoped(Layer.build(runtime)));
 
         assert.isTrue(Exit.hasInterrupts(exit));
+        // Sidebar fork: the fork's own profile (upstream: t3code-v2).
         assert.deepEqual(events, [
-          "setPath:userData:/tmp/app-data/t3code-v2",
+          "setPath:userData:/tmp/app-data/t3code-sidebar-v2",
           "requestSingleInstanceLock",
           "quit",
         ]);

@@ -128,6 +128,8 @@ describe("pickSharedServerSettings", () => {
       "newWorktreesStartFromOrigin",
       "sidebarAutoSettleAfterDays",
       "sidebarAutoSettleOnMerge",
+      // Sidebar fork: the workspace tiles follow the owner across environments.
+      "sidebarWorkspaces",
       "snoozeLimitedThreads",
       "sourceControlWritingStyle",
       "textGenerationModelSelection",

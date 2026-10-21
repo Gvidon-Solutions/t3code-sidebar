@@ -12,7 +12,7 @@ import {
   useNavigation,
   type StaticScreenProps,
 } from "@react-navigation/native";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from "react";
 import * as Option from "effect/Option";
 import {
   AuthOrchestrationOperateScope,
@@ -94,7 +94,6 @@ import { useThreadPromptLink } from "../prompt-links/useThreadPromptLink";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
 import { ThreadPager } from "../panels/ThreadPager";
-import { ThreadFileView } from "../files/ThreadFilesRouteScreen";
 import { terminalTabKey } from "../panels/terminalTabs";
 import { ThreadTerminalRouteScreen } from "../terminal/ThreadTerminalRouteScreen";
 import { terminalEnvironment } from "../../state/terminal";
@@ -102,6 +101,12 @@ import {
   useAndroidWorkspaceBack,
   useWorkspaceBackNavigation,
 } from "../workspace/useAndroidWorkspaceNavigation";
+
+// Sidebar fork: the files screen imports this one for the tablet inspector, so the pager's file
+// page loads it lazily; a static import would close an import cycle.
+const ThreadFileView = lazy(() =>
+  import("../files/ThreadFilesRouteScreen").then((module) => ({ default: module.ThreadFileView })),
+);
 
 interface ThreadInspectorSelection {
   readonly routeThreadIdentity: string | null;
@@ -1073,16 +1078,18 @@ function ThreadRouteContent(
         />
       )}
       renderFile={(path, line) => (
-        <ThreadFileView
-          embedded
-          route={{
-            params: {
-              ...threadParams,
-              path: path.split("/").filter(Boolean),
-              ...(line === null ? {} : { line }),
-            },
-          }}
-        />
+        <Suspense fallback={<View className="flex-1 bg-screen" />}>
+          <ThreadFileView
+            embedded
+            route={{
+              params: {
+                ...threadParams,
+                path: path.split("/").filter(Boolean),
+                ...(line === null ? {} : { line }),
+              },
+            }}
+          />
+        </Suspense>
       )}
     />
   );

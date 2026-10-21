@@ -39,6 +39,15 @@ vi.mock("react", () => ({
   useCallback: (callback: unknown) => callback,
   useMemo: (factory: () => unknown) => factory(),
 }));
+// Sidebar fork: the fork-from-menu seam reaches the composer's provider modules; mock it like
+// the rest of the hook's collaborators.
+vi.mock("../components/workspaces/useForkThread", () => ({
+  useForkThread: () => async () => recordEffect("fork"),
+}));
+vi.mock("../rpc/atomRegistry", () => ({ appAtomRegistry: { get: () => new Map() } }));
+vi.mock("../state/presentation", () => ({
+  environmentPresentations: { providersByEnvironmentAtom: "providers-by-environment" },
+}));
 vi.mock("@tanstack/react-router", () => ({
   useRouter: () => ({ navigate: async () => recordEffect("project-settings") }),
 }));
@@ -61,6 +70,9 @@ vi.mock("../state/entities", () => ({
     worktreePath: null,
     runtime: null,
     latestRun: null,
+    lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: "thread" },
+    source: {},
+    visibleItemCount: 0,
   }),
   useProjects: () => [{ id: "project", environmentId: "secondary" }],
 }));

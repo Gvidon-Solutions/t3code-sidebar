@@ -112,6 +112,7 @@ import { SidebarChromeFooter } from "../sidebar/SidebarChrome";
 import { SidebarHeaderIconButton } from "../sidebar/SidebarThreadHeader";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { SidebarContent, SidebarInput, useSidebar } from "../ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   WORKSPACE_PROJECT_DRAG_TYPE,
   WorkspaceAvatar,
@@ -1147,102 +1148,114 @@ export default function WorkspaceSidebar() {
     ).length;
     return (
       <div key={folderKey} className="flex flex-col">
-        <div
-          role="button"
-          tabIndex={0}
-          draggable
-          aria-expanded={open}
-          title={folder.group.memberProjects.map((member) => member.workspaceRoot).join("\n")}
-          className="group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-[13px] font-medium text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => view.setFolderOpen(folderKey, !open)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              view.setFolderOpen(folderKey, !open);
+        <Tooltip disabled={folderDrag !== null}>
+          <TooltipTrigger
+            render={
+              <div
+                role="button"
+                tabIndex={0}
+                draggable
+                aria-expanded={open}
+                className="group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-sm font-medium text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                onClick={() => view.setFolderOpen(folderKey, !open)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    view.setFolderOpen(folderKey, !open);
+                  }
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  void openFolderMenu(folder, { x: event.clientX, y: event.clientY });
+                }}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData(WORKSPACE_PROJECT_DRAG_TYPE, folder.group.projectKey);
+                  event.dataTransfer.effectAllowed = "copyMove";
+                  setFolderDrag({
+                    workspaceId: folder.workspaceId,
+                    projectKey: folder.group.projectKey,
+                  });
+                }}
+                onDragEnd={() => {
+                  setFolderDrag(null);
+                  setFolderDrop(null);
+                }}
+                onDragOver={(event) => {
+                  if (!acceptsDrop) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const after = event.clientY > rect.top + rect.height / 2;
+                  if (dropAt?.after !== after) {
+                    setFolderDrop({ projectKey: folder.group.projectKey, after });
+                  }
+                }}
+                onDragLeave={(event) => {
+                  if (dropAt && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setFolderDrop(null);
+                  }
+                }}
+                onDrop={(event) => {
+                  if (!acceptsDrop) return;
+                  event.preventDefault();
+                  dropFolder(folder, dropAt?.after ?? false);
+                  setFolderDrag(null);
+                  setFolderDrop(null);
+                }}
+              />
             }
-          }}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            void openFolderMenu(folder, { x: event.clientX, y: event.clientY });
-          }}
-          onDragStart={(event) => {
-            event.dataTransfer.setData(WORKSPACE_PROJECT_DRAG_TYPE, folder.group.projectKey);
-            event.dataTransfer.effectAllowed = "copyMove";
-            setFolderDrag({
-              workspaceId: folder.workspaceId,
-              projectKey: folder.group.projectKey,
-            });
-          }}
-          onDragEnd={() => {
-            setFolderDrag(null);
-            setFolderDrop(null);
-          }}
-          onDragOver={(event) => {
-            if (!acceptsDrop) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            const rect = event.currentTarget.getBoundingClientRect();
-            const after = event.clientY > rect.top + rect.height / 2;
-            if (dropAt?.after !== after) {
-              setFolderDrop({ projectKey: folder.group.projectKey, after });
-            }
-          }}
-          onDragLeave={(event) => {
-            if (dropAt && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
-              setFolderDrop(null);
-            }
-          }}
-          onDrop={(event) => {
-            if (!acceptsDrop) return;
-            event.preventDefault();
-            dropFolder(folder, dropAt?.after ?? false);
-            setFolderDrag(null);
-            setFolderDrop(null);
-          }}
-        >
-          {dropAt ? (
-            <span
+          >
+            {dropAt ? (
+              <span
+                className={cn(
+                  "pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-primary",
+                  dropAt.after ? "-bottom-px" : "-top-px",
+                )}
+              />
+            ) : null}
+            <ChevronRightIcon
               className={cn(
-                "pointer-events-none absolute inset-x-1 h-0.5 rounded-full bg-primary",
-                dropAt.after ? "-bottom-px" : "-top-px",
+                "size-3.5 shrink-0 text-sidebar-muted-foreground transition-transform duration-150",
+                open && "rotate-90",
               )}
             />
-          ) : null}
-          <ChevronRightIcon
-            className={cn(
-              "size-3.5 shrink-0 text-sidebar-muted-foreground transition-transform duration-150",
-              open && "rotate-90",
+            {folder.isScratch ? (
+              <MessagesSquareIcon className="size-4 shrink-0 text-sidebar-muted-foreground" />
+            ) : (
+              <ProjectFavicon project={folder.group} className="size-4 shrink-0" />
             )}
-          />
-          {folder.isScratch ? (
-            <MessagesSquareIcon className="size-4 shrink-0 text-sidebar-muted-foreground" />
-          ) : (
-            <ProjectFavicon project={folder.group} className="size-4 shrink-0" />
-          )}
-          <span className="min-w-0 flex-1 truncate">{folder.label}</span>
-          {!open && (attention > 0 || working > 0) ? (
-            <span className="flex shrink-0 items-center gap-1.5 text-2xs font-semibold tabular-nums group-hover/ws-folder:hidden">
-              {attention > 0 ? <span className="text-warning-foreground">◆{attention}</span> : null}
-              {working > 0 ? (
-                <span className="text-sky-600 dark:text-sky-400">●{working}</span>
-              ) : null}
+            <span className="min-w-0 flex-1 truncate">{folder.label}</span>
+            {!open && (attention > 0 || working > 0) ? (
+              <span className="flex shrink-0 items-center gap-1.5 text-2xs font-semibold tabular-nums group-hover/ws-folder:hidden">
+                {attention > 0 ? (
+                  <span className="text-warning-foreground">◆{attention}</span>
+                ) : null}
+                {working > 0 ? <span className="text-info-foreground">●{working}</span> : null}
+              </span>
+            ) : null}
+            <span className="hidden shrink-0 items-center gap-0.5 group-hover/ws-folder:flex group-focus-within/ws-folder:flex">
+              <FolderAction
+                label={`New thread in ${folder.label}`}
+                onClick={() => startThreadInFolder(folder)}
+              >
+                <SquarePenIcon />
+              </FolderAction>
+              <FolderAction
+                label="Project actions"
+                onClick={(position) => void openFolderMenu(folder, position)}
+              >
+                <EllipsisIcon />
+              </FolderAction>
             </span>
-          ) : null}
-          <span className="hidden shrink-0 items-center gap-0.5 group-hover/ws-folder:flex group-focus-within/ws-folder:flex">
-            <FolderAction
-              label={`New thread in ${folder.label}`}
-              onClick={() => startThreadInFolder(folder)}
-            >
-              <SquarePenIcon />
-            </FolderAction>
-            <FolderAction
-              label="Project actions"
-              onClick={(position) => void openFolderMenu(folder, position)}
-            >
-              <EllipsisIcon />
-            </FolderAction>
-          </span>
-        </div>
+          </TooltipTrigger>
+          <TooltipPopup side="right" align="start">
+            {folder.group.memberProjects.map((member) => (
+              <div key={member.workspaceRoot} className="min-w-0 wrap-anywhere">
+                {member.workspaceRoot}
+              </div>
+            ))}
+          </TooltipPopup>
+        </Tooltip>
         {open ? (
           <div className="flex flex-col pl-3">
             {visible.map((thread) => renderThread(thread, "active"))}
@@ -1364,7 +1377,7 @@ export default function WorkspaceSidebar() {
             <Fragment key={bucket.workspace.id}>
               <button
                 type="button"
-                className="mt-1 flex h-7 items-center gap-2 rounded-md px-1 text-left text-xs font-semibold tracking-tight text-sidebar-foreground outline-hidden hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-ring"
+                className="mt-1 flex h-7 items-center gap-2 rounded-md px-1 text-left text-xs font-semibold tracking-tight text-sidebar-foreground outline-hidden hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 aria-expanded={open}
                 onClick={() => view.setSectionOpen(key, !open)}
                 onContextMenu={(event) => {
@@ -1434,7 +1447,7 @@ export default function WorkspaceSidebar() {
       {accent ? (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b from-[color-mix(in_oklab,var(--ws-accent)_13%,transparent)] to-transparent"
+          className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b from-(--ws-accent)/13 to-transparent"
         />
       ) : null}
       <WorkspaceTitlebar
@@ -1520,15 +1533,17 @@ export default function WorkspaceSidebar() {
           ) : null}
         </div>
       </div>
-      <SidebarContent className="relative px-2 pb-2">
-        {isSearching
-          ? renderSearch()
-          : view.tilesVisible
-            ? (() => {
-                const bucket = model.byWorkspace.get(activeWorkspaceId);
-                return bucket ? renderWorkspaceBody(withPinned(bucket), false) : null;
-              })()
-            : renderAllWorkspaces()}
+      <SidebarContent className="relative">
+        <div className="flex flex-col px-2 pb-2">
+          {isSearching
+            ? renderSearch()
+            : view.tilesVisible
+              ? (() => {
+                  const bucket = model.byWorkspace.get(activeWorkspaceId);
+                  return bucket ? renderWorkspaceBody(withPinned(bucket), false) : null;
+                })()
+              : renderAllWorkspaces()}
+        </div>
       </SidebarContent>
       <WorkspaceUpdateStrip />
       <WorkspaceDock
@@ -1571,19 +1586,25 @@ function FolderAction({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      className="flex size-5 items-center justify-center rounded text-sidebar-muted-foreground transition-colors hover:bg-foreground/8 hover:text-sidebar-foreground [&_svg]:size-3.5"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onClick({ x: event.clientX, y: event.clientY });
-      }}
-    >
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className="flex size-5 items-center justify-center rounded text-sidebar-muted-foreground transition-colors hover:bg-foreground/8 hover:text-sidebar-foreground [&_svg]:size-3.5"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onClick({ x: event.clientX, y: event.clientY });
+            }}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{label}</TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -1591,7 +1612,7 @@ function MoreButton({ onClick, children }: { onClick: () => void; children: Reac
   return (
     <button
       type="button"
-      className="flex h-6 items-center gap-1.5 rounded-md pl-[1.875rem] text-left text-xs text-sidebar-muted-foreground outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex h-6 items-center gap-1.5 rounded-md pl-7.5 text-left text-xs text-sidebar-muted-foreground outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       onClick={onClick}
     >
       {children}
@@ -1642,37 +1663,43 @@ function CollapsibleSection({
   const [dropOver, setDropOver] = useState(false);
   return (
     <div className="mt-1 flex flex-col">
-      <button
-        type="button"
-        title={title}
-        aria-expanded={open}
-        className={cn(
-          "flex h-6 items-center gap-1.5 rounded-md px-1 text-left text-2xs font-medium tracking-wide text-sidebar-muted-foreground uppercase outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring",
-          onDropFolder && "outline-1 -outline-offset-1 outline-dashed outline-sidebar-border",
-          onDropFolder &&
-            dropOver &&
-            "bg-sidebar-row-hover text-sidebar-foreground outline-primary",
-        )}
-        onClick={onToggle}
-        onDragOver={(event) => {
-          if (!onDropFolder) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-          if (!dropOver) setDropOver(true);
-        }}
-        onDragLeave={() => setDropOver(false)}
-        onDrop={(event) => {
-          setDropOver(false);
-          if (!onDropFolder) return;
-          event.preventDefault();
-          onDropFolder();
-        }}
-      >
-        <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-        {icon}
-        <span>{label}</span>
-        <span className="ml-auto pr-1 tabular-nums">{count}</span>
-      </button>
+      <Tooltip disabled={!title}>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              aria-expanded={open}
+              className={cn(
+                "flex h-6 items-center gap-1.5 rounded-md px-1 text-left text-2xs font-medium tracking-wide text-sidebar-muted-foreground uppercase outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                onDropFolder && "outline-1 -outline-offset-1 outline-dashed outline-sidebar-border",
+                onDropFolder &&
+                  dropOver &&
+                  "bg-sidebar-row-hover text-sidebar-foreground outline-primary",
+              )}
+              onClick={onToggle}
+              onDragOver={(event) => {
+                if (!onDropFolder) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                if (!dropOver) setDropOver(true);
+              }}
+              onDragLeave={() => setDropOver(false)}
+              onDrop={(event) => {
+                setDropOver(false);
+                if (!onDropFolder) return;
+                event.preventDefault();
+                onDropFolder();
+              }}
+            />
+          }
+        >
+          <ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+          {icon}
+          <span>{label}</span>
+          <span className="ml-auto pr-1 tabular-nums">{count}</span>
+        </TooltipTrigger>
+        <TooltipPopup side="top">{title}</TooltipPopup>
+      </Tooltip>
       {open ? <div className="flex flex-col">{children}</div> : null}
     </div>
   );

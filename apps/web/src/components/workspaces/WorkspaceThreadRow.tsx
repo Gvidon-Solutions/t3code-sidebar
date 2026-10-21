@@ -27,6 +27,7 @@ import {
 
 import { cn } from "~/lib/utils";
 import type { SidebarThreadSummary } from "../../types";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { useUiStateStore } from "../../uiStateStore";
 import { resolveSidebarThreadStatus, resolveWorkingStartedAt } from "../Sidebar.logic";
 import { useWorkspaceViewStore } from "./workspaceViewStore";
@@ -68,58 +69,56 @@ function StatusGlyph({
   isAgent: boolean;
 }) {
   const status = resolveSidebarThreadStatus(thread);
-  const glyph: { icon: ReactNode; label: string } | null =
+  // Colors follow the upstream sidebar's status palette (Sidebar.tsx topStatus).
+  const glyph: { icon: ReactNode; label: string; className: string } | null =
     status === "working"
-      ? {
-          icon: <CircleDashedIcon className="size-3.5 text-sky-600 dark:text-sky-400" />,
-          label: "Working",
-        }
+      ? { icon: <CircleDashedIcon />, label: "Working", className: "text-info" }
       : status === "waiting"
-        ? { icon: <HourglassIcon className="size-3.5 text-foreground/60" />, label: "Waiting" }
+        ? { icon: <HourglassIcon />, label: "Waiting", className: "text-foreground/60" }
         : status === "limited"
-          ? {
-              icon: <GaugeIcon className="size-3.5 text-warning" />,
-              label: "Usage limit reached",
-            }
+          ? { icon: <GaugeIcon />, label: "Usage limit reached", className: "text-warning" }
           : status === "approval"
             ? {
-                icon: <ShieldQuestionIcon className="size-3.5 text-warning-foreground" />,
+                icon: <ShieldQuestionIcon />,
                 label: "Needs approval",
+                className: "text-warning-foreground",
               }
             : status === "input"
               ? {
-                  icon: (
-                    <MessageCircleQuestionIcon className="size-3.5 text-indigo-600 dark:text-indigo-300" />
-                  ),
+                  icon: <MessageCircleQuestionIcon />,
                   label: "Waiting for your answer",
+                  className: "text-indigo-600 dark:text-indigo-300",
                 }
               : status === "failed"
-                ? {
-                    icon: <CircleAlertIcon className="size-3.5 text-red-600 dark:text-red-400" />,
-                    label: "Failed",
-                  }
+                ? { icon: <CircleAlertIcon />, label: "Failed", className: "text-error" }
                 : isUnread
-                  ? {
-                      icon: (
-                        <CircleCheckIcon className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                      ),
-                      label: "Done, unread",
-                    }
+                  ? { icon: <CircleCheckIcon />, label: "Done, unread", className: "text-success" }
                   : isAgent
                     ? {
-                        icon: <CheckIcon className="size-3.5 text-sidebar-muted-foreground" />,
+                        icon: <CheckIcon />,
                         label: "Done",
+                        className: "text-sidebar-muted-foreground",
                       }
                     : null;
+  if (!glyph) return <span className="flex size-3.5 shrink-0" />;
   return (
-    <span
-      className="flex size-3.5 shrink-0 items-center justify-center"
-      role={glyph ? "img" : undefined}
-      aria-label={glyph?.label}
-      title={glyph?.label}
-    >
-      {glyph?.icon}
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label={glyph.label}
+            className={cn(
+              "flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5",
+              glyph.className,
+            )}
+          />
+        }
+      >
+        {glyph.icon}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{glyph.label}</TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -135,20 +134,26 @@ function RowAction({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      className="flex size-5 items-center justify-center rounded text-sidebar-muted-foreground transition-colors hover:bg-foreground/8 hover:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-35 [&_svg]:size-3.5"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onClick();
-      }}
-    >
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            disabled={disabled}
+            className="flex size-5 items-center justify-center rounded text-sidebar-muted-foreground transition-colors hover:bg-foreground/8 hover:text-sidebar-foreground disabled:pointer-events-none disabled:opacity-35 [&_svg]:size-3.5"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onClick();
+            }}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{label}</TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -201,116 +206,124 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
 
   const isPinned = thread.pinnedAt != null;
   const settleBlocked = isRunning || thread.hasPendingApprovals;
-  const tooltip = [thread.title, thread.branch ? `⎇ ${thread.branch}` : null]
-    .filter(Boolean)
-    .join("\n");
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      data-thread-key={threadKey}
-      data-active={props.isActive ? "true" : undefined}
-      title={tooltip}
-      className={cn(
-        "group/ws-row relative flex h-7 min-w-0 cursor-pointer select-none items-center gap-2 rounded-md pr-1.5 pl-2 text-[13px] outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-        props.isActive
-          ? "bg-sidebar-row-active text-sidebar-foreground"
-          : "text-sidebar-foreground/90 hover:bg-sidebar-row-hover",
-        variant === "settled" && !props.isActive && "text-sidebar-muted-foreground",
-      )}
-      onClick={() => props.onOpen(threadRef)}
-      onKeyDown={handleKeyDown}
-      onContextMenu={handleContextMenu}
-    >
-      {variant === "voice" ? (
-        <span
-          className="flex size-3.5 shrink-0 items-center justify-center"
-          role="img"
-          aria-label="Voice conversation"
-        >
-          <AudioLinesIcon className="size-3.5 text-sidebar-foreground" />
-        </span>
-      ) : (
-        <StatusGlyph thread={thread} isUnread={isUnread} isAgent={variant === "agent"} />
-      )}
-      {props.isRenaming ? (
-        <RenameInput
-          initialTitle={thread.title}
-          onCommit={(title) => props.onCommitRename(threadRef, title)}
-        />
-      ) : (
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate",
-            isUnread && !props.isActive && "font-medium text-sidebar-foreground",
-            isRegenerating && "animate-pulse",
-          )}
-        >
-          {props.projectLabel ? (
-            <span className="mr-1.5 text-sidebar-muted-foreground">{props.projectLabel}</span>
-          ) : null}
-          {thread.title}
-        </span>
-      )}
-      {props.isRenaming ? null : (
-        <>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <div
+            role="button"
+            tabIndex={0}
+            data-thread-key={threadKey}
+            data-active={props.isActive ? "true" : undefined}
+            className={cn(
+              "group/ws-row relative flex h-7 min-w-0 cursor-pointer select-none items-center gap-2 rounded-md pr-1.5 pl-2 text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+              props.isActive
+                ? "bg-sidebar-row-active text-sidebar-foreground"
+                : "text-sidebar-foreground/90 hover:bg-sidebar-row-hover",
+              variant === "settled" && !props.isActive && "text-sidebar-muted-foreground",
+            )}
+            onClick={() => props.onOpen(threadRef)}
+            onKeyDown={handleKeyDown}
+            onContextMenu={handleContextMenu}
+          />
+        }
+      >
+        {variant === "voice" ? (
+          <span
+            className="flex size-3.5 shrink-0 items-center justify-center"
+            role="img"
+            aria-label="Voice conversation"
+          >
+            <AudioLinesIcon className="size-3.5 text-sidebar-foreground" />
+          </span>
+        ) : (
+          <StatusGlyph thread={thread} isUnread={isUnread} isAgent={variant === "agent"} />
+        )}
+        {props.isRenaming ? (
+          <RenameInput
+            initialTitle={thread.title}
+            onCommit={(title) => props.onCommitRename(threadRef, title)}
+          />
+        ) : (
           <span
             className={cn(
-              "shrink-0 text-2xs tabular-nums text-sidebar-muted-foreground",
-              variant !== "agent" && "group-hover/ws-row:hidden group-focus-within/ws-row:hidden",
-              status === "working" && "text-sky-600 dark:text-sky-400",
+              "min-w-0 flex-1 truncate",
+              isUnread && !props.isActive && "font-medium text-sidebar-foreground",
+              isRegenerating && "animate-pulse",
             )}
           >
-            {variant === "pinned" || variant === "snoozed" ? null : isPinned ? (
-              <PinIcon className="mr-1 inline size-3 align-[-2px] opacity-60" />
+            {props.projectLabel ? (
+              <span className="mr-1.5 text-sidebar-muted-foreground">{props.projectLabel}</span>
             ) : null}
-            {props.jumpLabel ? (
-              <span className="rounded bg-foreground/8 px-1 text-3xs font-medium text-sidebar-foreground">
-                {props.jumpLabel}
-              </span>
-            ) : (
-              meta
-            )}
+            {thread.title}
           </span>
-          <span className="hidden shrink-0 items-center gap-0.5 group-hover/ws-row:flex group-focus-within/ws-row:flex">
-            {variant === "agent" ? null : variant === "snoozed" ? (
-              <RowAction label="Wake now" onClick={() => props.onWake(threadRef)}>
-                <AlarmClockOffIcon />
-              </RowAction>
-            ) : variant === "settled" ? (
-              <RowAction label="Move back to active" onClick={() => props.onUnsettle(threadRef)}>
-                <Undo2Icon />
-              </RowAction>
-            ) : (
-              <>
-                {props.canPin ? (
-                  <RowAction
-                    label={isPinned ? "Unpin" : "Pin"}
-                    onClick={() => props.onTogglePin(thread)}
-                  >
-                    {isPinned ? <PinOffIcon /> : <PinIcon />}
-                  </RowAction>
-                ) : null}
-                {props.canSettle ? (
-                  <RowAction
-                    label={
-                      settleBlocked
-                        ? "Can't settle while the agent is running or waiting for approval"
-                        : "Settle"
-                    }
-                    disabled={settleBlocked}
-                    onClick={() => props.onSettle(threadRef)}
-                  >
-                    <CheckIcon />
-                  </RowAction>
-                ) : null}
-              </>
-            )}
-          </span>
-        </>
-      )}
-    </div>
+        )}
+        {props.isRenaming ? null : (
+          <>
+            <span
+              className={cn(
+                "shrink-0 text-2xs tabular-nums text-sidebar-muted-foreground",
+                variant !== "agent" && "group-hover/ws-row:hidden group-focus-within/ws-row:hidden",
+                status === "working" && "text-info-foreground",
+              )}
+            >
+              {variant === "pinned" || variant === "snoozed" ? null : isPinned ? (
+                <PinIcon className="mr-1 inline size-3 align-[-2px] opacity-60" />
+              ) : null}
+              {props.jumpLabel ? (
+                <span className="rounded bg-foreground/8 px-1 text-3xs font-medium text-sidebar-foreground">
+                  {props.jumpLabel}
+                </span>
+              ) : (
+                meta
+              )}
+            </span>
+            <span className="hidden shrink-0 items-center gap-0.5 group-hover/ws-row:flex group-focus-within/ws-row:flex">
+              {variant === "agent" ? null : variant === "snoozed" ? (
+                <RowAction label="Wake now" onClick={() => props.onWake(threadRef)}>
+                  <AlarmClockOffIcon />
+                </RowAction>
+              ) : variant === "settled" ? (
+                <RowAction label="Move back to active" onClick={() => props.onUnsettle(threadRef)}>
+                  <Undo2Icon />
+                </RowAction>
+              ) : (
+                <>
+                  {props.canPin ? (
+                    <RowAction
+                      label={isPinned ? "Unpin" : "Pin"}
+                      onClick={() => props.onTogglePin(thread)}
+                    >
+                      {isPinned ? <PinOffIcon /> : <PinIcon />}
+                    </RowAction>
+                  ) : null}
+                  {props.canSettle ? (
+                    <RowAction
+                      label={
+                        settleBlocked
+                          ? "Can't settle while the agent is running or waiting for approval"
+                          : "Settle"
+                      }
+                      disabled={settleBlocked}
+                      onClick={() => props.onSettle(threadRef)}
+                    >
+                      <CheckIcon />
+                    </RowAction>
+                  ) : null}
+                </>
+              )}
+            </span>
+          </>
+        )}
+      </TooltipTrigger>
+      <TooltipPopup side="right" align="start">
+        <div className="min-w-0 wrap-anywhere">{thread.title}</div>
+        {thread.branch ? (
+          <div className="min-w-0 text-muted-foreground">⎇ {thread.branch}</div>
+        ) : null}
+      </TooltipPopup>
+    </Tooltip>
   );
 });
 
@@ -338,7 +351,7 @@ function RenameInput({
       ref={inputRef}
       value={value}
       aria-label="Thread title"
-      className="h-5 min-w-0 flex-1 rounded border border-ring/60 bg-background px-1 text-[13px] outline-hidden"
+      className="h-5 min-w-0 flex-1 rounded border border-ring/60 bg-background px-1 text-sm outline-hidden"
       onChange={(event) => setValue(event.currentTarget.value)}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {

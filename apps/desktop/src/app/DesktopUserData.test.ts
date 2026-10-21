@@ -8,7 +8,8 @@ import * as PlatformError from "effect/PlatformError";
 import { resolveUserDataPath } from "./DesktopUserData.ts";
 
 it.effect("identifies a failed source read and preserves its cause", () => {
-  const sourceState = "/profiles/t3code/Local State";
+  // Sidebar fork: V1 profiles are "t3code-sidebar" / "T3 Code Sidebar", not upstream's.
+  const sourceState = "/profiles/t3code-sidebar/Local State";
   const cause = PlatformError.systemError({
     _tag: "PermissionDenied",
     module: "FileSystem",
@@ -37,7 +38,8 @@ it.effect("identifies a failed source read and preserves its cause", () => {
   );
 });
 
-it.effect.each(["t3code", "T3 Code (Alpha)"])(
+// Sidebar fork: the fork's V1 and V2 profile names (upstream: t3code, T3 Code (Alpha), t3code-v2).
+it.effect.each(["t3code-sidebar", "T3 Code Sidebar"])(
   "preserves Windows credential keys from %s without copying browser databases",
   (sourceName) =>
     Effect.gen(function* () {
@@ -45,9 +47,9 @@ it.effect.each(["t3code", "T3 Code (Alpha)"])(
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-v2-profile-" });
       const source = path.join(directory, sourceName);
-      const destination = path.join(directory, "t3code-v2");
+      const destination = path.join(directory, "t3code-sidebar-v2");
       const state = '{"os_crypt":{"encrypted_key":"test-encrypted-key"}}';
-      yield* fs.makeDirectory(path.join(directory, "T3 Code (Alpha)"), { recursive: true });
+      yield* fs.makeDirectory(path.join(directory, "T3 Code Sidebar"), { recursive: true });
       yield* fs.makeDirectory(path.join(source, "IndexedDB"), { recursive: true });
       yield* fs.writeFileString(path.join(source, "Local State"), state);
       yield* fs.writeFileString(path.join(source, "IndexedDB", "LOCK"), "V1 owns this database");

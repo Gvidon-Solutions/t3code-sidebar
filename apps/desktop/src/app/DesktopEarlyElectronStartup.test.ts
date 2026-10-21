@@ -82,15 +82,18 @@ describe("DesktopEarlyElectronStartup", () => {
       },
     });
 
+    // Sidebar fork: its own desktop entry, and the WM class equals the desktop id
+    // (upstream: t3code-dev, com.t3tools.T3Code.Development.desktop).
     assert.deepEqual(options, {
       isDevelopment: true,
-      linuxWmClass: "t3code-dev",
-      linuxDesktopEntryName: "com.t3tools.T3Code.Development.desktop",
+      linuxWmClass: "com.gvidon.T3CodeSidebar.Development",
+      linuxDesktopEntryName: "com.gvidon.T3CodeSidebar.Development.desktop",
       passwordStore: "gnome-libsecret",
     });
   });
 
-  it("keeps implicit development state under ~/.t3/dev when T3CODE_HOME is unset", () => {
+  // Sidebar fork: the fork's state home is ~/.t3-sidebar (upstream: ~/.t3).
+  it("keeps implicit development state under ~/.t3-sidebar/dev when T3CODE_HOME is unset", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
       env: {
         VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
@@ -98,7 +101,7 @@ describe("DesktopEarlyElectronStartup", () => {
       homeDirectory: "/home/user",
       joinPath,
       readFileString: (path) => {
-        assert.equal(path, "/home/user/.t3/dev/desktop-settings.json");
+        assert.equal(path, "/home/user/.t3-sidebar/dev/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "kwallet" });
       },
     });
@@ -115,7 +118,8 @@ describe("DesktopEarlyElectronStartup", () => {
       homeDirectory: "/home/user",
       joinPath,
       readFileString: (path) => {
-        assert.equal(path, "/home/user/.t3/dev/desktop-settings.json");
+        // Sidebar fork: the fork's state home is ~/.t3-sidebar (upstream: ~/.t3).
+        assert.equal(path, "/home/user/.t3-sidebar/dev/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "gnome-libsecret" });
       },
     });

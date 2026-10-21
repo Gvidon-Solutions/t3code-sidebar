@@ -212,14 +212,16 @@ describe("DesktopPreReadyPlatform", () => {
     let desktopName = "t3code.desktop";
     let desktopEntry = previousEntry;
     let iconInstalled = false;
+    // Sidebar fork: its own desktop id and product name
+    // (upstream: com.t3tools.T3Code.desktop, "T3 Code (Beta)").
     copyFileSyncMock.mockImplementation((_source: string, destination: string) => {
-      iconInstalled = destination === "/xdg/icons/com.t3tools.T3Code.desktop.png";
+      iconInstalled = destination === "/xdg/icons/com.gvidon.T3CodeSidebar.desktop.png";
     });
     setDesktopNameMock.mockImplementation((name: string) => {
       desktopName = name;
     });
     writeFileSyncMock.mockImplementation((path: string, contents: string) => {
-      if (path === "/xdg/applications/com.t3tools.T3Code.desktop") desktopEntry = contents;
+      if (path === "/xdg/applications/com.gvidon.T3CodeSidebar.desktop") desktopEntry = contents;
     });
 
     return Effect.scoped(
@@ -235,13 +237,13 @@ describe("DesktopPreReadyPlatform", () => {
           ),
         );
         const identity = yield* Effect.promise(() => portalIdentity);
-        assert.equal(identity.desktopName, "com.t3tools.T3Code.desktop");
+        assert.equal(identity.desktopName, "com.gvidon.T3CodeSidebar.desktop");
         assert.include(identity.desktopEntry ?? "", "Exec=/Applications/current.AppImage %U");
-        assert.include(identity.desktopEntry ?? "", "Name=T3 Code (Beta)");
+        assert.include(identity.desktopEntry ?? "", "Name=T3 Code Sidebar (Beta)");
         assert.include(identity.desktopEntry ?? "", "MimeType=x-scheme-handler/t3code;");
         assert.include(
           identity.desktopEntry ?? "",
-          "Icon=/xdg/icons/com.t3tools.T3Code.desktop.png",
+          "Icon=/xdg/icons/com.gvidon.T3CodeSidebar.desktop.png",
         );
         assert.isTrue(identity.iconInstalled);
       }),
