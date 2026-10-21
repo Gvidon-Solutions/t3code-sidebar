@@ -89,6 +89,11 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   usually a minute or two; it auto-loads `~/.local/share/t3-ws/android-signing.env` when present,
   so the APK updates an installed fork build). E2E helpers for the emulator are in
   `scripts/sidebar-mobile-e2e/`.
+- **iOS.** `.github/workflows/sidebar-ios.yml` builds the sidebar variant for the iOS Simulator
+  (arm64, unsigned, `com.gvidon.t3codesidebar`) on every `ws` push that touches the app and
+  uploads the zipped `.app` as an artifact. It proves the app and its native modules compile for
+  iOS; it never publishes a release (the desktop workflow ignores this file). A signed
+  IPA/TestFlight job is in the file but stays off until the owner picks Apple signing.
 - **Self-hosted web.** `deploy/t3-ws/` builds a Docker image of `t3 serve` and runs it on the
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 

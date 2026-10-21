@@ -13,7 +13,7 @@ name: Sidebar fork desktop build
 on:
   push:
     branches: [ws]
-    paths-ignore: ["deploy/**", "docs/**", "**/*.md"]
+    paths-ignore: ["deploy/**", "docs/**", "**/*.md", ".github/workflows/sidebar-ios.yml"]
   workflow_dispatch:
     inputs:
       android_arch:

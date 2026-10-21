@@ -15,8 +15,13 @@ name: Sidebar fork iOS build
 
 on:
   push:
-    branches: [ios-ci]
-    paths-ignore: ["deploy/**", "docs/**", "**/*.md"]
+    # Every `ws` push that touches the app; `ios-ci` stays for trying workflow changes.
+    branches: [ws, ios-ci]
+    paths:
+      - "apps/mobile/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/sidebar-ios.yml"
   workflow_dispatch:
     inputs:
       device_build:
