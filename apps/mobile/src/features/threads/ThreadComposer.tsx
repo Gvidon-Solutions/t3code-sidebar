@@ -37,7 +37,14 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { Keyboard, Platform, useWindowDimensions, View, type ViewStyle } from "react-native";
+import {
+  Keyboard,
+  Platform,
+  useWindowDimensions,
+  View,
+  type ViewInstance,
+  type ViewStyle,
+} from "react-native";
 import { useKeyboardState } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { composerImageGallery } from "../../lib/composerImageGallery";
@@ -201,6 +208,8 @@ export interface ThreadComposerProps {
   readonly placeholder: string;
   readonly contentMaxWidth?: number;
   readonly bottomInset?: number;
+  /** Window y the full-screen editor grows up to, just below the screen's header. */
+  readonly fullScreenTop?: number | null;
   readonly connectionState: RemoteClientConnectionState;
   readonly environmentLabel: string | null;
   readonly threadSyncPhase?: "loading" | "syncing" | null;
@@ -275,8 +284,6 @@ export const COMPOSER_LAYOUT_TRANSITION =
   Platform.OS === "android" ? undefined : composerHeightTransition;
 // Share of the one-row composer the draft keeps; a long model name truncates first.
 const INLINE_EDITOR_MIN_WIDTH = "40%";
-// The one-row editor's horizontal padding plus room for the caret.
-const INLINE_EDITOR_TEXT_SLACK = 10;
 const INLINE_EDITOR_HEIGHT = 36;
 
 const COMPOSER_ATTACHMENT_ENTERING =
@@ -592,39 +599,38 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   });
   // Full screen gives the editor the thread's glimpse too: only the header and tabs stay above.
   // A resting composer sits the safe-area inset higher than the cap allows for.
+  // Sidebar fork: the estimate misses the real header and chrome heights, so once open the
+  // composer measures where its top landed and grows by the gap left below the header. The
+  // miss does not depend on the keyboard, so the fit settles once per opening and is not
+  // redone mid-way through a keyboard animation.
+  const composerRootRef = useRef<ViewInstance>(null);
+  const [fullScreenCorrection, setFullScreenCorrection] = useState(0);
+  const fullScreenFittedRef = useRef(false);
+  useEffect(() => {
+    if (!fullScreenEditor.fullScreen) fullScreenFittedRef.current = false;
+  }, [fullScreenEditor.fullScreen]);
   const fullScreenEditorHeight =
     editorMaxHeight +
     COMPOSER_FULL_SCREEN_EXTRA_HEIGHT -
-    (keyboardHeight > 0 ? 0 : safeAreaInsets.bottom);
+    (keyboardHeight > 0 ? 0 : safeAreaInsets.bottom) +
+    fullScreenCorrection;
+  const fullScreenTop = props.fullScreenTop ?? null;
+  const fitFullScreenToHeader = () => {
+    if (!fullScreenEditor.fullScreen || fullScreenTop === null || fullScreenFittedRef.current) {
+      return;
+    }
+    composerRootRef.current?.measureInWindow((_x, y) => {
+      const gap = Math.round(y - fullScreenTop);
+      if (Math.abs(gap) > 1) setFullScreenCorrection((current) => current + gap);
+      else fullScreenFittedRef.current = true;
+    });
+  };
   const { setComposerEditing } = useAdaptiveWorkspaceLayout();
-  // The composer stays one row, with the model picker in it, until the draft would
-  // wrap. Then the draft stacks above the controls and returns to the row once it
-  // fits again. The native editor reports its laid-out text size: more than one
-  // line means the draft wrapped where it is, and the widest line is a one-line
-  // draft's natural width, which is compared with the row's text area so a draft
-  // laid out in the wider card still returns to the row when it fits, including
-  // when the pane widens. The measurements live in refs and only the verdict is
-  // state, so a keystroke that keeps the verdict costs no extra render.
-  const draftSizeRef = useRef({ width: 0, height: 0 });
-  const rowGeometryRef = useRef({ surfaceWidth: 0, leadingWidth: 0, trailingWidth: 0 });
-  const [draftOverflowsRow, setDraftOverflowsRow] = useState(false);
   const lineHeight = bodyText.lineHeight;
-  const updateDraftOverflow = () => {
-    const { width, height } = draftSizeRef.current;
-    const row = rowGeometryRef.current;
-    const rowTextWidth =
-      row.surfaceWidth - row.leadingWidth - row.trailingWidth - INLINE_EDITOR_TEXT_SLACK;
-    setDraftOverflowsRow(
-      height > lineHeight * 1.5 || (row.surfaceWidth > 0 && width > rowTextWidth),
-    );
-  };
-  const measureRow = (key: keyof typeof rowGeometryRef.current, value: number) => {
-    if (rowGeometryRef.current[key] === value) return;
-    rowGeometryRef.current = { ...rowGeometryRef.current, [key]: value };
-    updateDraftOverflow();
-  };
-  const usesCard =
-    fullScreenEditor.fullScreen || (isExpanded && draftMessage.length > 0 && draftOverflowsRow);
+  // Sidebar fork: the composer keeps sidebar.43's layout instead of upstream's one-row
+  // composer. A focused composer is a card with the draft above a toolbar row, so the
+  // model name and its reasoning effort stay in view while typing.
+  const usesCard = isExpanded;
   const showsCompactDictation = isVoiceInputPresented && !usesCard;
   const isToolbarVisible = usesCard || isVoiceInputPresented;
   const hasEditingAttachments =
@@ -880,8 +886,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     </>
   ) : null;
 
-  // The row and the card's toolbar share this picker. It shrinks to the provider
-  // icon once the draft has text, so the draft keeps the width.
+  // The row and the card's toolbar share this picker; it always names the model and its effort.
   const modelControl = (
     <View className="min-w-0 shrink">
       <ComposerInlineControl
@@ -900,7 +905,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
           />
         )}
         label={currentModelDisplay.name}
-        iconOnly={draftMessage.length > 0}
         maxWidth="100%"
         onPress={openQuickModelSheet}
       />
@@ -909,6 +913,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
 
   return (
     <Animated.View
+      ref={composerRootRef}
+      onLayout={fitFullScreenToHeader}
       className="px-[6px]"
       style={{
         paddingTop: 6,
@@ -931,7 +937,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       <Animated.View
         className="relative w-full self-center"
         style={{ maxWidth: props.contentMaxWidth }}
-        onLayout={(event) => measureRow("surfaceWidth", event.nativeEvent.layout.width)}
       >
         {!voiceInput.isBusy &&
         composerMenu.trigger &&
@@ -1030,11 +1035,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
               className={usesCard ? "px-[14px]" : "min-w-0 flex-1 px-[4px]"}
               style={usesCard ? undefined : { minWidth: INLINE_EDITOR_MIN_WIDTH }}
               layout={COMPOSER_LAYOUT_TRANSITION}
-              onLayout={
-                usesCard
-                  ? undefined
-                  : (event) => measureRow("leadingWidth", event.nativeEvent.layout.x)
-              }
             >
               <ComposerEditor
                 hidden={props.hidden}
@@ -1153,10 +1153,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 contentInsetVertical={
                   usesCard || Platform.OS === "android" ? 0 : collapsedEditorInset(bodyText)
                 }
-                onContentSizeChange={(size) => {
-                  draftSizeRef.current = size;
-                  updateDraftOverflow();
-                }}
                 style={
                   fullScreenEditor.fullScreen
                     ? {
@@ -1213,10 +1209,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
               </View>
             ) : null}
             {!usesCard ? (
-              <View
-                className="min-w-0 shrink flex-row items-center"
-                onLayout={(event) => measureRow("trailingWidth", event.nativeEvent.layout.width)}
-              >
+              <View className="min-w-0 shrink flex-row items-center">
                 {modelControl}
                 {voiceModeButton}
                 <ComposerDictationStartAction

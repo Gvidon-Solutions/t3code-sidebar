@@ -705,8 +705,12 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
   // Android lays the screen out below its opaque header and reports a zero
   // header height, so the window height overstates the room by the header.
   const [screenHeight, setScreenHeight] = useState<number | null>(null);
+  // Sidebar fork: the window y just below that header, where the full-screen editor tops out.
+  const screenRef = useRef<ViewInstance>(null);
+  const [screenTop, setScreenTop] = useState<number | null>(null);
   const handleScreenLayout = useCallback((event: LayoutChangeEvent) => {
     setScreenHeight(event.nativeEvent.layout.height);
+    if (Platform.OS === "android") screenRef.current?.measureInWindow((_x, y) => setScreenTop(y));
   }, []);
   const screenAreaHeight = screenHeight ?? windowHeight;
   // The usage panel stacks with the composer and any approval card, so it gets
@@ -1092,7 +1096,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
   };
 
   return (
-    <View className="flex-1" onLayout={handleScreenLayout}>
+    <View ref={screenRef} className="flex-1" onLayout={handleScreenLayout}>
       {!usesNativeWorkspaceColumns ? <NativeLayoutObserver onChange={setScreenMetrics} /> : null}
       <ThreadVisitWatermark
         environmentId={props.environmentId}
@@ -1447,6 +1451,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
                               }
                         }
                         bottomInset={composerBottomInset}
+                        fullScreenTop={screenTop}
                         onChangeDraftMessage={props.onChangeDraftMessage}
                         onPickDraftMedia={props.onPickDraftMedia}
                         onPickDraftFiles={props.onPickDraftFiles}

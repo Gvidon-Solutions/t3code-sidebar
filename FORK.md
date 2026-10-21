@@ -108,6 +108,20 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-10-21 — Phone composer: model and reasoning always in view, ⤢ fills the screen
+
+- **What.** The thread composer is back to the fork's layout: the draft on top and one toolbar
+  row of "+", ⤢, the model chip with its name and reasoning effort, voice and send. The chip no
+  longer shrinks to a provider icon while typing, and a short draft no longer turns the composer
+  into upstream's single row. ⤢ grows the editor up to the thread's header, with or without the
+  keyboard (it used to stop about a message short of it).
+- **How.** `ThreadComposer` drops upstream's one-row measurement: a focused composer is always the
+  card, and the model control never gets `iconOnly`. The full-screen height is still estimated
+  from the window, then corrected once per opening: the composer measures where its top landed
+  (`measureInWindow`) against the window y of the screen below the header, which
+  `ThreadDetailScreen` passes as `fullScreenTop` on Android.
+- **Where.** `apps/mobile/src/features/threads/{ThreadComposer,ThreadDetailScreen}.tsx`.
+
 ### 2026-10-21 — A clean fork: lint and tests green
 
 - **What.** `vp lint` reports no errors (47 before) and the full test suite passes. The sidebar's
