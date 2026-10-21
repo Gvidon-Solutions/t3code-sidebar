@@ -357,9 +357,155 @@ jobs:
           path: release-android/*.apk
           if-no-files-found: error
 
+  # Checks gate the release: lint, format, typecheck and every package's tests
+  # run next to the builds, and "Publish release" waits for them, so a red tree
+  # never reaches installed apps. Same commands as upstream's ci.yml, on GitHub's
+  # runners (upstream's run on Blacksmith).
+  check:
+    name: Lint and typecheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/setup-ci-deps
+
+      - run: vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Check generated GitHub GraphQL operations
+        run: vp run --filter @t3tools/source-control-github generate --check
+
+      - name: Check generated Expo GraphQL operations
+        run: vp run --filter t3 generate --check
+
+      - name: Lint and format
+        run: vp check
+
+      - name: Typecheck
+        run: vpr typecheck
+
+  # Everything except apps/server and the web app, which have their own jobs.
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+
+      # The ACP process-tree tests compile a pthread fixture with `cc`; the
+      # desktop tests compile the browser secret helper against libsecret.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libsecret-1-dev pkg-config
+
+      - uses: ./.github/actions/setup-ci-deps
+
+      - run: vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Test
+        run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' --filter '!@t3tools/web' test
+
+  test_web:
+    name: Test Web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/setup-ci-deps
+
+      - name: Resolve Playwright version
+        id: playwright_version
+        run: echo "version=$(node -p "require('./apps/web/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        id: chromium_cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright_version.outputs.version }}
+
+      - name: Install Chromium for web browser tests
+        if: steps.chromium_cache.outputs.cache-hit != 'true'
+        run: node apps/web/node_modules/playwright/cli.js install --only-shell chromium
+
+      - name: Install missing Chromium system dependencies
+        run: |
+          browser=$(find "$HOME/.cache/ms-playwright" -name chrome-headless-shell -type f -print -quit)
+          test -n "$browser"
+          if ldd "$browser" | grep '=> not found'; then
+            node apps/web/node_modules/playwright/cli.js install-deps chromium
+          fi
+
+      - name: Test
+        run: vp run --filter @t3tools/web test
+
+  # apps/server runs its test files one at a time (fileParallelism: false), so
+  # shards spread them over runners, split by recorded duration like upstream's.
+  test_server:
+    name: Test Server ${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/apps/mobile/modules/t3-terminal/Vendor/**/*.a
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/setup-ci-deps
+
+      - name: Resolve Playwright version
+        id: playwright_version
+        run: echo "version=$(node -p "require('./apps/server/node_modules/playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        id: chromium_cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-shell-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright_version.outputs.version }}
+
+      - name: Install Chromium for server browser integration tests
+        if: steps.chromium_cache.outputs.cache-hit != 'true'
+        run: node apps/server/node_modules/playwright-core/cli.js install --only-shell chromium
+
+      - name: Install missing Chromium system dependencies
+        run: |
+          browser=$(find "$HOME/.cache/ms-playwright" -name chrome-headless-shell -type f -print -quit)
+          test -n "$browser"
+          if ldd "$browser" | grep '=> not found'; then
+            node apps/server/node_modules/playwright-core/cli.js install-deps chromium
+          fi
+
+      - name: Test
+        run: vp run --filter t3 test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+
   release:
     name: Publish release
-    needs: [bundle, linux, windows, android]
+    needs: [bundle, linux, windows, android, check, test, test_web, test_server]
     env:
       VERSION: ${{ needs.bundle.outputs.version }}
     if: github.event_name == 'push'

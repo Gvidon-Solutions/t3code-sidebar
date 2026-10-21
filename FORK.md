@@ -18,7 +18,8 @@ Everything else is upstream.
   tests). Upstream tests that check desktop identity (app name, id, profile, `~/.t3-sidebar`, WSL
   runtime dir) expect the fork's values, marked `// Sidebar fork:`. When a merge breaks a test,
   fix the fork code or the test; an upstream test that is broken upstream too is dropped or
-  fixed the way upstream later did. Upstream CI does not run here (it triggers on `main`).
+  fixed the way upstream later did. Upstream CI does not run here (it triggers on `main`); the
+  release workflow runs the same checks itself and publishes only when they pass.
 
 ## Relation to upstream
 
@@ -84,6 +85,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   the core stays upstream's so version-skew checks against servers hold. The core is the higher
   of `apps/server/package.json` and the release tag in "Last synced with upstream release" above,
   because upstream stamps a release's version only when it builds it. Builds are unsigned.
+  Next to the builds run the checks (`vp check`, `vpr typecheck`, generated GraphQL operations,
+  and the tests: packages, web, and apps/server in 6 shards); the release waits for all of them.
+  Upstream's `knip:check` is left out for now: it flags unused exports in the fork's own modules.
 - **Android.** The same workflow's `android` job prebuilds the sidebar variant, builds a release
   APK signed with the fork key and attaches `T3-Code-Sidebar-<version>.apk` to the release. The
   generated `android/` project and its native build outputs live in an Actions cache keyed by
