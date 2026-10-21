@@ -1,0 +1,276 @@
+name: Sidebar fork iOS build
+
+# iOS build of the sidebar fork's mobile app (APP_VARIANT=sidebar,
+# "T3 Code Sidebar", com.gvidon.t3codesidebar). Fork-owned workflow, kept out
+# of sidebar-desktop.yml so it never gates or publishes a `ws` release.
+#
+# `simulator` (default): an unsigned iOS Simulator build (arm64, Release, JS
+# bundled in), uploaded as a zipped .app artifact. It proves the native project,
+# pods and the fork's native modules (modules/*, e.g. t3-terminal's
+# GhosttyKit) compile for iOS. Install on a Mac with:
+#   unzip T3-Code-Sidebar-*-simulator.zip && xcrun simctl install booted T3CodeSidebar.app
+#
+# `device`: a signed IPA + TestFlight upload, disabled until the owner picks a
+# signing route. See the comments on that job.
+
+on:
+  push:
+    # Every `ws` push that touches the app; `ios-ci` stays for trying workflow changes.
+    branches: [ws, ios-ci]
+    paths:
+      - "apps/mobile/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/sidebar-ios.yml"
+  workflow_dispatch:
+    inputs:
+      device_build:
+        description: "Also build a signed IPA and upload it to TestFlight (needs the Apple secrets and vars.IOS_SIGNING_ENABLED == 'true')"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sidebar-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_VARIANT: sidebar
+  EXPO_NO_GIT_STATUS: "1"
+  NODE_ENV: production
+  NODE_OPTIONS: --max-old-space-size=8192
+
+jobs:
+  simulator:
+    name: Build iOS Simulator app
+    # Apple Silicon: GhosttyKit.xcframework ships an arm64-only simulator slice.
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      # Same version scheme as sidebar-desktop.yml (core version + run number).
+      - name: Version
+        run: |
+          core="$(node -e '
+            const fs = require("node:fs");
+            const pkg = require("./apps/server/package.json").version;
+            const synced = /Last synced with upstream release `v(\d+\.\d+\.\d+)`/.exec(fs.readFileSync("FORK.md", "utf8"))?.[1];
+            const key = (v) => v.replace(/[-+].*$/, "").split(".").map(Number);
+            const newer = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+            console.log(synced && newer(synced, pkg) ? synced : pkg.replace(/[-+].*$/, ""));
+          ')"
+          echo "VERSION=$core-sidebar.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "T3_SIDEBAR_VERSION=$core-sidebar.${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      # The app's icon is an Icon Composer project, which needs Xcode 26+.
+      # Pick the newest Xcode on the image.
+      - name: Select Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          xcode="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+          pod --version
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - run: vp install --filter=@t3tools/mobile...
+
+      - name: Prebuild iOS project
+        run: |
+          cd apps/mobile
+          npx expo prebuild --platform ios --no-install
+
+      - name: Install pods
+        run: |
+          cd apps/mobile/ios
+          pod install
+
+      - name: Build for iOS Simulator
+        run: |
+          set -euo pipefail
+          cd apps/mobile/ios
+          workspace="$(ls -d *.xcworkspace | head -1)"
+          scheme="${workspace%.xcworkspace}"
+          echo "workspace=$workspace scheme=$scheme"
+          mkdir -p "$RUNNER_TEMP/logs"
+          xcodebuild \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build 2>&1 | tee "$RUNNER_TEMP/logs/xcodebuild.log" | xcbeautify --renderer github-actions
+
+      - name: Zip app
+        run: |
+          set -euo pipefail
+          app="$(ls -d "$RUNNER_TEMP"/dd/Build/Products/Release-iphonesimulator/*.app | head -1)"
+          echo "app=$app"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleDisplayName" -c "Print :CFBundleShortVersionString" "$app/Info.plist" || true
+          mkdir -p "$GITHUB_WORKSPACE/release-ios"
+          ditto -c -k --sequesterRsrc --keepParent "$app" \
+            "$GITHUB_WORKSPACE/release-ios/T3-Code-Sidebar-$VERSION-simulator.zip"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ios-simulator
+          path: release-ios/*.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: failure()
+        with:
+          name: ios-simulator-logs
+          path: ${{ runner.temp }}/logs/
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # STUB, disabled by default: signed device build (IPA) + TestFlight upload.
+  #
+  # Runs only on a manual dispatch with `device_build` checked AND the repository
+  # variable IOS_SIGNING_ENABLED set to "true". Nothing here has been run yet.
+  #
+  # Needs a paid Apple Developer Program team. Signing is Xcode's automatic
+  # (cloud) signing driven by an App Store Connect API key, so no certificate or
+  # profile files are stored as secrets. Secrets to add (values come from the
+  # owner's App Store Connect account; never commit or echo them):
+  #   APPLE_TEAM_ID              10-character team id
+  #   ASC_KEY_ID                 App Store Connect API key id (Admin or App Manager role)
+  #   ASC_ISSUER_ID              App Store Connect issuer id
+  #   ASC_KEY_P8_BASE64          the AuthKey_<id>.p8 file, base64-encoded
+  #
+  # Before the first run (owner, in the Apple developer portal / App Store Connect):
+  #   - App IDs com.gvidon.t3codesidebar, .widgets and .sharing, App Group
+  #     group.com.gvidon.t3codesidebar; capabilities used by the app: Push
+  #     Notifications, App Groups, Associated Domains, Sign in with Apple,
+  #     Keychain Sharing (automatic signing may enable some of them itself).
+  #   - An App Store Connect app record for com.gvidon.t3codesidebar.
+  #   - app.config.ts pins ios.appleTeamId to upstream's team; this job overrides
+  #     it with DEVELOPMENT_TEAM on the command line. Associated Domains point at
+  #     upstream's clerk.t3.codes, which will not verify for the fork's team.
+  #   - App Store versions must be numeric, so this job writes the core version
+  #     to CFBundleShortVersionString and the run number to CFBundleVersion.
+  #
+  # Free sideload instead (no paid team): app.config.ts already supports a
+  # Personal Team build (T3CODE_IOS_PERSONAL_TEAM=1 plus
+  # T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID); that is signed locally on a Mac with
+  # Xcode, or re-signed by a sideload tool, not by this job.
+  # ---------------------------------------------------------------------------
+  device:
+    name: Build signed IPA (TestFlight)
+    needs: simulator
+    if: github.event_name == 'workflow_dispatch' && inputs.device_build && vars.IOS_SIGNING_ENABLED == 'true'
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Version
+        run: |
+          core="$(node -p 'require("./apps/server/package.json").version.replace(/[-+].*$/, "")')"
+          echo "CORE_VERSION=$core" >> "$GITHUB_ENV"
+          echo "T3_SIDEBAR_VERSION=$core" >> "$GITHUB_ENV"
+
+      - name: Select Xcode
+        run: |
+          xcode="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          xcodebuild -version
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - run: vp install --filter=@t3tools/mobile...
+
+      - name: Prebuild iOS project
+        run: |
+          cd apps/mobile
+          npx expo prebuild --platform ios --no-install
+          cd ios && pod install
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$ASC_KEY_P8_BASE64" | base64 -d > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Archive
+        run: |
+          set -euo pipefail
+          cd apps/mobile/ios
+          workspace="$(ls -d *.xcworkspace | head -1)"
+          scheme="${workspace%.xcworkspace}"
+          plist="$scheme/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $CORE_VERSION" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" "$plist"
+          xcodebuild \
+            -workspace "$workspace" -scheme "$scheme" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/T3CodeSidebar.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            archive | xcbeautify --renderer github-actions
+
+      # destination=upload sends the build straight to App Store Connect
+      # (TestFlight); switch to "export" to only produce the IPA.
+      - name: Export and upload to TestFlight
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/T3CodeSidebar.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Remove API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
