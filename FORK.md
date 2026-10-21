@@ -18,8 +18,7 @@ Everything else is upstream.
   tests). Upstream tests that check desktop identity (app name, id, profile, `~/.t3-sidebar`, WSL
   runtime dir) expect the fork's values, marked `// Sidebar fork:`. When a merge breaks a test,
   fix the fork code or the test; an upstream test that is broken upstream too is dropped or
-  fixed the way upstream later did. Upstream CI does not run here (it triggers on `main`); the
-  release workflow runs the same checks itself and publishes only when they pass.
+  fixed the way upstream later did. Upstream CI does not run here (it triggers on `main`).
 
 ## Relation to upstream
 
@@ -61,14 +60,19 @@ the linking prefix in `src/App.tsx` and `src/lib/appLinking.ts`.
 
 ## Identity (desktop)
 
-|                          | Upstream             | Fork                              |
-| ------------------------ | -------------------- | --------------------------------- |
-| Product name             | T3 Code (Alpha)      | T3 Code Sidebar                   |
-| App id                   | `com.t3tools.t3code` | `com.gvidon.t3code-sidebar`       |
-| Data dir (`T3CODE_HOME`) | `~/.t3`              | `~/.t3-sidebar` (also inside WSL) |
-| Electron profile         | `t3code-v2`          | `t3code-sidebar-v2`               |
-| `t3code://` handler      | registered           | not registered (left to upstream) |
-| Updates                  | upstream releases    | this fork's GitHub releases       |
+|                          | Upstream             | Fork                                                                                           |
+| ------------------------ | -------------------- | ---------------------------------------------------------------------------------------------- |
+| Product name             | T3 Code (Alpha)      | T3 Code Sidebar                                                                                |
+| App id                   | `com.t3tools.t3code` | `com.gvidon.t3code-sidebar`                                                                    |
+| Data dir (`T3CODE_HOME`) | `~/.t3`              | `~/.t3-sidebar` (also inside WSL)                                                              |
+| Electron profile         | `t3code-v2`          | `t3code-sidebar-v2`                                                                            |
+| `t3code://` handler      | registered           | registered at launch by Clerk's bridge (last launched app wins when upstream is installed too) |
+| Updates                  | upstream releases    | this fork's GitHub releases                                                                    |
+
+The fork skips upstream's own `xdg-mime` registration, but `@clerk/electron` calls
+`app.setAsDefaultProtocolClient("t3code")` on every launch, so with upstream T3 Code installed
+alongside, whichever app started last receives `t3code://` links: the Clerk sign-in callback, the
+Codex sign-in handoff and prompt links.
 
 Changed in `apps/desktop/src/app/{DesktopEnvironment,DesktopStatePaths,DesktopEarlyElectronStartup,DesktopApp,DesktopUserData,DesktopLegacyLocalStorage}.ts`,
 `apps/desktop/src/backend/DesktopBackendConfiguration.ts` (WSL `t3Home`),
@@ -85,9 +89,6 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   the core stays upstream's so version-skew checks against servers hold. The core is the higher
   of `apps/server/package.json` and the release tag in "Last synced with upstream release" above,
   because upstream stamps a release's version only when it builds it. Builds are unsigned.
-  Next to the builds run the checks (`vp check`, `vpr typecheck`, generated GraphQL operations,
-  and the tests: packages, web, and apps/server in 6 shards); the release waits for all of them.
-  Upstream's `knip:check` is left out for now: it flags unused exports in the fork's own modules.
 - **Android.** The same workflow's `android` job prebuilds the sidebar variant, builds a release
   APK signed with the fork key and attaches `T3-Code-Sidebar-<version>.apk` to the release. The
   generated `android/` project and its native build outputs live in an Actions cache keyed by

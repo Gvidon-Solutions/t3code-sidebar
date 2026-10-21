@@ -323,7 +323,8 @@ const startup = Effect.gen(function* () {
   yield* applicationMenu.configure;
   yield* updates.configure;
   yield* DesktopRemoteUpdates.listen;
-  // The sidebar fork leaves the t3code:// scheme to upstream T3 Code installed alongside.
+  // Sidebar fork: upstream's xdg-mime registration of t3code:// is skipped; Clerk's bridge
+  // still registers the scheme at launch, so the last launched app receives t3code:// links.
   yield* bootstrap.pipe(Effect.catchCause((cause) => fatalStartupCause("bootstrap", cause)));
 }).pipe(Effect.withSpan("desktop.startup"));
 
