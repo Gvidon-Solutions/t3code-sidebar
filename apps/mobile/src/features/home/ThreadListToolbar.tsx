@@ -119,6 +119,15 @@ export function ThreadListToolbar(props: {
         titleAccessibilityLabel="T3 Code, Threads"
         onOpenEnvironments={props.onOpenEnvironments}
         filter={filterButton}
+        onOpenSettings={
+          props.sidebar
+            ? undefined
+            : () =>
+                navigation.navigate("SettingsSheet", {
+                  screen: "SettingsContent",
+                  params: { screen: "Settings" },
+                })
+        }
       />
     </View>
   );

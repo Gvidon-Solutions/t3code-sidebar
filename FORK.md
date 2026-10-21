@@ -108,6 +108,17 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-10-21 — Settings gear back in the phone's thread-list header
+
+- **What.** On a phone the thread list's header shows inbox · search · ⚙ · filter again, and
+  the gear opens Settings. Upstream v0.1.1 moved Settings into Android's bottom navigation bar,
+  which the fork hides on phones (the workspace dock replaces it), so Settings had no way in.
+- **How.** `WorkspaceListToolbarRow` takes an optional `onOpenSettings` and renders a gear
+  button; `ThreadListToolbar` passes it outside the tablet sidebar, navigating to
+  `SettingsSheet → SettingsContent → Settings`.
+- **Where.** `apps/mobile/src/features/workspace/WorkspaceListToolbarRow.tsx`,
+  `apps/mobile/src/features/home/ThreadListToolbar.tsx`.
+
 ### 2026-10-21 — Phone composer: model and reasoning always in view, ⤢ fills the screen
 
 - **What.** The thread composer is back to the fork's layout: the draft on top and one toolbar

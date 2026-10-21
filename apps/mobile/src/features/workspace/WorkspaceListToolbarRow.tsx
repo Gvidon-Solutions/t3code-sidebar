@@ -23,6 +23,8 @@ export function WorkspaceListToolbarRow(props: {
   readonly onOpenEnvironments: () => void;
   /** Stays trailing while searching, so it never moves and still narrows the results. */
   readonly filter: ReactNode;
+  /** Sidebar fork: phones have no navigation bar (the workspace dock replaces it), so Settings sits here. */
+  readonly onOpenSettings?: () => void;
 }) {
   const { height } = useToolbarLayout();
   return (
@@ -64,6 +66,13 @@ export function WorkspaceListToolbarRow(props: {
             icon="magnifyingglass"
             onPress={props.onOpenSearch}
           />
+          {props.onOpenSettings ? (
+            <AndroidHeaderIconButton
+              accessibilityLabel="Open settings"
+              icon="gearshape"
+              onPress={props.onOpenSettings}
+            />
+          ) : null}
           {props.filter}
         </>
       )}
