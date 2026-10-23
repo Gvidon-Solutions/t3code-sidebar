@@ -1,3 +1,4 @@
+import { uuidv4 } from "../../lib/uuid";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { snoozeWakeLabel } from "@t3tools/client-runtime/state/thread-settled";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -88,9 +89,9 @@ export function WorkspaceDrawer(props: {
   const startThread = useCallback(
     (project: EnvironmentProject) => {
       onClose();
-      navigation.navigate("NewTaskSheet", {
-        screen: "NewTaskDraft",
-        params: {
+      navigation.navigate("Thread", {
+        draft: {
+          requestId: uuidv4(),
           environmentId: String(project.environmentId),
           projectId: String(project.id),
           title: project.title,

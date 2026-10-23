@@ -245,7 +245,7 @@ const config: ExpoConfig = {
   version:
     APP_VARIANT === "sidebar"
       ? (process.env.T3_SIDEBAR_VERSION ?? "0.0.0-sidebar.local")
-      : (repoEnv.T3CODE_MOBILE_VERSION ?? "2.0.0"),
+      : (repoEnv.T3CODE_MOBILE_VERSION ?? "2.1.0"),
   runtimeVersion: {
     // Development manifests resolve on every launch, so avoid fingerprint's
     // expensive native-project calculation there. Preview and production stay

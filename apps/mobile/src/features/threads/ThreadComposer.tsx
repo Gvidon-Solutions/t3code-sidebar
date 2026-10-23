@@ -101,7 +101,7 @@ import {
   ComposerInlineControl,
   ComposerToolbarRow,
 } from "../../components/ComposerToolbar";
-import { ProviderIcon } from "../../components/ProviderIcon";
+import { ProviderIcon, ProviderInstanceIcon } from "../../components/ProviderIcon";
 import {
   composerStripAttachments,
   type DraftComposerFileAttachment,
@@ -176,8 +176,6 @@ function collapsedEditorInset(text: ScaledTextRole): number {
   return Math.max(0, Math.round(COLLAPSED_EDITOR_DEFAULT_INSET - shift));
 }
 
-export const COMPOSER_EXPANDED_CHROME = 156;
-
 /** The focused editor's smallest height: about two lines before it starts to grow. */
 export const EXPANDED_EDITOR_MIN_HEIGHT = 48;
 /** Header, toolbar, card padding and a glimpse of the thread kept visible above the editor. */
@@ -204,6 +202,7 @@ export function expandedEditorMaxHeight(input: {
 }
 
 export interface ThreadComposerProps {
+  readonly isDraft?: boolean;
   readonly canOperateThread: boolean;
   readonly placeholder: string;
   readonly contentMaxWidth?: number;
@@ -223,6 +222,9 @@ export interface ThreadComposerProps {
   readonly environmentId: EnvironmentId;
   readonly projectCwd: string | null;
   readonly sendBlockedReason?: string | null;
+  readonly interactionLocked?: boolean;
+  /** Sidebar fork: a draft's voice button, which creates the thread before talking. */
+  readonly draftVoice?: { readonly canStart: boolean; readonly start: () => void } | null;
   readonly draftKey?: string;
   readonly queuedEdit?: {
     readonly existingAttachments: ReadonlyArray<ChatAttachment>;
@@ -242,14 +244,17 @@ export interface ThreadComposerProps {
   readonly onStopThread: () => void;
   /** Present while the thread's queue is held. */
   readonly onResumeQueue: (() => Promise<void>) | null;
-  readonly onSendMessage: (followUp?: ActiveTurnComposerAction) => Promise<MessageId | null>;
+  /** `stillSendable` reports whether the draft is unchanged after any wait before sending. */
+  readonly onSendMessage: (
+    followUp?: ActiveTurnComposerAction,
+    stillSendable?: () => boolean,
+  ) => Promise<MessageId | null>;
   readonly onShowUsageLimits: (report: UsageLimitsReport | null) => void;
   readonly canSwitchProvider: boolean;
   readonly onUpdateModelSelection: (modelSelection: ModelSelection) => void;
   readonly onUpdateRuntimeMode: (runtimeMode: RuntimeMode) => void;
-  readonly onUpdateInteractionMode: (interactionMode: ProviderInteractionMode) => void;
-  /** True while the draft is stacked above the controls rather than in the one-row capsule. */
-  readonly onExpandedChange?: (expanded: boolean) => void;
+  readonly onUpdateInteractionMode?: (interactionMode: ProviderInteractionMode) => void;
+  readonly onHeightChange?: (height: number) => void;
   readonly onEditorFocusChange?: (focused: boolean) => void;
 }
 
@@ -306,6 +311,7 @@ const FOLLOW_UP_ACTION_SUBTITLE = {
 } as const;
 
 function SendActionButton(props: {
+  readonly size?: "regular" | "large";
   readonly accessibilityLabel: string;
   readonly presentation: ComposerSendPresentation;
   readonly disabled: boolean;
@@ -315,6 +321,7 @@ function SendActionButton(props: {
   const button = (
     <ComposerActionButton
       accessibilityLabel={props.accessibilityLabel}
+      size={props.size}
       icon={presentation.icon}
       variant="primary"
       disabled={props.disabled}
@@ -364,8 +371,10 @@ export function ComposerSurface(props: {
         })
       : targetBorderRadius;
   }, [animatedBorderRadius, shouldAnimate, targetBorderRadius]);
+  const borderCurve = props.style.borderCurve;
   const animatedShapeStyle = useAnimatedStyle(() => ({
     borderRadius: animatedBorderRadius.value,
+    ...(borderCurve ? { borderCurve } : {}),
   }));
   const layoutTransition = shouldAnimate ? COMPOSER_LAYOUT_TRANSITION : undefined;
 
@@ -407,6 +416,9 @@ export function ComposerSurface(props: {
   );
 }
 
+/** Space below the composer pill, inside the bottom inset it is given. */
+export const THREAD_COMPOSER_BOTTOM_GUTTER = 6;
+
 export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps) {
   const project = useProject(scopeProjectRef(props.environmentId, props.selectedThread.projectId));
   const { themeVariables: materialTheme } = useAppearancePreferences();
@@ -419,6 +431,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const [isFocused, setIsFocused] = useState(false);
   const fullScreenEditor = useComposerFullScreen(bodyText.lineHeight);
   const pendingPastedTextAttachmentCountRef = useRef(0);
+  const pendingNativeImagePasteCountRef = useRef(0);
   const [pendingPastedTextAttachmentCount, setPendingPastedTextAttachmentCount] = useState(0);
   const settingsSheetPresentation = useThreadSettingsSheetPresentation({
     editorRef: inputRef,
@@ -428,7 +441,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const settingsRoutePresentedRef = useRef(false);
   const wasExpandedBeforePreviewRef = useRef(false);
   const inFlightThreadIdsRef = useRef(new Set<string>());
-  const { onExpandedChange } = props;
 
   const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
@@ -535,7 +547,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     pullRequestRepository: project?.repositoryIdentity?.displayName ?? null,
     threadPullRequests: props.selectedThread.pullRequests,
     selectedProviderStatus,
-    hasThread: true,
+    hasThread: !props.isDraft,
     hasCompactableConversation: props.hasCompactableConversation,
     onChangeDraftMessage: props.onChangeDraftMessage,
     onUpdateInteractionMode:
@@ -573,13 +585,23 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     voiceConversationLive ||
     (props.connectionState === "connected" && threadOnServer && !voiceInput.isBusy);
   const toggleVoiceConversation = useCallback(() => voiceMode.toggle(voiceTarget), [voiceTarget]);
-  const voiceModeButton = offersVoiceConversation ? (
+  const voiceModeButton = props.isDraft ? (
+    props.draftVoice ? (
+      <ComposerVoiceModeButton
+        phase="idle"
+        disabled={!props.draftVoice.canStart || voiceInput.isBusy}
+        onPress={props.draftVoice.start}
+      />
+    ) : null
+  ) : offersVoiceConversation ? (
     <ComposerVoiceModeButton
       phase={voicePhase}
       disabled={!canToggleVoiceConversation}
       onPress={toggleVoiceConversation}
     />
   ) : null;
+  const isSubmissionLocked =
+    props.interactionLocked === true || queuedEdit?.saving === true || voiceInput.blocksSubmission;
   const voicePresentation = resolveVoiceComposerPresentation(
     voiceInput.state,
     voiceInput.elapsedSeconds,
@@ -653,13 +675,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     (props.canOperateThread || props.connectionState !== "connected") &&
     hasContent &&
     !contextImports[composerDraftKey] &&
-    !voiceInput.blocksSubmission &&
+    !isSubmissionLocked &&
     sendBlockedReason === null &&
     !modelUnavailable;
 
-  useEffect(() => {
-    onExpandedChange?.(usesCard);
-  }, [usesCard, onExpandedChange]);
   useEffect(() => () => setComposerEditing(false), [setComposerEditing]);
 
   const onPressPreview = (source: FilePreviewSource) => {
@@ -703,7 +722,13 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     setComposerEditing(false);
   };
   const handleSend = async (followUp?: ActiveTurnComposerAction) => {
-    if (voiceInput.blocksSubmission || pendingPastedTextAttachmentCountRef.current > 0) return;
+    if (
+      isSubmissionLocked ||
+      sendBlockedReason !== null ||
+      pendingPastedTextAttachmentCountRef.current > 0 ||
+      pendingNativeImagePasteCountRef.current > 0
+    )
+      return;
     if (usageLimitsOffered && isUsageLimitsCommand(draftMessage) && draftAttachments.length === 0) {
       if (openUsageLimits()) onChangeDraftMessage("");
       return;
@@ -711,7 +736,20 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
     if (inFlightThreadIdsRef.current.has(threadKey)) return;
     inFlightThreadIdsRef.current.add(threadKey);
-    const sent = await settlePromise(() => onSendMessage(followUp));
+    const draftAtSend = getComposerDraftSnapshot(composerDraftKey);
+    const stillSendable = () => {
+      const draft = getComposerDraftSnapshot(composerDraftKey);
+      return (
+        pendingPastedTextAttachmentCountRef.current === 0 &&
+        pendingNativeImagePasteCountRef.current === 0 &&
+        draft.text === draftAtSend.text &&
+        draft.attachments.length === draftAtSend.attachments.length &&
+        draft.attachments.every(
+          (attachment, index) => attachment.id === draftAtSend.attachments[index]?.id,
+        )
+      );
+    };
+    const sent = await settlePromise(() => onSendMessage(followUp, stillSendable));
     inFlightThreadIdsRef.current.delete(threadKey);
     if (AsyncResult.isFailure(sent)) {
       // The composer state already surfaces send errors; only the lock needed releasing.
@@ -761,6 +799,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     ...(lockedProviderInstanceId ? { lockedProviderInstanceId } : {}),
     providerGroups: threadProviderGroups,
     selectedModel: currentModelSelection,
+    prompt: draftMessage,
+    onPromptChange: (text) => setComposerDraftText(composerDraftKey, text),
     reportedModelSelection: props.reportedModelSelection,
     onSelectModel: (option) =>
       props.onUpdateModelSelection(withRememberedModelOptions(option.selection)),
@@ -845,32 +885,32 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     <>
       {queuedEdit !== null && queuedEdit.existingAttachments.length > 0 ? (
         <Animated.View
-          className="px-[14px] pb-2.5"
+          className="px-[14px] pb-2.5 pt-2"
           entering={COMPOSER_ATTACHMENT_ENTERING}
           exiting={FadeOut.duration(120)}
         >
           <ComposerQueuedEditAttachments
             environmentId={props.environmentId}
             attachments={queuedEdit.existingAttachments}
-            disabled={queuedEdit.saving || voiceInput.isBusy}
+            disabled={isSubmissionLocked}
             onRemove={queuedEdit.onRemoveExistingAttachment}
           />
         </Animated.View>
       ) : null}
       {stripAttachments.length > 0 ? (
         <Animated.View
-          className="px-[14px] pb-2.5"
+          className="px-[14px] pb-2.5 pt-2"
           entering={COMPOSER_ATTACHMENT_ENTERING}
           exiting={FadeOut.duration(120)}
         >
           <ComposerAttachmentStrip
             environmentId={props.environmentId}
             attachments={stripAttachments}
-            onRemove={voiceInput.isBusy ? () => undefined : props.onRemoveDraftImage}
-            onPressPreview={voiceInput.isBusy ? undefined : onPressPreview}
-            onPressVideo={voiceInput.isBusy ? undefined : onPressVideo}
+            onRemove={isSubmissionLocked ? () => undefined : props.onRemoveDraftImage}
+            onPressPreview={isSubmissionLocked ? undefined : onPressPreview}
+            onPressVideo={isSubmissionLocked ? undefined : onPressVideo}
             onPressDocument={
-              voiceInput.isBusy
+              isSubmissionLocked
                 ? undefined
                 : (attachment) =>
                     openDraftDocument({
@@ -887,6 +927,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   ) : null;
 
   // The row and the card's toolbar share this picker; it always names the model and its effort.
+  const currentModelBadge = currentModelOption?.providerBadge;
   const modelControl = (
     <View className="min-w-0 shrink">
       <ComposerInlineControl
@@ -897,13 +938,25 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
         }
         detail={currentModelDisplay.effort}
         emphasized
-        renderIcon={(size) => (
-          <ProviderIcon
-            iconUrl={currentModelOption?.providerIconUrl}
-            provider={currentModelOption?.providerDriver}
-            size={size}
-          />
-        )}
+        renderIcon={(size) =>
+          currentModelBadge?.showBadge ? (
+            <ProviderInstanceIcon
+              iconUrl={currentModelOption?.providerIconUrl}
+              provider={currentModelOption?.providerDriver}
+              displayName={currentModelBadge.displayName}
+              accentColor={currentModelBadge.accentColor}
+              showBadge
+              surfaceColor={composerPanel}
+              size={size}
+            />
+          ) : (
+            <ProviderIcon
+              iconUrl={currentModelOption?.providerIconUrl}
+              provider={currentModelOption?.providerDriver}
+              size={size}
+            />
+          )
+        }
         label={currentModelDisplay.name}
         maxWidth="100%"
         onPress={openQuickModelSheet}
@@ -914,11 +967,14 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   return (
     <Animated.View
       ref={composerRootRef}
-      onLayout={fitFullScreenToHeader}
+      onLayout={(event) => {
+        fitFullScreenToHeader();
+        props.onHeightChange?.(event.nativeEvent.layout.height);
+      }}
       className="px-[6px]"
       style={{
         paddingTop: 6,
-        paddingBottom: (props.bottomInset ?? 0) + 6,
+        paddingBottom: (props.bottomInset ?? 0) + THREAD_COMPOSER_BOTTOM_GUTTER,
         backgroundColor:
           Platform.OS === "android" ? themeColorWithAlpha(composerPanel, 1) : undefined,
       }}
@@ -938,7 +994,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
         className="relative w-full self-center"
         style={{ maxWidth: props.contentMaxWidth }}
       >
-        {!voiceInput.isBusy &&
+        {!isSubmissionLocked &&
         composerMenu.trigger &&
         (composerMenu.items.length > 0 || composerMenu.trigger.kind === "pull-request") ? (
           <ComposerPopoverAnchor>
@@ -1018,6 +1074,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
           >
             {!usesCard ? (
               <ComposerAttachmentButton
+                disabled={isSubmissionLocked}
                 supportsFiles={Boolean(
                   props.serverConfig?.environment.capabilities.fileAttachments,
                 )}
@@ -1042,11 +1099,19 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 environmentId={props.environmentId}
                 onOpenMention={(path) => {
                   Keyboard.dismiss();
-                  navigation.navigate("ThreadFile", {
-                    environmentId: String(props.environmentId),
-                    threadId: String(props.selectedThread.id),
-                    path: fileRoutePathSegments(path),
-                  });
+                  if (props.isDraft) {
+                    navigation.navigate("NewTaskFile", {
+                      environmentId: String(props.environmentId),
+                      cwd: props.projectCwd ?? undefined,
+                      path: fileRoutePathSegments(path),
+                    });
+                  } else {
+                    navigation.navigate("ThreadFile", {
+                      environmentId: String(props.environmentId),
+                      threadId: String(props.selectedThread.id),
+                      path: fileRoutePathSegments(path),
+                    });
+                  }
                 }}
                 onOpenAttachment={openDraftDocument}
                 chipsInert={!isExpanded}
@@ -1055,13 +1120,22 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 multiline
                 value={draftMessage}
                 // The save uses a draft snapshot; further typing would be discarded on success.
-                readOnly={voiceInput.freezesEditor || queuedEdit?.saving === true}
+                readOnly={isSubmissionLocked}
                 skills={composerMenu.skills}
                 selection={composerMenu.selection}
-                onChangeText={props.onChangeDraftMessage}
+                onChangeText={(text) => {
+                  if (!isSubmissionLocked) props.onChangeDraftMessage(text);
+                }}
                 onSelectionChange={composerMenu.onSelectionChange}
-                onPasteImages={(uris) => void props.onNativePasteImages(uris)}
+                onPasteImages={(uris) => {
+                  if (isSubmissionLocked) return;
+                  pendingNativeImagePasteCountRef.current += 1;
+                  void props.onNativePasteImages(uris).finally(() => {
+                    pendingNativeImagePasteCountRef.current -= 1;
+                  });
+                }}
                 onPasteText={(paste) => {
+                  if (isSubmissionLocked) return;
                   const insertPaste = () => {
                     const insertion = replaceTextSelection({
                       value: paste.value,
@@ -1195,8 +1269,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     size={30}
                     borderRadius={8}
                     compact
-                    onPressPreview={onPressPreview}
-                    onPressVideo={onPressVideo}
+                    onPressPreview={isSubmissionLocked ? undefined : onPressPreview}
+                    onPressVideo={isSubmissionLocked ? undefined : onPressVideo}
                   />
                 ))}
                 {stripAttachments.length > 3 ? (
@@ -1215,7 +1289,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 <ComposerDictationStartAction
                   state={voiceInput.state}
                   isAvailable={voiceInput.isAvailable}
-                  disabled={voiceConversationLive}
+                  disabled={voiceConversationLive || isSubmissionLocked}
                   onStart={voiceInput.start}
                   onCancel={voiceInput.cancel}
                 />
@@ -1290,6 +1364,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                       <View />
                     ) : (
                       <ComposerAttachmentButton
+                        disabled={isSubmissionLocked}
                         supportsFiles={Boolean(
                           props.serverConfig?.environment.capabilities.fileAttachments,
                         )}
@@ -1313,7 +1388,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                       state={voiceInput.state}
                       presentation={voicePresentation}
                       isAvailable={voiceInput.isAvailable}
-                      disabled={voiceConversationLive}
+                      disabled={voiceConversationLive || isSubmissionLocked}
                       onStart={voiceInput.start}
                       onConfirm={voiceInput.stop}
                       onCancel={voiceInput.cancel}

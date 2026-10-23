@@ -14,16 +14,16 @@ Everything else is upstream.
   feature below. Re-check those seams after every upstream merge.
 - **No upstream PRs** from this fork unless the owner asks for one.
 - **Tests.** The fork keeps the whole suite green: `vp lint` has no errors and every package's
-  tests pass on Node 24 (the version `package.json` pins; Node 22 fails sqlite, WSL and lint-plugin
-  tests). Upstream tests that check desktop identity (app name, id, profile, `~/.t3-sidebar`, WSL
+  tests pass on the Node version `package.json` pins (26.12.1 since v0.1.2; older Nodes fail
+  sqlite, WSL and lint-plugin tests). Upstream tests that check desktop identity (app name, id, profile, `~/.t3-sidebar`, WSL
   runtime dir) expect the fork's values, marked `// Sidebar fork:`. When a merge breaks a test,
   fix the fork code or the test; an upstream test that is broken upstream too is dropped or
   fixed the way upstream later did. Upstream CI does not run here (it triggers on `main`).
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream release `v0.1.1` (`fe27e8e3dc`, tagged 2026-10-20) on
-  2026-10-21 (merge into `ws`); from now on only stable upstream releases are merged.
+- **Base.** Last synced with upstream release `v0.1.2` (`044f07257c`, tagged 2026-10-22) on
+  2026-10-23 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
   above: CI reads it from this line.
@@ -107,6 +107,47 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 
 ## Feature log
+
+### 2026-10-23 — Upstream release v0.1.2
+
+- **What.** Brings in upstream's `v0.1.2` (260 commits past the v0.1.1 sync). Mermaid diagrams
+  render with pele; the composer stays usable during approvals, and sending declines and
+  redirects; approvals in full access say why Claude asked; messages from other agents and
+  automations fold into one-line rows; `t3 thread` starts, messages and reads threads from the
+  terminal; Claude idle compaction gets a global default with per-instance overrides. The phone
+  catches up with web: model controls with provider-instance badges, plans, wake status and
+  elapsed time on thread rows, undo for archive and thread actions, background work and status
+  actions, project and checkout removal. Plus many server, provider and web fixes. Upstream
+  deleted about 11k low-signal tests and lints tests against timeouts, wall-clock reads and
+  polling. The repo moves to Node 26.12.1 and pnpm 12.14.0.
+- **How.** Web: upstream split `MessagesTimeline`, `ChatView` and `ChatComposer`, so the seams
+  moved with the code. The inbox attribution is in `TimelineUserMessageRow`, fork-from-run in
+  `useTimelineRewind` (through `useForkThread`), `/voice` in `useComposerSend`, and the voice
+  slash item in `useComposerMenuItems`. `ChatComposer` keeps the voice button, strip, F8/mute
+  keys and `toggleVoice` handle. Mobile: the new-task draft is now the `Thread` route with a
+  `draft` param, rendered by `ThreadDetailScreen` and `ThreadComposer`. The fork's composer
+  layout (card when focused, ⤢, model chip with effort) stays and takes upstream's submission
+  lock, paste handling, height reporting and bottom gutter. The chip shows upstream's
+  provider-instance badge; upstream's `ComposerModelControl` and the unused `fab-scroll` are
+  dropped. The draft gets voice through a `draftVoice` prop (`NewTaskDraftScreen` creates the
+  voice thread and switches the route to it). On Android the thread pager mounts the shared
+  thread screen on its chat page through `ThreadScreenInlineOutlet`, and the tab strip sits in
+  the header. Share-into-open-draft, the drawer's new thread and cold-start share navigate to
+  the draft route. The camera source moved into `useComposerAttachmentActions`.
+  `workspaceNavigator` fills the now-required `wokeAt`. Tests: where upstream deleted a test
+  file, the fork's cases in it go too (desktop identity, packaging, shared settings); the fork's
+  own cases in surviving files stay. The Codex voice-handoff test waits on the harness's change
+  signal instead of the removed polling helper. CI: the CLI single-executable builds on
+  `engines.node`, which upstream now requires; the pinned `VP_NODE_VERSION` is gone.
+- **Where.** `apps/web/src/components/chat/{TimelineUserMessageRow,ChatComposer}.tsx`,
+  `chat/{useTimelineRewind,useComposerSend,useComposerMenuItems}.ts`, `AppSidebarLayout.tsx`,
+  `CommandPalette.tsx`;
+  `apps/mobile/src/features/threads/{ThreadComposer,ThreadDetailScreen,NewTaskDraftScreen,ThreadScreenHost,ThreadRouteScreen,ThreadSettingsSheet,ThreadFeed,NewTaskRouteScreen}.tsx`,
+  `state/use-composer-attachment-actions.ts`, `features/panels/WorkspaceDrawer.tsx`,
+  `features/workspaces/workspaceNavigator.ts`, `Stack.tsx`, `components/ComposerToolbar.tsx`,
+  `lib/modelOptions.ts`, `app.config.ts`;
+  `apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts`;
+  `.github/workflows/sidebar-desktop.yml`.
 
 ### 2026-10-21 — Settings gear back in the phone's thread-list header
 

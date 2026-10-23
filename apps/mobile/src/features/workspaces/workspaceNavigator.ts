@@ -25,6 +25,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 
 import {
   resolveThreadListV2Status,
+  resolveThreadListV2WokeAt,
   threadListV2ListItemsAreEqual,
   type ThreadListV2Item,
   type ThreadListV2ListItem,
@@ -377,6 +378,7 @@ export function buildWorkspaceHomeItems(input: {
       variant: flags.variant,
       snoozed: flags.snoozed === true,
       pinned: flags.pinned === true,
+      wokeAt: resolveThreadListV2WokeAt(thread, { now: nowIso }),
       isLast: false,
     });
     rows.push({
