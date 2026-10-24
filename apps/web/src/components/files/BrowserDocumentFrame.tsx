@@ -34,6 +34,8 @@ import { readLocalApi } from "~/localApi";
 import { cn } from "~/lib/utils";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "~/state/server";
 
+import { PdfDocumentView } from "./PdfDocumentView";
+
 /**
  * The page reports the keys, and a page script can report any key it likes,
  * so only commands that change what the reader sees are here, never one that
@@ -63,7 +65,7 @@ export const isPdfPreviewFile = (path: string): boolean =>
 
 /**
  * HTML runs in a sandboxed frame with an opaque origin, so a page cannot reach
- * the app's session or storage. PDFs use the browser's native viewer.
+ * the app's session or storage. PDFs render with pdf.js so a new revision keeps the reader's place.
  */
 export function BrowserDocumentFrame(props: {
   readonly src: string;
@@ -76,13 +78,7 @@ export function BrowserDocumentFrame(props: {
 }) {
   const key = props.documentKey ?? props.src;
   return props.pdf ? (
-    <embed
-      key={props.src}
-      src={props.src}
-      type="application/pdf"
-      title={props.title}
-      className="min-h-0 w-full flex-1 border-0"
-    />
+    <PdfDocumentView src={props.src} title={props.title} reloadKey={key} />
   ) : props.htmlRender ? (
     <HtmlRenderDocument
       key={key}

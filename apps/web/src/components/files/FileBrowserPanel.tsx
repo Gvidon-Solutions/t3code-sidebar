@@ -204,7 +204,12 @@ export default function FileBrowserPanel({
       const position = pointerIsFresh
         ? { x: pointer.x, y: pointer.y }
         : { x: anchorRect.left, y: anchorRect.bottom };
-      const fileTarget = { environmentId, filePath: relativePath, workspaceRoot: cwd };
+      const fileTarget = {
+        environmentId,
+        filePath: relativePath,
+        workspaceRoot: cwd,
+        directory: item.path.endsWith("/"),
+      };
       const fileMenuItems = fileContextMenu.buildItems(fileTarget);
       void settlePromise(async () => {
         const clicked = await api.contextMenu.show(

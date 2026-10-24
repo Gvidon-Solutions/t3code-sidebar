@@ -108,6 +108,22 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-10-24 — PDFs keep their place on rebuild; Download in the file menu
+
+- **What.** A PDF in the side panel no longer jumps to page one when the file changes (a LaTeX
+  rebuild): the new revision renders behind the shown one and replaces it at the same zoom and
+  scroll offset. The view has zoom, fit-width, reload and "Open in browser" buttons, and
+  Ctrl/⌘+wheel zooms. Every file's right-click menu (file tree, diff, chat) has **Download**, which
+  saves any file, not just previewable ones, from any client.
+- **How.** pdf.js (`pdfjs-dist`, loaded only when a PDF opens) replaces the native `<embed>`;
+  its stylesheet is wrapped in `@scope` because it sets `color-scheme` on `:root`. A revision
+  that fails to parse (still being written) keeps the last good one. File asset resources take
+  `disposition: "attachment"`, which skips the preview-type check and signs a one-file download
+  URL; the client fetches it into a blob so the desktop shell does not hand it to the browser.
+- **Where.** `apps/web/src/components/files/{PdfDocumentView.tsx,pdfStack.ts,BrowserDocumentFrame.tsx}`,
+  `apps/web/src/fileContextMenu.ts`, `apps/server/src/assets/AssetAccess.ts`,
+  `packages/contracts/src/assets.ts`.
+
 ### 2026-10-23 — Upstream release v0.1.2
 
 - **What.** Brings in upstream's `v0.1.2` (260 commits past the v0.1.1 sync). Mermaid diagrams

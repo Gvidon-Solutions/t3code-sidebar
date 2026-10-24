@@ -1045,4 +1045,71 @@ describe("AssetAccess", () => {
       }
     }).pipe(Effect.provide(layerTest)),
   );
+
+  it.effect("serves any single file as a download when asked, but never inline", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-asset-download-",
+      });
+      const outside = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-asset-download-outside-",
+      });
+      const texPath = path.join(root, "paper.tex");
+      const zipPath = path.join(outside, "bundle.zip");
+      yield* fileSystem.writeFileString(texPath, "\\documentclass{article}");
+      yield* fileSystem.writeFileString(path.join(root, "notes.tex"), "sibling");
+      yield* fileSystem.writeFileString(zipPath, "zip");
+      const canonicalTexPath = yield* fileSystem.realPath(texPath);
+      const canonicalZipPath = yield* fileSystem.realPath(zipPath);
+      const tokenOf = (relativeUrl: string) => {
+        const suffix = relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+        return suffix.slice(0, suffix.indexOf("/"));
+      };
+
+      const inline = yield* issueAssetUrl({
+        resource: { _tag: "draft-workspace-file", cwd: root, path: "paper.tex" },
+        workspaceRoot: root,
+      }).pipe(Effect.flip);
+      expect(inline._tag).toBe("AssetPreviewTypeValidationError");
+
+      const workspace = tokenOf(
+        (yield* issueAssetUrl({
+          resource: {
+            _tag: "draft-workspace-file",
+            cwd: root,
+            path: "paper.tex",
+            disposition: "attachment",
+          },
+          workspaceRoot: root,
+        })).relativeUrl,
+      );
+      expect(yield* resolveAsset(workspace, "paper.tex")).toEqual({
+        kind: "file",
+        path: canonicalTexPath,
+        download: true,
+        fileName: "paper.tex",
+      });
+      expect(yield* resolveAsset(workspace, "notes.tex")).toBeNull();
+
+      const absolute = tokenOf(
+        (yield* issueAssetUrl({
+          resource: {
+            _tag: "draft-workspace-file",
+            cwd: root,
+            path: zipPath,
+            disposition: "attachment",
+          },
+          workspaceRoot: root,
+        })).relativeUrl,
+      );
+      expect(yield* resolveAsset(absolute, "bundle.zip")).toMatchObject({
+        kind: "file",
+        path: canonicalZipPath,
+        download: true,
+        fileName: "bundle.zip",
+      });
+    }).pipe(Effect.provide(layerTest)),
+  );
 });

@@ -10,10 +10,14 @@ import {
   revealInFileExplorerLabelForKind,
   revealInFileExplorerLabelForOs,
 } from "~/components/preview/fileExplorerLabel";
+import { resolveAssetUrl } from "./assets/assetUrls";
 import { readLocalApi } from "./localApi";
+import { assetEnvironment } from "./state/assets";
 import { serverEnvironment } from "./state/server";
 import { shellEnvironment } from "./state/shell";
 import { useAtomCommand } from "./state/use-atom-command";
+import { useAtomQueryRunner } from "./state/use-atom-query-runner";
+import { usePreparedConnection } from "./state/session";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { toastManager } from "./components/ui/toast";
 import { useAtomValue } from "@effect/atom-react";
@@ -21,6 +25,7 @@ import { useAtomValue } from "@effect/atom-react";
 export type FileContextMenuAction =
   | "reveal-in-folder"
   | "open"
+  | "download"
   /** Submenu parent; never the activated id. */
   | "open-with"
   | `editor:${EditorId}`;
@@ -31,6 +36,7 @@ export interface FileContextMenuTarget {
   readonly filePath: string;
   readonly workspaceRoot: string | undefined;
   readonly repositoryRoot?: string | undefined;
+  readonly directory?: boolean | undefined;
 }
 
 export function resolveFileContextMenuAbsolutePath(target: FileContextMenuTarget): string | null {
@@ -54,10 +60,12 @@ export interface FileContextMenuCapabilities {
   readonly revealLabel: string | undefined;
   readonly canOpenDefault: boolean;
   readonly editorIds: ReadonlyArray<EditorId>;
+  readonly canDownload: boolean;
 }
 
-function buildFileContextMenuItems(input: {
+export function buildFileContextMenuItems(input: {
   readonly hasAbsolutePath: boolean;
+  readonly directory?: boolean | undefined;
   readonly capabilities: FileContextMenuCapabilities;
 }): readonly ContextMenuItem<FileContextMenuAction>[] {
   if (!input.hasAbsolutePath) return [];
@@ -83,12 +91,20 @@ function buildFileContextMenuItems(input: {
       })),
     });
   }
+  if (input.capabilities.canDownload && input.directory !== true) {
+    items.push({ id: "download", label: "Download", icon: "download" });
+  }
   return items;
 }
 
 export function useFileContextMenu(environmentId: EnvironmentId | null) {
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, { reportFailure: false });
   const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
+  const connection = usePreparedConnection(environmentId);
+  const createAssetUrl = useAtomQueryRunner(assetEnvironment.createUrl, {
+    reportFailure: false,
+    refresh: true,
+  });
 
   const availableEditors = serverConfig?.availableEditors ?? [];
   const capabilities: FileContextMenuCapabilities = {
@@ -104,6 +120,48 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
         : undefined,
     canOpenDefault: availableEditors.includes("file-manager"),
     editorIds: availableEditors,
+    // The file comes over the server's asset route, so this works from any client.
+    canDownload: environmentId !== null,
+  };
+
+  const download = async (absolutePath: string, target: FileContextMenuTarget) => {
+    if (environmentId === null) return;
+    const fileName = absolutePath.split(/[\\/]/).at(-1) ?? "download";
+    const fail = (description: string) =>
+      toastManager.add({ type: "error", title: "Could not download file", description });
+    const result = await createAssetUrl({
+      environmentId,
+      input: {
+        resource: {
+          _tag: "draft-workspace-file",
+          cwd: target.workspaceRoot ?? absolutePath,
+          path: absolutePath,
+          disposition: "attachment",
+        },
+      },
+    });
+    const url =
+      result._tag === "Success" && connection._tag === "Some"
+        ? resolveAssetUrl(connection.value.httpBaseUrl, result.value.relativeUrl)
+        : null;
+    if (url === null) {
+      fail(absolutePath);
+      return;
+    }
+    // The asset route is usually another origin, where the download attribute is ignored and
+    // the desktop shell would hand the navigation to the system browser; a blob URL is local.
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) {
+      fail(error instanceof Error ? error.message : absolutePath);
+    }
   };
 
   const activate = async (
@@ -112,6 +170,10 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
   ): Promise<void> => {
     const absolutePath = resolveFileContextMenuAbsolutePath(target);
     if (absolutePath === null || environmentId === null) return;
+    if (action === "download") {
+      await download(absolutePath, target);
+      return;
+    }
 
     const reveal = action === "reveal-in-folder";
     const editor =
@@ -144,6 +206,7 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
     const api = readLocalApi();
     const items = buildFileContextMenuItems({
       hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
+      directory: target.directory,
       capabilities,
     });
     if (items.length === 0 || api === undefined) return;
@@ -156,6 +219,7 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
     buildItems: (target: FileContextMenuTarget) =>
       buildFileContextMenuItems({
         hasAbsolutePath: resolveFileContextMenuAbsolutePath(target) !== null,
+        directory: target.directory,
         capabilities,
       }),
     capabilities,

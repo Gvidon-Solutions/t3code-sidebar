@@ -1,7 +1,7 @@
 import { EnvironmentId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveFileContextMenuAbsolutePath } from "./fileContextMenu";
+import { buildFileContextMenuItems, resolveFileContextMenuAbsolutePath } from "./fileContextMenu";
 
 const BASE_TARGET = {
   environmentId: EnvironmentId.make("environment-local"),
@@ -40,5 +40,22 @@ describe("resolveFileContextMenuAbsolutePath", () => {
         filePath: "/absolute/src/index.ts",
       }),
     ).toBeNull();
+  });
+});
+
+describe("buildFileContextMenuItems", () => {
+  it("offers download for files but not folders", () => {
+    const capabilities = {
+      revealLabel: undefined,
+      canOpenDefault: false,
+      editorIds: [],
+      canDownload: true,
+    };
+    expect(
+      buildFileContextMenuItems({ hasAbsolutePath: true, capabilities }).map((item) => item.id),
+    ).toEqual(["download"]);
+    expect(
+      buildFileContextMenuItems({ hasAbsolutePath: true, directory: true, capabilities }),
+    ).toEqual([]);
   });
 });
