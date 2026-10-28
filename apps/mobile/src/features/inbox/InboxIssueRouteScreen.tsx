@@ -5,7 +5,6 @@ import {
   EnvironmentId,
   InboxIssueId,
   ThreadId,
-  type ChatFileAttachment,
   type InboxEntry,
   type InboxIssue,
 } from "@t3tools/contracts";
@@ -21,10 +20,8 @@ import { AppText as Text } from "../../components/ui/AppText";
 import * as Dialog from "../../components/ui/Dialog";
 import { Menu } from "../../components/ui/Menu";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
-import { VideoPreviewModal, type VideoPreviewSource } from "../../components/VideoPreviewModal";
 import { cn } from "../../lib/cn";
 import { relativeTime } from "../../lib/time";
-import { attachmentVideoPreviewSource } from "../../lib/videoPreviewSource";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { useThreadShell } from "../../state/entities";
 import { useEnvironmentQuery } from "../../state/query";
@@ -46,6 +43,7 @@ import {
   presentInboxEntry,
 } from "./inboxList";
 import { inboxEnvironment } from "./useInbox";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 type InboxIssueParams = { readonly environmentId: string; readonly issueId: string };
 
@@ -63,8 +61,9 @@ export function InboxIssueRouteScreen({ route }: StaticScreenProps<InboxIssuePar
 /** Opens history attachments the way a thread's messages do. */
 interface AttachmentPreview {
   readonly onPressPreview: (source: FilePreviewSource) => void;
-  readonly onPressVideo: (attachment: ChatFileAttachment, sourceIdentifier: string) => void;
 }
+
+const noop = () => {};
 
 function InboxIssueScreen(props: {
   readonly environmentId: EnvironmentId;
@@ -72,6 +71,7 @@ function InboxIssueScreen(props: {
 }) {
   const { environmentId, issueId } = props;
   const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const bottomInset = keyboardVisible ? 8 : Math.max(insets.bottom, 12);
@@ -88,7 +88,6 @@ function InboxIssueScreen(props: {
   const [busy, setBusy] = useState(false);
   const [composerHeight, setComposerHeight] = useState(64);
   const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
-  const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
   const issue = detail.data?.issue ?? null;
   const entries = detail.data?.entries ?? [];
 
@@ -121,23 +120,17 @@ function InboxIssueScreen(props: {
     void undismiss({ environmentId, input: { issueId } }).finally(() => setBusy(false));
   };
   const openThread = (threadId: ThreadId) =>
-    navigation.navigate("Thread", {
-      environmentId: String(environmentId),
-      threadId: String(threadId),
+    selectDetail({
+      name: "Thread",
+      params: {
+        environmentId: String(environmentId),
+        threadId: String(threadId),
+      },
     });
   const onPressPreview = useCallback((source: FilePreviewSource) => {
     setPreviewFile((current) => current ?? source);
   }, []);
-  const onPressVideo = useCallback(
-    (attachment: ChatFileAttachment, sourceIdentifier: string) => {
-      setPreviewVideo(
-        (current) =>
-          current ?? attachmentVideoPreviewSource(environmentId, attachment, sourceIdentifier),
-      );
-    },
-    [environmentId],
-  );
-  const preview: AttachmentPreview = { onPressPreview, onPressVideo };
+  const preview: AttachmentPreview = { onPressPreview };
 
   const showComposer = canOperate && issue !== null;
   return (
@@ -215,7 +208,6 @@ function InboxIssueScreen(props: {
         />
       ) : null}
       <FilePreviewModal source={previewFile} onRequestClose={() => setPreviewFile(null)} />
-      <VideoPreviewModal source={previewVideo} onRequestClose={() => setPreviewVideo(null)} />
     </KeyboardAvoidingView>
   );
 }
@@ -430,7 +422,7 @@ function EntryAttachments(props: {
             environmentId={props.environmentId}
             attachment={attachment}
             onPressPreview={props.preview.onPressPreview}
-            onPressVideo={props.preview.onPressVideo}
+            onPlaybackStart={noop}
           />
         ) : (
           <MessageAttachmentUnknown key={attachment.id} name={attachment.name} />

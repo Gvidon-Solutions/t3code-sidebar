@@ -44,11 +44,9 @@ const FAIL_Y_PX = 14;
 const FREE_EDGES: PageEdges = { prev: true, next: true };
 
 /**
- * Chat swipes (sidebar fork). The chat and the thread's file tabs, in the
- * order they were opened, are full-screen pages that follow the finger. Past
- * the chat a swipe right is Back: Home slides in from underneath. Past the
- * last tab a swipe left pulls in the Files panel (open tabs, changes, all
- * files, git). Only the pages next to the current one are mounted.
+ * Chat swipes (sidebar fork): the chat and its file tabs are full-screen pages. Past the chat a
+ * swipe right is Back; past the last tab a swipe left pulls in the Files panel. Only the pages
+ * next to the current one are mounted.
  */
 export function ThreadPager(props: {
   readonly environmentId: EnvironmentId;
@@ -80,6 +78,7 @@ export function ThreadPager(props: {
     [props.terminals],
   );
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- Forget a requested shell once the server lists it.
     setRequestedTerminals((current) =>
       current.some((id) => liveTerminalIds.includes(id))
         ? current.filter((id) => !liveTerminalIds.includes(id))
@@ -205,6 +204,7 @@ export function ThreadPager(props: {
     if (props.request) goTo(props.request.path, props.request.line);
   });
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- An open request arrives through route params.
     if (requestAt !== undefined) openRequest();
   }, [requestAt]);
 

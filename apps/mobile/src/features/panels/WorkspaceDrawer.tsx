@@ -25,6 +25,7 @@ import {
 } from "../workspaces/WorkspaceChrome";
 import type { WorkspaceHomeListItem } from "../workspaces/workspaceNavigator";
 import { WorkspaceThreadLine } from "../workspaces/WorkspaceThreadLine";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 const NO_ENVIRONMENTS: ReadonlySet<EnvironmentId> = new Set();
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -40,6 +41,7 @@ export function WorkspaceDrawer(props: {
 }) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const projects = useProjects();
   const threads = useNavigationThreadShells();
   const { options } = useHomeListOptions(NO_ENVIRONMENTS);
@@ -59,6 +61,7 @@ export function WorkspaceDrawer(props: {
   );
   const { buildItems } = workspaceHome;
   const items = useMemo(() => {
+    // oxlint-disable-next-line react/purity -- Snooze state is read when the drawer's list rebuilds; it does not tick.
     const now = new Date().toISOString();
     return buildItems({
       base: [],
@@ -89,16 +92,19 @@ export function WorkspaceDrawer(props: {
   const startThread = useCallback(
     (project: EnvironmentProject) => {
       onClose();
-      navigation.navigate("Thread", {
-        draft: {
-          requestId: uuidv4(),
-          environmentId: String(project.environmentId),
-          projectId: String(project.id),
-          title: project.title,
+      selectDetail({
+        name: "Thread",
+        params: {
+          draft: {
+            requestId: uuidv4(),
+            environmentId: String(project.environmentId),
+            projectId: String(project.id),
+            title: project.title,
+          },
         },
       });
     },
-    [navigation, onClose],
+    [onClose, selectDetail],
   );
 
   const renderItem = ({ item }: { readonly item: WorkspaceHomeListItem }) => {

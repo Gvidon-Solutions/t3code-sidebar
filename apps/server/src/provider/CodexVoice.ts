@@ -1,12 +1,7 @@
 /**
- * Codex voice conversations: a thread-scoped realtime session whose audio runs
- * over WebRTC between the client and OpenAI. The app-server only relays the
- * SDP handshake, captions, and lifecycle; this module owns that signaling.
- *
- * Handoffs are client-managed, matching the Codex TUI: the realtime model
- * delegates work by starting a Codex turn whose user message is wrapped in
- * `<realtime_delegation>`, and when that turn finishes we hand its final
- * answer back with `thread/realtime/appendSpeech` so the voice reads it out.
+ * Codex voice: realtime audio runs over WebRTC between the client and OpenAI; the app-server only
+ * relays SDP, captions and lifecycle. As in the Codex TUI, handoffs are client-managed: a
+ * `<realtime_delegation>` turn's final answer goes back via `thread/realtime/appendSpeech`.
  */
 import type { ProviderVoiceSessionEvent } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";

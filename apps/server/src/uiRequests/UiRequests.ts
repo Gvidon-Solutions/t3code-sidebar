@@ -1,9 +1,7 @@
 /**
- * Fork: requests from agents to show something on the owner's clients, and
- * spoken commands for a thread's voice conversation. The server only relays
- * them; each client applies a request when it holds that thread's voice
- * conversation or is showing the thread (client-runtime uiRequests). Nothing
- * is stored or replayed.
+ * Fork: agents' requests to show something on the owner's clients, and spoken voice commands. The
+ * server only relays them; a client applies one when it holds the thread's voice conversation or
+ * shows the thread (client-runtime uiRequests). Nothing is stored or replayed.
  */
 import type {
   ThreadId,

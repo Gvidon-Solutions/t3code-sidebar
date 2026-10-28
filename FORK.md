@@ -22,8 +22,8 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream release `v0.1.2` (`044f07257c`, tagged 2026-10-22) on
-  2026-10-23 (merge into `ws`); from now on only stable upstream releases are merged.
+- **Base.** Last synced with upstream release `v0.1.3` (`d2c440312e`, tagged 2026-10-26) on
+  2026-10-28 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
   above: CI reads it from this line.
@@ -107,6 +107,46 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 
 ## Feature log
+
+### 2026-10-28 — Upstream release v0.1.3
+
+- **What.** Brings in upstream's `v0.1.3` (about 500 changes past the v0.1.2 sync). Share a
+  thread with a guest who watches live and sends messages you approve (Labs); Cmd+K finds the
+  right thread first with indexed message search; web Settings and Usage open as large modals
+  over the thread; a redesigned UI behind a Beta toggle; previews for office files, fonts,
+  archives, SQLite, notebooks and more, audio played inline, PDFs sent to Claude as documents;
+  follow-ups steer the running turn by default; the Working section in the sidebar is on by
+  default; agent instructions are 60% shorter. On the phone Settings becomes a workspace page,
+  video and audio play inline, and the terminal and thread list were rewritten. Plus many
+  server, provider and source-control fixes. Upstream promoted its React and Effect lint rules
+  to errors and added a per-file React effect budget.
+- **How.** Mobile: the enriched-markdown patch is re-created on `t3.16`. The thread list uses
+  upstream's `useThreadListV2`, which the workspace Home feeds its project refs and rows. The
+  terminal seams (pager tabs, extra keys, "Attach output to chat") sit on the rewritten
+  `ThreadTerminal`, with `useTerminalExitNavigation` taking a `pager` exit. The model settings
+  sheet is now a route driven by params, so the fork's quick model sheet builds its own session
+  and writes the thread draft's settings. The list toolbar's gear opens the new `Settings`
+  route. Fork navigation to a thread (fork-from-run, voice, inbox, the drawer) goes through
+  `useSelectWorkspaceDetail`. The inbox drops its video modal for upstream's inline playback.
+  Sending keeps the keyboard up, as before. Web: the fork's coordinators stay in `__root.tsx`
+  next to upstream's moved ones; the thread menu has the fork's agents item and upstream's
+  "Share with guest", which the workspace sidebar passes too; the inbox attribution is checked
+  before the guest one. The fork's `PdfDocumentView` stays and upstream's `PdfViewer` is unused.
+  Server: agent instructions append the fork's inbox, `ui_open` and voice sections to upstream's
+  rewritten text; file downloads merge with upstream's media downloads; the inbox provides
+  `DocumentText` to message intake. Lint: fork files are added to `scripts/effect-budget.json`
+  at their current counts, long fork comments are cut to four lines, and the voice carry-over
+  test waits on a `Deferred` instead of polling.
+- **Where.** `patches/react-native-enriched-markdown@1.2.0-t3.16.patch`, `pnpm-workspace.yaml`;
+  `apps/mobile/src/features/home/{HomeScreen,ThreadListToolbar,thread-swipe-actions}.tsx`,
+  `features/terminal/{ThreadTerminalRouteScreen.tsx,useTerminalExitNavigation.ts}`,
+  `features/threads/{ThreadComposer,ThreadDetailScreen,ThreadFeed,ThreadRouteScreen,NewTaskDraftScreen}.tsx`,
+  `features/workspaces/useForkThread.ts`, `features/voice-mode/`, `features/inbox/`, `Stack.tsx`;
+  `apps/web/src/routes/__root.tsx`, `hooks/useThreadActionMenu.ts`,
+  `components/{threadActionMenu.logic.ts,workspaces/WorkspaceSidebar.tsx,files/BrowserDocumentFrame.tsx}`;
+  `apps/server/src/assets/AssetAccess.ts`, `orchestration-v2/ProjectionStore.ts`,
+  `inbox/InboxService.ts`, `packages/provider-core/src/server/orchestrationInstructions.ts`,
+  `packages/client-runtime/src/userMessage.ts`; `scripts/effect-budget.json`.
 
 ### 2026-10-24 — PDFs keep their place on rebuild; Download in the file menu
 

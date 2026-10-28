@@ -4,18 +4,9 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 /**
- * Workspace sidebar configuration (fork feature).
- *
- * Workspaces group projects (personal, work clients, …). The config is a
- * shared server setting so every client of the user's environments shows the
- * same workspaces; which workspace is open, collapsed folders and similar view
- * state stay per device.
- *
- * A project shows in the workspaces listed in `placements[projectKey]`, else
- * in the workspace named by `assignments[projectKey]`, else in the first
- * workspace whose rule glob matches its workspace root, else in
- * `defaultWorkspace` (or the first workspace). The "No project" folder shows
- * in every workspace until it is placed.
+ * Workspace sidebar configuration (fork feature), a shared server setting; view state stays per
+ * device. A project shows in `placements[projectKey]`, else `assignments[projectKey]`, else the
+ * first workspace whose rule glob matches its root, else `defaultWorkspace` (or the first).
  */
 export const SidebarWorkspace = Schema.Struct({
   id: TrimmedNonEmptyString,

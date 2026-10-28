@@ -1,10 +1,24 @@
 import {
+  type GuestMessageAttribution,
   type InboxIssueId,
   type OrchestrationV2Actor,
   type OrchestrationV2CreationSource,
+  type OrchestrationV2IdleCompaction,
   parseInboxDelivery,
   ScheduledTaskId,
 } from "@t3tools/contracts";
+
+/** The working row while T3 Code's own compaction runs. */
+export const IDLE_COMPACTING_LABELS = {
+  beforeCacheExpires: "Compacting before the cache expires…",
+  onReturn: "Compacting after being idle…",
+} satisfies Record<OrchestrationV2IdleCompaction, string>;
+
+/** Leads the finished compaction's token counts, in place of "Context compacted". */
+export const IDLE_COMPACTION_TITLES = {
+  beforeCacheExpires: "Context automatically compacted before cache expiry",
+  onReturn: "Context compacted after being idle",
+} satisfies Record<OrchestrationV2IdleCompaction, string>;
 
 const LEGACY_AUTOMATION_PREFIX = /^\[Triggered by schedule task: [^\r\n]+\]\r?\n\r?\n/;
 const LEGACY_AUTOMATION_MESSAGE_ID = /^scheduled-task-message:(.+):\d+:(?:scheduled|manual)$/;
@@ -16,11 +30,14 @@ export function resolveUserMessagePresentation(message: {
   readonly createdBy?: OrchestrationV2Actor;
   readonly creationSource?: OrchestrationV2CreationSource;
   readonly scheduledTaskId?: ScheduledTaskId;
+  readonly context?: { readonly guest?: GuestMessageAttribution | undefined } | undefined;
 }): {
   readonly text: string;
   /** "inbox" (fork): the owner's comment on an inbox issue, or a notice about one. */
-  readonly attribution: "automation" | "agent" | "t3code" | "inbox" | null;
+  readonly attribution: "automation" | "agent" | "t3code" | "guest" | "inbox" | null;
   readonly scheduledTaskId: ScheduledTaskId | undefined;
+  /** Set when `attribution` is "guest". */
+  readonly guestName?: string;
   readonly inbox?: {
     readonly issueId: InboxIssueId;
     readonly title: string;
@@ -37,6 +54,16 @@ export function resolveUserMessagePresentation(message: {
       attribution: "inbox",
       scheduledTaskId: undefined,
       inbox: { issueId: inbox.issueId, title: inbox.title, kind: inbox.kind },
+    };
+  }
+  // The stored text names the guest for the agent; people see the guest's own words.
+  const guest = message.context?.guest;
+  if (guest !== undefined) {
+    return {
+      text: guest.text,
+      attribution: "guest",
+      scheduledTaskId: undefined,
+      guestName: guest.name,
     };
   }
   if (message.scheduledTaskId !== undefined) {

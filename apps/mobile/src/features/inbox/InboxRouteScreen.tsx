@@ -11,6 +11,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Button } from "../../components/ui/Button";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import {
   buildClosedInboxRows,
@@ -72,6 +73,7 @@ export function InboxRouteScreen() {
       ) : null}
       <LegendList
         className="flex-1"
+        renderScrollComponent={Platform.OS === "ios" ? NativeScrollView : undefined}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
           paddingHorizontal: 16,

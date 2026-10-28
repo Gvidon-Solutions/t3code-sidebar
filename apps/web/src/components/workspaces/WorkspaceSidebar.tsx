@@ -1,11 +1,7 @@
 /**
- * Workspace sidebar (fork feature): workspace tiles at the bottom, the open
- * workspace's name on top, and its projects as folders of one-line threads.
- * Projects idle for a few days fold into "Quiet projects".
- *
- * It reuses the default sidebar's data and mutations (thread shells, project
- * grouping, useThreadActions, the thread action menu) and only owns layout and
- * workspace bookkeeping. The workspace config is a shared server setting.
+ * Workspace sidebar (fork feature): workspace tiles at the bottom and the open workspace's projects
+ * as folders of one-line threads. It reuses the default sidebar's data and mutations and owns only
+ * layout and workspace bookkeeping. The workspace config is a shared server setting.
  */
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -29,6 +25,7 @@ import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   type ContextMenuItem,
+  type EnvironmentId,
   type ProjectIconOverride,
   type ScopedThreadRef,
   type SidebarWorkspace,
@@ -101,6 +98,7 @@ import { useUiStateStore } from "../../uiStateStore";
 import { useTalk } from "../../voice/useTalk";
 import { useVoiceThreadRef } from "../../voice/voiceMode";
 import { ProjectFavicon } from "../ProjectFavicon";
+import { canShareWithGuestAtom } from "../chat/guestShareAvailability";
 import {
   resolveAdjacentThreadId,
   resolveSidebarThreadStatus,
@@ -255,11 +253,8 @@ export default function WorkspaceSidebar() {
   const talk = useTalk();
   const voiceThreadRef = useVoiceThreadRef();
 
-  // ── Config ────────────────────────────────────────────────────────────
-  // Edits go to every server that syncs shared settings. Reads prefer a
-  // connected remote that has workspaces (first by id, as the phone picks),
-  // so a desktop paired with the user's server shows what the phone shows
-  // rather than its own bundled server's copy.
+  // Config: edits go to every server that syncs shared settings. Reads prefer a connected remote
+  // with workspaces (first by id, as the phone picks), so the desktop shows what the phone shows.
   const remoteConfig = [...serverConfigs]
     .filter(
       ([environmentId, serverConfig]) =>
@@ -611,8 +606,12 @@ export default function WorkspaceSidebar() {
       setShown: (shown: boolean) => view.setSectionOpen(choiceKey, shown),
     };
   })();
+  const canShareMenuThreadWithGuest = useAtomValue(
+    canShareWithGuestAtom(menuRequest?.ref.environmentId ?? ("" as EnvironmentId)),
+  );
   const { openMenu } = useThreadActionMenu({
     agents: menuAgents,
+    canShareWithGuest: canShareMenuThreadWithGuest,
     threadRef: menuRequest?.ref ?? null,
     projectCwd: menuThread,
     onStartRename: () => {

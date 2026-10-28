@@ -25,7 +25,7 @@ export function describeDesktopUpdateProgress(
     return {
       kind: "downloading",
       label: percent === null ? "Downloading…" : `Downloading ${percent}%`,
-      detail: `Downloading${named}${percent === null ? "…" : ` — ${percent}%`}`,
+      detail: `Downloading${named}${percent === null ? "…" : ` (${percent}%)`}`,
       percent,
     };
   }

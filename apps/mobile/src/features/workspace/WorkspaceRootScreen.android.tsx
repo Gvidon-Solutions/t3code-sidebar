@@ -1,3 +1,6 @@
+import { useEnabledNavigationTabs } from "./navigation-tabs";
+import { NAVIGATION_TAB_ORDER } from "./navigation-tab-order";
+import { WorkspaceExtraTab } from "./WorkspaceExtraTab";
 import { useMemo } from "react";
 import { View } from "react-native";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
@@ -10,11 +13,12 @@ import { WorkspaceTabsContext, useWorkspaceTabs } from "./WorkspaceTabsContext";
 import { WorkspaceTabPanes } from "./WorkspaceTabPanes";
 import type { WorkspaceTab } from "./workspace-tabs-state";
 
-const TABS: readonly WorkspaceTab[] = ["threads", "pullRequests"];
+const TABS: readonly WorkspaceTab[] = NAVIGATION_TAB_ORDER;
 
 export function WorkspaceRootScreen() {
   const { layout } = useAdaptiveWorkspaceLayout();
   const workspace = useWorkspaceTabs()!;
+  const enabled = useEnabledNavigationTabs();
   const { fabClearance } = useAndroidControlSizing();
   const context = useMemo(
     () => ({
@@ -26,6 +30,7 @@ export function WorkspaceRootScreen() {
   const tab = workspace.state.selectedTab;
 
   if (layout.usesSplitView) {
+    if (enabled.length === 0) return <View className="flex-1 bg-screen" />;
     return (
       <WorkspaceTabPanes
         tabs={TABS}
@@ -33,6 +38,8 @@ export function WorkspaceRootScreen() {
         renderTab={(tab) =>
           tab === "threads" ? (
             <HomeRouteScreen />
+          ) : tab !== "pullRequests" ? (
+            <WorkspaceExtraTab tab={tab} />
           ) : (
             <>
               <NativeStackScreenOptions options={{ headerShown: false }} />

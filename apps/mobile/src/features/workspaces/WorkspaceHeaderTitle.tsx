@@ -38,6 +38,7 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
   useEffect(() => {
     if (request === null || workspace === null || request.workspaceId !== workspace.id) return;
     clearWorkspaceEditRequest();
+    // oxlint-disable-next-line react/set-state-in-effect -- An edit request arrives from the workspace menu's store, outside React.
     setDraft(request.mode === "name" ? workspace.name : (workspace.icon ?? ""));
     editingRef.current = request.mode;
     setEditing(request.mode);

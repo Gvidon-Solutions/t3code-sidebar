@@ -64,12 +64,9 @@ export const voiceMode = new VoiceModeController({
 });
 
 /*
- * WebRTC's iOS audio session uses voice-chat mode, which plays through the
- * earpiece. Once the call is live, re-apply play-and-record with the speaker
- * as the default route (headphones and Bluetooth still win). WebRTC only sets
- * its category when its audio unit starts, which has happened by then.
- * Android does not use this: expo-audio forces the speakerphone on there,
- * over any headset, so the T3VoiceAudio module routes the call instead.
+ * WebRTC's iOS voice-chat mode plays through the earpiece, so once the call is live re-apply
+ * play-and-record with the speaker as default (headsets still win). Android routes the call in
+ * the T3VoiceAudio module instead, since expo-audio forces the speakerphone there.
  */
 async function routeVoiceToSpeaker(): Promise<void> {
   await setAudioModeAsync({

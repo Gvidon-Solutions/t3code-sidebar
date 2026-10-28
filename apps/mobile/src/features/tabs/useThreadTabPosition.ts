@@ -35,6 +35,7 @@ export function useThreadTabPosition(input: {
   }, [relativePath, threadKey]);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A pending save belongs to the file it was scheduled for.
   useEffect(() => () => clearTimeout(timerRef.current), [relativePath]);
   const savePosition = useCallback(
     (mode: ThreadTabMode, position: number) => {

@@ -2,7 +2,7 @@ import { settlePromise } from "@t3tools/client-runtime/state/runtime";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import type { ComponentType } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -22,7 +22,7 @@ import {
 } from "../diffs/nativeReviewDiffSurface";
 import { createNativeReviewDiffTheme } from "../review/nativeReviewDiffAdapter";
 import { REVIEW_MONO_FONT_FAMILY, renderVisibleWhitespace } from "../review/reviewDiffRendering";
-import type { ReviewHighlightedToken } from "../review/shikiReviewHighlighter";
+import type { HighlightedToken } from "../../lib/highlights";
 import { cn } from "../../lib/cn";
 import type { ResolvedMobileCodeSurface } from "../../lib/appearancePreferences";
 import { useAppearanceCodeSurface } from "../settings/appearance/useAppearanceCodeSurface";
@@ -37,6 +37,7 @@ import { SourceText } from "@t3tools/mobile-source-text";
 
 import { boundedSelectableSourceTokens, prepareSourceFileDocument } from "./source-file-document";
 import { sourceHighlightAtom } from "./sourceHighlightingState";
+import { createSourceLineScroll } from "./source-file-scroll";
 
 interface SourceFileSurfaceProps {
   readonly contents: string;
@@ -57,7 +58,7 @@ const HighlightedSourceLine = function HighlightedSourceLine(props: {
   readonly codeSurface: ResolvedMobileCodeSurface;
   readonly index: number;
   readonly line: string;
-  readonly tokens: ReadonlyArray<ReviewHighlightedToken> | null;
+  readonly tokens: ReadonlyArray<HighlightedToken> | null;
   readonly highlighted: boolean;
   readonly wordBreak: boolean;
 }) {
@@ -256,20 +257,21 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
   const { normalizedContents, lines, status, targetIndex, tokens } = useSourceFileModel(props);
   const selectableTokens = props.selectable ? boundedSelectableSourceTokens(tokens) : null;
   const listRef = useRef<FlatList<string>>(null);
+  const [lineScroll] = useState(createSourceLineScroll);
   const { isPullRefreshing, handlePullToRefresh } = useSourceFileRefresh(props.onRefresh);
   const refreshControl = props.onRefresh ? (
     <RefreshControl refreshing={isPullRefreshing} onRefresh={() => void handlePullToRefresh()} />
   ) : undefined;
 
-  useEffect(() => {
+  // Layout effect so a pending jump is cancelled in the commit that swaps the file.
+  useLayoutEffect(() => {
     if (targetIndex === null) {
       return;
     }
-    const frame = requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: targetIndex, animated: false, viewPosition: 0.3 });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [props.path, targetIndex]);
+    lineScroll.scrollToLine(listRef.current, targetIndex);
+    return lineScroll.cancel;
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Opening another file at the same line index scrolls the new file to it.
+  }, [lineScroll, props.path, targetIndex]);
 
   // A reopened tab returns to the line it was left at (only when no line was asked for).
   // Read once: later saves of this same view must not scroll it again.
@@ -308,11 +310,7 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
     />
   );
 
-  // On iOS `uiTextView` renders a real `UITextView`, which selects across every line,
-  // wraps, and lays out long documents through TextKit; on Android the primitive is an RN
-  // `Text`, which selects across its nested children. Either way "select all" takes the
-  // file rather than a line, which a `FlatList` row can never do because each row is its
-  // own selection scope.
+  // One native text view permits document-wide selection; virtualized rows cannot.
   const selectableBlock = props.selectable ? (
     <SourceText
       selectable
@@ -325,34 +323,41 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
       }}
     >
       {selectableTokens
-        ? lines.map((line, index) => {
-            const lineTokens = selectableTokens[index] ?? null;
-            const body =
-              lineTokens && lineTokens.length > 0
-                ? lineTokens.map((token, tokenIndex) => (
-                    <SourceText
-                      key={`${index}:${tokenIndex}`}
-                      style={{
-                        color: token.color ?? foreground,
-                        fontWeight:
-                          token.fontStyle !== null && (token.fontStyle & 2) === 2 ? "700" : "400",
-                        fontStyle:
-                          token.fontStyle !== null && (token.fontStyle & 1) === 1
-                            ? "italic"
-                            : "normal",
-                      }}
-                    >
-                      {token.content}
-                    </SourceText>
-                  ))
-                : line;
-            return (
-              <SourceText key={index}>
-                {body}
-                {index < lines.length - 1 ? "\n" : ""}
-              </SourceText>
-            );
-          })
+        ? lines.map(
+            (
+              line,
+              index,
+            ) => /* oxlint-disable react/no-array-index-key -- Source lines and highlight tokens are stateless positions within the loaded file. */ {
+                const lineTokens = selectableTokens[index] ?? null;
+                const body =
+                  lineTokens && lineTokens.length > 0
+                    ? lineTokens.map((token, tokenIndex) => (
+                        <SourceText
+                          key={`${index}:${tokenIndex}`}
+                          style={{
+                            color: token.color ?? foreground,
+                            fontWeight:
+                              token.fontStyle !== null && (token.fontStyle & 2) === 2
+                                ? "700"
+                                : "400",
+                            fontStyle:
+                              token.fontStyle !== null && (token.fontStyle & 1) === 1
+                                ? "italic"
+                                : "normal",
+                          }}
+                        >
+                          {token.content}
+                        </SourceText>
+                      ))
+                    : line;
+                return (
+                  <SourceText key={index}>
+                    {body}
+                    {index < lines.length - 1 ? "\n" : ""}
+                  </SourceText>
+                );
+              } /* oxlint-enable react/no-array-index-key */,
+          )
         : normalizedContents}
     </SourceText>
   ) : null;
@@ -367,12 +372,6 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
       keyExtractor={(_line, index) => String(index)}
       initialNumToRender={80}
       onViewableItemsChanged={onVisibleRowChange ? handleViewableItemsChanged : undefined}
-      onScrollToIndexFailed={(info) =>
-        listRef.current?.scrollToOffset({
-          offset: info.averageItemLength * info.index,
-          animated: false,
-        })
-      }
       maxToRenderPerBatch={80}
       windowSize={12}
       {...(codeWordBreak
@@ -390,6 +389,18 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
         paddingTop: 8,
       }}
       renderItem={renderLine}
+      onScrollToIndexFailed={(info) => {
+        if (targetIndex !== null) {
+          lineScroll.onScrollToIndexFailed(info);
+          return;
+        }
+        // Sidebar fork: the restored-row jump has no retry budget; land near it once.
+        listRef.current?.scrollToOffset({
+          offset: info.averageItemLength * info.index,
+          animated: false,
+        });
+      }}
+      onScrollBeginDrag={lineScroll.cancel}
     />
   );
 

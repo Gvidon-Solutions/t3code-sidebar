@@ -22,11 +22,9 @@ import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 /**
- * Workspace sidebar (fork feature) on the phone. The config is the shared
- * `sidebarWorkspaces` server setting, so desktop edits show up here; the
- * workspace open on this device and folded folders/sections are local preferences.
- * Null `config` means no connected server has workspaces set up, and Home
- * stays upstream's plain list.
+ * Workspace sidebar (fork feature) on the phone. The config is the shared `sidebarWorkspaces`
+ * server setting; the open workspace and folded folders are local preferences. Null `config`
+ * means no connected server has workspaces, and Home stays upstream's plain list.
  */
 export function useSidebarWorkspaces() {
   const serverConfigs = useServerConfigs();

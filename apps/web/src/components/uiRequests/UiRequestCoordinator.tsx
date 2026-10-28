@@ -58,12 +58,9 @@ function heldVoiceThreadId(environmentId: EnvironmentId): string | null {
 }
 
 /**
- * Fork: acts on agents' `ui_open` requests from every connected environment.
- * What a request does here depends on this client (see `decideUiRequest`):
- * the voice thread's agent navigates at once, the shown thread's agent opens
- * files and diffs beside it and navigates for the rest, other threads are
- * ignored.
- * Mounted once at the app root.
+ * Fork: acts on agents' `ui_open` requests from every connected environment, per
+ * `decideUiRequest`: the voice thread's agent navigates at once, the shown thread's agent opens
+ * files and diffs beside it, other threads are ignored. Mounted once at the app root.
  */
 export function UiRequestCoordinator() {
   const entries = useAtomValue(latestUiRequestsAtom);

@@ -1,12 +1,7 @@
 /**
- * Fork: settling a thread settles its subagent threads, and un-settling it
- * un-settles them (FORK.md, "Settling a thread settles its agents").
- *
- * A reactor on committed domain events, so every way in cascades the same:
- * the settle button on any client, MCP and t3ctl, an agent settling its own
- * thread after its turn, and automatic settlement (`thread.auto-settle`
- * commits the same `thread.settled` event). Only the way down cascades;
- * settling or un-settling a child never touches its parent.
+ * Fork: settling a thread settles its subagent threads, and un-settling un-settles them. A reactor
+ * on committed domain events, so the button, MCP, t3ctl, agents and auto-settle all cascade the
+ * same. Only the way down cascades; a child never touches its parent.
  */
 import {
   CommandId,
@@ -65,14 +60,9 @@ export const make = Effect.gen(function* () {
   const orchestrator = yield* Orchestrator.OrchestratorV2;
 
   /**
-   * Walks the subagent threads under the event's thread, depth first. A
-   * child not yet in the target state gets one command, with an id derived
-   * from the parent event so a replayed event dispatches nothing twice; its
-   * own committed event then carries the cascade to its children. A child
-   * already in the target state is walked through here, so a grandchild left
-   * behind earlier still follows. A child that refuses (still running,
-   * waiting on an approval, a queued message) keeps itself and its subtree
-   * as they are; the rest carry on.
+   * Walks the subagents depth first. A child not yet in the target state gets one command with an
+   * id derived from the parent event, so replays dispatch nothing twice; one already there is
+   * walked through for its children. A child that refuses keeps its subtree as it is.
    */
   const cascade = Effect.fn("ThreadSettlementCascadeV2.cascade")(function* (input: Cascade) {
     const visited = new Set<ThreadId>([input.threadId]);

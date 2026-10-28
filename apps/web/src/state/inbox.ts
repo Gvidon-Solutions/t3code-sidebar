@@ -28,13 +28,9 @@ export function showMoreClosedInboxIssues(): void {
 }
 
 /**
- * One inbox across every connected environment. Each connected environment's
- * live subscription is read here, so the list follows environments as they
- * connect and disconnect. An environment whose server has no inbox (an older
- * version answers the subscription with an error) never yields a snapshot and
- * is skipped. While a subscription restarts (the closed limit grew) the
- * environment keeps its previous snapshot, so the list and the notification
- * marks do not blink.
+ * One inbox across every connected environment's live subscription. A server without an inbox
+ * never yields a snapshot and is skipped. A restarting subscription keeps its previous snapshot,
+ * so the list and notification marks do not blink.
  */
 export const inboxStateAtom = Atom.make((get): InboxState => {
   const closedLimit = get(inboxClosedLimitAtom);

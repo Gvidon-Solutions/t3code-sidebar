@@ -20,7 +20,6 @@ import { useWorkspaceConnectionState } from "../../state/workspace";
 import { useToolbarLayout } from "../../components/ui/useToolbarLayout";
 import { useWorkspaceDockHeight } from "../workspaces/workspaceDockInset";
 
-/** One toolbar height for the compact list and expanded sidebar, including search. */
 export function ThreadListToolbar(props: {
   readonly searchQuery: string;
   readonly onSearchQueryChange: (query: string) => void;
@@ -119,15 +118,7 @@ export function ThreadListToolbar(props: {
         titleAccessibilityLabel="T3 Code, Threads"
         onOpenEnvironments={props.onOpenEnvironments}
         filter={filterButton}
-        onOpenSettings={
-          props.sidebar
-            ? undefined
-            : () =>
-                navigation.navigate("SettingsSheet", {
-                  screen: "SettingsContent",
-                  params: { screen: "Settings" },
-                })
-        }
+        onOpenSettings={props.sidebar ? undefined : () => navigation.navigate("Settings")}
       />
     </View>
   );

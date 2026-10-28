@@ -13,6 +13,7 @@ import { useWorkspaceEnvironments } from "../../state/workspace";
 import { fileRoutePathSegments } from "../files/filePath";
 import { useSidebarWorkspaces } from "../workspaces/useSidebarWorkspaces";
 import { voiceMode } from "./voiceMode";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 /**
  * Sidebar fork: agents asking clients to show something (`ui_open`), and
@@ -101,14 +102,13 @@ function VoiceCommandWatcher(props: {
 }
 
 /**
- * Root-mounted (sidebar fork): acts on agents' requests to show something,
- * as `decideUiRequest` rules for this phone. The thread holding this device's
- * voice conversation is obeyed at once; the thread on screen opens files and
- * its diff directly (the phone has no side panel) and switches for the rest.
+ * Root-mounted (sidebar fork): acts on agents' requests to show something, per `decideUiRequest`.
+ * The phone has no side panel, so the thread on screen opens files and its diff directly.
  * `shownThread` is the thread whose screen is in front, if any.
  */
 export function UiRequestCoordinator(props: { readonly shownThread: ShownThread | null }) {
   const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const environments = useWorkspaceEnvironments();
   const { config, openWorkspace } = useSidebarWorkspaces();
   // Read when a request lands, so handlers stay stable across navigation.
@@ -122,7 +122,7 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
       const { target } = request;
       switch (target.kind) {
         case "thread":
-          navigation.navigate("Thread", { environmentId, threadId: target.threadId });
+          selectDetail({ name: "Thread", params: { environmentId, threadId: target.threadId } });
           return;
         case "inbox":
           if (target.issueId === undefined) navigation.navigate("Inbox");
@@ -158,7 +158,7 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
           return;
       }
     },
-    [config, navigation, openWorkspace],
+    [config, navigation, openWorkspace, selectDetail],
   );
 
   const handle = useCallback<HandleUiRequest>(
@@ -182,10 +182,10 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
         return;
       }
       void applyVoiceCommand(voiceMode, command.action, (target) => {
-        navigation.navigate("Thread", { environmentId, threadId: target.threadId });
+        selectDetail({ name: "Thread", params: { environmentId, threadId: target.threadId } });
       });
     },
-    [navigation],
+    [selectDetail],
   );
 
   return environments

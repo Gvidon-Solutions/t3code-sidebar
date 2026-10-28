@@ -1,17 +1,8 @@
 #!/usr/bin/env node
 /**
- * Local Android APK build with a warm Gradle cache.
- *
- * The EAS and CI paths rebuild the native project and all four ABIs, which is
- * the half-hour part. This script keeps `apps/mobile/android` in place, builds
- * one ABI, and turns off R8 and PNG crunching for preview builds. The first
- * run still compiles the native modules; later runs reuse them and finish in
- * about a minute or two, depending on how much JavaScript changed.
- *
- *   node scripts/mobile-android-apk.mjs            # release APK
- *   node scripts/mobile-android-apk.mjs --install  # and adb install -r
- *   node scripts/mobile-android-apk.mjs --dev      # dev-client APK (Metro needed)
- *   node scripts/mobile-android-apk.mjs --clean    # explicit prebuild --clean
+ * Local Android APK build with a warm Gradle cache: keeps `apps/mobile/android`, builds one ABI and
+ * skips R8 and PNG crunching for previews. Flags: --install (adb install -r), --dev (dev-client
+ * APK), --clean (prebuild --clean).
  */
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";

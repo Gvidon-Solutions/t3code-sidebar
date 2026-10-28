@@ -1,16 +1,7 @@
 /**
- * Starts voice conversations on a thread. Codex attaches realtime to a loaded
- * native thread, so a thread that has never run, or whose provider session went
- * away (server restart, idle release), gets one here first: the session is
- * opened and the native thread started or resumed without a user turn. The
- * provider thread is recorded like a run would record it, so the thread's next
- * run continues the same native conversation the voice talks into. A thread
- * still titled for voice is named after the first phrase spoken in it.
- *
- * Fork: it also keeps what was said in each live conversation, so the owner
- * can ask out loud to carry the conversation over to another thread
- * (`carryOver`); the next conversation started there begins with those lines.
- * A thread still preparing or starting is waited for instead of refused.
+ * Starts voice conversations on a thread. Codex needs a loaded native thread, so one is started or
+ * resumed here without a user turn and recorded like a run would. Fork: it keeps what was said so
+ * `carryOver` can start the next thread's conversation with it, and waits for a preparing thread.
  */
 import {
   type OrchestrationV2DomainEvent,

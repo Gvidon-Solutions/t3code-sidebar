@@ -1,4 +1,3 @@
-import { useNavigation } from "@react-navigation/native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { nextForkTitle, planForkPlacement } from "@t3tools/client-runtime/state/thread-forks";
 import { type EnvironmentId, type RunId, ThreadId } from "@t3tools/contracts";
@@ -12,6 +11,7 @@ import { appAtomRegistry } from "../../state/atom-registry";
 import { environmentThreadShells, threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { waitForThreadShellReady } from "../threads/threadForkNavigation";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 /**
  * Forks a thread (sidebar fork): "Title (n)", placed right under the source
@@ -19,7 +19,7 @@ import { waitForThreadShellReady } from "../threads/threadForkNavigation";
  * completed response. Resolves true once the fork is open.
  */
 export function useForkThread() {
-  const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const forkFromRun = useAtomCommand(threadEnvironment.forkFromRun, { reportFailure: false });
   const reorderActive = useAtomCommand(threadEnvironment.reorderActive, { reportFailure: false });
 
@@ -88,9 +88,12 @@ export function useForkThread() {
           }),
         ),
       );
-      navigation.navigate("Thread", { environmentId, threadId: targetThreadId });
+      selectDetail({
+        name: "Thread",
+        params: { environmentId: String(environmentId), threadId: String(targetThreadId) },
+      });
       return true;
     },
-    [forkFromRun, navigation, reorderActive],
+    [forkFromRun, selectDetail, reorderActive],
   );
 }

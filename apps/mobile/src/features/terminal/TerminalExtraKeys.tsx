@@ -69,6 +69,7 @@ export function TerminalExtraKeys(props: {
       repeatRef.current = null;
     }
   };
+  // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Unmount cleanup; stopRepeat only reads refs.
   useEffect(() => stopRepeat, []);
   // Repeats fire from timers, so an effect event sends through the latest handler.
   const sendRepeat = useEffectEvent((data: string) => props.onSend(data));
@@ -94,6 +95,7 @@ export function TerminalExtraKeys(props: {
       }}
     >
       {extraKeyRows(props.hostPlatform).map((row, rowIndex) => (
+        // oxlint-disable-next-line react/no-array-index-key -- The key rows are a fixed layout per platform.
         <View key={rowIndex} style={{ flex: 1, flexDirection: "row" }}>
           {row.map((key) => {
             const active =

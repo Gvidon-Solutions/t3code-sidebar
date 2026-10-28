@@ -1,15 +1,9 @@
 import type { UiRequest, VoiceCommand } from "@t3tools/contracts";
 
 /**
- * Fork: what this client does with an agent's request to show something.
- * - `navigate`: this client holds the asking thread's voice conversation, so
- *   the owner asked out loud; switch to it at once.
- * - `panel`: this client is showing the asking thread; open the file or diff
- *   in its side panel without leaving.
- * - `navigate` also when this client is showing the asking thread and the
- *   target is elsewhere: the owner is looking at the agent they asked.
- * - `ignore`: the asking thread is not in front of the owner here, so a
- *   background agent never pulls any device away.
+ * Fork: what this client does with an agent's request to show something. `navigate` when it holds
+ * the thread's voice conversation, or shows the thread and the target is elsewhere; `panel` when
+ * it shows the thread; `ignore` otherwise, so a background agent never pulls a device away.
  */
 export type UiRequestDecision = "navigate" | "panel" | "ignore";
 

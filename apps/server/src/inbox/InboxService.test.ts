@@ -28,6 +28,7 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as DocumentText from "../provider/DocumentText.ts";
 import * as InboxService from "./InboxService.ts";
 
 const project = ProjectId.make("project-ops");
@@ -104,7 +105,7 @@ const harness = Effect.gen(function* () {
       ),
     ),
     Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-inbox-" })),
-    Layer.provideMerge(NodeServices.layer),
+    Layer.provideMerge(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
   );
   return { sent, launched, layer };
 });

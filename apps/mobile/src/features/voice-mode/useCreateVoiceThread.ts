@@ -19,11 +19,9 @@ import { waitForThreadShellReady } from "../threads/threadForkNavigation";
 import { VOICE_THREAD_TITLE } from "./voiceThreads";
 
 /**
- * Sidebar fork: creates an empty server thread to talk in. The server opens
- * the provider session itself when voice starts, so no first message is
- * needed. Resolves the conversation's target once the thread's shell reached
- * this client (so its screen opens on the thread, not a loading state), or
- * null after telling the user why it failed.
+ * Sidebar fork: creates an empty server thread to talk in; the server opens the provider session
+ * when voice starts. Resolves once the thread's shell reached this client, so its screen opens on
+ * the thread, or null after telling the user why it failed.
  */
 export function useCreateVoiceThread() {
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });

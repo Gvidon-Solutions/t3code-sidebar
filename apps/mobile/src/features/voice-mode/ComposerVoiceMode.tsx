@@ -1,4 +1,3 @@
-import { useNavigation } from "@react-navigation/native";
 import type { VoiceModePhase } from "@t3tools/client-runtime/voice-mode";
 import * as Haptics from "expo-haptics";
 import { useRef, useState } from "react";
@@ -16,6 +15,7 @@ import {
 import { VoiceConversationPreview } from "./VoiceConversationPreview";
 import { voiceMode } from "./voiceMode";
 import { describeVoiceAudioDevice } from "./voiceModePresentation";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 /** How long to hold the panel's words, or the bubble, for more. */
 export const VOICE_OPEN_LONG_PRESS_MS = 400;
@@ -131,12 +131,9 @@ interface ElsewhereConversation {
 }
 
 /**
- * What a long press on the words swaps in: going to the conversation (from
- * another thread) and the device the call goes through. A headset connected
- * from the quick settings shade joins the list and takes the call by itself;
- * there is no way to system settings, since leaving the app ends the
- * conversation. "Back" or any action that leaves returns to the words;
- * picking a device keeps the menu so the check mark shows where sound went.
+ * What a long press on the words swaps in: the way to the conversation and the audio device.
+ * There is no way to system settings, since leaving the app ends the conversation. Picking a
+ * device keeps the menu so the check mark shows where sound went.
  */
 function VoicePanelMenu(props: {
   readonly elsewhere: ElsewhereConversation | null;
@@ -190,11 +187,9 @@ function VoicePanelMenu(props: {
 }
 
 /**
- * Sidebar fork: the voice panel above the composer, the same on the
- * conversation's own thread and on every other one. Mute and stop are always
- * one tap away on the right. The rest shows the newest words, four lines
- * tall so it holds still while they stream; a long press swaps them for a
- * short menu (VoicePanelMenu) in the same place.
+ * Sidebar fork: the voice panel above every thread's composer. Mute and stop sit on the right;
+ * the rest shows the newest words, four lines tall so it holds still while they stream. A long
+ * press swaps them for a short menu (VoicePanelMenu).
  */
 function VoicePanel(props: { readonly elsewhere: ElsewhereConversation | null }) {
   const muted = useVoiceModeMuted();
@@ -268,7 +263,7 @@ function VoicePanel(props: { readonly elsewhere: ElsewhereConversation | null })
  * conversation runs.
  */
 export function ComposerVoiceElsewhereStrip(props: { readonly onTalkHere?: () => void }) {
-  const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const live = useLiveVoiceThread();
   if (live === null) return null;
   return (
@@ -276,9 +271,12 @@ export function ComposerVoiceElsewhereStrip(props: { readonly onTalkHere?: () =>
       elsewhere={{
         title: live.title,
         onOpen: () =>
-          navigation.navigate("Thread", {
-            environmentId: live.target.environmentId,
-            threadId: live.target.threadId,
+          selectDetail({
+            name: "Thread",
+            params: {
+              environmentId: live.target.environmentId,
+              threadId: live.target.threadId,
+            },
           }),
         ...(props.onTalkHere ? { onTalkHere: props.onTalkHere } : {}),
       }}

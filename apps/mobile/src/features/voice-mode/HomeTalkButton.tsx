@@ -1,4 +1,3 @@
-import { useNavigation } from "@react-navigation/native";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
@@ -29,6 +28,7 @@ import { arrangeWorkspaceFolders } from "../workspaces/workspaceNavigator";
 import { useCreateVoiceThread } from "./useCreateVoiceThread";
 import { voiceMode, voiceModeSupported } from "./voiceMode";
 import { pickTalkProject, resolveVoiceModelSelection } from "./voiceThreads";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 const NO_ENVIRONMENTS: ReadonlySet<EnvironmentId> = new Set();
 /** Diameter of the Talk button, so the FAB layout can center it on the new-thread button. */
@@ -41,7 +41,7 @@ export const TALK_BUTTON_SIZE = 44;
  * environment can hold a conversation.
  */
 export function HomeTalkButton() {
-  const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const serverConfigs = useServerConfigs();
   const environments = useWorkspaceEnvironments();
   const projects = useProjects();
@@ -155,9 +155,12 @@ export function HomeTalkButton() {
         worktreePath: null,
       });
       if (!target) return;
-      navigation.navigate("Thread", {
-        environmentId: target.environmentId,
-        threadId: target.threadId,
+      selectDetail({
+        name: "Thread",
+        params: {
+          environmentId: target.environmentId,
+          threadId: target.threadId,
+        },
       });
       void voiceMode.start(target);
     };
@@ -166,7 +169,7 @@ export function HomeTalkButton() {
       startingRef.current = false;
       setStarting(false);
     });
-  }, [createVoiceThread, navigation, resolveProject, serverConfigs]);
+  }, [createVoiceThread, resolveProject, selectDetail, serverConfigs]);
 
   if (!voiceModeSupported || voiceEnvironmentIds.size === 0) return null;
   return (

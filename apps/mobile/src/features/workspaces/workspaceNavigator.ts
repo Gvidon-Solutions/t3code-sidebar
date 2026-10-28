@@ -33,11 +33,9 @@ import {
 } from "../threads/threadListV2";
 
 /**
- * Home in workspace mode (sidebar fork), laid out like the desktop workspace
- * sidebar: pinned threads, then project folders of one-line threads in the
- * user's order, quiet projects folded into one group, "No project", snoozed
- * threads last. Same partition and order rules as the desktop
- * (`WorkspaceSidebar.tsx`).
+ * Home in workspace mode (sidebar fork), with the desktop's partition and order rules
+ * (`WorkspaceSidebar.tsx`): pinned threads, project folders in the user's order, quiet projects
+ * in one group, "No project", snoozed threads last.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -244,11 +242,9 @@ interface FolderModel {
 }
 
 /**
- * Builds Home's rows for one workspace. `toggles` holds keys flipped from
- * their default: folders default open (quiet ones closed); the Quiet group,
- * Snoozed, a folder's settled threads and its "show more" default closed.
- * `toRow` turns a partitioned thread into the shared v2 row item (time,
- * snooze labels, queued state), so menus and swipes behave as upstream's.
+ * Builds Home's rows for one workspace. `toggles` holds keys flipped from their default: folders
+ * open (quiet ones closed); Quiet, Snoozed, settled threads and "show more" closed. `toRow` makes
+ * the shared v2 row item, so menus and swipes behave as upstream's.
  */
 export function buildWorkspaceHomeItems(input: {
   readonly workspaceId: string;

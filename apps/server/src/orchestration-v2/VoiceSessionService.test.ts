@@ -13,7 +13,6 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -39,6 +38,8 @@ interface Scenario {
   readonly conversation?: ReadonlyArray<ProviderVoiceSessionEvent>;
   /** Keeps every conversation open until it completes. */
   readonly hold?: Deferred.Deferred<void>;
+  /** Completes once a held conversation has streamed everything before the hold. */
+  readonly held?: Deferred.Deferred<void>;
   /** The thread's runs, for readiness. */
   readonly runs?: () => ReadonlyArray<{ readonly status: string }>;
 }
@@ -96,7 +97,16 @@ const makeHarness = (scenario: Scenario) =>
         const hold = scenario.hold;
         return hold === undefined
           ? events
-          : Stream.concat(events, Stream.drain(Stream.fromEffect(Deferred.await(hold))));
+          : Stream.concat(
+              events,
+              Stream.drain(
+                Stream.fromEffect(
+                  (scenario.held ? Deferred.succeed(scenario.held, undefined) : Effect.void).pipe(
+                    Effect.andThen(Deferred.await(hold)),
+                  ),
+                ),
+              ),
+            );
       },
     };
     const layer = VoiceSessionService.layer.pipe(
@@ -139,7 +149,7 @@ const makeHarness = (scenario: Scenario) =>
                 calls.push("open");
                 return runtime as never;
               }),
-            get: () => Effect.succeed(Option.none()),
+            get: () => Effect.succeedNone,
           }),
           Layer.mock(ThreadTitleRegenerationService.ThreadTitleRegenerationService)({
             nameFromSpeech: ({ text }) => Queue.offer(spokenNames, text).pipe(Effect.asVoid),
@@ -268,9 +278,11 @@ it("carries only the newest lines that fit", () => {
 it.effect("starts a moved conversation with what was said before", () =>
   Effect.gen(function* () {
     const hold = yield* Deferred.make<void>();
+    const held = yield* Deferred.make<void>();
     const harness = yield* makeHarness({
       providerThreads: [existingRow],
       hold,
+      held,
       conversation: [
         { type: "transcript.done", role: "user", text: "Plan the release" },
         { type: "transcript.done", role: "assistant", text: "Friday works." },
@@ -286,8 +298,7 @@ it.effect("starts a moved conversation with what was said before", () =>
       const first = yield* Stream.runDrain(voice.start({ threadId, offerSdp: "v=offer\r\n" })).pipe(
         Effect.forkChild,
       );
-      while (!(yield* voice.isLive(threadId))) yield* Effect.yieldNow;
-      yield* Effect.repeat(Effect.yieldNow, { times: 10 });
+      yield* Deferred.await(held);
       NodeAssert.equal(
         yield* voice.carryOver({ from: threadId, fromTitle: "Release", to: target }),
         true,

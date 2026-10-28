@@ -19,6 +19,8 @@ import {
   readSpeakableAnswer,
 } from "./CodexVoice.ts";
 
+const isCodexVoiceSessionError = Schema.is(CodexVoiceSessionError);
+
 const PROVIDER_THREAD = "provider-thread-1";
 
 function delegation(input: string) {
@@ -232,7 +234,7 @@ describe("makeCodexVoice", () => {
       const exit = yield* Fiber.await(voice.fiber);
       NodeAssert.ok(Exit.isFailure(exit));
       const error = exit.cause.reasons[0];
-      NodeAssert.ok(error?._tag === "Fail" && Schema.is(CodexVoiceSessionError)(error.error));
+      NodeAssert.ok(error?._tag === "Fail" && isCodexVoiceSessionError(error.error));
       NodeAssert.equal(error.error.detail, "realtime unavailable");
     }),
   );

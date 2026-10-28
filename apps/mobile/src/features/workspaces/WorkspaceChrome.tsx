@@ -157,6 +157,7 @@ export function WorkspaceDock(props: {
     void Haptics.selectionAsync();
     onOpen(next.id);
   });
+  // oxlint-disable-next-line react/capitalized-calls -- Gesture.Pan is a gesture factory, not a React component.
   const swipe = Gesture.Pan()
     .enabled(tilesFit)
     .activeOffsetX([-16, 16])
@@ -259,11 +260,9 @@ export function WorkspaceDock(props: {
 }
 
 /**
- * A project folder header, as on the desktop: tap folds it, + starts a thread.
- * Long-press opens its menu, where "Show in workspaces" picks every workspace
- * the project shows in; on Android, holding and moving drags it into a new
- * place (see `WorkspaceFolderDrag`). "No project" always sits last, so it
- * can't be dragged.
+ * A project folder header, as on the desktop: tap folds it, + starts a thread, long-press opens
+ * its menu. On Android, holding and moving drags it (see `WorkspaceFolderDrag`). "No project"
+ * always sits last, so it can't be dragged.
  */
 export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly item: WorkspaceFolderListItem;

@@ -55,6 +55,7 @@ import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as ThreadMessageIntake from "../orchestration-v2/ThreadMessageIntake.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
+import * as DocumentText from "../provider/DocumentText.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as ServerSettings from "../serverSettings.ts";
 
@@ -206,11 +207,9 @@ const entryFromRow = (row: EntryRow): Effect.Effect<InboxEntry, InboxError> => {
 };
 
 /**
- * The inbox keeps its own tables instead of a numbered migration: the
- * migrator only runs ids above the newest one a database recorded, so a fork
- * migration in upstream's sequence would silently skip upstream's next
- * migration with that id. Schema changes here must stay additive and
- * idempotent (check `PRAGMA table_info` before `ALTER TABLE`).
+ * The inbox keeps its own tables instead of a numbered migration: a fork id in upstream's sequence
+ * would make the migrator skip upstream's next migration with that id. Schema changes here stay
+ * additive and idempotent (check `PRAGMA table_info` before `ALTER TABLE`).
  */
 export const ensureSchema = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -308,6 +307,7 @@ export const layer = Layer.effect(
       | ThreadLaunchService.ThreadLaunchService
       | FileSystem.FileSystem
       | ServerConfig.ServerConfig
+      | DocumentText.DocumentText
     >();
 
     yield* ensureSchema.pipe(Effect.orDie);
@@ -336,10 +336,9 @@ export const layer = Layer.effect(
 
     const requireIssue = (issueId: InboxIssueId) =>
       findIssue(issueId).pipe(
-        Effect.flatMap((issue) =>
-          issue === null
-            ? Effect.fail(fail(`Inbox issue ${issueId} was not found.`, issueId))
-            : Effect.succeed(issue),
+        Effect.filterOrFail(
+          (issue) => issue !== null,
+          () => fail(`Inbox issue ${issueId} was not found.`, issueId),
         ),
       );
 
@@ -474,7 +473,7 @@ export const layer = Layer.effect(
         Effect.gen(function* () {
           const shell = yield* threadManagement.getThreadShell(input.threadId);
           if (shell === null || shell.deletedAt !== null) {
-            return yield* Effect.fail(fail("The thread no longer exists."));
+            return yield* fail("The thread no longer exists.");
           }
           const sent = yield* ThreadMessageIntake.sendToThread({
             projectId: shell.projectId,
@@ -878,9 +877,7 @@ export const layer = Layer.effect(
                 .getThreadShell(input.responsibleThreadId)
                 .pipe(Effect.orElseSucceed(() => null));
               if (target === null || target.deletedAt !== null) {
-                return yield* Effect.fail(
-                  fail(`Thread ${input.responsibleThreadId} was not found.`, issue.id),
-                );
+                return yield* fail(`Thread ${input.responsibleThreadId} was not found.`, issue.id);
               }
               const from = issue.responsibleThreadId;
               issue.responsibleThreadId = input.responsibleThreadId;
@@ -939,9 +936,7 @@ export const layer = Layer.effect(
             const now = yield* nowIso;
             const target = yield* findResolveTarget(input);
             if (target.state !== "open") {
-              return yield* Effect.fail(
-                fail(`Inbox issue ${target.id} is already ${target.state}.`, target.id),
-              );
+              return yield* fail(`Inbox issue ${target.id} is already ${target.state}.`, target.id);
             }
             const issue: Mutable<InboxIssue> = { ...target };
             issue.state = "resolved";
@@ -1044,7 +1039,7 @@ export const layer = Layer.effect(
       const text = input.text.trim();
       const attachments = input.attachments ?? [];
       if (text.length === 0 && attachments.length === 0) {
-        return yield* Effect.fail(fail("A comment needs text or an attachment.", input.issueId));
+        return yield* fail("A comment needs text or an attachment.", input.issueId);
       }
       const written = yield* commit(
         Effect.gen(function* () {
@@ -1130,9 +1125,7 @@ export const layer = Layer.effect(
             const now = yield* nowIso;
             const target = yield* requireIssue(input.issueId);
             if (target.state !== "open") {
-              return yield* Effect.fail(
-                fail(`Inbox issue ${target.id} is already ${target.state}.`, target.id),
-              );
+              return yield* fail(`Inbox issue ${target.id} is already ${target.state}.`, target.id);
             }
             const issue: Mutable<InboxIssue> = { ...target };
             issue.state = "dismissed";
@@ -1169,8 +1162,9 @@ export const layer = Layer.effect(
             const now = yield* nowIso;
             const target = yield* requireIssue(issueId);
             if (target.state !== "dismissed") {
-              return yield* Effect.fail(
-                fail(`Inbox issue ${target.id} was not closed as not relevant.`, target.id),
+              return yield* fail(
+                `Inbox issue ${target.id} was not closed as not relevant.`,
+                target.id,
               );
             }
             const issue: Mutable<InboxIssue> = { ...target };

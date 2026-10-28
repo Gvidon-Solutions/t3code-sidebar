@@ -44,11 +44,9 @@ export function agentRunState(thread: AgentThreadInput): AgentRunState {
 const keyOf = (environmentId: string, threadId: string) => `${environmentId}:${threadId}`;
 
 /**
- * Every unarchived subagent under the top-level thread that started it, by
- * `environmentId:threadId` of that thread, in launch order. A subagent's own
- * subagents join the same list. Subagents whose top-level thread is not among
- * `threads` stay out of the map and out of `nested`, so they still show as
- * ordinary rows rather than vanish.
+ * Every unarchived subagent, nested ones included, under the top-level thread that started it, by
+ * `environmentId:threadId`, in launch order. Subagents whose top-level thread is not in `threads`
+ * stay out, so they still show as ordinary rows.
  */
 export function groupThreadAgents<T extends AgentThreadInput>(
   threads: ReadonlyArray<T>,
@@ -114,11 +112,9 @@ export function threadAgentsLive(summary: ThreadAgentsSummary): boolean {
 }
 
 /**
- * How the agents line shows under a thread. Open while any agent works or
- * needs the user, or while the user reads one of them; `choice: false` folds
- * it. Once all are done the line goes away (the thread itself still lists its
- * agents), except that failed agents leave it folded. A `choice` shows it
- * (`true`) or hides it (`false`) then.
+ * How the agents line shows under a thread: open while any agent works, needs the user, or is
+ * being read; gone once all are done, except failed agents leave it folded. A `choice` then shows
+ * (`true`) or hides (`false`) it.
  */
 export function threadAgentsDisplay(
   summary: ThreadAgentsSummary,

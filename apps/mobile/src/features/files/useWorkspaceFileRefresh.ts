@@ -48,11 +48,9 @@ export function useOpenFileScreenActive(enabled: boolean): boolean {
 }
 
 /**
- * Keeps an open workspace file current (sidebar fork). The read is cached, so
- * without this the screen kept showing the copy from its first visit. Re-reads
- * at once after each workspace mutation of the thread and on every return to
- * the screen or the app, and polls while it is on screen so edits made outside
- * the thread (an editor, another thread) show up within a poll.
+ * Keeps an open workspace file current (sidebar fork): the read is cached, so re-read it after
+ * each workspace mutation of the thread and on every return to the screen or the app, and poll
+ * while it is on screen so edits made outside the thread show up.
  */
 export function useWorkspaceFileRefresh(input: {
   readonly enabled: boolean;

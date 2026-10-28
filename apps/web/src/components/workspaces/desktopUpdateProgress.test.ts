@@ -29,7 +29,7 @@ describe("describeDesktopUpdateProgress", () => {
     ).toMatchObject({
       kind: "downloading",
       label: "Downloading 37%",
-      detail: "Downloading 0.0.45-sidebar.12 — 37%",
+      detail: "Downloading 0.0.45-sidebar.12 (37%)",
       percent: 37,
     });
   });

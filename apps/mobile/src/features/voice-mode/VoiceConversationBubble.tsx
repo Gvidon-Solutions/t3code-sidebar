@@ -1,5 +1,4 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback, useEffect, useState } from "react";
@@ -14,6 +13,7 @@ import { VOICE_OPEN_LONG_PRESS_MS, VoiceStripButton } from "./ComposerVoiceMode"
 import { VoiceConversationPreview } from "./VoiceConversationPreview";
 import { useLiveVoiceThread, useVoiceModeMuted } from "./useVoiceMode";
 import { voiceMode } from "./voiceMode";
+import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 const BUBBLE_SIZE = 52;
 const EDGE = 8;
@@ -22,12 +22,9 @@ const PANEL_WIDTH = 260;
 const DEFAULT_POSITION = { x: 1, y: 0.62 };
 
 /**
- * Sidebar fork: while a voice conversation runs, a round wave button floats
- * over every screen but the thread chat (which has the full strip). Drag it
- * anywhere inside the safe area; where it is left is remembered. A tap opens
- * a small panel: the conversation's newest words, mute and stop. A long press
- * on the bubble or the words opens its thread. Static: it draws nothing on its
- * own between touches.
+ * Sidebar fork: a draggable wave button over every screen but the thread chat while a voice
+ * conversation runs; its spot is remembered. A tap opens the newest words, mute and stop; a long
+ * press opens the thread. It draws nothing on its own between touches.
  */
 export function VoiceConversationBubble(props: { readonly hidden: boolean }) {
   const live = useLiveVoiceThread();
@@ -39,7 +36,7 @@ function Bubble(props: {
   readonly target: { readonly environmentId: string; readonly threadId: string };
   readonly title: string;
 }) {
-  const navigation = useNavigation();
+  const selectDetail = useSelectWorkspaceDetail();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const muted = useVoiceModeMuted();
@@ -84,12 +81,16 @@ function Bubble(props: {
   const openThread = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setExpanded(false);
-    navigation.navigate("Thread", {
-      environmentId: props.target.environmentId,
-      threadId: props.target.threadId,
+    selectDetail({
+      name: "Thread",
+      params: {
+        environmentId: props.target.environmentId,
+        threadId: props.target.threadId,
+      },
     });
-  }, [navigation, props.target.environmentId, props.target.threadId]);
+  }, [props.target.environmentId, props.target.threadId, selectDetail]);
 
+  // oxlint-disable-next-line react/capitalized-calls -- Gesture.Pan is a gesture factory, not a React component.
   const pan = Gesture.Pan()
     .minDistance(6)
     .onStart(() => {
@@ -104,15 +105,18 @@ function Bubble(props: {
     .onEnd(() => {
       runOnJS(persist)(x.get(), y.get());
     });
+  // oxlint-disable-next-line react/capitalized-calls -- Gesture.LongPress is a gesture factory, not a React component.
   const longPress = Gesture.LongPress()
     .minDuration(VOICE_OPEN_LONG_PRESS_MS)
     .onStart(() => {
       runOnJS(openThread)();
     });
+  // oxlint-disable-next-line react/capitalized-calls -- Gesture.Tap is a gesture factory, not a React component.
   const tap = Gesture.Tap().onEnd((_event, success) => {
     if (success) runOnJS(toggleExpanded)();
   });
   // Whichever is recognized first wins: a drag, a hold, or a quick tap.
+  // oxlint-disable-next-line react/capitalized-calls -- Gesture.Race is a gesture factory, not a React component.
   const gesture = Gesture.Race(pan, longPress, tap);
   const bubbleStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: x.get() }, { translateY: y.get() }],

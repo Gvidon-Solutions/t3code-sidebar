@@ -10,12 +10,9 @@ import { useThreadTabs } from "./useThreadTabs";
 const basename = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
 /**
- * Thread tabs (sidebar fork): Chat plus the files this thread has open. Inside
- * the thread pager a tab flips to its page; on a standalone file screen Chat
- * pops back to the thread and a file tab swaps the file in. A file restores
- * its tab's mode and scroll. Long-press closes a file tab. Inside the pager the
- * thread's live terminals come first; long-pressing one kills its shell.
- * Hidden on the chat while nothing is open.
+ * Thread tabs (sidebar fork): Chat, the thread's live terminals in the pager, then its open files.
+ * A tab flips the pager or swaps the file in; a file restores its mode and scroll. Long-press
+ * closes a file tab or kills a terminal. Hidden on the chat while nothing is open.
  */
 export function ThreadTabStrip(props: {
   readonly environmentId: string;

@@ -2,12 +2,9 @@
 import type { ProviderVoiceSessionEvent, ProviderVoiceTranscriptRole } from "@t3tools/contracts";
 
 /**
- * Voice conversations (Codex realtime voice). The client owns the microphone,
- * speaker, and WebRTC peer; the environment only relays the SDP handshake and
- * captions over `provider.voice.session`. Audio never crosses the T3 socket,
- * so voice works the same locally, over a relay, or through a tunnel.
- *
- * The WebRTC surface is structural so browsers and react-native-webrtc both fit.
+ * Voice conversations (Codex realtime voice). The client owns the microphone, speaker and WebRTC
+ * peer; the environment relays only SDP and captions, so voice works the same locally, over a
+ * relay or a tunnel. The WebRTC surface is structural so browsers and react-native-webrtc fit.
  */
 
 export interface VoiceMediaTrack {
@@ -434,6 +431,7 @@ export class VoiceModeController {
   private setState(next: VoiceModeState): void {
     this.state = next;
     // Read the latest state per listener: an earlier listener may have changed it.
+    // oxlint-disable-next-line unicorn/no-useless-spread -- The copy lets a listener unsubscribe or subscribe while notified.
     for (const listener of [...this.listeners]) listener(this.state);
   }
 }
