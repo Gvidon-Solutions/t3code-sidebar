@@ -76,7 +76,7 @@ import {
 } from "../../keybindings";
 import { isTerminalFocused } from "../../lib/terminalFocus";
 import { readLocalApi } from "../../localApi";
-import { selectProjectGroupingSettings } from "../../logicalProject";
+import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import {
   buildSidebarProjectSnapshots,
@@ -481,6 +481,7 @@ export default function WorkspaceSidebar() {
     lastFollowedRouteRef.current = followKey;
     view.setActiveWorkspace(target);
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- follows router changes by switching to the route's workspace
   useEffect(() => {
     followRoute();
   }, [
@@ -621,6 +622,7 @@ export default function WorkspaceSidebar() {
   const openRequestedMenu = useEffectEvent(() => {
     if (menuRequest) openMenu(menuRequest.position);
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens the context menu once per new menu request
   useEffect(() => {
     openRequestedMenu();
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A new request (nonce) opens the menu once.
@@ -953,6 +955,7 @@ export default function WorkspaceSidebar() {
     const jumpIndex = threadJumpIndexFromCommand(command ?? "");
     if (jumpIndex !== null) go(orderedThreadKeys[jumpIndex]);
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- listens to window key events for jump shortcuts and their hints
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => onShortcutKeyDown(event);
     const onModifier = (event: KeyboardEvent) => {
@@ -974,6 +977,7 @@ export default function WorkspaceSidebar() {
   // ── Activity per workspace (tiles) ────────────────────────────────────
   const seenBaselineAt = useWorkspaceViewStore((state) => state.seenBaselineAt);
   const ensureSeenBaseline = useWorkspaceViewStore((state) => state.ensureSeenBaseline);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records the unread baseline in the persisted view store once
   useEffect(ensureSeenBaseline, [ensureSeenBaseline]);
   const isUnreadThread = (thread: SidebarThreadSummary) =>
     isThreadUnread(thread, lastVisitedById[threadKeyOf(thread)], seenBaselineAt);

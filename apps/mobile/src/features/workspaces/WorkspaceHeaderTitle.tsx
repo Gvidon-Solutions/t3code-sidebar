@@ -35,6 +35,7 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
     setEditing(mode);
   };
   const request = useWorkspaceEditRequest();
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies an edit request from the workspace menu's module store
   useEffect(() => {
     if (request === null || workspace === null || request.workspaceId !== workspace.id) return;
     clearWorkspaceEditRequest();
@@ -61,6 +62,7 @@ export function WorkspaceHeaderTitle(props: { readonly fallback: ReactNode }) {
 
   // Android's Back hides the keyboard without blurring the field; that ends the edit too.
   const commitOnKeyboardHide = useEffectEvent(commit);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the native keyboard hiding to commit the edit
   useEffect(() => {
     if (editing === null) return;
     const subscription = Keyboard.addListener("keyboardDidHide", () => commitOnKeyboardHide());

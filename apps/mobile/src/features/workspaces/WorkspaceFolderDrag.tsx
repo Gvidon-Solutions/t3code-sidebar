@@ -121,6 +121,7 @@ export function FolderDragHost(props: {
   }));
 
   // Holding the finger near an edge of a list taller than the screen scrolls it.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- runs a frame loop that auto-scrolls the list while a drag nears an edge
   useEffect(() => {
     if (!overlay) return;
     const total = overlay.entries.length * ROW_HEIGHT;

@@ -368,6 +368,7 @@ export function QuickModelSheet(
 ) {
   const [progress] = useState(() => new Animated.Value(0));
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- starts the sheet's native-driver entrance animation on mount
   useEffect(() => {
     Animated.timing(progress, {
       toValue: 1,

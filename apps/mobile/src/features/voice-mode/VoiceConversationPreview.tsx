@@ -28,6 +28,7 @@ export function VoiceConversationPreview(props: {
   const [speaking, setSpeaking] = useState(false);
 
   // Re-renders only when the speaking flag flips, not per level sample.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the voice session's audio levels
   useEffect(() => {
     const isSpeaking = createSpeakingDetector();
     return voiceMode.subscribeLevels((levels) => {

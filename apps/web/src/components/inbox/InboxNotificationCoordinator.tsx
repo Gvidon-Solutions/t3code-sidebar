@@ -39,6 +39,7 @@ export function InboxNotificationCoordinator() {
   const marks = useRef<InboxAlertMarksByEnvironment>(new Map());
   const notifications = useRef(new Map<string, Notification>());
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- closes desktop notifications when the window gains focus
   useEffect(() => {
     const clear = () => {
       for (const notification of notifications.current.values()) notification.close();
@@ -51,6 +52,7 @@ export function InboxNotificationCoordinator() {
     };
   }, []);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- raises sounds and desktop notifications for new inbox activity
   useEffect(() => {
     const result = collectInboxAlertsByEnvironment(marks.current, state.environments);
     marks.current = result.marks;

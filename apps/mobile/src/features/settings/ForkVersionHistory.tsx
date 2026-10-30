@@ -64,6 +64,7 @@ export function ForkVersionHistorySection() {
   const downloadController = useRef<AbortController | null>(null);
   const installing = download?.version ?? null;
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- fetches the fork's APK releases from GitHub with an abortable request
   useEffect(() => {
     if (!repo) return;
     const controller = new AbortController();

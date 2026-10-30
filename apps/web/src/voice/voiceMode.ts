@@ -139,6 +139,7 @@ export const SPEAKING_LEVEL = 0.02;
 /** Whether the assistant is talking right now; re-renders only when that flips. */
 export function useVoiceSpeaking(active: boolean): boolean {
   const [speaking, setSpeaking] = useState(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the voice session's audio levels
   useEffect(() => {
     if (!active) return;
     return voiceMode.subscribeLevels((levels) => setSpeaking(levels.speaker > SPEAKING_LEVEL));

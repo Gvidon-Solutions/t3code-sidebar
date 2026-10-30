@@ -70,6 +70,7 @@ export function useVoiceModeMuted(): boolean {
  * user is. Mount once at the root: a conversation outlives its thread screen.
  */
 export function useVoiceModeNotices(): void {
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- shows voice session notices from the voice-mode store as native alerts
   useEffect(() => {
     // Reads the live state: dismissing notifies listeners re-entrantly, so a
     // listener's argument can already be stale.

@@ -36,7 +36,10 @@ import { useEnvironment } from "../../state/environments";
 import { inboxAtoms } from "../../state/inbox";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "../ComposerPromptEditor";
+import {
+  type ComposerPromptEditorHandle,
+  ComposerPromptEditorTiptap as ComposerPromptEditor,
+} from "../ComposerPromptEditorTiptap";
 import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "../composerContextPresentation";
 import { ComposerBanner } from "../chat/ComposerBanner";
 import { ComposerImageThumbnail } from "../chat/ComposerImageThumbnail";
@@ -105,6 +108,7 @@ export function InboxComposer(props: {
   const [cursor, setCursor] = useState(0);
   const [attachments, setAttachments] = useState<ReadonlyArray<InboxComposerAttachment>>([]);
   const attachmentsRef = useRef(attachments);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest attachments for the unmount cleanup
   useLayoutEffect(() => {
     attachmentsRef.current = attachments;
   });
@@ -113,6 +117,7 @@ export function InboxComposer(props: {
   const uploads = useAttachmentUploadStore((state) => state.uploadsByImageId);
 
   // Unsent uploads die with the box: switching issues discards the draft.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases unsent uploads when the composer unmounts
   useEffect(() => () => attachmentsRef.current.forEach(releaseInboxAttachment), []);
 
   const disabled = !connected || !canComment;

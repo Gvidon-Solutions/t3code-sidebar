@@ -96,6 +96,7 @@ function InboxIssueScreen(props: {
   const requestedSeen = useRef(0);
   const lastSequence = issue?.lastSequence ?? 0;
   const seenSequence = issue?.seenSequence ?? 0;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- marks the issue seen on the server while the screen is focused
   useEffect(() => {
     if (!focused || !canOperate || lastSequence <= seenSequence) return;
     if (requestedSeen.current >= lastSequence) return;

@@ -46,6 +46,7 @@ function useNewOnce<T extends { readonly id: string }>(
   onItem: (item: T) => void,
 ): void {
   const seenIdRef = useRef<string | null | undefined>(undefined);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- acts once on each new ui request from the server stream
   useEffect(() => {
     const id = item?.id ?? null;
     if (seenIdRef.current === undefined) {
@@ -113,6 +114,7 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
   const { config, openWorkspace } = useSidebarWorkspaces();
   // Read when a request lands, so handlers stay stable across navigation.
   const shownThreadRef = useRef(props.shownThread);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest shown thread for the request handlers
   useEffect(() => {
     shownThreadRef.current = props.shownThread;
   });

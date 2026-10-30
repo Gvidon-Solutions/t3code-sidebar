@@ -77,6 +77,7 @@ export function ThreadPager(props: {
     () => props.terminals.map((terminal) => terminal.terminalId),
     [props.terminals],
   );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- forgets requested shells once the server's terminal list includes them
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- Forget a requested shell once the server lists it.
     setRequestedTerminals((current) =>
@@ -113,6 +114,7 @@ export function ThreadPager(props: {
   const activeSeen = useRef(false);
   const activeIndex = active.path === null ? -1 : paths.indexOf(active.path);
   // Keyed on the whole state: goTo clears activeSeen even when it re-selects the same tab.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- falls back to Chat when the tab store drops the active file tab
   useEffect(() => {
     if (activeIndex >= 0) activeSeen.current = true;
     else if (active.path !== null && activeSeen.current) setActive({ path: null, line: null });
@@ -135,6 +137,7 @@ export function ThreadPager(props: {
   const widthValue = useSharedValue(width);
   const panelWidthValue = useSharedValue(panelWidth);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- drives the pager's Reanimated shared values and slide from the selected page
   useEffect(() => {
     indexValue.set(index);
     lastValue.set(last);
@@ -144,17 +147,20 @@ export function ThreadPager(props: {
   }, [index, indexValue, last, lastValue, panelWidth, panelWidthValue, width, widthValue, x]);
 
   // Leaving the chat takes the keyboard down with it.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- dismisses the native keyboard when the pager leaves the chat page
   useEffect(() => {
     if (index > 0) Keyboard.dismiss();
   }, [index]);
 
   const edgesByPath = useRef(new Map<string, PageEdges>());
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- feeds the active page's scroll edges to the pager's Reanimated gesture
   useEffect(() => {
     edges.set(
       active.path === null ? FREE_EDGES : (edgesByPath.current.get(active.path) ?? FREE_EDGES),
     );
   }, [active.path, edges]);
   const activePathRef = useRef(active.path);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest active path for edge reports from native scroll callbacks
   useLayoutEffect(() => {
     activePathRef.current = active.path;
   }, [active.path]);
@@ -168,6 +174,7 @@ export function ThreadPager(props: {
 
   // Opening a tab rewrites the tabs, so goTo reads them through a ref to stay stable.
   const openTabRef = useRef(threadTabs.open);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest tab opener for the stable goTo that gestures and routes call
   useLayoutEffect(() => {
     openTabRef.current = threadTabs.open;
   }, [threadTabs.open]);
@@ -203,6 +210,7 @@ export function ThreadPager(props: {
   const openRequest = useEffectEvent(() => {
     if (props.request) goTo(props.request.path, props.request.line);
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens a tab requested through navigation route params
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- An open request arrives through route params.
     if (requestAt !== undefined) openRequest();
@@ -227,6 +235,7 @@ export function ThreadPager(props: {
 
   // Back walks the same way the swipes do: panel, then file tabs, then Home.
   const backState = useRef({ panel, index });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest panel and page for the hardware Back listener
   useLayoutEffect(() => {
     backState.current = { panel, index };
   }, [index, panel]);

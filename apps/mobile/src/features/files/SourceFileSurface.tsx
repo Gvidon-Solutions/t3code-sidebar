@@ -264,6 +264,7 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
   ) : undefined;
 
   // Layout effect so a pending jump is cancelled in the commit that swaps the file.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the FlatList to the target line and cancels a pending jump when the file changes
   useLayoutEffect(() => {
     if (targetIndex === null) {
       return;
@@ -276,6 +277,7 @@ function JavaScriptSourceFileSurface(props: SourceFileSurfaceProps) {
   // A reopened tab returns to the line it was left at (only when no line was asked for).
   // Read once: later saves of this same view must not scroll it again.
   const restoreRowRef = useRef(targetIndex === null ? (props.restoreRow ?? null) : null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- restores the saved scroll row through the list ref once lines are laid out
   useEffect(() => {
     const restoreRow = restoreRowRef.current;
     if (restoreRow === null || restoreRow <= 0 || lines.length === 0) return;

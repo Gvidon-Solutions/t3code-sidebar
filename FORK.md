@@ -22,8 +22,8 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream release `v0.1.3` (`d2c440312e`, tagged 2026-10-26) on
-  2026-10-28 (merge into `ws`); from now on only stable upstream releases are merged.
+- **Base.** Last synced with upstream release `v0.1.5` (`6d450a4284`, tagged 2026-10-29) on
+  2026-10-30 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
   above: CI reads it from this line.
@@ -107,6 +107,50 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 
 ## Feature log
+
+### 2026-10-30 — Upstream release v0.1.5
+
+- **What.** Brings in upstream's `v0.1.4` and `v0.1.5` (286 commits past the v0.1.3 sync). A
+  "No project" thread can be turned into a project; Antigravity gets Claude and GPT models,
+  thinking levels and diff edits; the thread details card shows what you pick, usage limits
+  included; Settings switches every installation between Stable and Nightly in one step; new
+  threads avoid providers that just hit a usage limit; guest links no longer expose diffs; Claude
+  edits open as diffs; Electron 44.10 fixes a Brotli CVE; the undo notice moves to the sidebar
+  footer; `t3` starts on Ubuntu without libatomic. Upstream removed its legacy sidebar (the
+  "boring sidebar" groups threads into project folders instead), the redesign toggle, the
+  in-memory projection store, the per-file effect budget and about 18k lines nothing reached. On
+  the phone: "Use last project" for new threads, two-pane Android Settings, an optional One UI
+  floating tab bar, link requests for other machines in the composer.
+- **How.** Web: the sidebar switch picks the workspace sidebar or upstream's sidebar (the legacy
+  option is gone with upstream's file, so is its Settings row). The voice button sits in front of
+  upstream's new composer controls; `isServerThread` comes from `routeKind`. The inbox composer
+  imports `ComposerPromptEditorTiptap`, the workspace sidebar reads grouping settings and
+  `isThreadWorking` from client-runtime. Desktop: `followFeed` keeps its own downgrade flag next to
+  upstream's `check({ allowDowngrade })`; the fork still skips the xdg-mime URL handler but runs
+  upstream's startup recovery. Server: the voice session layer uses the renamed event sink and
+  adapter registry layers; the inbox and ui tools join upstream's `layerTools`, and the agent
+  context budget test mocks their services. Upstream's new `agentContextBudget.json` holds the
+  fork's measured sizes: its inbox, `ui_open` and voice instructions and tools add about 3.2 KB to
+  Claude's and Codex's text and 6.3 KB to the MCP tool list. Mobile: the phone keeps the fork's root (Home only,
+  dock instead of navigation, compact FAB with Talk), so the floating tab bar does not apply
+  there; the composer keeps the fork's card layout and takes upstream's environment mentions;
+  upstream's knip pass had unexported `useThreadProjection`, `useThreadVisibleTurnItems`,
+  `composerAttachmentWireMimeType` and `ComposerSurface`, which fork files use. Lint: upstream
+  replaced `scripts/effect-budget.json` with `t3code/no-unreasoned-state-sync`, so each fork
+  effect now names what it keeps in step; `fileContextMenu.ts` no longer throws inside `try`, so
+  the React Compiler compiles it again. The enriched-markdown patch still applies to the vendored
+  `t3.16` tarball.
+- **Where.** `apps/web/src/components/{AppSidebarLayout,CommandPalette}.tsx`,
+  `components/chat/{ChatComposer.tsx,useComposerSend.ts,useComposerMenuItems.ts}`,
+  `components/settings/{SettingsPanels.tsx,settingsSearch.ts}`, `components/inbox/InboxComposer.tsx`,
+  `components/workspaces/{WorkspaceSidebar.tsx,workspaces.logic.ts}`;
+  `apps/desktop/src/{preload.ts,app/DesktopApp.ts,updates/DesktopUpdates.ts}`,
+  `packages/contracts/src/{ipc,provider,settings}.ts`, `packages/provider-core/src/server/snapshotProbe.ts`;
+  `apps/server/src/orchestration-v2/runtimeLayer.ts`, `mcp/McpHttpServer.ts`,
+  `provider/{AgentContextBudget.test.ts,agentContextBudget.json}`; `apps/web/src/fileContextMenu.ts`; `apps/mobile/src/{Stack.tsx,lib/modelOptions.ts}`,
+  `features/threads/{ThreadComposer,ThreadFeed,ThreadDetailScreen,thread-list-v2-items}.tsx`,
+  `features/home/{HomeScreen,HomeRouteScreen}.tsx`, `state/use-thread-detail.ts`,
+  `lib/attachmentUpload.ts`; fork files with effects (lint reasons).
 
 ### 2026-10-28 — Upstream release v0.1.3
 

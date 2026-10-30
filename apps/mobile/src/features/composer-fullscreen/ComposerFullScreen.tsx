@@ -18,6 +18,7 @@ export function useComposerFullScreen(lineHeight: number) {
   const open = useCallback(() => setFullScreen(true), []);
   const toggle = useCallback(() => setFullScreen((current) => !current), []);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to Android's hardware Back while the full-screen editor is open
   useEffect(() => {
     if (!fullScreen) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {

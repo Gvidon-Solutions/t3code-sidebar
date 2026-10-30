@@ -27,6 +27,7 @@ export function ForkVersionRow() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- lists the fork's desktop releases through the Electron bridge
   useEffect(() => {
     if (!bridge) return;
     let cancelled = false;

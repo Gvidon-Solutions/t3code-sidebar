@@ -142,6 +142,7 @@ export function WorkspaceDock(props: {
   readonly reportsHeight?: boolean;
 }) {
   const reportsHeight = props.reportsHeight !== false;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the published dock height in the module store on unmount
   useEffect(() => (reportsHeight ? () => setWorkspaceDockHeight(0) : undefined), [reportsHeight]);
   // A horizontal swipe along the bar opens the neighbouring workspace. Only
   // while the tiles fit: once the bar scrolls, the swipe belongs to it.

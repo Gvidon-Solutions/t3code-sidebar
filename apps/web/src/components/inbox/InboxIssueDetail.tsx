@@ -116,6 +116,7 @@ function useMarkIssueSeen(
   const issueId = issue?.id;
   const lastSequence = issue?.lastSequence ?? 0;
   const seenSequence = issue?.seenSequence ?? 0;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- marks the issue seen on the server once the window is visible and focused
   useEffect(() => {
     if (!enabled || issueId === undefined || lastSequence <= seenSequence) return;
     const key = `${environmentId}:${issueId}:${lastSequence}`;

@@ -151,7 +151,10 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
     // the desktop shell would hand the navigation to the system browser; a blob URL is local.
     try {
       const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        fail(`HTTP ${response.status}`);
+        return;
+      }
       const objectUrl = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = objectUrl;

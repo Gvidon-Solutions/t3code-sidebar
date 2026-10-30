@@ -97,12 +97,14 @@ function FloatingVoiceBubble({ voiceThreadRef }: { voiceThreadRef: ScopedThreadR
   // The click that ends a drag must not toggle the panel.
   const suppressClickRef = useRef(false);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- listens to window resizes to keep the bubble on screen
   useEffect(() => {
     const onResize = () => setPosition((current) => clampToViewport(current));
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- closes the bubble on outside pointer down or Escape through document listeners
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {

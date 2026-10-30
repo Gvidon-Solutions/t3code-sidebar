@@ -1,10 +1,10 @@
 import type { ProjectFoldMode } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
+import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 
 import type { SidebarThreadSummary } from "../../types";
 import {
   hasUnseenCompletion,
-  isSidebarThreadWorking,
   resolveSidebarThreadStatus,
   resolveThreadLastVisitedAt,
 } from "../Sidebar.logic";
@@ -88,7 +88,7 @@ export function isProjectQuiet(input: {
     if (effectiveSnoozed(thread, { now: nowIso })) continue;
     if (thread.settledOverride === "settled") continue;
     if (thread.pinnedAt != null) return false;
-    if (needsAttention(thread) || isSidebarThreadWorking(thread)) return false;
+    if (needsAttention(thread) || isThreadWorking(thread)) return false;
     if (threadActivityMs(thread) >= horizon) return false;
   }
   if (live === 0) {

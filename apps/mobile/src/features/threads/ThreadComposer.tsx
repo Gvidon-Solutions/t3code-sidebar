@@ -80,6 +80,8 @@ import { updateThreadDraftModelSelection } from "../../state/use-thread-composer
 import { appAtomRegistry } from "../../state/atom-registry";
 import type { ComposerDocumentAttachment } from "../../lib/composerContext";
 import { useProject, useThreadShell, useThreadShells } from "../../state/entities";
+import { useMentionableEnvironments } from "../../state/environments";
+import { useLinkedEnvironments } from "../../state/peerLinks";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -128,6 +130,8 @@ import { ComposerCommandPopover } from "./ComposerCommandPopover";
 import { ComposerPopoverAnchor } from "./ComposerPopoverAnchor";
 import { ComposerQueuedEditAttachments } from "./ComposerQueuedEdit";
 import { useComposerCommandMenu } from "./use-composer-command-menu";
+import type { ComposerEnvironmentCandidate } from "@t3tools/client-runtime/composerThreadItems";
+import { offersLinkedEnvironments } from "@t3tools/client-runtime/link-request";
 import {
   ComposerDictationCancelAction,
   ComposerDictationDraftContent,
@@ -163,6 +167,7 @@ import {
 
 export const COMPOSER_COLLAPSED_CHROME = 60;
 
+const NO_MACHINES: ReadonlyArray<ComposerEnvironmentCandidate> = [];
 const COLLAPSED_EDITOR_DEFAULT_INSET = 6;
 // iOS puts line-height slack above glyphs. DM Sans's lowercase midline is
 // descender (0.31em) + half x-height (0.504em) above the line bottom.
@@ -213,7 +218,6 @@ export interface ThreadComposerProps {
   readonly fullScreenTop?: number | null;
   readonly connectionState: RemoteClientConnectionState;
   readonly environmentLabel: string | null;
-  readonly threadSyncPhase?: "loading" | "syncing" | null;
   readonly selectedThread: EnvironmentThreadShell;
   readonly reportedModelSelection?: ModelSelection | null;
   readonly hasCompactableConversation: boolean;
@@ -259,7 +263,7 @@ export interface ThreadComposerProps {
 }
 
 // Android KeyboardStickyView tracks the IME; concurrent timed layout morphs cause jitter.
-export const COMPOSER_TRANSITION_DURATION_MS = 220;
+const COMPOSER_TRANSITION_DURATION_MS = 220;
 // Side panes animate dock width; nested horizontal transitions would make the surface trail the toolbar.
 const composerHeightTransition: LayoutAnimationFunction = (values) => {
   "worklet";
@@ -282,8 +286,7 @@ const composerHeightTransition: LayoutAnimationFunction = (values) => {
     },
   };
 };
-export const COMPOSER_LAYOUT_TRANSITION =
-  Platform.OS === "android" ? undefined : composerHeightTransition;
+const COMPOSER_LAYOUT_TRANSITION = Platform.OS === "android" ? undefined : composerHeightTransition;
 // Share of the one-row composer the draft keeps; a long model name truncates first.
 const INLINE_EDITOR_MIN_WIDTH = "40%";
 const INLINE_EDITOR_HEIGHT = 36;
@@ -541,16 +544,19 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     return report !== null;
   };
 
+  const mentionableEnvironments = useMentionableEnvironments();
   const composerMenu = useComposerCommandMenu({
     draftMessage: draftMessage,
     ownerKey: composerDraftKey,
     environmentId: props.environmentId,
     threadShells: useThreadShells(),
+    environments: offersLinkedEnvironments(props.serverConfig)
+      ? mentionableEnvironments
+      : NO_MACHINES,
+    linkedEnvironments: useLinkedEnvironments(props.environmentId),
     currentThreadId: props.selectedThread.id,
     projectCwd: props.projectCwd,
-    pullRequestProjectId: props.serverConfig?.environment.capabilities.pullRequests
-      ? (project?.id ?? null)
-      : null,
+    pullRequestProjectId: props.serverConfig ? (project?.id ?? null) : null,
     pullRequestRepository: project?.repositoryIdentity?.displayName ?? null,
     threadPullRequests: props.selectedThread.pullRequests,
     selectedProviderStatus,
@@ -633,6 +639,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const composerRootRef = useRef<ViewInstance>(null);
   const [fullScreenCorrection, setFullScreenCorrection] = useState(0);
   const fullScreenFittedRef = useRef(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-arms the window measurement that fits the full-screen editor under the header
   useEffect(() => {
     if (!fullScreenEditor.fullScreen) fullScreenFittedRef.current = false;
   }, [fullScreenEditor.fullScreen]);
@@ -684,8 +691,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     sendBlockedReason === null &&
     !modelUnavailable;
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- clears the workspace layout's composer-editing flag when the composer unmounts
   useEffect(() => () => setComposerEditing(false), [setComposerEditing]);
   // A pending sheet presentation or focus restore has no composer left to act on.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- disposes the pending settings sheet presentation and focus restore on unmount
   useEffect(() => () => disposeSettingsSheetPresentation(), []);
 
   const onPressPreview = (source: FilePreviewSource) => {
@@ -864,6 +873,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     settingsSheetPresentation.onDismissed();
   });
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the native stack's finishTransitioning event to restore the keyboard after a sheet dismisses
   useEffect(
     () =>
       // The native-stack patch exposes UIKit dismissal completion; restore the keyboard then.
@@ -1068,9 +1078,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
             {!usesCard ? (
               <ComposerAttachmentButton
                 disabled={isSubmissionLocked}
-                supportsFiles={Boolean(
-                  props.serverConfig?.environment.capabilities.fileAttachments,
-                )}
+                supportsFiles={props.serverConfig !== null}
                 onPickMedia={props.onPickDraftMedia}
                 onPickFiles={props.onPickDraftFiles}
               />
@@ -1140,10 +1148,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     composerMenu.onSelectionChange(selection);
                   };
                   const capabilities = props.serverConfig?.environment.capabilities;
-                  const advertisedMax =
-                    capabilities?.attachmentUploads === true
-                      ? capabilities.fileAttachments?.maxUploadBytes
-                      : undefined;
+                  const advertisedMax = capabilities?.fileAttachments?.maxUploadBytes;
                   const maxBytes =
                     advertisedMax === undefined
                       ? null
@@ -1186,12 +1191,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                       insertPaste();
                     } else {
                       Dialog.alert(
-                        wouldExceedInputLimit
-                          ? "Pasted text is too large for this message"
-                          : "Could not attach pasted text",
-                        wouldExceedInputLimit
-                          ? "Remove some text or an attachment, then paste again."
-                          : "Remove an attachment or use a smaller paste, then try again.",
+                        "Pasted text is too large for this message",
+                        "Remove some text or an attachment, then paste again.",
                       );
                     }
                     return;
@@ -1358,9 +1359,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     ) : (
                       <ComposerAttachmentButton
                         disabled={isSubmissionLocked}
-                        supportsFiles={Boolean(
-                          props.serverConfig?.environment.capabilities.fileAttachments,
-                        )}
+                        supportsFiles={props.serverConfig !== null}
                         onPickMedia={props.onPickDraftMedia}
                         onPickFiles={props.onPickDraftFiles}
                       />

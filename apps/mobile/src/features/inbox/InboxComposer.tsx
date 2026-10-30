@@ -115,6 +115,7 @@ export function InboxComposer(props: {
   const [previewFile, setPreviewFile] = useState<FilePreviewSource | null>(null);
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
   const mounted = useRef(true);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tracks whether the composer is still mounted for async upload callbacks
   useEffect(
     () => () => {
       mounted.current = false;

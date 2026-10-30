@@ -69,7 +69,7 @@ export function TerminalExtraKeys(props: {
       repeatRef.current = null;
     }
   };
-  // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Unmount cleanup; stopRepeat only reads refs.
+  // oxlint-disable-next-line react/exhaustive-effect-dependencies, t3code/no-unreasoned-state-sync -- clears the key-repeat timer on unmount; unmount cleanup; stopRepeat only reads refs.
   useEffect(() => stopRepeat, []);
   // Repeats fire from timers, so an effect event sends through the latest handler.
   const sendRepeat = useEffectEvent((data: string) => props.onSend(data));

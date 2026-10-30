@@ -27,15 +27,17 @@ export function useThreadTabPosition(input: {
 
   // The tab actions change with every tab write; callbacks read them through a ref to stay stable.
   const tabsRef = useRef(threadTabs);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest tab actions for the stable save callbacks
   useLayoutEffect(() => {
     tabsRef.current = threadTabs;
   }, [threadTabs]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the opened file as a tab in the thread tab store
   useEffect(() => {
     if (threadKey !== null && relativePath !== null) tabsRef.current.open(relativePath);
   }, [relativePath, threadKey]);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // oxlint-disable-next-line react/exhaustive-effect-dependencies -- A pending save belongs to the file it was scheduled for.
+  // oxlint-disable-next-line react/exhaustive-effect-dependencies, t3code/no-unreasoned-state-sync -- cancels a pending scroll-position save timer; a pending save belongs to the file it was scheduled for.
   useEffect(() => () => clearTimeout(timerRef.current), [relativePath]);
   const savePosition = useCallback(
     (mode: ThreadTabMode, position: number) => {

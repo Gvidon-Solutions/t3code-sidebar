@@ -40,6 +40,7 @@ export const OPEN_FILE_POLL_MAX_BYTES = 512 * 1024;
 export function useOpenFileScreenActive(enabled: boolean): boolean {
   const focused = useIsFocused();
   const [appState, setAppState] = useState(AppState.currentState);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to AppState to know whether the app is in the foreground
   useEffect(() => {
     const subscription = AppState.addEventListener("change", setAppState);
     return () => subscription.remove();
@@ -78,6 +79,7 @@ export function useWorkspaceFileRefresh(input: {
 
   // The first run also re-reads on open and on each return, so a cached copy never survives.
   const handledRef = useRef<string | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- re-reads the open file from the server after workspace mutations and on each return
   useEffect(() => {
     if (!active) {
       handledRef.current = null;
@@ -89,6 +91,7 @@ export function useWorkspaceFileRefresh(input: {
     refresh();
   }, [active, mutationId, resourceKey]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- polls the open file on a timer while its screen is active
   useEffect(() => {
     if (!active || !poll) return;
     const timer = setInterval(() => refresh(), OPEN_FILE_POLL_MS);

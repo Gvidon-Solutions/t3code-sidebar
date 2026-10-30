@@ -60,6 +60,7 @@ function Bubble(props: {
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
   // Follows a restored position, a rotation, or the keyboard-free safe area changing.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- moves the bubble's Reanimated position when the restored position or safe area changes
   useEffect(() => {
     x.set(left);
     y.set(top);

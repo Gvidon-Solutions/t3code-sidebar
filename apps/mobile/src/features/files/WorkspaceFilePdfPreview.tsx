@@ -244,12 +244,14 @@ export function WorkspaceFilePdfPreview(props: {
       : null;
   }, [initialRestore, initialUri]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pushes a new revision's URL into the already-loaded PDF WebView
   useEffect(() => {
     if (props.uri === null || props.uri === initialUri) return;
     webViewRef.current?.injectJavaScript(
       `window.__t3SetUrl?.(${JSON.stringify(props.uri)}); true;`,
     );
   }, [initialUri, props.uri]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- tells the PDF WebView whether its tab is the visible one
   useEffect(() => {
     webViewRef.current?.injectJavaScript(`window.__t3SetActive?.(${active}); true;`);
   }, [active]);

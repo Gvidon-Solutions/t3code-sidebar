@@ -225,6 +225,7 @@ function InlineInput({
   const [value, setValue] = useState(initial);
   const doneRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- focuses and selects the rename input's DOM node on mount
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();

@@ -70,6 +70,7 @@ export function UiRequestCoordinator() {
   const seenVoiceCommands = useRef(new Map<EnvironmentId, string | null>());
 
   // Spoken commands for the conversation this client holds: end, mute, move.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies voice commands from the server's ui-request stream to the voice session and router
   useEffect(() => {
     for (const { environmentId, request: command } of takeNewUiRequests(
       seenVoiceCommands.current,
@@ -89,6 +90,7 @@ export function UiRequestCoordinator() {
     }
   }, [voiceCommands, router]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- acts on new ui_open requests from the server stream by navigating the router
   useEffect(() => {
     const fresh = takeNewUiRequests(seen.current, entries);
     if (fresh.length === 0) return;

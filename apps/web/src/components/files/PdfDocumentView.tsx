@@ -32,11 +32,13 @@ export function PdfDocumentView(props: {
   const stackRef = useRef<PdfStack | null>(null);
   const srcRef = useRef(props.src);
   // Declared before the effects that read it, so they see this render's URL.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the latest URL for the pdf.js viewer's async loads
   useEffect(() => {
     srcRef.current = props.src;
   }, [props.src]);
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- creates the pdf.js viewer on the host DOM node and destroys it on unmount
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
@@ -62,6 +64,7 @@ export function PdfDocumentView(props: {
   }, []);
 
   const shownReloadKey = useRef(props.reloadKey);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- loads a new file revision into the pdf.js viewer when the reload key changes
   useEffect(() => {
     if (props.reloadKey === shownReloadKey.current) return;
     shownReloadKey.current = props.reloadKey;
