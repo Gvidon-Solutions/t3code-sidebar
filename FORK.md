@@ -248,6 +248,13 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `lib/modelOptions.ts`, `app.config.ts`;
   `apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts`;
   `.github/workflows/sidebar-desktop.yml`.
+### 2026-10-31 — Phone model picker and machine labels
+
+- Quick-switch model taps pass through the horizontal scroll view while the keyboard is open.
+  Holding a model opens its shared nickname editor, which accepts emoji names.
+- No project folders, workspace thread rows and the new-task project picker show the destination machine.
+- Files: `QuickModelSheet.tsx`, `ThreadSettingsSheet.tsx`, `NewTaskRouteScreen.tsx`,
+  `workspaces/WorkspaceChrome.tsx`, `workspaces/WorkspaceThreadLine.tsx`.
 
 ### 2026-10-21 — Settings gear back in the phone's thread-list header
 

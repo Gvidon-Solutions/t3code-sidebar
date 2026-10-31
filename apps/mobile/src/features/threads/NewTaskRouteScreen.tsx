@@ -344,7 +344,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               <View collapsable={false} className="overflow-hidden rounded-[28px] bg-grouped-card">
                 <NavigationRow
                   className="bg-grouped-card"
-                  title="No project"
+                  title={`No project · ${scratchEnvironment?.environmentLabel ?? ""}`}
                   subtitle="Start a task without a project"
                   onPress={() => void startScratch()}
                   leading={
@@ -361,7 +361,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               <View collapsable={false} className="overflow-hidden rounded-[24px] bg-grouped-card">
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="No project"
+                  accessibilityLabel={`No project · ${scratchEnvironment?.environmentLabel ?? ""}`}
                   onPress={() => void startScratch()}
                   className="flex-row items-center gap-3 bg-grouped-card px-4 py-3.5"
                 >
@@ -374,7 +374,9 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                     />
                   </View>
                   <View className="min-w-0 flex-1">
-                    <Text className="text-base font-t3-bold leading-snug">No project</Text>
+                    <Text className="text-base font-t3-bold leading-snug">
+                      No project · {scratchEnvironment?.environmentLabel}
+                    </Text>
                     <Text className="text-xs leading-snug text-foreground-muted" numberOfLines={1}>
                       Start a task without a project
                     </Text>

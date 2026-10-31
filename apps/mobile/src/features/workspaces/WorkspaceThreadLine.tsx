@@ -4,6 +4,7 @@ import { View } from "react-native";
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import { cn } from "../../lib/cn";
+import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import { QueuedMessageIcon } from "../threads/queued-message-icon";
 
 /**
@@ -44,6 +45,10 @@ export function WorkspaceThreadLine(props: {
   /** Holds this device's voice conversation: a wave before the time. */
   readonly voice?: boolean;
 }) {
+  const { savedConnectionsById } = useSavedRemoteConnections();
+  const machineLabel =
+    savedConnectionsById[props.thread.environmentId]?.environmentLabel ??
+    props.thread.environmentId;
   return (
     <View
       className={cn(
@@ -81,6 +86,13 @@ export function WorkspaceThreadLine(props: {
         {props.thread.title}
       </Text>
       {props.hasQueuedMessages ? <QueuedMessageIcon selected={props.selected} /> : null}
+      <Text
+        accessibilityLabel={`Machine: ${machineLabel}`}
+        className="max-w-[90px] rounded bg-subtle px-1.5 py-0.5 text-3xs text-foreground-muted"
+        numberOfLines={1}
+      >
+        {machineLabel}
+      </Text>
       {props.showPin ? (
         <SymbolView name="pin" size={11} tintColorClassName="accent-foreground-muted" />
       ) : null}

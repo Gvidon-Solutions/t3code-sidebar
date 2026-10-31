@@ -481,7 +481,8 @@ export function ThreadSettingsSessionProvider(
     // An empty name restores it.
     Dialog.prompt({
       title: `Rename ${option.label}`,
-      message: "Leave empty to use the original name.",
+      message:
+        "Add an emoji to distinguish this model, e.g. 🧠 Opus. Leave empty to use the original name.",
       initialValue: option.nickname ?? option.label,
       confirmText: "Rename",
       onConfirm: commit,

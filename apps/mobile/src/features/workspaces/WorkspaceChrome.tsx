@@ -34,6 +34,7 @@ import { AndroidAnchoredMenu } from "../../components/ui/AndroidAnchoredMenu";
 import { Menu } from "../../components/ui/Menu";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
+import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import type {
   WorkspaceAgentsListItem,
   WorkspaceFolderListItem,
@@ -276,6 +277,11 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly onNewThread: (project: EnvironmentProject) => void;
 }) {
   const { item } = props;
+  const { savedConnectionsById } = useSavedRemoteConnections();
+  const machineLabel = savedConnectionsById[item.project.environmentId]?.environmentLabel;
+  const folderTitle = item.isScratch
+    ? `${item.title} · ${machineLabel ?? item.project.environmentId}`
+    : item.title;
   const actions = useMemo((): MenuAction[] => {
     const shownIn = item.workspaceIds;
     return [
@@ -315,7 +321,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   const draggable = useFolderDragAvailable() && Platform.OS === "android" && !item.isScratch;
   const row = (
     <Pressable
-      accessibilityLabel={item.title}
+      accessibilityLabel={folderTitle}
       accessibilityRole="button"
       accessibilityState={{ expanded: item.open }}
       className="mt-1 flex-row items-center gap-2 py-1 pl-3 pr-2"
@@ -338,7 +344,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
         workspaceRoot={item.project.workspaceRoot}
       />
       <Text className="min-w-0 flex-1 text-[15px] font-t3-medium text-foreground" numberOfLines={1}>
-        {item.title}
+        {folderTitle}
       </Text>
       {!item.open && item.attention > 0 ? (
         <Text className="text-xs font-t3-bold tabular-nums text-warning-foreground">

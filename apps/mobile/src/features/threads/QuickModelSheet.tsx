@@ -26,6 +26,7 @@ function QuickSwitchPill(props: {
   readonly option: ModelOption;
   readonly selected: boolean;
   readonly onPress: () => void;
+  readonly onLongPress: () => void;
 }) {
   const display = modelOptionDisplay(props.option);
   return (
@@ -38,6 +39,8 @@ function QuickSwitchPill(props: {
         props.selected ? "border-accent bg-secondary" : "border-border bg-grouped-card",
       )}
       onPress={props.onPress}
+      onLongPress={props.onLongPress}
+      accessibilityHint="Hold to change the name or add an emoji"
     >
       <ProviderIcon
         iconUrl={props.option.providerIconUrl}
@@ -261,6 +264,7 @@ function QuickModelSheetContent(props: {
             ) : (
               <ScrollView
                 horizontal
+                keyboardShouldPersistTaps="handled"
                 bounces={false}
                 contentContainerStyle={{ gap: 6, paddingHorizontal: 1 }}
                 showsHorizontalScrollIndicator={false}
@@ -270,6 +274,7 @@ function QuickModelSheetContent(props: {
                     key={option.key}
                     option={option}
                     selected={option.key === current?.key}
+                    onLongPress={() => session.renameModel(option)}
                     onPress={() => {
                       session.selectModelNow(option);
                     }}
@@ -350,7 +355,7 @@ function QuickModelSheetContent(props: {
             </View>
 
             <Text className="pb-1 pt-2 text-center text-3xs text-foreground-muted">
-              Applies instantly · tap outside to close
+              Applies instantly · hold a model to add an emoji or rename
             </Text>
           </ScrollView>
         </View>
