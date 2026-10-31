@@ -108,6 +108,14 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-10-31 — Quick model switching works in new-task drafts
+
+- A new-task draft reuses the thread composer, but its quick model sheet wrote settings to the
+  synthetic draft thread instead of the flow draft the task starts from. Picking a model,
+  reasoning level or runtime now updates the draft itself, so the chip and the started task agree.
+- Where: `apps/mobile/src/features/threads/ThreadComposer.tsx`,
+  `apps/mobile/src/features/threads/composerSettingsKey.ts`.
+
 ### 2026-10-31 — Release APK version survives native cache reuse
 
 - The Android release job stamps `versionName` in the generated Gradle project before every
@@ -255,6 +263,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `lib/modelOptions.ts`, `app.config.ts`;
   `apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts`;
   `.github/workflows/sidebar-desktop.yml`.
+
 ### 2026-10-31 — Phone model picker and machine labels
 
 - Quick-switch model taps pass through the horizontal scroll view while the keyboard is open.

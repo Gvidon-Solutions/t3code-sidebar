@@ -67,6 +67,7 @@ import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { themeColorWithAlpha } from "../../lib/mobileTheme";
 import { armAgentAwarenessLiveActivityForLocalWork } from "../agent-awareness/remoteRegistration";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { resolveComposerSettingsKey } from "./composerSettingsKey";
 import {
   getComposerDraftSnapshot,
   composerDraftsAtom,
@@ -457,6 +458,11 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
   const [previewVideo, setPreviewVideo] = useState<VideoPreviewSource | null>(null);
   const composerOwnerKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
   const composerDraftKey = props.draftKey ?? composerOwnerKey;
+  const composerSettingsKey = resolveComposerSettingsKey({
+    isDraft: props.isDraft,
+    draftKey: props.draftKey,
+    threadKey: composerOwnerKey,
+  });
   const { text: draftMessage, attachments: draftAttachments } = useComposerDraft(composerDraftKey);
   const queuedEdit = props.queuedEdit ?? null;
   const hasContent =
@@ -805,10 +811,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     capabilities: currentModelOption?.capabilities,
     selections: currentModelSelection.options,
   });
-  // Sidebar fork: the quick model sheet edits the thread's draft settings in place.
+  // Sidebar fork: the quick model sheet edits the composer's draft settings in place.
   const updateQuickModelSelection = (selection: ModelSelection) =>
     updateThreadDraftModelSelection(
-      composerOwnerKey,
+      composerSettingsKey,
       selection,
       props.serverConfig?.providers ?? [],
     );
@@ -836,7 +842,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     },
     runtimeMode: props.selectedThread.runtimeMode,
     onUpdateRuntimeMode: (runtimeMode) =>
-      updateComposerDraftSettings(composerOwnerKey, { runtimeMode }),
+      updateComposerDraftSettings(composerSettingsKey, { runtimeMode }),
   } satisfies ThreadSettingsSessionProps;
   const openSettings = () => {
     settingsSheetPresentation.open();
