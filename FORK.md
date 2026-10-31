@@ -108,6 +108,13 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-10-31 — Release APK version survives native cache reuse
+
+- The Android release job stamps `versionName` in the generated Gradle project before every
+  build, including cache hits. It rejects a missing version field or invalid release version;
+  `versionCode` stays 1 so installing over another fork build keeps its data.
+- Where: `.github/workflows/sidebar-desktop.yml`.
+
 ### 2026-10-30 — Upstream release v0.1.5
 
 - **What.** Brings in upstream's `v0.1.4` and `v0.1.5` (286 commits past the v0.1.3 sync). A

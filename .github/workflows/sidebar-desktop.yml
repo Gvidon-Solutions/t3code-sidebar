@@ -339,6 +339,21 @@ jobs:
           export T3_ANDROID_KEYSTORE="$RUNNER_TEMP/release.keystore"
           printf '%s' "$T3_ANDROID_KEYSTORE_BASE64" | base64 -d > "$T3_ANDROID_KEYSTORE"
           cd apps/mobile/android
+          # The cached native project contains the version from its first prebuild.
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'app/build.gradle';
+          const version = process.env.T3_SIDEBAR_VERSION;
+          if (!/^\d+\.\d+\.\d+-sidebar\.\d+$/.test(version ?? '')) {
+            throw new Error('Missing or invalid sidebar release version');
+          }
+          const source = fs.readFileSync(path, 'utf8');
+          const pattern = /\bversionName\s+(['"])[^'"\r\n]*\1/g;
+          if ([...source.matchAll(pattern)].length !== 1) {
+            throw new Error('Expected exactly one Android versionName');
+          }
+          fs.writeFileSync(path, source.replace(pattern, `versionName "${version}"`));
+          NODE
           ./gradlew assembleRelease \
             -PreactNativeArchitectures="$ANDROID_ARCH" \
             -Pandroid.enableMinifyInReleaseBuilds=false \
