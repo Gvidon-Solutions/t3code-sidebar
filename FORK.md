@@ -22,8 +22,8 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream release `v0.1.5` (`6d450a4284`, tagged 2026-10-29) on
-  2026-10-30 (merge into `ws`); from now on only stable upstream releases are merged.
+- **Base.** Last synced with upstream release `v0.1.6` (`2359643cff`, tagged 2026-10-31) on
+  2026-11-01 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
   above: CI reads it from this line.
@@ -108,6 +108,38 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-01 — Upstream release v0.1.6
+
+- **What.** Brings in upstream's `v0.1.6` (521 changes past the v0.1.5 sync). Side chats answer
+  without derailing the main thread; favorite projects can be pinned and old ones archived;
+  local commits show in the Diff pane; 1Password supplies provider and source-control
+  credentials; the Android Usage page survives layout changes; and the terminal keeps focus on
+  hardware Enter. Upstream also reworked file previews with a paged PDF viewer and file cards;
+  the fork keeps its continuous `PdfDocumentView`. Plus many server, provider, desktop and
+  mobile fixes and performance work.
+- **How.** Side chats join the fork's imported-thread fork path in the orchestrator, so both
+  the legacy history copy and upstream's digest-backed side chat work. Composer slash commands
+  keep the fork's `/voice` next to upstream's `/side` and `/btw`. The inbox keeps its
+  attribution and uses upstream's presentation text for context chips. The phone keeps the
+  fork's Home-only root and compact composer; upstream's Usage-preservation fix applies in
+  split view, and the test now covers only that path. The Android terminal takes upstream's
+  `TerminalEnterListener`, which already swallows the hardware Enter key-up, so the fork's
+  custom else branch is gone. `PdfDocumentView` stays; upstream's workspace-PDF tests for its
+  paged `PdfViewer` are dropped. The agent context budget takes upstream's new baseline plus
+  the fork's measured additions. The scratch environment label comes from the connected
+  environment again. `forceStopThread` joins the guarded RPC scopes beside the fork's inbox
+  methods.
+- **Where.** `apps/server/src/orchestration-v2/{Orchestrator,ThreadForkService.test,Adapters/CodexAdapterV2.test}.ts`,
+  `apps/mobile/src/features/workspace/{WorkspaceRootScreen.android,workspace-tabs-state.test}.tsx`,
+  `apps/mobile/src/features/threads/{ThreadComposer,ThreadFeed,NewTaskRouteScreen}.tsx`,
+  `apps/mobile/modules/t3-terminal/android/.../T3TerminalView.kt`,
+  `apps/web/src/components/chat/{ChatComposer,TimelineUserMessageRow,useComposerMenuItems}.tsx`,
+  `apps/web/src/components/files/{BrowserDocumentFrame,AttachmentFilePreview.browser.test}.tsx`,
+  `apps/web/src/{composer-logic,composer-logic.test}.ts`, `apps/web/src/hooks/useThreadActionMenu.ts`,
+  `packages/client-runtime/src/userMessage.ts`, `packages/contracts/src/clientRpcPermissions.ts`,
+  `packages/provider-core/src/server/orchestrationInstructions.ts`,
+  `apps/server/src/provider/agentContextBudget.json`.
+
 ### 2026-11-01 — APK install survives the system's cache cleanup
 
 - **What.** Settings › About › Version history no longer fails with "The file is no longer
@@ -137,6 +169,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `apps/mobile/src/features/settings/SettingsProjectGroupingRouteScreen.tsx`,
   `apps/mobile/src/persistence/mobile-preferences.ts`,
   `apps/web/src/components/settings/SettingsPanels.logic.ts`.
+
 ### 2026-10-31 — Quick model switching works in new-task drafts
 
 - A new-task draft reuses the thread composer, but its quick model sheet wrote settings to the

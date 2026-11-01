@@ -1,15 +1,7 @@
-import { type EnvironmentId, type InboxIssueId, parseInboxDelivery } from "@t3tools/contracts";
+import { type EnvironmentId, type InboxIssueId } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 
 import { InlineButton } from "../ui/button";
-
-/** Fork: an inbox delivery as the thread shows it, without the header and footer the agent reads. */
-export function withInboxMessageText<M extends { readonly id?: string; readonly text: string }>(
-  message: M,
-): M {
-  const inbox = parseInboxDelivery(message);
-  return inbox === null ? message : { ...message, text: inbox.text };
-}
 
 /**
  * Fork: the label above a thread message the inbox delivered: the owner's

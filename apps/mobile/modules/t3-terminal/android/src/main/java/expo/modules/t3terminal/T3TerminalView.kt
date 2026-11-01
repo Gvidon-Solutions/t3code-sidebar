@@ -271,23 +271,12 @@ class T3TerminalView(context: Context, appContext: AppContext) : ExpoView(contex
       InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
       InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
     inputView.setPadding(0, 0, 0, 0)
-    inputView.setOnEditorActionListener { _, actionId, event ->
-      if (readOnly) return@setOnEditorActionListener true
-      val isKeyUp = event?.action == KeyEvent.ACTION_UP
-      val isImeSend = actionId == EditorInfo.IME_ACTION_SEND && !isKeyUp
-      val isHardwareEnter = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
-        event.action == KeyEvent.ACTION_DOWN
-      val isEnter = isImeSend || isHardwareEnter
-      if (isEnter) {
+    inputView.setOnEditorActionListener(
+      TerminalEnterListener({ readOnly }) {
         // Enter must send CR: raw-mode TUIs treat LF as Ctrl+J (insert newline).
         onInput(mapOf("data" to "\r"))
-        true
-      } else {
-        // Swallow the hardware Enter's key-up too: left unhandled, Android moves focus to
-        // the next field, such as the chat composer on the thread pager's neighbouring page.
-        event?.keyCode == KeyEvent.KEYCODE_ENTER
-      }
-    }
+      },
+    )
     inputView.setOnKeyListener { _, keyCode, event ->
       if (readOnly) return@setOnKeyListener true
       if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
