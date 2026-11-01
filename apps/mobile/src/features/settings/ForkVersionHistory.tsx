@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
-import { openAttachmentInViewer } from "../../lib/attachmentDownload";
+import { installApkFromUrl } from "../../lib/attachmentDownload";
 import { SettingsSection } from "./components/SettingsSection";
 import { compareForkVersionsNewestFirst, downloadPercent } from "./forkVersions";
 
@@ -12,6 +12,7 @@ interface ForkApkRelease {
   readonly publishedAt: string;
   readonly apkUrl: string;
   readonly apkName: string;
+  readonly apkSizeBytes: number;
 }
 
 const RELEASE_TAG = /^sidebar-v(\d+\.\d+\.\d+-sidebar\.\d+)$/;
@@ -26,7 +27,7 @@ async function listForkApkReleases(repo: string, signal: AbortSignal): Promise<F
     tag_name: string;
     draft: boolean;
     published_at: string | null;
-    assets: ReadonlyArray<{ name: string; browser_download_url: string }>;
+    assets: ReadonlyArray<{ name: string; browser_download_url: string; size: number }>;
   }>;
   const apks = releases.flatMap((release) => {
     const version = RELEASE_TAG.exec(release.tag_name)?.[1];
@@ -38,6 +39,7 @@ async function listForkApkReleases(repo: string, signal: AbortSignal): Promise<F
             publishedAt: release.published_at ?? "",
             apkUrl: apk.browser_download_url,
             apkName: apk.name,
+            apkSizeBytes: apk.size,
           },
         ]
       : [];
@@ -96,12 +98,13 @@ export function ForkVersionHistorySection() {
             const controller = new AbortController();
             downloadController.current = controller;
             setDownload({ version: release.version, percent: null });
-            void openAttachmentInViewer({
+            void installApkFromUrl({
               uri: release.apkUrl,
               attachment: {
                 name: release.apkName,
                 mimeType: "application/vnd.android.package-archive",
               },
+              expectedBytes: release.apkSizeBytes,
               signal: controller.signal,
               onProgress: (progress) => {
                 const percent = downloadPercent(progress);

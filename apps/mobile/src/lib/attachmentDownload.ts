@@ -6,6 +6,10 @@ import { beginForegroundHandoff } from "./foreground-handoff";
 import { uuidv4 } from "./uuid";
 
 const ATTACHMENT_DOWNLOAD_DIRECTORY = "t3-attachment-downloads";
+// APKs go to documents, not cache: Android trims app cache when storage runs low,
+// and it can drop a downloaded APK between the download and the installer opening it.
+const INSTALLER_DOWNLOAD_DIRECTORY = "t3-installer-downloads";
+const INSTALLER_SPACE_MARGIN_BYTES = 64 * 1024 * 1024;
 const DOWNLOAD_RETENTION_MS = 24 * 60 * 60_000;
 const DOWNLOAD_DIRECTORY_NAME = /^(\d+)-[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 const activeDirectories = new Set<string>();
@@ -205,6 +209,89 @@ export async function openAttachmentInViewer(input: {
   } finally {
     cached.preview.dispose();
   }
+}
+
+/**
+ * Downloads an APK into the app's documents directory and hands it to Android's
+ * installer. Documents survive the system's cache trimming, so the file is still
+ * there when the installer reads it; the next install replaces it.
+ */
+export async function installApkFromUrl(input: {
+  readonly uri: string;
+  readonly attachment: AttachmentFileMetadata;
+  readonly expectedBytes?: number | null;
+  readonly signal: AbortSignal;
+  readonly onProgress?: (progress: {
+    readonly bytesWritten: number;
+    readonly totalBytes: number;
+  }) => void;
+}): Promise<void> {
+  const { Directory, File, Paths } = await import("expo-file-system");
+  const { requireNativeModule } = await import("expo");
+  if (input.signal.aborted) return;
+
+  const directory = new Directory(Paths.document, INSTALLER_DOWNLOAD_DIRECTORY);
+  directory.create({ idempotent: true, intermediates: true });
+  for (const entry of directory.list()) {
+    try {
+      entry.delete();
+    } catch (error) {
+      console.warn("[installer-downloads] could not remove an earlier APK", error);
+    }
+  }
+
+  const expectedBytes = input.expectedBytes ?? 0;
+  if (
+    expectedBytes > 0 &&
+    Paths.availableDiskSpace > 0 &&
+    Paths.availableDiskSpace < expectedBytes + INSTALLER_SPACE_MARGIN_BYTES
+  ) {
+    throw new Error(
+      `Not enough free storage: this build needs ${formatMegabytes(expectedBytes)} and the device has ${formatMegabytes(Paths.availableDiskSpace)}. Free up space and try again.`,
+    );
+  }
+
+  const file = new File(directory, downloadFileName(input.attachment.name));
+  await File.downloadFileAsync(input.uri, file, {
+    signal: input.signal,
+    idempotent: true,
+    ...(input.onProgress ? { onProgress: input.onProgress } : {}),
+  });
+  if (input.signal.aborted) return;
+
+  const size = file.size ?? 0;
+  if (!file.exists || size === 0) {
+    throw new Error(
+      "The APK finished downloading but the file is gone. Free up storage and try again.",
+    );
+  }
+  if (expectedBytes > 0 && size !== expectedBytes) {
+    throw new Error(
+      `The APK download is incomplete (${formatMegabytes(size)} of ${formatMegabytes(expectedBytes)}). Try again.`,
+    );
+  }
+
+  const endHandoff = beginForegroundHandoff();
+  try {
+    await requireNativeModule<{ openFile(uri: string, mimeType: string): Promise<void> }>(
+      "T3NativeControls",
+    ).openFile(file.uri, "application/vnd.android.package-archive");
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    if (/no longer available/i.test(message)) {
+      throw new Error(
+        "Android removed the downloaded APK before the installer opened it. Free up storage and try again.",
+        { cause },
+      );
+    }
+    throw cause;
+  } finally {
+    endHandoff();
+  }
+}
+
+function formatMegabytes(bytes: number): string {
+  return `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB`;
 }
 
 /** The caller owns this cached file until disposal, unless it has been shared with another app. */
