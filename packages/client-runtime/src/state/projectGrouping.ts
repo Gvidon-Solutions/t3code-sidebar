@@ -90,6 +90,11 @@ export function getProjectOrderKey(
   return derivePhysicalProjectKey(project);
 }
 
+function deriveTitleScopedKey(project: Pick<EnvironmentProject, "title">): string | null {
+  const title = project.title.trim().replace(/\s+/g, " ").toLowerCase();
+  return title.length === 0 ? null : `title:${title}`;
+}
+
 function resolveProjectGroupingMode(
   project: Pick<EnvironmentProject, "environmentId" | "workspaceRoot">,
   settings: ProjectGroupingSettings,
@@ -129,7 +134,7 @@ function deriveRepositoryScopedKey(
 function deriveLogicalProjectKey(
   project: Pick<
     EnvironmentProject,
-    "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
+    "environmentId" | "id" | "title" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
   >,
   options?: {
     readonly groupingMode?: SidebarProjectGroupingMode;
@@ -140,6 +145,9 @@ function deriveLogicalProjectKey(
   const groupingMode = options?.groupingMode ?? "repository";
   if (groupingMode === "separate") {
     return derivePhysicalProjectKey(project);
+  }
+  if (groupingMode === "title") {
+    return deriveTitleScopedKey(project) ?? derivePhysicalProjectKey(project);
   }
 
   return (
@@ -152,7 +160,7 @@ function deriveLogicalProjectKey(
 export function deriveLogicalProjectKeyFromSettings(
   project: Pick<
     EnvironmentProject,
-    "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
+    "environmentId" | "id" | "title" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
   >,
   settings: ProjectGroupingSettings,
   options?: { readonly groupScratchProjects?: boolean },
@@ -168,7 +176,7 @@ export function resolveScratchProjectScopeKey(
   projects: ReadonlyArray<
     Pick<
       EnvironmentProject,
-      "environmentId" | "id" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
+      "environmentId" | "id" | "title" | "workspaceRoot" | "repositoryIdentity" | "isScratch"
     >
   >,
   settings: ProjectGroupingSettings = {

@@ -69,6 +69,7 @@ const DEFAULT_SIDEBAR_THREAD_SORT_ORDER: SidebarThreadSortOrder = "updated_at";
 export const SidebarProjectGroupingMode = Schema.Literals([
   "repository",
   "repository_path",
+  "title",
   "separate",
 ]);
 export type SidebarProjectGroupingMode = typeof SidebarProjectGroupingMode.Type;

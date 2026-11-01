@@ -5,6 +5,8 @@ import {
   backgroundActivitySharedPolicySettings,
   getChangedBrowserSettingLabels,
   hasChangedBackgroundActivitySettings,
+  isProjectGroupingEnabled,
+  projectGroupingModeFromToggle,
 } from "./SettingsPanels.logic";
 
 describe("background activity settings restore", () => {
@@ -86,5 +88,13 @@ describe("getChangedBrowserSettingLabels", () => {
         browserCustomSearchUrl: "https://search.example/?q=%s",
       }),
     ).toEqual(["Search engine"]);
+  });
+});
+
+describe("project grouping toggle", () => {
+  it("restores name grouping when the toggle is cycled", () => {
+    expect(isProjectGroupingEnabled("title")).toBe(true);
+    expect(projectGroupingModeFromToggle(false, "title")).toBe("separate");
+    expect(projectGroupingModeFromToggle(true, "title")).toBe("title");
   });
 });

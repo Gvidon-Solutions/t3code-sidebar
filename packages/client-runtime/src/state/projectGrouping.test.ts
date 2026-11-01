@@ -395,3 +395,34 @@ describe("sortProjectsByGroupOrder", () => {
     expect(sorted.map((entry) => entry.environmentId)).toEqual([remote, environmentId]);
   });
 });
+
+describe("grouping by name", () => {
+  it("merges the same project name across machines, whatever its folder", () => {
+    const remoteEnvironmentId = EnvironmentId.make("remote");
+    const projects = [
+      makeProject("wrapper", "/home/user/Repos/publ2025-calfwrapper", {
+        title: "CALF Wrapper",
+        repositoryIdentity: null,
+      }),
+      makeProject("wrapper-remote", "/root/mnt/gvidon/submission-5", {
+        title: "  CALF   wrapper ",
+        environmentId: remoteEnvironmentId,
+        repositoryIdentity: null,
+      }),
+      makeProject("envelope", "/home/user/Repos/publ2024-calf", {
+        title: "CALF Envelope",
+        repositoryIdentity: null,
+      }),
+    ];
+
+    expect(buildProjectGroups({ projects, settings: settings("repository") })).toHaveLength(3);
+    const groups = buildProjectGroups({ projects, settings: settings("title") });
+    expect(groups).toHaveLength(2);
+    const wrapper = groups.find((group) => group.label !== "CALF Envelope")!;
+    expect(wrapper.label).toBe("CALF Wrapper");
+    expect(wrapper.memberProjectRefs).toEqual([
+      { environmentId, projectId: ProjectId.make("wrapper") },
+      { environmentId: remoteEnvironmentId, projectId: ProjectId.make("wrapper-remote") },
+    ]);
+  });
+});

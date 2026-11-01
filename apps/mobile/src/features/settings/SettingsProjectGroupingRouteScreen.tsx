@@ -30,6 +30,11 @@ const GROUPING_OPTIONS: ReadonlyArray<{
     description: "Keep monorepo paths separate.",
   },
   {
+    mode: "title",
+    label: "Group by name",
+    description: "Projects with the same name appear as one, on any machine.",
+  },
+  {
     mode: "separate",
     label: "Keep separate",
     description: "Show every workspace as its own project.",

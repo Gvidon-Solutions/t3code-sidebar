@@ -108,6 +108,35 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-01 — APK install survives the system's cache cleanup
+
+- **What.** Settings › About › Version history no longer fails with "The file is no longer
+  available" after the download finishes. The APK is downloaded into the app's documents
+  directory instead of cache, its size is checked against the release asset before Android's
+  installer opens, and a low-storage or vanished file now explains itself instead of exposing
+  the native error.
+- **How.** Android trims app cache when storage runs low and can unlink a freshly downloaded
+  APK while it is being written, so the file was gone by the time `T3NativeControls.openFile`
+  checked it. `installApkFromUrl` keeps one APK in `t3-installer-downloads` under
+  `Paths.document`, replaces it on the next install, checks free space from
+  `Paths.availableDiskSpace` and rewrites the native "no longer available" failure.
+- **Where.** `apps/mobile/src/lib/attachmentDownload.ts`,
+  `apps/mobile/src/features/settings/ForkVersionHistory.tsx`.
+
+### 2026-11-01 — Group projects by name across machines
+
+- **What.** A new project-grouping mode, "Group by name": projects with the same name appear as
+  one sidebar row on any machine, whatever their folders or git identities. It fixes the phone
+  showing, for example, two "CALF Wrapper" folders because one copy lives on gvidon and the
+  other on Operalia over SSHFS with no detected repository.
+- **How.** `deriveTitleScopedKey` normalizes the title (trim, collapse whitespace, lower case) and
+  becomes the logical key for the `title` mode; grouping is client-side, so older servers need no
+  change. Available in Settings › Organization on the phone.
+- **Where.** `packages/contracts/src/settings.ts`,
+  `packages/client-runtime/src/state/projectGrouping.ts`,
+  `apps/mobile/src/features/settings/SettingsProjectGroupingRouteScreen.tsx`,
+  `apps/mobile/src/persistence/mobile-preferences.ts`,
+  `apps/web/src/components/settings/SettingsPanels.logic.ts`.
 ### 2026-10-31 — Quick model switching works in new-task drafts
 
 - A new-task draft reuses the thread composer, but its quick model sheet wrote settings to the

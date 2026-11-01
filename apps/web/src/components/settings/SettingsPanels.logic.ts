@@ -27,16 +27,17 @@ export function projectGroupingModeFromToggle(
   lastEnabledMode: SidebarProjectGroupingMode = "repository",
 ): SidebarProjectGroupingMode {
   if (!enabled) return "separate";
-  return lastEnabledMode === "repository_path" ? "repository_path" : "repository";
+  return lastEnabledMode === "repository_path" || lastEnabledMode === "title"
+    ? lastEnabledMode
+    : "repository";
 }
 
 const LAST_ENABLED_PROJECT_GROUPING_MODE_KEY = "t3code:last-enabled-project-grouping-mode";
 
 export function readLastEnabledProjectGroupingMode(): SidebarProjectGroupingMode {
   try {
-    return localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY) === "repository_path"
-      ? "repository_path"
-      : "repository";
+    const stored = localStorage.getItem(LAST_ENABLED_PROJECT_GROUPING_MODE_KEY);
+    return stored === "repository_path" || stored === "title" ? stored : "repository";
   } catch {
     return "repository";
   }
