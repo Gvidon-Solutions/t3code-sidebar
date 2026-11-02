@@ -133,6 +133,10 @@ describe("serverSettings helpers", () => {
       alwaysShow: [],
       alwaysQuiet: [],
       quietAfterDays: 5,
+      machines: {},
+      projectAliases: {},
+      projectMounts: {},
+      projectMountStatus: {},
     };
     const assigned = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
       sidebarWorkspaces: { ...base, assignments: { "github.com/acme/app": "personal" } },

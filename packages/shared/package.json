@@ -143,6 +143,10 @@
       "types": "./src/serverSettings.ts",
       "import": "./src/serverSettings.ts"
     },
+    "./meshLayout": {
+      "types": "./src/meshLayout/index.ts",
+      "import": "./src/meshLayout/index.ts"
+    },
     "./backgroundActivitySettings": {
       "types": "./src/backgroundActivitySettings.ts",
       "import": "./src/backgroundActivitySettings.ts"

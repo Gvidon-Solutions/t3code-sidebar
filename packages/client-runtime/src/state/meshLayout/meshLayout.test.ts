@@ -16,12 +16,12 @@ import {
   setProjectFoldMode,
 } from "../sidebarWorkspaces.ts";
 import { buildProjectGroups } from "../projectGrouping.ts";
-import { tick, receive, compare } from "./hlc.ts";
-import { between, generateN } from "./fractionalIndex.ts";
+import { tick, receive, compare } from "./index.ts";
+import { between, generateN } from "./index.ts";
 import { merge, apply, keys, entriesNewerThan, type MeshLayoutDocument } from "./index.ts";
 import { diff } from "./index.ts";
 import { materialize } from "./index.ts";
-import { importLegacy, mergeLegacyConfigs } from "./importLegacy.ts";
+import { importLegacy, mergeLegacyConfigs } from "./index.ts";
 import * as logical from "./logicalProjects.ts";
 import gvidon from "./fixtures/gvidon.json" with { type: "json" };
 import operalia from "./fixtures/operalia.json" with { type: "json" };
