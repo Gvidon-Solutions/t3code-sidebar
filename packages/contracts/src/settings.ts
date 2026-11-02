@@ -1299,6 +1299,29 @@ export const ServerSettings = Schema.Struct({
    * Beta: links to the user's other machines, both ways. Off refuses new links, calls over links
    * and tasks on another machine; tasks already running there finish.
    */
+  replicasEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  mutagenPath: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  replicaRoot: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  replicaIgnores: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed([
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".pytest_cache",
+        "dist",
+        "build",
+        "target",
+        ".next",
+        ".turbo",
+        "coverage",
+        ".t3",
+        ".claude/worktrees",
+        ".DS_Store",
+      ]),
+    ),
+  ),
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
@@ -1661,6 +1684,10 @@ export const ServerSettingsPatch = Schema.Struct({
   sidebarWorkspaces: Schema.optionalKey(SidebarWorkspacesConfig),
   snoozePresets: Schema.optionalKey(SnoozePresetSettings),
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),
+  replicasEnabled: Schema.optionalKey(Schema.Boolean),
+  mutagenPath: Schema.optionalKey(Schema.String),
+  replicaRoot: Schema.optionalKey(Schema.String),
+  replicaIgnores: Schema.optionalKey(Schema.Array(Schema.String)),
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({
