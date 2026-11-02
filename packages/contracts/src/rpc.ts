@@ -1,3 +1,4 @@
+import { WsReplicasStatusRpc, WsReplicasRetryRpc } from "./meshLayout.ts";
 import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
@@ -1983,6 +1984,8 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 ) {}
 
 export const WsRpcGroup = RpcGroup.make(
+  WsReplicasStatusRpc,
+  WsReplicasRetryRpc,
   WsGuestShareCreateRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
