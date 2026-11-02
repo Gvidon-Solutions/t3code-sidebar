@@ -11,7 +11,11 @@ import {
 } from "@t3tools/client-runtime/state/shell";
 import { pickableProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
-import { type EnvironmentId, type SidebarProjectGroupingMode } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  type SidebarProjectGroupingMode,
+} from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { use, useEffect, useRef, useState, type ComponentProps } from "react";
 import {
@@ -84,6 +88,12 @@ import { createSwipeRowActivation } from "./swipe-row-activation";
 import { SwipeableScrollGateProvider, useSwipeableScrollGate } from "./thread-swipe-actions";
 import { useFabScroll } from "./FabScrollContext";
 import { useWorkspaceHome } from "../workspaces/useWorkspaceHome";
+import {
+  machineSubactions,
+  mobileMachineChoices,
+  type MobilePendingReplicaItem,
+} from "../workspaces/replicas.logic";
+import { MachinesSheet } from "../workspaces/MachinesSheet";
 import { FolderDragHost } from "../workspaces/WorkspaceFolderDrag";
 import {
   WorkspaceDock,
@@ -99,6 +109,18 @@ import {
 } from "../workspaces/workspaceNavigator";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { ThreadListFilters } from "./ThreadListFilters";
+import {
+  planThreadOnMachine,
+  removeRepresentation,
+  replicaDriverEnvironment,
+  replicaProjectId,
+  setPrimary,
+  type PendingReplicaRow,
+} from "@t3tools/client-runtime/state/mesh-layout";
+import { useServerConfigs } from "../../state/entities";
+import { replicaStatusEnvironment, useReplicaStatuses } from "../../state/meshReplicas";
+import { useAtomCommand } from "../../state/use-atom-command";
+import * as Dialog from "../../components/ui/Dialog";
 
 interface HomeScreenProps {
   readonly projects: ReadonlyArray<EnvironmentProject>;
@@ -382,6 +404,136 @@ export function HomeScreen(props: HomeScreenProps) {
     projectGroupingMode: props.projectGroupingMode,
   });
   const workspaceHome = useWorkspaceHome({ projectScopes, threads: props.threads });
+  const replicaStatuses = useReplicaStatuses();
+  const serverConfigs = useServerConfigs();
+  const replicaConfig = workspaceHome.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
+  const machineChoices = mobileMachineChoices(
+    replicaConfig,
+    props.environments.map((environment) => ({
+      environmentId: environment.environmentId,
+      label: environment.label,
+      connected: environment.connectionState === "connected",
+      supportsMesh:
+        serverConfigs.get(environment.environmentId)?.environment.capabilities.meshLayout === true,
+    })),
+  );
+  const machineActions = machineSubactions(machineChoices);
+  const retryReplicaCommand = useAtomCommand(replicaStatusEnvironment.retry, {
+    label: "replica retry",
+    reportFailure: true,
+  });
+  const [machinesProjectKey, setMachinesProjectKey] = useState<string | null>(null);
+  const [pendingMachineStarts, setPendingMachineStarts] = useState<
+    Record<string, { readonly projectKey: string; readonly environmentId: string }>
+  >({});
+  const seedOfProject = (projectKey: string) => {
+    const scope = projectScopes.find((candidate) => candidate.key === projectKey);
+    const member = scope?.projects[0];
+    return member
+      ? { environmentId: member.environmentId, path: member.workspaceRoot, projectId: member.id }
+      : null;
+  };
+  const planOnMachine = (projectKey: string, environmentId: string) => {
+    const seed = seedOfProject(projectKey);
+    if (!seed) return null;
+    return planThreadOnMachine({
+      config: replicaConfig,
+      logicalKey: projectKey,
+      targetEnvironmentId: environmentId,
+      seed,
+    });
+  };
+  const startOnMachine = (projectKey: string, environmentId: string) => {
+    const plan = planOnMachine(projectKey, environmentId);
+    if (!plan) return;
+    if (plan.config !== replicaConfig) workspaceHome.updateConfig(() => plan.config);
+    if (plan.projectId !== null) {
+      const project = props.projects.find(
+        (candidate) =>
+          String(candidate.environmentId) === environmentId &&
+          String(candidate.id) === plan.projectId,
+      );
+      if (project) props.onNewThreadInProject(project);
+      return;
+    }
+    const key = `${projectKey}:${environmentId}`;
+    setPendingMachineStarts((current) => ({
+      ...current,
+      [key]: { projectKey, environmentId },
+    }));
+  };
+  const addReplicaOn = (projectKey: string, environmentId: string) => {
+    const plan = planOnMachine(projectKey, environmentId);
+    if (plan && plan.config !== replicaConfig) workspaceHome.updateConfig(() => plan.config);
+  };
+  const retryPendingItem = (item: MobilePendingReplicaItem) => {
+    if (item.retryEnvironmentId === null) {
+      Dialog.alert(
+        "Can't retry this replica",
+        `Add an ssh route between ${item.label} and its source in Settings › Machines.`,
+      );
+      return;
+    }
+    void retryReplicaCommand({
+      environmentId: EnvironmentId.make(item.retryEnvironmentId),
+      input: { logicalKey: item.projectKey, environmentId: item.environmentId },
+    });
+  };
+  const retryReplicaRow = (row: PendingReplicaRow) => {
+    const driver = replicaDriverEnvironment(replicaConfig, row.rep);
+    if (driver === null) {
+      Dialog.alert(
+        "Can't retry this replica",
+        `Add an ssh route between ${row.rep.environmentId} and ${row.rep.source ?? "its source"} in Settings › Machines.`,
+      );
+      return;
+    }
+    void retryReplicaCommand({
+      environmentId: EnvironmentId.make(driver),
+      input: { logicalKey: row.logicalKey, environmentId: row.rep.environmentId },
+    });
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- follows the layout until a mounted project can open its draft
+  useEffect(() => {
+    const config = workspaceHome.config;
+    if (config === null) return;
+    const next = { ...pendingMachineStarts };
+    let opened = false;
+    for (const [key, intent] of Object.entries(next)) {
+      const projectId = replicaProjectId(
+        config,
+        replicaStatuses,
+        intent.projectKey,
+        intent.environmentId,
+      );
+      if (projectId === null) continue;
+      const project = props.projects.find(
+        (candidate) =>
+          String(candidate.environmentId) === intent.environmentId &&
+          String(candidate.id) === projectId,
+      );
+      if (!project) continue;
+      delete next[key];
+      opened = true;
+      // oxlint-disable-next-line react/exhaustive-effect-dependencies -- the handler is listed
+      props.onNewThreadInProject(project);
+    }
+    if (opened) {
+      // oxlint-disable-next-line react/set-state-in-effect -- clears the intent after the external layout arrives
+      setPendingMachineStarts(next);
+    }
+  }, [
+    pendingMachineStarts,
+    props.onNewThreadInProject,
+    props.projects,
+    replicaStatuses,
+    workspaceHome.config,
+  ]);
+  const machinesTitle =
+    machinesProjectKey === null
+      ? ""
+      : (projectScopes.find((scope) => scope.key === machinesProjectKey)?.title ??
+        machinesProjectKey);
   const hasSearchQuery = props.searchQuery.trim().length > 0;
   const projectByKey = (() => {
     const map = new Map<string, EnvironmentProject>();
@@ -542,6 +694,10 @@ export function HomeScreen(props: HomeScreenProps) {
           onToggleWorkspace={workspaceHome.toggleProjectIn}
           onFoldMode={workspaceHome.setFoldMode}
           onNewThread={props.onNewThreadInProject}
+          machineSubactions={machineActions}
+          onNewThreadOnMachine={startOnMachine}
+          onOpenMachines={setMachinesProjectKey}
+          onRetryReplica={retryPendingItem}
         />
       ) : null;
     }
@@ -949,6 +1105,28 @@ export function HomeScreen(props: HomeScreenProps) {
         </SwipeableScrollGateProvider>
         {workspaceDock}
       </View>
+      {machinesProjectKey !== null ? (
+        <MachinesSheet
+          config={replicaConfig}
+          projectKey={machinesProjectKey}
+          title={machinesTitle}
+          liveStatuses={replicaStatuses}
+          machines={machineChoices}
+          onClose={() => setMachinesProjectKey(null)}
+          onAddReplica={(environmentId) => addReplicaOn(machinesProjectKey, environmentId)}
+          onMakePrimary={(environmentId) =>
+            workspaceHome.updateConfig((current) =>
+              setPrimary(current, machinesProjectKey, environmentId),
+            )
+          }
+          onRemove={(environmentId) =>
+            workspaceHome.updateConfig((current) =>
+              removeRepresentation(current, machinesProjectKey, environmentId),
+            )
+          }
+          onRetry={retryReplicaRow}
+        />
+      ) : null}
     </View>
   );
 }
