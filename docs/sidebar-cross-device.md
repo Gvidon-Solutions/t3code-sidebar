@@ -54,6 +54,7 @@ voice can do everything by name: "создай тред в проекте X на
 ## Architecture
 
 ### 1. Layout document = LWW-map CRDT (fork file `packages/shared/src/meshLayout/` or
+
 `packages/client-runtime/src/state/meshLayout/`, pure, no Effect services)
 
 - `Hlc` string `"<ms:13 digits>.<counter:5 digits>.<envId>"`, compared lexicographically;
@@ -126,6 +127,7 @@ voice can do everything by name: "создай тред в проекте X на
 
 Declarative and per machine: each server reconciles the `rep/*/<self>` entries whose
 `transport = "mutagen"` and `role = "replica"`.
+
 - Needs `machine/<self>.reach[source].ssh` (ssh alias/URL to the source machine) — configurable in
   Settings › Machines; local server settings: `mutagenPath` (default `mutagen`), `replicaRoot`
   (default "": same absolute path as the source when free, else `~/t3-replicas/<basename>`),
@@ -146,7 +148,6 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 - Reverse direction works the same: any machine can be a replica of any other; a project can have
   two primaries (`transport: git`, independent checkouts) and replicas of either.
 - Disabled unless `replicasEnabled` (server setting); requires a non-fenced caller.
-
 
 ### 5a. Who drives a session, and Mutagen availability (decided after the survey)
 
@@ -220,7 +221,6 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 [--primary] [--wait]`, `t3ctl new --project P --on <machine>`, `t3ctl find "words"` (all machines),
 `t3ctl open <thread>`; SKILL.md triggers with voice phrasing; the mesh paradigm documented once.
 
-
 ### 9. Files anywhere
 
 - Any file on any machine opens in the side panel's file viewer — in a project, outside projects,
@@ -265,18 +265,18 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 
 ## Stages and owners
 
-| Stage | Scope | Depends on |
-|---|---|---|
-| A — core | §1 pure CRDT lib, materialize/diff/importLegacy, §4 pure functions, exhaustive tests | — |
-| B — tags | §7 tags UI + Settings › Machines (reads materialized config; write path via current settings until C) | — |
-| C — server mesh | §2 store, RPC, replication over links, legacy compat | A |
-| D — clients | §3 web + mobile read/write via mesh, offline queue, §4 UI | A, C |
-| E — replicas | §5, §6 server + clients + MCP | A, C |
-| F — skills | §8 | C, E |
-| H — files | §9 | C |
-| I — mesh UI | §10 | C, D |
-| J — agents | §11 instructions + behaviour eval | F |
-| G — e2e | test bed and scenarios below; web (Playwright), Android (adb emulator), desktop build | all |
+| Stage           | Scope                                                                                                 | Depends on |
+| --------------- | ----------------------------------------------------------------------------------------------------- | ---------- |
+| A — core        | §1 pure CRDT lib, materialize/diff/importLegacy, §4 pure functions, exhaustive tests                  | —          |
+| B — tags        | §7 tags UI + Settings › Machines (reads materialized config; write path via current settings until C) | —          |
+| C — server mesh | §2 store, RPC, replication over links, legacy compat                                                  | A          |
+| D — clients     | §3 web + mobile read/write via mesh, offline queue, §4 UI                                             | A, C       |
+| E — replicas    | §5, §6 server + clients + MCP                                                                         | A, C       |
+| F — skills      | §8                                                                                                    | C, E       |
+| H — files       | §9                                                                                                    | C          |
+| I — mesh UI     | §10                                                                                                   | C, D       |
+| J — agents      | §11 instructions + behaviour eval                                                                     | F          |
+| G — e2e         | test bed and scenarios below; web (Playwright), Android (adb emulator), desktop build                 | all        |
 
 ## Test bed (E2E) — never the live gvidon/Operalia servers
 
