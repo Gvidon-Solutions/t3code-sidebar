@@ -5,6 +5,7 @@ import {
   type EnvironmentId,
   type ClientGuardedRpcTag,
   INBOX_WS_METHODS,
+  MESH_WS_METHODS,
   UI_REQUESTS_WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
   WS_METHODS,
@@ -65,6 +66,7 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof INBOX_WS_METHODS.subscribeIssue
   | typeof UI_REQUESTS_WS_METHODS.subscribe
   | typeof UI_REQUESTS_WS_METHODS.subscribeVoiceCommands
+  | typeof MESH_WS_METHODS.layoutSubscribe
   | typeof WS_METHODS.serverGetStorageCleanupReport
   | typeof WS_METHODS.serverGetDatabaseStorage
   | typeof WS_METHODS.subscribeTerminalMetadata

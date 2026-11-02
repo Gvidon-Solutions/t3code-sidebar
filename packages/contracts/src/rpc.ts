@@ -380,6 +380,7 @@ import {
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { INBOX_RPCS } from "./inbox.ts";
+import { MeshRpcs } from "./meshLayout.ts";
 import { UI_REQUESTS_RPCS } from "./uiRequests.ts";
 import {
   ProjectCloneActionInput,
@@ -2196,4 +2197,6 @@ export const WsRpcGroup = RpcGroup.make(
   ...INBOX_RPCS,
   // Fork: agents asking clients to show something.
   ...UI_REQUESTS_RPCS,
+  // Fork: the shared T3 Mesh layout document.
+  ...MeshRpcs,
 ).middleware(RpcScopeAuthorization);

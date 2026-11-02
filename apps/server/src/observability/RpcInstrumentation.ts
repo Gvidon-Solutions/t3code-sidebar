@@ -1,5 +1,6 @@
 import {
   INBOX_WS_METHODS,
+  MESH_WS_METHODS,
   UI_REQUESTS_WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
   WS_METHODS,
@@ -234,6 +235,11 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerConfig]: "server",
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
+  [MESH_WS_METHODS.layoutGet]: "mesh",
+  [MESH_WS_METHODS.layoutApply]: "mesh",
+  [MESH_WS_METHODS.layoutSubscribe]: "mesh",
+  [MESH_WS_METHODS.replicasStatus]: "mesh",
+  [MESH_WS_METHODS.replicasRetry]: "mesh",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";
