@@ -1,3 +1,4 @@
+import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { EnvironmentId, ProjectId, SourceControlProviderKind } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -121,6 +122,33 @@ function settings(
 }
 
 describe("buildProjectGroups", () => {
+  it("uses optional Mesh representations and aliases across machines", () => {
+    const projects = [
+      makeProject("one", "/one", { repositoryIdentity: null }),
+      makeProject("two", "/two", {
+        environmentId: EnvironmentId.make("remote"),
+        repositoryIdentity: null,
+      }),
+    ];
+    const layout = {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      projectAliases: { physical: "logical" },
+      projectMounts: {
+        physical: projects.map((p) => ({
+          environmentId: p.environmentId,
+          path: p.workspaceRoot,
+          transport: "git" as const,
+          role: "primary" as const,
+          createdAt: "",
+        })),
+      },
+    };
+    expect(buildProjectGroups({ projects, settings: settings("separate") })).toHaveLength(2);
+    const groups = buildProjectGroups({ projects, settings: settings("separate"), layout });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.key).toBe("logical");
+    expect(groups[0]?.memberProjectRefs).toHaveLength(2);
+  });
   it.each(["repository", "repository_path", "separate"] as const)(
     "keeps scratch project ownership separate by default in %s mode",
     (mode) => {

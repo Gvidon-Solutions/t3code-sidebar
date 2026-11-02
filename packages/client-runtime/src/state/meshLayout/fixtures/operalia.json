@@ -1,0 +1,116 @@
+{
+  "workspaces": [
+    {
+      "id": "main",
+      "name": "main",
+      "color": "#c27bd6"
+    },
+    {
+      "id": "fixture-0",
+      "name": "fixture-1",
+      "color": "#4fa9c9"
+    },
+    {
+      "id": "fixture-2",
+      "name": "fixture-3",
+      "color": "#e0795b"
+    },
+    {
+      "id": "fixture-4",
+      "name": "fixture-5",
+      "color": "#6d8cff"
+    },
+    {
+      "id": "fixture-6",
+      "name": "fixture-6",
+      "icon": "fixture-7",
+      "color": "#4fb58f"
+    },
+    {
+      "id": "fixture-8",
+      "name": "fixture-9",
+      "color": "#c77dff"
+    },
+    {
+      "id": "fixture-10",
+      "name": "fixture-11",
+      "color": "#d9a640"
+    }
+  ],
+  "assignments": {
+    "fixture-49:/fixtures/fixture-69": "main",
+    "fixture-49:/fixtures/fixture-50": "main",
+    "fixture-49:/fixtures/fixture-71": "main",
+    "github.com/fixtures/fixture-16": "main"
+  },
+  "placements": {
+    "fixture-49:/fixtures/fixture-69": ["main", "fixture-8"],
+    "fixture-49:/fixtures/fixture-50": ["main", "fixture-2"],
+    "fixture-49:/fixtures/fixture-71": ["main", "fixture-2"],
+    "github.com/fixtures/fixture-16": ["main"]
+  },
+  "rules": [
+    {
+      "match": "github.com/fixtures/fixture-44",
+      "workspace": "fixture-2"
+    },
+    {
+      "match": "github.com/fixtures/fixture-45",
+      "workspace": "fixture-2"
+    },
+    {
+      "match": "github.com/fixtures/fixture-46",
+      "workspace": "fixture-6"
+    },
+    {
+      "match": "github.com/fixtures/fixture-47",
+      "workspace": "fixture-6"
+    }
+  ],
+  "defaultWorkspace": "fixture-2",
+  "projectOrder": [],
+  "workspaceProjectOrder": {
+    "main": [
+      "fixture-49:/fixtures/fixture-71",
+      "fixture-49:/fixtures/fixture-69",
+      "fixture-49:/fixtures/fixture-50"
+    ],
+    "fixture-8": ["fixture-49:/fixtures/fixture-69"],
+    "fixture-2": [
+      "fixture-49:/fixtures/fixture-50",
+      "github.com/fixtures/fixture-37",
+      "fixture-18:/fixtures/fixture-39",
+      "fixture-18:/fixtures/fixture-52",
+      "github.com/fixtures/fixture-35",
+      "fixture-18:/fixtures/fixture-32",
+      "fixture-18:/fixtures/fixture-28",
+      "fixture-18:/fixtures/fixture-54",
+      "github.com/fixtures/fixture-26",
+      "github.com/fixtures/fixture-24",
+      "github.com/fixtures/fixture-25",
+      "github.com/fixtures/fixture-55",
+      "fixture-18:/fixtures/fixture-30",
+      "fixture-18:/fixtures/fixture-57",
+      "github.com/fixtures/fixture-16",
+      "fixture-18:/fixtures/fixture-21",
+      "github.com/fixtures/fixture-22",
+      "fixture-18:/fixtures/fixture-19",
+      "fixture-18:/fixtures/fixture-59",
+      "fixture-18:/fixtures/fixture-61",
+      "github.com/fixtures/fixture-23",
+      "fixture-18:/fixtures/fixture-63",
+      "github.com/fixtures/fixture-15",
+      "fixture-18:/fixtures/fixture-34",
+      "fixture-18:/fixtures/fixture-65"
+    ]
+  },
+  "workspaceFold": {
+    "main": {
+      "fixture-49:/fixtures/fixture-69": "active",
+      "fixture-49:/fixtures/fixture-50": "active"
+    }
+  },
+  "alwaysShow": [],
+  "alwaysQuiet": [],
+  "quietAfterDays": 5
+}
