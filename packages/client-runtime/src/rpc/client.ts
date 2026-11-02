@@ -448,3 +448,75 @@ export const runStream = <
   tag: TTag,
   input: EnvironmentRpcInput<TTag>,
 ) => runStreamGuarded(tag, input);
+
+// Fork: mesh RPCs are advertised by a server that may be newer than this client build, so the
+// method name is checked at runtime rather than registered in this build's `WsRpcGroup`.
+// Their payloads stay typed by `@t3tools/contracts`.
+
+/**
+ * Calls one RPC by its wire method name, with the same session, authorization and observer
+ * boundary as a typed request. `A` is the contract's success type.
+ */
+export const requestMethod = Effect.fn("EnvironmentRpc.requestMethod")(function* <A>(
+  method: string,
+  input: unknown,
+) {
+  const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+  const session = yield* currentSession();
+  yield* authorizeRequest(method, input);
+  const client = session.client as unknown as Record<
+    string,
+    | ((
+        input: unknown,
+      ) => Effect.Effect<A, EnvironmentRpcUnavailableError | EnvironmentAuthorizationError>)
+    | undefined
+  >;
+  const call = client[method];
+  if (call === undefined) {
+    return yield* new EnvironmentRpcUnavailableError({
+      environmentId: supervisor.target.environmentId,
+      message: `${method} is not available on this server.`,
+    });
+  }
+  const observer = yield* EnvironmentRpcRequestObserver;
+  const completeObservation = yield* observer.observe({
+    environmentId: supervisor.target.environmentId,
+    environmentLabel: supervisor.target.label,
+    method,
+  });
+  return yield* call(input).pipe(Effect.ensuring(completeObservation));
+});
+
+/** Subscribes by wire method name, re-subscribing whenever the environment's session changes. */
+export function subscribeMethod<A>(
+  method: string,
+  input: unknown,
+): Stream.Stream<A, EnvironmentRpcUnavailableError, EnvironmentSupervisor.EnvironmentSupervisor> {
+  return Stream.unwrap(
+    Effect.gen(function* () {
+      const supervisor = yield* EnvironmentSupervisor.EnvironmentSupervisor;
+      return SubscriptionRef.changes(supervisor.session).pipe(
+        Stream.switchMap(
+          Option.match({
+            onNone: () => Stream.empty,
+            onSome: (session) => {
+              const client = session.client as unknown as Record<
+                string,
+                ((input: unknown) => Stream.Stream<A, EnvironmentRpcUnavailableError>) | undefined
+              >;
+              const call = client[method];
+              return call === undefined
+                ? Stream.fail(
+                    new EnvironmentRpcUnavailableError({
+                      environmentId: supervisor.target.environmentId,
+                      message: `${method} is not available on this server.`,
+                    }),
+                  )
+                : call(input);
+            },
+          }),
+        ),
+      );
+    }),
+  );
+}
