@@ -108,6 +108,18 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — T3 Mesh — replica backend components (Stage E, partial)
+
+- **What.** Pinned Mutagen installation and an isolated CLI runner, replica reconciliation service,
+  machine identity routes, and replica settings schemas. This does not yet expose replicas in the
+  running server, MCP, or clients.
+- **How.** Downloads Mutagen 0.18.1 using pinned release SHA256 checksums; all CLI calls use a
+  server-specific data directory. Reconciliation chooses a single driver from layout routes,
+  adopts labeled sessions, records state changes, registers local projects after watching, and
+  leaves orphan sessions and removed replicas' files intact. SSH identities use a managed block.
+- **Where.** `apps/server/src/replicas/`; seams: `packages/contracts/src/{settings,sidebarWorkspaces}.ts`.
+  Tests use an in-memory layout layer and a real local-to-local Mutagen integration.
+
 ### 2026-11-02 — T3 Mesh — layout CRDT core
 
 - **What.** Pure shared layout CRDT, legacy migration and logical project operations for Mesh.
