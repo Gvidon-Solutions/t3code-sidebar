@@ -31,3 +31,14 @@ it.each([
 );
 
 const decodeConfig = Schema.decodeUnknownSync(SidebarWorkspacesConfig);
+
+it("adopts legacy into a workspace already edited by a peer without recreating its old id", () => {
+  const a = decodeConfig(gvidon);
+  const b = decodeConfig(operalia);
+  const existing = importLegacy(a, "peer", "0000000000100.00000.peer");
+  const result = materialize(adoptLegacy(b, existing));
+  expect(result.workspaces.filter((w) => w.name === "main")).toEqual([
+    expect.objectContaining({ id: "workspace-4" }),
+  ]);
+  expect(Object.values(result.placements).flat()).not.toContain("main");
+});

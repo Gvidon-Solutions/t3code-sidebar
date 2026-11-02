@@ -58,7 +58,7 @@ export const layer = Layer.effect(
       const combined = merge(document, entries);
       const merged = Object.entries(combined)
         .filter(([key]) => key.startsWith("ws/"))
-        .every(([, entry]) => entry.h.startsWith("0000000000000."))
+        .some(([, entry]) => entry.h.startsWith("0000000000000."))
         ? adoptLegacy(DEFAULT_SIDEBAR_WORKSPACES_CONFIG, combined)
         : combined;
       yield* sql.withTransaction(
