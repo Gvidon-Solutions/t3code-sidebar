@@ -546,6 +546,7 @@ const makeLaptop = (
   /** The laptop's links from before a restart, which keep their sessions there. */
   kept?: Context.Context<Layer.Success<ReturnType<typeof layerLinkingEnvironment>>>,
   workspaceRoot = "/home/me/app",
+  onResolve: Effect.Effect<void> = Effect.void,
 ) =>
   Effect.gen(function* () {
     const linking = kept ?? (yield* layerLinkingEnvironment(laptop).pipe(Layer.build));
@@ -588,10 +589,14 @@ const makeLaptop = (
           Layer.provide(
             Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({
               resolve: (cwd) =>
-                Effect.succeed(
-                  cwd === workspaceRoot
-                    ? ({ canonicalKey: "github.com/acme/app" } as RepositoryIdentity)
-                    : null,
+                onResolve.pipe(
+                  Effect.andThen(
+                    Effect.succeed(
+                      cwd === workspaceRoot
+                        ? ({ canonicalKey: "github.com/acme/app" } as RepositoryIdentity)
+                        : null,
+                    ),
+                  ),
                 ),
             }),
           ),
@@ -1803,9 +1808,13 @@ it.effect.each(["representation-id", "representation-path", "same-path"] as cons
                   ],
                 },
         });
-        const a = yield* makeLaptop(database, offers, undefined, workspaceRoot).pipe(
-          Effect.provide(MeshTest.layerTest(laptop.environmentId, config)),
-        );
+        const a = yield* makeLaptop(
+          database,
+          offers,
+          undefined,
+          workspaceRoot,
+          Effect.die("Layout and path matches must not resolve repository identity."),
+        ).pipe(Effect.provide(MeshTest.layerTest(laptop.environmentId, config)));
         yield* linkTo(a.links, b, "full-access");
         yield* seedParent(a);
         yield* delegateToBox(a);

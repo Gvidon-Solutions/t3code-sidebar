@@ -389,25 +389,27 @@ const make = Effect.gen(function* () {
       rows.filter(
         (row) =>
           row.logicalKey !== "" ||
-          (sessions.some((session) => session.name === row.sessionName) &&
+          (sessions.some((session) => (session.name ?? session.identifier) === row.sessionName) &&
             !expected.has(row.sessionName ?? "") &&
             !terminated.has(row.sessionName ?? "")),
       ),
     );
-    for (const session of sessions)
-      if (session.name && !expected.has(session.name) && !terminated.has(session.name)) {
+    for (const session of sessions) {
+      const name = session.name ?? session.identifier;
+      if (!expected.has(name) && !terminated.has(name)) {
         yield* Ref.update(statuses, (all) => [
-          ...all.filter((row) => row.sessionName !== session.name),
+          ...all.filter((row) => row.sessionName !== name),
           {
             logicalKey: "",
             environmentId: mesh.environmentId,
             ...sessionStatus(session),
-            sessionName: session.name!,
+            sessionName: name,
             message: "Orphan session: no representation; left untouched.",
             updatedAt: now,
           },
         ]);
       }
+    }
     yield* PubSub.publish(updates, { replicas: yield* Ref.get(statuses) });
   });
   const reconcileSafely = reconciliationLock.withPermit(

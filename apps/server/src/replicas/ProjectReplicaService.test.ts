@@ -54,8 +54,10 @@ it.effect(
         yield* service.reconcile;
         expect((yield* service.status)[0]?.state).toBe("error");
         h.addOrphan();
+        h.addOrphan(false);
         yield* service.reconcile;
         expect((yield* service.status).some((s) => s.sessionName === "orphan")).toBe(true);
+        expect((yield* service.status).some((s) => s.sessionName === "nameless")).toBe(true);
         yield* mesh.edit((config) => ({
           ...config,
           projectMounts: {

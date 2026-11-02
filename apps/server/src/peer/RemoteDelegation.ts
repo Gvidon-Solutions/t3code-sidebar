@@ -178,15 +178,11 @@ const make = Effect.gen(function* () {
           )
         : undefined;
     if (representation?.projectId) return ProjectId.make(representation.projectId);
-    // The project's own identity is a one-minute cache that reads blank when
-    // cold, so resolve it here, as the other side's t3_project_list does.
-    const key =
-      here === undefined
-        ? undefined
-        : (yield* repositoryIdentities.resolve(here.workspaceRoot))?.canonicalKey;
     const samePath: Array<{ readonly id: ProjectId }> = [];
     const represented: Array<{ readonly id: ProjectId }> = [];
-    const matches: Array<{ readonly id: ProjectId; readonly title: string }> = [];
+    const candidates: Array<
+      Tool.Success<typeof ProjectToolkit.tools.t3_project_list>["projects"][number]
+    > = [];
     let cursor: number | null = 0;
     while (cursor !== null) {
       const listed: Tool.Success<typeof ProjectToolkit.tools.t3_project_list> =
@@ -204,21 +200,25 @@ const make = Effect.gen(function* () {
           (project) => representation && project.workspaceRoot === representation.path,
         ),
       );
-      matches.push(
-        ...listed.projects.filter(
-          (project) => key !== undefined && project.repositoryIdentity?.canonicalKey === key,
-        ),
-      );
+      candidates.push(...listed.projects);
       cursor = listed.nextCursor;
     }
     if (represented.length === 1) return represented[0]!.id;
     if (samePath.length === 1) return samePath[0]!.id;
+    // A cold enrichment cache has no identity, so resolve only after layout and path matching.
+    const key =
+      here === undefined
+        ? undefined
+        : (yield* repositoryIdentities.resolve(here.workspaceRoot))?.canonicalKey;
     if (key === undefined) {
       return yield* new OrchestratorMcpFailure({
         code: "target_required",
         message: "Pass target.projectId: this thread's project has no repository to match there.",
       });
     }
+    const matches = candidates.filter(
+      (project) => project.repositoryIdentity?.canonicalKey === key,
+    );
     if (matches.length === 1) return matches[0]!.id;
     return yield* new OrchestratorMcpFailure({
       code: "invalid_request",

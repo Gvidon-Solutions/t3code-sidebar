@@ -167,12 +167,12 @@ export const makeReplicaHarness = (
     setSession: (patch: Partial<Runner.MutagenSession>) => {
       sessions = sessions.map((s) => ({ ...s, ...patch }));
     },
-    addOrphan: () => {
+    addOrphan: (named = true) => {
       sessions = [
         ...sessions,
         {
-          identifier: "orphan",
-          name: "orphan",
+          identifier: named ? "orphan" : "nameless",
+          ...(named ? { name: "orphan" } : {}),
           labels: { "t3-logical": "orphan" },
           paused: false,
           status: "watching",
