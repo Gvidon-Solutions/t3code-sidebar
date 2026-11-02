@@ -12,6 +12,8 @@ import {
   ProviderInstanceId,
   WS_METHODS,
   WsServerRefreshProvidersRpc,
+  MeshRpcs,
+  MESH_WS_METHODS,
   WsSubscribeServerConfigRpc,
   type OrchestrationV2StoredEvent,
   type OrchestrationV2ThreadShell,
@@ -774,6 +776,17 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
     const providerChanges = yield* Queue.unbounded<ReadonlyArray<ServerProvider>>();
     const pulled = yield* Queue.unbounded<void>();
     const responses = yield* Queue.unbounded<unknown>();
+    const meshStatus = {
+      peers: [
+        {
+          environmentId: "peer",
+          lastExchangeAt: "2026-11-02T00:00:00.000Z",
+          lastError: "offline",
+          sentSeq: 4,
+          receivedSeq: 7,
+        },
+      ],
+    };
     const configRpcServices = Layer.mergeAll(
       layerUnusedConfigRpcServices,
       Layer.mock(ExternalLauncher.ExternalLauncher)({
@@ -821,7 +834,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       }),
     );
     const server = yield* RpcServer.makeNoSerialization(
-      RpcGroup.make(WsSubscribeServerConfigRpc, WsServerRefreshProvidersRpc),
+      RpcGroup.make(WsSubscribeServerConfigRpc, WsServerRefreshProvidersRpc, ...MeshRpcs),
       {
         ...WS_RPC_SERVER_OPTIONS,
         onFromServer: (response) =>
@@ -845,9 +858,24 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
           {},
           yield* ServerBrowser.ServerBrowser,
           () => Effect.void,
-        ).pipe(Layer.provide(configRpcServices)),
+        ).pipe(
+          Layer.provide(
+            Layer.merge(
+              configRpcServices,
+              Layer.mock(MeshReplicator)({ status: Effect.succeed(meshStatus) }),
+            ),
+          ),
+        ),
       ),
     );
+    yield* server.write(0, {
+      _tag: "Request",
+      id: RpcMessage.RequestId("mesh-status"),
+      tag: MESH_WS_METHODS.status,
+      payload: {},
+      headers: Headers.empty,
+    });
+    assert.deepEqual(yield* Queue.take(responses), meshStatus);
     const configRequest = RpcMessage.RequestId("config");
     yield* server.write(0, {
       _tag: "Request",

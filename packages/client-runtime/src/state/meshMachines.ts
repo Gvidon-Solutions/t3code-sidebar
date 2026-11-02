@@ -1,4 +1,6 @@
 import type {
+  EnvironmentId,
+  PeerLinkCreateInput,
   SidebarMachineReach,
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
@@ -29,6 +31,7 @@ export interface MeshPeerLinkView {
 
 /** The links one connected server holds. */
 export interface MeshLinkSource {
+  readonly error?: string;
   readonly environmentId: string;
   readonly links: readonly MeshPeerLinkView[];
 }
@@ -50,7 +53,7 @@ export interface MeshLinkedWith {
 export interface MeshMachine extends MachineDisplay {
   readonly environmentId: string;
   readonly connectedHere: boolean;
-  /** Connected servers that hold a link to this machine. */
+  /** Machines connected by an incoming or outgoing peer link. */
   readonly linkedWith: readonly MeshLinkedWith[];
   readonly version: string | null;
   /** The last successful layout exchange, as the server recorded it. */
@@ -129,9 +132,13 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
     .sort((left, right) => left.localeCompare(right))
     .map((environmentId) => {
       const connection = connectionById.get(environmentId);
-      const fallbackLabel = connection?.label ?? "";
+      const fallbackLabel =
+        connection?.label ??
+        links.flatMap((source) => source.links).find((link) => link.environmentId === environmentId)
+          ?.label ??
+        "";
       const display = machineDisplayOf(config, environmentId, fallbackLabel);
-      const linkedWith = links.flatMap((source) => {
+      const incoming = links.flatMap((source) => {
         if (source.environmentId === environmentId) return [];
         if (!source.links.some((link) => link.environmentId === environmentId)) return [];
         const sourceDisplay = machineDisplayOf(
@@ -147,6 +154,29 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
           },
         ];
       });
+      const outgoing = links
+        .filter((source) => source.environmentId === environmentId)
+        .flatMap((source) =>
+          source.links.map((link) => ({
+            environmentId: link.environmentId,
+            ...machineDisplayOf(
+              config,
+              link.environmentId,
+              connectionById.get(link.environmentId)?.label ?? link.label,
+            ),
+          })),
+        );
+      const linkedWith = [
+        ...new Map(
+          [...incoming, ...outgoing].map((peer) => [
+            peer.environmentId,
+            { environmentId: peer.environmentId, label: peer.label, tag: peer.tag },
+          ]),
+        ).values(),
+      ];
+      const peerLinks = links.flatMap((source) =>
+        source.links.filter((link) => link.environmentId === environmentId),
+      );
       let replicas = 0;
       let primaries = 0;
       let conflicts = 0;
@@ -174,7 +204,7 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         peerStates.filter((state) => state.environmentId === environmentId),
       );
       const reach: Record<string, SidebarMachineReach> = {
-        ...(config.machines[environmentId]?.reach ?? {}),
+        ...config.machines[environmentId]?.reach,
       };
       return {
         environmentId,
@@ -185,7 +215,11 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         linkedWith,
         version: connection?.version ?? null,
         lastExchangeAt: peerState?.lastExchangeAt ?? null,
-        lastError: peerState?.lastError ?? null,
+        lastError:
+          peerState?.lastError ??
+          links.find((source) => source.environmentId === environmentId && source.error)?.error ??
+          peerLinks.find((link) => link.lastError)?.lastError ??
+          null,
         sentSeq: peerState?.sentSeq ?? 0,
         receivedSeq: peerState?.receivedSeq ?? 0,
         replicas,
@@ -271,9 +305,13 @@ export function setMachineReach(
 ): SidebarWorkspacesConfig {
   const ssh = reach?.ssh.trim() ?? "";
   const identityFile = reach?.identityFile?.trim() ?? "";
-  const next: { label?: string; tag?: string; color?: string; reach?: Record<string, SidebarMachineReach> } =
-    { ...config.machines[machineEnvironmentId] };
-  const routes = { ...(next.reach ?? {}) };
+  const next: {
+    label?: string;
+    tag?: string;
+    color?: string;
+    reach?: Record<string, SidebarMachineReach>;
+  } = { ...config.machines[machineEnvironmentId] };
+  const routes = { ...next.reach };
   if (ssh.length === 0) delete routes[targetEnvironmentId];
   else
     routes[targetEnvironmentId] = {
@@ -286,4 +324,34 @@ export function setMachineReach(
   if (Object.keys(next).length === 0) delete machines[machineEnvironmentId];
   else machines[machineEnvironmentId] = next;
   return { ...config, machines };
+}
+
+export async function linkMeshMachines<A>(input: {
+  readonly source: EnvironmentId;
+  readonly target: {
+    readonly environmentId: EnvironmentId;
+    readonly label: string;
+  } | null;
+  readonly url: string;
+  readonly code: string;
+  readonly mintOnTarget: boolean;
+  readonly mintCode: (target: EnvironmentId) => Promise<string>;
+  readonly link: (source: EnvironmentId, request: PeerLinkCreateInput) => Promise<A>;
+}): Promise<A> {
+  if (input.target?.environmentId === input.source) throw new Error("Choose another machine.");
+  const url = input.url.trim();
+  if (!url) throw new Error("Enter the machine's address.");
+  const pairingCode =
+    input.mintOnTarget && input.target !== null
+      ? await input.mintCode(input.target.environmentId)
+      : input.code.trim();
+  if (!pairingCode) throw new Error("Enter a pairing code from that machine.");
+  return input.link(input.source, {
+    url,
+    pairingCode,
+    access: "full-access",
+    ...(input.target === null
+      ? {}
+      : { expectedEnvironmentId: input.target.environmentId, expectedLabel: input.target.label }),
+  });
 }

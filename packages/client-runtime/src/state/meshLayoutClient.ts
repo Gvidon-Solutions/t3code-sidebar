@@ -441,6 +441,7 @@ export function createMeshLayoutAtoms<R, E>(
     status: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:mesh-layout:status",
       tag: MESH_WS_METHODS.status,
+      refreshIntervalMs: 60_000,
     }),
   };
 }

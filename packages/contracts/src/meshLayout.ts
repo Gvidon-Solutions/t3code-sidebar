@@ -108,7 +108,7 @@ export const WsMeshLayoutSubscribeRpc = Rpc.make(MESH_WS_METHODS.layoutSubscribe
   stream: true,
 });
 /** Per-peer replication state: when the last exchange ran and what it last reported. */
-export const WsMeshLayoutStatusRpc = Rpc.make(MESH_WS_METHODS.status, {
+const WsMeshLayoutStatusRpc = Rpc.make(MESH_WS_METHODS.status, {
   payload: Schema.Struct({}),
   success: MeshLayoutStatus,
   error: LayoutError,

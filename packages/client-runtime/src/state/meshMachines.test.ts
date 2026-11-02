@@ -62,8 +62,20 @@ describe("buildMeshMachines", () => {
         },
       ],
       peerStates: [
-        { environmentId: "operatia", lastExchangeAt: null, lastError: null, sentSeq: 0, receivedSeq: 0 },
-        { environmentId: "vps", lastExchangeAt: null, lastError: "offline", sentSeq: 3, receivedSeq: 4 },
+        {
+          environmentId: "operatia",
+          lastExchangeAt: null,
+          lastError: null,
+          sentSeq: 0,
+          receivedSeq: 0,
+        },
+        {
+          environmentId: "vps",
+          lastExchangeAt: null,
+          lastError: "offline",
+          sentSeq: 3,
+          receivedSeq: 4,
+        },
       ],
     });
     expect(machines.map((machine) => machine.environmentId)).toEqual([
@@ -84,9 +96,12 @@ describe("buildMeshMachines", () => {
       conflicts: 2,
       urls: ["https://op.example"],
     });
-    expect(operatia.linkedWith).toEqual([
-      { environmentId: "gvidon", label: "Gvidon", tag: "GV" },
-    ]);
+    expect(
+      machines
+        .find((machine) => machine.environmentId === "gvidon")
+        ?.linkedWith.map((peer) => peer.environmentId),
+    ).toContain("operatia");
+    expect(operatia.linkedWith).toEqual([{ environmentId: "gvidon", label: "Gvidon", tag: "GV" }]);
     const gvidon = machines.find((machine) => machine.environmentId === "gvidon")!;
     expect(gvidon.connectedHere).toBe(true);
     expect(gvidon.version).toBe("0.1.5");
@@ -255,4 +270,106 @@ describe("ssh routes", () => {
     expect(machineReachOf(removed, "operatia", "gvidon")).toBeNull();
     expect(removed.machines.operatia).toEqual({ label: "Operalia", tag: "OP", color: "#123456" });
   });
+});
+
+it("mints on the target before linking from the source, and supports manual codes", async () => {
+  const { linkMeshMachines } = await import("./meshMachines.ts");
+  const { EnvironmentId } = await import("@t3tools/contracts");
+  const source = EnvironmentId.make("source");
+  const target = { environmentId: EnvironmentId.make("target"), label: "Target" };
+  const calls: unknown[] = [];
+  const mintCode = async (id: string) => {
+    calls.push(["mint", id]);
+    return "fresh-code";
+  };
+  const link = async (id: string, request: unknown) => {
+    calls.push(["link", id, request]);
+    return "linked";
+  };
+  expect(
+    await linkMeshMachines({
+      source,
+      target,
+      url: " https://target ",
+      code: "",
+      mintOnTarget: true,
+      mintCode,
+      link,
+    }),
+  ).toBe("linked");
+  expect(calls).toEqual([
+    ["mint", "target"],
+    [
+      "link",
+      "source",
+      {
+        url: "https://target",
+        pairingCode: "fresh-code",
+        access: "full-access",
+        expectedEnvironmentId: "target",
+        expectedLabel: "Target",
+      },
+    ],
+  ]);
+  calls.length = 0;
+  await linkMeshMachines({
+    source,
+    target: null,
+    url: "https://unknown",
+    code: " manual ",
+    mintOnTarget: false,
+    mintCode,
+    link,
+  });
+  expect(calls).toEqual([
+    ["link", "source", { url: "https://unknown", pairingCode: "manual", access: "full-access" }],
+  ]);
+  calls.length = 0;
+  await expect(
+    linkMeshMachines({
+      source,
+      target,
+      url: "https://target",
+      code: "",
+      mintOnTarget: true,
+      mintCode: async () => {
+        throw new Error("denied");
+      },
+      link,
+    }),
+  ).rejects.toThrow("denied");
+  expect(calls).toEqual([]);
+  await expect(
+    linkMeshMachines({
+      source,
+      target: { ...target, environmentId: source },
+      url: "https://target",
+      code: "manual",
+      mintOnTarget: false,
+      mintCode,
+      link,
+    }),
+  ).rejects.toThrow("Choose another machine");
+  await expect(
+    linkMeshMachines({
+      source,
+      target,
+      url: " ",
+      code: "manual",
+      mintOnTarget: false,
+      mintCode,
+      link,
+    }),
+  ).rejects.toThrow("address");
+  await expect(
+    linkMeshMachines({
+      source,
+      target: null,
+      url: "https://target",
+      code: " ",
+      mintOnTarget: false,
+      mintCode,
+      link,
+    }),
+  ).rejects.toThrow("pairing code");
 });

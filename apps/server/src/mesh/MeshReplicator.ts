@@ -107,20 +107,17 @@ export const layer = Layer.effect(
         last_error: string | null;
       }>`SELECT environment_id, sent_seq, received_seq, last_exchange_at, last_error FROM mesh_peer_state ORDER BY environment_id`;
       return {
-        peers: rows.map(
-          (row): PeerStatus => ({
-            environmentId: row.environment_id,
-            lastExchangeAt: row.last_exchange_at,
-            lastError: row.last_error,
-            sentSeq: row.sent_seq,
-            receivedSeq: row.received_seq,
-          }),
-        ),
+        peers: rows.map((row): PeerStatus => ({
+          environmentId: row.environment_id,
+          lastExchangeAt: row.last_exchange_at,
+          lastError: row.last_error,
+          sentSeq: row.sent_seq,
+          receivedSeq: row.received_seq,
+        })),
       };
     }).pipe(
       Effect.mapError(
-        (cause) =>
-          new MeshLayoutError({ reason: "storage", message: "Mesh status failed", cause }),
+        (cause) => new MeshLayoutError({ reason: "storage", message: "Mesh status failed", cause }),
       ),
     );
     const exchange = Effect.fn("MeshReplicator.exchange")(
