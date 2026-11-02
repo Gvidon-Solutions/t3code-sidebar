@@ -47,7 +47,13 @@ vi.mock("../../components/ui/Dialog", () => ({ alert: vi.fn() }));
 vi.mock("../../components/ui/ScreenScrollView", () => ({ ScreenScrollView: Children }));
 vi.mock("../../components/ui/AppText", () => ({
   AppText: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  AppTextInput: () => null,
+  AppTextInput: ({
+    value,
+    accessibilityLabel,
+  }: {
+    value?: string;
+    accessibilityLabel?: string;
+  }) => <input readOnly value={value ?? ""} aria-label={accessibilityLabel} />,
 }));
 vi.mock("../../components/ui/FrostedCutout", () => ({ FrostedCutout: () => null }));
 vi.mock("../../components/ui/AppSymbol", () => ({ SymbolView: () => null }));
@@ -93,8 +99,19 @@ it("does not show another feature's error as a pairing failure", () => {
   harness.pendingConnectionError = "Could not send the message.";
   const container = document.createElement("div");
   const root = createRoot(container);
-  act(() => root.render(<ConnectionsNewRouteScreen route={{ params: undefined }} />));
+  act(() =>
+    root.render(
+      <ConnectionsNewRouteScreen
+        route={{ params: { initialHost: "https://mesh-peer.example" } }}
+      />,
+    ),
+  );
 
+  expect(
+    [...container.querySelectorAll("input")].some(
+      (input) => input.value === "https://mesh-peer.example",
+    ),
+  ).toBe(true);
   expect(container.textContent).not.toContain("Could not send the message.");
   expect(container.textContent).toContain("For machines on your local network or tailnet.");
 

@@ -67,6 +67,7 @@ export const RPC_REQUIRED_SCOPES = {
   [MESH_WS_METHODS.layoutGet]: AuthOrchestrationReadScope,
   [MESH_WS_METHODS.layoutSubscribe]: AuthOrchestrationReadScope,
   [MESH_WS_METHODS.layoutApply]: AuthSettingsWriteScope,
+  [MESH_WS_METHODS.status]: AuthOrchestrationReadScope,
   [MESH_WS_METHODS.replicasStatus]: AuthOrchestrationReadScope,
   [MESH_WS_METHODS.replicasRetry]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: AuthOrchestrationReadScope,

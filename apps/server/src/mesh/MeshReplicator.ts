@@ -23,6 +23,13 @@ export const ExchangeInput = Schema.Struct({
 });
 const ExchangeOutput = Schema.Struct({ entries: MeshLayoutEntries, seq: Schema.Int });
 type PeerState = { sent_seq: number; received_seq: number };
+export interface PeerStatus {
+  readonly environmentId: string;
+  readonly lastExchangeAt: string | null;
+  readonly lastError: string | null;
+  readonly sentSeq: number;
+  readonly receivedSeq: number;
+}
 export class MeshReplicator extends Context.Service<
   MeshReplicator,
   {
@@ -30,6 +37,8 @@ export class MeshReplicator extends Context.Service<
       input: typeof ExchangeInput.Type,
     ) => Effect.Effect<typeof ExchangeOutput.Type, MeshLayoutError>;
     readonly sync: Effect.Effect<void, MeshLayoutError>;
+    /** Per-peer replication bookkeeping from `mesh_peer_state`. */
+    readonly status: Effect.Effect<{ readonly peers: ReadonlyArray<PeerStatus> }, MeshLayoutError>;
   }
 >()("t3/mesh/MeshReplicator") {}
 
@@ -89,6 +98,28 @@ export const layer = Layer.effect(
     ) {
       yield* sql`INSERT INTO mesh_peer_state(environment_id, sent_seq, received_seq, last_exchange_at, last_error) VALUES (${id}, ${sent}, ${received}, ${DateTime.formatIso(yield* DateTime.now)}, NULL) ON CONFLICT(environment_id) DO UPDATE SET sent_seq = max(sent_seq, excluded.sent_seq), received_seq = max(received_seq, excluded.received_seq), last_exchange_at = excluded.last_exchange_at, last_error = NULL`;
     });
+    const status = Effect.gen(function* () {
+      const rows = yield* sql<{
+        environment_id: string;
+        sent_seq: number;
+        received_seq: number;
+        last_exchange_at: string | null;
+        last_error: string | null;
+      }>`SELECT environment_id, sent_seq, received_seq, last_exchange_at, last_error FROM mesh_peer_state ORDER BY environment_id`;
+      return {
+        peers: rows.map((row): PeerStatus => ({
+          environmentId: row.environment_id,
+          lastExchangeAt: row.last_exchange_at,
+          lastError: row.last_error,
+          sentSeq: row.sent_seq,
+          receivedSeq: row.received_seq,
+        })),
+      };
+    }).pipe(
+      Effect.mapError(
+        (cause) => new MeshLayoutError({ reason: "storage", message: "Mesh status failed", cause }),
+      ),
+    );
     const exchange = Effect.fn("MeshReplicator.exchange")(
       function* (input: typeof ExchangeInput.Type) {
         if (!(yield* enabled))
@@ -175,7 +206,7 @@ export const layer = Layer.effect(
       Effect.repeat(Schedule.spaced("1 second")),
       Effect.forkScoped,
     );
-    return MeshReplicator.of({ exchange, sync });
+    return MeshReplicator.of({ exchange, sync, status });
   }),
 );
 

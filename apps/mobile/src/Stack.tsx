@@ -349,12 +349,17 @@ const SETTINGS_SCREENS = {
       title: "General",
     },
   }),
+  SettingsMesh: createNativeStackScreen({
+    screen: SettingsMachinesRouteScreen,
+    linking: "settings/mesh",
+    options: { title: "Mesh" },
+  }),
   SettingsMachines: createNativeStackScreen({
     screen: SettingsMachinesRouteScreen,
     linking: "settings/machines",
     options: {
       ...SETTINGS_PAGE_OPTIONS,
-      title: "Machines",
+      title: "Mesh",
     },
   }),
   SettingsOrganization: createNativeStackScreen({

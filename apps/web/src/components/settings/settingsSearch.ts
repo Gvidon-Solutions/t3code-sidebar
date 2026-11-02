@@ -32,6 +32,7 @@ export type SettingsPath =
   | "/settings/source-control"
   | "/settings/worktrees"
   | "/settings/connections"
+  | "/settings/mesh"
   | "/settings/machines"
   | "/settings/access"
   | "/settings/secrets"
@@ -103,6 +104,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/source-control": "Source control",
   "/settings/worktrees": "Worktrees",
   "/settings/connections": "Environments",
+  "/settings/mesh": "Mesh",
   "/settings/machines": "Machines",
   "/settings/access": "Sharing & access",
   "/settings/secrets": "Secrets",
@@ -146,7 +148,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     heading: "Connections",
     paths: [
       "/settings/connections",
-      "/settings/machines",
+      "/settings/mesh",
       "/settings/access",
       ...(isSecretsFeatureEnabled ? (["/settings/secrets"] as const) : []),
     ],
@@ -221,10 +223,23 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
 export const SETTINGS_SEARCH_ITEMS = [
   {
     id: "machines-names",
-    targetId: "machines",
-    title: "Machine names and tags",
-    to: "/settings/machines",
-    searchTerms: ["machines", "servers", "devices", "label", "tag", "color", "cross-device"],
+    targetId: "mesh",
+    title: "Mesh, machine names and tags",
+    to: "/settings/mesh",
+    searchTerms: [
+      "mesh",
+      "machines",
+      "servers",
+      "devices",
+      "label",
+      "tag",
+      "color",
+      "cross-device",
+      "link",
+      "sync",
+      "ssh",
+      "replica",
+    ],
   },
   {
     id: "storage-worktree-keep-when",
@@ -1208,6 +1223,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/threads": null,
   "/settings/browser": null,
   "/settings/devices": null,
+  "/settings/mesh": null,
   "/settings/machines": null,
   "/settings/source-control": "environment-defaults",
   "/settings/worktrees": "project-defaults",

@@ -34,6 +34,7 @@ import { leaveSettingsPage } from "../settings/settings-navigation";
 import { workspaceHasColumns } from "../workspace/workspace-selection-store";
 
 type ConnectionsNewRouteParams = {
+  readonly initialHost?: string;
   readonly mode?: string;
   readonly pairingUrl?: string;
   readonly autoConnect?: string;
@@ -51,6 +52,7 @@ export function ConnectionsNewRouteScreen({
     <PairingForm
       key={routePairingUrl}
       routePairingUrl={routePairingUrl}
+      initialHost={params.initialHost}
       routeFor={params.routeFor}
     />
   );
@@ -58,8 +60,10 @@ export function ConnectionsNewRouteScreen({
 
 function PairingForm({
   routePairingUrl,
+  initialHost,
   routeFor,
 }: {
+  readonly initialHost?: string;
   readonly routePairingUrl: string;
   readonly routeFor: EnvironmentId | undefined;
 }) {
@@ -69,7 +73,7 @@ function PairingForm({
   const routeName = useRoute().name;
   const insets = useSafeAreaInsets();
   const [initialPairing] = useState(() => parsePairingUrl(routePairingUrl || connectionPairingUrl));
-  const [hostInput, setHostInput] = useState(initialPairing.host);
+  const [hostInput, setHostInput] = useState(initialHost ?? initialPairing.host);
   const [codeInput, setCodeInput] = useState(initialPairing.code);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);

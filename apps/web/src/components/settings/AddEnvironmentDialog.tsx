@@ -72,6 +72,8 @@ export function AddEnvironmentDialog({
   routeTarget,
   error,
   savedEnvironments,
+  initialHost,
+  hideTrigger = false,
   onOpenChange,
   onErrorChange,
 }: {
@@ -79,6 +81,10 @@ export function AddEnvironmentDialog({
   readonly routeTarget: EnvironmentPresentation | null;
   readonly error: string | null;
   readonly savedEnvironments: ReadonlyArray<EnvironmentPresentation>;
+  /** Prefills the remote host when the dialog opens, still editable. */
+  readonly initialHost?: string;
+  /** Renders only the controlled dialog, for a caller that has its own button. */
+  readonly hideTrigger?: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onErrorChange: (error: string | null) => void;
 }) {
@@ -110,7 +116,7 @@ export function AddEnvironmentDialog({
     return keys;
   })();
   const [savedBackendMode, setSavedBackendMode] = useState<"remote" | "ssh">("remote");
-  const [savedBackendHost, setSavedBackendHost] = useState("");
+  const [savedBackendHost, setSavedBackendHost] = useState(initialHost ?? "");
   const [savedBackendPairingCode, setSavedBackendPairingCode] = useState("");
   const [savedBackendSshHost, setSavedBackendSshHost] = useState("");
   const [savedBackendSshUsername, setSavedBackendSshUsername] = useState("");
@@ -607,21 +613,23 @@ export function AddEnvironmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <DialogTrigger
-              render={
-                <Button size="xs" variant="ghost-muted" aria-label="Add environment">
-                  <PlusIcon className="size-3" />
-                  <span>Add environment</span>
-                </Button>
-              }
-            />
-          }
-        />
-        <TooltipPopup side="top">Add environment</TooltipPopup>
-      </Tooltip>
+      {hideTrigger ? null : (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DialogTrigger
+                render={
+                  <Button size="xs" variant="ghost-muted" aria-label="Add environment">
+                    <PlusIcon className="size-3" />
+                    <span>Add environment</span>
+                  </Button>
+                }
+              />
+            }
+          />
+          <TooltipPopup side="top">Add environment</TooltipPopup>
+        </Tooltip>
+      )}
       <DialogPopup className="max-h-[80dvh] sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
