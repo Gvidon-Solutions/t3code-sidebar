@@ -1,3 +1,4 @@
+import { ProjectPlaceInput, ProjectPlaceResult, ProjectMachinesResult } from "@t3tools/contracts";
 import { McpAttachmentInput } from "../attachment/input.ts";
 import {
   NonNegativeInt,
@@ -176,7 +177,32 @@ const ThreadLaunchTool = Tool.make("t3_thread_launch", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
+const ProjectPlaceTool = Tool.make("t3_project_place", {
+  ...shared,
+  description:
+    "Add or remove a project's representation on a mesh machine by id, label or tag. Replicas sync from a primary; wait (seconds, at most 600) waits for watching and registration. Remove keeps files and the registered project.",
+  parameters: ProjectPlaceInput,
+  success: ProjectPlaceResult,
+  dependencies: shared.dependencies,
+}).annotate(Tool.Destructive, true);
+const ProjectMachinesTool = Tool.make("t3_project_machines", {
+  ...shared,
+  description:
+    "List a logical project's representations, roles, driving servers and replica status. project accepts a name, id or logical key.",
+  parameters: Schema.Struct({
+    project: Schema.String,
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    live: Schema.optionalKey(Schema.Boolean),
+  }),
+  success: ProjectMachinesResult,
+  dependencies: shared.dependencies,
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false);
+
 export const ProjectToolkit = Toolkit.make(
+  ProjectPlaceTool,
+  ProjectMachinesTool,
   ThreadLaunchTool,
   ProjectListTool,
   ProjectReadTool,

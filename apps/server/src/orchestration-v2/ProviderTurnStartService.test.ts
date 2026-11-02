@@ -1,3 +1,5 @@
+import { SidebarWorkspacesConfig } from "@t3tools/contracts";
+import * as ReplicaMeshTest from "../replicas/MeshLayoutTestLayer.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it, vi } from "vite-plus/test";
 import { it as effectIt } from "@effect/vitest";
@@ -1749,3 +1751,44 @@ for (const previousMessages of [[], ["/compact", " /COMPACT "]]) {
       }),
   );
 }
+
+const decodeReplicaLayout = Schema.decodeSync(SidebarWorkspacesConfig);
+
+effectIt.effect("injects the primary SSH command into a replica's actual provider prompt", () =>
+  Effect.gen(function* () {
+    const harness = makeLocalCommandHarness({
+      text: "Build this project",
+      sideChat: { contextRun: "delivered" },
+    });
+    const config = decodeReplicaLayout({
+      projectMounts: {
+        repo: [
+          {
+            environmentId: "primary",
+            path: "/srv/project with spaces",
+            role: "primary",
+            transport: "git",
+            createdAt: "",
+          },
+          {
+            environmentId: "replica",
+            path: "/replica",
+            projectId: "project-native-account-command",
+            source: "primary",
+            role: "replica",
+            transport: "mutagen",
+            createdAt: "",
+          },
+        ],
+      },
+      machines: { replica: { reach: { primary: { ssh: "primary-host" } } } },
+    });
+    yield* harness.start.pipe(Effect.provide(ReplicaMeshTest.layerTest("replica", config)));
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain(
+      "Run git and builds on the primary",
+    );
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("primary-host");
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("/srv/project with spaces");
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("Build this project");
+  }),
+);

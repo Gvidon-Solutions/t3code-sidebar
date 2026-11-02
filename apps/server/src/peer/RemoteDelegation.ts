@@ -1,3 +1,6 @@
+import { remoteRepresentation } from "../replicas/replicaModel.ts";
+import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
+import * as ServerSettings from "../serverSettings.ts";
 import {
   CommandId,
   type EnvironmentId,
@@ -8,7 +11,7 @@ import {
   type OrchestratorMcpThreadTimelineItem,
   type OrchestrationV2RemoteTaskChild,
   type OrchestrationV2Subagent,
-  type ProjectId,
+  ProjectId,
   type ProviderInstanceId,
   ProviderDriverKind,
   type RunId,
@@ -122,6 +125,8 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
   const repositoryIdentities = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
   const crypto = yield* Crypto.Crypto;
+  const meshLayout = yield* Effect.serviceOption(MeshLayoutService);
+  const localSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
   const hereId = yield* ServerEnvironment.ServerEnvironment.pipe(
     Effect.flatMap((environment) => environment.getEnvironmentId),
   );
@@ -149,18 +154,38 @@ const make = Effect.gen(function* () {
       Effect.map(Option.getOrUndefined),
       Effect.orElseSucceed(() => undefined),
     );
+    const mesh = meshLayout;
+    const settings = localSettings;
+    const config = Option.isSome(mesh)
+      ? (yield* mesh.value.read).config
+      : Option.isSome(settings)
+        ? (yield* settings.value.getSettings.pipe(
+            Effect.mapError(
+              () =>
+                new OrchestratorMcpFailure({
+                  code: "orchestration_error",
+                  message: "Could not read mesh layout.",
+                }),
+            ),
+          )).sidebarWorkspaces
+        : undefined;
+    const representation =
+      here && config
+        ? remoteRepresentation(
+            config,
+            { environmentId: hereId, id: here.id, workspaceRoot: here.workspaceRoot },
+            environmentId,
+          )
+        : undefined;
+    if (representation?.projectId) return ProjectId.make(representation.projectId);
     // The project's own identity is a one-minute cache that reads blank when
     // cold, so resolve it here, as the other side's t3_project_list does.
     const key =
       here === undefined
         ? undefined
         : (yield* repositoryIdentities.resolve(here.workspaceRoot))?.canonicalKey;
-    if (key === undefined) {
-      return yield* new OrchestratorMcpFailure({
-        code: "target_required",
-        message: "Pass target.projectId: this thread's project has no repository to match there.",
-      });
-    }
+    const samePath: Array<{ readonly id: ProjectId }> = [];
+    const represented: Array<{ readonly id: ProjectId }> = [];
     const matches: Array<{ readonly id: ProjectId; readonly title: string }> = [];
     let cursor: number | null = 0;
     while (cursor !== null) {
@@ -169,10 +194,30 @@ const make = Effect.gen(function* () {
           cursor,
           limit: 100,
         });
+      samePath.push(
+        ...listed.projects.filter(
+          (project) => here && project.workspaceRoot === here.workspaceRoot,
+        ),
+      );
+      represented.push(
+        ...listed.projects.filter(
+          (project) => representation && project.workspaceRoot === representation.path,
+        ),
+      );
       matches.push(
-        ...listed.projects.filter((project) => project.repositoryIdentity?.canonicalKey === key),
+        ...listed.projects.filter(
+          (project) => key !== undefined && project.repositoryIdentity?.canonicalKey === key,
+        ),
       );
       cursor = listed.nextCursor;
+    }
+    if (represented.length === 1) return represented[0]!.id;
+    if (samePath.length === 1) return samePath[0]!.id;
+    if (key === undefined) {
+      return yield* new OrchestratorMcpFailure({
+        code: "target_required",
+        message: "Pass target.projectId: this thread's project has no repository to match there.",
+      });
     }
     if (matches.length === 1) return matches[0]!.id;
     return yield* new OrchestratorMcpFailure({

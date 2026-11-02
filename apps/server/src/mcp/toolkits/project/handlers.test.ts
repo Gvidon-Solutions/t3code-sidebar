@@ -1,6 +1,14 @@
+import * as ReplicaRuntime from "../../../replicas/ReplicaRuntime.ts";
+import * as Replicas from "../../../replicas/ProjectReplicaService.ts";
+import { makeReplicaHarness } from "../../../replicas/replicas.testkit.ts";
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
+import * as Fiber from "effect/Fiber";
+import * as Schema from "effect/Schema";
+import type * as Tool from "effect/ai/Tool";
 import * as ProviderRegistry from "../../../provider/ProviderRegistry.ts";
 import { expect, it } from "@effect/vitest";
 import {
+  ThreadId,
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
@@ -631,4 +639,88 @@ it.effect("deleting a project through MCP also discards its clone record", () =>
 
     expect(discarded).toEqual([harness.projectId]);
   }),
+);
+
+const decodeRemoteLaunch = Schema.decodeUnknownSync(
+  ProjectToolkit.tools.t3_thread_launch.parametersSchema,
+);
+it.effect(
+  "t3_thread_launch places on its target machine and forwards only after registration",
+  () =>
+    Effect.gen(function* () {
+      const localLaunches: ThreadLaunch.ThreadLaunchInput[] = [];
+      const base = clientLaunchHarness({
+        runtimeModeCeiling: "full-access",
+        launched: localLaunches,
+      });
+      const h = makeReplicaHarness("source", true);
+      const sent: ProjectId[] = [];
+      const forwarding = Layer.mock(PeerForwarding.PeerForwarding)({
+        call: (_scope, tool, _target, params) =>
+          Effect.sync(() => {
+            const input = decodeRemoteLaunch(params);
+            sent.push(input.projectId!);
+            return {
+              threadId: ThreadId.make("remote-thread"),
+              projectId: input.projectId!,
+              modelSelection: base.modelSelection,
+              runId: null,
+              status: null,
+              link: "<t3-thread://box/remote-thread>",
+            } as unknown as Tool.Success<typeof tool>;
+          }),
+      });
+      const runtime = Layer.effect(
+        ReplicaRuntime.ReplicaRuntime,
+        Effect.map(Replicas.ProjectReplicaService, (service) => ({ get: Effect.succeed(service) })),
+      );
+      const dependencies = Layer.mergeAll(runtime, forwarding).pipe(
+        Layer.provideMerge(Layer.mergeAll(base.dependencies, h.layer)),
+      );
+      yield* Effect.gen(function* () {
+        const mesh = yield* MeshLayoutService;
+        yield* mesh.edit((config) => ({
+          ...config,
+          machines: { ...config.machines, box: { label: "Box" } },
+        }));
+        const toolkit = yield* ProjectToolkit.pipe(
+          Effect.provide(McpToolAccess.HandlersLayer.layer(ProjectHandlers.layer)),
+        );
+        const launch = yield* toolkit
+          .handle("t3_thread_launch", {
+            projectId: ProjectId.make("primary"),
+            environmentId: EnvironmentId.make("box"),
+            title: "Remote task",
+          })
+          .pipe(Stream.unwrap, Stream.runCollect, Effect.forkChild({ startImmediately: true }));
+        yield* mesh.changes.pipe(
+          Stream.filter((snapshot) =>
+            Boolean(snapshot.config.projectMounts.repo?.some((rep) => rep.environmentId === "box")),
+          ),
+          Stream.take(1),
+          Stream.runDrain,
+        );
+        expect(sent).toEqual([]);
+        expect(localLaunches).toEqual([]);
+        yield* mesh.edit((config) => ({
+          ...config,
+          projectMounts: {
+            ...config.projectMounts,
+            repo: config.projectMounts.repo!.map((rep) =>
+              rep.environmentId === "box"
+                ? { ...rep, projectId: "box-project", pathAllocated: true }
+                : rep,
+            ),
+          },
+          projectMountStatus: { repo: { box: { state: "watching", updatedAt: "" } } },
+        }));
+        const result = yield* Fiber.join(launch);
+        expect(result.at(-1)?.result).toMatchObject({
+          threadId: "remote-thread",
+          projectId: "box-project",
+        });
+        expect(sent).toEqual(["box-project"]);
+        expect(localLaunches).toEqual([]);
+      }).pipe(Effect.provide(dependencies));
+    }),
 );

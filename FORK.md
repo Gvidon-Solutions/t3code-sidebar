@@ -108,17 +108,18 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
-### 2026-11-02 — T3 Mesh — replica backend components (Stage E, partial)
+### 2026-11-02 — T3 Mesh — replicas on other machines (server)
 
-- **What.** Pinned Mutagen installation and an isolated CLI runner, replica reconciliation service,
-  machine identity routes, and replica settings schemas. This does not yet expose replicas in the
-  running server, MCP, or clients.
-- **How.** Downloads Mutagen 0.18.1 using pinned release SHA256 checksums; all CLI calls use a
-  server-specific data directory. Reconciliation chooses a single driver from layout routes,
-  adopts labeled sessions, records state changes, registers local projects after watching, and
-  leaves orphan sessions and removed replicas' files intact. SSH identities use a managed block.
-- **Where.** `apps/server/src/replicas/`; seams: `packages/contracts/src/{settings,sidebarWorkspaces}.ts`.
-  Tests use an in-memory layout layer and a real local-to-local Mutagen integration.
+- **What.** Server-side project placement and thread launch on a mesh machine, with managed
+  Mutagen replicas and live sync state. Web/mobile placement controls are maintained separately.
+- **How.** Mutagen 0.18.1 is SHA256-pinned and uses a private daemon directory. A single driver
+  reconciles on startup, layout changes and every 30 seconds; reserved destination paths survive
+  restart. State RPCs require project operation permission. MCP places/lists representations,
+  waits for registration before a remote launch, and replica prompts name the primary's SSH command.
+  Stage C supplies the MeshLayoutService port; older graphs return a disabled error without it.
+- **Where.** `apps/server/src/replicas/`; seams: server runtime, WebSocket/MCP handlers,
+  `peer/RemoteDelegation.ts`, `ProviderTurnStartService.ts`, contracts and the capability descriptor.
+  Tests include a CRDT test layer, RPC/MCP/runtime integration and real local Mutagen synchronization.
 
 ### 2026-11-02 — T3 Mesh — layout CRDT core
 
