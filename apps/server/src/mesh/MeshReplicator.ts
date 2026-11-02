@@ -141,7 +141,9 @@ export const layer = Layer.effect(
                     const failures = (retries.get(peer.environmentId)?.failures ?? 0) + 1;
                     retries.set(peer.environmentId, {
                       failures,
-                      after: now + Math.min(60000, 1000 * 2 ** Math.min(failures, 6)),
+                      after:
+                        (yield* Clock.currentTimeMillis) +
+                        Math.min(60000, 1000 * 2 ** Math.min(failures, 6)),
                     });
                     yield* sql`INSERT INTO mesh_peer_state(environment_id, last_error) VALUES (${peer.environmentId}, ${String(cause)}) ON CONFLICT(environment_id) DO UPDATE SET last_error = excluded.last_error`;
                     yield* Effect.logWarning("Mesh peer exchange failed", cause);

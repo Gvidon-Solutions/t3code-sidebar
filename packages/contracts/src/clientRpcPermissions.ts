@@ -17,6 +17,8 @@ import { WS_METHODS } from "./rpc.ts";
 
 /** Incremental client enforcement; the server still authorizes every request. */
 export const CLIENT_GUARDED_RPC_SCOPES = {
+  [MESH_WS_METHODS.layoutGet]: AuthOrchestrationReadScope,
+  [MESH_WS_METHODS.layoutSubscribe]: AuthOrchestrationReadScope,
   [MESH_WS_METHODS.layoutApply]: AuthSettingsWriteScope,
   [WS_METHODS.previewClose]: AuthPreviewOperateScope,
   // Stopping a server signals its processes, as closing a terminal does.

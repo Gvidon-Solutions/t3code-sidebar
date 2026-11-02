@@ -42,3 +42,22 @@ it("adopts legacy into a workspace already edited by a peer without recreating i
   ]);
   expect(Object.values(result.placements).flat()).not.toContain("main");
 });
+
+it("keeps both orders and folds when a received document already contains both legacy ids", () => {
+  const before = decodeConfig({
+    workspaces: [
+      { id: "main", name: "main" },
+      { id: "old-main", name: "main" },
+    ],
+    placements: { a: ["main"], b: ["old-main"] },
+    workspaceProjectOrder: { main: ["a"], "old-main": ["b"] },
+    workspaceFold: { main: { a: "quiet" }, "old-main": { b: "active" } },
+  });
+  const doc = importLegacy(before, "peer", "0000000000000.00000.peer");
+  doc["ws/main"] = { ...doc["ws/main"]!, h: "0000000000100.00000.peer" };
+  const result = materialize(adoptLegacy(decodeConfig({}), doc));
+  expect(result.workspaces).toHaveLength(1);
+  expect(result.workspaceProjectOrder.main).toEqual(expect.arrayContaining(["a", "b"]));
+  expect(result.workspaceFold.main).toEqual({ a: "quiet", b: "active" });
+  expect(result.placements).toEqual({ a: ["main"], b: ["main"] });
+});

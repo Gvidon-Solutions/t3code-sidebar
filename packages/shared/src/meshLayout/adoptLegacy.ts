@@ -21,6 +21,14 @@ export function adoptLegacy(
       source.workspaces.map((w) => [w.id, existing.get(w.name.trim().toLowerCase()) ?? w.id]),
     );
     const remap = (id: string) => ids.get(id) ?? id;
+    const workspaceProjectOrder: Record<string, string[]> = {};
+    for (const [id, order] of Object.entries(source.workspaceProjectOrder))
+      workspaceProjectOrder[remap(id)] = [
+        ...new Set([...(workspaceProjectOrder[remap(id)] ?? []), ...order]),
+      ];
+    const workspaceFold: Record<string, Record<string, "quiet" | "active">> = {};
+    for (const [id, fold] of Object.entries(source.workspaceFold))
+      workspaceFold[remap(id)] = { ...workspaceFold[remap(id)], ...fold };
     return {
       ...source,
       workspaces: [
@@ -34,12 +42,8 @@ export function adoptLegacy(
       ),
       rules: source.rules.map((rule) => ({ ...rule, workspace: remap(rule.workspace) })),
       defaultWorkspace: source.defaultWorkspace === null ? null : remap(source.defaultWorkspace),
-      workspaceProjectOrder: Object.fromEntries(
-        Object.entries(source.workspaceProjectOrder).map(([w, order]) => [remap(w), order]),
-      ),
-      workspaceFold: Object.fromEntries(
-        Object.entries(source.workspaceFold).map(([w, fold]) => [remap(w), fold]),
-      ),
+      workspaceProjectOrder,
+      workspaceFold,
     };
   };
   const unified = mergeLegacyConfigs(
