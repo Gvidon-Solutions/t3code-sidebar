@@ -274,6 +274,10 @@ function useSettingsIndexSections(): SettingsListSection[] {
       ],
     },
     {
+      title: "Connections",
+      rows: [page("SettingsMachines", "desktopcomputer", "Machines")],
+    },
+    {
       rows: [
         serverPage("SettingsEnvironmentMaintenance", "arrow.clockwise", "Maintenance"),
         page("SettingsLabs", "sparkles", "Labs"),

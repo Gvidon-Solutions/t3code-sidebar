@@ -20,6 +20,7 @@ import {
   resolveThreadProviderStack,
 } from "@t3tools/client-runtime/state/models";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
+import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
 import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
@@ -156,6 +157,27 @@ function JumpHintBadge(props: { label: string }) {
     >
       {props.label}
     </span>
+  );
+}
+
+function MachineTag(props: { machine: MachineDisplay }) {
+  const { machine } = props;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label={`Machine: ${machine.label}`}
+            className="flex h-4 shrink-0 items-center rounded px-1 font-mono text-3xs font-semibold tracking-tight uppercase"
+            style={{ color: machine.color, backgroundColor: `${machine.color}22` }}
+          />
+        }
+      >
+        {machine.tag}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{machine.label}</TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -559,6 +581,8 @@ type SidebarThreadRowProps = {
   currentEnvironmentId: string | null;
   environmentLabel: string | null;
   environmentMachine: EnvironmentMachineKind;
+  /** Sidebar fork: a machine tag left of the title, replacing the remote icon. */
+  machineTag?: MachineDisplay | null | undefined;
   scratchMachineLabel: string | null;
   project: EnvironmentProject | null;
   projectDisplayName: string | null;
@@ -1123,7 +1147,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   ) : null;
 
   const remoteMachineIcon =
-    isRemote && !showsScratchMachine ? (
+    isRemote && !showsScratchMachine && props.machineTag == null ? (
       <span className="inline-flex shrink-0 items-center text-sidebar-muted-foreground/70">
         <EnvironmentMachineIcon aria-hidden kind={props.environmentMachine} className="size-3.5" />
       </span>
@@ -1246,6 +1270,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 </span>
               )}
               {draftIndicator}
+              {props.machineTag ? <MachineTag machine={props.machineTag} /> : null}
               {title}
               {multiline ? titleLineIcons : null}
               {pinIndicator}
@@ -1568,6 +1593,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               {props.sweepAction !== null ? dragDestination : null}
             </div>
             <div className="mt-1 flex min-w-0 items-center gap-1.5">
+              {props.machineTag ? <MachineTag machine={props.machineTag} /> : null}
               {title}
               {isRegeneratingTitle ? (
                 <span role="status" className="sr-only">

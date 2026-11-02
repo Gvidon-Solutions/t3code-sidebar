@@ -126,6 +126,7 @@ import {
   SettingsOpenSourceLicensesRouteScreen,
 } from "./features/settings/SettingsOpenSourceLicensesRouteScreen";
 import { SettingsProjectGroupingRouteScreen } from "./features/settings/SettingsProjectGroupingRouteScreen";
+import { SettingsMachinesRouteScreen } from "./features/settings/SettingsMachinesRouteScreen";
 import { SettingsProjectOverviewRouteScreen } from "./features/settings/SettingsProjectOverviewRouteScreen";
 import { UsageLimitAccountScreen } from "./features/usage/UsageLimitsPooled";
 import { UsageRouteScreen } from "./features/usage/UsageRouteScreen";
@@ -345,6 +346,14 @@ const SETTINGS_SCREENS = {
     options: {
       ...SETTINGS_PAGE_OPTIONS,
       title: "General",
+    },
+  }),
+  SettingsMachines: createNativeStackScreen({
+    screen: SettingsMachinesRouteScreen,
+    linking: "settings/machines",
+    options: {
+      ...SETTINGS_PAGE_OPTIONS,
+      title: "Machines",
     },
   }),
   SettingsOrganization: createNativeStackScreen({

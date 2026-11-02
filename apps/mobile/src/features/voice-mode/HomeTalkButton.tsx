@@ -102,6 +102,7 @@ export function HomeTalkButton() {
           memberKeys: scope.projectRefs.map((ref) =>
             scopedProjectKey(ref.environmentId, ref.projectId),
           ),
+          environmentIds: scope.projectRefs.map((ref) => ref.environmentId),
           isScratch: false,
         })),
         threads: appAtomRegistry.get(environmentThreadShells.navigationThreadShellsAtom),

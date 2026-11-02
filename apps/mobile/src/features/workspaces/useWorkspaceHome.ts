@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import {
   projectFoldModeOf,
@@ -8,11 +9,16 @@ import {
   type WorkspaceProjectIdentity,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  type EnvironmentId,
+  type ScopedProjectRef,
+} from "@t3tools/contracts";
 import { useCallback, useMemo } from "react";
 
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { useServerConfigs } from "../../state/entities";
+import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import type { HomeProjectScope } from "../home/homeThreadList";
 import {
   resolveThreadListV2Status,
@@ -48,6 +54,16 @@ export function useWorkspaceHome(input: {
     toggleProjectIn: toggleProjectInWorkspace,
   } = workspaces;
   const serverConfigs = useServerConfigs();
+  const connectedEnvironmentIds = useAtomValue(connectedEnvironmentIdsAtom);
+  const resolveMachineDisplay = useCallback(
+    (environmentId: EnvironmentId) =>
+      machineDisplayOf(
+        config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+        environmentId,
+        serverConfigs.get(environmentId)?.environment.label ?? environmentId,
+      ),
+    [config, serverConfigs],
+  );
   const voiceThreadKey = useLiveVoiceKey();
   // Subagents, which the navigation list leaves out, hang under their thread.
   const agentThreads = useAtomValue(agentThreadShellsAtom);
@@ -158,6 +174,7 @@ export function useWorkspaceHome(input: {
         memberKeys: scope.projectRefs.map((member) =>
           scopedProjectKey(member.environmentId, member.projectId),
         ),
+        environmentIds: scope.projectRefs.map((member) => member.environmentId),
         isScratch: isScratchScope(scope),
         workspaceIds: workspaceIdsOf(scope),
       });
@@ -222,6 +239,8 @@ export function useWorkspaceHome(input: {
         queuedThreadKeys: list.queuedThreadKeys,
         selectedThreadKey: list.selectedThreadKey,
         voiceThreadKey,
+        connectedEnvironmentIds,
+        resolveMachineDisplay,
         now: Date.now(),
         toRow: list.toRow,
       });
@@ -230,7 +249,17 @@ export function useWorkspaceHome(input: {
         ? [first, ...pending, ...rest]
         : [...pending, first, ...rest];
     },
-    [config, currentWorkspaceId, folders, homeThreads, otherFolders, toggles, voiceThreadKey],
+    [
+      config,
+      currentWorkspaceId,
+      folders,
+      homeThreads,
+      otherFolders,
+      toggles,
+      voiceThreadKey,
+      connectedEnvironmentIds,
+      resolveMachineDisplay,
+    ],
   );
 
   /** The open workspace's folders for the long-press drag, read when a drag starts. */

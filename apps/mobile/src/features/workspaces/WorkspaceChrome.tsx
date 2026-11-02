@@ -34,7 +34,6 @@ import { AndroidAnchoredMenu } from "../../components/ui/AndroidAnchoredMenu";
 import { Menu } from "../../components/ui/Menu";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
-import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import type {
   WorkspaceAgentsListItem,
   WorkspaceFolderListItem,
@@ -277,10 +276,8 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly onNewThread: (project: EnvironmentProject) => void;
 }) {
   const { item } = props;
-  const { savedConnectionsById } = useSavedRemoteConnections();
-  const machineLabel = savedConnectionsById[item.project.environmentId]?.environmentLabel;
   const folderTitle = item.isScratch
-    ? `${item.title} · ${machineLabel ?? item.project.environmentId}`
+    ? `${item.title} · ${item.machineLabel || item.project.environmentId}`
     : item.title;
   const actions = useMemo((): MenuAction[] => {
     const shownIn = item.workspaceIds;

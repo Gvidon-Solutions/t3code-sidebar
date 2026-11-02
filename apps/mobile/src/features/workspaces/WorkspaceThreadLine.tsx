@@ -1,10 +1,10 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
 import { View } from "react-native";
 
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
 import { cn } from "../../lib/cn";
-import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import { QueuedMessageIcon } from "../threads/queued-message-icon";
 
 /**
@@ -24,8 +24,9 @@ export function WorkspaceAgentGuide(props: { readonly inRow?: boolean }) {
 
 /**
  * A thread as one line inside a workspace folder, like the desktop sidebar:
- * status glyph, title (with the project for pinned and snoozed rows), time.
- * The row around it (press, long-press menu, swipes) is upstream's.
+ * status glyph, machine tag, title (with the project for pinned and snoozed
+ * rows), time. The row around it (press, long-press menu, swipes) is
+ * upstream's.
  */
 export function WorkspaceThreadLine(props: {
   readonly thread: EnvironmentThreadShell;
@@ -36,6 +37,8 @@ export function WorkspaceThreadLine(props: {
   /** Pinned threads outside the Pinned section keep a pin mark. */
   readonly showPin: boolean;
   readonly projectLabel: string | null;
+  /** Set when the list can mix machines: a tag before the title, the full name in its label. */
+  readonly machineTag?: MachineDisplay | null;
   readonly timeLabel: string;
   readonly working: boolean;
   readonly hasQueuedMessages: boolean;
@@ -45,10 +48,6 @@ export function WorkspaceThreadLine(props: {
   /** Holds this device's voice conversation: a wave before the time. */
   readonly voice?: boolean;
 }) {
-  const { savedConnectionsById } = useSavedRemoteConnections();
-  const machineLabel =
-    savedConnectionsById[props.thread.environmentId]?.environmentLabel ??
-    props.thread.environmentId;
   return (
     <View
       className={cn(
@@ -72,6 +71,21 @@ export function WorkspaceThreadLine(props: {
           />
         ) : null}
       </View>
+      {props.machineTag ? (
+        <View
+          accessible
+          accessibilityLabel={`Machine: ${props.machineTag.label}`}
+          className="shrink-0 rounded px-1 py-0.5"
+          style={{ backgroundColor: `${props.machineTag.color}26` }}
+        >
+          <Text
+            className="text-3xs font-t3-bold uppercase"
+            style={{ color: props.machineTag.color }}
+          >
+            {props.machineTag.tag}
+          </Text>
+        </View>
+      ) : null}
       <Text
         className={cn(
           "min-w-0 flex-1 text-[15px]",
@@ -86,13 +100,6 @@ export function WorkspaceThreadLine(props: {
         {props.thread.title}
       </Text>
       {props.hasQueuedMessages ? <QueuedMessageIcon selected={props.selected} /> : null}
-      <Text
-        accessibilityLabel={`Machine: ${machineLabel}`}
-        className="max-w-[90px] rounded bg-subtle px-1.5 py-0.5 text-3xs text-foreground-muted"
-        numberOfLines={1}
-      >
-        {machineLabel}
-      </Text>
       {props.showPin ? (
         <SymbolView name="pin" size={11} tintColorClassName="accent-foreground-muted" />
       ) : null}

@@ -32,6 +32,7 @@ export type SettingsPath =
   | "/settings/source-control"
   | "/settings/worktrees"
   | "/settings/connections"
+  | "/settings/machines"
   | "/settings/access"
   | "/settings/secrets"
   | "/settings/maintenance"
@@ -102,6 +103,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/source-control": "Source control",
   "/settings/worktrees": "Worktrees",
   "/settings/connections": "Environments",
+  "/settings/machines": "Machines",
   "/settings/access": "Sharing & access",
   "/settings/secrets": "Secrets",
   "/settings/maintenance": "Maintenance",
@@ -144,6 +146,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     heading: "Connections",
     paths: [
       "/settings/connections",
+      "/settings/machines",
       "/settings/access",
       ...(isSecretsFeatureEnabled ? (["/settings/secrets"] as const) : []),
     ],
@@ -216,6 +219,13 @@ const SOURCE_CONTROL_HOST_TERMS = sourceControlClients.definitions
   .join(" ");
 
 export const SETTINGS_SEARCH_ITEMS = [
+  {
+    id: "machines-names",
+    targetId: "machines",
+    title: "Machine names and tags",
+    to: "/settings/machines",
+    searchTerms: ["machines", "servers", "devices", "label", "tag", "color", "cross-device"],
+  },
   {
     id: "storage-worktree-keep-when",
     targetId: "storage-worktrees",
@@ -1198,6 +1208,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/threads": null,
   "/settings/browser": null,
   "/settings/devices": null,
+  "/settings/machines": null,
   "/settings/source-control": "environment-defaults",
   "/settings/worktrees": "project-defaults",
   "/settings/connections": "connections",

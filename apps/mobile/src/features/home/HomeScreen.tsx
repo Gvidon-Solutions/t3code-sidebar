@@ -631,9 +631,10 @@ export function HomeScreen(props: HomeScreenProps) {
     return (
       <ThreadListV2Row
         compact={
-          compact
+          compact && item.type === "ws-thread"
             ? {
                 projectLabel: item.projectLabel,
+                machineTag: item.machineTag,
                 nested: item.nested === true,
                 voice: item.voice === true,
               }

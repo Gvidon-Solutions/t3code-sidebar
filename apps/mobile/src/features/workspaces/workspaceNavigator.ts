@@ -17,6 +17,10 @@ import {
   type ProjectFoldMode,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import {
+  spansMultipleEnvironments,
+  type MachineDisplay,
+} from "@t3tools/client-runtime/state/machine-display";
+import {
   sortActiveThreadsByOrderKey,
   sortPinnedThreadsByOrderKey,
   toSortableTimestamp,
@@ -48,6 +52,8 @@ export interface WorkspaceFolderInput {
   readonly projectCreatedAt: string | null;
   /** `environmentId:projectId` of every member project. */
   readonly memberKeys: ReadonlyArray<string>;
+  /** Environment ids of the member projects, for machine tags. */
+  readonly environmentIds: ReadonlyArray<string>;
   /** The environment's "No project" folder: never quiet, always last. */
   readonly isScratch: boolean;
   /** Every workspace the project shows in, for the folder's "Show in workspaces". */
@@ -83,6 +89,8 @@ export interface WorkspaceFolderListItem {
   readonly workspaceIds: ReadonlyArray<string>;
   readonly attention: number;
   readonly working: number;
+  /** The machine "No project" belongs to, named the way the sidebar names it. */
+  readonly machineLabel: string;
 }
 
 export interface WorkspaceMoreListItem {
@@ -98,6 +106,8 @@ export interface WorkspaceMoreListItem {
 export interface WorkspaceThreadListItem extends Omit<ThreadListV2ThreadListItem, "type"> {
   readonly type: "ws-thread";
   readonly projectLabel: string | null;
+  /** The machine tag shown before the title in a list that can mix machines. */
+  readonly machineTag: MachineDisplay | null;
   /** An agent drawn under the thread that started it. */
   readonly nested?: boolean;
   /** The thread holding this device's voice conversation, drawn first with a wave. */
@@ -262,10 +272,15 @@ export function buildWorkspaceHomeItems(input: {
   readonly selectedThreadKey: string | null;
   /** `environmentId:threadId` of this device's voice conversation: shown first, only there. */
   readonly voiceThreadKey?: string | null;
+  /** Connected machines; a cross-project section tags rows only when there are two or more. */
+  readonly connectedEnvironmentIds: ReadonlyArray<string>;
+  /** How the sidebar names a machine on one environment. */
+  readonly resolveMachineDisplay: (environmentId: EnvironmentId) => MachineDisplay;
   readonly now: number;
   readonly toRow: (item: ThreadListV2Item) => ThreadListV2ThreadListItem;
 }): WorkspaceHomeListItem[] {
   const nowIso = new Date(input.now).toISOString();
+  const sectionMachineTags = spansMultipleEnvironments(input.connectedEnvironmentIds);
   const voiceThread =
     input.voiceThreadKey == null
       ? undefined
@@ -368,6 +383,7 @@ export function buildWorkspaceHomeItems(input: {
       voice?: boolean;
     },
     projectLabel: string | null,
+    showMachineTag: boolean,
   ) => {
     const { type: _type, ...row } = input.toRow({
       thread,
@@ -383,6 +399,7 @@ export function buildWorkspaceHomeItems(input: {
       key: `ws-thread:${threadKey(thread)}`,
       timeLabel: row.snoozeWakeLabelText ?? compactAgo(threadActivityMs(thread), input.now),
       projectLabel,
+      machineTag: showMachineTag ? input.resolveMachineDisplay(thread.environmentId) : null,
       ...(flags.nested ? { nested: true } : {}),
       ...(flags.voice ? { voice: true } : {}),
     });
@@ -417,7 +434,7 @@ export function buildWorkspaceHomeItems(input: {
     });
     if (!open) return;
     for (const agent of list) {
-      if (agent !== voiceThread) pushThread(agent, { variant: "card", nested: true }, null);
+      if (agent !== voiceThread) pushThread(agent, { variant: "card", nested: true }, null, false);
     }
   };
 
@@ -426,6 +443,7 @@ export function buildWorkspaceHomeItems(input: {
       voiceThread,
       { variant: "card", voice: true },
       folderByMember.get(`${voiceThread.environmentId}:${voiceThread.projectId}`)?.title ?? null,
+      sectionMachineTags,
     );
   }
   if (pinned.length > 0) {
@@ -438,13 +456,21 @@ export function buildWorkspaceHomeItems(input: {
       open: true,
     });
     for (const thread of sortPinnedThreadsByOrderKey(pinned)) {
-      pushThread(thread, { variant: "card", pinned: true }, titleByThread.get(threadKey(thread))!);
+      pushThread(
+        thread,
+        { variant: "card", pinned: true },
+        titleByThread.get(threadKey(thread))!,
+        sectionMachineTags,
+      );
     }
   }
 
   const pushFolder = (model: FolderModel) => {
     const { folderKey } = model;
     const open = !model.quiet !== has(folderKey);
+    const folderMachineTags = model.input.isScratch
+      ? sectionMachineTags
+      : spansMultipleEnvironments(model.input.environmentIds);
     const holdsSelected = (thread: EnvironmentThreadShell) =>
       threadKey(thread) === input.selectedThreadKey || threadKey(thread) === selectedRootKey;
     rows.push({
@@ -461,10 +487,11 @@ export function buildWorkspaceHomeItems(input: {
       workspaceIds: model.input.workspaceIds ?? [],
       attention: model.all.filter(needsAttention).length,
       working: model.all.filter((thread) => resolveThreadListV2Status(thread) === "working").length,
+      machineLabel: input.resolveMachineDisplay(model.input.project.environmentId).label,
     });
     if (!open) {
       const selected = model.active.find(holdsSelected);
-      if (selected) pushThread(selected, { variant: "card" }, null);
+      if (selected) pushThread(selected, { variant: "card" }, null, folderMachineTags);
       return;
     }
     const moreKey = `more:${folderKey}`;
@@ -475,7 +502,7 @@ export function buildWorkspaceHomeItems(input: {
       const selected = model.active.find(holdsSelected);
       if (selected && !visible.includes(selected)) visible = [...visible, selected];
     }
-    for (const thread of visible) pushThread(thread, { variant: "card" }, null);
+    for (const thread of visible) pushThread(thread, { variant: "card" }, null, folderMachineTags);
     if (model.active.length > FOLDER_PREVIEW_COUNT) {
       rows.push({
         type: "ws-more",
@@ -497,7 +524,8 @@ export function buildWorkspaceHomeItems(input: {
       const settledKey = `settled:${folderKey}`;
       const settledOpen = has(settledKey);
       if (settledOpen) {
-        for (const thread of model.settled) pushThread(thread, { variant: "slim" }, null);
+        for (const thread of model.settled)
+          pushThread(thread, { variant: "slim" }, null, folderMachineTags);
       }
       rows.push({
         type: "ws-more",
@@ -550,6 +578,7 @@ export function buildWorkspaceHomeItems(input: {
           thread,
           { variant: "card", snoozed: true },
           titleByThread.get(threadKey(thread))!,
+          sectionMachineTags,
         );
       }
     }
@@ -580,7 +609,8 @@ export function workspaceHomeItemsAreEqual(
         previous.foldMode === item.foldMode &&
         previous.workspaceIds.join("\n") === item.workspaceIds.join("\n") &&
         previous.attention === item.attention &&
-        previous.working === item.working
+        previous.working === item.working &&
+        previous.machineLabel === item.machineLabel
       );
     case "ws-more":
       return previous.type === "ws-more" && previous.label === item.label;
@@ -599,6 +629,9 @@ export function workspaceHomeItemsAreEqual(
       return (
         previous.type === "ws-thread" &&
         previous.projectLabel === item.projectLabel &&
+        previous.machineTag?.label === item.machineTag?.label &&
+        previous.machineTag?.tag === item.machineTag?.tag &&
+        previous.machineTag?.color === item.machineTag?.color &&
         previous.nested === item.nested &&
         previous.voice === item.voice &&
         threadListV2ListItemsAreEqual(

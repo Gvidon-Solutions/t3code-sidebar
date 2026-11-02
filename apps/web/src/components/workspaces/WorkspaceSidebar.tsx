@@ -23,6 +23,10 @@ import {
 } from "@t3tools/client-runtime/state/thread-agents";
 import { effectiveSnoozed } from "@t3tools/client-runtime/state/thread-settled";
 import {
+  machineDisplayOf,
+  spansMultipleEnvironments,
+} from "@t3tools/client-runtime/state/machine-display";
+import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   type ContextMenuItem,
   type EnvironmentId,
@@ -294,9 +298,14 @@ export default function WorkspaceSidebar() {
         : [],
     ),
   );
-  const environmentLabels = new Map(
+  const environmentLabels = new Map<string, string>(
     environments.map((env) => [env.environmentId, env.label] as const),
   );
+  const machineDisplayFor = (environmentId: string) =>
+    machineDisplayOf(config, environmentId, environmentLabels.get(environmentId) ?? environmentId);
+  // Rows outside a folder (pinned, snoozed, voice, search) show tags only when the
+  // list can mix machines at all.
+  const sectionMachineTags = spansMultipleEnvironments(environmentLabels.keys());
   const projectGroups = sortLogicalProjectsForSidebar(
     buildSidebarProjectSnapshots({
       projects,
@@ -998,6 +1007,7 @@ export default function WorkspaceSidebar() {
     thread: SidebarThreadSummary,
     variant: WorkspaceRowVariant,
     projectLabel?: string | null,
+    showMachineTag = false,
   ) => {
     const key = threadKeyOf(thread);
     const capabilities = capabilitiesOf(thread);
@@ -1009,6 +1019,7 @@ export default function WorkspaceSidebar() {
         isActive={key === routeThreadKey}
         now={now}
         projectLabel={projectLabel ?? null}
+        machineTag={showMachineTag ? machineDisplayFor(thread.environmentId) : null}
         jumpLabel={showJumpHints ? (jumpLabelByKey.get(key) ?? null) : null}
         isRenaming={renamingKey === key}
         canSettle={capabilities?.threadSettlement === true}
@@ -1032,22 +1043,23 @@ export default function WorkspaceSidebar() {
     thread: SidebarThreadSummary,
     variant: WorkspaceRowVariant,
     projectLabel?: string | null,
+    showMachineTag = false,
   ) => {
     const key = threadKeyOf(thread);
     if (key === voiceThreadKey && variant !== "voice") return null;
     const agents = model.agentsByRoot.get(key);
-    if (!agents) return renderRow(thread, variant, projectLabel);
+    if (!agents) return renderRow(thread, variant, projectLabel, showMachineTag);
     const summary = summarizeThreadAgents(agents);
     const choiceKey = threadAgentsChoiceKey(key, summary);
     const display = threadAgentsDisplay(summary, {
       holdsRoute: routeRootKey === key,
       choice: view.sectionOpen[choiceKey],
     });
-    if (display === "hidden") return renderRow(thread, variant, projectLabel);
+    if (display === "hidden") return renderRow(thread, variant, projectLabel, showMachineTag);
     const open = display === "open";
     return (
       <Fragment key={key}>
-        {renderRow(thread, variant, projectLabel)}
+        {renderRow(thread, variant, projectLabel, showMachineTag)}
         <WorkspaceAgentGroup
           summary={summary}
           dotKeys={agents.map(threadKeyOf)}
@@ -1066,7 +1078,7 @@ export default function WorkspaceSidebar() {
   };
   const voiceRow = voiceThread ? (
     <div className="mb-1 flex flex-col">
-      {renderThread(voiceThread, "voice", labelOfThread(voiceThread))}
+      {renderThread(voiceThread, "voice", labelOfThread(voiceThread), sectionMachineTags)}
     </div>
   ) : null;
 
@@ -1145,6 +1157,11 @@ export default function WorkspaceSidebar() {
       if (activeRow && !visible.includes(activeRow)) visible = [...visible, activeRow];
     }
     const collapsedActive = !open ? folder.active.find((thread) => holdsRoute(thread)) : undefined;
+    const machineTags = folder.isScratch
+      ? sectionMachineTags
+      : spansMultipleEnvironments(
+          folder.group.memberProjects.map((member) => member.environmentId),
+        );
     const attention = folder.all.filter(needsAttention).length;
     const working = folder.all.filter(
       (thread) => resolveSidebarThreadStatus(thread) === "working",
@@ -1261,7 +1278,7 @@ export default function WorkspaceSidebar() {
         </Tooltip>
         {open ? (
           <div className="flex flex-col pl-3">
-            {visible.map((thread) => renderThread(thread, "active"))}
+            {visible.map((thread) => renderThread(thread, "active", null, machineTags))}
             {folder.active.length > FOLDER_PREVIEW_COUNT ? (
               <MoreButton onClick={() => view.toggleFolderExpanded(folderKey)}>
                 {expanded ? "Show less" : `Show ${folder.active.length - visible.length} more`}
@@ -1277,7 +1294,7 @@ export default function WorkspaceSidebar() {
                 {settledOpen
                   ? folder.settled
                       .slice(0, expanded ? undefined : SETTLED_PAGE_COUNT)
-                      .map((thread) => renderThread(thread, "settled"))
+                      .map((thread) => renderThread(thread, "settled", null, machineTags))
                   : null}
                 <MoreButton onClick={() => view.toggleSettledOpen(folderKey)}>
                   {settledOpen ? "Hide settled" : `${folder.settled.length} settled`}
@@ -1286,7 +1303,9 @@ export default function WorkspaceSidebar() {
             ) : null}
           </div>
         ) : collapsedActive ? (
-          <div className="flex flex-col pl-3">{renderThread(collapsedActive, "active")}</div>
+          <div className="flex flex-col pl-3">
+            {renderThread(collapsedActive, "active", null, machineTags)}
+          </div>
         ) : null}
       </div>
     );
@@ -1310,7 +1329,9 @@ export default function WorkspaceSidebar() {
         {nested ? null : voiceRow}
         {!nested && pinned.length > 0 ? (
           <Section icon={<PinIcon className="size-3" />} label="Pinned">
-            {pinned.map((thread) => renderThread(thread, "pinned", labelOfThread(thread)))}
+            {pinned.map((thread) =>
+              renderThread(thread, "pinned", labelOfThread(thread), sectionMachineTags),
+            )}
           </Section>
         ) : null}
         {loud.length === 0 && quiet.length === 0 ? (
@@ -1345,7 +1366,9 @@ export default function WorkspaceSidebar() {
             open={snoozedOpen}
             onToggle={() => view.setSectionOpen(snoozedKey, !snoozedOpen)}
           >
-            {bucket.snoozed.map((thread) => renderThread(thread, "snoozed", labelOfThread(thread)))}
+            {bucket.snoozed.map((thread) =>
+              renderThread(thread, "snoozed", labelOfThread(thread), sectionMachineTags),
+            )}
           </CollapsibleSection>
         ) : null}
       </div>
@@ -1367,7 +1390,9 @@ export default function WorkspaceSidebar() {
         {voiceRow}
         {allPinned.length > 0 ? (
           <Section icon={<PinIcon className="size-3" />} label="Pinned">
-            {allPinned.map((thread) => renderThread(thread, "pinned", labelOfThread(thread)))}
+            {allPinned.map((thread) =>
+              renderThread(thread, "pinned", labelOfThread(thread), sectionMachineTags),
+            )}
           </Section>
         ) : null}
         {[...model.byWorkspace.values()].map((bucket) => {
@@ -1415,7 +1440,9 @@ export default function WorkspaceSidebar() {
             open={snoozedOpen}
             onToggle={() => view.setSectionOpen("snoozed:all", !snoozedOpen)}
           >
-            {allSnoozed.map((thread) => renderThread(thread, "snoozed", labelOfThread(thread)))}
+            {allSnoozed.map((thread) =>
+              renderThread(thread, "snoozed", labelOfThread(thread), sectionMachineTags),
+            )}
           </CollapsibleSection>
         ) : null}
       </div>
@@ -1434,6 +1461,7 @@ export default function WorkspaceSidebar() {
             thread,
             thread.settledOverride === "settled" ? "settled" : "active",
             folder.label,
+            sectionMachineTags,
           ),
         )}
       </div>

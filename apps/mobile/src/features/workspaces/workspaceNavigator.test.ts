@@ -17,6 +17,7 @@ function folder(id: string, title: string, isScratch = false) {
     project: { id, title } as unknown as EnvironmentProject,
     projectCreatedAt: hoursAgo(24 * 60),
     memberKeys: [`${environmentId}:${id}`],
+    environmentIds: [environmentId],
     isScratch,
   };
 }
@@ -41,6 +42,7 @@ function build(
     otherFolders?: ReturnType<typeof folder>[];
     projectOrder?: ReadonlyArray<string>;
     voiceThreadKey?: string;
+    connectedEnvironmentIds?: ReadonlyArray<string>;
   } = {},
 ): WorkspaceHomeListItem[] {
   return buildWorkspaceHomeItems({
@@ -57,6 +59,8 @@ function build(
     queuedThreadKeys: new Set(),
     selectedThreadKey: null,
     ...(options.voiceThreadKey ? { voiceThreadKey: options.voiceThreadKey } : {}),
+    connectedEnvironmentIds: options.connectedEnvironmentIds ?? [environmentId],
+    resolveMachineDisplay: (id) => ({ label: id, tag: "EN", color: "#000000" }),
     now: NOW,
     toRow: (item: ThreadListV2Item) => ({
       type: "v2-thread",
@@ -249,5 +253,31 @@ describe("buildWorkspaceHomeItems", () => {
       "thread chat",
       "section snoozed 1",
     ]);
+  });
+
+  it("tags rows in a folder only when its project spans machines", () => {
+    const single = build([thread("one", "a")]);
+    const shared = build([thread("one", "a")], [], {
+      folders: [
+        {
+          ...folder("a", "Alpha"),
+          environmentIds: [environmentId, EnvironmentId.make("other")],
+        },
+      ],
+    });
+    const tagOf = (items: WorkspaceHomeListItem[]) =>
+      items.find((item) => item.type === "ws-thread")?.machineTag ?? null;
+    expect(tagOf(single)).toBeNull();
+    expect(tagOf(shared)?.tag).toBe("EN");
+  });
+
+  it("tags cross-project sections when more than one machine is connected", () => {
+    const threads = [thread("pinned", "a", { pinnedAt: hoursAgo(1) })];
+    const tagOf = (items: WorkspaceHomeListItem[]) =>
+      items.find((item) => item.type === "ws-thread")?.machineTag ?? null;
+    expect(tagOf(build(threads))).toBeNull();
+    expect(
+      tagOf(build(threads, [], { connectedEnvironmentIds: [environmentId, "other"] }))?.tag,
+    ).toBe("EN");
   });
 });

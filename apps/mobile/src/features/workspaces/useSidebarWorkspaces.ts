@@ -155,6 +155,7 @@ export function useSidebarWorkspaces() {
     toggleProjectIn,
     setFoldMode,
     reorderProject,
+    updateConfig,
     edit,
   } as const;
 }
