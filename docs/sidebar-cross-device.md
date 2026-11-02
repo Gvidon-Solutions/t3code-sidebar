@@ -132,7 +132,7 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
   `replicaIgnores` (default `node_modules .venv venv __pycache__ .pytest_cache dist build target
   .next .turbo coverage .t3 .claude/worktrees .DS_Store`, no trailing slashes) + `--ignore-vcs`.
 - Session: deterministic name `t3-<hash8(logicalKey)>-<envId8>`, labels `t3-logical=<hash8>`
-  `t3-env=<envId8>`; `mutagen sync create --sync-mode two-way-safe --ignore-vcs --ignore …
+  `t3-env=<envId8>`; `mutagen sync create --mode two-way-safe --ignore-vcs --ignore …
   --default-file-mode-beta=0644 --default-directory-mode-beta=0755 --symlink-mode=portable
   <ssh>:<sourcePath> <localPath>` (alpha = source). Per-key lock; ensure is idempotent (check
   `mutagen sync list --label-selector`; verify `--template '{{json .}}'` on Mutagen 0.18.x).
@@ -146,6 +146,44 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 - Reverse direction works the same: any machine can be a replica of any other; a project can have
   two primaries (`transport: git`, independent checkouts) and replicas of either.
 - Disabled unless `replicasEnabled` (server setting); requires a non-fenced caller.
+
+
+### 5a. Who drives a session, and Mutagen availability (decided after the survey)
+
+- Mutagen 0.18.1: mode flag is `-m/--mode` (no `--sync-mode`); `--label-selector`, `--template
+  '{{json .}}'`, `-l/--label`, `--ignore-vcs`, `-i/--ignore`, `--default-*-mode-beta`,
+  `--symlink-mode` exist. The ssh endpoint is resolved by OpenSSH (`~/.ssh/config` of the user
+  running the daemon).
+- A session is driven by ONE side's daemon: the replica's server when `machine/<replica>.reach[source]`
+  exists, else the source's server when `machine/<source>.reach[replica]` exists, else the replica
+  shows `error: "<replica> cannot reach <source> and back — add an ssh route in Settings › Machines"`.
+  The driving server reconciles; the other only reports. Alpha is always the source.
+- `reach` value = an ssh destination string (`alias`, `user@host`, `user@host:port`) plus optional
+  `identityFile`; T3 writes a managed block `# t3-mesh` into `~/.ssh/config` only when the user saves
+  a route with an identity file (never touches other lines).
+- Mutagen is installed by T3 itself when missing: `MutagenInstaller` downloads the pinned release
+  (0.18.1, sha256-checked) for the host OS/arch into `<baseDir>/bin/mutagen` (+ agents bundle) on
+  first use; `mutagenPath` overrides. Each T3 server uses its own `MUTAGEN_DATA_DIRECTORY` under its
+  base dir so it never collides with a user's own daemon/sessions (e.g. gvidon's existing
+  `mutagen-daemon.service` with sessions `calf-wrapper`, `acc-review` — never touched).
+- Existing manual sessions can be adopted: Settings › Machines lists foreign Mutagen sessions of the
+  user's daemon read-only with "Adopt as replica of <project>" (records a `rep` with
+  `transport: mutagen`, leaves the session where it is, status read from that daemon).
+
+### 2a. Links and routing (decided after the survey)
+
+- Links today: none; `linkedEnvironmentsEnabled=false` on gvidon/Operalia; gor runs 0.0.45 without
+  links. HTTP reachability: gvidon→Operalia `https://operalia.bolychev.com:3774`; Operalia→gvidon
+  `https://happier.nobodyshurt.com`; gvidon↔gor only through ssh tunnels (gor listens on loopback);
+  Operalia↔gor no route.
+- The mesh does not need a full graph: layout gossips over any connected graph. Tool calls to a
+  machine without a direct link are relayed: `PeerForwarding` forwards to a linked peer that has a
+  link to the target (max 2 hops, loop guard by a hop header, the target's access rules still apply).
+- `meshEnabled` replication runs only over full-access links. Turning the mesh on in Settings › Mesh
+  also turns on `linkedEnvironmentsEnabled` (explain it in the UI).
+- `ui_open` gains `environmentId` (thread and file targets); the server forwards a UI request for a
+  thread on another machine to the client that shows the calling thread, and the client switches
+  environment.
 
 ### 6. "New thread in project X on machine M"
 
