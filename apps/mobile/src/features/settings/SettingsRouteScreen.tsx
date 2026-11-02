@@ -274,8 +274,8 @@ function useSettingsIndexSections(): SettingsListSection[] {
       ],
     },
     {
-      title: "Connections",
-      rows: [page("SettingsMachines", "desktopcomputer", "Machines")],
+      title: "Mesh",
+      rows: [page("SettingsMesh", "desktopcomputer", "Mesh")],
     },
     {
       rows: [

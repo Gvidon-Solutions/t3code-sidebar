@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — T3 Mesh — Stage I settings and status
+
+- **What:** Settings › Mesh replaces Machines on web and mobile; old Machines routes remain aliases. Machine cards edit names, tags, colors and SSH routes and show connections, peer links, versions, last exchange, replicas and conflicts. Guided full-access linking mints a code on a connected target; manual codes cover other machines. Connect opens the pairing form with the known address, unlink asks for confirmation, and the workspace footer opens Mesh.
+- **How:** a shared machine union and status model reads layout, representations, every connected server’s links and per-peer replication watermarks. `meshLayout.status` exposes read-only replication state and refreshes once a minute while observed. The mesh switch writes both server flags together.
+- **Where:** `packages/client-runtime/src/state/meshMachines.ts`, `packages/contracts/src/meshLayout.ts`, server `mesh/MeshReplicator.ts` and `ws.ts`; web `components/workspaces/Mesh*`, `hooks/useMeshOverview.ts`, settings routes/nav/search and pairing form; mobile `features/settings/{SettingsMachinesRouteScreen,MeshLinkForm,mesh-settings.logic}`, `features/workspaces/{useMeshOverview,MeshFooterStatus,WorkspaceChrome}`, stack/search and ConnectionsNew prefill.
+
 ### 2026-11-02 — T3 Mesh — Stage C server replication
 
 - **What:** persistent shared sidebar layout, legacy settings compatibility, server gossip and two-hop tool routing.

@@ -45,6 +45,7 @@ import type {
   WorkspaceMoreListItem,
   WorkspaceSectionListItem,
 } from "./workspaceNavigator";
+import { MeshFooterStatus } from "./MeshFooterStatus";
 import { setWorkspaceDockHeight } from "./workspaceDockInset";
 import { FolderDragHandle, useFolderDragAvailable } from "./WorkspaceFolderDrag";
 import { WorkspaceAgentGuide } from "./WorkspaceThreadLine";
@@ -184,6 +185,7 @@ export function WorkspaceDock(props: {
       style={{ paddingBottom: props.bottomInset }}
       testID="workspace-dock"
     >
+      <MeshFooterStatus />
       <GestureDetector gesture={swipe}>
         <ScrollView
           horizontal

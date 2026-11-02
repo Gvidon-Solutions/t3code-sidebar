@@ -151,6 +151,7 @@ import {
 import { WorkspaceAgentGroup } from "./WorkspaceAgentGroup";
 import { WorkspaceUpdateStrip } from "./WorkspaceUpdateStrip";
 import { MachinesDialog } from "./MachinesDialog";
+import { MeshFooterStatus } from "./MeshFooterStatus";
 import { PendingReplicaRow } from "./PendingReplicaRow";
 import {
   folderMachineChoices,
@@ -1890,6 +1891,7 @@ export default function WorkspaceSidebar() {
         onDropProject={dropProjectOnTile}
         onReorder={reorderWorkspace}
       />
+      <MeshFooterStatus config={config} />
       <SidebarChromeFooter />
       {iconPickerFolder ? (
         <Suspense fallback={null}>

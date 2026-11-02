@@ -19,6 +19,7 @@ export const SETTINGS_PAGE_TARGETS = [
   "SettingsFollowUp",
   "SettingsScheduledTasks",
   "SettingsProjectGrouping",
+  "SettingsMesh",
   "SettingsMachines",
   "SettingsClientStorage",
   "SettingsDiagnostics",

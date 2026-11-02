@@ -43,12 +43,13 @@ vi.mock(import("~/state/server"), async (original) => ({
 
 import { AddEnvironmentDialog } from "./AddEnvironmentDialog";
 
-function Owner() {
-  const [open, setOpen] = useState(false);
+function Owner({ initialHost }: { readonly initialHost?: string }) {
+  const [open, setOpen] = useState(initialHost !== undefined);
   const [error, setError] = useState<string | null>(null);
   return (
     <AppAtomRegistryProvider>
       <AddEnvironmentDialog
+        {...(initialHost === undefined ? {} : { initialHost })}
         open={open}
         routeTarget={null}
         error={error}
@@ -83,6 +84,22 @@ async function expectDefaultModeAfterReopen() {
 }
 
 describe("AddEnvironmentDialog", () => {
+  it("prefills a mesh address and keeps it editable without supplying a code", async () => {
+    using _bridge = setup();
+    await using _screen = await render(<Owner initialHost="https://mesh-peer.example" />);
+    await expect
+      .element(page.getByPlaceholder("backend.example.com"))
+      .toHaveValue("https://mesh-peer.example");
+    await expect.element(page.getByPlaceholder("PAIRCODE")).toHaveValue("");
+    await userEvent.clear(page.getByPlaceholder("backend.example.com"));
+    await userEvent.type(
+      page.getByPlaceholder("backend.example.com"),
+      "https://another-route.example",
+    );
+    await expect
+      .element(page.getByPlaceholder("backend.example.com"))
+      .toHaveValue("https://another-route.example");
+  });
   it("reopens on Remote link after adding an SSH environment", async () => {
     using _bridge = setup();
     await using _screen = await render(<Owner />);
