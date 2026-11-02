@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — T3 Mesh — round 2 replica acceptance
+
+- **What:** real Mutagen replica acceptance across gor, isolated gvidon and the VPS container, including staged `t3ctl-next`.
+- **How:** Settings-model SSH routes, authenticated MCP launches, live status, file and session assertions, conflict/retry, restart, removal and orphan checks. Build-current mode avoids the shared build checkout; deploy copies only the staged skill.
+- **Where:** `scripts/mesh-e2e/round2.sh`, `round2-routes.sh` and the accompanying run report/log. Product code is unchanged.
+
 ### 2026-11-02 — T3 Mesh — round 1 E2E
 
 - **What:** repeatable three-machine layout, link, restart, file-routing and old-client checks.

@@ -76,6 +76,7 @@ exec ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 
   -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$GOR_VPS_KNOWN" \\
   -i "\$HOME/.ssh/id_t3_mesh_e2e_vps" -o IdentitiesOnly=yes -N \\
   -L 127.0.0.1:$VPS_LOCAL:127.0.0.1:$VPS_PORT \\
+  -L 127.0.0.1:$GV_LOCAL:$VPS_BIND:$GV_LOCAL \\
   -R $VPS_BIND:$VPS_SSH_GOR:127.0.0.1:22 \\
   -R $VPS_BIND:$GOR_LOCAL:127.0.0.1:$GOR_PORT \\
   root@$VPS_HOST

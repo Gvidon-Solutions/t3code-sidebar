@@ -202,9 +202,6 @@ dir="$HOME/.agents/skills/t3-next/scripts"
 chmod 755 "$dir/t3ctl.mjs" "$dir/selftest.sh"
 [ -f "$dir/sidebar-workspaces-sync.mjs" ] && chmod 644 "$dir/sidebar-workspaces-sync.mjs"
 f="$dir/t3ctl.mjs"
-if ! grep -q "'0.1.5'" "$f"; then
-  sed -i "s/const TESTED_VERSIONS = \[\(.*\)\];/const TESTED_VERSIONS = [\1, '0.1.5'];/" "$f"
-fi
 "$HOME/.nvm/versions/node/v23.11.1/bin/node" --check "$f" >/dev/null
 EOF
 

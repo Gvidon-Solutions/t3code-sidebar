@@ -78,7 +78,6 @@ echo ""
 
 echo "== cross-machine reachability =="
 check_http_cmd "gor -> vps" gor_ssh "curl -fsS --max-time 5 http://127.0.0.1:$VPS_LOCAL/.well-known/t3/environment"
-check_http_cmd "gor -> gvidon live (13773)" gor_ssh "curl -fsS --max-time 5 http://127.0.0.1:13773/.well-known/t3/environment"
 check_http_cmd "vps container -> gor" vps_ssh "docker exec t3-mesh-e2e curl -fsS --max-time 5 http://$VPS_BIND:$GOR_LOCAL/.well-known/t3/environment"
 check_http_cmd "vps container -> gvidon" vps_ssh "docker exec t3-mesh-e2e curl -fsS --max-time 5 http://$VPS_BIND:$GV_LOCAL/.well-known/t3/environment"
 
