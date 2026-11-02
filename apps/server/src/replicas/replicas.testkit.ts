@@ -24,6 +24,8 @@ export const makeReplicaHarness = (
   self = "replica",
   sourceDrives = false,
   onList: Effect.Effect<void, ReplicaError> = Effect.void,
+  onRegister: Effect.Effect<void, ProjectService.ProjectServiceError> = Effect.void,
+  onCreate: Effect.Effect<void, ReplicaError> = Effect.void,
 ) => {
   const replica: SidebarProjectMount = {
     environmentId: "replica",
@@ -61,22 +63,27 @@ export const makeReplicaHarness = (
     Runner.MutagenRunner,
     Runner.MutagenRunner.of({
       list: () => Effect.sync(() => sessions).pipe(Effect.tap(() => onList)),
+      listExisting: Effect.sync(() => sessions),
       create: (input) =>
-        Effect.sync(() => {
-          created.push(input);
-          sessions = [
-            ...sessions,
-            {
-              identifier: input.name,
-              name: input.name,
-              labels: { "t3-logical": input.logicalHash, "t3-env": input.environmentTag },
-              paused: false,
-              status: "scanning",
-              alpha: { path: input.alpha },
-              beta: { path: input.beta },
-            },
-          ];
-        }),
+        onCreate.pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              created.push(input);
+              sessions = [
+                ...sessions,
+                {
+                  identifier: input.name,
+                  name: input.name,
+                  labels: { "t3-logical": input.logicalHash, "t3-env": input.environmentTag },
+                  paused: false,
+                  status: "scanning",
+                  alpha: { path: input.alpha },
+                  beta: { path: input.beta },
+                },
+              ];
+            }),
+          ),
+        ),
       terminate: (name) =>
         Effect.sync(() => {
           terminated.push(name);
@@ -125,20 +132,24 @@ export const makeReplicaHarness = (
       ),
     getByWorkspaceRoot: () => Effect.sync(() => Option.fromUndefinedOr(project)),
     create: (input) =>
-      Effect.sync(() => {
-        registrations++;
-        project = {
-          id: input.projectId,
-          title: input.title,
-          workspaceRoot: input.workspaceRoot,
-          defaultModelSelection: null,
-          scripts: [],
-          createdAt: "2026-01-01T00:00:00Z",
-          updatedAt: "2026-01-01T00:00:00Z",
-          deletedAt: null,
-        };
-        return project;
-      }),
+      onRegister.pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            registrations++;
+            project = {
+              id: input.projectId,
+              title: input.title,
+              workspaceRoot: input.workspaceRoot,
+              defaultModelSelection: null,
+              scripts: [],
+              createdAt: "2026-01-01T00:00:00Z",
+              updatedAt: "2026-01-01T00:00:00Z",
+              deletedAt: null,
+            };
+            return project;
+          }),
+        ),
+      ),
   });
   const dependencies = Layer.mergeAll(
     Layer.succeed(HostProcess.HomeDirectory, "/tmp/t3-e-unused-test-home"),

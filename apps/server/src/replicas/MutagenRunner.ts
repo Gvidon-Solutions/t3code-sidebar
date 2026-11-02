@@ -1,6 +1,7 @@
 import { ReplicaError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as ProcessRunner from "../processRunner.ts";
@@ -58,6 +59,7 @@ export class MutagenRunner extends Context.Service<
     readonly list: (
       selector?: string,
     ) => Effect.Effect<ReadonlyArray<MutagenSession>, ReplicaError>;
+    readonly listExisting: Effect.Effect<ReadonlyArray<MutagenSession>, ReplicaError>;
     readonly flush: (session: string) => Effect.Effect<void, ReplicaError>;
     readonly pause: (session: string) => Effect.Effect<void, ReplicaError>;
     readonly resume: (session: string) => Effect.Effect<void, ReplicaError>;
@@ -72,6 +74,7 @@ const isReplicaError = Schema.is(ReplicaError);
 const make = Effect.gen(function* () {
   const installer = yield* MutagenInstaller.MutagenInstaller;
   const runner = yield* ProcessRunner.ProcessRunner;
+  const fs = yield* FileSystem.FileSystem;
   const run = Effect.fn("MutagenRunner.run")(function* (args: ReadonlyArray<string>) {
     const command = yield* installer.executable;
     const result = yield* runner
@@ -97,6 +100,20 @@ const make = Effect.gen(function* () {
   });
   const action = (verb: string) => (session: string) =>
     run(["sync", verb, session]).pipe(Effect.asVoid);
+  const list = Effect.fn("MutagenRunner.list")((selector = "t3-logical") =>
+    run(["sync", "list", "--label-selector", selector, "--template", "{{json .}}"]).pipe(
+      Effect.flatMap(decodeSessions),
+      Effect.mapError((cause) =>
+        isReplicaError(cause)
+          ? cause
+          : new ReplicaError({
+              reason: "mutagen",
+              message: "Invalid Mutagen session output.",
+              cause,
+            }),
+      ),
+    ),
+  );
   return MutagenRunner.of({
     create: Effect.fn("MutagenRunner.create")((input) =>
       run([
@@ -119,18 +136,17 @@ const make = Effect.gen(function* () {
         input.beta,
       ]).pipe(Effect.asVoid),
     ),
-    list: Effect.fn("MutagenRunner.list")((selector = "t3-logical") =>
-      run(["sync", "list", "--label-selector", selector, "--template", "{{json .}}"]).pipe(
-        Effect.flatMap(decodeSessions),
-        Effect.mapError((cause) =>
-          isReplicaError(cause)
-            ? cause
-            : new ReplicaError({
-                reason: "mutagen",
-                message: "Invalid Mutagen session output.",
-                cause,
-              }),
-        ),
+    list,
+    listExisting: fs.exists(installer.dataDirectory).pipe(
+      Effect.flatMap((exists) => (exists ? list() : Effect.succeed([]))),
+      Effect.mapError((cause) =>
+        isReplicaError(cause)
+          ? cause
+          : new ReplicaError({
+              reason: "storage",
+              message: "Cannot inspect private Mutagen state.",
+              cause,
+            }),
       ),
     ),
     flush: action("flush"),

@@ -14,6 +14,7 @@ import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import * as ReplicaService from "./ProjectReplicaService.ts";
 import { sessionIdentity } from "./replicaModel.ts";
 import { makeReplicaHarness as harness } from "./replicas.testkit.ts";
+import { ProjectOperationError } from "../project/ProjectService.ts";
 
 it.effect(
   "ensures once under concurrent reconciliation, registers on watching, reports states and removes only the managed session",
@@ -85,7 +86,11 @@ it.effect(
         yield* service.reconcile;
         expect(h.registrations()).toBe(0);
       }).pipe(Effect.provide(h.layer));
-      const replica = harness("replica", true);
+      const replica = harness(
+        "replica",
+        true,
+        Effect.die("An observer must not install or start Mutagen."),
+      );
       yield* Effect.gen(function* () {
         const service = yield* ReplicaService.ProjectReplicaService;
         const mesh = yield* MeshLayoutService;
@@ -315,5 +320,114 @@ it.effect(
         expect((yield* service.status)[0]?.state).toBe("mounting");
         expect(h.created).toHaveLength(1);
       }).pipe(Effect.provide(h.layer));
+    }),
+);
+
+it.effect(
+  "registration failures stay stable and observers preserve the driver's watching status",
+  () =>
+    Effect.gen(function* () {
+      for (const sourceDrives of [false, true]) {
+        let unavailable = true;
+        const h = harness(
+          "replica",
+          sourceDrives,
+          Effect.void,
+          Effect.suspend(() =>
+            unavailable
+              ? Effect.fail(
+                  new ProjectOperationError({
+                    operation: "dispatch-project-command",
+                    cause: "disk full",
+                  }),
+                )
+              : Effect.void,
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const service = yield* ReplicaService.ProjectReplicaService;
+          const mesh = yield* MeshLayoutService;
+          if (sourceDrives) {
+            yield* mesh.edit((config) => ({
+              ...config,
+              projectMountStatus: { repo: { replica: { state: "watching", updatedAt: "" } } },
+            }));
+          } else {
+            yield* service.reconcile;
+            h.setSession({ status: "watching" });
+          }
+          yield* service.reconcile;
+          expect((yield* service.status)[0]?.state).toBe("error");
+          expect((yield* mesh.read).config.projectMountStatus.repo?.replica?.state).toBe(
+            sourceDrives ? "watching" : "error",
+          );
+          const stable = (yield* mesh.read).document;
+          yield* service.reconcile;
+          expect((yield* mesh.read).document).toEqual(stable);
+          unavailable = false;
+          yield* service.reconcile;
+          expect(h.registrations()).toBe(1);
+          expect((yield* service.status)[0]?.state).toBe("watching");
+        }).pipe(Effect.provide(h.layer));
+      }
+    }),
+);
+
+it.effect(
+  "after restart a driver change terminates the old private session and preserves orphans",
+  () =>
+    Effect.gen(function* () {
+      const h = harness();
+      yield* Effect.gen(function* () {
+        yield* (yield* ReplicaService.ProjectReplicaService).reconcile;
+      }).pipe(Effect.provide(h.layer));
+      h.addOrphan();
+      yield* Effect.gen(function* () {
+        const service = yield* ReplicaService.ProjectReplicaService;
+        const mesh = yield* MeshLayoutService;
+        yield* mesh.edit((config) => ({
+          ...config,
+          machines: { source: { reach: { replica: { ssh: "replica" } } } },
+        }));
+        yield* service.reconcile;
+        expect(h.terminated).toEqual([sessionIdentity("repo", "replica").name]);
+        expect(
+          (yield* service.status).find((row) => row.sessionName === "orphan")?.message,
+        ).toContain("left untouched");
+        yield* service.reconcile;
+        expect(h.terminated).toHaveLength(1);
+      }).pipe(Effect.provide(Layer.fresh(h.layer)));
+    }),
+);
+
+it.effect(
+  "creation errors retry on the interval without feeding back through driver status edits",
+  () =>
+    Effect.gen(function* () {
+      const attempts = yield* Ref.make(0);
+      const h = harness(
+        "replica",
+        false,
+        Effect.void,
+        Effect.void,
+        Ref.update(attempts, (count) => count + 1).pipe(
+          Effect.andThen(
+            Effect.fail(new ReplicaError({ reason: "mutagen", message: "SSH unavailable" })),
+          ),
+        ),
+      );
+      yield* Effect.gen(function* () {
+        const service = yield* ReplicaService.ProjectReplicaService;
+        yield* service.start;
+        yield* service.changes.pipe(
+          Stream.filter(({ replicas }) => replicas.some((row) => row.state === "error")),
+          Stream.take(1),
+          Stream.runDrain,
+        );
+        yield* TestClock.adjust("0 seconds");
+        expect(yield* Ref.get(attempts)).toBe(1);
+        yield* TestClock.adjust("30 seconds");
+        expect(yield* Ref.get(attempts)).toBe(2);
+      }).pipe(Effect.scoped, Effect.provide(h.layer));
     }),
 );
