@@ -54,7 +54,6 @@ voice can do everything by name: "создай тред в проекте X на
 ## Architecture
 
 ### 1. Layout document = LWW-map CRDT (fork file `packages/shared/src/meshLayout/` or
-
 `packages/client-runtime/src/state/meshLayout/`, pure, no Effect services)
 
 - `Hlc` string `"<ms:13 digits>.<counter:5 digits>.<envId>"`, compared lexicographically;
@@ -127,7 +126,6 @@ voice can do everything by name: "создай тред в проекте X на
 
 Declarative and per machine: each server reconciles the `rep/*/<self>` entries whose
 `transport = "mutagen"` and `role = "replica"`.
-
 - Needs `machine/<self>.reach[source].ssh` (ssh alias/URL to the source machine) — configurable in
   Settings › Machines; local server settings: `mutagenPath` (default `mutagen`), `replicaRoot`
   (default "": same absolute path as the source when free, else `~/t3-replicas/<basename>`),
@@ -184,17 +182,63 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 [--primary] [--wait]`, `t3ctl new --project P --on <machine>`, `t3ctl find "words"` (all machines),
 `t3ctl open <thread>`; SKILL.md triggers with voice phrasing; the mesh paradigm documented once.
 
+
+### 9. Files anywhere
+
+- Any file on any machine opens in the side panel's file viewer — in a project, outside projects,
+  on a replica or a primary. Find the existing file viewer and `ui_open` file support (web + mobile),
+  and the server RPCs that read files (projects file read/list); add a mesh-aware path:
+  `files.read({ environmentId, absolutePath })` on the machine that holds it (direct client
+  connection when the client is connected to it, otherwise forwarded by a connected server over its
+  link), with the existing size/binary limits and a permission scope; images/PDF/markdown preview as
+  today.
+- "Open file…" command (palette + sidebar): machine picker (tags) + path with completion
+  (`files.list` on that machine); recent files per machine. Links `t3-file://<envId>/<abs path>` and
+  agent output paths resolve to the machine the thread runs on.
+- MCP `ui_open` accepts `{ file: { environmentId?, path } }`; agents on any machine can open a file
+  from any other machine on the owner's screen.
+
+### 10. Mesh in the interface
+
+- Settings › Mesh (web + mobile): every known machine (from links and layout `machine/*`), with tag,
+  status (reachable / unreachable / not linked / not connected from this client), version, last
+  sync, replicas count. Actions: "Link with…" (guided pairing: pick a machine this client already
+  knows, T3 creates the pairing code on one side and links from the other — no copy-paste when the
+  client is connected to both), "Connect this device" (when a mesh machine is known through a link
+  but this client has no connection: show its address and a pairing flow), unlink.
+- Partial view: a client connected to only some servers still sees the whole layout (it is
+  replicated) — projects and threads of machines it cannot reach show greyed with "on <tag>, not
+  connected here" and a one-tap connect. Never hide them silently, never duplicate them.
+- When a new server joins (link created), it gets the full layout within one exchange; its projects
+  appear in the default workspace (or by rules) on every client.
+- Status line in the sidebar footer: "Mesh: 3 machines · synced" / "OP unreachable 5 min".
+
+### 11. Agents everywhere understand the mesh
+
+- Global agent instructions on every machine (gvidon, Operalia, gor): `~/.claude/CLAUDE.md`,
+  `~/.codex/AGENTS.md` (and other harnesses' global files that exist), kept identical in content:
+  the machines, their roles, the mesh, the `t3` skill and when to use it, Mutagen rules (git and
+  builds on the primary), how to open threads/files on any machine.
+- Behaviour eval: a list of Russian voice-style requests ("создай тред в проекте X на Operalia
+  на соннете", "открой тред про маунт", "покажи файл README из X на гвидоне", "сделай X репликой на
+  горе", "что сейчас работает на всех машинах") run as real threads on the test bed with several
+  harnesses (Claude, Codex, DeepSeek 1017); pass = right tool calls, first action within seconds, no
+  wandering. Fix skills/instructions until all pass.
+
 ## Stages and owners
 
-| Stage           | Scope                                                                                                 | Depends on |
-| --------------- | ----------------------------------------------------------------------------------------------------- | ---------- |
-| A — core        | §1 pure CRDT lib, materialize/diff/importLegacy, §4 pure functions, exhaustive tests                  | —          |
-| B — tags        | §7 tags UI + Settings › Machines (reads materialized config; write path via current settings until C) | —          |
-| C — server mesh | §2 store, RPC, replication over links, legacy compat                                                  | A          |
-| D — clients     | §3 web + mobile read/write via mesh, offline queue, §4 UI                                             | A, C       |
-| E — replicas    | §5, §6 server + clients + MCP                                                                         | A, C       |
-| F — skills      | §8                                                                                                    | C, E       |
-| G — e2e         | test bed and scenarios below                                                                          | all        |
+| Stage | Scope | Depends on |
+|---|---|---|
+| A — core | §1 pure CRDT lib, materialize/diff/importLegacy, §4 pure functions, exhaustive tests | — |
+| B — tags | §7 tags UI + Settings › Machines (reads materialized config; write path via current settings until C) | — |
+| C — server mesh | §2 store, RPC, replication over links, legacy compat | A |
+| D — clients | §3 web + mobile read/write via mesh, offline queue, §4 UI | A, C |
+| E — replicas | §5, §6 server + clients + MCP | A, C |
+| F — skills | §8 | C, E |
+| H — files | §9 | C |
+| I — mesh UI | §10 | C, D |
+| J — agents | §11 instructions + behaviour eval | F |
+| G — e2e | test bed and scenarios below; web (Playwright), Android (adb emulator), desktop build | all |
 
 ## Test bed (E2E) — never the live gvidon/Operalia servers
 
