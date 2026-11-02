@@ -108,6 +108,32 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — Machine tags
+
+- **What.** Threads from several machines are told apart in the workspace sidebar and on the
+  phone: a small colored tag sits left of the title (after the status glyph) and its tooltip or
+  accessibility label carries the machine's full name. Tags appear only where a list can mix
+  machines: a folder whose project spans environments, or a cross-project section (Pinned,
+  Snoozed, No project, search) while more than one environment is connected. Settings › Machines
+  (web and phone) lists connected and layout-referenced environments and edits each one's label,
+  tag (up to three characters) and color. The phone loses the always-on right-side machine chip,
+  and "No project" uses the same display name.
+- **How.** `machineDisplayOf` resolves a machine from the shared layout's `machines` entry with
+  fallbacks to the server's own label, the label's first two letters/digits, and a workspace-style
+  color derived from the environment id. Machine edits go through `setMachineDisplay` and, until
+  the mesh writer lands, through one small helper per client that writes the shared
+  `sidebarWorkspaces` setting as before. Upstream's `SidebarThreadRow` takes an optional
+  `machineTag` prop, so the default and legacy sidebars are unchanged. The workspace grouping
+  helper `spansMultipleEnvironments` decides when tags show.
+- **Where.** `packages/client-runtime/src/state/machineDisplay.ts` (+ tests),
+  `apps/web/src/components/workspaces/{WorkspaceSidebar,WorkspaceThreadRow,MachinesSettingsPanel,machinesConfig}.tsx`,
+  `apps/web/src/components/sidebar/SidebarThreadRow.tsx`,
+  `apps/web/src/routes/_chat.settings.machines.tsx`,
+  `apps/web/src/components/settings/{settingsSearch,SettingsSidebarNav}.tsx`,
+  `apps/mobile/src/features/workspaces/{WorkspaceThreadLine,WorkspaceChrome,workspaceNavigator,useWorkspaceHome,useSidebarWorkspaces}.ts*`,
+  `apps/mobile/src/features/settings/{SettingsMachinesRouteScreen,SettingsRouteScreen,settings-search}.tsx`,
+  `apps/mobile/src/Stack.tsx`.
+
 ### 2026-11-01 — Upstream release v0.1.6
 
 - **What.** Brings in upstream's `v0.1.6` (521 changes past the v0.1.5 sync). Side chats answer

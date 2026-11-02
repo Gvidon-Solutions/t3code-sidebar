@@ -1,4 +1,5 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import {
   AlarmClockOffIcon,
@@ -46,6 +47,8 @@ export interface WorkspaceThreadRowProps {
   now: number;
   /** Project name shown before the title (pinned, snoozed and search rows). */
   projectLabel?: string | null;
+  /** The machine this thread runs on, shown as a tag before the title in mixed lists. */
+  machineTag?: MachineDisplay | null;
   jumpLabel?: string | null;
   isRenaming: boolean;
   canSettle: boolean;
@@ -118,6 +121,26 @@ function StatusGlyph({
         {glyph.icon}
       </TooltipTrigger>
       <TooltipPopup side="top">{glyph.label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+function MachineTag({ machine }: { machine: MachineDisplay }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            role="img"
+            aria-label={`Machine: ${machine.label}`}
+            className="flex h-4 shrink-0 items-center rounded px-1 font-mono text-3xs font-semibold tracking-tight uppercase"
+            style={{ color: machine.color, backgroundColor: `${machine.color}22` }}
+          />
+        }
+      >
+        {machine.tag}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{machine.label}</TooltipPopup>
     </Tooltip>
   );
 }
@@ -240,6 +263,7 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
         ) : (
           <StatusGlyph thread={thread} isUnread={isUnread} isAgent={variant === "agent"} />
         )}
+        {props.machineTag ? <MachineTag machine={props.machineTag} /> : null}
         {props.isRenaming ? (
           <RenameInput
             initialTitle={thread.title}

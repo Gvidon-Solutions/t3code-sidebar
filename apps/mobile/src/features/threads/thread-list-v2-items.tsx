@@ -21,6 +21,7 @@ import type {
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state/thread-search";
+import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
 import {
   formatWorkingDurationLabel,
   resolveThreadWorkingStartedAt,
@@ -584,6 +585,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   /** Sidebar fork: draw as one line in a workspace folder (same menu and swipes). */
   readonly compact?: {
     readonly projectLabel: string | null;
+    readonly machineTag?: MachineDisplay | null;
     readonly nested?: boolean;
     readonly voice?: boolean;
   };
@@ -1326,6 +1328,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           settled={variant === "slim"}
           showPin={thread.pinnedAt != null && !pinnedRow}
           projectLabel={props.compact.projectLabel}
+          machineTag={props.compact.machineTag ?? null}
           nested={props.compact.nested === true}
           voice={props.compact.voice === true}
           timeLabel={props.timeLabel}

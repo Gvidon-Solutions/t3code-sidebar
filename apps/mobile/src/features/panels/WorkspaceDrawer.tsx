@@ -158,6 +158,7 @@ export function WorkspaceDrawer(props: {
               settled={item.item.variant === "slim"}
               showPin={thread.pinnedAt != null && !item.item.pinned}
               projectLabel={item.projectLabel}
+              machineTag={item.machineTag}
               timeLabel={item.timeLabel}
               working={status === "working"}
               hasQueuedMessages={false}

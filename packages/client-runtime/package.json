@@ -315,6 +315,10 @@
       "types": "./src/state/sidebarWorkspaces.ts",
       "default": "./src/state/sidebarWorkspaces.ts"
     },
+    "./state/machine-display": {
+      "types": "./src/state/machineDisplay.ts",
+      "default": "./src/state/machineDisplay.ts"
+    },
     "./state/shared-settings": {
       "types": "./src/state/sharedSettings.ts",
       "default": "./src/state/sharedSettings.ts"
