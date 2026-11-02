@@ -1,0 +1,325 @@
+import { describe, expect, it } from "vite-plus/test";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG as empty,
+  type ReplicaLiveStatus,
+  type SidebarProjectMount,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
+
+import {
+  MACHINE_NEEDS_MESH,
+  mergeReplicaStatusLists,
+  pendingRows,
+  planThreadOnMachine,
+  replicaDriverEnvironment,
+  replicaMachineChoices,
+  replicaPlan,
+  replicaProjectId,
+  replicaStatusCopy,
+  representationRow,
+} from "./replicas.ts";
+
+const primary = (environmentId: string, path = "/work/demo"): SidebarProjectMount => ({
+  environmentId,
+  path,
+  projectId: `project-${environmentId}`,
+  transport: "git",
+  role: "primary",
+  createdAt: "2026-01-01T00:00:00.000Z",
+});
+
+const replica = (environmentId: string, source: string): SidebarProjectMount => ({
+  environmentId,
+  path: "/work/demo",
+  transport: "mutagen",
+  role: "replica",
+  source,
+  createdAt: "2026-01-02T00:00:00.000Z",
+});
+
+function withReps(
+  reps: ReadonlyArray<SidebarProjectMount>,
+  rest: Partial<SidebarWorkspacesConfig> = {},
+): SidebarWorkspacesConfig {
+  return { ...empty, projectMounts: { demo: [...reps] }, ...rest };
+}
+
+const status = (
+  environmentId: string,
+  state: ReplicaLiveStatus["state"],
+  patch: Partial<ReplicaLiveStatus> = {},
+): ReplicaLiveStatus => ({
+  logicalKey: "demo",
+  environmentId,
+  state,
+  conflicts: [],
+  problems: [],
+  updatedAt: "2026-01-03T00:00:00.000Z",
+  ...patch,
+});
+
+const displayOf = (environmentId: string, label: string) => ({
+  label: `${label} (${environmentId})`,
+  tag: environmentId.slice(0, 2).toUpperCase(),
+  color: "#123456",
+});
+
+describe("replicaPlan", () => {
+  it("is ready when the target already has a registered project", () => {
+    const config = withReps([primary("alpha"), { ...replica("beta", "alpha"), projectId: "p2" }]);
+    const plan = replicaPlan(config, "demo", "beta");
+    expect(plan).toMatchObject({ kind: "ready", projectId: "p2" });
+  });
+
+  it("waits with the last stored status when the representation is not registered yet", () => {
+    const config = withReps([primary("alpha"), replica("beta", "alpha")], {
+      projectMountStatus: {
+        demo: { beta: { state: "mounting", conflicts: 2, updatedAt: "2026-01-04T00:00:00.000Z" } },
+      },
+    });
+    const plan = replicaPlan(config, "demo", "beta");
+    expect(plan).toMatchObject({
+      kind: "pending",
+      status: { state: "mounting", conflicts: 2 },
+    });
+  });
+
+  it("creates a Mutagen replica of the first primary with the caller's timestamp", () => {
+    const config = withReps([primary("alpha"), primary("gamma")]);
+    const plan = replicaPlan(config, "demo", "beta", "2026-02-02T00:00:00.000Z");
+    expect(plan).toEqual({
+      kind: "create",
+      rep: {
+        environmentId: "beta",
+        path: "/work/demo",
+        transport: "mutagen",
+        role: "replica",
+        source: "alpha",
+        createdAt: "2026-02-02T00:00:00.000Z",
+      },
+    });
+  });
+
+  it("prefers a primary over another replica as the source", () => {
+    const config = withReps([replica("beta", "alpha"), primary("alpha")]);
+    const plan = replicaPlan(config, "demo", "gamma");
+    expect(plan.kind === "create" && plan.rep.source).toBe("alpha");
+  });
+});
+
+describe("planThreadOnMachine", () => {
+  it("records the folder's project as primary when the logical project has no representations", () => {
+    const plan = planThreadOnMachine({
+      config: empty,
+      logicalKey: "demo",
+      targetEnvironmentId: "beta",
+      seed: { environmentId: "alpha", path: "/work/demo", projectId: "p1" },
+      createdAt: "2026-02-02T00:00:00.000Z",
+    });
+    expect(plan.config.projectMounts.demo).toEqual([
+      {
+        environmentId: "alpha",
+        path: "/work/demo",
+        projectId: "p1",
+        transport: "git",
+        role: "primary",
+        createdAt: "2026-02-02T00:00:00.000Z",
+      },
+      {
+        environmentId: "beta",
+        path: "/work/demo",
+        transport: "mutagen",
+        role: "replica",
+        source: "alpha",
+        createdAt: "2026-02-02T00:00:00.000Z",
+      },
+    ]);
+    expect(plan).toMatchObject({ kind: "create", projectId: null });
+  });
+
+  it("adds no entry when the target is ready, and projects the ready id", () => {
+    const config = withReps([primary("alpha"), { ...replica("beta", "alpha"), projectId: "p2" }]);
+    const plan = planThreadOnMachine({
+      config,
+      logicalKey: "demo",
+      targetEnvironmentId: "beta",
+    });
+    expect(plan.config).toBe(config);
+    expect(plan).toMatchObject({ kind: "ready", projectId: "p2" });
+  });
+
+  it("leaves an existing pending representation alone", () => {
+    const config = withReps([primary("alpha"), replica("beta", "alpha")]);
+    const plan = planThreadOnMachine({
+      config,
+      logicalKey: "demo",
+      targetEnvironmentId: "beta",
+    });
+    expect(plan.config).toBe(config);
+    expect(plan).toMatchObject({ kind: "pending", projectId: null });
+  });
+});
+
+describe("pendingRows", () => {
+  it("lists only unregistered representations and merges the live status over the stored one", () => {
+    const config = withReps(
+      [primary("alpha"), replica("beta", "alpha"), replica("gamma", "alpha")],
+      {
+        projectMountStatus: {
+          demo: {
+            gamma: { state: "error", message: "stored", updatedAt: "2026-01-01T00:00:00.000Z" },
+          },
+        },
+      },
+    );
+    const rows = pendingRows(config, [
+      status("beta", "mounting", { progress: 0.42, sessionName: "t3-b" }),
+    ]);
+    expect(rows.map((row) => [row.rep.environmentId, row.status.state])).toEqual([
+      ["beta", "mounting"],
+      ["gamma", "error"],
+    ]);
+    expect(rows[0]?.progress).toBe(0.42);
+    expect(rows[1]?.message).toBe("stored");
+  });
+
+  it("takes the project id from a live status before the layout carries it", () => {
+    const config = withReps([primary("alpha"), replica("beta", "alpha")]);
+    const rows = pendingRows(config, [status("beta", "watching", { projectId: "p2" })]);
+    expect(rows[0]?.projectId).toBe("p2");
+    expect(rows[0]?.status.state).toBe("watching");
+  });
+
+  it("counts conflicts and ignores registered representations", () => {
+    const config = withReps([
+      primary("alpha"),
+      { ...replica("beta", "alpha"), projectId: "p2" },
+      replica("gamma", "alpha"),
+    ]);
+    const rows = pendingRows(config, [
+      status("beta", "conflict", { conflicts: ["a.ts"] }),
+      status("gamma", "conflict", { conflicts: ["b.ts", "c.ts"] }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ conflicts: 2, projectId: null });
+  });
+});
+
+describe("representationRow", () => {
+  it("calls a registered representation Synced when nothing newer is reported", () => {
+    const config = withReps([primary("alpha")]);
+    const row = representationRow(config, [], "demo", config.projectMounts.demo![0]!);
+    expect(row.text).toBe("Synced");
+    expect(row.retry).toBeNull();
+  });
+
+  it("uses the live error and offers a retry with the row a dialog needs", () => {
+    const config = withReps([primary("alpha"), { ...replica("beta", "alpha"), projectId: "p2" }]);
+    const row = representationRow(
+      config,
+      [status("beta", "error", { message: "Disk is full" })],
+      "demo",
+      config.projectMounts.demo![1]!,
+    );
+    expect(row.text).toBe("Disk is full");
+    expect(row.retry).toMatchObject({
+      logicalKey: "demo",
+      message: "Disk is full",
+      rep: { environmentId: "beta" },
+    });
+  });
+});
+
+describe("replicaProjectId", () => {
+  it("reads the layout first and falls back to the live status", () => {
+    const config = withReps([primary("alpha"), { ...replica("beta", "alpha"), projectId: "p2" }]);
+    expect(replicaProjectId(config, [], "demo", "beta")).toBe("p2");
+    expect(
+      replicaProjectId(config, [status("gamma", "watching", { projectId: "p3" })], "demo", "gamma"),
+    ).toBe("p3");
+    expect(replicaProjectId(config, [], "demo", "gamma")).toBeNull();
+  });
+});
+
+describe("mergeReplicaStatusLists", () => {
+  it("merges every machine's list by (logicalKey, environmentId), latest value winning", () => {
+    const merged = mergeReplicaStatusLists([
+      {
+        environmentId: "alpha",
+        replicas: [status("beta", "pending"), status("gamma", "mounting")],
+      },
+      {
+        environmentId: "beta",
+        replicas: [status("beta", "watching", { updatedAt: "2026-01-09T00:00:00.000Z" })],
+      },
+    ]);
+    expect(merged).toHaveLength(2);
+    expect(merged.find((row) => row.environmentId === "beta")?.state).toBe("watching");
+  });
+});
+
+describe("replicaDriverEnvironment", () => {
+  it("is the replica when it has a route to the source, else the source when it has a route back", () => {
+    const rep = replica("beta", "alpha");
+    const forward = {
+      ...empty,
+      machines: { beta: { reach: { alpha: { ssh: "alpha.local" } } } },
+    };
+    const backward = {
+      ...empty,
+      machines: { alpha: { reach: { beta: { ssh: "beta.local" } } } },
+    };
+    expect(replicaDriverEnvironment(forward, rep)).toBe("beta");
+    expect(replicaDriverEnvironment(backward, rep)).toBe("alpha");
+    expect(replicaDriverEnvironment(empty, rep)).toBeNull();
+  });
+});
+
+describe("replicaMachineChoices", () => {
+  it("keeps connected machines and disables those without the mesh RPCs with a reason", () => {
+    const choices = replicaMachineChoices(
+      empty,
+      [
+        { environmentId: "alpha", label: "Alpha", connected: true, supportsMesh: true },
+        { environmentId: "beta", label: "Beta", connected: true, supportsMesh: false },
+        { environmentId: "gamma", label: "Gamma", connected: false, supportsMesh: true },
+      ],
+      displayOf,
+    );
+    expect(choices.map((choice) => choice.environmentId)).toEqual(["alpha", "beta"]);
+    expect(choices[1]).toMatchObject({ disabled: true, reason: MACHINE_NEEDS_MESH });
+  });
+});
+
+describe("replicaStatusCopy", () => {
+  const base = {
+    progress: null,
+    conflicts: 0,
+    message: null,
+    targetLabel: "Operalia",
+    sourceLabel: "gvidon",
+  };
+  it("names the machine and the percentage while mounting", () => {
+    expect(replicaStatusCopy({ ...base, state: "mounting", progress: 0.42 })).toBe(
+      "Mounting on Operalia… 42%",
+    );
+    expect(replicaStatusCopy({ ...base, state: "mounting" })).toBe("Mounting on Operalia…");
+  });
+  it("says Synced, counts conflicts and pluralizes", () => {
+    expect(replicaStatusCopy({ ...base, state: "watching" })).toBe("Synced");
+    expect(replicaStatusCopy({ ...base, state: "conflict", conflicts: 1 })).toBe("1 conflict");
+    expect(replicaStatusCopy({ ...base, state: "conflict", conflicts: 2 })).toBe("2 conflicts");
+  });
+  it("turns unreachable errors into the Settings › Machines route hint", () => {
+    expect(
+      replicaStatusCopy({
+        ...base,
+        state: "error",
+        message: "Operalia cannot reach gvidon and back. Add an ssh route.",
+      }),
+    ).toBe("Can't reach gvidon from Operalia. Add a route in Settings › Machines");
+    expect(replicaStatusCopy({ ...base, state: "error", message: "Disk is full" })).toBe(
+      "Disk is full",
+    );
+  });
+});

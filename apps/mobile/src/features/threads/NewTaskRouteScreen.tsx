@@ -32,6 +32,12 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { useRemoteConnectionStatus } from "../../state/use-remote-environment-registry";
 import type { WorkspaceState } from "../../state/workspaceModel";
 import { useWorkspaceState } from "../../state/workspace";
+import { useReplicaStatuses } from "../../state/meshReplicas";
+import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
+import { planThreadOnMachine, replicaProjectId } from "@t3tools/client-runtime/state/mesh-layout";
+import { useSidebarWorkspaces } from "../workspaces/useSidebarWorkspaces";
+import { mobileMachineChoices, mobilePendingReplicaItems } from "../workspaces/replicas.logic";
+import type { HomeProjectScope } from "../home/homeThreadList";
 
 import { useIncomingShare } from "../sharing/IncomingShareProvider";
 import { useNewTaskFlow } from "./new-task-flow-provider";
@@ -197,26 +203,30 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
       .filter((environment) => environment.connectionState === "connected")
       .map((environment) => environment.environmentId),
   );
-  const openScratch = useAtomCommand(projectEnvironment.openScratch, {
-    reportFailure: false,
-  });
-  const scratchOption =
-    reservedDestinationProject === null
-      ? resolveNewTaskScratchOption({
-          environments: connectedEnvironments,
-          serverConfigs,
-          selectedEnvironmentId,
-        })
-      : null;
-  const canStartScratch = scratchOption?.ready === true;
-  const scratchEnvironment =
-    scratchOption === null
-      ? null
-      : (connectedEnvironments.find(
-          (environment) => environment.environmentId === scratchOption.environmentId,
-        ) ?? null);
-  const scratchStartInFlightRef = useRef(false);
-
+  const { config: replicaConfig, updateConfig: updateReplicaConfig } = useSidebarWorkspaces();
+  const replicaStatuses = useReplicaStatuses();
+  const [pendingMachineStart, setPendingMachineStart] = useState<{
+    readonly projectKey: string;
+    readonly environmentId: string;
+  } | null>(null);
+  const machineChoices = mobileMachineChoices(
+    replicaConfig ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    connectedEnvironments.map((environment) => ({
+      environmentId: environment.environmentId,
+      label: environment.environmentLabel,
+      connected: environment.connectionState === "connected",
+      supportsMesh:
+        serverConfigs.get(environment.environmentId)?.environment.capabilities.meshLayout === true,
+    })),
+  );
+  const pendingMachineItem =
+    pendingMachineStart === null
+      ? undefined
+      : mobilePendingReplicaItems(
+          replicaConfig ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+          replicaStatuses,
+          pendingMachineStart.projectKey,
+        ).find((item) => item.environmentId === pendingMachineStart.environmentId);
   async function selectProject(project: EnvironmentProject): Promise<void> {
     if (incomingShare?.destination && !reservedDestinationProject) {
       try {
@@ -260,6 +270,87 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
       },
     });
   }
+
+  const startOnMachine = (scope: HomeProjectScope, environmentId: string) => {
+    const plan = planThreadOnMachine({
+      config: replicaConfig ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      logicalKey: scope.key,
+      targetEnvironmentId: environmentId,
+      seed: {
+        environmentId: scope.representative.environmentId,
+        path: scope.representative.workspaceRoot,
+        projectId: scope.representative.id,
+      },
+    });
+    if (plan.config !== replicaConfig) updateReplicaConfig(() => plan.config);
+    if (plan.projectId !== null) {
+      const project = projects.find(
+        (candidate) =>
+          String(candidate.environmentId) === environmentId &&
+          String(candidate.id) === plan.projectId,
+      );
+      if (project) void selectProject(project);
+      return;
+    }
+    setPendingMachineStart({ projectKey: scope.key, environmentId });
+  };
+  const openMachinePicker = (scope: HomeProjectScope) => {
+    const supported = machineChoices.filter((choice) => !choice.disabled);
+    if (supported.length === 0) {
+      Dialog.alert(
+        "No machines to start on",
+        "Connect another machine, or update its server to use the mesh.",
+      );
+      return;
+    }
+    Dialog.alert(`Start ${scope.title} on`, "Pick the machine that runs the thread.", [
+      ...supported.map((choice) => ({
+        text: `${choice.tag}  ${choice.label}`,
+        onPress: () => startOnMachine(scope, choice.environmentId),
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
+  };
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- opens the flow once the machine registers the mounted project
+  useEffect(() => {
+    if (pendingMachineStart === null || replicaConfig === null) return;
+    const projectId = replicaProjectId(
+      replicaConfig,
+      replicaStatuses,
+      pendingMachineStart.projectKey,
+      pendingMachineStart.environmentId,
+    );
+    if (projectId === null) return;
+    const project = projects.find(
+      (candidate) =>
+        String(candidate.environmentId) === pendingMachineStart.environmentId &&
+        String(candidate.id) === projectId,
+    );
+    if (!project) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- clears the intent after the external layout arrives
+    setPendingMachineStart(null);
+    void selectProject(project);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- selectProject is stable enough for this one-shot
+  }, [pendingMachineStart, projects, replicaConfig, replicaStatuses]);
+  const openScratch = useAtomCommand(projectEnvironment.openScratch, {
+    reportFailure: false,
+  });
+  const scratchOption =
+    reservedDestinationProject === null
+      ? resolveNewTaskScratchOption({
+          environments: connectedEnvironments,
+          serverConfigs,
+          selectedEnvironmentId,
+        })
+      : null;
+  const canStartScratch = scratchOption?.ready === true;
+  const scratchEnvironment =
+    scratchOption === null
+      ? null
+      : (connectedEnvironments.find(
+          (environment) => environment.environmentId === scratchOption.environmentId,
+        ) ?? null);
+  const scratchStartInFlightRef = useRef(false);
 
   async function startScratch(): Promise<void> {
     if (!canStartScratch || !scratchOption || scratchStartInFlightRef.current) return;
@@ -328,6 +419,18 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
       />
 
       <ScreenContent>
+        {pendingMachineItem ? (
+          <View className="mx-4 mt-2 flex-row items-center gap-2 rounded-2xl bg-grouped-card px-4 py-2.5">
+            <View className="h-4 items-center justify-center rounded bg-foreground/10 px-1">
+              <Text className="font-mono text-[10px] font-t3-bold uppercase text-foreground">
+                {pendingMachineItem.tag}
+              </Text>
+            </View>
+            <Text className="min-w-0 flex-1 text-sm text-foreground-muted" numberOfLines={2}>
+              {pendingMachineItem.text}
+            </Text>
+          </View>
+        ) : null}
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           showsVerticalScrollIndicator={false}
@@ -504,6 +607,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                       subtitleEllipsizeMode="middle"
                       disabled={reservedDestinationProject !== null}
                       onPress={() => void selectProject(selectionTarget)}
+                      onLongPress={() => openMachinePicker(scope)}
                       leading={
                         <ProjectFavicon
                           environmentId={scope.representative.environmentId}
@@ -527,6 +631,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                       accessibilityLabel={scope.title}
                       disabled={reservedDestinationProject !== null}
                       onPress={() => void selectProject(selectionTarget)}
+                      onLongPress={() => openMachinePicker(scope)}
                       className="flex-row items-center gap-3 bg-grouped-card px-4 py-3.5"
                     >
                       <View className="h-7 w-7 items-center justify-center">

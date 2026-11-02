@@ -67,6 +67,7 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof UI_REQUESTS_WS_METHODS.subscribe
   | typeof UI_REQUESTS_WS_METHODS.subscribeVoiceCommands
   | typeof MESH_WS_METHODS.layoutSubscribe
+  | typeof MESH_WS_METHODS.replicasStatus
   | typeof WS_METHODS.serverGetStorageCleanupReport
   | typeof WS_METHODS.serverGetDatabaseStorage
   | typeof WS_METHODS.subscribeTerminalMetadata

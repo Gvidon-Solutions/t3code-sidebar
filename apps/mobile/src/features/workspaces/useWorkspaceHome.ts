@@ -19,6 +19,7 @@ import { useCallback, useMemo } from "react";
 
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { useServerConfigs } from "../../state/entities";
+import { useReplicaStatuses } from "../../state/meshReplicas";
 import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import type { HomeProjectScope } from "../home/homeThreadList";
 import {
@@ -29,6 +30,7 @@ import {
 } from "../threads/threadListV2";
 import { useLiveVoiceKey } from "../voice-mode/useVoiceMode";
 import { agentThreadShellsAtom } from "./agentThreadShells";
+import { mobilePendingReplicaItems } from "./replicas.logic";
 import { useSidebarWorkspaces } from "./useSidebarWorkspaces";
 import type { WorkspaceTileActivity } from "./WorkspaceChrome";
 import {
@@ -55,6 +57,7 @@ export function useWorkspaceHome(input: {
     toggleProjectIn: toggleProjectInWorkspace,
   } = workspaces;
   const serverConfigs = useServerConfigs();
+  const replicaStatuses = useReplicaStatuses();
   const connectedEnvironmentIds = useAtomValue(connectedEnvironmentIdsAtom);
   const resolveMachineDisplay = useCallback(
     (environmentId: EnvironmentId) =>
@@ -179,10 +182,22 @@ export function useWorkspaceHome(input: {
         isScratch: isScratchScope(scope),
         workspaceIds: workspaceIdsOf(scope),
         ...(scope.meshOffline === undefined ? {} : { meshOffline: scope.meshOffline }),
+        pending: mobilePendingReplicaItems(
+          config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+          replicaStatuses,
+          scope.key,
+        ),
       });
     }
     return { folders: own, otherFolders: other };
-  }, [input.projectScopes, isInCurrentWorkspace, isScratchScope, workspaceIdsOf]);
+  }, [
+    config,
+    input.projectScopes,
+    isInCurrentWorkspace,
+    isScratchScope,
+    replicaStatuses,
+    workspaceIdsOf,
+  ]);
 
   /** "Show in workspaces" from a folder's menu. */
   const toggleProjectIn = useCallback(

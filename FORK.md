@@ -114,6 +114,39 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How:** LWW entries retain HLC conflict resolution; local SQLite sequence watermarks drive replication over full-access peer links. Mesh-only MCP calls stay outside agent tool lists. Old settings writes become per-entry diffs and materialized settings remain readable by old clients.
 - **Where:** `apps/server/src/mesh/`, migration 077, `packages/shared/src/meshLayout/adoptLegacy.ts`; seams in server layer assembly, WS handlers, MCP authentication, peer forwarding, RPC contracts, permissions and environment capabilities.
 
+### 2026-11-02 — T3 Mesh — new thread on another machine, and the Machines dialog
+
+- **What.** A folder's "New thread" stays as before; a small chevron beside it opens "New thread
+  on…" with every connected machine and its tag. Choosing a machine that has no copy of the
+  project records a Mutagen replica and shows a pending row at the top of the folder (tag,
+  "Mounting on Operalia… 42%", "2 conflicts", or the error with Retry). The new-thread draft
+  opens there as soon as that machine registers the project. A folder's menu has "Machines…"
+  with every representation: machine, Primary/Replica, path, state, conflicts, Make primary,
+  Add replica on…, Retry, and Remove (files stay). The phone gets the same "New thread on…"
+  submenu and pending rows in its folder list, a "Machines…" sheet, and a long-press machine
+  picker in the new-task project list. Servers without the mesh RPCs are listed disabled with
+  the reason.
+- **How.** `replicaPlan` turns a logical project and target environment into ready/create/pending;
+  `planThreadOnMachine` seeds a legacy folder's primary representation before adding the replica
+  (`transport: "mutagen"`, source = first primary, same path). `pendingRows` merges the layout's
+  last status with the live `replicas.status` stream, and `replicaStatusCopy` keeps the copy in
+  one place. The live streams are subscribed per connected environment that advertises
+  `capabilities.meshLayout` and merged by (logicalKey, environmentId). Retry goes to the server
+  that drives the session (`replicaDriverEnvironment`). Every layout edit still goes through the
+  client's one workspace writer: web `WorkspaceSidebar.writeConfig`, phone
+  `useSidebarWorkspaces.updateConfig`, so the mesh writer can replace that seam later.
+- **Where.** `packages/client-runtime/src/state/meshLayout/replicas.ts` (+ tests),
+  `apps/web/src/components/workspaces/{replicas.logic,PendingReplicaRow,MachinesDialog}.tsx`
+  (+ logic test), `WorkspaceSidebar.tsx`, `apps/web/src/state/meshReplicas.ts`,
+  `apps/mobile/src/features/workspaces/{replicas.logic,MachinesSheet}.ts*` (+ logic test),
+  `WorkspaceChrome.tsx`, `workspaceNavigator.ts`, `useWorkspaceHome.ts`,
+  `apps/mobile/src/features/panels/WorkspaceDrawer.tsx`,
+  `apps/mobile/src/features/threads/NewTaskRouteScreen.tsx`,
+  `apps/mobile/src/state/meshReplicas.ts`. Seams: raw-by-method mesh RPC helpers
+  (`requestMethod`/`subscribeMethod`) in `packages/client-runtime/src/rpc/client.ts`, so a
+  client build can call RPCs its own `WsRpcGroup` predates;
+  `capabilities.meshLayout` in `packages/contracts/src/environment.ts`.
+
 ### 2026-11-02 — T3 Mesh — layout CRDT core
 
 - **What.** Pure shared layout CRDT, legacy migration and logical project operations for Mesh.

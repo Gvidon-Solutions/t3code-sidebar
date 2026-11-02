@@ -27,6 +27,8 @@ import {
 } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentId } from "@t3tools/contracts";
 
+import type { MobilePendingReplicaItem } from "./replicas.logic";
+
 import {
   resolveThreadListV2Status,
   resolveThreadListV2WokeAt,
@@ -63,6 +65,8 @@ export interface WorkspaceFolderInput {
     readonly tag: string;
     readonly state: string | null;
   };
+  /** Machines mounting this project; shown at the top of the open folder. */
+  readonly pending?: ReadonlyArray<MobilePendingReplicaItem>;
 }
 
 export type WorkspaceSectionKind = "pinned" | "quiet" | "snoozed";
@@ -101,6 +105,8 @@ export interface WorkspaceFolderListItem {
   readonly working: number;
   /** The machine "No project" belongs to, named the way the sidebar names it. */
   readonly machineLabel: string;
+  /** Machines mounting this project; shown at the top of the open folder. */
+  readonly pending: ReadonlyArray<MobilePendingReplicaItem>;
 }
 
 export interface WorkspaceMoreListItem {
@@ -499,6 +505,7 @@ export function buildWorkspaceHomeItems(input: {
       attention: model.all.filter(needsAttention).length,
       working: model.all.filter((thread) => resolveThreadListV2Status(thread) === "working").length,
       machineLabel: input.resolveMachineDisplay(model.input.project.environmentId).label,
+      pending: model.input.pending ?? [],
     });
     if (!open) {
       const selected = model.active.find(holdsSelected);
@@ -621,7 +628,12 @@ export function workspaceHomeItemsAreEqual(
         previous.workspaceIds.join("\n") === item.workspaceIds.join("\n") &&
         previous.attention === item.attention &&
         previous.working === item.working &&
-        previous.machineLabel === item.machineLabel
+        previous.machineLabel === item.machineLabel &&
+        previous.pending.length === item.pending.length &&
+        previous.pending.every((row, index) => {
+          const next = item.pending[index];
+          return next !== undefined && row.key === next.key && row.text === next.text;
+        })
       );
     case "ws-more":
       return previous.type === "ws-more" && previous.label === item.label;

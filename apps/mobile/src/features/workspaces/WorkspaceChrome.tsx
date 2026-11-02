@@ -15,6 +15,7 @@ import IconSparkles from "@tabler/icons-react-native/IconSparkles";
 import IconStar from "@tabler/icons-react-native/IconStar";
 import IconUsers from "@tabler/icons-react-native/IconUsers";
 import IconWallet from "@tabler/icons-react-native/IconWallet";
+import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
 import {
   workspaceColor,
   workspaceMark,
@@ -36,6 +37,7 @@ import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
 import { useNavigation } from "@react-navigation/native";
 import { openSettings } from "../settings/settings-navigation";
+import type { MachineSubaction, MobilePendingReplicaItem } from "./replicas.logic";
 import type {
   WorkspaceAgentsListItem,
   WorkspaceFolderListItem,
@@ -287,6 +289,11 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     readonly onMerge: (key: string) => void;
     readonly onSplit: (environmentId: string) => void;
   };
+  /** "New thread on…" subactions, one per connected machine. */
+  readonly machineSubactions: ReadonlyArray<MachineSubaction>;
+  readonly onNewThreadOnMachine: (projectKey: string, environmentId: string) => void;
+  readonly onOpenMachines: (projectKey: string) => void;
+  readonly onRetryReplica: (item: MobilePendingReplicaItem) => void;
 }) {
   const { item } = props;
   const navigation = useNavigation();
@@ -301,6 +308,20 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     const shownIn = item.workspaceIds;
     return [
       { id: "new", title: "New thread", image: "square.and.pencil" },
+      ...(props.machineSubactions.length === 0
+        ? []
+        : [
+            {
+              id: "new-on",
+              title: "New thread on…",
+              subactions: props.machineSubactions.map((action) => ({
+                id: action.id,
+                title: action.title,
+                attributes: action.disabled ? { disabled: true } : undefined,
+              })),
+            },
+          ]),
+      { id: "machines", title: "Machines…", image: "server.rack" },
       {
         id: "show-in",
         title: "Show in workspaces",
@@ -358,6 +379,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     item.quiet,
     item.workspaceIds,
     offline,
+    props.machineSubactions,
     props.workspaces,
     props.mesh,
   ]);
@@ -365,7 +387,11 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     if (nativeEvent.event === "connect")
       openSettings(navigation as Parameters<typeof openSettings>[0], "SettingsEnvironments");
     else if (nativeEvent.event === "new") props.onNewThread(item.project);
-    else if (nativeEvent.event.startsWith("show:")) {
+    else if (nativeEvent.event.startsWith("machine:")) {
+      props.onNewThreadOnMachine(item.projectKey, nativeEvent.event.slice("machine:".length));
+    } else if (nativeEvent.event === "machines") {
+      props.onOpenMachines(item.projectKey);
+    } else if (nativeEvent.event.startsWith("show:")) {
       props.onToggleWorkspace(item.projectKey, nativeEvent.event.slice("show:".length));
     } else if (nativeEvent.event.startsWith("fold:")) {
       props.onFoldMode(item.projectKey, nativeEvent.event.slice("fold:".length) as ProjectFoldMode);
@@ -439,12 +465,55 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       )}
     </Pressable>
   );
+  const pendingRows =
+    item.open && item.pending.length > 0 ? (
+      <View>
+        {item.pending.map((pending) => (
+          <View
+            key={pending.key}
+            className="flex-row items-center gap-2 py-1 pl-9 pr-2"
+            testID={`workspace-pending-${pending.environmentId}`}
+          >
+            <View
+              className="h-4 items-center justify-center rounded px-1"
+              style={{ backgroundColor: machineTagBackground(pending.color) }}
+            >
+              <Text
+                className="font-mono text-[10px] font-t3-bold uppercase"
+                style={{ color: pending.color }}
+              >
+                {pending.tag}
+              </Text>
+            </View>
+            <Text className="min-w-0 flex-1 text-[13px] text-foreground-muted" numberOfLines={1}>
+              {pending.text}
+            </Text>
+            {pending.state === "error" || pending.state === "conflict" ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Retry mounting on ${pending.label}`}
+                hitSlop={8}
+                onPress={() => props.onRetryReplica(pending)}
+              >
+                <Text className="text-[13px] font-t3-medium text-foreground">Retry</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    ) : null;
+  const body = (
+    <View collapsable={false}>
+      {row}
+      {pendingRows}
+    </View>
+  );
   if (draggable) {
     return (
       <AndroidAnchoredMenu actions={actions} onPressAction={handleAction}>
         {(open) => (
           <FolderDragHandle projectKey={item.projectKey} onMenu={open}>
-            {row}
+            {body}
           </FolderDragHandle>
         )}
       </AndroidAnchoredMenu>
@@ -452,7 +521,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   }
   return (
     <Menu actions={actions} onPressAction={handleAction} shouldOpenOnLongPress>
-      {row}
+      {body}
     </Menu>
   );
 });

@@ -10,6 +10,14 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import {
+  planThreadOnMachine,
+  removeRepresentation,
+  replicaDriverEnvironment,
+  replicaProjectId,
+  setPrimary,
+  type PendingReplicaRow as PendingReplicaRowModel,
+} from "@t3tools/client-runtime/state/mesh-layout";
+import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
   type AtomCommandResult,
@@ -28,8 +36,9 @@ import {
 } from "@t3tools/client-runtime/state/machine-display";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  ProjectId,
   type ContextMenuItem,
-  type EnvironmentId,
   type ProjectIconOverride,
   type ScopedThreadRef,
   type SidebarWorkspace,
@@ -38,6 +47,7 @@ import {
 import { useParams, useRouter } from "@tanstack/react-router";
 import {
   AudioLinesIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   EllipsisIcon,
   FolderPlusIcon,
@@ -100,6 +110,7 @@ import {
 } from "../../sidebarProjectGrouping";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
+import { replicaStatusEnvironment, useReplicaStatuses } from "../../state/meshReplicas";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../../state/server";
 import { projectEnvironment } from "../../state/projects";
 import { threadEnvironment } from "../../state/threads";
@@ -138,6 +149,14 @@ import {
 } from "./WorkspaceChrome";
 import { WorkspaceAgentGroup } from "./WorkspaceAgentGroup";
 import { WorkspaceUpdateStrip } from "./WorkspaceUpdateStrip";
+import { MachinesDialog } from "./MachinesDialog";
+import { PendingReplicaRow } from "./PendingReplicaRow";
+import {
+  folderMachineChoices,
+  folderPendingRows,
+  machineMenuItems,
+  primarySeedOf,
+} from "./replicas.logic";
 import { WorkspaceThreadRow, type WorkspaceRowVariant } from "./WorkspaceThreadRow";
 import { useWorkspaceViewStore } from "./workspaceViewStore";
 import {
@@ -267,6 +286,11 @@ export default function WorkspaceSidebar() {
     reportFailure: false,
   });
   const handleNewThread = useNewThreadHandler();
+  const liveReplicaStatuses = useReplicaStatuses();
+  const retryReplica = useAtomCommand(replicaStatusEnvironment.retry, {
+    label: "replica retry",
+    reportFailure: true,
+  });
   const talk = useTalk();
   const voiceThreadRef = useVoiceThreadRef();
 
@@ -562,6 +586,11 @@ export default function WorkspaceSidebar() {
     null,
   );
   const [folderDrop, setFolderDrop] = useState<{ projectKey: string; after: boolean } | null>(null);
+  const [machinesFolder, setMachinesFolder] = useState<FolderModel | null>(null);
+  /** Folders waiting for a machine to register their project, keyed by `logicalKey:environmentId`. */
+  const [pendingThreadOn, setPendingThreadOn] = useState<
+    Record<string, { readonly logicalKey: string; readonly environmentId: string }>
+  >({});
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isSearching = searchQuery.trim().length > 0;
@@ -700,6 +729,127 @@ export default function WorkspaceSidebar() {
       failureToast("Could not create thread", error),
     );
   };
+
+  // ── New thread on another machine ─────────────────────────────────────
+  const machineChoices = folderMachineChoices(
+    config,
+    environments.map((environment) => ({
+      environmentId: environment.environmentId,
+      label: environment.label,
+      connected: environment.connection.phase === "connected",
+      supportsMesh:
+        serverConfigs.get(environment.environmentId)?.environment.capabilities.meshLayout === true,
+    })),
+  );
+  const seedOf = (folder: FolderModel) =>
+    primarySeedOf(folder.group.memberProjects, primaryEnvironmentId);
+  const openThreadOnMachine = (environmentId: EnvironmentId, projectId: string) => {
+    if (isMobile) setOpenMobile(false);
+    void handleNewThread(scopeProjectRef(environmentId, ProjectId.make(projectId))).catch((error) =>
+      failureToast("Could not create thread", error),
+    );
+  };
+  const startThreadOnMachine = (folder: FolderModel, environmentId: string) => {
+    const logicalKey = folder.group.projectKey;
+    const plan = planThreadOnMachine({
+      config,
+      logicalKey,
+      targetEnvironmentId: environmentId,
+      seed: seedOf(folder),
+    });
+    if (plan.config !== config) writeConfig(() => plan.config);
+    if (plan.projectId !== null) {
+      openThreadOnMachine(EnvironmentId.make(environmentId), plan.projectId);
+      return;
+    }
+    const key = `${logicalKey}:${environmentId}`;
+    setPendingThreadOn((current) => ({
+      ...current,
+      [key]: { logicalKey, environmentId },
+    }));
+  };
+  const openNewThreadOnMenu = async (folder: FolderModel, position: { x: number; y: number }) => {
+    const api = readLocalApi();
+    if (!api) return;
+    const clicked = await api.contextMenu.show(machineMenuItems(machineChoices), position);
+    if (clicked?.startsWith("machine:")) {
+      startThreadOnMachine(folder, clicked.slice("machine:".length));
+    }
+  };
+  const addReplicaOn = (folder: FolderModel, environmentId: string) => {
+    const plan = planThreadOnMachine({
+      config,
+      logicalKey: folder.group.projectKey,
+      targetEnvironmentId: environmentId,
+      seed: seedOf(folder),
+    });
+    if (plan.config !== config) writeConfig(() => plan.config);
+  };
+  const retryPendingReplica = (row: PendingReplicaRowModel) => {
+    const driver = replicaDriverEnvironment(config, row.rep);
+    if (driver === null) {
+      failureToast(
+        "Can't retry this replica",
+        new Error(
+          `Add an ssh route between ${row.rep.environmentId} and ${row.rep.source ?? "its source"} in Settings › Machines.`,
+        ),
+      );
+      return;
+    }
+    void retryReplica({
+      environmentId: EnvironmentId.make(driver),
+      input: { logicalKey: row.logicalKey, environmentId: row.rep.environmentId },
+    });
+  };
+  const openMachinesDialog = (folder: FolderModel) => {
+    const logicalKey = folder.group.projectKey;
+    if ((config.projectMounts[logicalKey]?.length ?? 0) === 0) {
+      const seed = seedOf(folder);
+      if (seed) {
+        writeConfig(
+          (current) =>
+            planThreadOnMachine({
+              config: current,
+              logicalKey,
+              targetEnvironmentId: seed.environmentId,
+              seed,
+            }).config,
+        );
+      }
+    }
+    setMachinesFolder(folder);
+  };
+  /** Opens the draft as soon as the machine's project reaches this client's project list. */
+  const openReadyPendingThreads = useEffectEvent(() => {
+    const next = { ...pendingThreadOn };
+    let opened = false;
+    for (const [key, intent] of Object.entries(next)) {
+      const projectId = replicaProjectId(
+        config,
+        liveReplicaStatuses,
+        intent.logicalKey,
+        intent.environmentId,
+      );
+      if (
+        projectId === null ||
+        !projects.some(
+          (project) => project.environmentId === intent.environmentId && project.id === projectId,
+        )
+      ) {
+        continue;
+      }
+      delete next[key];
+      opened = true;
+      openThreadOnMachine(EnvironmentId.make(intent.environmentId), projectId);
+    }
+    if (opened) setPendingThreadOn(next);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- follows the layout and live replica stream until the mounted project can open a draft
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- opens a draft after the external layout arrives
+    openReadyPendingThreads();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- the effect event reads the latest values
+  }, [config, liveReplicaStatuses, pendingThreadOn, projects]);
 
   // ── Workspace edits ───────────────────────────────────────────────────
   const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceTitleEditing>(null);
@@ -920,7 +1070,14 @@ export default function WorkspaceSidebar() {
     ];
     const items: ContextMenuItem[] = [
       { id: "new-thread", label: "New thread", icon: "message-square-plus" },
+      {
+        id: "new-thread-on",
+        label: "New thread on…",
+        disabled: machineChoices.length === 0,
+        children: machineMenuItems(machineChoices),
+      },
       ...placement,
+      { id: "machines", label: "Machines…", icon: "server" },
       { id: "icon", label: "Icon…", icon: "smile", separatorBefore: true },
       ...(hasCustomIcon ? [{ id: "icon-reset", label: "Reset icon" }] : []),
       ...(mergeTargets.length > 0
@@ -963,6 +1120,9 @@ export default function WorkspaceSidebar() {
     const clicked = await api.contextMenu.show(items, position);
     if (!clicked) return;
     if (clicked === "new-thread") startThreadInFolder(folder);
+    else if (clicked.startsWith("machine:"))
+      startThreadOnMachine(folder, clicked.slice("machine:".length));
+    else if (clicked === "machines") openMachinesDialog(folder);
     else if (clicked === "icon") setIconPickerFolder(folder);
     else if (clicked === "icon-reset") void setFolderIcon(folder, null);
     else if (clicked.startsWith("show:"))
@@ -1261,6 +1421,7 @@ export default function WorkspaceSidebar() {
     const working = folder.all.filter(
       (thread) => resolveSidebarThreadStatus(thread) === "working",
     ).length;
+    const pendingReplicas = folderPendingRows(config, liveReplicaStatuses, folder.group.projectKey);
     return (
       <div key={folderKey} className="flex flex-col">
         <Tooltip disabled={folderDrag !== null}>
@@ -1373,6 +1534,12 @@ export default function WorkspaceSidebar() {
                     <SquarePenIcon />
                   </FolderAction>
                   <FolderAction
+                    label="New thread on another machine"
+                    onClick={(position) => void openNewThreadOnMenu(folder, position)}
+                  >
+                    <ChevronDownIcon />
+                  </FolderAction>
+                  <FolderAction
                     label="Project actions"
                     onClick={(position) => void openFolderMenu(folder, position)}
                   >
@@ -1399,6 +1566,14 @@ export default function WorkspaceSidebar() {
         </Tooltip>
         {open ? (
           <div className="flex flex-col pl-3">
+            {pendingReplicas.map((row) => (
+              <PendingReplicaRow
+                key={`replica:${folder.group.projectKey}:${row.rep.environmentId}`}
+                config={config}
+                row={row}
+                onRetry={retryPendingReplica}
+              />
+            ))}
             {visible.map((thread) => renderThread(thread, "active", null, machineTags))}
             {folder.active.length > FOLDER_PREVIEW_COUNT ? (
               <MoreButton onClick={() => view.toggleFolderExpanded(folderKey)}>
@@ -1723,6 +1898,31 @@ export default function WorkspaceSidebar() {
             onSelect={(icon) => void setFolderIcon(iconPickerFolder, icon)}
           />
         </Suspense>
+      ) : null}
+      {machinesFolder ? (
+        <MachinesDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setMachinesFolder(null);
+          }}
+          title={machinesFolder.label}
+          config={config}
+          logicalKey={machinesFolder.group.projectKey}
+          machines={machineChoices}
+          liveStatuses={liveReplicaStatuses}
+          onAddReplica={(environmentId) => addReplicaOn(machinesFolder, environmentId)}
+          onMakePrimary={(environmentId) =>
+            writeConfig((current) =>
+              setPrimary(current, machinesFolder.group.projectKey, environmentId),
+            )
+          }
+          onRemove={(environmentId) =>
+            writeConfig((current) =>
+              removeRepresentation(current, machinesFolder.group.projectKey, environmentId),
+            )
+          }
+          onRetry={retryPendingReplica}
+        />
       ) : null}
     </div>
   );
