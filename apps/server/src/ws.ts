@@ -1,3 +1,5 @@
+import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
+import { MESH_WS_METHODS, ServerSettingsError } from "@t3tools/contracts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -1280,6 +1282,10 @@ export const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const inbox = yield* InboxService.InboxService;
+      const mesh = yield* MeshLayoutService;
+      const meshSnapshot = (
+        snapshot: import("./mesh/MeshLayoutService.ts").MeshLayoutSnapshot,
+      ) => ({ ...snapshot, environmentId: mesh.environmentId });
       const uiRequests = yield* UiRequests.UiRequests;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const guestShares = yield* GuestShareService.GuestShareService;
@@ -1348,6 +1354,7 @@ export const layerWsRpc = (
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
       const databaseStorage = yield* DatabaseStorage.DatabaseStorage;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
+      let legacyLayout = (yield* serverSettings.getSettings).sidebarWorkspaces;
       const secretResolver = yield* SecretResolver.SecretResolver;
       const peerLinks = yield* PeerLinks.PeerLinks;
       const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
@@ -1748,6 +1755,7 @@ export const layerWsRpc = (
         const settings = ServerSettings.redactServerSettingsForClient(
           yield* serverSettings.getSettings,
         );
+        legacyLayout = settings.sidebarWorkspaces;
         const environment = yield* serverEnvironment.getDescriptor;
         const auth = yield* serverAuth.getDescriptor();
         const scratchWorkspaceRoot = yield* managedFolders.scratchRoot;
@@ -2145,6 +2153,12 @@ export const layerWsRpc = (
             ),
           ),
         // Fork: agent inbox. The owner's side; agents use the MCP tools.
+        [MESH_WS_METHODS.layoutGet]: () => mesh.read.pipe(Effect.map(meshSnapshot)),
+        [MESH_WS_METHODS.layoutApply]: ({ entries }) =>
+          mesh
+            .apply(entries as import("@t3tools/shared/meshLayout").MeshLayoutDocument)
+            .pipe(Effect.map(meshSnapshot)),
+        [MESH_WS_METHODS.layoutSubscribe]: () => mesh.changes.pipe(Stream.map(meshSnapshot)),
         [INBOX_WS_METHODS.subscribe]: (input) => inbox.subscribe(input),
         [INBOX_WS_METHODS.subscribeIssue]: ({ issueId }) => inbox.subscribeIssue(issueId),
         [INBOX_WS_METHODS.comment]: (input) => inbox.ownerComment(input),
@@ -2542,7 +2556,21 @@ export const layerWsRpc = (
                   Effect.provide(deviceHostContext),
                 )
               : undefined;
-            const nextPatch = { ...patch, ...(deviceHosts ? { deviceHosts } : {}) };
+            if (patch.sidebarWorkspaces !== undefined) {
+              yield* mesh.editLegacy(legacyLayout, patch.sidebarWorkspaces!).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ServerSettingsError({
+                      settingsPath: "<mesh>",
+                      operation: "write-file",
+                      cause,
+                    }),
+                ),
+              );
+            }
+            if (patch.sidebarWorkspaces !== undefined) legacyLayout = patch.sidebarWorkspaces;
+            const { sidebarWorkspaces: _layout, ...restPatch } = patch;
+            const nextPatch = { ...restPatch, ...(deviceHosts ? { deviceHosts } : {}) };
             const settings = yield* providerInstanceMutation === undefined
               ? serverSettings.updateSettings(nextPatch)
               : serverSettings.updateProviderInstance(providerInstanceMutation, nextPatch);
@@ -3296,6 +3324,7 @@ export const WS_RPC_SERVER_OPTIONS = {
 
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
+    const mesh = yield* MeshLayoutService;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const npmRelease = yield* NpmRelease.NpmRelease;
@@ -3384,6 +3413,7 @@ export const layer = Layer.unwrap(
                   reviewGuides,
                 ),
               ),
+              Layer.provide(Layer.succeed(MeshLayoutService, mesh)),
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
               Layer.provide(

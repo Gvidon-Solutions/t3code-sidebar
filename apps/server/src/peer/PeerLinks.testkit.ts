@@ -58,9 +58,10 @@ export const descriptorOf = (
  * socket. The descriptor can be swapped, as when its address comes to answer
  * as another environment, and every bearer it receives is recorded.
  */
-export const servePeer = <E, R>(
+export const servePeer = <E, R, S = never>(
   initial: ExecutionEnvironmentDescriptor,
   tools: Layer.Layer<never, E, R>,
+  services?: Context.Context<S>,
 ) =>
   Effect.gen(function* () {
     const descriptor = yield* Ref.make(initial);
@@ -112,6 +113,7 @@ export const servePeer = <E, R>(
         Layer.provide(McpOAuth.layerMcpClientAuthenticator),
       ),
     ).pipe(
+      Layer.provide(Layer.succeedContext(services ?? Context.empty())),
       Layer.provide(layerRecordBearers),
       Layer.provide(layerEnvironment),
       Layer.provide(Layer.succeedContext(authContext)),

@@ -1,3 +1,5 @@
+import { Routes } from "../mesh/MeshRelay.ts";
+import * as Option from "effect/Option";
 import {
   type EnvironmentId,
   OrchestratorMcpFailure,
@@ -145,6 +147,34 @@ const make = Effect.gen(function* () {
     }
     if (typeof args.clientRequestId === "string") {
       args.clientRequestId = yield* scopedRequestId(scope.requestNamespace, args.clientRequestId);
+    }
+    const direct = yield* links.get(environmentId).pipe(Effect.mapError(unavailable));
+    if (Option.isNone(direct)) {
+      for (const peer of yield* links.list.pipe(Effect.mapError(unavailable))) {
+        if (peer.access !== "full-access" || peer.status === "expired") continue;
+        const routes = yield* peers
+          .call({
+            environmentId: peer.environmentId,
+            tool: "t3_mesh_routes",
+            arguments: {},
+            limits,
+            success: Routes,
+          })
+          .pipe(
+            Effect.tapError((error) => Effect.logDebug("Mesh route discovery failed", error)),
+            Effect.option,
+          );
+        if (Option.isSome(routes) && routes.value.includes(environmentId)) {
+          return yield* peers.call({
+            environmentId: peer.environmentId,
+            tool: "t3_mesh_relay",
+            arguments: { environmentId, tool: toolName, arguments: args },
+            hops: [scope.environmentId],
+            limits,
+            success: success as Schema.Decoder<A>,
+          });
+        }
+      }
     }
     return yield* peers.call({
       environmentId,

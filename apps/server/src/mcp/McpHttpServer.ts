@@ -1,3 +1,6 @@
+import { interceptMeshRequest } from "../mesh/MeshMcp.ts";
+import { MeshRelay } from "../mesh/MeshRelay.ts";
+import { MeshReplicator } from "../mesh/MeshReplicator.ts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -197,6 +200,8 @@ const linkedEnvironmentsOff = HttpServerResponse.jsonUnsafe(
 );
 
 const makeMcpAuthMiddleware = Effect.gen(function* () {
+  const meshReplicator = yield* Effect.serviceOption(MeshReplicator);
+  const meshRelay = yield* Effect.serviceOption(MeshRelay);
   const registry = yield* McpSessionRegistry.McpSessionRegistry;
   const clients = yield* Effect.serviceOption(McpClientAuthenticator);
   const serverSettings = yield* ServerSettings.ServerSettingsService;
@@ -229,6 +234,14 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const limited = withModeLimit(invocation, request);
     if (limited === undefined) return invalidModeLimit;
     const linkedEnvironments = yield* linksEnabled;
+    const meshResponse = yield* interceptMeshRequest(
+      request,
+      limited,
+      meshReplicator,
+      meshRelay,
+      linkedEnvironments,
+    );
+    if (meshResponse !== undefined) return meshResponse;
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
     return yield* httpEffect.pipe(
       Effect.provideService(McpInvocationContext.McpInvocationContext, {

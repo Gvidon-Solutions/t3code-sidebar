@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — T3 Mesh — Stage C server replication
+
+- **What:** persistent shared sidebar layout, legacy settings compatibility, server gossip and two-hop tool routing.
+- **How:** LWW entries retain HLC conflict resolution; local SQLite sequence watermarks drive replication over full-access peer links. Mesh-only MCP calls stay outside agent tool lists. Old settings writes become per-entry diffs and materialized settings remain readable by old clients.
+- **Where:** `apps/server/src/mesh/`, migration 077, `packages/shared/src/meshLayout/adoptLegacy.ts`; seams in server layer assembly, WS handlers, MCP authentication, peer forwarding, RPC contracts, permissions and environment capabilities.
+
 ### 2026-11-02 — T3 Mesh — layout CRDT core
 
 - **What.** Pure shared layout CRDT, legacy migration and logical project operations for Mesh.

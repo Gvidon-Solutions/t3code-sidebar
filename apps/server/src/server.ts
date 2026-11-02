@@ -1,3 +1,7 @@
+import * as MeshSettings from "./mesh/MeshSettings.ts";
+import * as MeshRelayLive from "./mesh/MeshRelay.ts";
+import * as MeshReplication from "./mesh/MeshReplicator.ts";
+import * as MeshLayoutLive from "./mesh/MeshLayoutServiceLive.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Random from "effect/Random";
@@ -243,10 +247,16 @@ const layerProviderEventLoggers = Layer.effect(
 
 const layerPtyAdapter = NodePtyAdapter.layer;
 
-const layerServerSettings = ServerSettings.layer.pipe(
+const layerRawServerSettings = ServerSettings.layer.pipe(
   Layer.provide(ServerSecretStore.layer),
   Layer.provideMerge(SqlitePersistence.layerConfig),
 );
+
+const layerMesh = MeshLayoutLive.layer.pipe(
+  Layer.provideMerge(layerRawServerSettings),
+  Layer.provide(ServerEnvironment.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+);
+const layerServerSettings = MeshSettings.layer.pipe(Layer.provideMerge(layerMesh));
 
 const layerNativeTelemetry = NativeTelemetryClient.layer.pipe(
   Layer.provide(ResourceMonitorBinary.layer),
@@ -767,6 +777,14 @@ const layerMakeRoutes = Layer.mergeAll(
     ),
   ),
   Layer.provide(PreviewBrowser.layer),
+  Layer.provide(
+    Layer.merge(MeshRelayLive.layer, MeshReplication.layer).pipe(
+      Layer.provideMerge(PeerMcpClient.layer),
+      Layer.provideMerge(PeerLinks.layer),
+      Layer.provideMerge(layerMesh),
+      Layer.provide(layerServerSettings),
+    ),
+  ),
   // Links to other environments, shared by Settings (WebSocket) and agents (/mcp).
   Layer.provide(
     PeerForwarding.layer.pipe(

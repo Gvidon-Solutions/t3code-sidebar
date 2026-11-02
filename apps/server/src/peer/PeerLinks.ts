@@ -1,3 +1,5 @@
+import * as PubSub from "effect/PubSub";
+import * as Stream from "effect/Stream";
 import {
   AuthMcpClientAccess,
   AuthMcpRegistrationError,
@@ -64,6 +66,7 @@ export class PeerLinks extends Context.Service<
   PeerLinks,
   {
     /** Whether the Linked environments beta (Settings → Labs) is on here. */
+    readonly changes?: Stream.Stream<void>;
     readonly enabled: Effect.Effect<boolean>;
     readonly link: (input: PeerLinkCreateInput) => Effect.Effect<PeerLink, PeerLinkError>;
     /**
@@ -161,6 +164,7 @@ const linkLimitsHold = (peer: { readonly capabilities: ExecutionEnvironmentCapab
   peer.capabilities.mcpModeLimitHeader === true && peer.capabilities.linkFence === true;
 
 const make = Effect.gen(function* () {
+  const changes = yield* PubSub.unbounded<void>();
   const sql = yield* SqlClient.SqlClient;
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const crypto = yield* Crypto.Crypto;
@@ -476,6 +480,7 @@ const make = Effect.gen(function* () {
     if (Option.isSome(previous) && previous.value.secret_name !== secretName) {
       yield* secrets.remove(previous.value.secret_name).pipe(Effect.ignore);
     }
+    yield* PubSub.publish(changes, undefined);
     return linked;
   });
 
@@ -606,6 +611,7 @@ const make = Effect.gen(function* () {
     );
 
   return PeerLinks.of({
+    changes: Stream.fromPubSub(changes),
     enabled,
     link,
     describe: describeUrl,
