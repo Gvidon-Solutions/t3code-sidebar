@@ -2,14 +2,15 @@
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 
-import type {
-  FilesListEntry,
-  FilesListInput,
-  FilesListResult,
-  FilesReadInput,
-  FilesReadResult,
+import {
+  FILES_LIST_DEFAULT_LIMIT,
+  FilesError,
+  type FilesListEntry,
+  type FilesListInput,
+  type FilesListResult,
+  type FilesReadInput,
+  type FilesReadResult,
 } from "@t3tools/contracts";
-import { FilesError } from "@t3tools/contracts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
@@ -23,7 +24,6 @@ import { makeIsServerInternalPath } from "../auth/serverInternalPaths.ts";
 export const FILES_READ_PREVIEW_BYTES = 1024 * 1024;
 /** Beyond this a preview is refused instead of spending memory on bytes nobody reads. */
 export const FILES_READ_HARD_MAX_BYTES = 64 * 1024 * 1024;
-export const FILES_LIST_DEFAULT_LIMIT = 200;
 
 const failureOf = (cause: unknown): FilesError["reason"] => {
   const code = (cause as NodeJS.ErrnoException | undefined)?.code;
