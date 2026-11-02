@@ -1,4 +1,5 @@
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
+import { MeshReplicator } from "./mesh/MeshReplicator.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -560,6 +561,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(WorktreeSetupTracker.WorktreeSetupTracker)({}),
   // Sidebar fork services the RPC layer also needs.
   Layer.mock(MeshLayoutService)({ environmentId: "test" }),
+  Layer.mock(MeshReplicator)({}),
   Layer.mock(InboxService.InboxService)({}),
   Layer.mock(UiRequests.UiRequests)({}),
   Layer.mock(VoiceSessionService.VoiceSessionServiceV2)({}),

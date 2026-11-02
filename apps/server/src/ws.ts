@@ -129,6 +129,7 @@ import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as InboxService from "./inbox/InboxService.ts";
 import * as UiRequests from "./uiRequests/UiRequests.ts";
 import { replicaRpcFallbackHandlers } from "./mesh/meshLayoutRpcHandlers.ts";
+import { MeshReplicator } from "./mesh/MeshReplicator.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
@@ -1285,6 +1286,7 @@ export const layerWsRpc = (
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const inbox = yield* InboxService.InboxService;
       const mesh = yield* MeshLayoutService;
+      const meshReplicator = yield* MeshReplicator;
       const meshSnapshot = (
         snapshot: import("./mesh/MeshLayoutService.ts").MeshLayoutSnapshot,
       ) => ({ ...snapshot, environmentId: mesh.environmentId });
@@ -2162,6 +2164,7 @@ export const layerWsRpc = (
             .apply(entries as import("@t3tools/shared/meshLayout").MeshLayoutDocument)
             .pipe(Effect.map(meshSnapshot)),
         [MESH_WS_METHODS.layoutSubscribe]: () => mesh.changes.pipe(Stream.map(meshSnapshot)),
+        [MESH_WS_METHODS.status]: () => meshReplicator.status,
         // Fork: agent inbox. The owner's side; agents use the MCP tools.
         [INBOX_WS_METHODS.subscribe]: (input) => inbox.subscribe(input),
         [INBOX_WS_METHODS.subscribeIssue]: ({ issueId }) => inbox.subscribeIssue(issueId),
@@ -3332,6 +3335,7 @@ export const WS_RPC_SERVER_OPTIONS = {
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const mesh = yield* MeshLayoutService;
+    const meshReplicator = yield* MeshReplicator;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const npmRelease = yield* NpmRelease.NpmRelease;
@@ -3421,6 +3425,7 @@ export const layer = Layer.unwrap(
                 ),
               ),
               Layer.provide(Layer.succeed(MeshLayoutService, mesh)),
+              Layer.provide(Layer.succeed(MeshReplicator, meshReplicator)),
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
               Layer.provide(

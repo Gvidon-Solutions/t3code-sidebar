@@ -438,5 +438,9 @@ export function createMeshLayoutAtoms<R, E>(
       label: "environment-data:mesh-layout:apply",
       tag: MESH_WS_METHODS.layoutApply,
     }),
+    status: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:mesh-layout:status",
+      tag: MESH_WS_METHODS.status,
+    }),
   };
 }

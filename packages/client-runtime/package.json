@@ -327,6 +327,10 @@
       "types": "./src/state/machineDisplay.ts",
       "default": "./src/state/machineDisplay.ts"
     },
+    "./state/mesh-machines": {
+      "types": "./src/state/meshMachines.ts",
+      "default": "./src/state/meshMachines.ts"
+    },
     "./state/shared-settings": {
       "types": "./src/state/sharedSettings.ts",
       "default": "./src/state/sharedSettings.ts"

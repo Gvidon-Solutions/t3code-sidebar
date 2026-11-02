@@ -27,9 +27,16 @@ export type SidebarWorkspaceRule = typeof SidebarWorkspaceRule.Type;
 
 export const DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS = 5;
 
+/** An ssh route from one machine to another: a destination and an optional private key. */
+export const SidebarMachineReach = Schema.Struct({
+  ssh: Schema.String,
+  identityFile: Schema.optionalKey(Schema.String),
+});
+export type SidebarMachineReach = typeof SidebarMachineReach.Type;
+
 /** A machine as the user names it in the sidebar; absent fields fall back to the server's label. */
 export const SidebarMachine = Schema.Struct({
-  reach: Schema.optionalKey(Schema.Record(Schema.String, Schema.Struct({ ssh: Schema.String }))),
+  reach: Schema.optionalKey(Schema.Record(Schema.String, SidebarMachineReach)),
   label: Schema.optionalKey(Schema.String),
   /** Up to three characters shown on thread rows, e.g. "GV". */
   tag: Schema.optionalKey(Schema.String),

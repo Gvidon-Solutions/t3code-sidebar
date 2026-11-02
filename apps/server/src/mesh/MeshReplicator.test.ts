@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as Sqlite from "../persistence/Sqlite.ts";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Settings from "../serverSettings.ts";
 import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
@@ -169,4 +170,57 @@ it.effect(
       yield* settle;
       expect(yield* c.mesh.read).toEqual(snapshot);
     }).pipe(Effect.scoped),
+);
+
+it.effect("reports each peer's last exchange, error and sequence numbers", () =>
+  Effect.gen(function* () {
+    const peers = Layer.succeed(PeerMcpClient, {
+      call: () => Effect.die("the status test never calls a peer"),
+    });
+    const links = Layer.mock(PeerLinks)({
+      enabled: Effect.succeed(true),
+      list: Effect.succeed([]),
+    });
+    const env = Layer.succeed(ServerEnvironment, {
+      getEnvironmentId: Effect.succeed(EnvironmentId.make("A")),
+      getDescriptor: Effect.succeed(descriptorOf("A", "A")),
+    });
+    const context = yield* Layer.build(
+      layer.pipe(
+        Layer.provideMerge(Mesh.layer),
+        Layer.provideMerge(
+          Layer.mergeAll(
+            peers,
+            links,
+            env,
+            Settings.layerTest({ linkedEnvironmentsEnabled: true }),
+            Sqlite.layerMemory,
+          ),
+        ),
+        Layer.fresh,
+      ),
+    );
+    const replicator = yield* MeshReplicator.pipe(Effect.provide(context));
+    const sql = yield* SqlClient.SqlClient.pipe(Effect.provide(context));
+    yield* sql`INSERT INTO mesh_peer_state(environment_id, sent_seq, received_seq, last_exchange_at, last_error) VALUES ('B', 4, 7, '2026-01-01T00:00:00.000Z', NULL)`;
+    yield* sql`INSERT INTO mesh_peer_state(environment_id, sent_seq, received_seq, last_exchange_at, last_error) VALUES ('C', 0, 0, NULL, 'offline')`;
+    expect(yield* replicator.status).toEqual({
+      peers: [
+        {
+          environmentId: "B",
+          lastExchangeAt: "2026-01-01T00:00:00.000Z",
+          lastError: null,
+          sentSeq: 4,
+          receivedSeq: 7,
+        },
+        {
+          environmentId: "C",
+          lastExchangeAt: null,
+          lastError: "offline",
+          sentSeq: 0,
+          receivedSeq: 0,
+        },
+      ],
+    });
+  }).pipe(Effect.scoped),
 );

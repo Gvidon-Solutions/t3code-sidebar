@@ -46,6 +46,7 @@ it.effect(
             Layer.succeed(MeshReplicator, {
               exchange: (input) => Effect.succeed({ entries: input.entries, seq: input.seq }),
               sync: Effect.void,
+              status: Effect.succeed({ peers: [] }),
             }),
           ),
         ),

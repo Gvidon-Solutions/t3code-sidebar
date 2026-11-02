@@ -63,10 +63,26 @@ export class ReplicaError extends Schema.TaggedError<ReplicaError>()("ReplicaErr
   cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
+/** Replication bookkeeping for one peer, as the server last recorded it. */
+export const MeshPeerState = Schema.Struct({
+  environmentId: Schema.String,
+  lastExchangeAt: Schema.NullOr(Schema.String),
+  lastError: Schema.NullOr(Schema.String),
+  sentSeq: Schema.Int,
+  receivedSeq: Schema.Int,
+});
+export type MeshPeerState = typeof MeshPeerState.Type;
+
+export const MeshLayoutStatus = Schema.Struct({
+  peers: Schema.Array(MeshPeerState),
+});
+export type MeshLayoutStatus = typeof MeshLayoutStatus.Type;
+
 export const MESH_WS_METHODS = {
   layoutGet: "meshLayout.get",
   layoutApply: "meshLayout.apply",
   layoutSubscribe: "meshLayout.subscribe",
+  status: "meshLayout.status",
   replicasStatus: "replicas.status",
   replicasRetry: "replicas.retry",
 } as const;
@@ -91,6 +107,12 @@ export const WsMeshLayoutSubscribeRpc = Rpc.make(MESH_WS_METHODS.layoutSubscribe
   error: LayoutError,
   stream: true,
 });
+/** Per-peer replication state: when the last exchange ran and what it last reported. */
+export const WsMeshLayoutStatusRpc = Rpc.make(MESH_WS_METHODS.status, {
+  payload: Schema.Struct({}),
+  success: MeshLayoutStatus,
+  error: LayoutError,
+});
 /** Every replica this server drives or holds, re-sent on change (progress included). */
 export const WsReplicasStatusRpc = Rpc.make(MESH_WS_METHODS.replicasStatus, {
   payload: Schema.Struct({}),
@@ -108,6 +130,7 @@ export const MeshRpcs = [
   WsMeshLayoutGetRpc,
   WsMeshLayoutApplyRpc,
   WsMeshLayoutSubscribeRpc,
+  WsMeshLayoutStatusRpc,
   WsReplicasStatusRpc,
   WsReplicasRetryRpc,
 ] as const;
