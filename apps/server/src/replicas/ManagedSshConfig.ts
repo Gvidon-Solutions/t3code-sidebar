@@ -16,7 +16,12 @@ export function managedSshConfig(
   const stops = [...original.matchAll(/^# t3-mesh end$/gm)];
   const start = starts[0]?.index ?? -1;
   const stop = stops[0]?.index ?? -1;
-  if (start < 0 !== stop < 0 || (start >= 0 && stop < start))
+  if (
+    starts.length > 1 ||
+    stops.length > 1 ||
+    start < 0 !== stop < 0 ||
+    (start >= 0 && stop < start)
+  )
     throw new Error("Malformed t3-mesh SSH configuration block.");
   const lines: string[] = [];
   for (const [env, route] of Object.entries(routes ?? {}).sort(([a], [b]) => a.localeCompare(b))) {

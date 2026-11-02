@@ -15,6 +15,7 @@ it("replaces only its block and preserves surrounding SSH config byte for byte",
   expect(managedSshConfig(`${first}Host after\n`, {})).toBe(`${original}\nHost after\n`);
   expect(managedSshConfig(original, { peer: { ssh: "example" } })).toBe(original);
   expect(() => managedSshConfig("# t3-mesh begin\n", routes)).toThrow("Malformed");
+  expect(() => managedSshConfig(`${first}${first}`, routes)).toThrow("Malformed");
   expect(() =>
     managedSshConfig(original, { peer: { ssh: "example", identityFile: "key\nHost *" } }),
   ).toThrow("Invalid");
