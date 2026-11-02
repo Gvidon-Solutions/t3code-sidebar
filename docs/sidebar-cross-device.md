@@ -95,7 +95,7 @@ voice can do everything by name: "создай тред в проекте X на
   `clientRpcPermissions.ts`): `meshLayout.get` (doc + materialized), `meshLayout.apply(entries)`,
   `meshLayout.subscribe` (stream of merged changes). Capability flag `meshLayout`.
 - Replication: `MeshReplicator` uses every PeerLink with full access: on change (debounced) and
-  every 60 s exchange with each peer via a fork MCP tool `t3_mesh_exchange` (input: entries newer
+  every 5 s exchange with each peer (links point one way, so pulls carry the far side's edits) via a fork MCP tool `t3_mesh_exchange` (input: entries newer
   than the peer's last-acked HLC from us + our known watermark of theirs; output: their newer
   entries). One link per pair is enough (the exchange is two-way); entries gossip transitively.
   Backoff on unreachable peers; never blocks anything.

@@ -229,4 +229,38 @@ describe("FilesRpc", () => {
       }).pipe(Effect.provide(layer));
     }),
   );
+  it.effect("keeps the target's reason when a forwarded read fails", () =>
+    Effect.gen(function* () {
+      const layer = FilesRpc.layer.pipe(
+        Layer.provide(
+          Layer.mock(FilesService.FilesService)(service(localResult, listResult) as never),
+        ),
+        Layer.provide(
+          Layer.mock(ServerEnvironment.ServerEnvironment)({
+            getDescriptor: Effect.succeed({ environmentId: here } as never),
+          }),
+        ),
+        Layer.provide(linksMock([there])),
+        Layer.provide(
+          Layer.mock(PeerMcpClient.PeerMcpClient)({
+            call: () =>
+              Effect.fail(
+                new OrchestratorMcpFailure({
+                  code: "invalid_request",
+                  message: `${FilesRpc.FILES_REASON_PREFIX}not_found] No file at /srv/app/missing.md.`,
+                }),
+              ),
+          } as never),
+        ),
+      );
+      const error = yield* Effect.gen(function* () {
+        const rpc = yield* FilesRpc.FilesRpc;
+        return yield* rpc
+          .read({ environmentId: there, absolutePath: "/srv/app/missing.md" })
+          .pipe(Effect.flip);
+      }).pipe(Effect.provide(layer));
+      expect(error.reason).toBe("not_found");
+      expect(error.message).toBe("No file at /srv/app/missing.md.");
+    }),
+  );
 });

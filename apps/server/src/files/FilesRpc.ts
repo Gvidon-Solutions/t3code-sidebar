@@ -1,5 +1,6 @@
 import {
   FilesError,
+  FilesFailure,
   FilesListResult,
   type FilesListInput,
   type FilesReadInput,
@@ -9,6 +10,8 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import { callRouted } from "../mesh/MeshRouting.ts";
@@ -33,12 +36,23 @@ export class FilesRpc extends Context.Service<
   }
 >()("t3/files/FilesRpc") {}
 
-const asFilesError = (error: OrchestratorMcpFailure, absolutePath: string) =>
-  new FilesError({
-    reason: error.code === "capability_denied" ? "permission_denied" : "unavailable",
+/** Marks a FilesError reason inside a forwarded tool failure: `[files:not_found] message`. */
+export const FILES_REASON_PREFIX = "[files:";
+const decodeFailure = Schema.decodeUnknownOption(FilesFailure);
+
+const asFilesError = (error: OrchestratorMcpFailure, absolutePath: string) => {
+  const match = /\[files:([a-z_]+)\] (.*)$/su.exec(error.message);
+  const reason = match ? decodeFailure(match[1]) : Option.none();
+  return new FilesError({
+    reason: Option.isSome(reason)
+      ? reason.value
+      : error.code === "capability_denied"
+        ? "permission_denied"
+        : "unavailable",
     absolutePath,
-    message: error.message,
+    message: match && Option.isSome(reason) ? match[2]! : error.message,
   });
+};
 
 /** A client call is a person's, not an agent's: the link's own access stays the limit. */
 const clientLimits = { runtimeMode: "full-access", interactionMode: "default" } as const;

@@ -1,6 +1,7 @@
 import { FilesError, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
+import { FILES_REASON_PREFIX } from "../../../files/FilesRpc.ts";
 import * as FilesService from "../../../files/FilesService.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { FilesToolkit } from "./tools.ts";
@@ -16,7 +17,8 @@ const asFailure = (error: FilesError) =>
             error.reason === "invalid_path"
           ? "invalid_request"
           : "orchestration_error",
-    message: error.message,
+    // The reason travels in the text so a relayed or forwarded call can rebuild the FilesError.
+    message: `${FILES_REASON_PREFIX}${error.reason}] ${error.message}`,
   });
 
 export const layer = McpToolAccess.toLayer(FilesToolkit, {

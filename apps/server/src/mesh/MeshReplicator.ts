@@ -136,7 +136,7 @@ export const layer = Layer.effect(
                 yield* mesh.apply(incoming.entries as MeshLayoutDocument);
                 yield* record(peer.environmentId, outgoing.seq, incoming.seq);
                 retries.delete(peer.environmentId);
-                nextPeriodic.set(peer.environmentId, now + 60000);
+                nextPeriodic.set(peer.environmentId, now + PERIODIC_PULL_MS);
               }).pipe(
                 Effect.catch((cause) =>
                   Effect.gen(function* () {
@@ -178,6 +178,12 @@ export const layer = Layer.effect(
     return MeshReplicator.of({ exchange, sync });
   }),
 );
+
+/**
+ * How often each linked peer is pulled when nothing changed here. Links point one way, so a peer
+ * that cannot call us is only heard through these pulls; an empty exchange is cheap.
+ */
+export const PERIODIC_PULL_MS = 5_000;
 
 /** Longest pause before retrying an unreachable peer; a peer that calls in resets it. */
 export const MAX_RETRY_MS = 15_000;
