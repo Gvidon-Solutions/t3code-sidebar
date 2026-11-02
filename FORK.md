@@ -108,6 +108,13 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — T3 Mesh — round 1 E2E
+
+- **What:** repeatable three-machine layout, link, restart, file-routing and old-client checks.
+- **How:** authenticated WebSocket RPCs against the isolated mesh bed, document/config hashes,
+  legacy key-set comparisons, concurrent edits and server recovery; nonzero exit on failures.
+- **Where:** `scripts/mesh-e2e/round1.sh` and its recorded `round1.log`; no product changes.
+
 ### 2026-11-02 — T3 Mesh — Stage C server replication
 
 - **What:** persistent shared sidebar layout, legacy settings compatibility, server gossip and two-hop tool routing.

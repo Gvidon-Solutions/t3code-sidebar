@@ -1,0 +1,65 @@
+== step 3: settings and links ==
+PASS  build 0.1.5-mesh.2421edf54d7f deployed on gv
+PASS  build 0.1.5-mesh.2421edf54d7f deployed on gor
+PASS  build 0.1.5-mesh.2421edf54d7f image deployed on vps
+environments: gv=375bdc7e-f155-4b27-be6a-bcd165c9b0a8 gor=34e33796-4717-4293-a955-88c2f740db4d vps=8bd7a7df-310c-48e9-9be9-f65ccd6c05f4
+PASS  gv has linkedEnvironmentsEnabled
+PASS  gor has linkedEnvironmentsEnabled
+PASS  vps has linkedEnvironmentsEnabled
+PASS  gv→gor link is full-access
+PASS  gor→vps link is full-access
+PASS  no gv↔vps link
+PASS  links reachable  (gv→gor and gor→vps in 406ms)
+== step 4: convergence and legacy adoption ==
+PASS  three documents and materialized configs converge  (converged in 1287ms, doc f03087a39b18b4570c91bda7ffbce56d44dc2fb7cda9484b73f30a884440e08f)
+PASS  exactly one "main" workspace on every server
+PASS  the same "main" workspace id everywhere
+PASS  no project key from either legacy config was lost  (30 keys)
+PASS  legacy settings.sidebarWorkspaces equals materialize(doc) on every server
+== step 5: edits ==
+test projects: github.com/non-standart-tasks/webpanel-vtbfamily-automatization / 04e6a58b-6631-4a06-87b7-265cc7e77054:/home/t3/repos/eduplatform
+PASS  gv created scratch workspace round1-20261102T144538Z
+PASS  scratch workspace replicated to all three  (converged in 1995ms, doc eaf108dd080d83a85590155661a719743af972e7918859a265a5a79c9ffc0bb3)
+PASS  concurrent edits on gv, vps and gor applied
+PASS  concurrent edits converged  (converged in 2259ms, doc ae38c617a07acb5b6a195fd08b2b61f7d122b9d23a886d4b4364930563f6fc19)
+PASS  concurrent gv rename kept
+PASS  concurrent vps placement kept
+PASS  concurrent gor reorder kept (independent workspace first)
+PASS  edits applied while gor was down
+PASS  gor rejoins and catches up  (converged in 8561ms, doc 419e23fc492e4f498bdfdce01361043c605cfceda5f5a807e67fa8ae5bf6b2e3)
+  gor catch-up: 12980ms
+PASS  offline gv rename reached gor
+PASS  offline vps placement reached gor
+PASS  vps restarts after a mid-sync kill and catches up  (converged in 1227ms, doc 11ee572aabdf67884a78dd46ccb8873d804127aa4cb0f694ae28010604862b89)
+PASS  mid-sync rename reached the restarted vps
+PASS  scratch workspace removed everywhere  (converged in 5726ms, doc dca7c08fec3dbd143d7127ceeed012170950c017bc24f28b85d31f607d90b191)
+PASS  no scratch workspace left
+== step 6: RPC regression ==
+PASS  every meshLayout.get returns the real document and config
+PASS  replicas.status returns the documented "disabled" until the replica service lands
+== step 7: files ==
+FAIL  files.read on gor through gv  ({"__error":true,"message":"[{\"_tag\":\"Fail\",\"error\":{\"_tag\":\"FilesError\",\"reason\":\"unavailable\",\"absolutePath\":\"/home/user/xdev-e2e/demo/README.md\",\"message\":\"This environment cannot reach linked environments.\"}}]"})
+FAIL  files.read on vps through gv (relayed via gor)  ({"__error":true,"message":"[{\"_tag\":\"Fail\",\"error\":{\"_tag\":\"FilesError\",\"reason\":\"unavailable\",\"absolutePath\":\"/home/t3/round1-e2e.txt\",\"message\":\"This environment cannot reach linked environments.\"}}]"})
+FAIL  files.read missing file is an error  ({"__error":true,"message":"[{\"_tag\":\"Fail\",\"error\":{\"_tag\":\"FilesError\",\"reason\":\"unavailable\",\"absolutePath\":\"/home/user/xdev-e2e/demo/definitely-missing-round1\",\"message\":\"This environment cannot reach linked environments.\"}}]"})
+FAIL  files.read binary file is an error  ({"__error":true,"message":"[{\"_tag\":\"Fail\",\"error\":{\"_tag\":\"FilesError\",\"reason\":\"unavailable\",\"absolutePath\":\"/home/user/xdev-e2e/demo/binary.bin\",\"message\":\"This environment cannot reach linked environments.\"}}]"})
+FAIL  files.read too-large file is an error  ({"__error":true,"message":"[{\"_tag\":\"Fail\",\"error\":{\"_tag\":\"FilesError\",\"reason\":\"unavailable\",\"absolutePath\":\"/home/user/xdev-e2e/demo/large.bin\",\"message\":\"This environment cannot reach linked environments.\"}}]"})
+FAIL  files.list completes on gor  ({"__error":true,"message":"[{\"_tag\":\"Fail\",\"error\":{\"_tag\":\"FilesError\",\"reason\":\"unavailable\",\"absolutePath\":\"/home/user/xdev-e2e/demo/\",\"message\":\"This environment cannot reach linked environments.\"}}]"})
+FAIL  files.list completes on vps through gv  ({"__error":true,"message":"[{\"_tag\":\"Fail\",\"error\":{\"_tag\":\"FilesError\",\"reason\":\"unavailable\",\"absolutePath\":\"/home/t3/\",\"message\":\"This environment cannot reach linked environments.\"}}]"})
+== step 8: old client compatibility ==
+PASS  old-client scratch workspaces replicated  (converged in 2158ms, doc d5aec7e1c0152981e629bc232fb73a68703711510ba61db7f400a70c9ba1a035)
+PASS  old client whole-object write accepted
+PASS  old-client write merged  (converged in 2153ms, doc ffef0beaf6179be3e7db5267cfb5eb3b8d9a2915cf91a17b5deb96f0f6a9464d)
+PASS  concurrent gor edit survived the old client's whole-object write
+PASS  old client's changed workspace propagated
+PASS  old-client scratch workspaces removed  (converged in 2174ms, doc 290ebcc82a128bce07b9b6f1bb1ca647cdd6409b7c9a29bd6074655a20250799)
+
+== summary ==
+PASS: 38  FAIL: 7
+failed checks:
+  - files.read on gor through gv
+  - files.read on vps through gv (relayed via gor)
+  - files.read missing file is an error
+  - files.read binary file is an error
+  - files.read too-large file is an error
+  - files.list completes on gor
+  - files.list completes on vps through gv
