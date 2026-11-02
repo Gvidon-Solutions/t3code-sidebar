@@ -108,6 +108,16 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — T3 Mesh — web accessibility QA
+
+- **What:** machine tags remain readable with pale custom colors in either theme. Pending
+  replica errors and the mesh footer expose their full text in tooltips; Retry names its machine
+  for screen readers and keyboard actions show focus.
+- **How:** tags use the theme foreground over the existing machine tint; truncated rows reuse
+  the shared Tooltip primitive. A browser regression checks pale, dark and preset tag colors.
+- **Where:** web `components/workspaces/{MachineTag,PendingReplicaRow,MeshFooterStatus}.tsx`
+  and `MachineTag.browser.test.tsx`. No mesh contracts or server interfaces change.
+
 ### 2026-11-02 — T3 Mesh — round 1 E2E
 
 - **What:** repeatable three-machine layout, link, restart, file-routing and old-client checks.

@@ -7,6 +7,7 @@ import { RefreshCwIcon } from "lucide-react";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 
 import { MachineTag } from "./MachineTag";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 /** Fork: a machine mounting this folder, above its threads until the project registers. */
 export function PendingReplicaRow(props: {
@@ -34,11 +35,17 @@ export function PendingReplicaRow(props: {
       data-replica-pending={row.rep.environmentId}
     >
       <MachineTag machine={machine} />
-      <span className="min-w-0 flex-1 truncate">{text}</span>
+      <Tooltip>
+        <TooltipTrigger render={<span className="min-w-0 flex-1 truncate" />}>
+          {text}
+        </TooltipTrigger>
+        <TooltipPopup>{text}</TooltipPopup>
+      </Tooltip>
       {canRetry ? (
         <button
           type="button"
-          className="flex h-5 shrink-0 items-center gap-1 rounded px-1 text-2xs font-medium text-sidebar-foreground hover:bg-foreground/8"
+          aria-label={`Retry replica on ${machine.label}`}
+          className="flex h-5 shrink-0 items-center gap-1 rounded px-1 text-2xs font-medium text-sidebar-foreground hover:bg-foreground/8 focus-visible:outline-2 focus-visible:outline-ring"
           onClick={() => props.onRetry(row)}
         >
           <RefreshCwIcon className="size-3" />
