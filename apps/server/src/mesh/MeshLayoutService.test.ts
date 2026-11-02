@@ -110,6 +110,7 @@ it.effect("rejects unknown families, malformed clocks and oversized batches and 
     const mesh = yield* MeshLayoutService;
     for (const entries of [
       { "unknown/key": { v: null, h: "0000000000100.00000.B" } },
+      { [`machine/${"x".repeat(65536)}`]: { v: null, h: "0000000000100.00000.B" } },
       { "machine/B": { v: null, h: "broken" } },
       { "machine/B": { v: "x".repeat(65537), h: "0000000000100.00000.B" } },
       Object.fromEntries(

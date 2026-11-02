@@ -15,7 +15,7 @@ export const validateEntries = Effect.fn("MeshLayout.validateEntries")(function*
       Object.entries(entries).some(([key, entry]) => {
         if (!keyPattern.test(key) || !/^\d{13}\.\d{5}\..+$/.test(entry.h)) return true;
         for (const part of key.split("/")) decodeURIComponent(part);
-        return new TextEncoder().encode(entryJson(entry)).byteLength > 65536;
+        return new TextEncoder().encode(entryJson({ [key]: entry })).byteLength > 65536;
       }),
     catch: (cause) =>
       new MeshLayoutError({ reason: "invalid_entries", message: "Invalid mesh entries", cause }),
