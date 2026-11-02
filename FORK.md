@@ -108,6 +108,15 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — T3 Mesh — layout CRDT core
+
+- **What.** Pure shared layout CRDT, legacy migration and logical project operations for Mesh.
+- **How.** HLC LWW entries, fractional order keys, lossless materialization/diff and deterministic
+  workspace-name unification. Placement values distinguish membership from ordering; workspaceOrder
+  and empty markers preserve explicit empty legacy collections. Machine reach carries SSH routes.
+- **Where.** `packages/client-runtime/src/state/meshLayout/`, exported as `./state/mesh-layout`.
+  Seams: optional `layout` in `projectGrouping.ts`; `SidebarMachine.reach` in contracts.
+
 ### 2026-11-01 — Upstream release v0.1.6
 
 - **What.** Brings in upstream's `v0.1.6` (521 changes past the v0.1.5 sync). Side chats answer

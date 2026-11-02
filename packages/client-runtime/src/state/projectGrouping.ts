@@ -1,3 +1,5 @@
+import { resolveLogicalProjectKey } from "./meshLayout/logicalProjects.ts";
+import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "../environment/scoped.ts";
 import {
   repositoryGroupingDisplayNameOf,
@@ -304,6 +306,7 @@ function selectProjectIdentitySource<TProject extends EnvironmentProject>(
 }
 
 export function buildProjectGroups<TProject extends EnvironmentProject>(input: {
+  readonly layout?: SidebarWorkspacesConfig;
   readonly projects: ReadonlyArray<TProject>;
   readonly settings: ProjectGroupingSettings;
   readonly preferredEnvironmentId?: EnvironmentId | null;
@@ -327,10 +330,14 @@ export function buildProjectGroups<TProject extends EnvironmentProject>(input: {
       shouldReplacePhysicalProjectWinner(current, candidate) ? candidate : current,
     );
     const identitySource = selectProjectIdentitySource(physicalProjects, winner);
-    const logicalKey = deriveLogicalProjectKey(identitySource, {
-      groupingMode: resolveProjectGroupingMode(winner, input.settings),
-      groupScratchProjects: input.groupScratchProjects ?? false,
-    });
+    const fallback = () =>
+      deriveLogicalProjectKey(identitySource, {
+        groupingMode: resolveProjectGroupingMode(winner, input.settings),
+        groupScratchProjects: input.groupScratchProjects ?? false,
+      });
+    const logicalKey = input.layout
+      ? resolveLogicalProjectKey(winner, input.layout, fallback)
+      : fallback();
     logicalKeyByPhysicalKey.set(physicalProjectKey, logicalKey);
     const member = { physicalProjectKey, project: winner };
     const existing = groupedMembers.get(logicalKey);
