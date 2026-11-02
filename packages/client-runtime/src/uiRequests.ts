@@ -1,4 +1,4 @@
-import type { UiRequest, VoiceCommand } from "@t3tools/contracts";
+import type { EnvironmentId, UiOpenTarget, UiRequest, VoiceCommand } from "@t3tools/contracts";
 
 /**
  * Fork: what this client does with an agent's request to show something. `navigate` when it holds
@@ -18,6 +18,20 @@ export function decideUiRequest(input: {
   if (input.voiceThreadId === request.threadId) return "navigate";
   if (input.shownThreadId !== request.threadId) return "ignore";
   return request.target.kind === "file" || request.target.kind === "diff" ? "panel" : "navigate";
+}
+
+/**
+ * Fork: the machine a target lives on. Threads and files may name another
+ * machine than the asking thread's; everything else belongs to the thread's
+ * environment.
+ */
+export function uiTargetEnvironmentId(
+  target: UiOpenTarget,
+  requestEnvironmentId: EnvironmentId,
+): EnvironmentId {
+  return (target.kind === "thread" || target.kind === "file") && target.environmentId !== undefined
+    ? target.environmentId
+    : requestEnvironmentId;
 }
 
 /**

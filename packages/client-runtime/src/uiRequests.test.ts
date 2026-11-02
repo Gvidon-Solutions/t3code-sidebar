@@ -1,9 +1,11 @@
-import type { ThreadId, UiRequest } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId, UiRequest } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { decideUiRequest } from "./uiRequests.ts";
+import { decideUiRequest, uiTargetEnvironmentId } from "./uiRequests.ts";
 
 const asking = "thread-asking" as ThreadId;
+const here = "env-here" as EnvironmentId;
+const there = "env-there" as EnvironmentId;
 const request = (target: UiRequest["target"]): UiRequest => ({
   id: "ui-request:1",
   threadId: asking,
@@ -47,5 +49,33 @@ describe("decideUiRequest", () => {
         shownThreadId: "thread-other",
       }),
     ).toBe("ignore");
+  });
+});
+
+describe("uiTargetEnvironmentId", () => {
+  it("follows a thread or file named on another machine", () => {
+    expect(
+      uiTargetEnvironmentId(
+        { kind: "thread", threadId: "thread-there" as ThreadId, environmentId: there },
+        here,
+      ),
+    ).toBe(there);
+    expect(
+      uiTargetEnvironmentId(
+        { kind: "file", path: "/srv/app/README.md", environmentId: there },
+        here,
+      ),
+    ).toBe(there);
+  });
+
+  it("defaults to the asking thread's machine", () => {
+    expect(
+      uiTargetEnvironmentId({ kind: "thread", threadId: "thread-here" as ThreadId }, here),
+    ).toBe(here);
+    expect(uiTargetEnvironmentId({ kind: "file", path: "README.md" }, here)).toBe(here);
+    expect(uiTargetEnvironmentId({ kind: "home" }, here)).toBe(here);
+    expect(uiTargetEnvironmentId({ kind: "diff" }, here)).toBe(here);
+    expect(uiTargetEnvironmentId({ kind: "inbox" }, here)).toBe(here);
+    expect(uiTargetEnvironmentId({ kind: "workspace", workspace: "main" }, here)).toBe(here);
   });
 });

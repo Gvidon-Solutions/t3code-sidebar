@@ -8,12 +8,14 @@ import * as Rpc from "effect/rpc/Rpc";
 import * as Schema from "effect/Schema";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
-import { PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { EnvironmentId, PositiveInt, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 export const UiOpenTarget = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("thread"),
     threadId: ThreadId,
+    /** The machine holding the thread; omitted means the asking thread's machine. */
+    environmentId: Schema.optionalKey(EnvironmentId),
   }),
   Schema.Struct({
     kind: Schema.Literal("inbox"),
@@ -21,9 +23,14 @@ export const UiOpenTarget = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal("file"),
-    /** Relative to the asking thread's workspace. */
+    /**
+     * Relative to the asking thread's workspace, or an absolute host path. A
+     * relative path resolves on `environmentId`; omitted means the asking
+     * thread's machine.
+     */
     path: TrimmedNonEmptyString,
     line: Schema.optional(PositiveInt),
+    environmentId: Schema.optionalKey(EnvironmentId),
   }),
   Schema.Struct({
     kind: Schema.Literal("diff"),
