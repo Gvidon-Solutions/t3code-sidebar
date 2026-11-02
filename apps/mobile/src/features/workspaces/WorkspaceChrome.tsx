@@ -23,6 +23,8 @@ import {
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { SidebarWorkspace } from "@t3tools/contracts";
 import type { MenuAction, NativeActionEvent } from "@react-native-menu/menu";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
 import { memo, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
@@ -277,6 +279,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly onNewThread: (project: EnvironmentProject) => void;
 }) {
   const { item } = props;
+  const navigation = useNavigation<NativeStackNavigationProp<ReactNavigation.RootParamList>>();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const machineLabel = savedConnectionsById[item.project.environmentId]?.environmentLabel;
   const folderTitle = item.isScratch
@@ -286,6 +289,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     const shownIn = item.workspaceIds;
     return [
       { id: "new", title: "New thread", image: "square.and.pencil" },
+      { id: "open-file", title: "Open file…", image: "doc.text.magnifyingglass" },
       {
         id: "show-in",
         title: "Show in workspaces",
@@ -312,7 +316,13 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   }, [item.foldMode, item.isScratch, item.quiet, item.workspaceIds, props.workspaces]);
   const handleAction = ({ nativeEvent }: NativeActionEvent) => {
     if (nativeEvent.event === "new") props.onNewThread(item.project);
-    else if (nativeEvent.event.startsWith("show:")) {
+    else if (nativeEvent.event === "open-file") {
+      navigation.navigate("OpenFile", {
+        environmentId: String(item.project.environmentId),
+        cwd: item.project.workspaceRoot,
+        projectName: item.project.title,
+      });
+    } else if (nativeEvent.event.startsWith("show:")) {
       props.onToggleWorkspace(item.projectKey, nativeEvent.event.slice("show:".length));
     } else if (nativeEvent.event.startsWith("fold:")) {
       props.onFoldMode(item.projectKey, nativeEvent.event.slice("fold:".length) as ProjectFoldMode);

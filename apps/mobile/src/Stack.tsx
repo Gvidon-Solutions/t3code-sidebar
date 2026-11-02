@@ -51,6 +51,7 @@ import { InboxIssueRouteScreen } from "./features/inbox/InboxIssueRouteScreen";
 import { VoiceModeRootLayer } from "./features/voice-mode/VoiceModeRootLayer";
 import { ConnectOnboardingRouteScreen } from "./features/cloud/ConnectOnboardingRouteScreen";
 import { AttachmentFileScreen } from "./features/files/AttachmentFileScreen";
+import { OpenFileRouteScreen } from "./features/files/OpenFileRouteScreen";
 import { ThreadFilesTreeScreen, ThreadFileScreen } from "./features/files/ThreadFilesRouteScreen";
 import { AdaptiveWorkspaceLayout } from "./features/layout/AdaptiveWorkspaceLayout";
 import { selectedPullRequestKey } from "./features/pull-requests/pullRequestSelection";
@@ -860,6 +861,14 @@ const RootStackConfig = createWorkspaceStackNavigator({
           : HORIZONTAL_FORM_SHEET_OPTIONS),
         sheetAllowedDetents: Platform.OS === "android" ? undefined : formSheetDetents(0.55),
         sheetGrabberVisible: Platform.OS !== "android",
+      },
+    }),
+    OpenFile: createNativeStackScreen({
+      screen: OpenFileRouteScreen,
+      linking: "files/open",
+      options: {
+        ...GLASS_HEADER_OPTIONS,
+        title: "Open file",
       },
     }),
     ThreadFiles: createNativeStackScreen({
