@@ -1,10 +1,11 @@
-import type { EnvironmentId, ScopedProjectRef } from "@t3tools/contracts";
+import type { EnvironmentId, ScopedProjectRef, SidebarWorkspacesConfig } from "@t3tools/contracts";
 import {
   buildProjectGroups,
   derivePhysicalProjectKey,
   resolveScratchProjectScopeKey,
   type ProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
+import { offlineLogicalProjects } from "@t3tools/client-runtime/state/mesh-layout";
 import type { Project } from "./types";
 
 export type EnvironmentPresence = "local-only" | "remote-only" | "mixed";
@@ -15,6 +16,12 @@ export interface SidebarProjectGroupMember extends Project {
 }
 
 export interface SidebarProjectSnapshot extends Project {
+  /** T3 Mesh (fork): only reachable on a machine this client is not connected to. */
+  meshOffline?: {
+    readonly environmentId: string;
+    readonly tag: string;
+    readonly state: string | null;
+  };
   projectKey: string;
   displayName: string;
   groupedProjectCount: number;
@@ -101,12 +108,14 @@ export function buildPhysicalToLogicalProjectKeyMap(input: {
   projects: ReadonlyArray<Project>;
   settings: ProjectGroupingSettings;
   primaryEnvironmentId: EnvironmentId | null;
+  layout?: SidebarWorkspacesConfig;
 }): Map<string, string> {
   const mapping = new Map<string, string>();
   const groups = buildProjectGroups({
     projects: input.projects,
     settings: input.settings,
     preferredEnvironmentId: input.primaryEnvironmentId,
+    ...(input.layout === undefined ? {} : { layout: input.layout }),
   });
   for (const group of groups) {
     for (const member of group.members) {
@@ -117,6 +126,8 @@ export function buildPhysicalToLogicalProjectKeyMap(input: {
 }
 
 export function buildSidebarProjectSnapshots(input: {
+  layout?: SidebarWorkspacesConfig;
+  connectedEnvironmentIds?: ReadonlySet<string>;
   projects: ReadonlyArray<Project>;
   settings: ProjectGroupingSettings;
   groupScratchProjects?: boolean;
@@ -125,11 +136,12 @@ export function buildSidebarProjectSnapshots(input: {
   isDesktopLocalEnvironment?: (environmentId: EnvironmentId) => boolean;
   isWslEnvironment?: (environmentId: EnvironmentId) => boolean;
 }): SidebarProjectSnapshot[] {
-  return buildProjectGroups({
+  const snapshots = buildProjectGroups({
     projects: input.projects,
     groupScratchProjects: input.groupScratchProjects ?? false,
     settings: input.settings,
     preferredEnvironmentId: input.primaryEnvironmentId,
+    ...(input.layout === undefined ? {} : { layout: input.layout }),
   }).map((group): SidebarProjectSnapshot => {
     const members = group.members.map(
       ({ physicalProjectKey, project }): SidebarProjectGroupMember => ({
@@ -183,6 +195,57 @@ export function buildSidebarProjectSnapshots(input: {
       archived: group.archived,
     };
   });
+  const offline =
+    input.layout === undefined || input.connectedEnvironmentIds === undefined
+      ? []
+      : offlineLogicalProjects(input.layout, input.connectedEnvironmentIds, (environmentId) =>
+          input.resolveEnvironmentLabel(environmentId as EnvironmentId),
+        )
+          .filter(
+            (entry) => !snapshots.some((snapshot) => snapshot.projectKey === entry.logicalKey),
+          )
+          .map((entry): SidebarProjectSnapshot => {
+            const title = entry.path.split(/[\\/]/).filter(Boolean).at(-1) ?? entry.logicalKey;
+            const project = {
+              id: `mesh:${entry.logicalKey}:${entry.environmentId}` as Project["id"],
+              environmentId: entry.environmentId as Project["environmentId"],
+              title,
+              workspaceRoot: entry.path,
+              repositoryIdentity: null,
+              defaultModelSelection: null,
+              scripts: [],
+              createdAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
+              updatedAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
+            } as Project;
+            return {
+              ...project,
+              projectKey: entry.logicalKey,
+              displayName: title,
+              groupedProjectCount: 1,
+              environmentPresence: "remote-only",
+              allRemoteMembersAreDesktopLocal: false,
+              allRemoteMembersAreWsl: false,
+              memberProjects: [
+                {
+                  ...project,
+                  physicalProjectKey: `${entry.environmentId}:${entry.path}`,
+                  environmentLabel: input.resolveEnvironmentLabel(
+                    entry.environmentId as EnvironmentId,
+                  ),
+                },
+              ],
+              memberProjectRefs: [],
+              remoteEnvironmentLabels: [entry.tag],
+              pinned: false,
+              archived: false,
+              meshOffline: {
+                environmentId: entry.environmentId,
+                tag: entry.tag,
+                state: entry.state,
+              },
+            };
+          });
+  return [...snapshots, ...offline];
 }
 
 export function buildSidebarProjectPickerEntries(input: {

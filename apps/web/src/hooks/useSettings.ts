@@ -27,6 +27,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import {
   filterSharedServerPatch,
+  meshLayoutHandlesSidebarWorkspaces,
   splitSharedServerPatch,
   supportsSharedSettingsSync,
 } from "@t3tools/client-runtime/state/shared-settings";
@@ -620,7 +621,16 @@ function useUpdateSettingsTarget(environmentId: EnvironmentId | null) {
       });
     }
     if (Object.keys(serverPatch).length > 0 && canWriteServerPatch) {
-      const { sharedPatch, localPatch } = splitSharedServerPatch(serverPatch);
+      const { sharedPatch, localPatch } = splitSharedServerPatch(serverPatch, {
+        meshLayoutHandlesSidebarWorkspaces: meshLayoutHandlesSidebarWorkspaces(
+          environments.map((environment) => ({
+            connected: environment.connection.phase === "connected",
+            hasWorkspaces:
+              (environment.serverConfig?.settings.sidebarWorkspaces.workspaces.length ?? 0) > 0,
+            capabilities: environment.serverConfig?.environment.capabilities,
+          })),
+        ),
+      });
       // Dropping the write silently leaves the control looking saved.
       const warnUnsaved = (description = PRIMARY_SETTINGS_UNAVAILABLE_MESSAGE) =>
         toastManager.add({

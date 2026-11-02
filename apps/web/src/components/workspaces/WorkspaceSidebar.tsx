@@ -61,6 +61,7 @@ import { isCommandPaletteOpen, openCommandPalette } from "../../commandPaletteBu
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { isElectron } from "../../env";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
+import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import {
   useClientSettings,
@@ -76,9 +77,20 @@ import {
 } from "../../keybindings";
 import { isTerminalFocused } from "../../lib/terminalFocus";
 import { readLocalApi } from "../../localApi";
-import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
+import {
+  derivePhysicalProjectKey,
+  deriveLogicalProjectKeyFromSettings,
+  selectProjectGroupingSettings,
+} from "@t3tools/client-runtime/state/project-grouping";
+import {
+  machineTag,
+  mergeLogicalProjects,
+  mergeSuggestionsFor,
+  splitLogicalProject,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { isModelPickerOpen } from "../../modelPickerVisibility";
 import {
+  buildPhysicalToLogicalProjectKeyMap,
   buildSidebarProjectSnapshots,
   type SidebarProjectSnapshot,
 } from "../../sidebarProjectGrouping";
@@ -239,6 +251,7 @@ export default function WorkspaceSidebar() {
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const primaryConfig = usePrimarySettings((s) => s.sidebarWorkspaces);
   const updatePrimarySettings = useUpdatePrimarySettings();
+  const mesh = useMeshLayout();
   const lastVisitedById = useUiStateStore((s) => s.threadLastVisitedAtById);
   const nowMinute = useNowMinute();
   const now = Date.parse(nowMinute);
@@ -262,7 +275,9 @@ export default function WorkspaceSidebar() {
         serverConfig.settings.sidebarWorkspaces.workspaces.length > 0,
     )
     .sort(([left], [right]) => left.localeCompare(right))[0];
-  const storedConfig = remoteConfig?.[1].settings.sidebarWorkspaces ?? primaryConfig;
+  // T3 Mesh (fork): a connected mesh server is authoritative; otherwise keep the legacy
+  // per-server shared setting path unchanged.
+  const storedConfig = mesh.config ?? remoteConfig?.[1].settings.sidebarWorkspaces ?? primaryConfig;
   const baseConfig = storedConfig ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
   const config: SidebarWorkspacesConfig =
     baseConfig.workspaces.length > 0
@@ -273,7 +288,8 @@ export default function WorkspaceSidebar() {
           defaultWorkspace: IMPLICIT_WORKSPACE.id,
         };
   const writeConfig = (update: (current: SidebarWorkspacesConfig) => SidebarWorkspacesConfig) => {
-    updatePrimarySettings({ sidebarWorkspaces: update(config) });
+    if (mesh.source !== null) mesh.edit(update);
+    else updatePrimarySettings({ sidebarWorkspaces: update(config) });
   };
 
   const routeTarget = useParams({ strict: false, select: resolveThreadRouteTarget });
@@ -299,6 +315,16 @@ export default function WorkspaceSidebar() {
   );
   const projectGroups = sortLogicalProjectsForSidebar(
     buildSidebarProjectSnapshots({
+      ...(mesh.config === null
+        ? {}
+        : {
+            layout: mesh.config,
+            connectedEnvironmentIds: new Set(
+              environments
+                .filter((environment) => environment.connection.phase === "connected")
+                .map((environment) => environment.environmentId),
+            ),
+          }),
       projects,
       settings: projectGroupingSettings,
       primaryEnvironmentId,
@@ -837,6 +863,28 @@ export default function WorkspaceSidebar() {
     const hasCustomIcon = folder.group.memberProjects.some(
       (member) => member.projectIcon != null || member.faviconPath != null,
     );
+    const logicalKeyByPhysical = buildPhysicalToLogicalProjectKeyMap({
+      projects,
+      settings: projectGroupingSettings,
+      primaryEnvironmentId,
+      ...(mesh.config === null ? {} : { layout: mesh.config }),
+    });
+    const logicalKeyOf = (project: (typeof projects)[number]) =>
+      logicalKeyByPhysical.get(derivePhysicalProjectKey(project)) ??
+      deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings);
+    const mergeTargets = projectGroups.filter(
+      (candidate) => candidate.projectKey !== projectKey && candidate.meshOffline === undefined,
+    );
+    const splitMembers = folder.group.memberProjects;
+    const hasAliases =
+      splitMembers.length > 1 || Object.values(config.projectAliases).includes(projectKey);
+    const suggestions = mergeSuggestionsFor(
+      config,
+      projects,
+      projectKey,
+      logicalKeyOf,
+      (environmentId) => environmentLabels.get(environmentId as EnvironmentId) ?? null,
+    ).filter((suggestion) => logicalKeyOf(suggestion.project) !== projectKey);
     const shownIn = model.workspaceIdsByProjectKey.get(projectKey) ?? [];
     const placement: ContextMenuItem[] = [
       {
@@ -866,6 +914,41 @@ export default function WorkspaceSidebar() {
       ...placement,
       { id: "icon", label: "Icon…", icon: "smile", separatorBefore: true },
       ...(hasCustomIcon ? [{ id: "icon-reset", label: "Reset icon" }] : []),
+      ...(mergeTargets.length > 0
+        ? [
+            {
+              id: "merge",
+              label: "Merge with…",
+              icon: "git-merge",
+              separatorBefore: true,
+              children: mergeTargets.map((target) => ({
+                id: `merge:${target.projectKey}`,
+                label: target.displayName,
+              })),
+            },
+          ]
+        : []),
+      ...(hasAliases && splitMembers.length > 0
+        ? [
+            {
+              id: "split",
+              label: "Split…",
+              children: splitMembers.map((member) => ({
+                id: `split:${member.environmentId}`,
+                label: `${machineTag(
+                  config,
+                  member.environmentId,
+                  environmentLabels.get(member.environmentId) ?? null,
+                )} · ${member.environmentLabel ?? member.environmentId}`,
+              })),
+            },
+          ]
+        : []),
+      ...suggestions.map((suggestion) => ({
+        id: `suggest:${logicalKeyOf(suggestion.project)}`,
+        label: `Same name on ${suggestion.tag}: merge?`,
+        separatorBefore: true,
+      })),
       { id: "settings", label: "Project settings", icon: "settings", separatorBefore: true },
     ];
     const clicked = await api.contextMenu.show(items, position);
@@ -878,6 +961,17 @@ export default function WorkspaceSidebar() {
     else if (clicked.startsWith("fold:")) {
       const mode = clicked.slice("fold:".length) as ProjectFoldMode;
       writeConfig((config) => setProjectFoldMode(config, folder.workspaceId, projectKey, mode));
+    } else if (clicked.startsWith("merge:")) {
+      const into = clicked.slice("merge:".length);
+      writeConfig((config) => mergeLogicalProjects(config, projectKey, into));
+    } else if (clicked.startsWith("split:")) {
+      const environmentId = clicked.slice("split:".length);
+      writeConfig((config) =>
+        splitLogicalProject(config, projectKey, environmentId, `${projectKey}~${environmentId}`),
+      );
+    } else if (clicked.startsWith("suggest:")) {
+      const into = clicked.slice("suggest:".length);
+      writeConfig((config) => mergeLogicalProjects(config, projectKey, into));
     } else if (clicked === "settings") {
       if (isMobile) setOpenMobile(false);
       void router.navigate({ to: "/projects/$projectKey", params: { projectKey } });
@@ -1127,6 +1221,7 @@ export default function WorkspaceSidebar() {
 
   const renderFolder = (folder: FolderModel) => {
     const folderKey = `${folder.workspaceId}:${folder.group.projectKey}`;
+    const offline = folder.group.meshOffline;
     const dropAt = folderDrop?.projectKey === folder.group.projectKey ? folderDrop : null;
     // "No project" stays last, so it neither takes nor makes a place in the order.
     const acceptsDrop =
@@ -1157,10 +1252,21 @@ export default function WorkspaceSidebar() {
               <div
                 role="button"
                 tabIndex={0}
-                draggable
+                draggable={offline === undefined}
                 aria-expanded={open}
-                className="group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-sm font-medium text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                onClick={() => view.setFolderOpen(folderKey, !open)}
+                className={cn(
+                  "group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-sm font-medium outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  offline === undefined
+                    ? "text-sidebar-foreground"
+                    : "text-sidebar-muted-foreground opacity-70",
+                )}
+                onClick={() => {
+                  if (offline) {
+                    void router.navigate({ to: "/settings/connections" });
+                    return;
+                  }
+                  view.setFolderOpen(folderKey, !open);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
@@ -1168,6 +1274,7 @@ export default function WorkspaceSidebar() {
                   }
                 }}
                 onContextMenu={(event) => {
+                  if (offline) return;
                   event.preventDefault();
                   void openFolderMenu(folder, { x: event.clientX, y: event.clientY });
                 }}
@@ -1227,7 +1334,10 @@ export default function WorkspaceSidebar() {
             ) : (
               <ProjectFavicon project={folder.group} className="size-4 shrink-0" />
             )}
-            <span className="min-w-0 flex-1 truncate">{folder.label}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {folder.label}
+              {offline ? ` · on ${offline.tag}, not connected here` : ""}
+            </span>
             {!open && (attention > 0 || working > 0) ? (
               <span className="flex shrink-0 items-center gap-1.5 text-2xs font-semibold tabular-nums group-hover/ws-folder:hidden">
                 {attention > 0 ? (
@@ -1237,18 +1347,29 @@ export default function WorkspaceSidebar() {
               </span>
             ) : null}
             <span className="hidden shrink-0 items-center gap-0.5 group-hover/ws-folder:flex group-focus-within/ws-folder:flex">
-              <FolderAction
-                label={`New thread in ${folder.label}`}
-                onClick={() => startThreadInFolder(folder)}
-              >
-                <SquarePenIcon />
-              </FolderAction>
-              <FolderAction
-                label="Project actions"
-                onClick={(position) => void openFolderMenu(folder, position)}
-              >
-                <EllipsisIcon />
-              </FolderAction>
+              {offline === undefined ? (
+                <>
+                  <FolderAction
+                    label={`New thread in ${folder.label}`}
+                    onClick={() => startThreadInFolder(folder)}
+                  >
+                    <SquarePenIcon />
+                  </FolderAction>
+                  <FolderAction
+                    label="Project actions"
+                    onClick={(position) => void openFolderMenu(folder, position)}
+                  >
+                    <EllipsisIcon />
+                  </FolderAction>
+                </>
+              ) : (
+                <FolderAction
+                  label="Connect to this machine"
+                  onClick={() => void router.navigate({ to: "/settings/connections" })}
+                >
+                  <SquarePenIcon />
+                </FolderAction>
+              )}
             </span>
           </TooltipTrigger>
           <TooltipPopup side="right" align="start">

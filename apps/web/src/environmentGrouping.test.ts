@@ -1,4 +1,10 @@
-import { EnvironmentId, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -300,5 +306,72 @@ describe("environment grouping", () => {
       preferredProjectRef: { environmentId: current.environmentId, projectId: current.id },
     });
     expect(entries.map((entry) => entry.group.displayName)).toEqual(["pinned", "current", "other"]);
+  });
+});
+
+describe("T3 Mesh logical projects", () => {
+  const local = makeProject({
+    id: ProjectId.make("local"),
+    title: "shared",
+    workspaceRoot: "/tmp/shared-repo",
+  });
+  const remote = makeProject({
+    id: ProjectId.make("remote"),
+    environmentId: remoteEnvironmentId,
+    title: "shared",
+    workspaceRoot: "/remote/shared-repo",
+  });
+  const layout: SidebarWorkspacesConfig = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    projectMounts: {
+      "logical-shared": [
+        {
+          environmentId: local.environmentId,
+          path: local.workspaceRoot,
+          transport: "git",
+          role: "primary",
+          createdAt: "",
+        },
+        {
+          environmentId: remote.environmentId,
+          path: remote.workspaceRoot,
+          transport: "mutagen",
+          role: "replica",
+          source: local.environmentId,
+          createdAt: "",
+        },
+      ],
+    },
+  };
+
+  it("groups representations by the layout even without repository identity", () => {
+    const groups = buildSidebarProjectSnapshots({
+      projects: [local, remote],
+      settings: defaultGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: () => null,
+      layout,
+    });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.projectKey).toBe("logical-shared");
+    expect(groups[0]?.memberProjects).toHaveLength(2);
+  });
+
+  it("keeps a project visible when only an unconnected machine has it", () => {
+    const groups = buildSidebarProjectSnapshots({
+      projects: [],
+      settings: defaultGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) =>
+        environmentId === remoteEnvironmentId ? "Operalia" : null,
+      layout: {
+        ...layout,
+        machines: { [remoteEnvironmentId]: { tag: "OP" } },
+        projectMounts: { "logical-shared": [layout.projectMounts["logical-shared"]![1]!] },
+      },
+      connectedEnvironmentIds: new Set([primaryEnvironmentId]),
+    });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.meshOffline).toMatchObject({ environmentId: remoteEnvironmentId, tag: "OP" });
   });
 });
