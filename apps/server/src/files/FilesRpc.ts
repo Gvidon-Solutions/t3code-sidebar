@@ -1,0 +1,111 @@
+import {
+  FilesError,
+  FilesListResult,
+  type FilesListInput,
+  type FilesReadInput,
+  FilesReadResult,
+  OrchestratorMcpFailure,
+} from "@t3tools/contracts";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
+import * as FilesService from "./FilesService.ts";
+
+/** The tool a peer exposes for a forwarded read; only this server calls it. */
+export const FILES_READ_TOOL = "t3_files_read";
+export const FILES_LIST_TOOL = "t3_files_list";
+
+/**
+ * T3 Mesh (fork): reads and lists files on the machine named by the caller.
+ * Connected clients call the machine directly; otherwise a connected server
+ * forwards the read over its peer link.
+ */
+export class FilesRpc extends Context.Service<
+  FilesRpc,
+  {
+    readonly read: (input: FilesReadInput) => Effect.Effect<FilesReadResult, FilesError>;
+    readonly list: (input: FilesListInput) => Effect.Effect<FilesListResult, FilesError>;
+  }
+>()("t3/files/FilesRpc") {}
+
+const asFilesError = (error: OrchestratorMcpFailure, absolutePath: string) =>
+  new FilesError({
+    reason: error.code === "capability_denied" ? "permission_denied" : "unavailable",
+    absolutePath,
+    message: error.message,
+  });
+
+/** A client call is a person's, not an agent's: the link's own access stays the limit. */
+const clientLimits = { runtimeMode: "full-access", interactionMode: "default" } as const;
+
+export const make = Effect.gen(function* () {
+  const files = yield* FilesService.FilesService;
+  const environment = yield* ServerEnvironment.ServerEnvironment;
+  const peers = yield* Effect.serviceOption(PeerMcpClient.PeerMcpClient);
+
+  const read: FilesRpc["Service"]["read"] = Effect.fn("FilesRpc.read")(function* (input) {
+    if (input.environmentId === undefined) {
+      return yield* files.read(input);
+    }
+    const descriptor = yield* environment.getDescriptor;
+    if (descriptor.environmentId === input.environmentId) {
+      return yield* files.read(input);
+    }
+    const { environmentId, absolutePath } = input;
+    if (Option.isNone(peers)) {
+      return yield* asFilesError(
+        new OrchestratorMcpFailure({
+          code: "orchestration_error",
+          message: "This environment cannot reach linked environments.",
+        }),
+        absolutePath,
+      );
+    }
+    return yield* peers.value
+      .call({
+        environmentId,
+        tool: FILES_READ_TOOL,
+        arguments: { absolutePath },
+        limits: clientLimits,
+        success: FilesReadResult,
+      })
+      .pipe(Effect.mapError((error) => asFilesError(error, absolutePath)));
+  });
+
+  const list: FilesRpc["Service"]["list"] = Effect.fn("FilesRpc.list")(function* (input) {
+    if (input.environmentId === undefined) {
+      return yield* files.list(input);
+    }
+    const descriptor = yield* environment.getDescriptor;
+    if (descriptor.environmentId === input.environmentId) {
+      return yield* files.list(input);
+    }
+    const { environmentId, partialPath, limit } = input;
+    if (Option.isNone(peers)) {
+      return yield* asFilesError(
+        new OrchestratorMcpFailure({
+          code: "orchestration_error",
+          message: "This environment cannot reach linked environments.",
+        }),
+        partialPath,
+      );
+    }
+    return yield* peers.value
+      .call({
+        environmentId,
+        tool: FILES_LIST_TOOL,
+        arguments: { partialPath, ...(limit === undefined ? {} : { limit }) },
+        limits: clientLimits,
+        success: FilesListResult,
+      })
+      .pipe(Effect.mapError((error) => asFilesError(error, partialPath)));
+  });
+
+  return FilesRpc.of({ read, list });
+});
+
+export const layer = Layer.effect(FilesRpc, make);

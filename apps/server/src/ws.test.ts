@@ -97,6 +97,7 @@ import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts"
 import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as VoiceSessionService from "./orchestration-v2/VoiceSessionService.ts";
 import * as InboxService from "./inbox/InboxService.ts";
+import * as FilesRpc from "./files/FilesRpc.ts";
 import * as UiRequests from "./uiRequests/UiRequests.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
@@ -554,6 +555,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(VcsStatusBroadcaster.VcsStatusBroadcaster)({}),
   Layer.mock(WorkspaceEntries.WorkspaceEntries)({}),
   Layer.mock(WorkspaceFileSystem.WorkspaceFileSystem)({}),
+  Layer.mock(FilesRpc.FilesRpc)({}),
   Layer.mock(WorktreeSetupTracker.WorktreeSetupTracker)({}),
   // Sidebar fork services the RPC layer also needs.
   Layer.mock(InboxService.InboxService)({}),
