@@ -7,6 +7,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   knownMachineIds,
   machineDisplayOf,
+  machineTagBackground,
   normalizeMachineTag,
   setMachineDisplay,
   spansMultipleEnvironments,
@@ -126,5 +127,16 @@ describe("knownMachineIds", () => {
       "source",
       "status",
     ]);
+  });
+});
+
+describe("machineTagBackground", () => {
+  it("tints six- and three-digit hex colors", () => {
+    expect(machineTagBackground("#6d8cff")).toBe("rgba(109, 140, 255, 0.14)");
+    expect(machineTagBackground("#fff", 0.2)).toBe("rgba(255, 255, 255, 0.2)");
+  });
+  it("falls back to a neutral tint for other colors", () => {
+    expect(machineTagBackground("rebeccapurple")).toBe("rgba(128, 128, 128, 0.14)");
+    expect(machineTagBackground("rgb(1, 2, 3)")).toBe("rgba(128, 128, 128, 0.14)");
   });
 });

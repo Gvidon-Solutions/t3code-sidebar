@@ -1,5 +1,8 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
+import {
+  machineTagBackground,
+  type MachineDisplay,
+} from "@t3tools/client-runtime/state/machine-display";
 import { View } from "react-native";
 
 import { SymbolView, type AppSymbolName } from "../../components/ui/AppSymbol";
@@ -76,7 +79,7 @@ export function WorkspaceThreadLine(props: {
           accessible
           accessibilityLabel={`Machine: ${props.machineTag.label}`}
           className="shrink-0 rounded px-1 py-0.5"
-          style={{ backgroundColor: `${props.machineTag.color}26` }}
+          style={{ backgroundColor: machineTagBackground(props.machineTag.color) }}
         >
           <Text
             className="text-3xs font-t3-bold uppercase"

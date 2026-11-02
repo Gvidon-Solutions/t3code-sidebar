@@ -122,3 +122,15 @@ export function knownMachineIds(
   }
   return [...ids].sort((left, right) => left.localeCompare(right));
 }
+
+/**
+ * The tag's tinted background: `color` at `alpha` for #rgb/#rrggbb colors, a neutral tint for
+ * anything else (named or functional CSS colors), so a hand-typed color never breaks the chip.
+ */
+export function machineTagBackground(color: string, alpha = 0.14): string {
+  const hex = color.trim().replace(/^#/, "");
+  const full = /^[0-9a-f]{3}$/i.test(hex) ? [...hex].map((c) => c + c).join("") : hex;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return `rgba(128, 128, 128, ${alpha})`;
+  const value = Number.parseInt(full, 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}

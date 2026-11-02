@@ -1,5 +1,6 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
+import { MachineTag } from "./MachineTag";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import {
   AlarmClockOffIcon,
@@ -121,26 +122,6 @@ function StatusGlyph({
         {glyph.icon}
       </TooltipTrigger>
       <TooltipPopup side="top">{glyph.label}</TooltipPopup>
-    </Tooltip>
-  );
-}
-
-function MachineTag({ machine }: { machine: MachineDisplay }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            role="img"
-            aria-label={`Machine: ${machine.label}`}
-            className="flex h-4 shrink-0 items-center rounded px-1 font-mono text-3xs font-semibold tracking-tight uppercase"
-            style={{ color: machine.color, backgroundColor: `${machine.color}22` }}
-          />
-        }
-      >
-        {machine.tag}
-      </TooltipTrigger>
-      <TooltipPopup side="top">{machine.label}</TooltipPopup>
     </Tooltip>
   );
 }
