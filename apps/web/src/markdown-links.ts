@@ -1,3 +1,5 @@
+import { parseT3FileLink } from "@t3tools/client-runtime/files";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { fileBasename, isAbsolutePath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 import {
   inlineCodeFilePathCandidate,
@@ -20,6 +22,8 @@ export interface MarkdownFileLinkMeta {
   basename: string;
   line?: number;
   column?: number;
+  /** T3 Mesh (fork): a `t3-file:` link names the machine that holds the file. */
+  environmentId?: EnvironmentId;
 }
 
 export function shouldOpenMarkdownFileLinkInEditor(
@@ -70,6 +74,21 @@ export function resolveMarkdownFileLinkMeta(
   cwd?: string,
   baseDir: string | undefined = cwd,
 ): MarkdownFileLinkMeta | null {
+  const machineLink = href ? parseT3FileLink(normalizeMarkdownLinkDestination(href)) : null;
+  if (machineLink !== null) {
+    const { path, line, column } = splitFilePathPosition(machineLink.absolutePath);
+    return {
+      filePath: path,
+      workspaceLookupPath: null,
+      targetPath: machineLink.absolutePath,
+      displayPath: path,
+      workspaceRelativePath: null,
+      basename: fileBasename(path),
+      environmentId: machineLink.environmentId,
+      ...(line !== undefined ? { line } : {}),
+      ...(column !== undefined ? { column } : {}),
+    };
+  }
   const targetPath = resolveMarkdownFileLinkTarget(href, cwd, baseDir);
   if (!targetPath) return null;
   const source = href ? parseMarkdownFileLink(href) : null;

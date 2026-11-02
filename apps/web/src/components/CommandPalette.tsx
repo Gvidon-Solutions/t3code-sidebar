@@ -234,6 +234,7 @@ import {
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { Checkbox } from "./ui/checkbox";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
+import { openOpenFileDialog } from "./files/openFileDialogState";
 import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
@@ -1521,6 +1522,25 @@ function OpenCommandPaletteDialog(props: {
     shortcutCommand: "filePicker.toggle",
     run: async () => {
       openChildSearch("files", { query, linkedThreadSearch });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:open-file-anywhere",
+    searchTerms: [
+      "open file anywhere",
+      "open file on machine",
+      "files anywhere",
+      "mesh file",
+      "open absolute path",
+    ],
+    title: "Open file on a machine…",
+    icon: <FileSearchIcon className={ITEM_ICON_CLASS} />,
+    keepOpen: false,
+    run: async () => {
+      setOpen(false);
+      openOpenFileDialog();
     },
   });
 

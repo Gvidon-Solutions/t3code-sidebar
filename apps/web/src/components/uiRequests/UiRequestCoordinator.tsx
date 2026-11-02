@@ -1,6 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { appliesVoiceCommand, decideUiRequest } from "@t3tools/client-runtime/ui-requests";
+import {
+  appliesVoiceCommand,
+  decideUiRequest,
+  uiTargetEnvironmentId,
+} from "@t3tools/client-runtime/ui-requests";
 import { applyVoiceCommand } from "@t3tools/client-runtime/voice-mode";
 import {
   InboxIssueId,
@@ -15,8 +19,10 @@ import { useEffect, useRef } from "react";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
+import { environmentSummaries } from "../../state/presentation";
 import { environmentServerConfigsAtom } from "../../state/server";
 import { latestUiRequestsAtom, latestVoiceCommandsAtom } from "../../state/uiRequests";
+import { toastManager } from "../ui/toast";
 import {
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
@@ -27,12 +33,43 @@ import { useWorkspaceViewStore } from "../workspaces/workspaceViewStore";
 import { findSidebarWorkspace, takeNewUiRequests } from "./uiRequests.logic";
 
 /** Opens the asking thread's file or diff in its right panel. */
-function openInPanel(threadRef: ScopedThreadRef, target: UiRequest["target"]) {
+function openInPanel(
+  threadRef: ScopedThreadRef,
+  target: UiRequest["target"],
+  targetEnvironmentId: EnvironmentId,
+) {
   if (target.kind === "file") {
-    useRightPanelStore.getState().openFile(threadRef, target.path, target.line);
+    if (target.environmentId === undefined) {
+      useRightPanelStore.getState().openFile(threadRef, target.path, target.line);
+      return;
+    }
+    const label =
+      appAtomRegistry
+        .get(environmentSummaries.identitiesAtom)
+        .find((identity) => identity.environmentId === targetEnvironmentId)?.label ??
+      String(targetEnvironmentId);
+    useRightPanelStore.getState().openFile(threadRef, target.path, target.line, {
+      environmentId: targetEnvironmentId,
+      workspaceRoot: "/",
+      projectName: label,
+    });
   } else if (target.kind === "diff") {
     useRightPanelStore.getState().open(threadRef, "diff");
   }
+}
+
+function environmentLabel(environmentId: EnvironmentId): string {
+  return (
+    appAtomRegistry
+      .get(environmentSummaries.identitiesAtom)
+      .find((identity) => identity.environmentId === environmentId)?.label ?? String(environmentId)
+  );
+}
+
+function isEnvironmentConnected(environmentId: EnvironmentId): boolean {
+  return appAtomRegistry
+    .get(environmentSummaries.connectedEnvironmentIdsAtom)
+    .includes(environmentId);
 }
 
 /** Switches the workspace sidebar to a workspace named in any connected environment's config. */
@@ -104,14 +141,35 @@ export function UiRequestCoordinator() {
           : null;
       return resolveActiveThreadRouteRef(target, draft);
     };
+    const notConnected = (environmentId: EnvironmentId) => {
+      toastManager.add({
+        type: "warning",
+        title: `Not connected to ${environmentLabel(environmentId)}`,
+        description: "Connect that machine to open what the agent asked for.",
+        actionProps: {
+          children: "Connections",
+          onClick: () => {
+            void router.navigate({ to: "/settings/connections" });
+          },
+        },
+      });
+    };
     const go = (environmentId: EnvironmentId, request: UiRequest) => {
       const { target } = request;
       const askingRef = scopeThreadRef(environmentId, request.threadId);
+      const targetEnvironmentId = uiTargetEnvironmentId(target, environmentId);
+      if (
+        (target.kind === "thread" || target.kind === "file") &&
+        !isEnvironmentConnected(targetEnvironmentId)
+      ) {
+        notConnected(targetEnvironmentId);
+        return;
+      }
       switch (target.kind) {
         case "thread":
           void router.navigate({
             to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(scopeThreadRef(environmentId, target.threadId)),
+            params: buildThreadRouteParams(scopeThreadRef(targetEnvironmentId, target.threadId)),
           });
           return;
         case "inbox":
@@ -131,7 +189,7 @@ export function UiRequestCoordinator() {
           return;
         case "file":
         case "diff":
-          openInPanel(askingRef, target);
+          openInPanel(askingRef, target, targetEnvironmentId);
           void router.navigate({
             to: "/$environmentId/$threadId",
             params: buildThreadRouteParams(askingRef),
@@ -151,7 +209,12 @@ export function UiRequestCoordinator() {
       if (decision === "navigate") {
         go(environmentId, request);
       } else if (decision === "panel") {
-        openInPanel(askingRef, request.target);
+        const targetEnvironmentId = uiTargetEnvironmentId(request.target, environmentId);
+        if (!isEnvironmentConnected(targetEnvironmentId)) {
+          notConnected(targetEnvironmentId);
+          continue;
+        }
+        openInPanel(askingRef, request.target, targetEnvironmentId);
       }
     }
   }, [entries, router]);

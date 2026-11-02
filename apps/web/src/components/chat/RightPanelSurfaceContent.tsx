@@ -199,16 +199,24 @@ export function RightPanelSurfaceContent(props: {
     case "file": {
       const files = props.files;
       const attachment = surface.kind === "file" ? surface.attachment : undefined;
-      if (!attachment && (files.projectName === null || !files.workspaceRoot)) return null;
+      const externalSurface =
+        surface.kind === "file" && surface.environmentId !== undefined ? surface : null;
+      const environmentId =
+        externalSurface === null
+          ? props.environmentId
+          : (externalSurface.environmentId as EnvironmentId);
+      const projectName =
+        externalSurface === null ? files.projectName : (externalSurface.projectName ?? "");
+      const workspaceRoot =
+        externalSurface === null ? files.workspaceRoot : (externalSurface.workspaceRoot ?? "/");
+      if (!attachment && (projectName === null || !workspaceRoot)) return null;
       return (
         <Suspense fallback={null}>
           <FilePreviewPanel
-            key={`${props.environmentId}:${
-              attachment ? `attachment:${attachment.id}` : files.workspaceRoot
-            }`}
-            environmentId={props.environmentId}
-            cwd={files.workspaceRoot ?? ""}
-            projectName={files.projectName ?? ""}
+            key={`${environmentId}:${attachment ? `attachment:${attachment.id}` : workspaceRoot}`}
+            environmentId={environmentId}
+            cwd={workspaceRoot ?? ""}
+            projectName={projectName ?? ""}
             threadRef={threadRef}
             composerDraftTarget={props.composerDraftTarget}
             keybindings={props.keybindings}

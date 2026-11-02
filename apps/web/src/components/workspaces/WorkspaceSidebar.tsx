@@ -60,6 +60,7 @@ import { cn } from "~/lib/utils";
 import { isCommandPaletteOpen, openCommandPalette } from "../../commandPaletteBus";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { isElectron } from "../../env";
+import { openOpenFileDialog } from "../files/openFileDialogState";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import {
@@ -863,6 +864,7 @@ export default function WorkspaceSidebar() {
     ];
     const items: ContextMenuItem[] = [
       { id: "new-thread", label: "New thread", icon: "message-square-plus" },
+      { id: "open-file", label: "Open file…", icon: "file", separatorBefore: true },
       ...placement,
       { id: "icon", label: "Icon…", icon: "smile", separatorBefore: true },
       ...(hasCustomIcon ? [{ id: "icon-reset", label: "Reset icon" }] : []),
@@ -871,7 +873,10 @@ export default function WorkspaceSidebar() {
     const clicked = await api.contextMenu.show(items, position);
     if (!clicked) return;
     if (clicked === "new-thread") startThreadInFolder(folder);
-    else if (clicked === "icon") setIconPickerFolder(folder);
+    else if (clicked === "open-file") {
+      openOpenFileDialog(folder.group.memberProjects[0]?.environmentId);
+      if (isMobile) setOpenMobile(false);
+    } else if (clicked === "icon") setIconPickerFolder(folder);
     else if (clicked === "icon-reset") void setFolderIcon(folder, null);
     else if (clicked.startsWith("show:"))
       toggleProjectIn(projectKey, clicked.slice("show:".length));
