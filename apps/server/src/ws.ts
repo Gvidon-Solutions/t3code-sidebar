@@ -1,5 +1,6 @@
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
 import { MESH_WS_METHODS, ServerSettingsError } from "@t3tools/contracts";
+import * as ReplicaRpc from "./replicas/ReplicaRpc.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -128,7 +129,6 @@ import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as InboxService from "./inbox/InboxService.ts";
 import * as UiRequests from "./uiRequests/UiRequests.ts";
-import { replicaRpcFallbackHandlers } from "./mesh/meshLayoutRpcHandlers.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
@@ -1886,6 +1886,7 @@ export const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
+        ...ReplicaRpc.handlers,
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
@@ -3311,7 +3312,6 @@ export const layerWsRpc = (
               Stream.concat(Stream.make(latest), changes),
             ),
           ),
-        ...replicaRpcFallbackHandlers,
       });
       const splitHandlers: Pick<typeof handlers, SplitWsRpc["_tag"]> = handlers;
       const otherHandlers: Pick<typeof handlers, Exclude<ServerWsRpc, SplitWsRpc>["_tag"]> =

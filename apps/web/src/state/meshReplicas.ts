@@ -26,7 +26,7 @@ export const replicaStatusesAtom = Atom.make((get): ReadonlyArray<ReplicaLiveSta
     readonly replicas: ReadonlyArray<ReplicaLiveStatus>;
   }> = [];
   for (const environmentId of connected) {
-    if (configs.get(environmentId)?.environment.capabilities.meshLayout !== true) continue;
+    if (configs.get(environmentId)?.environment.capabilities.replicas !== true) continue;
     const value = Option.getOrNull(
       AsyncResult.value(get(replicaStatusEnvironment.live({ environmentId, input: {} }))),
     );

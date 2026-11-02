@@ -91,7 +91,7 @@ export function WorkspaceDrawer(props: {
       label: environment.environmentLabel,
       connected: environment.connectionState === "connected",
       supportsMesh:
-        serverConfigs.get(environment.environmentId)?.environment.capabilities.meshLayout === true,
+        serverConfigs.get(environment.environmentId)?.environment.capabilities.replicas === true,
     })),
   );
   const machineActions = machineSubactions(machineChoices);

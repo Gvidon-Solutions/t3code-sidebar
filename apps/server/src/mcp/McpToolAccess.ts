@@ -1,3 +1,5 @@
+import { ProjectId } from "@t3tools/contracts";
+import { resolveLaunchProject } from "../replicas/RemoteReplicaLaunch.ts";
 import {
   type EnvironmentId,
   type OrchestrationV2LinkOrigin,
@@ -402,7 +404,37 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
         if (scope.linkedEnvironments === false) return yield* PeerForwarding.linkedEnvironmentsOff;
         yield* (remote as RemoteCheck<typeof params>)(params);
         if (Option.isNone(forwarding)) return yield* linksUnavailable;
-        return yield* forwarding.value.call(scope, tool, target, { ...params, environmentId });
+        let forwarded = params;
+        if (
+          name === "t3_thread_launch" &&
+          !(Predicate.hasProperty(params, "scratch") && params.scratch === true)
+        ) {
+          const caller = yield* readCaller();
+          yield* assertNotLinked(caller, "place projects on another machine");
+          const projectId =
+            Predicate.hasProperty(params, "projectId") && typeof params.projectId === "string"
+              ? ProjectId.make(params.projectId)
+              : caller.caller?.projectId;
+          if (projectId)
+            forwarded = {
+              ...params,
+              projectId: yield* resolveLaunchProject(
+                projectId,
+                target,
+                assertFullAccess(caller, fullAccessRequired),
+              ).pipe(
+                Effect.mapError((cause) =>
+                  cause._tag === "OrchestratorMcpFailure"
+                    ? cause
+                    : new OrchestratorMcpFailure({
+                        code: "invalid_request",
+                        message: cause.message,
+                      }),
+                ),
+              ),
+            };
+        }
+        return yield* forwarding.value.call(scope, tool, target, { ...forwarded, environmentId });
       });
   }
   return handlers as Toolkit.HandlersFrom<Tools>;

@@ -1,3 +1,6 @@
+import * as Schema from "effect/Schema";
+import { SidebarWorkspacesConfig } from "@t3tools/contracts";
+import * as MeshTest from "../replicas/MeshLayoutTestLayer.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -85,6 +88,7 @@ type LaunchedWith = Pick<
 /** The thread the box launches for the task, which the test finishes. */
 interface BoxThread {
   readonly launched: Ref.Ref<ThreadId | null>;
+  readonly launchedProject: Ref.Ref<ProjectId | null>;
   /** The link session that launched it, as the box stamps it. */
   readonly linkOrigin: Ref.Ref<{ readonly sessionId: string; readonly label: string } | null>;
   /** The parent the launch names, so the thread there can link back to it. */
@@ -133,6 +137,7 @@ interface BoxThread {
 const makeBoxThread = Effect.gen(function* () {
   return {
     launched: yield* Ref.make<ThreadId | null>(null),
+    launchedProject: yield* Ref.make<ProjectId | null>(null),
     linkOrigin: yield* Ref.make<{ readonly sessionId: string; readonly label: string } | null>(
       null,
     ),
@@ -423,6 +428,7 @@ const boxToolkitLayer = (thread: BoxThread) => {
       Ref.get(thread.runless).pipe(
         Effect.flatMap((runless) =>
           Ref.set(thread.launched, input.threadId!).pipe(
+            Effect.andThen(Ref.set(thread.launchedProject, input.projectId)),
             Effect.andThen(Ref.set(thread.linkOrigin, input.linkOrigin ?? null)),
             Effect.andThen(Ref.set(thread.delegatedFrom, input.delegatedFrom ?? null)),
             Effect.andThen(Ref.set(thread.message, input.initialMessage?.text ?? null)),
@@ -539,6 +545,8 @@ const makeLaptop = (
   >,
   /** The laptop's links from before a restart, which keep their sessions there. */
   kept?: Context.Context<Layer.Success<ReturnType<typeof layerLinkingEnvironment>>>,
+  workspaceRoot = "/home/me/app",
+  onResolve: Effect.Effect<void> = Effect.void,
 ) =>
   Effect.gen(function* () {
     const linking = kept ?? (yield* layerLinkingEnvironment(laptop).pipe(Layer.build));
@@ -573,7 +581,7 @@ const makeLaptop = (
               // A cold enrichment cache: the project itself reports no identity yet.
               getById: () =>
                 Effect.succeedSome({
-                  workspaceRoot: "/home/me/app",
+                  workspaceRoot,
                   repositoryIdentity: null,
                 } as never),
             }),
@@ -581,10 +589,14 @@ const makeLaptop = (
           Layer.provide(
             Layer.mock(RepositoryIdentityResolver.RepositoryIdentityResolver)({
               resolve: (cwd) =>
-                Effect.succeed(
-                  cwd === "/home/me/app"
-                    ? ({ canonicalKey: "github.com/acme/app" } as RepositoryIdentity)
-                    : null,
+                onResolve.pipe(
+                  Effect.andThen(
+                    Effect.succeed(
+                      cwd === workspaceRoot
+                        ? ({ canonicalKey: "github.com/acme/app" } as RepositoryIdentity)
+                        : null,
+                    ),
+                  ),
                 ),
             }),
           ),
@@ -1755,4 +1767,58 @@ it.effect("a local task runs in this thread's project", () =>
       expect(JSON.stringify(result.content)).toContain("invalid_request");
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+const decodeReplicaLayout = Schema.decodeSync(SidebarWorkspacesConfig);
+it.effect.each(["representation-id", "representation-path", "same-path"] as const)(
+  "remote project resolution prefers %s before a repository match",
+  (mode) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const thread = yield* makeBoxThread;
+        const b = yield* serveBox(thread);
+        const offers = yield* SubscriptionRef.make<
+          ReadonlyArray<ProviderContinuationRequests.ProviderContinuationRequest>
+        >([]);
+        const database = yield* SqlitePersistence.layerMemory.pipe(Layer.build);
+        const chosen = boxProjects[0]!;
+        const workspaceRoot = mode === "same-path" ? chosen.workspaceRoot : "/home/me/app";
+        const config = decodeReplicaLayout({
+          projectMounts:
+            mode === "same-path"
+              ? {}
+              : {
+                  repo: [
+                    {
+                      environmentId: laptop.environmentId,
+                      path: workspaceRoot,
+                      role: "primary",
+                      transport: "git",
+                      createdAt: "",
+                    },
+                    {
+                      environmentId: box.environmentId,
+                      path: chosen.workspaceRoot,
+                      ...(mode === "representation-id" ? { projectId: chosen.id } : {}),
+                      role: "replica",
+                      source: laptop.environmentId,
+                      transport: "mutagen",
+                      createdAt: "",
+                    },
+                  ],
+                },
+        });
+        const a = yield* makeLaptop(
+          database,
+          offers,
+          undefined,
+          workspaceRoot,
+          Effect.die("Layout and path matches must not resolve repository identity."),
+        ).pipe(Effect.provide(MeshTest.layerTest(laptop.environmentId, config)));
+        yield* linkTo(a.links, b, "full-access");
+        yield* seedParent(a);
+        yield* delegateToBox(a);
+        expect(yield* Ref.get(thread.launchedProject)).toBe(chosen.id);
+      }),
+    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

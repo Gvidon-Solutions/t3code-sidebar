@@ -300,7 +300,7 @@ export interface MeshMachineInfo {
   readonly environmentId: string;
   readonly label: string;
   readonly connected: boolean;
-  /** The server advertises the mesh RPCs (`capabilities.meshLayout`). */
+  /** The server runs replicas (`capabilities.replicas`). */
   readonly supportsMesh: boolean;
 }
 

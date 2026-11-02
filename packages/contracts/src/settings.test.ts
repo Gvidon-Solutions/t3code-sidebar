@@ -326,6 +326,44 @@ describe("provider enabled defaults", () => {
   });
 });
 
+describe("ServerSettings replica defaults", () => {
+  it("defaults to managed Mutagen and accepts explicit replica overrides", () => {
+    const settings = decodeServerSettings({});
+    expect(settings.replicasEnabled).toBe(true);
+    expect(settings.mutagenPath).toBe("");
+    expect(settings.replicaRoot).toBe("");
+    expect(settings.replicaIgnores).toEqual([
+      "node_modules",
+      ".venv",
+      "venv",
+      "__pycache__",
+      ".pytest_cache",
+      "dist",
+      "build",
+      "target",
+      ".next",
+      ".turbo",
+      "coverage",
+      ".t3",
+      ".claude/worktrees",
+      ".DS_Store",
+    ]);
+    expect(
+      decodeServerSettingsPatch({
+        replicasEnabled: false,
+        mutagenPath: "/custom/mutagen",
+        replicaRoot: "/copies",
+        replicaIgnores: [],
+      }),
+    ).toMatchObject({
+      replicasEnabled: false,
+      mutagenPath: "/custom/mutagen",
+      replicaRoot: "/copies",
+      replicaIgnores: [],
+    });
+  });
+});
+
 describe("ServerSettings worktree defaults", () => {
   it("defaults the thread env mode to inherit and keeps stored values", () => {
     expect(decodeServerSettings({}).defaultThreadEnvMode).toBeNull();

@@ -39,6 +39,8 @@ const RPC_AGGREGATES = {
   [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: "orchestrationV2",
   [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: "orchestrationV2",
   [WS_METHODS.projectsMutate]: "orchestration",
+  "replicas.status": "replicas",
+  "replicas.retry": "replicas",
   [WS_METHODS.serverProbe]: "server",
   [WS_METHODS.serverGetConfig]: "server",
   [WS_METHODS.serverGetNpmRelease]: "server",
@@ -240,8 +242,6 @@ const RPC_AGGREGATES = {
   [MESH_WS_METHODS.layoutGet]: "mesh",
   [MESH_WS_METHODS.layoutApply]: "mesh",
   [MESH_WS_METHODS.layoutSubscribe]: "mesh",
-  [MESH_WS_METHODS.replicasStatus]: "mesh",
-  [MESH_WS_METHODS.replicasRetry]: "mesh",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";

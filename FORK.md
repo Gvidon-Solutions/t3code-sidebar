@@ -183,6 +183,19 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `apps/mobile/src/features/voice-mode/UiRequestCoordinator.tsx`,
   `apps/mobile/src/features/workspaces/WorkspaceChrome.tsx`.
 
+### 2026-11-02 — T3 Mesh — replicas on other machines (server)
+
+- **What.** Server-side project placement and thread launch on a mesh machine, with managed
+  Mutagen replicas and live sync state. Web/mobile placement controls are maintained separately.
+- **How.** Mutagen 0.18.1 is SHA256-pinned and uses a private daemon directory. A single driver
+  reconciles on startup, layout changes and every 30 seconds; reserved destination paths survive
+  restart. State RPCs require project operation permission. MCP places/lists representations,
+  waits for registration before a remote launch, and replica prompts name the primary's SSH command.
+  Stage C supplies the MeshLayoutService port; older graphs return a disabled error without it.
+- **Where.** `apps/server/src/replicas/`; seams: server runtime, WebSocket/MCP handlers,
+  `peer/RemoteDelegation.ts`, `ProviderTurnStartService.ts`, contracts and the capability descriptor.
+  Tests include a CRDT test layer, RPC/MCP/runtime integration and real local Mutagen synchronization.
+
 ### 2026-11-02 — T3 Mesh — layout CRDT core
 
 - **What.** Pure shared layout CRDT, legacy migration and logical project operations for Mesh.

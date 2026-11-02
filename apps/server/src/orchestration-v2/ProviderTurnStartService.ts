@@ -1,3 +1,5 @@
+import { replicaContextNote } from "../replicas/ReplicaInstructions.ts";
+import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
 import {
@@ -1534,6 +1536,14 @@ export const layer: Layer.Layer<
           ],
         });
       });
+      const mesh = yield* Effect.serviceOption(MeshLayoutService);
+      const replicaNote = Option.isSome(mesh)
+        ? replicaContextNote(
+            (yield* mesh.value.read).config,
+            mesh.value.environmentId,
+            projection.thread.projectId,
+          )
+        : "";
       const startWithHandoffs = Effect.fn("ProviderTurnStartService.startWithHandoffs")(
         function* (turnInput: Parameters<typeof session.startTurn>[0], compact = false) {
           const delivery = yield* deliverContextHandoffs({
@@ -1560,7 +1570,7 @@ export const layer: Layer.Layer<
             sideChatHandoff === undefined || compact || goalCommand
               ? ""
               : sideChatHandoff.summaryText;
-          const context = [delivery.context, sideChatContext, restartNote]
+          const context = [delivery.context, sideChatContext, restartNote, replicaNote]
             .filter((part) => part !== "")
             .join("\n\n");
           const { restartContinuationOfRunId: _resumedRunId, ...promptedInput } = turnInput;
@@ -1628,6 +1638,7 @@ export const layer: Layer.Layer<
         retryHandoff.length === 0 &&
         sideChatHandoff === undefined &&
         restartNote === "" &&
+        replicaNote === "" &&
         !noteContinuation
           ? session
           : makeDeliverySession(session, startWithHandoffs);

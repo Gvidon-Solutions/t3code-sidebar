@@ -1,3 +1,6 @@
+import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
+import { EnvironmentId } from "@t3tools/contracts";
+import * as ReplicaRuntime from "../../../replicas/ReplicaRuntime.ts";
 import {
   CommandId,
   MessageId,
@@ -78,6 +81,85 @@ const access = Effect.gen(function* () {
   return yield* Project.ProjectService;
 });
 export const layer = McpToolAccess.toLayer(ProjectToolkit, {
+  t3_project_place: McpToolAccess.writesEnvironment((input) =>
+    ReplicaRuntime.getService.pipe(
+      Effect.flatMap((replicas) => replicas.place(input)),
+      Effect.mapError(
+        (cause) => new OrchestratorMcpFailure({ code: "invalid_request", message: cause.message }),
+      ),
+    ),
+  ),
+  t3_project_machines: McpToolAccess.reads((input) =>
+    Effect.gen(function* () {
+      yield* readCaller();
+      const replicas = yield* ReplicaRuntime.getService.pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorMcpFailure({ code: "invalid_request", message: cause.message }),
+        ),
+      );
+      const result = yield* replicas
+        .machines(input.project)
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new OrchestratorMcpFailure({ code: "invalid_request", message: cause.message }),
+          ),
+        );
+      if (input.live === false) return result;
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
+      if (Option.isNone(forwarding)) return result;
+      const now = DateTime.formatIso(yield* DateTime.now);
+      const drivers = [
+        ...new Set(
+          result.representations.flatMap((rep) =>
+            rep.driverEnvironmentId && rep.driverEnvironmentId !== scope.environmentId
+              ? [rep.driverEnvironmentId]
+              : [],
+          ),
+        ),
+      ];
+      const remote = yield* Effect.forEach(
+        drivers,
+        (driver) =>
+          forwarding.value
+            .call(scope, ProjectToolkit.tools.t3_project_machines, EnvironmentId.make(driver), {
+              project: result.logicalKey,
+              live: false,
+            })
+            .pipe(
+              Effect.map((value) => ({ driver, value, error: undefined })),
+              Effect.catch((error) => Effect.succeed({ driver, value: undefined, error })),
+            ),
+        { concurrency: 4 },
+      );
+      return {
+        ...result,
+        representations: result.representations.map((rep) => {
+          const response = remote.find((row) => row.driver === rep.driverEnvironmentId);
+          const live = response?.value?.representations.find(
+            (row) => row.environmentId === rep.environmentId,
+          )?.live;
+          if (live) return { ...rep, live };
+          if (response?.error)
+            return {
+              ...rep,
+              live: {
+                logicalKey: result.logicalKey,
+                environmentId: rep.environmentId,
+                state: "error" as const,
+                conflicts: [],
+                problems: [response.error.message],
+                message: "The driving server is unavailable.",
+                updatedAt: now,
+              },
+            };
+          return rep;
+        }),
+      };
+    }),
+  ),
   t3_thread_launch: McpToolAccess.startsThreads(
     (input) => input,
     (input, { runtimeMode, interactionMode, linkOrigin }) =>

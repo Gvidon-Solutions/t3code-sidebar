@@ -2,7 +2,12 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
-import { SidebarProjectMountState, SidebarWorkspacesConfig } from "./sidebarWorkspaces.ts";
+import {
+  SidebarProjectMount,
+  SidebarProjectMountStatus,
+  SidebarProjectMountState,
+  SidebarWorkspacesConfig,
+} from "./sidebarWorkspaces.ts";
 
 /**
  * T3 Mesh (fork): the shared layout document every server replicates and every client reads.
@@ -111,3 +116,34 @@ export const MeshRpcs = [
   WsReplicasStatusRpc,
   WsReplicasRetryRpc,
 ] as const;
+
+export const ProjectPlaceInput = Schema.Struct({
+  project: Schema.String,
+  machine: Schema.String,
+  action: Schema.optionalKey(Schema.Literals(["add", "remove"])),
+  role: Schema.optionalKey(Schema.Literals(["primary", "replica"])),
+  source: Schema.optionalKey(Schema.String),
+  path: Schema.optionalKey(Schema.String),
+  wait: Schema.optionalKey(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 600 }))),
+});
+export type ProjectPlaceInput = typeof ProjectPlaceInput.Type;
+export const ProjectPlaceResult = Schema.Struct({
+  logicalKey: Schema.String,
+  representation: Schema.NullOr(SidebarProjectMount),
+  ready: Schema.Boolean,
+});
+export type ProjectPlaceResult = typeof ProjectPlaceResult.Type;
+export const ProjectMachinesResult = Schema.Struct({
+  logicalKey: Schema.String,
+  representations: Schema.Array(
+    Schema.Struct({
+      ...SidebarProjectMount.fields,
+      machine: Schema.String,
+      tag: Schema.optionalKey(Schema.String),
+      driverEnvironmentId: Schema.optionalKey(Schema.String),
+      status: Schema.optionalKey(SidebarProjectMountStatus),
+      live: Schema.optionalKey(ReplicaLiveStatus),
+    }),
+  ),
+});
+export type ProjectMachinesResult = typeof ProjectMachinesResult.Type;

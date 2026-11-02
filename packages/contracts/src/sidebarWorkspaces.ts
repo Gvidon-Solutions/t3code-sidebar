@@ -29,7 +29,12 @@ export const DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS = 5;
 
 /** A machine as the user names it in the sidebar; absent fields fall back to the server's label. */
 export const SidebarMachine = Schema.Struct({
-  reach: Schema.optionalKey(Schema.Record(Schema.String, Schema.Struct({ ssh: Schema.String }))),
+  reach: Schema.optionalKey(
+    Schema.Record(
+      Schema.String,
+      Schema.Struct({ ssh: Schema.String, identityFile: Schema.optionalKey(Schema.String) }),
+    ),
+  ),
   label: Schema.optionalKey(Schema.String),
   /** Up to three characters shown on thread rows, e.g. "GV". */
   tag: Schema.optionalKey(Schema.String),
@@ -56,6 +61,8 @@ export const SidebarProjectMount = Schema.Struct({
   /** The project registered at `path` there, once it is. */
   projectId: Schema.optionalKey(Schema.String),
   transport: SidebarProjectMountTransport,
+  /** Reserved by the destination server before its driver starts copying. */
+  pathAllocated: Schema.optionalKey(Schema.Boolean),
   /** "primary" owns `.git` and computes; "replica" is a synced working copy of `source`. */
   role: Schema.Literals(["primary", "replica"]),
   /** For a replica: the environment whose representation it syncs with. */

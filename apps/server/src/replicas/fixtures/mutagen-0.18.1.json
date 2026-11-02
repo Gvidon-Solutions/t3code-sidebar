@@ -1,0 +1,116 @@
+[
+  {
+    "identifier": "sync_fixture0",
+    "version": 1,
+    "creationTime": "2026-01-01T00:00:00Z",
+    "creatingVersion": "0.18.1",
+    "alpha": {
+      "protocol": "local",
+      "path": "/home/user/Repos/example",
+      "ignore": {},
+      "symlink": {},
+      "watch": {},
+      "permissions": {},
+      "compression": {},
+      "connected": true,
+      "scanned": true,
+      "directories": 464,
+      "files": 6602,
+      "totalFileSize": 1557040366
+    },
+    "beta": {
+      "protocol": "ssh",
+      "user": "example",
+      "host": "example-peer",
+      "path": "/srv/example",
+      "ignore": {},
+      "symlink": {},
+      "watch": {},
+      "permissions": {},
+      "compression": {},
+      "connected": true,
+      "scanned": true,
+      "directories": 464,
+      "files": 6602,
+      "totalFileSize": 1557040366
+    },
+    "ignore": {
+      "paths": [
+        "legacy",
+        ".venv",
+        ".playwright-mcp",
+        "*.aux",
+        "*.log",
+        "*.fls",
+        "*.fdb_latexmk",
+        "*.synctex.gz",
+        "*.out",
+        "*.toc",
+        ".~lock.*",
+        ".git/index",
+        ".git/index.lock",
+        ".git/*.lock"
+      ]
+    },
+    "symlink": {
+      "mode": "posix-raw"
+    },
+    "watch": {},
+    "permissions": {},
+    "compression": {
+      "algorithm": "zstandard"
+    },
+    "name": "example-0",
+    "paused": false,
+    "status": "watching",
+    "successfulCycles": 45
+  },
+  {
+    "identifier": "sync_fixture1",
+    "version": 1,
+    "creationTime": "2026-01-01T00:00:00Z",
+    "creatingVersion": "0.18.1",
+    "alpha": {
+      "protocol": "local",
+      "path": "/home/user/Repos/example",
+      "ignore": {},
+      "symlink": {},
+      "watch": {},
+      "permissions": {},
+      "compression": {},
+      "connected": true,
+      "scanned": true,
+      "directories": 88,
+      "files": 141,
+      "totalFileSize": 1370805
+    },
+    "beta": {
+      "protocol": "ssh",
+      "user": "example",
+      "host": "example-peer",
+      "path": "/srv/example",
+      "ignore": {},
+      "symlink": {},
+      "watch": {},
+      "permissions": {},
+      "compression": {},
+      "connected": true,
+      "scanned": true,
+      "directories": 88,
+      "files": 141,
+      "totalFileSize": 1370805
+    },
+    "ignore": {
+      "paths": [".venv", ".playwright-mcp", ".git/index", ".git/index.lock", ".git/*.lock"],
+      "vcs": false
+    },
+    "symlink": {},
+    "watch": {},
+    "permissions": {},
+    "compression": {},
+    "name": "example-1",
+    "paused": false,
+    "status": "watching",
+    "successfulCycles": 141
+  }
+]

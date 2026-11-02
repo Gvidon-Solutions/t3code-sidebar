@@ -739,7 +739,7 @@ export default function WorkspaceSidebar() {
       label: environment.label,
       connected: environment.connection.phase === "connected",
       supportsMesh:
-        serverConfigs.get(environment.environmentId)?.environment.capabilities.meshLayout === true,
+        serverConfigs.get(environment.environmentId)?.environment.capabilities.replicas === true,
     })),
   );
   const seedOf = (folder: FolderModel) =>
