@@ -142,9 +142,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `WorkspaceChrome.tsx`, `workspaceNavigator.ts`, `useWorkspaceHome.ts`,
   `apps/mobile/src/features/panels/WorkspaceDrawer.tsx`,
   `apps/mobile/src/features/threads/NewTaskRouteScreen.tsx`,
-  `apps/mobile/src/state/meshReplicas.ts`. Seams: raw-by-method mesh RPC helpers
-  (`requestMethod`/`subscribeMethod`) in `packages/client-runtime/src/rpc/client.ts`, so a
-  client build can call RPCs its own `WsRpcGroup` predates;
+  `apps/mobile/src/state/meshReplicas.ts`. Seams: `replicas.status` in the client's
+  subscription tags (`packages/client-runtime/src/rpc/client.ts`);
   `capabilities.meshLayout` in `packages/contracts/src/environment.ts`.
 
 ### 2026-11-02 — T3 Mesh — files anywhere and cross-machine `ui_open`
