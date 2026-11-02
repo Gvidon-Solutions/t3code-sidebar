@@ -1,142 +1,20 @@
-import * as HostProcess from "@t3tools/shared/HostProcess";
+import { ReplicaError } from "@t3tools/contracts";
+import * as Runtime from "./ReplicaRuntime.ts";
+import * as ServerConfig from "../config.ts";
+import * as TestClock from "effect/testing/TestClock";
+import * as Deferred from "effect/Deferred";
+import * as Ref from "effect/Ref";
+import * as Fiber from "effect/Fiber";
+import * as Stream from "effect/Stream";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, expect } from "@effect/vitest";
-import {
-  SidebarWorkspacesConfig,
-  type Project,
-  type SidebarProjectMount,
-} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
-import * as ProjectService from "../project/ProjectService.ts";
-import * as ServerSettings from "../serverSettings.ts";
 import * as ReplicaService from "./ProjectReplicaService.ts";
-import * as Runner from "./MutagenRunner.ts";
-import * as MeshTest from "./MeshLayoutTestLayer.ts";
 import { sessionIdentity } from "./replicaModel.ts";
+import { makeReplicaHarness as harness } from "./replicas.testkit.ts";
 
-const decodeConfig = Schema.decodeSync(SidebarWorkspacesConfig);
-
-const harness = (self = "replica", sourceDrives = false) => {
-  const replica: SidebarProjectMount = {
-    environmentId: "replica",
-    path: "/replica",
-    transport: "mutagen",
-    role: "replica",
-    source: "source",
-    createdAt: "",
-  };
-  const initial = decodeConfig({
-    projectMounts: {
-      repo: [
-        {
-          environmentId: "source",
-          path: "/source",
-          role: "primary",
-          transport: "git",
-          createdAt: "",
-        },
-        replica,
-      ],
-    },
-    machines: sourceDrives
-      ? { source: { reach: { replica: { ssh: "replica" } } } }
-      : { replica: { reach: { source: { ssh: "source" } } } },
-  });
-  let sessions: ReadonlyArray<Runner.MutagenSession> = [];
-  const created: Runner.CreateSession[] = [];
-  const terminated: string[] = [];
-  let project: Project | undefined;
-  let registrations = 0;
-  const runner = Layer.succeed(
-    Runner.MutagenRunner,
-    Runner.MutagenRunner.of({
-      list: () => Effect.sync(() => sessions),
-      create: (input) =>
-        Effect.sync(() => {
-          created.push(input);
-          sessions = [
-            ...sessions,
-            {
-              identifier: input.name,
-              name: input.name,
-              labels: { "t3-logical": input.logicalHash, "t3-env": input.environmentTag },
-              paused: false,
-              status: "scanning",
-              alpha: { path: input.alpha },
-              beta: { path: input.beta },
-            },
-          ];
-        }),
-      terminate: (name) =>
-        Effect.sync(() => {
-          terminated.push(name);
-          sessions = sessions.filter((s) => s.name !== name);
-        }),
-      pause: () => Effect.void,
-      resume: () =>
-        Effect.sync(() => {
-          sessions = sessions.map((s) => ({ ...s, paused: false }));
-        }),
-      reset: () => Effect.void,
-      flush: () => Effect.void,
-      daemon: () => Effect.void,
-    }),
-  );
-  const projects = Layer.mock(ProjectService.ProjectService)({
-    getByWorkspaceRoot: () => Effect.sync(() => Option.fromUndefinedOr(project)),
-    create: (input) =>
-      Effect.sync(() => {
-        registrations++;
-        project = {
-          id: input.projectId,
-          title: input.title,
-          workspaceRoot: input.workspaceRoot,
-          defaultModelSelection: null,
-          scripts: [],
-          createdAt: "2026-01-01T00:00:00Z",
-          updatedAt: "2026-01-01T00:00:00Z",
-          deletedAt: null,
-        };
-        return project;
-      }),
-  });
-  const dependencies = Layer.mergeAll(
-    Layer.succeed(HostProcess.HomeDirectory, "/tmp/t3-e-unused-test-home"),
-    MeshTest.layerTest(self, initial),
-    runner,
-    projects,
-    ServerSettings.layerTest(),
-    NodeServices.layer,
-  );
-  const layer = ReplicaService.layer.pipe(Layer.provideMerge(dependencies));
-  return {
-    layer,
-    created,
-    terminated,
-    registrations: () => registrations,
-    setSession: (patch: Partial<Runner.MutagenSession>) => {
-      sessions = sessions.map((s) => ({ ...s, ...patch }));
-    },
-    addOrphan: () => {
-      sessions = [
-        ...sessions,
-        {
-          identifier: "orphan",
-          name: "orphan",
-          labels: { "t3-logical": "orphan" },
-          paused: false,
-          status: "watching",
-          alpha: { path: "/a" },
-          beta: { path: "/b" },
-        },
-      ];
-    },
-  };
-};
 it.effect(
   "ensures once under concurrent reconciliation, registers on watching, reports states and removes only the managed session",
   () =>
@@ -185,6 +63,11 @@ it.effect(
         }));
         yield* service.reconcile;
         expect(h.terminated).toEqual([sessionIdentity("repo", "replica").name]);
+        expect(
+          (yield* service.status).some(
+            (row) => row.sessionName === sessionIdentity("repo", "replica").name,
+          ),
+        ).toBe(false);
         expect(h.registrations()).toBe(1);
       }).pipe(Effect.provide(h.layer));
     }),
@@ -213,6 +96,10 @@ it.effect(
         yield* service.reconcile;
         expect(replica.created).toEqual([]);
         expect(replica.registrations()).toBe(1);
+        expect((yield* service.status)[0]).toMatchObject({
+          state: "watching",
+          projectId: expect.any(String),
+        });
         yield* mesh.edit((config) => ({ ...config, machines: {} }));
         yield* service.reconcile;
         expect((yield* service.status)[0]?.state).toBe("error");
@@ -240,4 +127,193 @@ it.effect("recovers an existing labeled session without creating it after servic
       expect(h.registrations()).toBe(1);
     }).pipe(Effect.provide(Layer.fresh(h.layer)));
   }),
+);
+
+it.effect(
+  "production runtime starts once, reconciles layout changes and polls every 30 seconds",
+  () =>
+    Effect.gen(function* () {
+      const lists = yield* Ref.make(0);
+      const observed = yield* Deferred.make<void>();
+      const h = harness(
+        "replica",
+        false,
+        Ref.update(lists, (n) => n + 1),
+      );
+      const runtime = Runtime.withRuntime(h.layer).pipe(
+        Layer.provide(
+          ServerConfig.layerTest("/tmp", "/tmp/t3-replica-runtime-test").pipe(
+            Layer.provide(NodeServices.layer),
+          ),
+        ),
+      );
+      yield* Effect.gen(function* () {
+        const replicas = yield* Runtime.getService;
+        expect(yield* (yield* Runtime.ReplicaRuntime).get).toBe(replicas);
+        yield* replicas.changes.pipe(
+          Stream.filter(({ replicas }) => replicas.some((rep) => rep.state === "mounting")),
+          Stream.take(1),
+          Stream.runDrain,
+        );
+        yield* TestClock.adjust("0 seconds");
+        expect(h.created).toHaveLength(1);
+        const baseline = yield* Ref.get(lists);
+        yield* replicas.start;
+        yield* TestClock.adjust("29 seconds");
+        expect(yield* Ref.get(lists)).toBe(baseline);
+        yield* TestClock.adjust("1 second");
+        expect(yield* Ref.get(lists)).toBeGreaterThan(baseline);
+        h.setSession({ status: "watching" });
+        const watcher = yield* replicas.changes.pipe(
+          Stream.filter(({ replicas }) => replicas.some((rep) => rep.state === "watching")),
+          Stream.take(1),
+          Stream.runDrain,
+          Effect.tap(() => Deferred.succeed(observed, undefined)),
+          Effect.forkChild({ startImmediately: true }),
+        );
+        yield* (yield* MeshLayoutService).edit((config) => ({
+          ...config,
+          machines: { ...config.machines, source: { label: "Primary changed" } },
+        }));
+        yield* Deferred.await(observed);
+        yield* Fiber.join(watcher);
+        yield* (yield* MeshLayoutService).changes.pipe(
+          Stream.filter((snapshot) =>
+            Boolean(
+              snapshot.config.projectMounts.repo?.find((rep) => rep.environmentId === "replica")
+                ?.projectId,
+            ),
+          ),
+          Stream.take(1),
+          Stream.runDrain,
+        );
+        expect(h.registrations()).toBe(1);
+        expect(h.created).toHaveLength(1);
+      }).pipe(Effect.provide(runtime));
+    }),
+);
+
+it.effect(
+  "places by name or id and machine tag, waits for registration, lists state and removes without deleting a project",
+  () =>
+    Effect.gen(function* () {
+      const h = harness("source", true);
+      yield* Effect.gen(function* () {
+        const service = yield* ReplicaService.ProjectReplicaService;
+        const mesh = yield* MeshLayoutService;
+        yield* mesh.edit((config) => ({
+          ...config,
+          machines: { ...config.machines, newPeer: { label: "New peer", tag: "NP" } },
+        }));
+        const placed = yield* service.place({ project: "Example", machine: "NP" });
+        expect(placed.representation).toMatchObject({
+          environmentId: "newPeer",
+          role: "replica",
+          source: "source",
+        });
+        const waiting = yield* service
+          .place({ project: "primary", machine: "New peer", wait: 60 })
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* mesh.edit((config) => ({
+          ...config,
+          projectMounts: {
+            ...config.projectMounts,
+            repo: config.projectMounts.repo!.map((rep) =>
+              rep.environmentId === "newPeer"
+                ? { ...rep, projectId: "remote-project", pathAllocated: true }
+                : rep,
+            ),
+          },
+          projectMountStatus: { repo: { newPeer: { state: "watching", updatedAt: "" } } },
+        }));
+        expect(yield* Fiber.join(waiting)).toMatchObject({
+          ready: true,
+          representation: { projectId: "remote-project" },
+        });
+        const machines = yield* service.machines("repo");
+        expect(
+          machines.representations.find((rep) => rep.environmentId === "newPeer"),
+        ).toMatchObject({ tag: "NP", status: { state: "watching" } });
+        expect(yield* service.place({ project: "repo", machine: "NP", action: "remove" })).toEqual({
+          logicalKey: "repo",
+          representation: null,
+          ready: true,
+        });
+        expect(h.terminated).toEqual([]);
+        expect(
+          (yield* mesh.read).config.projectMounts.repo!.some(
+            (rep) => rep.environmentId === "newPeer",
+          ),
+        ).toBe(false);
+        expect(
+          yield* service.place({ project: "repo", machine: "missing" }).pipe(Effect.isFailure),
+        ).toBe(true);
+      }).pipe(Effect.provide(h.layer));
+    }),
+);
+
+it.effect(
+  "a destination registers a newly declared primary without starting Mutagen synchronization",
+  () =>
+    Effect.gen(function* () {
+      const h = harness();
+      yield* Effect.gen(function* () {
+        const service = yield* ReplicaService.ProjectReplicaService;
+        const mesh = yield* MeshLayoutService;
+        yield* mesh.edit((config) => ({
+          ...config,
+          projectMounts: {
+            repo: config.projectMounts.repo!.map((rep) =>
+              rep.environmentId === "replica"
+                ? { ...rep, role: "primary" as const, transport: "git" as const }
+                : rep,
+            ),
+          },
+        }));
+        yield* service.reconcile;
+        expect(
+          (yield* mesh.read).config.projectMounts.repo!.find(
+            (rep) => rep.environmentId === "replica",
+          )?.projectId,
+        ).toBeDefined();
+        expect(h.registrations()).toBe(1);
+        expect(h.created).toEqual([]);
+      }).pipe(Effect.provide(h.layer));
+    }),
+);
+
+it.effect(
+  "installation/list failures become persisted replica errors and recover on the next reconciliation",
+  () =>
+    Effect.gen(function* () {
+      let unavailable = true;
+      const h = harness(
+        "replica",
+        false,
+        Effect.suspend(() =>
+          unavailable
+            ? Effect.fail(
+                new ReplicaError({ reason: "mutagen", message: "Mutagen download failed." }),
+              )
+            : Effect.void,
+        ),
+      );
+      yield* Effect.gen(function* () {
+        const service = yield* ReplicaService.ProjectReplicaService;
+        const mesh = yield* MeshLayoutService;
+        expect((yield* service.reconcile.pipe(Effect.flip)).reason).toBe("mutagen");
+        expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+          state: "error",
+          message: "Mutagen download failed.",
+        });
+        expect((yield* service.status)[0]).toMatchObject({
+          state: "error",
+          problems: ["Mutagen download failed."],
+        });
+        unavailable = false;
+        yield* service.reconcile;
+        expect((yield* service.status)[0]?.state).toBe("mounting");
+        expect(h.created).toHaveLength(1);
+      }).pipe(Effect.provide(h.layer));
+    }),
 );

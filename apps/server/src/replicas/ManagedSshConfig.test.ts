@@ -33,6 +33,10 @@ it.effect("writes only the managed block in an isolated home and removes retired
       Effect.provideService(HostProcess.HomeDirectory, home),
     );
     const saved = yield* fs.readFileString(config);
+    yield* syncManagedSshConfig(undefined).pipe(
+      Effect.provideService(HostProcess.HomeDirectory, home),
+    );
+    expect(yield* fs.readFileString(config)).toBe(saved);
     expect(saved).toContain("Host personal\n  HostName personal.test\n# t3-mesh begin");
     expect(saved).toContain('IdentityFile "/keys/peer"');
     yield* syncManagedSshConfig({}).pipe(Effect.provideService(HostProcess.HomeDirectory, home));

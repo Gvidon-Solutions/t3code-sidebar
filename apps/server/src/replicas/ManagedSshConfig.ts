@@ -49,6 +49,7 @@ export function managedSshConfig(
 export const syncManagedSshConfig = Effect.fn("ManagedSshConfig.sync")(function* (
   routes: SidebarWorkspacesConfig["machines"][string]["reach"],
 ) {
+  if (routes === undefined) return;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const home = yield* HostProcess.HomeDirectory;
