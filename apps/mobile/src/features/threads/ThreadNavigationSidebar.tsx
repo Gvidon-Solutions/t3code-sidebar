@@ -36,6 +36,7 @@ import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
 import { useProjects, useNavigationThreadShells } from "../../state/entities";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useThreadSearch } from "../../state/queries";
 import { useThreadListV2ShelfPreferences } from "./use-thread-list-v2-shelf-preferences";
 import { useThreadListNow } from "./use-thread-list-now";
@@ -148,6 +149,7 @@ function NativeSidebarContainer(props: ThreadNavigationSidebarProps) {
 function ThreadNavigationSidebarPane(
   props: ThreadNavigationSidebarProps & { readonly nativeChrome: boolean },
 ) {
+  const meshLayout = useMeshLayout();
   const floatingTabsEnabled = useAndroidFloatingTabs();
   const { themeVariables: materialTheme } = useAppearancePreferences();
   const drawerColor = materialTheme["--color-drawer"];
@@ -220,11 +222,23 @@ function ThreadNavigationSidebarPane(
   const projectScopes = useMemo(
     () =>
       buildHomeProjectScopes({
+        ...(meshLayout.config === null
+          ? {}
+          : {
+              layout: meshLayout.config,
+              connectedEnvironmentIds: meshLayout.connectedEnvironmentIds,
+            }),
         projects,
         environmentId: options.selectedEnvironmentId,
         projectGroupingMode: options.projectGroupingMode,
       }),
-    [projects, options.selectedEnvironmentId, options.projectGroupingMode],
+    [
+      meshLayout.config,
+      meshLayout.connectedEnvironmentIds,
+      projects,
+      options.selectedEnvironmentId,
+      options.projectGroupingMode,
+    ],
   );
   const projectFilterOptions = pickableProjectGroups(projectScopes).map((scope) => ({
     key: scope.key,

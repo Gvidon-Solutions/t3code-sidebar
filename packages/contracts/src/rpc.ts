@@ -1,9 +1,4 @@
 import {
-  WsMeshLayoutGetRpc,
-  WsMeshLayoutApplyRpc,
-  WsMeshLayoutSubscribeRpc,
-} from "./meshLayout.ts";
-import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -385,6 +380,7 @@ import {
 } from "./scheduledTask.ts";
 import { SecretRequestAnswerInput, SecretRequestError } from "./secretRequest.ts";
 import { INBOX_RPCS } from "./inbox.ts";
+import { MeshRpcs } from "./meshLayout.ts";
 import { UI_REQUESTS_RPCS } from "./uiRequests.ts";
 import {
   ProjectCloneActionInput,
@@ -2199,9 +2195,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeCommandOutputRpc,
   // Fork: agent inbox.
   ...INBOX_RPCS,
-  WsMeshLayoutGetRpc,
-  WsMeshLayoutApplyRpc,
-  WsMeshLayoutSubscribeRpc,
   // Fork: agents asking clients to show something.
   ...UI_REQUESTS_RPCS,
+  // Fork: the shared T3 Mesh layout document.
+  ...MeshRpcs,
 ).middleware(RpcScopeAuthorization);

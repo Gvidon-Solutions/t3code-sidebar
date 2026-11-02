@@ -128,6 +128,7 @@ import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as InboxService from "./inbox/InboxService.ts";
 import * as UiRequests from "./uiRequests/UiRequests.ts";
+import { replicaRpcFallbackHandlers } from "./mesh/meshLayoutRpcHandlers.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import * as GuestShareService from "./guest/GuestShareService.ts";
 import {
@@ -2152,13 +2153,14 @@ export const layerWsRpc = (
               Effect.andThen(subscribeOrchestrationV2Thread(input)),
             ),
           ),
-        // Fork: agent inbox. The owner's side; agents use the MCP tools.
+        // Fork: T3 Mesh shared layout.
         [MESH_WS_METHODS.layoutGet]: () => mesh.read.pipe(Effect.map(meshSnapshot)),
         [MESH_WS_METHODS.layoutApply]: ({ entries }) =>
           mesh
             .apply(entries as import("@t3tools/shared/meshLayout").MeshLayoutDocument)
             .pipe(Effect.map(meshSnapshot)),
         [MESH_WS_METHODS.layoutSubscribe]: () => mesh.changes.pipe(Stream.map(meshSnapshot)),
+        // Fork: agent inbox. The owner's side; agents use the MCP tools.
         [INBOX_WS_METHODS.subscribe]: (input) => inbox.subscribe(input),
         [INBOX_WS_METHODS.subscribeIssue]: ({ issueId }) => inbox.subscribeIssue(issueId),
         [INBOX_WS_METHODS.comment]: (input) => inbox.ownerComment(input),
@@ -3305,6 +3307,7 @@ export const layerWsRpc = (
               Stream.concat(Stream.make(latest), changes),
             ),
           ),
+        ...replicaRpcFallbackHandlers,
       });
       const splitHandlers: Pick<typeof handlers, SplitWsRpc["_tag"]> = handlers;
       const otherHandlers: Pick<typeof handlers, Exclude<ServerWsRpc, SplitWsRpc>["_tag"]> =

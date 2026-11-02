@@ -183,3 +183,79 @@ export function suggestMerges<T extends Project & { readonly title: string }>(
     (group) => new Set(group.map((p) => p.environmentId)).size > 1,
   );
 }
+
+/** A short machine tag for hints and thread chips; falls back to the label's initials. */
+export function machineTag(
+  config: SidebarWorkspacesConfig,
+  environmentId: string,
+  label?: string | null,
+): string {
+  const configured = config.machines[environmentId]?.tag?.trim();
+  if (configured) return configured;
+  const letters = (label ?? environmentId)
+    .replace(/[^A-Za-z0-9]/g, "")
+    .slice(0, 2)
+    .toUpperCase();
+  return letters || environmentId.slice(0, 2).toUpperCase();
+}
+
+export interface OfflineLogicalProject {
+  readonly logicalKey: string;
+  readonly environmentId: string;
+  readonly path: string;
+  readonly state: string | null;
+  readonly updatedAt: string | null;
+  readonly tag: string;
+}
+
+/**
+ * Logical projects whose every representation sits on a machine this client cannot reach. A
+ * project with one connected representation is already in the normal project list; excluding it
+ * here prevents a duplicate greyed card.
+ */
+export function offlineLogicalProjects(
+  config: SidebarWorkspacesConfig,
+  connectedEnvironmentIds: ReadonlySet<string>,
+  labelOf: (environmentId: string) => string | null = () => null,
+): OfflineLogicalProject[] {
+  const result: OfflineLogicalProject[] = [];
+  for (const [logicalKey, reps] of Object.entries(config.projectMounts).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )) {
+    if (reps.some((rep) => connectedEnvironmentIds.has(rep.environmentId))) continue;
+    for (const rep of reps) {
+      const status = config.projectMountStatus[logicalKey]?.[rep.environmentId];
+      result.push({
+        logicalKey,
+        environmentId: rep.environmentId,
+        path: rep.path,
+        state: status?.state ?? null,
+        updatedAt: status?.updatedAt ?? null,
+        tag: machineTag(config, rep.environmentId, labelOf(rep.environmentId)),
+      });
+    }
+  }
+  return result;
+}
+
+/** Merge suggestions for one logical project, with the other environment's tag. */
+export function mergeSuggestionsFor<T extends Project & { readonly title: string }>(
+  config: SidebarWorkspacesConfig,
+  projects: readonly T[],
+  targetKey: string,
+  logicalKeyOf: (project: T) => string,
+  environmentLabel: (environmentId: string) => string | null = () => null,
+): { readonly project: T; readonly tag: string }[] {
+  const suggestions: { readonly project: T; readonly tag: string }[] = [];
+  for (const group of suggestMerges(projects)) {
+    if (!group.some((project) => logicalKeyOf(project) === targetKey)) continue;
+    for (const project of group) {
+      if (logicalKeyOf(project) === targetKey) continue;
+      suggestions.push({
+        project,
+        tag: machineTag(config, project.environmentId, environmentLabel(project.environmentId)),
+      });
+    }
+  }
+  return suggestions;
+}

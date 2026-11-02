@@ -558,6 +558,10 @@
     "./state/mesh-layout": {
       "types": "./src/state/meshLayout/index.ts",
       "default": "./src/state/meshLayout/index.ts"
+    },
+    "./state/mesh-layout-client": {
+      "types": "./src/state/meshLayoutClient.ts",
+      "default": "./src/state/meshLayoutClient.ts"
     }
   },
   "scripts": {

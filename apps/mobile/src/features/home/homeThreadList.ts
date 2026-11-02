@@ -1,4 +1,5 @@
 import { buildProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
+import { offlineLogicalProjects } from "@t3tools/client-runtime/state/mesh-layout";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -12,6 +13,7 @@ import type {
   ScopedProjectRef,
   SidebarProjectGroupingMode,
   SidebarProjectSortOrder,
+  SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
@@ -22,6 +24,12 @@ import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 export type HomeProjectSortOrder = Exclude<SidebarProjectSortOrder, "manual">;
 
 export interface HomeProjectScope {
+  /** T3 Mesh (fork): only reachable on a machine this client is not connected to. */
+  readonly meshOffline?: {
+    readonly environmentId: string;
+    readonly tag: string;
+    readonly state: string | null;
+  };
   readonly key: string;
   readonly title: string;
   readonly representative: EnvironmentProject;
@@ -43,6 +51,8 @@ function getProjectSortTimestamp(
 }
 
 export function buildHomeProjectScopes(input: {
+  readonly layout?: SidebarWorkspacesConfig;
+  readonly connectedEnvironmentIds?: ReadonlySet<string>;
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly environmentId: EnvironmentId | null;
   readonly projectGroupingMode: SidebarProjectGroupingMode;
@@ -50,13 +60,14 @@ export function buildHomeProjectScopes(input: {
   const projects = input.projects.filter(
     (project) => input.environmentId === null || project.environmentId === input.environmentId,
   );
-  return buildProjectGroups({
+  const scopes: HomeProjectScope[] = buildProjectGroups({
     projects,
     groupScratchProjects: true,
     settings: {
       sidebarProjectGroupingMode: input.projectGroupingMode,
       sidebarProjectGroupingOverrides: {},
     },
+    ...(input.layout === undefined ? {} : { layout: input.layout }),
   }).map((group) => {
     return {
       key: group.key,
@@ -68,6 +79,39 @@ export function buildHomeProjectScopes(input: {
       archived: group.archived,
     };
   });
+  if (input.layout === undefined || input.connectedEnvironmentIds === undefined) return scopes;
+  const existing = new Set(scopes.map((scope) => scope.key));
+  const offline = offlineLogicalProjects(input.layout, input.connectedEnvironmentIds)
+    .filter((entry) => !existing.has(entry.logicalKey))
+    .map((entry): HomeProjectScope => {
+      const title = entry.path.split(/[\\/]/).filter(Boolean).at(-1) ?? entry.logicalKey;
+      const project = {
+        id: `mesh:${entry.logicalKey}:${entry.environmentId}`,
+        environmentId: entry.environmentId,
+        title,
+        workspaceRoot: entry.path,
+        repositoryIdentity: null,
+        defaultModelSelection: null,
+        scripts: [],
+        createdAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
+        updatedAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
+      } as unknown as EnvironmentProject;
+      return {
+        key: entry.logicalKey,
+        title,
+        representative: project,
+        projects: [project],
+        projectRefs: [],
+        pinned: false,
+        archived: false,
+        meshOffline: {
+          environmentId: entry.environmentId,
+          tag: entry.tag,
+          state: entry.state,
+        },
+      };
+    });
+  return [...scopes, ...offline];
 }
 
 export function findHomeProjectScope(

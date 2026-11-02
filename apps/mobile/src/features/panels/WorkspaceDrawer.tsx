@@ -14,6 +14,7 @@ import { buildHomeProjectScopes } from "../home/homeThreadList";
 import { DONE_STATUS_LABEL, STATUS_LABEL_BY_STATUS } from "../threads/thread-list-v2-items";
 import { resolveThreadListV2Status, threadHasUnseenCompletion } from "../threads/threadListV2";
 import { useWorkspaceHome } from "../workspaces/useWorkspaceHome";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { FolderDragHost } from "../workspaces/WorkspaceFolderDrag";
 import {
   WorkspaceDock,
@@ -39,6 +40,7 @@ export function WorkspaceDrawer(props: {
   readonly currentThreadKey: string;
   readonly onClose: () => void;
 }) {
+  const meshLayout = useMeshLayout();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const selectDetail = useSelectWorkspaceDetail();
@@ -48,11 +50,17 @@ export function WorkspaceDrawer(props: {
   const projectScopes = useMemo(
     () =>
       buildHomeProjectScopes({
+        ...(meshLayout.config === null
+          ? {}
+          : {
+              layout: meshLayout.config,
+              connectedEnvironmentIds: meshLayout.connectedEnvironmentIds,
+            }),
         projects,
         environmentId: null,
         projectGroupingMode: options.projectGroupingMode,
       }),
-    [options.projectGroupingMode, projects],
+    [meshLayout.config, meshLayout.connectedEnvironmentIds, options.projectGroupingMode, projects],
   );
   const workspaceHome = useWorkspaceHome({ projectScopes, threads });
   const environmentIds = useMemo(
@@ -120,6 +128,7 @@ export function WorkspaceDrawer(props: {
             onToggleWorkspace={workspaceHome.toggleProjectIn}
             onFoldMode={workspaceHome.setFoldMode}
             onNewThread={startThread}
+            mesh={workspaceHome.meshActionsFor(item.projectKey)}
           />
         ) : null;
       case "ws-more":

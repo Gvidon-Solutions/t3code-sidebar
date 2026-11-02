@@ -150,6 +150,28 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `apps/mobile/src/features/settings/{SettingsMachinesRouteScreen,SettingsRouteScreen,settings-search}.tsx`,
   `apps/mobile/src/Stack.tsx`.
 
+### 2026-11-02 — T3 Mesh — clients on the mesh (web + mobile)
+
+- **What.** Web and phone read one replicated layout document from any connected mesh-capable
+  server, keep the last snapshot offline and queue edits as idempotent CRDT entries. Logical
+  projects group through layout `rep` entries, folder menus merge/split representations and
+  suggest same-name merges, and a project that lives only on an unreachable machine shows
+  greyed with its tag and a one-tap Connect. Servers without `meshLayout` keep the legacy shared
+  `sidebarWorkspaces` path unchanged.
+- **How.** `pickMeshSource` prefers the primary (web) or first capable server, failover
+  resubscribes on disconnect, optimistic edits dedupe against the server echo, and the outbox
+  replays on reconnect. Web caches in `localStorage`; mobile caches in its preferences store.
+  `sidebarWorkspaces` leaves the shared-setting fan-out only when every connected server with
+  workspaces advertises `meshLayout` (`meshLayoutHandlesSidebarWorkspaces`).
+- **Where.** `packages/client-runtime/src/state/meshLayoutClient.ts` (`./state/mesh-layout-client`),
+  `logicalProjects.ts` helpers; web `hooks/useMeshLayout.ts`, `state/meshLayout.ts`,
+  `components/workspaces/WorkspaceSidebar.tsx`, `sidebarProjectGrouping.ts`; mobile
+  `features/workspaces/useMeshLayout.ts`, `useSidebarWorkspaces.ts`, `useWorkspaceHome.ts`,
+  `WorkspaceChrome.tsx`, grouping call sites and `persistence/mobile-preferences.ts`. Seams:
+  `meshLayout` capability and `MeshRpcs` in contracts, mesh tags in `rpc/client.ts`, the
+  disabled server RPC seam in `apps/server/src/mesh/`, RPC scopes/instrumentation, and
+  `splitSharedServerPatch`.
+
 ### 2026-11-01 — Upstream release v0.1.6
 
 - **What.** Brings in upstream's `v0.1.6` (521 changes past the v0.1.5 sync). Side chats answer

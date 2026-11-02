@@ -58,6 +58,11 @@ export interface WorkspaceFolderInput {
   readonly isScratch: boolean;
   /** Every workspace the project shows in, for the folder's "Show in workspaces". */
   readonly workspaceIds?: ReadonlyArray<string>;
+  readonly meshOffline?: {
+    readonly environmentId: string;
+    readonly tag: string;
+    readonly state: string | null;
+  };
 }
 
 export type WorkspaceSectionKind = "pinned" | "quiet" | "snoozed";
@@ -87,6 +92,11 @@ export interface WorkspaceFolderListItem {
   readonly isScratch: boolean;
   /** Every workspace the project shows in. */
   readonly workspaceIds: ReadonlyArray<string>;
+  readonly meshOffline?: {
+    readonly environmentId: string;
+    readonly tag: string;
+    readonly state: string | null;
+  };
   readonly attention: number;
   readonly working: number;
   /** The machine "No project" belongs to, named the way the sidebar names it. */
@@ -485,6 +495,7 @@ export function buildWorkspaceHomeItems(input: {
       foldMode: input.foldModeOf(model.input.projectKey),
       isScratch: model.input.isScratch,
       workspaceIds: model.input.workspaceIds ?? [],
+      ...(model.input.meshOffline === undefined ? {} : { meshOffline: model.input.meshOffline }),
       attention: model.all.filter(needsAttention).length,
       working: model.all.filter((thread) => resolveThreadListV2Status(thread) === "working").length,
       machineLabel: input.resolveMachineDisplay(model.input.project.environmentId).label,
