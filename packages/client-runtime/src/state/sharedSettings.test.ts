@@ -5,7 +5,11 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 
-import { filterSharedServerPatch } from "./sharedSettings.ts";
+import {
+  filterSharedServerPatch,
+  meshLayoutHandlesSidebarWorkspaces,
+  splitSharedServerPatch,
+} from "./sharedSettings.ts";
 
 describe("filterSharedServerPatch", () => {
   it("holds the restart preference until the target's config loads", () => {
@@ -79,4 +83,38 @@ describe("filterSharedServerPatch", () => {
       );
     },
   );
+});
+
+describe("T3 Mesh sidebar workspace fan-out", () => {
+  const patch = { sidebarWorkspaces: { ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces } };
+
+  it("keeps writing the whole setting to legacy servers", () => {
+    const environments = [
+      { connected: true, hasWorkspaces: true, capabilities: { meshLayout: true } },
+      { connected: true, hasWorkspaces: true, capabilities: {} },
+    ];
+    expect(meshLayoutHandlesSidebarWorkspaces(environments)).toBe(false);
+    expect(splitSharedServerPatch(patch).sharedPatch).toEqual(patch);
+  });
+
+  it("drops the setting only when every connected server with workspaces speaks the mesh", () => {
+    const environments = [
+      { connected: true, hasWorkspaces: true, capabilities: { meshLayout: true } },
+      { connected: false, hasWorkspaces: true, capabilities: {} },
+      { connected: true, hasWorkspaces: false, capabilities: {} },
+    ];
+    expect(meshLayoutHandlesSidebarWorkspaces(environments)).toBe(true);
+    expect(splitSharedServerPatch(patch, { meshLayoutHandlesSidebarWorkspaces: true })).toEqual({
+      sharedPatch: {},
+      localPatch: {},
+    });
+  });
+
+  it("stays on the legacy path when no server has workspaces yet", () => {
+    expect(
+      meshLayoutHandlesSidebarWorkspaces([
+        { connected: true, hasWorkspaces: false, capabilities: { meshLayout: true } },
+      ]),
+    ).toBe(false);
+  });
 });
