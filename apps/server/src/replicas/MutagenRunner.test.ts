@@ -1,3 +1,4 @@
+import stagingFixture from "./fixtures/mutagen-0.18.1-staging.json" with { type: "json" };
 import fixture from "./fixtures/mutagen-0.18.1.json" with { type: "json" };
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -14,6 +15,12 @@ describe("Mutagen 0.18.1", () => {
   it.effect("decodes the sanitized read-only capture and rejects malformed output", () =>
     Effect.gen(function* () {
       const sessions = yield* decodeSessions(fixtureJson);
+      const [staging] = yield* decodeSessions(JSON.stringify(stagingFixture));
+      expect(sessionStatus(staging!)).toMatchObject({
+        state: "mounting",
+        progress: expect.any(Number),
+      });
+      expect(sessionStatus(staging!).progress).toBeCloseTo(4653056 / 1073741824);
       expect(sessions).toHaveLength(2);
       expect(sessionStatus(sessions[0]!)).toEqual({
         state: "watching",
@@ -32,7 +39,15 @@ describe("Mutagen 0.18.1", () => {
         sessionStatus({
           ...session!,
           status: "staging-beta",
-          beta: { path: "/beta", stagingProgress: { receivedSize: 5, totalSize: 10 } },
+          beta: {
+            path: "/beta",
+            stagingProgress: {
+              receivedSize: 5,
+              expectedSize: 10,
+              receivedFiles: 0,
+              expectedFiles: 1,
+            },
+          },
         }),
       ).toMatchObject({ state: "mounting", progress: 0.5 });
       expect(sessionStatus({ ...session!, conflicts: [{ root: "src/a.ts" }] })).toMatchObject({

@@ -42,8 +42,18 @@ export function sessionStatus(
           : session.status === "watching"
             ? "watching"
             : "mounting",
-    ...(staging && staging.totalSize > 0
-      ? { progress: Math.min(1, staging.receivedSize / staging.totalSize) }
+    ...(staging && staging.expectedFiles > 0
+      ? {
+          progress: Math.max(
+            0,
+            Math.min(
+              1,
+              (staging.receivedFiles +
+                (staging.expectedSize > 0 ? staging.receivedSize / staging.expectedSize : 0)) /
+                staging.expectedFiles,
+            ),
+          ),
+        }
       : {}),
     conflicts,
     problems,
@@ -59,4 +69,26 @@ export function sshEndpoint(
   return /:\d+$/.test(route.ssh)
     ? `ssh://${route.ssh}${root.startsWith("/") ? "" : "/"}${root}`
     : `${route.ssh}:${root}`;
+}
+
+export function remoteRepresentation(
+  config: SidebarWorkspacesConfig,
+  local: { readonly environmentId: string; readonly id: string; readonly workspaceRoot: string },
+  target: string,
+) {
+  const normalize = (root: string) => root.replaceAll("\\", "/").replace(/\/+$/, "");
+  let key = Object.keys(config.projectMounts).find((key) =>
+    config.projectMounts[key]!.some(
+      (rep) =>
+        rep.environmentId === local.environmentId &&
+        (rep.projectId === local.id || normalize(rep.path) === normalize(local.workspaceRoot)),
+    ),
+  );
+  if (!key) return undefined;
+  const visited = new Set<string>();
+  for (let hops = 0; hops < 8 && config.projectAliases[key] && !visited.has(key); hops++) {
+    visited.add(key);
+    key = config.projectAliases[key]!;
+  }
+  return config.projectMounts[key]?.find((rep) => rep.environmentId === target);
 }

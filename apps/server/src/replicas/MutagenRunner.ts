@@ -15,7 +15,9 @@ const Endpoint = Schema.Struct({
   stagingProgress: Schema.optionalKey(
     Schema.Struct({
       receivedSize: Schema.Number,
-      totalSize: Schema.Number,
+      expectedSize: Schema.Number,
+      receivedFiles: Schema.Number,
+      expectedFiles: Schema.Number,
     }),
   ),
 });

@@ -36,6 +36,7 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
       const run = Effect.gen(function* () {
         const runner = yield* MutagenRunner.MutagenRunner;
         yield* Effect.addFinalizer(() => runner.daemon("stop").pipe(Effect.orDie));
+        yield* runner.daemon("start");
         yield* runner.create({
           name: "t3-integration",
           logicalHash: "integration",
@@ -55,6 +56,8 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         yield* fs.writeFileString(path.join(alpha, "hello"), "alpha edit");
         yield* runner.flush("t3-integration");
         expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe("alpha edit");
+        yield* runner.reset("t3-integration");
+        yield* runner.flush("t3-integration");
         yield* runner.pause("t3-integration");
         expect(sessionStatus((yield* runner.list())[0]!).state).toBe("paused");
         yield* fs.writeFileString(path.join(alpha, "hello"), "conflict alpha");

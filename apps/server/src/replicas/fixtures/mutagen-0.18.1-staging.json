@@ -1,0 +1,53 @@
+[
+  {
+    "identifier": "sync_fixture_progress",
+    "version": 1,
+    "creationTime": "2026-01-01T00:00:00Z",
+    "creatingVersion": "0.18.1",
+    "alpha": {
+      "protocol": "local",
+      "path": "/tmp/replica-alpha",
+      "ignore": {},
+      "symlink": {},
+      "watch": {},
+      "permissions": {},
+      "compression": {},
+      "connected": true,
+      "scanned": true,
+      "directories": 1,
+      "files": 1,
+      "totalFileSize": 1073741824
+    },
+    "beta": {
+      "protocol": "local",
+      "path": "/tmp/replica-beta",
+      "ignore": {},
+      "symlink": {},
+      "watch": {},
+      "permissions": {},
+      "compression": {},
+      "connected": true,
+      "scanned": true,
+      "directories": 1,
+      "stagingProgress": {
+        "path": "bulk.bin",
+        "receivedSize": 4653056,
+        "expectedSize": 1073741824,
+        "receivedFiles": 0,
+        "expectedFiles": 1,
+        "totalReceivedSize": 4653056
+      }
+    },
+    "mode": "two-way-safe",
+    "ignore": {
+      "vcs": true
+    },
+    "symlink": {},
+    "watch": {},
+    "permissions": {},
+    "compression": {},
+    "name": "t3-progress-fixture",
+    "paused": false,
+    "status": "staging-beta"
+  }
+]
