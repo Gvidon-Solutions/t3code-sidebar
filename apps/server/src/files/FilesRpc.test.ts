@@ -8,9 +8,11 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 import * as FilesRpc from "./FilesRpc.ts";
 import * as FilesService from "./FilesService.ts";
@@ -36,6 +38,26 @@ const listResult: FilesListResult = {
   entries: [{ name: "README.md", absolutePath: "/srv/app/README.md", kind: "file" }],
 };
 
+const far = EnvironmentId.make("env-far");
+
+/** Links of this machine: `direct` are linked with full access. */
+const linksMock = (direct: ReadonlyArray<EnvironmentId>) =>
+  Layer.mock(PeerLinks.PeerLinks)({
+    get: (environmentId: EnvironmentId) =>
+      Effect.succeed(
+        direct.includes(environmentId)
+          ? Option.some({ environmentId, access: "full-access", status: "reachable" } as never)
+          : Option.none(),
+      ),
+    list: Effect.succeed(
+      direct.map((environmentId) => ({
+        environmentId,
+        access: "full-access",
+        status: "reachable",
+      })),
+    ),
+  } as never);
+
 const service = (readResult: FilesReadResult, list: FilesListResult) => ({
   read: () => Effect.succeed(readResult),
   list: () => Effect.succeed(list),
@@ -54,6 +76,7 @@ describe("FilesRpc", () => {
             getDescriptor: Effect.succeed({ environmentId: here } as never),
           }),
         ),
+        Layer.provide(linksMock([there])),
         Layer.provide(
           Layer.mock(PeerMcpClient.PeerMcpClient)({
             call: (input: unknown) =>
@@ -88,6 +111,7 @@ describe("FilesRpc", () => {
             getDescriptor: Effect.succeed({ environmentId: here } as never),
           }),
         ),
+        Layer.provide(linksMock([there])),
         Layer.provide(
           Layer.mock(PeerMcpClient.PeerMcpClient)({
             call: (input: { tool: string }) =>
@@ -136,6 +160,7 @@ describe("FilesRpc", () => {
             getDescriptor: Effect.succeed({ environmentId: here } as never),
           }),
         ),
+        Layer.provide(linksMock([there])),
         Layer.provide(
           Layer.mock(PeerMcpClient.PeerMcpClient)({
             call: () =>
@@ -157,6 +182,50 @@ describe("FilesRpc", () => {
         expect(error).toBeInstanceOf(FilesError);
         expect(error.reason).toBe("permission_denied");
         expect(error.message).toBe("The link does not allow this.");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+  it.effect("relays a read for a machine reached only through a linked peer", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<{ tool: string; environmentId: string }>>([]);
+      const layer = FilesRpc.layer.pipe(
+        Layer.provide(
+          Layer.mock(FilesService.FilesService)(service(localResult, listResult) as never),
+        ),
+        Layer.provide(
+          Layer.mock(ServerEnvironment.ServerEnvironment)({
+            getDescriptor: Effect.succeed({ environmentId: here } as never),
+          }),
+        ),
+        Layer.provide(linksMock([there])),
+        Layer.provide(
+          Layer.mock(PeerMcpClient.PeerMcpClient)({
+            call: (input: { tool: string; environmentId: string }) =>
+              Ref.update(calls, (current) => [...current, input]).pipe(
+                Effect.as((input.tool === "t3_mesh_routes" ? [far] : remoteResult) as never),
+              ),
+          } as never),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const rpc = yield* FilesRpc.FilesRpc;
+        expect(yield* rpc.read({ environmentId: far, absolutePath: "/srv/app/README.md" })).toEqual(
+          remoteResult,
+        );
+        expect(yield* Ref.get(calls)).toMatchObject([
+          { environmentId: there, tool: "t3_mesh_routes" },
+          {
+            environmentId: there,
+            tool: "t3_mesh_relay",
+            arguments: {
+              environmentId: far,
+              tool: FilesRpc.FILES_READ_TOOL,
+              arguments: { absolutePath: "/srv/app/README.md" },
+            },
+            hops: [here],
+          },
+        ]);
       }).pipe(Effect.provide(layer));
     }),
   );

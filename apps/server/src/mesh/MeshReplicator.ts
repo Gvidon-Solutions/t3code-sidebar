@@ -99,6 +99,8 @@ export const layer = Layer.effect(
         yield* mesh.apply(input.entries as MeshLayoutDocument);
         const output = yield* changesSince(input.ackReceivedSeq);
         yield* record(input.fromEnvironmentId, input.ackReceivedSeq, input.seq);
+        // The peer just reached us, so it is up again: stop backing off from it.
+        retries.delete(input.fromEnvironmentId);
         return output;
       },
       Effect.mapError((cause) =>
@@ -143,7 +145,7 @@ export const layer = Layer.effect(
                       failures,
                       after:
                         (yield* Clock.currentTimeMillis) +
-                        Math.min(60000, 1000 * 2 ** Math.min(failures, 6)),
+                        Math.min(MAX_RETRY_MS, 1000 * 2 ** Math.min(failures, 4)),
                     });
                     yield* sql`INSERT INTO mesh_peer_state(environment_id, last_error) VALUES (${peer.environmentId}, ${String(cause)}) ON CONFLICT(environment_id) DO UPDATE SET last_error = excluded.last_error`;
                     yield* Effect.logWarning("Mesh peer exchange failed", cause);
@@ -176,6 +178,9 @@ export const layer = Layer.effect(
     return MeshReplicator.of({ exchange, sync });
   }),
 );
+
+/** Longest pause before retrying an unreachable peer; a peer that calls in resets it. */
+export const MAX_RETRY_MS = 15_000;
 
 const decodeJson = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
 const isMeshError = Schema.is(MeshLayoutError);

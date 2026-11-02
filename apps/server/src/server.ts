@@ -494,10 +494,14 @@ const layerProjectFaviconResolver = ProjectFaviconResolver.layer.pipe(
 
 const layerServerEnvironment = ServerEnvironment.layer.pipe(Layer.provide(ServerSecretStore.layer));
 
-// Fork: files anywhere. PeerMcpClient for forwarding is provided by the outer runtime layer.
+// Fork: files anywhere. Reads on another machine go over this server's links (direct or relayed);
+// the links layer is memoized, so this is the same PeerLinks/PeerMcpClient the runtime uses.
 const layerFiles = Layer.mergeAll(
   FilesService.layer,
-  FilesRpc.layer.pipe(Layer.provide(FilesService.layer), Layer.provide(layerServerEnvironment)),
+  FilesRpc.layer.pipe(
+    Layer.provide(FilesService.layer),
+    Layer.provide(PeerMcpClient.layer.pipe(Layer.provideMerge(PeerLinks.layer))),
+  ),
 );
 
 const layerAuth = EnvironmentAuth.layer.pipe(
@@ -702,8 +706,8 @@ const layerRuntimeCoreDependencies = layerRuntimeCoreDependenciesBase.pipe(
   Layer.provideMerge(Layer.mergeAll(NativeAppIconResolver.layer, layerProjectFaviconResolver)),
   Layer.provideMerge(layerRepositoryIdentityResolver),
   Layer.provideMerge(CodexManagedTokenBroker.layer),
-  Layer.provideMerge(layerServerEnvironment),
   Layer.provideMerge(layerFiles),
+  Layer.provideMerge(layerServerEnvironment),
   Layer.provideMerge(layerAuth),
   Layer.provideMerge(ServerSecretStore.layer),
   Layer.provideMerge(
@@ -801,6 +805,7 @@ const layerMakeRoutes = Layer.mergeAll(
       Layer.provideMerge(PeerLinks.layer),
     ),
   ),
+
   Layer.provide(PreviewAutomationBroker.layer),
   Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
   Layer.provide(layerCommandReadiness),

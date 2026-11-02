@@ -1,5 +1,4 @@
-import { Routes } from "../mesh/MeshRelay.ts";
-import * as Option from "effect/Option";
+import { callRouted } from "../mesh/MeshRouting.ts";
 import {
   type EnvironmentId,
   OrchestratorMcpFailure,
@@ -148,41 +147,16 @@ const make = Effect.gen(function* () {
     if (typeof args.clientRequestId === "string") {
       args.clientRequestId = yield* scopedRequestId(scope.requestNamespace, args.clientRequestId);
     }
-    const direct = yield* links.get(environmentId).pipe(Effect.mapError(unavailable));
-    if (Option.isNone(direct)) {
-      for (const peer of yield* links.list.pipe(Effect.mapError(unavailable))) {
-        if (peer.access !== "full-access" || peer.status === "expired") continue;
-        const routes = yield* peers
-          .call({
-            environmentId: peer.environmentId,
-            tool: "t3_mesh_routes",
-            arguments: {},
-            limits,
-            success: Routes,
-          })
-          .pipe(
-            Effect.tapError((error) => Effect.logDebug("Mesh route discovery failed", error)),
-            Effect.option,
-          );
-        if (Option.isSome(routes) && routes.value.includes(environmentId)) {
-          return yield* peers.call({
-            environmentId: peer.environmentId,
-            tool: "t3_mesh_relay",
-            arguments: { environmentId, tool: toolName, arguments: args },
-            hops: [scope.environmentId],
-            limits,
-            success: success as Schema.Decoder<A>,
-          });
-        }
-      }
-    }
-    return yield* peers.call({
-      environmentId,
-      tool: toolName,
-      arguments: args,
-      limits,
-      success: success as Schema.Decoder<A>,
-    });
+    return (yield* callRouted(
+      { links, peers, self: scope.environmentId },
+      {
+        environmentId,
+        tool: toolName,
+        arguments: args,
+        limits,
+        success: success as Schema.Decoder<A>,
+      },
+    )) as A;
   });
 
   const readThread: PeerForwarding["Service"]["readThread"] = (scope, environmentId, input) =>

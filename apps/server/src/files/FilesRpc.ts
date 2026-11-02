@@ -9,9 +9,10 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import { callRouted } from "../mesh/MeshRouting.ts";
+import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 import * as FilesService from "./FilesService.ts";
 
@@ -45,7 +46,8 @@ const clientLimits = { runtimeMode: "full-access", interactionMode: "default" } 
 export const make = Effect.gen(function* () {
   const files = yield* FilesService.FilesService;
   const environment = yield* ServerEnvironment.ServerEnvironment;
-  const peers = yield* Effect.serviceOption(PeerMcpClient.PeerMcpClient);
+  const peers = yield* PeerMcpClient.PeerMcpClient;
+  const links = yield* PeerLinks.PeerLinks;
 
   const read: FilesRpc["Service"]["read"] = Effect.fn("FilesRpc.read")(function* (input) {
     if (input.environmentId === undefined) {
@@ -56,24 +58,16 @@ export const make = Effect.gen(function* () {
       return yield* files.read(input);
     }
     const { environmentId, absolutePath } = input;
-    if (Option.isNone(peers)) {
-      return yield* asFilesError(
-        new OrchestratorMcpFailure({
-          code: "orchestration_error",
-          message: "This environment cannot reach linked environments.",
-        }),
-        absolutePath,
-      );
-    }
-    return yield* peers.value
-      .call({
+    return yield* callRouted(
+      { links, peers, self: descriptor.environmentId },
+      {
         environmentId,
         tool: FILES_READ_TOOL,
         arguments: { absolutePath },
         limits: clientLimits,
         success: FilesReadResult,
-      })
-      .pipe(Effect.mapError((error) => asFilesError(error, absolutePath)));
+      },
+    ).pipe(Effect.mapError((error) => asFilesError(error, absolutePath)));
   });
 
   const list: FilesRpc["Service"]["list"] = Effect.fn("FilesRpc.list")(function* (input) {
@@ -85,24 +79,16 @@ export const make = Effect.gen(function* () {
       return yield* files.list(input);
     }
     const { environmentId, partialPath, limit } = input;
-    if (Option.isNone(peers)) {
-      return yield* asFilesError(
-        new OrchestratorMcpFailure({
-          code: "orchestration_error",
-          message: "This environment cannot reach linked environments.",
-        }),
-        partialPath,
-      );
-    }
-    return yield* peers.value
-      .call({
+    return yield* callRouted(
+      { links, peers, self: descriptor.environmentId },
+      {
         environmentId,
         tool: FILES_LIST_TOOL,
         arguments: { partialPath, ...(limit === undefined ? {} : { limit }) },
         limits: clientLimits,
         success: FilesListResult,
-      })
-      .pipe(Effect.mapError((error) => asFilesError(error, partialPath)));
+      },
+    ).pipe(Effect.mapError((error) => asFilesError(error, partialPath)));
   });
 
   return FilesRpc.of({ read, list });
