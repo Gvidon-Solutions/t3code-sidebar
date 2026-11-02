@@ -1,0 +1,26 @@
+# Deployed to /opt/t3-mesh-e2e/compose.yaml. Isolated from t3-ws and every
+# other stack on the VPS: own project name, own network, loopback-only port.
+name: t3-mesh-e2e
+services:
+  t3:
+    image: t3-mesh-e2e:dev
+    container_name: t3-mesh-e2e
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3791:3791"
+    volumes:
+      - /opt/t3-mesh-e2e/home:/home/t3
+    environment:
+      TZ: Europe/Moscow
+      MUTAGEN_DATA_DIRECTORY: /home/t3/.mutagen
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 2
+    pids_limit: 512
+    init: false
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
