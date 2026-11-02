@@ -98,6 +98,7 @@ import {
   type WorkspaceHomeListItem,
 } from "../workspaces/workspaceNavigator";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { ThreadListFilters } from "./ThreadListFilters";
 
 interface HomeScreenProps {
@@ -254,6 +255,7 @@ function renderHomeScrollView(props: ScrollViewProps) {
 }
 
 export function HomeScreen(props: HomeScreenProps) {
+  const meshLayout = useMeshLayout();
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
   const workspace = useWorkspaceTabs();
   const [initialScrollOffset] = useState(() => workspace?.getScrollOffset("threads") ?? 0);
@@ -377,6 +379,12 @@ export function HomeScreen(props: HomeScreenProps) {
   });
 
   const projectScopes = buildHomeProjectScopes({
+    ...(meshLayout.config === null
+      ? {}
+      : {
+          layout: meshLayout.config,
+          connectedEnvironmentIds: meshLayout.connectedEnvironmentIds,
+        }),
     projects: props.projects,
     environmentId: props.selectedEnvironmentId,
     projectGroupingMode: props.projectGroupingMode,
@@ -542,6 +550,7 @@ export function HomeScreen(props: HomeScreenProps) {
           onToggleWorkspace={workspaceHome.toggleProjectIn}
           onFoldMode={workspaceHome.setFoldMode}
           onNewThread={props.onNewThreadInProject}
+          mesh={workspaceHome.meshActionsFor(item.projectKey)}
         />
       ) : null;
     }

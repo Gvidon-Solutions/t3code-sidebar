@@ -2,7 +2,14 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildHomeProjectScopes, findHomeProjectScope } from "./homeThreadList";
@@ -221,5 +228,72 @@ describe("home project scopes", () => {
     expect(findHomeProjectScope(scopes, "environment-local:project-target")).toBe(targetScope);
     expect(findHomeProjectScope(scopes, "environment-local:missing")).toBeNull();
     expect(findHomeProjectScope(scopes, null)).toBeNull();
+  });
+});
+
+describe("T3 Mesh home scopes", () => {
+  const localEnvironmentId = EnvironmentId.make("local");
+  const remoteEnvironmentId = EnvironmentId.make("remote");
+  const local = makeProject({
+    environmentId: localEnvironmentId,
+    id: ProjectId.make("local"),
+    title: "shared",
+    workspaceRoot: "/tmp/shared",
+  });
+  const remote = makeProject({
+    environmentId: remoteEnvironmentId,
+    id: ProjectId.make("remote"),
+    title: "shared",
+    workspaceRoot: "/remote/shared",
+  });
+  const layout: SidebarWorkspacesConfig = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { [remoteEnvironmentId]: { tag: "OP" } },
+    projectMounts: {
+      "logical-shared": [
+        {
+          environmentId: localEnvironmentId,
+          path: local.workspaceRoot,
+          transport: "git",
+          role: "primary",
+          createdAt: "",
+        },
+        {
+          environmentId: remoteEnvironmentId,
+          path: remote.workspaceRoot,
+          transport: "mutagen",
+          role: "replica",
+          source: localEnvironmentId,
+          createdAt: "",
+        },
+      ],
+    },
+  };
+
+  it("groups folders through the layout", () => {
+    const scopes = buildHomeProjectScopes({
+      projects: [local, remote],
+      environmentId: null,
+      projectGroupingMode: "repository",
+      layout,
+    });
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0]?.key).toBe("logical-shared");
+    expect(scopes[0]?.projects).toHaveLength(2);
+  });
+
+  it("shows a project whose only machine is not connected", () => {
+    const scopes = buildHomeProjectScopes({
+      projects: [],
+      environmentId: null,
+      projectGroupingMode: "repository",
+      layout: {
+        ...layout,
+        projectMounts: { "logical-shared": [layout.projectMounts["logical-shared"]![1]!] },
+      },
+      connectedEnvironmentIds: new Set([localEnvironmentId]),
+    });
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0]?.meshOffline).toMatchObject({ environmentId: remoteEnvironmentId, tag: "OP" });
   });
 });

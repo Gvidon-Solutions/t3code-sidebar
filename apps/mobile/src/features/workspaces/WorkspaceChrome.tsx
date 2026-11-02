@@ -35,6 +35,8 @@ import { Menu } from "../../components/ui/Menu";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
+import { useNavigation } from "@react-navigation/native";
+import { openSettings } from "../settings/settings-navigation";
 import type {
   WorkspaceAgentsListItem,
   WorkspaceFolderListItem,
@@ -275,14 +277,30 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   /** Moves the project into "Quiet projects" or out of it, or back to folding by itself. */
   readonly onFoldMode: (projectKey: string, mode: ProjectFoldMode) => void;
   readonly onNewThread: (project: EnvironmentProject) => void;
+  readonly mesh?: {
+    readonly mergeTargets: ReadonlyArray<{ readonly key: string; readonly label: string }>;
+    readonly splitTargets: ReadonlyArray<{
+      readonly environmentId: string;
+      readonly label: string;
+    }>;
+    readonly canSplit: boolean;
+    readonly suggestions: ReadonlyArray<{ readonly key: string; readonly tag: string }>;
+    readonly onMerge: (key: string) => void;
+    readonly onSplit: (environmentId: string) => void;
+  };
 }) {
   const { item } = props;
+  const navigation = useNavigation();
+  const offline = item.meshOffline;
   const { savedConnectionsById } = useSavedRemoteConnections();
   const machineLabel = savedConnectionsById[item.project.environmentId]?.environmentLabel;
   const folderTitle = item.isScratch
     ? `${item.title} · ${machineLabel ?? item.project.environmentId}`
-    : item.title;
+    : offline
+      ? `${item.title} · on ${offline.tag}, not connected here`
+      : item.title;
   const actions = useMemo((): MenuAction[] => {
+    if (offline) return [{ id: "connect", title: "Connect this machine", image: "link" }];
     const shownIn = item.workspaceIds;
     return [
       { id: "new", title: "New thread", image: "square.and.pencil" },
@@ -308,14 +326,58 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
               ? []
               : [{ id: "fold:auto", title: "Fold automatically", image: "wand.and.stars" }]),
           ]),
+      ...(props.mesh && props.mesh.mergeTargets.length > 0
+        ? [
+            {
+              id: "merge",
+              title: "Merge with…",
+              subactions: props.mesh.mergeTargets.map((target) => ({
+                id: `merge:${target.key}`,
+                title: target.label,
+              })),
+            },
+          ]
+        : []),
+      ...(props.mesh && props.mesh.canSplit
+        ? [
+            {
+              id: "split",
+              title: "Split…",
+              subactions: props.mesh.splitTargets.map((target) => ({
+                id: `split:${target.environmentId}`,
+                title: target.label,
+              })),
+            },
+          ]
+        : []),
+      ...(props.mesh?.suggestions ?? []).map((suggestion) => ({
+        id: `suggest:${suggestion.key}`,
+        title: `Same name on ${suggestion.tag}: merge?`,
+      })),
     ];
-  }, [item.foldMode, item.isScratch, item.quiet, item.workspaceIds, props.workspaces]);
+  }, [
+    item.foldMode,
+    item.isScratch,
+    item.quiet,
+    item.workspaceIds,
+    offline,
+    props.workspaces,
+    props.mesh,
+  ]);
   const handleAction = ({ nativeEvent }: NativeActionEvent) => {
-    if (nativeEvent.event === "new") props.onNewThread(item.project);
+    if (nativeEvent.event === "connect")
+      openSettings(navigation as Parameters<typeof openSettings>[0], "SettingsEnvironments");
+    else if (nativeEvent.event === "new") props.onNewThread(item.project);
     else if (nativeEvent.event.startsWith("show:")) {
       props.onToggleWorkspace(item.projectKey, nativeEvent.event.slice("show:".length));
     } else if (nativeEvent.event.startsWith("fold:")) {
       props.onFoldMode(item.projectKey, nativeEvent.event.slice("fold:".length) as ProjectFoldMode);
+    } else if (nativeEvent.event.startsWith("merge:")) {
+      props.mesh?.onMerge(nativeEvent.event.slice("merge:".length));
+    } else if (nativeEvent.event.startsWith("split:")) {
+      props.mesh?.onSplit(nativeEvent.event.slice("split:".length));
+    } else if (nativeEvent.event.startsWith("suggest:")) {
+      props.mesh?.onMerge(nativeEvent.event.slice("suggest:".length));
     }
   };
   const draggable = useFolderDragAvailable() && Platform.OS === "android" && !item.isScratch;
@@ -324,8 +386,12 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       accessibilityLabel={folderTitle}
       accessibilityRole="button"
       accessibilityState={{ expanded: item.open }}
-      className="mt-1 flex-row items-center gap-2 py-1 pl-3 pr-2"
-      onPress={() => props.onToggle(item.folderKey)}
+      className={cn("mt-1 flex-row items-center gap-2 py-1 pl-3 pr-2", offline && "opacity-70")}
+      onPress={() =>
+        offline
+          ? openSettings(navigation as Parameters<typeof openSettings>[0], "SettingsEnvironments")
+          : props.onToggle(item.folderKey)
+      }
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
       testID={`workspace-folder-${item.projectKey}`}
     >
@@ -356,22 +422,24 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
           ●{item.working}
         </Text>
       ) : null}
-      <Pressable
-        accessibilityLabel={`New thread in ${item.title}`}
-        accessibilityRole="button"
-        hitSlop={8}
-        onPress={() => props.onNewThread(item.project)}
-        className="h-8 w-8 items-center justify-center rounded-full"
-        style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-        testID={`workspace-folder-new-${item.projectKey}`}
-      >
-        <SymbolView
-          name="square.and.pencil"
-          size={16}
-          tintColorClassName="accent-foreground-muted"
-          type="monochrome"
-        />
-      </Pressable>
+      {offline ? null : (
+        <Pressable
+          accessibilityLabel={`New thread in ${item.title}`}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => props.onNewThread(item.project)}
+          className="h-8 w-8 items-center justify-center rounded-full"
+          style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+          testID={`workspace-folder-new-${item.projectKey}`}
+        >
+          <SymbolView
+            name="square.and.pencil"
+            size={16}
+            tintColorClassName="accent-foreground-muted"
+            type="monochrome"
+          />
+        </Pressable>
+      )}
     </Pressable>
   );
   if (draggable) {

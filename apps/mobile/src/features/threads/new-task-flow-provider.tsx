@@ -24,6 +24,7 @@ import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 
 import { useProjects, useServerConfigs, useThreadShells } from "../../state/entities";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import type { TurnCommandMetadata } from "../../lib/commandMetadata";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
@@ -225,6 +226,7 @@ export function NewTaskFlowProvider(
     routeDraftId?: string;
   }>,
 ) {
+  const meshLayout = useMeshLayout();
   const projects = useProjects();
   const threads = useThreadShells();
   const { savedConnectionsById } = useSavedRemoteConnections();
@@ -233,6 +235,12 @@ export function NewTaskFlowProvider(
 
   const projectScopes = sortHomeProjectScopes({
     scopes: buildHomeProjectScopes({
+      ...(meshLayout.config === null
+        ? {}
+        : {
+            layout: meshLayout.config,
+            connectedEnvironmentIds: meshLayout.connectedEnvironmentIds,
+          }),
       projects,
       environmentId: null,
       projectGroupingMode: groupingSettings.sidebarProjectGroupingMode,

@@ -36,11 +36,13 @@ import { useThreadListActions } from "./useThreadListActions";
 import { useForkThread } from "../workspaces/useForkThread";
 import { getConnectionAwareBrandHeaderOptions } from "./WorkspaceConnectionTitle";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { openSettings } from "../settings/settings-navigation";
 import { useSelectWorkspaceTab } from "../workspace/useSelectWorkspaceTab";
 import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
 
 export function HomeRouteScreen() {
+  const meshLayout = useMeshLayout();
   const { width: windowWidth } = useWindowDimensions();
   const nativePrimaryColumn = use(NativePrimaryColumnContext);
   const columnMetrics = useNativeColumnLayoutMetrics();
@@ -147,6 +149,12 @@ export function HomeRouteScreen() {
     () =>
       pickableProjectGroups(
         buildHomeProjectScopes({
+          ...(meshLayout.config === null
+            ? {}
+            : {
+                layout: meshLayout.config,
+                connectedEnvironmentIds: meshLayout.connectedEnvironmentIds,
+              }),
           projects,
           environmentId: selectedEnvironmentId,
           projectGroupingMode: listOptions.projectGroupingMode,
@@ -155,7 +163,13 @@ export function HomeRouteScreen() {
         key: scope.key,
         label: scope.title,
       })),
-    [listOptions.projectGroupingMode, projects, selectedEnvironmentId],
+    [
+      listOptions.projectGroupingMode,
+      meshLayout.config,
+      meshLayout.connectedEnvironmentIds,
+      projects,
+      selectedEnvironmentId,
+    ],
   );
   const selectedProjectKey = projectFilterOptions.some(
     (project) => project.key === resolvedProjectKey,

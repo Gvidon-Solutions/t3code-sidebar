@@ -12,11 +12,16 @@ import {
   type WorkspaceSequenceOf,
   type ProjectFoldMode,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
+import {
+  mergeLogicalProjects,
+  splitLogicalProject,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import type { EnvironmentId, SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback, useMemo } from "react";
 
 import { useServerConfigs } from "../../state/entities";
+import { useMeshLayout } from "./useMeshLayout";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -28,6 +33,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
  */
 export function useSidebarWorkspaces() {
   const serverConfigs = useServerConfigs();
+  const mesh = useMeshLayout();
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const updateSettings = useAtomCommand(serverEnvironment.updateSettings, {
@@ -44,7 +50,9 @@ export function useSidebarWorkspaces() {
     }
     return entries.sort((a, b) => a.environmentId.localeCompare(b.environmentId));
   }, [serverConfigs]);
-  const config = sources[0]?.config ?? null;
+  // T3 Mesh (fork): the replicated document wins; without a mesh source keep the legacy
+  // first-server-by-id path unchanged.
+  const config = mesh.config ?? sources[0]?.config ?? null;
 
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : null;
   const storedWorkspaceId = preferences?.sidebarWorkspaceId;
@@ -78,6 +86,10 @@ export function useSidebarWorkspaces() {
   );
   const updateConfig = useCallback(
     (edit: (config: SidebarWorkspacesConfig) => SidebarWorkspacesConfig) => {
+      if (mesh.source !== null) {
+        mesh.edit(edit);
+        return;
+      }
       for (const source of sources) {
         void updateSettings({
           environmentId: source.environmentId,
@@ -85,7 +97,7 @@ export function useSidebarWorkspaces() {
         });
       }
     },
-    [sources, updateSettings],
+    [mesh, sources, updateSettings],
   );
   /** "Show in workspaces": ticks or unticks one workspace (never the last). */
   const toggleProjectIn = useCallback(
@@ -142,6 +154,10 @@ export function useSidebarWorkspaces() {
         updateConfig((current) => ({ ...current, defaultWorkspace: workspaceId })),
       remove: (workspaceId: string) =>
         updateConfig((current) => deleteWorkspace(current, workspaceId)),
+      mergeProject: (from: string, into: string) =>
+        updateConfig((current) => mergeLogicalProjects(current, from, into)),
+      splitProject: (from: string, environmentId: string, into: string) =>
+        updateConfig((current) => splitLogicalProject(current, from, environmentId, into)),
     }),
     [config, openWorkspace, updateConfig],
   );

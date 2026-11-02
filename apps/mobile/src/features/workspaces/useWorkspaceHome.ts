@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { machineTag, suggestMerges } from "@t3tools/client-runtime/state/mesh-layout";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import {
   projectFoldModeOf,
@@ -160,6 +161,7 @@ export function useWorkspaceHome(input: {
         ),
         isScratch: isScratchScope(scope),
         workspaceIds: workspaceIdsOf(scope),
+        ...(scope.meshOffline === undefined ? {} : { meshOffline: scope.meshOffline }),
       });
     }
     return { folders: own, otherFolders: other };
@@ -249,6 +251,65 @@ export function useWorkspaceHome(input: {
     [config, currentWorkspaceId, folders, input.threads],
   );
 
+  const scopeKeyByProjectRef = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const scope of input.projectScopes)
+      for (const ref of scope.projectRefs)
+        map.set(scopedProjectKey(ref.environmentId, ref.projectId), scope.key);
+    return map;
+  }, [input.projectScopes]);
+
+  const suggestionsByScope = useMemo(() => {
+    const suggestions = new Map<string, { readonly key: string; readonly tag: string }[]>();
+    if (config === null) return suggestions;
+    for (const group of suggestMerges(input.projectScopes.flatMap((scope) => scope.projects))) {
+      const keys = new Set(
+        group.flatMap((project) => {
+          const key = scopeKeyByProjectRef.get(scopedProjectKey(project.environmentId, project.id));
+          return key === undefined ? [] : [key];
+        }),
+      );
+      for (const key of keys) {
+        const scope = input.projectScopes.find((candidate) => candidate.key === key);
+        if (!scope) continue;
+        for (const otherKey of keys) {
+          if (otherKey === key) continue;
+          const other = input.projectScopes.find((candidate) => candidate.key === otherKey);
+          if (!other) continue;
+          const tag = machineTag(config, other.representative.environmentId, null);
+          const list = suggestions.get(key) ?? [];
+          if (!list.some((entry) => entry.key === otherKey)) list.push({ key: otherKey, tag });
+          suggestions.set(key, list);
+        }
+      }
+    }
+    return suggestions;
+  }, [config, input.projectScopes, scopeKeyByProjectRef]);
+
+  const meshActionsFor = useCallback(
+    (projectKey: string) => {
+      if (config === null) return undefined;
+      const scope = input.projectScopes.find((candidate) => candidate.key === projectKey);
+      if (!scope) return undefined;
+      return {
+        mergeTargets: input.projectScopes
+          .filter((candidate) => candidate.key !== projectKey)
+          .map((candidate) => ({ key: candidate.key, label: candidate.title })),
+        splitTargets: scope.projects.map((project) => ({
+          environmentId: project.environmentId,
+          label: machineTag(config, project.environmentId, null),
+        })),
+        canSplit:
+          scope.projects.length > 1 || Object.values(config.projectAliases).includes(projectKey),
+        suggestions: suggestionsByScope.get(projectKey) ?? [],
+        onMerge: (into: string) => workspaces.edit.mergeProject(projectKey, into),
+        onSplit: (environmentId: string) =>
+          workspaces.edit.splitProject(projectKey, environmentId, `${projectKey}~${environmentId}`),
+      };
+    },
+    [config, input.projectScopes, suggestionsByScope, workspaces.edit],
+  );
+
   const workspace =
     config?.workspaces.find((candidate) => candidate.id === currentWorkspaceId) ?? null;
   return {
@@ -259,5 +320,6 @@ export function useWorkspaceHome(input: {
     activity,
     buildItems,
     arrangeFolders,
+    meshActionsFor,
   } as const;
 }

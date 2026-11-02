@@ -130,6 +130,9 @@ export interface Preferences {
   readonly pullRequestListFilters?: PullRequestListPreferences;
   /** Sidebar fork: the workspace open on this device, and folders/sections flipped from their default. */
   readonly sidebarWorkspaceId?: string;
+  /** T3 Mesh (fork): cached layout snapshot and offline outbox, JSON. */
+  readonly meshLayoutCache?: string;
+  readonly meshLayoutDeviceId?: string;
   readonly workspaceToggles?: readonly string[];
   /** Sidebar fork: open file tabs per thread (`environmentId:threadId`). */
   readonly threadTabs?: ThreadTabsByThread;
@@ -213,6 +216,8 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     threadListFilters?: ThreadListFilters;
     pullRequestListFilters?: PullRequestListPreferences;
     sidebarWorkspaceId?: string;
+    meshLayoutCache?: string;
+    meshLayoutDeviceId?: string;
     workspaceToggles?: readonly string[];
     threadTabs?: ThreadTabsByThread;
     voiceBubblePosition?: { readonly x: number; readonly y: number };
@@ -302,6 +307,12 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.sidebarWorkspaceId === "string") {
     preferences.sidebarWorkspaceId = parsed.sidebarWorkspaceId;
+  }
+  if (typeof parsed.meshLayoutCache === "string") {
+    preferences.meshLayoutCache = parsed.meshLayoutCache;
+  }
+  if (typeof parsed.meshLayoutDeviceId === "string") {
+    preferences.meshLayoutDeviceId = parsed.meshLayoutDeviceId;
   }
   if (Array.isArray(parsed.workspaceToggles)) {
     preferences.workspaceToggles = parsed.workspaceToggles.filter(
