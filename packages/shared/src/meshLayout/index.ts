@@ -6,3 +6,4 @@ export type { Json, MeshLayoutEntry, MeshLayoutDocument } from "./document.ts";
 export { materialize } from "./materialize.ts";
 export { diff, encode } from "./diff.ts";
 export * from "./importLegacy.ts";
+export { adoptLegacy } from "./adoptLegacy.ts";
