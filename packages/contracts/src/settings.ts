@@ -1299,6 +1299,7 @@ export const ServerSettings = Schema.Struct({
    * Beta: links to the user's other machines, both ways. Off refuses new links, calls over links
    * and tasks on another machine; tasks already running there finish.
    */
+  meshEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
@@ -1661,6 +1662,7 @@ export const ServerSettingsPatch = Schema.Struct({
   sidebarWorkspaces: Schema.optionalKey(SidebarWorkspacesConfig),
   snoozePresets: Schema.optionalKey(SnoozePresetSettings),
   guestSharingEnabled: Schema.optionalKey(Schema.Boolean),
+  meshEnabled: Schema.optionalKey(Schema.Boolean),
   linkedEnvironmentsEnabled: Schema.optionalKey(Schema.Boolean),
   backgroundActivity: Schema.optionalKey(
     Schema.Struct({

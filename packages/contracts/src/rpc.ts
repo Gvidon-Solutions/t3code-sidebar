@@ -1,4 +1,9 @@
 import {
+  WsMeshLayoutGetRpc,
+  WsMeshLayoutApplyRpc,
+  WsMeshLayoutSubscribeRpc,
+} from "./meshLayout.ts";
+import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
@@ -2194,6 +2199,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeCommandOutputRpc,
   // Fork: agent inbox.
   ...INBOX_RPCS,
+  WsMeshLayoutGetRpc,
+  WsMeshLayoutApplyRpc,
+  WsMeshLayoutSubscribeRpc,
   // Fork: agents asking clients to show something.
   ...UI_REQUESTS_RPCS,
 ).middleware(RpcScopeAuthorization);

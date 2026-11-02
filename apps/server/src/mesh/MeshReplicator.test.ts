@@ -1,0 +1,148 @@
+import { it, expect } from "@effect/vitest";
+import { EnvironmentId, OrchestratorMcpFailure, type PeerLinkSummary } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
+import * as Sqlite from "../persistence/Sqlite.ts";
+import * as Settings from "../serverSettings.ts";
+import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
+import { PeerLinks } from "../peer/PeerLinks.ts";
+import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
+import { descriptorOf } from "../peer/PeerLinks.testkit.ts";
+import { MeshLayoutService } from "./MeshLayoutService.ts";
+import * as Mesh from "./MeshLayoutServiceLive.ts";
+import { MeshReplicator, ExchangeInput, layer } from "./MeshReplicator.ts";
+
+const decodeExchange = Schema.decodeUnknownSync(ExchangeInput);
+it.effect(
+  "gossips A–B–C, heals a partition, forwards late old HLCs and makes replays idempotent",
+  () =>
+    Effect.gen(function* () {
+      const nodes = new Map<
+        string,
+        { mesh: MeshLayoutService["Service"]; replicator: MeshReplicator["Service"] }
+      >();
+      let ready = false;
+      let partition = false;
+      for (const [id, adjacent] of [
+        ["A", ["B"]],
+        ["B", ["C"]],
+        ["C", []],
+      ] as const) {
+        const peers = Layer.succeed(PeerMcpClient, {
+          call: Effect.fn("test.meshCall")(function* <S extends Schema.Decoder<unknown>>(input: {
+            environmentId: EnvironmentId;
+            tool: string;
+            arguments: Record<string, unknown>;
+            limits: import("../peer/PeerMcpClient.ts").PeerCallLimits;
+            success: S;
+          }) {
+            if (partition)
+              return yield* new OrchestratorMcpFailure({
+                code: "orchestration_error",
+                message: "partition",
+              });
+            const result = yield* nodes
+              .get(input.environmentId)!
+              .replicator.exchange(decodeExchange(input.arguments))
+              .pipe(
+                Effect.mapError(
+                  (error) =>
+                    new OrchestratorMcpFailure({
+                      code: "orchestration_error",
+                      message: error.message,
+                    }),
+                ),
+              );
+            // oxlint-disable-next-line t3code/no-inline-schema-compile -- The success schema is selected by each call.
+            return yield* Schema.decodeEffect(input.success)(result).pipe(Effect.orDie);
+          }),
+        });
+        const links = Layer.mock(PeerLinks)({
+          enabled: Effect.succeed(true),
+          list: Effect.sync(() =>
+            ready
+              ? adjacent.map(
+                  (other) =>
+                    ({
+                      environmentId: EnvironmentId.make(other),
+                      access: "full-access",
+                      status: "reachable",
+                      label: other,
+                      urls: [],
+                      linkedAt: DateTime.makeUnsafe(0),
+                      expiresAt: DateTime.makeUnsafe(9999999999999),
+                      lastReachedAt: null,
+                      lastError: null,
+                    }) satisfies PeerLinkSummary,
+                )
+              : [],
+          ),
+        });
+        const env = Layer.succeed(ServerEnvironment, {
+          getEnvironmentId: Effect.succeed(EnvironmentId.make(id)),
+          getDescriptor: Effect.succeed(descriptorOf(id, id)),
+        });
+        const context = yield* Layer.build(
+          layer.pipe(
+            Layer.provideMerge(Mesh.layer),
+            Layer.provideMerge(
+              Layer.mergeAll(
+                peers,
+                links,
+                env,
+                Settings.layerTest({ linkedEnvironmentsEnabled: true }),
+                Sqlite.layerMemory,
+              ),
+            ),
+            Layer.fresh,
+          ),
+        );
+        const mesh = yield* MeshLayoutService.pipe(Effect.provide(context));
+        const replicator = yield* MeshReplicator.pipe(Effect.provide(context));
+        nodes.set(id, { mesh, replicator });
+      }
+      ready = true;
+      const a = nodes.get("A")!,
+        b = nodes.get("B")!,
+        c = nodes.get("C")!;
+      const settle = Effect.gen(function* () {
+        yield* a.replicator.sync;
+        yield* b.replicator.sync;
+        yield* a.replicator.sync;
+      });
+      yield* a.mesh.edit((config) => ({
+        ...config,
+        machines: { ...config.machines, A: { label: "A" } },
+      }));
+      yield* c.mesh.edit((config) => ({
+        ...config,
+        machines: { ...config.machines, C: { label: "C" } },
+      }));
+      yield* settle;
+      expect(yield* a.mesh.read).toEqual(yield* c.mesh.read);
+      partition = true;
+      for (const [id, node] of nodes)
+        yield* node.mesh.edit((config) => ({
+          ...config,
+          machines: { ...config.machines, [id]: { label: `offline ${id}` } },
+        }));
+      yield* a.replicator.sync;
+      yield* b.replicator.sync;
+      partition = false;
+      yield* TestClock.adjust("3 seconds");
+      yield* settle;
+      expect(yield* a.mesh.read).toEqual(yield* b.mesh.read);
+      expect(yield* b.mesh.read).toEqual(yield* c.mesh.read);
+      const late = { "machine/old": { v: { label: "late" }, h: "0000000000001.00000.old" } };
+      yield* c.mesh.apply(late);
+      yield* settle;
+      expect((yield* a.mesh.read).config.machines.old?.label).toBe("late");
+      const snapshot = yield* a.mesh.read;
+      yield* a.mesh.apply(snapshot.document);
+      yield* settle;
+      expect(yield* c.mesh.read).toEqual(snapshot);
+    }).pipe(Effect.scoped),
+);

@@ -40,6 +40,7 @@ export class PeerMcpClient extends Context.Service<
       readonly tool: string;
       readonly arguments: Record<string, unknown>;
       readonly limits: PeerCallLimits;
+      readonly hops?: readonly string[];
       readonly success: S;
     }) => Effect.Effect<S["Type"], OrchestratorMcpFailure>;
   }
@@ -158,6 +159,7 @@ const make = Effect.gen(function* () {
         .resolve(input.environmentId)
         .pipe(Effect.mapError(fromLinkError));
       const limitHeader = {
+        ...(input.hops === undefined ? {} : { "t3-mesh-hops": input.hops.join(",") }),
         [McpInvocationContext.MODE_LIMIT_HEADER]: `${input.limits.runtimeMode}/${input.limits.interactionMode}`,
       };
       const sessionKey = `${input.environmentId} ${resolved.url}`;
