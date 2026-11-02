@@ -1,4 +1,4 @@
-import { WsReplicasStatusRpc, WsReplicasRetryRpc } from "./meshLayout.ts";
+import { MeshRpcs } from "./meshLayout.ts";
 import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
@@ -1983,9 +1983,13 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
   { error: EnvironmentAuthorizationError },
 ) {}
 
+const replicaRpcs = MeshRpcs.filter(
+  (rpc): rpc is Extract<(typeof MeshRpcs)[number], { readonly _tag: `replicas.${string}` }> =>
+    rpc._tag.startsWith("replicas."),
+);
+
 export const WsRpcGroup = RpcGroup.make(
-  WsReplicasStatusRpc,
-  WsReplicasRetryRpc,
+  ...replicaRpcs,
   WsGuestShareCreateRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,

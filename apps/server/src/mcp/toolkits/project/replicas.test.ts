@@ -16,12 +16,12 @@ import { makeReplicaHarness } from "../../../replicas/replicas.testkit.ts";
 import * as Handlers from "./handlers.ts";
 import { ProjectToolkit } from "./tools.ts";
 
-const client = (access: AuthMcpClientAccess) =>
+const client = (access: AuthMcpClientAccess, linked = false) =>
   Layer.succeed(Invocation.McpInvocationContext, {
     environmentId: EnvironmentId.make("source"),
     requestNamespace: "client:replica-test",
     thread: undefined,
-    client: { sessionId: "replica-test", label: "test", access },
+    client: { sessionId: "replica-test", label: "test", access, linked },
     issuedAt: 0,
     capabilities: new Set(["orchestration" as const]),
   });
@@ -132,6 +132,13 @@ it.effect(
           .handle("t3_project_place", { project: "repo", machine: "NP", action: "remove" })
           .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(client("read-only")));
         expect(denied.at(-1)?.result).toMatchObject({ code: "capability_denied" });
+        const fenced = yield* tools
+          .handle("t3_project_place", { project: "repo", machine: "NP", action: "remove" })
+          .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(client("auto", true)));
+        expect(fenced.at(-1)?.result).toMatchObject({
+          code: "capability_denied",
+          message: expect.stringContaining("linked environment"),
+        });
         expect(
           (yield* mesh.read).config.projectMounts.repo!.some(
             (rep) => rep.environmentId === "newPeer",
