@@ -21,7 +21,7 @@ GVIDON_PUBLIC_IP="${MESH_E2E_GVIDON_IP:-78.17.147.89}"
 GOR_PUBLIC_IP="${MESH_E2E_GOR_IP:-91.77.163.152}"
 
 GV_PORT=3795
-GOR_PORT=3797
+GOR_PORT=3774
 VPS_PORT=3791
 GV_LOCAL=13795
 GOR_LOCAL=13797
@@ -32,13 +32,15 @@ VPS_SSH_GV=22023
 
 GV_BASE_DIR=/tmp/t3-mesh-e2e-gv
 GV_RUNTIME_ROOT="$HOME/.t3-mesh-e2e-gv-runtime"
-GOR_BASE_DIR="$HOME/.t3-mesh-e2e"
-GOR_RUNTIME_ROOT="$HOME/.t3-mesh-e2e/runtime"
+GOR_BASE_DIR="$HOME/.t3-sidebar-server"
+GOR_RUNTIME_ROOT="$HOME/.t3-sidebar-server/runtime/versions"
+GOR_LEGACY_BASE_DIR="$HOME/.t3-mesh-e2e"
 VPS_DIR=/opt/t3-mesh-e2e
 VPS_DATA="$VPS_DIR/home"
 
 GV_UNIT=t3-mesh-e2e-gv.service
-GOR_UNIT=t3-mesh-e2e.service
+GOR_UNIT=t3code-sidebar.service
+GOR_LEGACY_UNIT=t3-mesh-e2e.service
 GV_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
 GOR_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
 IMAGE=t3-mesh-e2e:dev

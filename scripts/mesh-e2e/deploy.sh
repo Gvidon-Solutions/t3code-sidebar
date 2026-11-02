@@ -133,8 +133,41 @@ if ! vps_ssh "for i in \$(seq 1 60); do curl -fsS --max-time 2 -o /dev/null http
 fi
 
 # ---------------------------------------------------------------------------
-# 4. gor: runtime, mutagen, demo repo, systemd unit.
+# 4. gor: retire the separate test server, back up userdata, then switch the
+#    main t3code-sidebar.service to this build.
 # ---------------------------------------------------------------------------
+log "retiring gor separate mesh test server (if present)"
+gor_ssh 'bash -s' <<'EOF'
+set -euo pipefail
+systemctl --user disable --now t3-mesh-e2e.service >/dev/null 2>&1 || true
+systemctl --user reset-failed t3-mesh-e2e.service >/dev/null 2>&1 || true
+rm -f "$HOME/.config/systemd/user/t3-mesh-e2e.service"
+systemctl --user daemon-reload
+EOF
+
+# The owner's real gor data: one pre-change tar, taken with the service
+# stopped so SQLite and its WAL are consistent.
+GOR_STOPPED=0
+cleanup_gor() {
+  if [ "$GOR_STOPPED" = 1 ]; then
+    gor_ssh 'systemctl --user start t3code-sidebar.service' >/dev/null 2>&1 || true
+    GOR_STOPPED=0
+  fi
+}
+trap cleanup_gor EXIT
+
+existing_backup="$(gor_ssh 'find "$HOME/.t3-sidebar-server" -maxdepth 1 -name "userdata.pre-mesh-e2e-*.tar.gz" -print -quit' || true)"
+if [ -z "$existing_backup" ]; then
+  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  log "backing up gor userdata before the first main-server change"
+  gor_ssh 'systemctl --user stop t3code-sidebar.service'
+  GOR_STOPPED=1
+  gor_ssh "tar -C ~/.t3-sidebar-server -czf ~/.t3-sidebar-server/userdata.pre-mesh-e2e-$ts.tar.gz userdata && tar -tzf ~/.t3-sidebar-server/userdata.pre-mesh-e2e-$ts.tar.gz >/dev/null"
+  gor_ssh "ls -lh ~/.t3-sidebar-server/userdata.pre-mesh-e2e-$ts.tar.gz"
+else
+  log "gor userdata backup already exists: $existing_backup"
+fi
+
 log "deploying runtime to gor"
 ARCHIVE_NAME="$(basename "$ARCHIVE")"
 gor_scp "$ARCHIVE" "$GOR_HOST:/tmp/$ARCHIVE_NAME"
@@ -155,6 +188,25 @@ gor_ssh 'mkdir -p ~/.local/bin'
 gor_scp "$HOME/.local/bin/mutagen" "$GOR_HOST:.local/bin/mutagen"
 gor_scp "$HOME/.local/bin/mutagen-agents.tar.gz" "$GOR_HOST:.local/bin/mutagen-agents.tar.gz"
 gor_ssh 'chmod 755 ~/.local/bin/mutagen; ~/.local/bin/mutagen version'
+
+log "updating gor t3ctl / t3 skill"
+gor_ssh 'mkdir -p ~/.agents/skills/t3/scripts'
+for f in t3ctl.mjs selftest.sh sidebar-workspaces-sync.mjs; do
+  if [ -f "$HOME/.agents/skills/t3/scripts/$f" ]; then
+    gor_scp "$HOME/.agents/skills/t3/scripts/$f" "$GOR_HOST:.agents/skills/t3/scripts/"
+  fi
+done
+gor_ssh 'bash -s' <<'EOF'
+set -euo pipefail
+dir="$HOME/.agents/skills/t3/scripts"
+chmod 755 "$dir/t3ctl.mjs" "$dir/selftest.sh"
+[ -f "$dir/sidebar-workspaces-sync.mjs" ] && chmod 644 "$dir/sidebar-workspaces-sync.mjs"
+f="$dir/t3ctl.mjs"
+if ! grep -q "'0.1.5'" "$f"; then
+  sed -i "s/const TESTED_VERSIONS = \[\(.*\)\];/const TESTED_VERSIONS = [\1, '0.1.5'];/" "$f"
+fi
+"$HOME/.nvm/versions/node/v23.11.1/bin/node" --check "$f" >/dev/null
+EOF
 
 log "preparing demo repo on gor"
 gor_ssh 'bash -s' <<'EOF'
@@ -179,31 +231,60 @@ if ! git -C "$repo" diff --cached --quiet; then
 fi
 EOF
 
-log "installing gor systemd unit"
-gor_ssh "mkdir -p ~/.config/systemd/user && cat > ~/.config/systemd/user/$GOR_UNIT" <<EOF
+log "switching gor main unit $GOR_UNIT to $BUILD_VERSION"
+current_ref="$(gor_ssh "grep -o 'runtime/versions/[^/]*' ~/.config/systemd/user/$GOR_UNIT | head -1" || true)"
+if [ "$current_ref" != "runtime/versions/$BUILD_VERSION" ]; then
+  if ! gor_ssh "test -n \"\$(find ~/.config/systemd/user -maxdepth 1 -name '$GOR_UNIT.bak-t3-mesh-e2e-*' -print -quit)\""; then
+    gor_ssh "cp -p ~/.config/systemd/user/$GOR_UNIT ~/.config/systemd/user/$GOR_UNIT.bak-t3-mesh-e2e-\$(date -u +%Y%m%dT%H%M%SZ)"
+  fi
+  gor_ssh "sed -i 's|^ExecStart=.*|ExecStart=%h/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 serve --base-dir %h/.t3-sidebar-server --host 127.0.0.1 --port $GOR_PORT --no-browser|' ~/.config/systemd/user/$GOR_UNIT"
+fi
+gor_ssh "systemctl --user daemon-reload && systemctl --user restart $GOR_UNIT" >/dev/null
+GOR_STOPPED=0
+if ! gor_ssh "for i in \$(seq 1 90); do curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:$GOR_PORT/.well-known/t3/environment 2>/dev/null && exit 0; sleep 1; done; exit 1"; then
+  gor_ssh "journalctl --user -u $GOR_UNIT -n 80 --no-pager" || true
+  die "gor main server did not become healthy on the new build"
+fi
+
+log "preparing gor -> gvidon tunnel key"
+gor_ssh 'bash -s' <<'EOF'
+set -euo pipefail
+key="$HOME/.ssh/id_t3_mesh_e2e_gvidon"
+[ -f "$key" ] || ssh-keygen -q -t ed25519 -N '' -C t3-gvidon-tunnel -f "$key"
+chmod 600 "$key"; chmod 644 "$key.pub"
+EOF
+PUB_GVIDON_TUNNEL="$(key_body "$(gor_ssh 'cat ~/.ssh/id_t3_mesh_e2e_gvidon.pub')")"
+authorize_line "$HOME/.ssh/authorized_keys" \
+  'from="192.168.1.10",restrict,port-forwarding,permitopen="127.0.0.1:3774"' \
+  "$PUB_GVIDON_TUNNEL" t3-gvidon-tunnel
+
+log "fixing gor -> gvidon tunnel (3773 -> 3774, dedicated key)"
+gor_ssh 'bash -s' <<'EOF'
+set -euo pipefail
+unit="$HOME/.config/systemd/user/t3-gvidon-tunnel.service"
+[ -f "$unit" ] || exit 0
+find "$HOME/.config/systemd/user" -maxdepth 1 -name "t3-gvidon-tunnel.service.bak-t3-mesh-e2e-*" -print -quit | grep -q . \
+  || cp -p "$unit" "$unit.bak-t3-mesh-e2e-$(date -u +%Y%m%dT%H%M%SZ)"
+cat >"$unit" <<UNIT
 [Unit]
-Description=T3 Mesh E2E server on gor (isolated from t3code-sidebar)
-StartLimitIntervalSec=300
-StartLimitBurst=5
+Description=SSH tunnel to T3 on gvidon (127.0.0.1:13773 -> gvidon:3774)
+After=network-online.target
 
 [Service]
-Type=simple
-WorkingDirectory=%h
-UnsetEnvironment=T3CODE_HOME T3_BOOT_SERVICE_UNIT T3_SERVICE_LAUNCHER_CONTEXT
-ExecStart=%h/.t3-mesh-e2e/runtime/$BUILD_VERSION/t3 serve --base-dir %h/.t3-mesh-e2e --host 127.0.0.1 --port $GOR_PORT --no-browser
-KillMode=mixed
-Restart=on-failure
-RestartSec=3
-StandardOutput=append:%h/.t3-mesh-e2e/serve.log
-StandardError=append:%h/.t3-mesh-e2e/serve.log
+ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new -i %h/.ssh/id_t3_mesh_e2e_gvidon -o IdentitiesOnly=yes -L 127.0.0.1:13773:127.0.0.1:3774 user@192.168.1.17
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=default.target
+UNIT
+systemctl --user daemon-reload
+systemctl --user restart t3-gvidon-tunnel.service
 EOF
-gor_ssh "systemctl --user daemon-reload && systemctl --user enable --now $GOR_UNIT && systemctl --user restart $GOR_UNIT" >/dev/null
-if ! gor_ssh "for i in \$(seq 1 60); do curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:$GOR_PORT/.well-known/t3/environment 2>/dev/null && exit 0; sleep 1; done; exit 1"; then
-  gor_ssh "journalctl --user -u $GOR_UNIT -n 60 --no-pager" || true
-  die "gor test server did not become healthy"
+if gor_ssh "curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:13773/.well-known/t3/environment"; then
+  log "gor -> gvidon route is up at http://127.0.0.1:13773"
+else
+  warn "gor -> gvidon tunnel (13773) is not answering; check t3-gvidon-tunnel.service"
 fi
 
 # ---------------------------------------------------------------------------

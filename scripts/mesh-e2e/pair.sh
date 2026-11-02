@@ -39,8 +39,8 @@ mint_gv() {
 
 mint_gor() {
   local label=$1 out token
-  out="$(gor_ssh "~/.t3-mesh-e2e/runtime/$BUILD_VERSION/t3 pair \
-    --base-dir ~/.t3-mesh-e2e --ttl $TTL --label '$label'" 2>&1)" || {
+  out="$(gor_ssh "~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 pair \
+    --base-dir ~/.t3-sidebar-server --ttl $TTL --label '$label'" 2>&1)" || {
     printf '%s\n' "$out" >&2
     return 1
   }
