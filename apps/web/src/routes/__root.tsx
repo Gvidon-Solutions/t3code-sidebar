@@ -30,6 +30,7 @@ import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAp
 import { DesktopWebLinkCoordinator } from "../components/desktop/DesktopWebLinkCoordinator";
 import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
 import { InboxNotificationCoordinator } from "../components/inbox/InboxNotificationCoordinator";
+import { OpenFileDialog } from "../components/files/OpenFileDialog";
 import { UiRequestCoordinator } from "../components/uiRequests/UiRequestCoordinator";
 import { VoiceBubble } from "../components/voice/VoiceBubble";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
@@ -211,6 +212,7 @@ function RootRouteBranch() {
         <SnapShotCoordinator />
         <InboxNotificationCoordinator />
         <UiRequestCoordinator />
+        <OpenFileDialog />
         <VoiceBubble />
         <ReopenClosedViewShortcut />
         <ConfirmDialogHost />

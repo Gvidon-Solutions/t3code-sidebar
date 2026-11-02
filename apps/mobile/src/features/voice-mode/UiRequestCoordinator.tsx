@@ -1,12 +1,17 @@
 import { useAtomValue } from "@effect/atom-react";
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { createUiRequestAtoms } from "@t3tools/client-runtime/state/ui-requests";
-import { appliesVoiceCommand, decideUiRequest } from "@t3tools/client-runtime/ui-requests";
+import {
+  appliesVoiceCommand,
+  decideUiRequest,
+  uiTargetEnvironmentId,
+} from "@t3tools/client-runtime/ui-requests";
 import { applyVoiceCommand } from "@t3tools/client-runtime/voice-mode";
 import { EnvironmentId, ThreadId, type UiRequest, type VoiceCommand } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult } from "effect/reactivity";
 import { useCallback, useEffect, useRef } from "react";
+import { Alert } from "react-native";
 
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { useWorkspaceEnvironments } from "../../state/workspace";
@@ -120,11 +125,14 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
   });
 
   const open = useCallback(
-    (environmentId: EnvironmentId, request: UiRequest) => {
+    (environmentId: EnvironmentId, request: UiRequest, targetEnvironmentId: EnvironmentId) => {
       const { target } = request;
       switch (target.kind) {
         case "thread":
-          selectDetail({ name: "Thread", params: { environmentId, threadId: target.threadId } });
+          selectDetail({
+            name: "Thread",
+            params: { environmentId: targetEnvironmentId, threadId: target.threadId },
+          });
           return;
         case "inbox":
           if (target.issueId === undefined) navigation.navigate("Inbox");
@@ -144,14 +152,19 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
           navigation.dispatch(StackActions.popTo("Home"));
           return;
         }
-        case "file":
+        case "file": {
+          const otherMachine = targetEnvironmentId !== environmentId;
+          const label =
+            environments.find((candidate) => candidate.environmentId === targetEnvironmentId)
+              ?.environmentLabel ?? String(targetEnvironmentId);
           navigation.navigate("ThreadFile", {
-            environmentId,
-            threadId: request.threadId,
+            environmentId: targetEnvironmentId,
+            ...(otherMachine ? { cwd: "/", projectName: label } : { threadId: request.threadId }),
             path: fileRoutePathSegments(target.path),
             ...(target.line === undefined ? {} : { line: String(target.line) }),
           });
           return;
+        }
         case "diff":
           navigation.navigate("ThreadReview", {
             environmentId,
@@ -160,7 +173,7 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
           return;
       }
     },
-    [config, navigation, openWorkspace, selectDetail],
+    [config, environments, navigation, openWorkspace, selectDetail],
   );
 
   const handle = useCallback<HandleUiRequest>(
@@ -172,9 +185,22 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
         shownThreadId: shown?.environmentId === environmentId ? shown.threadId : null,
       });
       if (decision === "ignore") return;
-      open(environmentId, request);
+      const targetEnvironmentId = uiTargetEnvironmentId(request.target, environmentId);
+      if (request.target.kind === "thread" || request.target.kind === "file") {
+        const target = environments.find(
+          (candidate) => candidate.environmentId === targetEnvironmentId,
+        );
+        if (target?.connectionState !== "connected") {
+          Alert.alert(
+            `Not connected to ${target?.environmentLabel ?? String(targetEnvironmentId)}`,
+            "Connect that machine from the environment list to open what the agent asked for.",
+          );
+          return;
+        }
+      }
+      open(environmentId, request, targetEnvironmentId);
     },
-    [open],
+    [environments, open],
   );
 
   // Spoken commands for the conversation this device holds: end, mute, move.

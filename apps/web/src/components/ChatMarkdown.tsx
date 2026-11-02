@@ -152,6 +152,8 @@ import { cn } from "../lib/utils";
 import { resolveRemoteOpenState, useRemoteOpenResolution } from "../remoteOpen";
 import { useRightPanelStore } from "../rightPanelStore";
 import { readThreadShell, useProjects } from "../state/entities";
+import { environmentSummaries } from "../state/presentation";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
 import { assetEnvironment } from "../state/assets";
@@ -799,8 +801,23 @@ function useChatMarkdownState({
     if (!threadRef) return;
     // Every open supersedes pending lookups, including synchronous opens.
     const isLatestLookup = claimWorkspaceBasenameLookup();
-    const openAt = (path: string) =>
+    const openAt = (path: string) => {
+      const targetEnvironmentId = fileLinkMeta.environmentId;
+      if (targetEnvironmentId !== undefined && targetEnvironmentId !== threadRef.environmentId) {
+        const label =
+          appAtomRegistry
+            .get(environmentSummaries.identitiesAtom)
+            .find((identity) => identity.environmentId === targetEnvironmentId)?.label ??
+          String(targetEnvironmentId);
+        useRightPanelStore.getState().openFile(threadRef, path, fileLinkMeta.line, {
+          environmentId: targetEnvironmentId,
+          workspaceRoot: "/",
+          projectName: label,
+        });
+        return;
+      }
       useRightPanelStore.getState().openFile(threadRef, path, fileLinkMeta.line);
+    };
     if (
       fileLinkMeta.workspaceLookupPath === null ||
       !cwd ||
@@ -838,7 +855,7 @@ function useChatMarkdownState({
 
     return (
       <MarkdownFileLink
-        environmentId={environmentId}
+        environmentId={fileLinkMeta.environmentId ?? environmentId}
         href={fileLinkMeta.targetPath}
         targetPath={fileLinkMeta.targetPath}
         iconPath={fileLinkMeta.filePath}

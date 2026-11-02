@@ -80,6 +80,8 @@ import {
 } from "./toolkits/device/tools.ts";
 import * as HtmlHandlers from "./toolkits/html/handlers.ts";
 import { HtmlPreviewTool, HtmlPreviewToolkit, HtmlRenderToolkit } from "./toolkits/html/tools.ts";
+import * as FilesHandlers from "./toolkits/files/handlers.ts";
+import { FilesToolkit } from "./toolkits/files/tools.ts";
 import * as InboxHandlers from "./toolkits/inbox/handlers.ts";
 import { InboxToolkit } from "./toolkits/inbox/tools.ts";
 import * as UiHandlers from "./toolkits/ui/handlers.ts";
@@ -1163,6 +1165,9 @@ export const layerInboxToolkit = toolkitRegistration(InboxToolkit, InboxHandlers
 // Fork: show things on the owner's screen.
 export const layerUiToolkit = toolkitRegistration(UiToolkit, UiHandlers.layer);
 
+// Fork: read and list files on another machine over a peer link.
+export const layerFilesToolkit = toolkitRegistration(FilesToolkit, FilesHandlers.layer);
+
 export const layerMcpTransport = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
@@ -1186,6 +1191,7 @@ export const layerTools = Layer.mergeAll(
   layerHtmlToolkit,
   layerInboxToolkit,
   layerUiToolkit,
+  layerFilesToolkit,
 );
 
 export const layer = layerTools.pipe(Layer.provideMerge(layerMcpTransport));

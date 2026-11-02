@@ -24,6 +24,8 @@ import {
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { SidebarWorkspace } from "@t3tools/contracts";
 import type { MenuAction, NativeActionEvent } from "@react-native-menu/menu";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
 import { memo, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, View } from "react-native";
@@ -35,7 +37,6 @@ import { AndroidAnchoredMenu } from "../../components/ui/AndroidAnchoredMenu";
 import { Menu } from "../../components/ui/Menu";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
-import { useNavigation } from "@react-navigation/native";
 import { openSettings } from "../settings/settings-navigation";
 import type { MachineSubaction, MobilePendingReplicaItem } from "./replicas.logic";
 import type {
@@ -296,7 +297,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   readonly onRetryReplica: (item: MobilePendingReplicaItem) => void;
 }) {
   const { item } = props;
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<ReactNavigation.RootParamList>>();
   const offline = item.meshOffline;
   const folderTitle = item.isScratch
     ? `${item.title} · ${item.machineLabel || item.project.environmentId}`
@@ -322,6 +323,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
             },
           ]),
       { id: "machines", title: "Machines…", image: "server.rack" },
+      { id: "open-file", title: "Open file…", image: "doc.text.magnifyingglass" },
       {
         id: "show-in",
         title: "Show in workspaces",
@@ -391,6 +393,12 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       props.onNewThreadOnMachine(item.projectKey, nativeEvent.event.slice("machine:".length));
     } else if (nativeEvent.event === "machines") {
       props.onOpenMachines(item.projectKey);
+    } else if (nativeEvent.event === "open-file") {
+      navigation.navigate("OpenFile", {
+        environmentId: String(item.project.environmentId),
+        cwd: item.project.workspaceRoot,
+        projectName: item.project.title,
+      });
     } else if (nativeEvent.event.startsWith("show:")) {
       props.onToggleWorkspace(item.projectKey, nativeEvent.event.slice("show:".length));
     } else if (nativeEvent.event.startsWith("fold:")) {

@@ -1,6 +1,6 @@
 import * as NodeAssert from "node:assert/strict";
 
-import type { ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
@@ -27,5 +27,28 @@ it.effect("relays a request to connected clients and counts them", () =>
     NodeAssert.equal(clients, 1);
     // A client that disconnected is no longer counted.
     NodeAssert.equal(yield* uiRequests.open({ threadId, target: { kind: "home" } }), 0);
+  }).pipe(Effect.provide(UiRequests.layer)),
+);
+
+it.effect("keeps the machine named by a thread or file target", () =>
+  Effect.gen(function* () {
+    const uiRequests = yield* UiRequests.UiRequests;
+    const there = "env-there" as EnvironmentId;
+    const targets = [
+      { kind: "thread" as const, threadId: "thread-there" as ThreadId, environmentId: there },
+      { kind: "file" as const, path: "/srv/app/README.md", environmentId: there },
+    ];
+    const requests = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const subscription = yield* uiRequests.subscribe;
+        for (const target of targets) {
+          yield* uiRequests.open({ threadId, target });
+          const request = yield* PubSub.take(subscription);
+          NodeAssert.deepEqual(request.target, target);
+        }
+        return targets.length;
+      }),
+    );
+    NodeAssert.equal(requests, 2);
   }).pipe(Effect.provide(UiRequests.layer)),
 );

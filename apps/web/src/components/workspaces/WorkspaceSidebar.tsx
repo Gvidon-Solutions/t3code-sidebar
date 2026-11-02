@@ -74,6 +74,7 @@ import { cn } from "~/lib/utils";
 import { isCommandPaletteOpen, openCommandPalette } from "../../commandPaletteBus";
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { isElectron } from "../../env";
+import { openOpenFileDialog } from "../files/openFileDialogState";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -1076,6 +1077,7 @@ export default function WorkspaceSidebar() {
         disabled: machineChoices.length === 0,
         children: machineMenuItems(machineChoices),
       },
+      { id: "open-file", label: "Open file…", icon: "file", separatorBefore: true },
       ...placement,
       { id: "machines", label: "Machines…", icon: "server" },
       { id: "icon", label: "Icon…", icon: "smile", separatorBefore: true },
@@ -1123,7 +1125,10 @@ export default function WorkspaceSidebar() {
     else if (clicked.startsWith("machine:"))
       startThreadOnMachine(folder, clicked.slice("machine:".length));
     else if (clicked === "machines") openMachinesDialog(folder);
-    else if (clicked === "icon") setIconPickerFolder(folder);
+    else if (clicked === "open-file") {
+      openOpenFileDialog(folder.group.memberProjects[0]?.environmentId);
+      if (isMobile) setOpenMobile(false);
+    } else if (clicked === "icon") setIconPickerFolder(folder);
     else if (clicked === "icon-reset") void setFolderIcon(folder, null);
     else if (clicked.startsWith("show:"))
       toggleProjectIn(projectKey, clicked.slice("show:".length));

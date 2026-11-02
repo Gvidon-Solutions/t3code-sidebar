@@ -40,6 +40,28 @@ describe("rewriteMarkdownFileUriHref", () => {
   });
 });
 
+describe("t3-file links", () => {
+  it("names the machine and keeps the absolute path", () => {
+    expect(
+      resolveMarkdownFileLinkMeta("t3-file://operalia/%2Fsrv%2Fapp%2FREADME.md", "/repo", "/repo"),
+    ).toMatchObject({
+      environmentId: "operalia",
+      filePath: "/srv/app/README.md",
+      targetPath: "/srv/app/README.md",
+      workspaceRelativePath: null,
+    });
+  });
+
+  it("keeps a line suffix", () => {
+    expect(
+      resolveMarkdownFileLinkMeta("t3-file://gor/%2Fsrv%2Fapp%2Fmain.ts", "/repo", "/repo"),
+    ).toMatchObject({ environmentId: "gor" });
+    expect(
+      resolveMarkdownFileLinkMeta("t3-file://gor/%2Fsrv%2Fapp%2Fmain.ts%3A12", "/repo", "/repo"),
+    ).toMatchObject({ line: 12, filePath: "/srv/app/main.ts" });
+  });
+});
+
 describe("relative links inside a rendered host file", () => {
   it("anchor to the file's directory while workspace membership follows cwd", () => {
     const meta = resolveMarkdownFileLinkMeta("appendix.md", "/repo", "/tmp/report");
