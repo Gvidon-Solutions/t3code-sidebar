@@ -121,6 +121,26 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How:** a shared machine union and status model reads layout, representations, every connected server’s links and per-peer replication watermarks. `meshLayout.status` exposes read-only replication state and refreshes once a minute while observed. The mesh switch writes both server flags together.
 - **Where:** `packages/client-runtime/src/state/meshMachines.ts`, `packages/contracts/src/meshLayout.ts`, server `mesh/MeshReplicator.ts` and `ws.ts`; web `components/workspaces/Mesh*`, `hooks/useMeshOverview.ts`, settings routes/nav/search and pairing form; mobile `features/settings/{SettingsMachinesRouteScreen,MeshLinkForm,mesh-settings.logic}`, `features/workspaces/{useMeshOverview,MeshFooterStatus,WorkspaceChrome}`, stack/search and ConnectionsNew prefill.
 
+### 2026-11-02 — T3 Mesh — Stage F skills: `t3ctl` and the `t3` skill
+
+- **What.** The `t3` skill can drive the whole mesh by name: list machines and links, link/unlink,
+  place a project on a machine (primary or Mutagen replica) and retry it, start a thread on another
+  machine, search/list/status across every linked machine, open a thread or file on any machine,
+  print a file from any machine, and migrate legacy layouts through the shared adoption path.
+  Machine names resolve from environment id/prefix, label, tag, ssh alias, or Russian voice forms
+  («гвидон», «гора», «опералия»). `doctor` gained a mesh section.
+- **How.** `t3ctl` keeps using only the server's MCP and WebSocket RPCs: `meshLayout.get/apply`,
+  `replicas.status/retry`, `files.read`, `peerLinks.*`, `t3_thread_search/list/read`,
+  `t3_project_place`, `t3_thread_launch` with `environmentId`, and `ui_open` with a target
+  environment. `mesh link` mints the pairing code on the target over ssh, like `login`, then links
+  with full access. Legacy layouts are encoded with the same rules as
+  `@t3tools/shared/meshLayout` into zero-HLC entries, so the server runs `adoptLegacy`; backups go
+  to `~/.local/state/t3-mesh-migrate/` first.
+- **Where.** The skill itself stays outside the repo (`~/.agents/skills/t3-next`;
+  `scripts/t3ctl.mjs`, `scripts/selftest.sh`, new `scripts/t3ctl.unit.test.mjs`, `SKILL.md`). The
+  review copy is `docs/skill-t3-next/` (`SKILL.md`, `scripts/t3ctl.mjs`, offline and transport tests, `scripts/selftest.sh`
+  and `t3ctl-changes.md`). No server contracts or app code changed.
+
 ### 2026-11-02 — T3 Mesh — Stage C server replication
 
 - **What:** persistent shared sidebar layout, legacy settings compatibility, server gossip and two-hop tool routing.
