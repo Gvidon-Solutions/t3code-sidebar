@@ -9,6 +9,7 @@ import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
 import { descriptorOf } from "../peer/PeerLinks.testkit.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import * as Mesh from "./MeshLayoutServiceLive.ts";
+import * as MeshSettings from "./MeshSettings.ts";
 
 const environment = Layer.succeed(ServerEnvironment, {
   getEnvironmentId: Effect.succeed(EnvironmentId.make("A")),
@@ -77,7 +78,31 @@ it.effect(
       });
       expect(result.config.machines.B?.label).toBe("concurrent");
       expect(result.config.workspaces[0]?.name).toBe("renamed");
-    }).pipe(Effect.provide(Mesh.layer.pipe(Layer.provide(dependencies)))),
+      const raw = yield* Settings.ServerSettingsService;
+      const wrappedContext = yield* Layer.build(
+        MeshSettings.layer.pipe(
+          Layer.provide(
+            Layer.merge(
+              Layer.succeed(Settings.ServerSettingsService, raw),
+              Layer.succeed(MeshLayoutService, mesh),
+            ),
+          ),
+        ),
+      );
+      const wrapped = yield* Settings.ServerSettingsService.pipe(Effect.provide(wrappedContext));
+      const sql = yield* SqlClient.SqlClient;
+      const seq = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
+      yield* wrapped.updateSettings({
+        sidebarWorkspaces: { ...result.config, quietAfterDays: 17 },
+      });
+      expect((yield* mesh.read).config.quietAfterDays).toBe(17);
+      expect((yield* raw.getSettings).sidebarWorkspaces).toEqual((yield* mesh.read).config);
+      expect(
+        (yield* sql<{ key: string }>`SELECT key FROM mesh_layout_entries WHERE seq > ${seq}`).map(
+          (row) => row.key,
+        ),
+      ).toEqual(["ws.quietAfterDays"]);
+    }).pipe(Effect.scoped, Effect.provide(Mesh.layer.pipe(Layer.provideMerge(dependencies)))),
 );
 
 it.effect("rejects unknown families, malformed clocks and oversized batches and entries", () =>
