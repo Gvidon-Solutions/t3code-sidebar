@@ -1,0 +1,500 @@
+
+=== routes.json ===
+{"entries":{"machine/375bdc7e-f155-4b27-be6a-bcd165c9b0a8":{"v":{"label":"gv test","tag":"GV","reach":{"34e33796-4717-4293-a955-88c2f740db4d":{"ssh":"user@192.168.1.10","identityFile":"/home/user/.ssh/id_malaniya_25519"},"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4":{"ssh":"root@152.89.244.57","identityFile":"/home/user/.local/share/t3-mesh-e2e/round2-container"}}},"h":"1793636015084.00000.34e33796-4717-4293-a955-88c2f740db4d"},"machine/34e33796-4717-4293-a955-88c2f740db4d":{"v":{"label":"gor","tag":"GR","reach":{"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4":{"ssh":"root@152.89.244.57","identityFile":"/home/user/.local/share/t3-mesh-e2e/round2-container"}}},"h":"1793636015084.00000.34e33796-4717-4293-a955-88c2f740db4d"},"machine/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4":{"v":{"label":"vps","tag":"VP","reach":{"34e33796-4717-4293-a955-88c2f740db4d":{"ssh":"gor"},"375bdc7e-f155-4b27-be6a-bcd165c9b0a8":{"ssh":"gvidon"}}},"h":"1793636015084.00000.34e33796-4717-4293-a955-88c2f740db4d"}}}
+
+=== installer-clean.out ===
+
+=== route-gv-gor.out ===
+gor
+
+=== route-vps-gor.out ===
+gor
+
+=== route-vps-gv.out ===
+gvidon
+
+=== route-gor-vps.out ===
+45cd4d71f494
+
+=== f-mid-mount.out ===
+[
+  {
+    "replicas": [
+      {
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+        "state": "mounting",
+        "conflicts": [],
+        "problems": [],
+        "sessionName": "t3-6cd3d4d7-8bd7a7df",
+        "localPath": "/home/t3/t3-replicas/demo-5",
+        "updatedAt": "2026-11-02T16:13:46.259Z"
+      },
+      {
+        "logicalKey": "",
+        "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+        "state": "watching",
+        "conflicts": [],
+        "problems": [],
+        "message": "Orphan session: no representation; left untouched.",
+        "sessionName": "round2-orphan",
+        "updatedAt": "2026-11-02T16:13:46.210Z"
+      }
+    ]
+  }
+]
+
+=== a-mcp-launch.out ===
+{
+  "threadId": "mcp:launch:474963c08e6877e58cdb51b5fd183780427ab3a467ff9fbb5dda0cedf54421e8",
+  "link": "<t3-thread://v2/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/mcp:launch:474963c08e6877e58cdb51b5fd183780427ab3a467ff9fbb5dda0cedf54421e8>",
+  "projectId": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+  "modelSelection": {
+    "instanceId": "codex",
+    "model": "gpt-6-luna"
+  },
+  "runId": "run:thread:mcp%3Alaunch%3A474963c08e6877e58cdb51b5fd183780427ab3a467ff9fbb5dda0cedf54421e8:ordinal:1",
+  "status": "preparing"
+}
+
+=== a-machines.out ===
+{
+  "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+  "representations": [
+    {
+      "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+      "path": "/home/user/xdev-e2e/demo",
+      "projectId": "mcp:f8f715f3-d4d9-4ac5-9e58-72314190dbbe",
+      "transport": "git",
+      "role": "primary",
+      "createdAt": "2026-11-02T15:53:59.511Z",
+      "machine": "gor",
+      "tag": "GR"
+    },
+    {
+      "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+      "path": "/tmp/t3-mesh-round2-primary",
+      "projectId": "2aabdee7-c54b-4dec-bed4-c908d3f88a3b",
+      "transport": "git",
+      "pathAllocated": false,
+      "role": "primary",
+      "createdAt": "2026-11-02T15:59:14.393Z",
+      "machine": "gv test",
+      "tag": "GV"
+    },
+    {
+      "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+      "path": "/home/t3/t3-replicas/demo-5",
+      "projectId": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+      "transport": "mutagen",
+      "pathAllocated": true,
+      "role": "replica",
+      "source": "34e33796-4717-4293-a955-88c2f740db4d",
+      "createdAt": "2026-11-02T16:13:44.726Z",
+      "machine": "vps",
+      "tag": "VP",
+      "driverEnvironmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+      "status": {
+        "state": "watching",
+        "conflicts": 0,
+        "updatedAt": "2026-11-02T16:14:21.567Z"
+      },
+      "live": {
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+        "state": "watching",
+        "conflicts": [],
+        "problems": [],
+        "sessionName": "t3-6cd3d4d7-8bd7a7df",
+        "localPath": "/home/t3/t3-replicas/demo-5",
+        "projectId": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+        "updatedAt": "2026-11-02T16:14:21.663Z"
+      }
+    }
+  ]
+}
+
+=== a-installer.out ===
+0a8115a5b0d6462340eb33ccfe2e18a5ff0edf28142ff25e10985bd866f39a10  /home/t3/.t3/bin/mutagen
+
+=== a-agent-edit.out ===
+round2-20261102T161320Z-a
+
+=== b-cli-launch.out ===
+started thread mcp:0e91f578-407c-472b-af52-90888434b1e3 "round2-20261102T161320Z-b" · codex:gpt-6-luna · preparing on vps
+
+=== b-agent-edit.out ===
+round2-20261102T161320Z-b
+
+=== c-place.out ===
+{
+  "logicalKey": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4:/home/t3/round2-primary",
+  "representation": {
+    "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+    "path": "/home/user/t3-replicas/round2-primary",
+    "projectId": "1a11aede-4937-447b-a624-ba8da68cd33d",
+    "transport": "mutagen",
+    "pathAllocated": true,
+    "role": "replica",
+    "source": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+    "createdAt": "2026-11-02T15:56:40.801Z"
+  },
+  "ready": true
+}
+
+=== c-watching.out ===
+[
+  {
+    "replicas": [
+      {
+        "logicalKey": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4:/home/t3/round2-primary",
+        "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+        "state": "watching",
+        "conflicts": [],
+        "problems": [],
+        "sessionName": "t3-a27033be-375bdc7e",
+        "localPath": "/home/user/t3-replicas/round2-primary",
+        "projectId": "1a11aede-4937-447b-a624-ba8da68cd33d",
+        "updatedAt": "2026-11-02T16:14:38.602Z"
+      }
+    ]
+  }
+]
+
+=== c-files.out ===
+reverse primary
+
+=== d-checkout.out ===
+true
+
+=== d-grouping.out ===
+[{"environmentId":"34e33796-4717-4293-a955-88c2f740db4d","path":"/home/user/xdev-e2e/demo","projectId":"mcp:f8f715f3-d4d9-4ac5-9e58-72314190dbbe","transport":"git","role":"primary","createdAt":"2026-11-02T15:53:59.511Z"},{"environmentId":"375bdc7e-f155-4b27-be6a-bcd165c9b0a8","path":"/tmp/t3-mesh-round2-primary","projectId":"2aabdee7-c54b-4dec-bed4-c908d3f88a3b","transport":"git","pathAllocated":false,"role":"primary","createdAt":"2026-11-02T15:59:14.393Z"},{"environmentId":"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4","path":"/home/t3/t3-replicas/demo-5","projectId":"17548b1a-3ed9-46da-a7cc-1a00d9f865df","transport":"mutagen","pathAllocated":true,"role":"replica","source":"34e33796-4717-4293-a955-88c2f740db4d","createdAt":"2026-11-02T16:13:44.726Z"}]
+one sidebar group, three physical representations
+
+=== e-conflict.out ===
+[
+  {
+    "replicas": [
+      {
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+        "state": "conflict",
+        "conflicts": [
+          "round2-conflict.txt"
+        ],
+        "problems": [],
+        "sessionName": "t3-6cd3d4d7-8bd7a7df",
+        "localPath": "/home/t3/t3-replicas/demo-5",
+        "projectId": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+        "updatedAt": "2026-11-02T16:15:21.577Z"
+      },
+      {
+        "logicalKey": "",
+        "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+        "state": "watching",
+        "conflicts": [],
+        "problems": [],
+        "message": "Orphan session: no representation; left untouched.",
+        "sessionName": "round2-orphan",
+        "updatedAt": "2026-11-02T16:15:21.543Z"
+      }
+    ]
+  }
+]
+
+=== e-conflict-path.out ===
+true
+
+=== e-retry.out ===
+{
+  "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+  "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+  "state": "watching",
+  "conflicts": [],
+  "problems": [],
+  "sessionName": "t3-6cd3d4d7-8bd7a7df",
+  "localPath": "/home/t3/t3-replicas/demo-5",
+  "projectId": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+  "updatedAt": "2026-11-02T16:15:25.942Z"
+}
+
+=== e-recovered.out ===
+[
+  {
+    "replicas": [
+      {
+        "logicalKey": "",
+        "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+        "state": "watching",
+        "conflicts": [],
+        "problems": [],
+        "message": "Orphan session: no representation; left untouched.",
+        "sessionName": "round2-orphan",
+        "updatedAt": "2026-11-02T16:15:21.543Z"
+      },
+      {
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+        "state": "watching",
+        "conflicts": [],
+        "problems": [],
+        "sessionName": "t3-6cd3d4d7-8bd7a7df",
+        "localPath": "/home/t3/t3-replicas/demo-5",
+        "projectId": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+        "updatedAt": "2026-11-02T16:15:25.942Z"
+      }
+    ]
+  }
+]
+
+=== e-content.out ===
+alpha-round2-20261102T161320Z
+
+=== f-place-1.out ===
+{
+  "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+  "representation": {
+    "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+    "path": "/home/t3/t3-replicas/demo-5",
+    "projectId": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+    "transport": "mutagen",
+    "pathAllocated": true,
+    "role": "replica",
+    "source": "34e33796-4717-4293-a955-88c2f740db4d",
+    "createdAt": "2026-11-02T16:13:44.726Z"
+  },
+  "ready": true
+}
+
+=== f-place-2.out ===
+{
+  "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+  "representation": {
+    "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+    "path": "/home/t3/t3-replicas/demo-5",
+    "projectId": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+    "transport": "mutagen",
+    "pathAllocated": true,
+    "role": "replica",
+    "source": "34e33796-4717-4293-a955-88c2f740db4d",
+    "createdAt": "2026-11-02T16:13:44.726Z"
+  },
+  "ready": true
+}
+
+=== f-one-launch.out ===
+mcp:launch:474963c08e6877e58cdb51b5fd183780427ab3a467ff9fbb5dda0cedf54421e8
+
+=== f-sessions.out ===
+[{"identifier":"sync_8RnAxsvsjO4uHAhU4yuF1jTOCwD8Ya2B1y3nqkb6Lag","version":1,"creationTime":"2026-11-02T16:00:24.355036239Z","creatingVersion":"0.18.1","alpha":{"protocol":"local","path":"/home/t3/round2-orphan-a","ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"connected":true,"scanned":true,"directories":1},"beta":{"protocol":"local","path":"/home/t3/round2-orphan-b","ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"connected":true,"scanned":true,"directories":1},"ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"name":"round2-orphan","labels":{"t3-env":"orphan","t3-logical":"deadbeef"},"paused":false,"status":"watching","successfulCycles":1},{"identifier":"sync_pAvLeFctn9FHA3Jkcc97Yg1YL0VzZb5WSwntgURWKUb","version":1,"creationTime":"2026-11-02T16:13:45.528194911Z","creatingVersion":"0.18.1","alpha":{"protocol":"ssh","host":"gor","path":"/home/user/xdev-e2e/demo","ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"connected":true,"scanned":true,"directories":3,"files":5,"totalFileSize":348},"beta":{"protocol":"local","path":"/home/t3/t3-replicas/demo-5","ignore":{},"symlink":{},"watch":{},"permissions":{"defaultFileMode":"0644","defaultDirectoryMode":"0755"},"compression":{},"connected":true,"scanned":true,"directories":3,"files":5,"totalFileSize":348},"mode":"two-way-safe","ignore":{"paths":["node_modules",".venv","venv","__pycache__",".pytest_cache","dist","build","target",".next",".turbo","coverage",".t3",".claude/worktrees",".DS_Store"],"vcs":true},"symlink":{"mode":"portable"},"watch":{},"permissions":{},"compression":{},"name":"t3-6cd3d4d7-8bd7a7df","labels":{"t3-env":"8bd7a7df","t3-logical":"6cd3d4d7"},"paused":false,"status":"watching","successfulCycles":1}]
+
+=== f-one-project.out ===
+true
+
+=== f-one-session.out ===
+true
+
+=== h-cat-gv.out ===
+# mesh e2e demo
+
+Source representation on gor.
+
+=== h-open-gv.out ===
+/tmp/t3-mesh-round2-primary/README.md  [GV] gv test
+link:  t3-file://375bdc7e-f155-4b27-be6a-bcd165c9b0a8/%2Ftmp%2Ft3-mesh-round2-primary%2FREADME.md
+ui_open runs as the calling T3 thread, so an outside client only gets the link. Ask an agent in that thread, or open the link.
+
+=== h-cat-gor.out ===
+# mesh e2e demo
+
+Source representation on gor.
+round2-20261102T155346Z-b
+round2-20261102T160146Z-b
+round2-20261102T160653Z-a
+round2-20261102T160653Z-b
+round2-20261102T161013Z-a
+round2-20261102T161013Z-b
+round2-20261102T161320Z-a
+round2-20261102T161320Z-b
+
+=== h-open-gor.out ===
+/home/user/xdev-e2e/demo/README.md  [GR] gor
+link:  t3-file://34e33796-4717-4293-a955-88c2f740db4d/%2Fhome%2Fuser%2Fxdev-e2e%2Fdemo%2FREADME.md
+ui_open runs as the calling T3 thread, so an outside client only gets the link. Ask an agent in that thread, or open the link.
+
+=== h-cat-vps.out ===
+# mesh e2e demo
+
+Source representation on gor.
+round2-20261102T155346Z-b
+round2-20261102T160146Z-b
+round2-20261102T160653Z-a
+round2-20261102T160653Z-b
+round2-20261102T161013Z-a
+round2-20261102T161013Z-b
+round2-20261102T161320Z-a
+round2-20261102T161320Z-b
+
+=== h-open-vps.out ===
+/home/t3/t3-replicas/demo-5/README.md  [VP] vps
+link:  t3-file://8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/%2Fhome%2Ft3%2Ft3-replicas%2Fdemo-5%2FREADME.md
+ui_open runs as the calling T3 thread, so an outside client only gets the link. Ask an agent in that thread, or open the link.
+
+=== h-find.out ===
+GR  78810877  round2-20261102T161320Z-gor  
+GR  9be1364b  round2-20261102T161013Z-gor  
+GR  a5663e54  round2-20261102T160653Z-gor  
+GR  c0962c0e  round2-20261102T160146Z-gor  
+GV  9cf9ccb6  round2-20261102T161320Z-gv  
+GV  76b2cfac  round2-20261102T161013Z-gv  
+GV  2f2fb305  round2-20261102T160653Z-gv  
+GV  70ce24ec  round2-20261102T160146Z-gv  
+VP  0e91f578  round2-20261102T161320Z-b  
+VP  474963c0  round2-20261102T161320Z-a  
+VP  55dc4037  round2-20261102T161013Z-b  
+VP  e6d96827  round2-20261102T161013Z-a  
+VP  d1a14490  round2-20261102T160653Z-b  
+VP  ea5003ca  round2-20261102T160653Z-a  
+VP  3f218d2f  round2-20261102T160146Z-b  
+VP  7e275806  round2-20261102T160146Z-a  
+VP  a042a381  round2-20261102T155346Z-b  
+VP  c822fe98  round2-20261102T155346Z-a  
+
+=== h-status.out ===
+
+failed: 1
+  c822fe98  failed       20m ago  codex:gpt-6-luna           [VP] [demo] round2-20261102T155346Z-a
+
+done (recent): 9
+  474963c0  completed    66s ago  codex:gpt-6-luna           [VP] [demo-5] round2-20261102T161320Z-a
+  0e91f578  completed    66s ago  codex:gpt-6-luna           [VP] [demo-5] round2-20261102T161320Z-b
+  e6d96827  completed     5m ago  codex:gpt-6-luna           [VP] [demo-4] round2-20261102T161013Z-a
+  55dc4037  completed     5m ago  codex:gpt-6-luna           [VP] [demo-4] round2-20261102T161013Z-b
+  ea5003ca  completed     8m ago  codex:gpt-6-luna           [VP] [demo-3] round2-20261102T160653Z-a
+  d1a14490  completed     8m ago  codex:gpt-6-luna           [VP] [demo-3] round2-20261102T160653Z-b
+  7e275806  completed    11m ago  codex:gpt-6-luna           [VP] [demo-2] round2-20261102T160146Z-a
+  3f218d2f  completed    11m ago  codex:gpt-6-luna           [VP] [demo-2] round2-20261102T160146Z-b
+  a042a381  completed    17m ago  codex:gpt-6-luna           [VP] [demo] round2-20261102T155346Z-b
+
+other: 8
+  78810877  idle         28s ago  codex:gpt-6-luna           [GR] [demo] round2-20261102T161320Z-gor
+  9cf9ccb6  idle         28s ago  codex:gpt-6-luna           [GV] [t3-mesh-round2-pr…] round2-20261102T161320Z-gv
+  9be1364b  idle          4m ago  codex:gpt-6-luna           [GR] [demo] round2-20261102T161013Z-gor
+  76b2cfac  idle          4m ago  codex:gpt-6-luna           [GV] [t3-mesh-round2-pr…] round2-20261102T161013Z-gv
+  a5663e54  idle          8m ago  codex:gpt-6-luna           [GR] [demo] round2-20261102T160653Z-gor
+  2f2fb305  idle          8m ago  codex:gpt-6-luna           [GV] [t3-mesh-round2-pr…] round2-20261102T160653Z-gv
+  c0962c0e  idle         11m ago  codex:gpt-6-luna           [GR] [demo] round2-20261102T160146Z-gor
+  70ce24ec  idle         11m ago  codex:gpt-6-luna           [GV] [t3-mesh-round2-pr…] round2-20261102T160146Z-gv
+
+=== h-machines.out ===
+GR  gor                  34e33796 0.1.5              local, 1 primary
+GV  gv test              375bdc7e 0.1.5              linked, reachable, 1 primary, 1 replica
+VP  vps                  8bd7a7df 0.1.5              linked, reachable, 1 primary, 1 replica  ssh root@152.89.244.57
+
+=== h-mesh.out ===
+mesh GR gor (34e33796-4717-4293-a955-88c2f740db4d) · 232 layout entries, revision 1793636166273.00000.8bd7a7df-310c-48e9-9be9-f65ccd6c05f4 · 7 workspace(s) · 5 representation(s)
+  link reachable   b88f83ea442d  8bd7a7df-310c-48e9-9be9-f65ccd6c05f4  http://127.0.0.1:13791  last 4s ago
+  link reachable   gvidon  375bdc7e-f155-4b27-be6a-bcd165c9b0a8  http://127.0.0.1:13795  last 4s ago
+  primary  34e33796 34e33796-4717-4293-a955-88c2f740db4d:… watching
+  primary  375bdc7e 34e33796-4717-4293-a955-88c2f740db4d:… watching
+  replica  8bd7a7df 34e33796-4717-4293-a955-88c2f740db4d:… watching
+  replica  375bdc7e 8bd7a7df-310c-48e9-9be9-f65ccd6c05f4:… watching
+  primary  8bd7a7df 8bd7a7df-310c-48e9-9be9-f65ccd6c05f4:… watching
+
+=== i-prompt.out ===
+/home/t3/.codex/sessions/2026/11/02/rollout-2026-11-02T19-14-23-01a19d0a-581d-7f30-b318-9b3b680455c7.jsonl
+
+=== g-remove.out ===
+{
+  "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+  "representation": null,
+  "ready": true
+}
+
+=== removed-sessions.json ===
+[{"identifier":"sync_8RnAxsvsjO4uHAhU4yuF1jTOCwD8Ya2B1y3nqkb6Lag","version":1,"creationTime":"2026-11-02T16:00:24.355036239Z","creatingVersion":"0.18.1","alpha":{"protocol":"local","path":"/home/t3/round2-orphan-a","ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"connected":true,"scanned":true,"directories":1},"beta":{"protocol":"local","path":"/home/t3/round2-orphan-b","ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"connected":true,"scanned":true,"directories":1},"ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"name":"round2-orphan","labels":{"t3-env":"orphan","t3-logical":"deadbeef"},"paused":false,"status":"watching","successfulCycles":1}]
+
+=== g-project-kept.out ===
+{
+  "id": "17548b1a-3ed9-46da-a7cc-1a00d9f865df",
+  "title": "demo-5",
+  "workspaceRoot": "/home/t3/t3-replicas/demo-5",
+  "repositoryIdentity": null,
+  "faviconPath": null,
+  "projectIcon": null,
+  "defaultModelSelection": null,
+  "defaultThreadEnvMode": null,
+  "autoPull": false,
+  "scripts": [],
+  "pinnedAt": null,
+  "archivedAt": null,
+  "createdAt": "2026-11-02T16:14:21.570Z",
+  "updatedAt": "2026-11-02T16:14:21.570Z",
+  "deletedAt": null
+}
+
+=== g-orphan-reported.out ===
+{
+  "logicalKey": "",
+  "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+  "state": "watching",
+  "conflicts": [],
+  "problems": [],
+  "message": "Orphan session: no representation; left untouched.",
+  "sessionName": "round2-orphan",
+  "updatedAt": "2026-11-02T16:16:49.546Z"
+}
+
+=== g-orphan-list.out ===
+[{"identifier":"sync_8RnAxsvsjO4uHAhU4yuF1jTOCwD8Ya2B1y3nqkb6Lag","version":1,"creationTime":"2026-11-02T16:00:24.355036239Z","creatingVersion":"0.18.1","alpha":{"protocol":"local","path":"/home/t3/round2-orphan-a","ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"connected":true,"scanned":true,"directories":1},"beta":{"protocol":"local","path":"/home/t3/round2-orphan-b","ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"connected":true,"scanned":true,"directories":1},"ignore":{},"symlink":{},"watch":{},"permissions":{},"compression":{},"name":"round2-orphan","labels":{"t3-env":"orphan","t3-logical":"deadbeef"},"paused":false,"status":"watching","successfulCycles":1}]
+
+=== final bed status ===
+== build ==
+ref xdev @ 25fcbc27502cbc73903b64e8f590ea2193ea6512
+runtime 0.1.5-mesh.25fcbc27502c
+
+== units / container ==
+PASS  gvidon server unit t3-mesh-e2e-gv.service active
+PASS  gvidon tunnel unit active
+PASS  gor server unit t3code-sidebar.service active
+PASS  gor tunnel unit active
+PASS  VPS container t3-mesh-e2e running 2147483648 2000000000
+
+== servers directly on their machines ==
+PASS  gv direct HTTP http://127.0.0.1:3795/.well-known/t3/environment  0.1.5 | 375bdc7e-f155-4b27-be6a-bcd165c9b0a8
+PASS  gor direct HTTP  0.1.5 | 34e33796-4717-4293-a955-88c2f740db4d
+PASS  vps direct (host) HTTP  0.1.5 | 8bd7a7df-310c-48e9-9be9-f65ccd6c05f4
+
+== gvidon client view via tunnels ==
+PASS  gv tunnel HTTP http://127.0.0.1:13795/.well-known/t3/environment  0.1.5 | 375bdc7e-f155-4b27-be6a-bcd165c9b0a8
+PASS  gor tunnel HTTP http://127.0.0.1:13797/.well-known/t3/environment  0.1.5 | 34e33796-4717-4293-a955-88c2f740db4d
+PASS  vps tunnel HTTP http://127.0.0.1:13791/.well-known/t3/environment  0.1.5 | 8bd7a7df-310c-48e9-9be9-f65ccd6c05f4
+
+== cross-machine reachability ==
+PASS  gor -> vps HTTP  0.1.5 | 8bd7a7df-310c-48e9-9be9-f65ccd6c05f4
+PASS  vps container -> gor HTTP  0.1.5 | 34e33796-4717-4293-a955-88c2f740db4d
+PASS  vps container -> gvidon HTTP  0.1.5 | 375bdc7e-f155-4b27-be6a-bcd165c9b0a8
+PASS  vps container ssh -> gor
+PASS  vps container ssh -> gvidon
+
+== mutagen ==
+PASS  gor mutagen 0.18.1
+PASS  vps mutagen 0.18.1
+
+== ports ==
+gvidon:
+LISTEN 0      128             127.0.0.1:13797 0.0.0.0:*
+LISTEN 0      128             127.0.0.1:13795 0.0.0.0:*
+LISTEN 0      128             127.0.0.1:13791 0.0.0.0:*
+LISTEN 0      511             127.0.0.1:3795  0.0.0.0:*
+gor:
+LISTEN 0      511        127.0.0.1:3774  0.0.0.0:*
+LISTEN 0      128        127.0.0.1:13791 0.0.0.0:*
+vps host:
+LISTEN 0      128       172.17.0.1:13795 0.0.0.0:*
+LISTEN 0      128       172.17.0.1:13797 0.0.0.0:*
+LISTEN 0      128       172.17.0.1:22023 0.0.0.0:*
+LISTEN 0      128       172.17.0.1:22022 0.0.0.0:*
+LISTEN 0      4096       127.0.0.1:3791  0.0.0.0:*
+
+RESULT: all checks passed
