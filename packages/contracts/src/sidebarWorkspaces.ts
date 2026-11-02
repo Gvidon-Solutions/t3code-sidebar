@@ -27,6 +27,31 @@ export type SidebarWorkspaceRule = typeof SidebarWorkspaceRule.Type;
 
 export const DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS = 5;
 
+/** A machine as the user names it in the sidebar; absent fields fall back to the server's label. */
+export const SidebarMachine = Schema.Struct({
+  label: Schema.optionalKey(Schema.String),
+  /** Up to three characters shown on thread rows, e.g. "GV". */
+  tag: Schema.optionalKey(Schema.String),
+  color: Schema.optionalKey(Schema.String),
+});
+export type SidebarMachine = typeof SidebarMachine.Type;
+
+export const SidebarProjectMountTransport = Schema.Literals(["origin", "mutagen", "sshfs", "manual"]);
+export type SidebarProjectMountTransport = typeof SidebarProjectMountTransport.Type;
+
+/** One folder of a logical project on one machine. */
+export const SidebarProjectMount = Schema.Struct({
+  environmentId: TrimmedNonEmptyString,
+  path: TrimmedNonEmptyString,
+  /** The project registered at `path` there, once it is. */
+  projectId: Schema.optionalKey(Schema.String),
+  transport: SidebarProjectMountTransport,
+  /** "home" holds `.git` and runs builds; "mirror" is a synced working copy. */
+  role: Schema.Literals(["home", "mirror"]),
+  createdAt: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+});
+export type SidebarProjectMount = typeof SidebarProjectMount.Type;
+
 export const SidebarWorkspacesConfig = Schema.Struct({
   workspaces: Schema.Array(SidebarWorkspace).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   /**
@@ -72,6 +97,24 @@ export const SidebarWorkspacesConfig = Schema.Struct({
   alwaysQuiet: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   quietAfterDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS)),
+  ),
+  /** Bumped by every accepted write; a write must carry the next revision. */
+  rev: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(0)),
+  ),
+  /** ISO time of the last accepted write; empty before the first. */
+  updatedAt: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  /** Environment id → how the user names and marks that machine. */
+  machines: Schema.Record(Schema.String, SidebarMachine).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  /** Any project key → the logical project key it belongs to (merged projects). */
+  projectAliases: Schema.Record(Schema.String, Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  /** Logical project key → the folders it has on each machine. */
+  projectMounts: Schema.Record(Schema.String, Schema.Array(SidebarProjectMount)).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
   ),
 });
 export type SidebarWorkspacesConfig = typeof SidebarWorkspacesConfig.Type;
