@@ -108,6 +108,36 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-02 — T3 Mesh — files anywhere and cross-machine `ui_open`
+
+- **What.** Opening any file on any machine in the existing viewer: a machine picker with
+  tags, path completion, recent files per machine, `t3-file://<environmentId>/<path>` links,
+  and `ui_open` thread/file targets that name another environment.
+- **How.** `files.read` / `files.list` read absolute host paths with the project read limits
+  (1 MiB preview, binary refusal, 64 MiB hard ceiling, server-state paths refused). They run on
+  the machine that holds the file; a connected server forwards over its peer link when the
+  client is not connected there, using the `t3_files_read` / `t3_files_list` MCP tools. The
+  web dialog marks unconnected machines, remembers one recent list per machine, and opens the
+  file in the current thread's panel under the target environment; mobile has the same flow as
+  an `Open file` route from a folder's menu. Markdown `t3-file:` links and `ui_open` targets
+  carry the target environment; clients that cannot reach it say so and offer Connections.
+  `ui_open` keeps `environmentId` optional on thread and file targets, so older callers are
+  unchanged. Permission scope is the existing strongest file-read scope,
+  `filesystem:read`, on both the local RPC and the forwarded tool.
+- **Where.** `packages/contracts/src/files.ts`, `packages/contracts/src/uiRequests.ts`,
+  `packages/contracts/src/rpc.ts`, `apps/server/src/files/`,
+  `apps/server/src/mcp/toolkits/files/`, `apps/server/src/uiRequests/UiRequests.ts`,
+  `packages/client-runtime/src/files.ts`, `packages/client-runtime/src/state/files.ts`,
+  `packages/client-runtime/src/uiRequests.ts`, `apps/web/src/components/files/OpenFileDialog.*`,
+  `apps/web/src/components/files/openFileDialogState.ts`, `apps/web/src/rightPanelStore.ts`,
+  `apps/web/src/components/uiRequests/UiRequestCoordinator.tsx`,
+  `apps/web/src/components/ChatMarkdown.tsx`, `apps/web/src/markdown-links.ts`,
+  `apps/web/src/components/CommandPalette.tsx`,
+  `apps/web/src/components/workspaces/WorkspaceSidebar.tsx`,
+  `apps/mobile/src/features/files/OpenFileRouteScreen.tsx`,
+  `apps/mobile/src/features/voice-mode/UiRequestCoordinator.tsx`,
+  `apps/mobile/src/features/workspaces/WorkspaceChrome.tsx`.
+
 ### 2026-11-02 — T3 Mesh — layout CRDT core
 
 - **What.** Pure shared layout CRDT, legacy migration and logical project operations for Mesh.
