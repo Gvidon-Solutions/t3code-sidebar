@@ -36,21 +36,54 @@ export const SidebarMachine = Schema.Struct({
 });
 export type SidebarMachine = typeof SidebarMachine.Type;
 
-export const SidebarProjectMountTransport = Schema.Literals(["origin", "mutagen", "sshfs", "manual"]);
+/**
+ * How a representation's files get there: its own checkout ("git": a primary, or an
+ * independent clone), a Mutagen session with `source`, an SSHFS mount of `source`, or
+ * a folder the user keeps in step by hand.
+ */
+export const SidebarProjectMountTransport = Schema.Literals(["git", "mutagen", "sshfs", "manual"]);
 export type SidebarProjectMountTransport = typeof SidebarProjectMountTransport.Type;
 
-/** One folder of a logical project on one machine. */
+/**
+ * One representation of a logical project on one machine. A project may have several
+ * primaries (each owns its `.git` and runs builds) and any number of replicas, each
+ * synced from one `source` representation. Nothing here is tied to a particular machine.
+ */
 export const SidebarProjectMount = Schema.Struct({
   environmentId: TrimmedNonEmptyString,
   path: TrimmedNonEmptyString,
   /** The project registered at `path` there, once it is. */
   projectId: Schema.optionalKey(Schema.String),
   transport: SidebarProjectMountTransport,
-  /** "home" holds `.git` and runs builds; "mirror" is a synced working copy. */
-  role: Schema.Literals(["home", "mirror"]),
+  /** "primary" owns `.git` and computes; "replica" is a synced working copy of `source`. */
+  role: Schema.Literals(["primary", "replica"]),
+  /** For a replica: the environment whose representation it syncs with. */
+  source: Schema.optionalKey(Schema.String),
+  /** Extra ignore patterns for this replica, on top of the machine's defaults. */
+  ignores: Schema.optionalKey(Schema.Array(Schema.String)),
   createdAt: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 });
 export type SidebarProjectMount = typeof SidebarProjectMount.Type;
+
+export const SidebarProjectMountState = Schema.Literals([
+  "pending",
+  "mounting",
+  "watching",
+  "conflict",
+  "error",
+  "paused",
+  "removed",
+]);
+export type SidebarProjectMountState = typeof SidebarProjectMountState.Type;
+
+/** What the machine holding a replica last reported about it; changes only on state changes. */
+export const SidebarProjectMountStatus = Schema.Struct({
+  state: SidebarProjectMountState,
+  message: Schema.optionalKey(Schema.String),
+  conflicts: Schema.optionalKey(Schema.Number),
+  updatedAt: Schema.String,
+});
+export type SidebarProjectMountStatus = typeof SidebarProjectMountStatus.Type;
 
 export const SidebarWorkspacesConfig = Schema.Struct({
   workspaces: Schema.Array(SidebarWorkspace).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
@@ -98,12 +131,6 @@ export const SidebarWorkspacesConfig = Schema.Struct({
   quietAfterDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS)),
   ),
-  /** Bumped by every accepted write; a write must carry the next revision. */
-  rev: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  /** ISO time of the last accepted write; empty before the first. */
-  updatedAt: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   /** Environment id → how the user names and marks that machine. */
   machines: Schema.Record(Schema.String, SidebarMachine).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
@@ -116,6 +143,11 @@ export const SidebarWorkspacesConfig = Schema.Struct({
   projectMounts: Schema.Record(Schema.String, Schema.Array(SidebarProjectMount)).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
+  /** Logical project key → environment id → that replica's last reported status. */
+  projectMountStatus: Schema.Record(
+    Schema.String,
+    Schema.Record(Schema.String, SidebarProjectMountStatus),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
 export type SidebarWorkspacesConfig = typeof SidebarWorkspacesConfig.Type;
 
