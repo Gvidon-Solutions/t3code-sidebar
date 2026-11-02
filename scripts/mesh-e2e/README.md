@@ -15,11 +15,11 @@ gor ──WAN──▶ VPS             VPS ──ssh tunnel──▶ gor, gvidon
 
 ## What runs where
 
-| Machine | Server | Data | Port | Runtime |
-| --- | --- | --- | --- | --- |
-| gor (`gor.local`, 192.168.1.10) | **main** systemd --user `t3code-sidebar.service` | `~/.t3-sidebar-server` | `127.0.0.1:3774` | `~/.t3-sidebar-server/runtime/versions/<version>` |
-| gvidon (this box) | isolated systemd --user `t3-mesh-e2e-gv.service` | `/tmp/t3-mesh-e2e-gv` | `127.0.0.1:3795` | `~/.t3-mesh-e2e-gv-runtime/<version>` |
-| VPS 152.89.244.57 | compose project `t3-mesh-e2e`, container `t3-mesh-e2e` | `/opt/t3-mesh-e2e/home` | `127.0.0.1:3791` | inside image `/opt/t3` |
+| Machine                         | Server                                                 | Data                    | Port             | Runtime                                           |
+| ------------------------------- | ------------------------------------------------------ | ----------------------- | ---------------- | ------------------------------------------------- |
+| gor (`gor.local`, 192.168.1.10) | **main** systemd --user `t3code-sidebar.service`       | `~/.t3-sidebar-server`  | `127.0.0.1:3774` | `~/.t3-sidebar-server/runtime/versions/<version>` |
+| gvidon (this box)               | isolated systemd --user `t3-mesh-e2e-gv.service`       | `/tmp/t3-mesh-e2e-gv`   | `127.0.0.1:3795` | `~/.t3-mesh-e2e-gv-runtime/<version>`             |
+| VPS 152.89.244.57               | compose project `t3-mesh-e2e`, container `t3-mesh-e2e` | `/opt/t3-mesh-e2e/home` | `127.0.0.1:3791` | inside image `/opt/t3`                            |
 
 The VPS container is `uid 10001`, `cap_drop: ALL`, `no-new-privileges`, 2 GiB
 RAM, 2 CPUs, no `docker.sock`, loopback-only port. Its image is built from
@@ -83,15 +83,15 @@ already resolves the runtime from the unit).
 `tunnels.sh up` installs two systemd --user units (`t3-mesh-e2e-tunnels.service`
 on gvidon and on gor) and keeps these forwards:
 
-| gvidon local | reaches | what |
-| --- | --- | --- |
-| `127.0.0.1:13795` | gvidon `:3795` (via sshd) | isolated gv server |
-| `127.0.0.1:13797` | gor `:3774` | gor main server |
-| `127.0.0.1:13791` | VPS `:3791` | VPS server |
-| VPS `172.17.0.1:22022` | gor `:22` | reverse tunnel from gor |
-| VPS `172.17.0.1:22023` | gvidon `:22` | reverse tunnel from gvidon |
-| VPS `172.17.0.1:13797` | gor `:3774` | reverse tunnel from gor |
-| VPS `172.17.0.1:13795` | gvidon `:3795` | reverse tunnel from gvidon |
+| gvidon local           | reaches                   | what                       |
+| ---------------------- | ------------------------- | -------------------------- |
+| `127.0.0.1:13795`      | gvidon `:3795` (via sshd) | isolated gv server         |
+| `127.0.0.1:13797`      | gor `:3774`               | gor main server            |
+| `127.0.0.1:13791`      | VPS `:3791`               | VPS server                 |
+| VPS `172.17.0.1:22022` | gor `:22`                 | reverse tunnel from gor    |
+| VPS `172.17.0.1:22023` | gvidon `:22`              | reverse tunnel from gvidon |
+| VPS `172.17.0.1:13797` | gor `:3774`               | reverse tunnel from gor    |
+| VPS `172.17.0.1:13795` | gvidon `:3795`            | reverse tunnel from gvidon |
 
 `172.17.0.1` is the VPS `docker0` address, reachable from the container on its
 bridge network; host loopback is not.
@@ -104,11 +104,11 @@ test bed (the gvidon test server is `:3795` and gor→gvidon test is not routed)
 
 Use these in Settings › Machines / peer links:
 
-| From | gor | gvidon | VPS |
-| --- | --- | --- | --- |
-| gor | `http://127.0.0.1:3774` | live only: `http://127.0.0.1:13773` | `http://127.0.0.1:13791` |
-| gvidon | `http://127.0.0.1:13797` | `http://127.0.0.1:3795` | `http://127.0.0.1:13791` |
-| VPS container | `http://172.17.0.1:13797` | `http://172.17.0.1:13795` | `http://127.0.0.1:3791` |
+| From          | gor                       | gvidon                              | VPS                      |
+| ------------- | ------------------------- | ----------------------------------- | ------------------------ |
+| gor           | `http://127.0.0.1:3774`   | live only: `http://127.0.0.1:13773` | `http://127.0.0.1:13791` |
+| gvidon        | `http://127.0.0.1:13797`  | `http://127.0.0.1:3795`             | `http://127.0.0.1:13791` |
+| VPS container | `http://172.17.0.1:13797` | `http://172.17.0.1:13795`           | `http://127.0.0.1:3791`  |
 
 Mutagen source paths from the VPS container use the ssh aliases `gor` and
 `gvidon` (see `/opt/t3-mesh-e2e/home/.ssh/config`). From gvidon, gor is the
@@ -130,14 +130,14 @@ its HTTP). From gor, gvidon is `192.168.1.17`; mutagen 0.18.1 is in
 
 Test-bed keys are disposable and tagged `t3-mesh-e2e`; the gor→gvidon tunnel key is a permanent fix and is not removed by teardown.
 
-| Key | Private half | Authorized on | Options |
-| --- | --- | --- | --- |
-| `id_mesh_gor` | `/opt/t3-mesh-e2e/home/.ssh` | gor `~/.ssh/authorized_keys` | `from="127.0.0.1,::1",restrict`, comment `t3-mesh-e2e-container-gor` |
-| `id_mesh_gvidon` | same | gvidon `~/.ssh/authorized_keys` | `from="127.0.0.1,::1",restrict`, comment `t3-mesh-e2e-container-gvidon` |
-| `id_t3_mesh_e2e_vps` | gvidon `~/.ssh` | VPS `/root/.ssh/authorized_keys` | `from="78.17.147.89",restrict,port-forwarding,permitlisten="172.17.0.1:22023"`, `…:13795`, comment `t3-mesh-e2e-reverse-gvidon` |
-| `id_t3_mesh_e2e_vps` | gor `~/.ssh` | VPS `/root/.ssh/authorized_keys` | `from="91.77.163.152",restrict,port-forwarding,permitlisten="172.17.0.1:22022"`, `…:13797`, comment `t3-mesh-e2e-reverse-gor` |
-| `id_t3_mesh_e2e_self` | gvidon `~/.ssh` | gvidon `~/.ssh/authorized_keys` | `from="127.0.0.1,::1",restrict,port-forwarding`, comment `t3-mesh-e2e-self` |
-| `id_t3_mesh_e2e_gvidon` | gor `~/.ssh` | gvidon `~/.ssh/authorized_keys` | `from="192.168.1.10",restrict,port-forwarding,permitopen="127.0.0.1:3774"`, comment `t3-gvidon-tunnel` — permanent fix for the pre-existing gor→gvidon tunnel, kept by teardown |
+| Key                     | Private half                 | Authorized on                    | Options                                                                                                                                                                         |
+| ----------------------- | ---------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id_mesh_gor`           | `/opt/t3-mesh-e2e/home/.ssh` | gor `~/.ssh/authorized_keys`     | `from="127.0.0.1,::1",restrict`, comment `t3-mesh-e2e-container-gor`                                                                                                            |
+| `id_mesh_gvidon`        | same                         | gvidon `~/.ssh/authorized_keys`  | `from="127.0.0.1,::1",restrict`, comment `t3-mesh-e2e-container-gvidon`                                                                                                         |
+| `id_t3_mesh_e2e_vps`    | gvidon `~/.ssh`              | VPS `/root/.ssh/authorized_keys` | `from="78.17.147.89",restrict,port-forwarding,permitlisten="172.17.0.1:22023"`, `…:13795`, comment `t3-mesh-e2e-reverse-gvidon`                                                 |
+| `id_t3_mesh_e2e_vps`    | gor `~/.ssh`                 | VPS `/root/.ssh/authorized_keys` | `from="91.77.163.152",restrict,port-forwarding,permitlisten="172.17.0.1:22022"`, `…:13797`, comment `t3-mesh-e2e-reverse-gor`                                                   |
+| `id_t3_mesh_e2e_self`   | gvidon `~/.ssh`              | gvidon `~/.ssh/authorized_keys`  | `from="127.0.0.1,::1",restrict,port-forwarding`, comment `t3-mesh-e2e-self`                                                                                                     |
+| `id_t3_mesh_e2e_gvidon` | gor `~/.ssh`                 | gvidon `~/.ssh/authorized_keys`  | `from="192.168.1.10",restrict,port-forwarding,permitopen="127.0.0.1:3774"`, comment `t3-gvidon-tunnel` — permanent fix for the pre-existing gor→gvidon tunnel, kept by teardown |
 
 `MESH_E2E_GVIDON_IP` / `MESH_E2E_GOR_IP` override the two `from=` addresses. gor exits through a different route than gvidon (it is not the home public IP), so deploy.sh probes `api.ipify.org` from each side and falls back to the pinned values above.
 Every append keeps a timestamped `authorized_keys.bak-t3-mesh-e2e-*` backup.
@@ -171,3 +171,20 @@ gvidon `:3774`, Operalia or `t3-ws`. `--purge` also removes `~/.t3-mesh-e2e`
   the reverse forwards exist.
 - `deploy.sh` uses the VPS `docker compose` project name `t3-mesh-e2e`; do not
   rename it to `t3-ws`.
+
+## Round 1 regression run
+
+After build/deploy and legacy seeding, run `scripts/mesh-e2e/round1.sh`. It tests
+steps 3–8 (links, layout adoption, concurrent/offline/restart edits, RPCs, files
+and old-client compatibility) and exits nonzero if any assertion fails. It stops
+and restarts gor and kills/restarts only the test VPS container. All three nodes
+are left running. `--timeout 90` changes each convergence deadline in seconds.
+
+The adoption fixtures are read-only copies in
+`~/.local/share/t3-mesh-e2e/legacy/{gvidon,operalia}.json`. Seed these under
+`sidebarWorkspaces` in each test server’s `userdata/settings.json` before its
+first mesh start; retain gor’s existing data. The runner never reseeds or reads
+the live servers. Per-run snapshots and RPC responses are in
+`/tmp/t3-mesh-e2e-round1` (override `MESH_E2E_ROUND1_WORK` for parallel runs).
+The committed `round1.log` records the observed product failures; it is not a
+claim that the bed passes.
