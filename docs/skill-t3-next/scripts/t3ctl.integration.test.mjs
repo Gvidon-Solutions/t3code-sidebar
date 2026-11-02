@@ -67,6 +67,8 @@ test("machine inventory, mesh status, replicas and layout reach transports", () 
     assert.ok(run(args).calls.some((c) => c.name === "meshLayout.get"));
 });
 test("place, unplace, retry resolve Russian machine and send server contracts", () => {
+  const primary = run(["place", "Demo", "--on", "гор", "--primary", "--path", "/checkout"]);
+  assert.equal(primary.calls.find((c) => c.name === "t3_project_place").args.role, "primary");
   const placed = run([
     "place",
     "Demo",
