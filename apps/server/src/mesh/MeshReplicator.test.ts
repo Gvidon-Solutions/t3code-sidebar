@@ -22,7 +22,11 @@ it.effect(
     Effect.gen(function* () {
       const nodes = new Map<
         string,
-        { mesh: MeshLayoutService["Service"]; replicator: MeshReplicator["Service"] }
+        {
+          mesh: MeshLayoutService["Service"];
+          replicator: MeshReplicator["Service"];
+          settings: Settings.ServerSettingsService["Service"];
+        }
       >();
       let ready = false;
       let partition = false;
@@ -102,7 +106,11 @@ it.effect(
         );
         const mesh = yield* MeshLayoutService.pipe(Effect.provide(context));
         const replicator = yield* MeshReplicator.pipe(Effect.provide(context));
-        nodes.set(id, { mesh, replicator });
+        nodes.set(id, {
+          mesh,
+          replicator,
+          settings: yield* Settings.ServerSettingsService.pipe(Effect.provide(context)),
+        });
       }
       ready = true;
       const a = nodes.get("A")!,
@@ -123,6 +131,22 @@ it.effect(
       }));
       yield* settle;
       expect(yield* a.mesh.read).toEqual(yield* c.mesh.read);
+      yield* a.settings.updateSettings({ meshEnabled: false });
+      yield* a.mesh.apply({
+        "machine/gated": { v: { label: "gated" }, h: "0000000000001.00000.gated" },
+      });
+      yield* a.replicator.sync;
+      expect((yield* b.mesh.read).config.machines.gated).toBeUndefined();
+      const refused = yield* a.replicator
+        .exchange({ fromEnvironmentId: "B", entries: {}, seq: 0, ackReceivedSeq: 0 })
+        .pipe(Effect.flip);
+      expect(refused.reason).toBe("disabled");
+      yield* a.settings.updateSettings({ meshEnabled: true, linkedEnvironmentsEnabled: false });
+      yield* a.replicator.sync;
+      expect((yield* b.mesh.read).config.machines.gated).toBeUndefined();
+      yield* a.settings.updateSettings({ linkedEnvironmentsEnabled: true });
+      yield* settle;
+      expect((yield* c.mesh.read).config.machines.gated?.label).toBe("gated");
       partition = true;
       for (const [id, node] of nodes)
         yield* node.mesh.edit((config) => ({

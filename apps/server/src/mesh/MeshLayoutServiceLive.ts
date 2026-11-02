@@ -70,8 +70,8 @@ export const layer = Layer.effect(
           let clock = meta.hlc;
           let seq = meta.seq;
           const now = yield* Clock.currentTimeMillis;
+          for (const entry of Object.values(entries)) clock = receive(clock, entry.h, now);
           for (const [key, entry] of Object.entries(merged)) {
-            clock = receive(clock, entry.h, now);
             if (merged[key] === document[key]) continue;
             seq++;
             yield* sql`INSERT INTO mesh_layout_entries (key, value, hlc, seq) VALUES (${key}, ${entry.v === null ? null : yield* encodeJson(entry.v)}, ${entry.h}, ${seq}) ON CONFLICT(key) DO UPDATE SET value = excluded.value, hlc = excluded.hlc, seq = excluded.seq`;
