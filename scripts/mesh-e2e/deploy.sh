@@ -39,8 +39,8 @@ vps_ssh "set -e
   chown 10001:10001 '$VPS_DATA'
   chown -R 10001:10001 '$VPS_DATA/.ssh'"
 
-PUB_GOR="$(vps_ssh "cat '$CONTAINER_KEY_GOR.pub'")"
-PUB_GV="$(vps_ssh "cat '$CONTAINER_KEY_GV.pub'")"
+PUB_GOR="$(key_body "$(vps_ssh "cat '$CONTAINER_KEY_GOR.pub'")")"
+PUB_GV="$(key_body "$(vps_ssh "cat '$CONTAINER_KEY_GV.pub'")")"
 
 log "authorizing the container key on gor"
 gor_ssh 'bash -s' <<EOF
@@ -70,8 +70,8 @@ key="$HOME/.ssh/id_t3_mesh_e2e_vps"
 [ -f "$key" ] || ssh-keygen -q -t ed25519 -N '' -C t3-mesh-e2e-reverse-gor -f "$key"
 chmod 600 "$key"; chmod 644 "$key.pub"
 EOF
-PUB_REV_GOR="$(gor_ssh 'cat ~/.ssh/id_t3_mesh_e2e_vps.pub')"
-PUB_REV_GV="$(cat "$REVERSE_KEY_GV.pub")"
+PUB_REV_GOR="$(key_body "$(gor_ssh 'cat ~/.ssh/id_t3_mesh_e2e_vps.pub')")"
+PUB_REV_GV="$(key_body "$(cat "$REVERSE_KEY_GV.pub")")"
 
 log "authorizing the reverse-tunnel keys on the VPS"
 vps_ssh 'bash -s' <<EOF
@@ -94,7 +94,7 @@ EOF
 log "preparing gvidon loopback tunnel key"
 ensure_local_key "$SELF_KEY" t3-mesh-e2e-self
 authorize_line "$HOME/.ssh/authorized_keys" 'from="127.0.0.1,::1",restrict,port-forwarding' \
-  "$(cat "$SELF_KEY.pub")" t3-mesh-e2e-self
+  "$(key_body "$(cat "$SELF_KEY.pub")")" t3-mesh-e2e-self
 
 # ---------------------------------------------------------------------------
 # 3. VPS: container SSH config, image, compose.

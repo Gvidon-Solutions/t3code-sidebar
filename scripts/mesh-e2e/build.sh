@@ -52,7 +52,12 @@ log "building server single-executable (node $(node -v))"
 
 log "building resource monitor"
 mkdir -p "$ARTIFACTS_DIR/resource-monitor/linux-x64"
-if (cd "$BUILD_DIR" && cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml); then
+CARGO=(cargo)
+if command -v rustup >/dev/null 2>&1; then
+  newest_tc="$(rustup toolchain list 2>/dev/null | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1 || true)"
+  [ -n "$newest_tc" ] && CARGO=(cargo "+$newest_tc")
+fi
+if (cd "$BUILD_DIR" && "${CARGO[@]}" build --locked --release --manifest-path native/resource-monitor/Cargo.toml); then
   cp "$BUILD_DIR/native/resource-monitor/target/release/t3-resource-monitor" \
     "$ARTIFACTS_DIR/resource-monitor/linux-x64/t3-resource-monitor"
 else

@@ -102,6 +102,9 @@ wait_http() {
   return 1
 }
 
+# Keep only "type base64" so the tag in authorized_keys appears once.
+key_body() { printf '%s\n' "$1" | awk 'NF >= 2 { print $1 " " $2; exit }'; }
+
 ensure_local_key() {
   local key=$1 comment=$2
   if [ ! -f "$key" ]; then
