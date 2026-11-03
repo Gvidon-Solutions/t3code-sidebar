@@ -573,9 +573,9 @@ const make = Effect.gen(function* () {
         known.set(refKey(logicalKey, rep.environmentId), identity.name);
     }
     const terminated = new Set<string>();
-    // Tombstones survive a driver crash between removal and session termination.
+    // Raw claims also retain sessions removed by authority selection or a role change.
     for (const [key, entry] of Object.entries(document)) {
-      if (!key.startsWith("rep/") || entry.v !== null) continue;
+      if (!key.startsWith("rep/")) continue;
       const [, logicalKey, environmentId] = key.split("/").map(decodeURIComponent);
       let currentKey = logicalKey;
       const visited = new Set<string>();
@@ -583,19 +583,34 @@ const make = Effect.gen(function* () {
         visited.add(currentKey);
         currentKey = config.projectAliases[currentKey];
       }
+      const active = currentKey
+        ? config.projectMounts[currentKey]?.find((rep) => rep.environmentId === environmentId)
+        : undefined;
       if (
         !logicalKey ||
         !environmentId ||
-        (currentKey &&
-          config.projectMounts[currentKey]?.some((rep) => rep.environmentId === environmentId))
+        (active?.role === "replica" &&
+          active.transport === "mutagen" &&
+          replicaDriver(config, active) === mesh.environmentId)
       )
         continue;
-      for (const syncKey of [
+      const rawSyncKey =
+        entry.v &&
+        typeof entry.v === "object" &&
+        "syncKey" in entry.v &&
+        typeof entry.v.syncKey === "string"
+          ? entry.v.syncKey
+          : undefined;
+      const syncKeys = new Set([
         logicalKey,
+        rawSyncKey,
+        active?.syncKey,
         ...Object.keys(config.projectAliases).filter(
           (alias) => config.projectAliases[alias] === logicalKey,
         ),
-      ]) {
+      ]);
+      for (const syncKey of syncKeys) {
+        if (!syncKey) continue;
         const identity = sessionIdentity(syncKey, environmentId);
         if (
           !terminated.has(identity.name) &&

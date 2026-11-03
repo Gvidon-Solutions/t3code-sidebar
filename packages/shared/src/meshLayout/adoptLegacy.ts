@@ -1,3 +1,4 @@
+import { authoredBy } from "./authorship.ts";
 import { meshAuthorityOf } from "./authority.ts";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { diff } from "./diff.ts";
@@ -15,11 +16,11 @@ export function adoptLegacy(
   const existing = new Map<string, string>();
   for (const workspace of [...before.workspaces].sort(
     (a, b) =>
-      Number(doc[keys.workspace(a.id)]?.h.slice(20) === authority) -
-        Number(doc[keys.workspace(b.id)]?.h.slice(20) === authority) || (a.id < b.id ? 1 : -1),
+      Number(authoredBy(doc, doc[keys.workspace(a.id)], authority)) -
+        Number(authoredBy(doc, doc[keys.workspace(b.id)], authority)) || (a.id < b.id ? 1 : -1),
   )) {
     const entry = doc[keys.workspace(workspace.id)];
-    if (entry && (!entry.h.startsWith("0000000000000.") || entry.h.slice(20) === authority))
+    if (entry && (!entry.h.startsWith("0000000000000.") || authoredBy(doc, entry, authority)))
       existing.set(workspace.name.trim().toLowerCase(), workspace.id);
   }
   const normalize = (source: SidebarWorkspacesConfig): SidebarWorkspacesConfig => {

@@ -1,3 +1,4 @@
+import { authoredBy } from "./authorship.ts";
 import { normalizeRepresentationPath } from "./representationPath.ts";
 import { meshAuthorityOf } from "./authority.ts";
 import { keys } from "./document.ts";
@@ -139,7 +140,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   );
   claims.sort(
     (a, b) =>
-      Number(b.entry.h.slice(20) === authority) - Number(a.entry.h.slice(20) === authority) ||
+      Number(authoredBy(doc, b.entry, authority)) - Number(authoredBy(doc, a.entry, authority)) ||
       (a.logical < b.logical ? -1 : a.logical > b.logical ? 1 : 0),
   );
   const claimed = new Set<string>();

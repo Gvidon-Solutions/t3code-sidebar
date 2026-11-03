@@ -713,3 +713,31 @@ it.effect(
     }).pipe(Effect.provide(h.layer));
   },
 );
+
+it.effect("after restart terminates the session of a path claim suppressed by authority", () => {
+  const h = harness();
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    yield* service.reconcile;
+    const rep = (yield* mesh.read).config.projectMounts.repo!.find(
+      (rep) => rep.environmentId === "replica",
+    )!;
+    yield* mesh.apply({
+      "mesh.authority": { v: "owner", h: "0000000000001.00000.owner" },
+      "rep/winner/replica": {
+        v: { ...rep, role: "primary", transport: "git" },
+        h: "0000000000001.00000.owner",
+      },
+    });
+    const restarted = yield* ReplicaService.ProjectReplicaService.pipe(
+      Effect.provide(ReplicaService.layer),
+    );
+    yield* restarted.reconcile;
+    expect(h.terminated).toEqual([h.created[0]!.name]);
+    expect(h.created).toHaveLength(1);
+    expect(
+      (yield* mesh.read).config.projectMounts.repo?.some((rep) => rep.environmentId === "replica"),
+    ).toBe(false);
+  }).pipe(Effect.provide(h.layer));
+});

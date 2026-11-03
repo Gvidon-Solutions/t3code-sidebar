@@ -1,3 +1,5 @@
+import { recordLayoutAuthors } from "./authorship.ts";
+import { keys } from "./document.ts";
 import { adoptLegacy } from "./adoptLegacy.ts";
 import { describe, expect, it } from "vite-plus/test";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG as empty } from "@t3tools/contracts";
@@ -64,4 +66,34 @@ it("adopts ambiguous legacy workspace names in favour of the authority's id and 
   expect(config.workspaces.map((w) => w.id)).toEqual(["z"]);
   expect(config.placements.project).toEqual(["z"]);
   expect(config.meshAuthority).toBe("owner");
+});
+
+it("prefers authority entries written with browser clocks after peer replication", () => {
+  const rep = {
+    environmentId: "folder-host",
+    path: "/shared",
+    role: "primary",
+    transport: "git",
+    createdAt: "",
+  };
+  const client = recordLayoutAuthors(
+    {
+      "rep/z/folder-host": { v: rep, h: "0000000000000.00000.browser" },
+      "ws/z": { v: { name: "Main", sort: "V" }, h: "0000000000000.00000.browser" },
+    },
+    "authority",
+  );
+  const doc = {
+    ...client,
+    "mesh.authority": { v: "authority", h: "0000000000001.00000.peer" },
+    "rep/a/folder-host": { v: rep, h: "0000000000009.00000.peer" },
+    "ws/a": { v: { name: "Main", sort: "V" }, h: "0000000000000.00000.peer" },
+  };
+  expect(materialize(doc).projectMounts.z).toHaveLength(1);
+  expect(materialize(doc).projectMounts.a).toEqual([]);
+  expect(materialize(adoptLegacy(empty, doc)).workspaces.map((workspace) => workspace.id)).toEqual([
+    "z",
+  ]);
+  expect(recordLayoutAuthors(client, "authority")).toEqual(client);
+  expect(client[keys.author("0000000000000.00000.browser", "authority")]?.v).toBe(true);
 });
