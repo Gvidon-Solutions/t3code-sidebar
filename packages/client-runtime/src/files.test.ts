@@ -13,12 +13,13 @@ const here = "env-here" as EnvironmentId;
 const there = "env-there" as EnvironmentId;
 
 describe("machineTag", () => {
-  it("takes two uppercase alphanumerics from the label", () => {
+  it("uses the same short-label rule as sidebar machine tags", () => {
     expect(machineTag("gvidon")).toBe("GV");
     expect(machineTag("Operalia")).toBe("OP");
-    expect(machineTag("gor")).toBe("GO");
+    expect(machineTag("gor")).toBe("GOR");
     expect(machineTag("my box")).toBe("MY");
-    expect(machineTag("x")).toBe("X?");
+    expect(machineTag("x")).toBe("X");
+    expect(machineTag("v-p-s")).toBe("VPS");
   });
 });
 

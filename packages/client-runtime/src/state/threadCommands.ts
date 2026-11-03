@@ -221,6 +221,12 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
+    move: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:move",
+      tag: "threads.move",
+      scheduler,
+      concurrency,
+    }),
     updateMetadata: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:update-metadata",
       execute: updateThreadMetadata,

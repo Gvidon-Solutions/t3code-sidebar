@@ -1,3 +1,4 @@
+import { ThreadHandoffState, HandoffEntry } from "./threadHandoffData.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
 import * as DateTime from "effect/DateTime";
@@ -453,6 +454,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   pullRequests: Schema.optional(Schema.Array(ThreadPullRequestLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
+  meshHandoff: Schema.optional(ThreadHandoffState),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
@@ -2876,6 +2878,14 @@ export type OrchestrationV2DomainEventJson = typeof OrchestrationV2DomainEventJs
 
 export const OrchestrationV2Command = Schema.Union([
   Schema.Struct({
+    type: Schema.Literal("thread.move"),
+    modelSelection: Schema.optional(ModelSelection),
+    commandId: CommandId,
+    threadId: ThreadId,
+    projectId: ProjectId,
+    targetEnvironmentId: Schema.optional(Schema.String),
+  }),
+  Schema.Struct({
     type: Schema.Literal("thread.stop"),
     commandId: CommandId,
     threadId: ThreadId,
@@ -3349,6 +3359,14 @@ export type OrchestrationV2Command = typeof OrchestrationV2Command.Type;
 
 // Excluded from dispatchCommand so only the server can send these.
 const OrchestrationV2InternalCommand = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("thread.handoff.record"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    state: ThreadHandoffState,
+    marker: Schema.optional(Schema.String),
+    entries: Schema.optional(Schema.Array(HandoffEntry)),
+  }),
   // Guest share commands the server issues after checking T3 Connect and the guest token.
   Schema.Struct({
     type: Schema.Literal("thread.guest-share.open"),

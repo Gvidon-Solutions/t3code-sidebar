@@ -1,9 +1,11 @@
 import { useAtomValue } from "@effect/atom-react";
-import { machineTag } from "@t3tools/client-runtime/files";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useState } from "react";
 
 import { useActiveProjectTarget } from "~/hooks/useActiveProjectTarget";
+import { useMeshLayout } from "~/hooks/useMeshLayout";
+import { MachineTag } from "../workspaces/MachineTag";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { useProjects } from "~/state/entities";
 import { filesEnvironment } from "~/state/files";
@@ -31,14 +33,6 @@ import { openOpenFileDialog, useOpenFileDialogStore } from "./openFileDialogStat
 
 const LIST_LIMIT = 50;
 
-function EnvironmentTag({ label }: { label: string }) {
-  return (
-    <span className="rounded-sm bg-muted px-1 py-0.5 font-mono text-2xs text-muted-foreground">
-      {machineTag(label)}
-    </span>
-  );
-}
-
 function OpenFileDialogContent({
   initialEnvironmentId,
   initialPath,
@@ -46,7 +40,11 @@ function OpenFileDialogContent({
   initialEnvironmentId: EnvironmentId | null;
   initialPath: string | null;
 }) {
-  const identities = useAtomValue(environmentSummaries.identitiesAtom);
+  const { config } = useMeshLayout();
+  const identities = useAtomValue(environmentSummaries.identitiesAtom).map((identity) => ({
+    ...identity,
+    ...machineDisplayOf(config ?? { machines: {} }, identity.environmentId, identity.label),
+  }));
   const connectedIds = useAtomValue(environmentSummaries.connectedEnvironmentIdsAtom);
   const projects = useProjects();
   const active = useActiveProjectTarget();
@@ -164,7 +162,7 @@ function OpenFileDialogContent({
                         setError(null);
                       }}
                     >
-                      <EnvironmentTag label={identity.label} />
+                      <MachineTag machine={identity} />
                       <span className={connected ? "" : "text-muted-foreground"}>
                         {identity.label}
                       </span>

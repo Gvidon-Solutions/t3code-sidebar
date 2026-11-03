@@ -1,6 +1,12 @@
+import { useAtomCommand } from "../../state/use-atom-command";
+import { projectEnvironment } from "../../state/projects";
 import { useAtomValue } from "@effect/atom-react";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
-import { machineTag, suggestMerges } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  machineTag,
+  renameLogicalProject,
+  suggestMerges,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import {
   projectFoldModeOf,
@@ -21,7 +27,7 @@ import { scopedProjectKey } from "../../lib/scopedEntities";
 import { useServerConfigs } from "../../state/entities";
 import { useReplicaStatuses } from "../../state/meshReplicas";
 import { connectedEnvironmentIdsAtom } from "../../state/presentation";
-import type { HomeProjectScope } from "../home/homeThreadList";
+import { homeProjectWorkspaceIds, type HomeProjectScope } from "../home/homeThreadList";
 import {
   resolveThreadListV2Status,
   type ThreadListV2Item,
@@ -50,6 +56,7 @@ export function useWorkspaceHome(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
 }) {
   const workspaces = useSidebarWorkspaces();
+  const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: true });
   const {
     config,
     currentWorkspaceId,
@@ -108,14 +115,9 @@ export function useWorkspaceHome(input: {
 
   const workspaceIdsOf = useCallback(
     (scope: HomeProjectScope): ReadonlyArray<string> => {
-      const ref = scope.projectRefs[0];
-      if (ref === undefined) return [];
-      return (
-        scopeByProjectRef.get(scopedProjectKey(ref.environmentId, ref.projectId))?.workspaceIds ??
-        []
-      );
+      return config === null ? [] : homeProjectWorkspaceIds(scope, config, isScratchScope(scope));
     },
-    [scopeByProjectRef],
+    [config, isScratchScope],
   );
 
   /** Whether a project's folder shows in the open workspace. */
@@ -357,12 +359,27 @@ export function useWorkspaceHome(input: {
         canSplit:
           scope.projects.length > 1 || Object.values(config.projectAliases).includes(projectKey),
         suggestions: suggestionsByScope.get(projectKey) ?? [],
+        onRename: (title: string) => {
+          workspaces.updateConfig((current) =>
+            renameLogicalProject(current, projectKey, title, scope.projects),
+          );
+          for (const project of scope.projects)
+            void updateProject({
+              environmentId: project.environmentId,
+              input: { projectId: project.id, title },
+            });
+        },
         onMerge: (into: string) => workspaces.edit.mergeProject(projectKey, into),
         onSplit: (environmentId: string) =>
-          workspaces.edit.splitProject(projectKey, environmentId, `${projectKey}~${environmentId}`),
+          workspaces.edit.splitProject(
+            projectKey,
+            environmentId,
+            `${projectKey}~${environmentId}`,
+            scope.projects.find((project) => project.environmentId === environmentId),
+          ),
       };
     },
-    [config, input.projectScopes, suggestionsByScope, workspaces.edit],
+    [config, input.projectScopes, suggestionsByScope, workspaces, updateProject],
   );
 
   const workspace =

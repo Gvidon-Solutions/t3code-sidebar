@@ -1,3 +1,7 @@
+import { ThreadHandoffService } from "../../../mesh/ThreadHandoffService.ts";
+import { assertNotLinked } from "../../linkOrigin.ts";
+import * as Option from "effect/Option";
+import { CommandId as HandoffCommandId, EnvironmentId } from "@t3tools/contracts";
 import {
   type CommandId,
   type RuntimeRequestId,
@@ -22,6 +26,7 @@ import {
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
 import * as ScheduledTasks from "../../../scheduledTasks/ScheduledTaskService.ts";
 import { queuedRunsInDeliveryOrder } from "../../../orchestration-v2/QueuedRunOrder.ts";
+import { threadSelf } from "./self.ts";
 import { ThreadToolkit } from "./tools.ts";
 
 function queueEntry(
@@ -91,6 +96,7 @@ const writesThread = <P extends { readonly threadId?: ThreadId | undefined }, A,
 ) => McpToolAccess.writesThreads((params: P) => [params.threadId], handle);
 
 export const layer = McpToolAccess.toLayer(ThreadToolkit, {
+  t3_thread_self: McpToolAccess.readsAsCaller(() => threadSelf()),
   run_scheduled_task_now: McpToolAccess.writesEnvironment((input) =>
     Effect.gen(function* () {
       const scheduler = yield* ScheduledTasks.ScheduledTaskService;
@@ -132,6 +138,34 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           link: McpInvocationContext.threadLinkFor(scope, match.threadId),
         })),
       };
+    }),
+  ),
+  t3_thread_move: writesThread((input) =>
+    Effect.gen(function* () {
+      const caller = yield* readCaller();
+      yield* assertNotLinked(caller, "move conversations through other links.");
+      const { projection } = yield* readThread(input.threadId);
+      const service = yield* Effect.serviceOption(ThreadHandoffService);
+      if (Option.isNone(service)) return yield* unavailable();
+      return yield* service.value.move(
+        {
+          commandId: input.clientRequestId
+            ? HandoffCommandId.make(
+                `${caller.scope.requestNamespace}:move:${input.clientRequestId}`,
+              )
+            : yield* newCommandId(),
+          threadId: projection.thread.id,
+          ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
+          ...(input.targetEnvironmentId === undefined
+            ? {}
+            : { targetEnvironmentId: EnvironmentId.make(input.targetEnvironmentId) }),
+          ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+          ...(input.logicalKey === undefined ? {} : { logicalKey: input.logicalKey }),
+          ...(input.message === undefined ? {} : { message: input.message }),
+          ...(input.undoHandoffId === undefined ? {} : { undoHandoffId: input.undoHandoffId }),
+        },
+        caller.limits,
+      );
     }),
   ),
   t3_thread_transfer: McpToolAccess.either(
@@ -331,6 +365,20 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     Effect.gen(function* () {
       const { threads, projection, caller } = yield* readThread(input.threadId);
       const common = { commandId: yield* newCommandId(), threadId: projection.thread.id };
+      if (input.action === "move" && input.targetEnvironmentId !== undefined) {
+        const scope = yield* readCaller();
+        yield* assertNotLinked(scope, "move conversations through other links.");
+        const service = yield* Effect.serviceOption(ThreadHandoffService);
+        if (Option.isNone(service)) return yield* unavailable();
+        return yield* service.value.move(
+          {
+            ...common,
+            ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
+            targetEnvironmentId: EnvironmentId.make(input.targetEnvironmentId),
+          },
+          scope.limits,
+        );
+      }
       if (input.action === "settle") {
         return yield* threads
           .settleThread({ ...common, byOwnAgent: caller?.id === projection.thread.id })
@@ -338,6 +386,16 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       }
       let command: OrchestrationV2Command;
       switch (input.action) {
+        case "move":
+          command = {
+            ...common,
+            type: "thread.move",
+            projectId: yield* required(input.projectId, "projectId"),
+            ...(input.targetEnvironmentId === undefined
+              ? {}
+              : { targetEnvironmentId: input.targetEnvironmentId }),
+          };
+          break;
         case "snooze":
           if (input.snoozedUntil === undefined) {
             return yield* new OrchestratorMcpFailure({

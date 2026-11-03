@@ -509,6 +509,20 @@ it.effect("a client caller targets any thread within its ceiling and cannot act 
     expect(pinned.isError).toBe(false);
     expect(pinned.structuredContent).toMatchObject({ sequence: 7 });
 
+    const moved = yield* call(
+      "t3_thread_organize",
+      { action: "move", threadId: "other-project-thread", projectId: "destination" },
+      clientScope("auto"),
+    );
+    expect(moved.isError).toBe(false);
+    expect(moved.structuredContent).toMatchObject({ sequence: 7 });
+    const missingTarget = yield* call(
+      "t3_thread_organize",
+      { action: "move", threadId: "other-project-thread" },
+      clientScope("auto"),
+    );
+    expect(declaredFailure(missingTarget)).toMatchObject({ code: "invalid_request" });
+
     const aboveCeiling = yield* call(
       "t3_thread_organize",
       { action: "pin", threadId: "other-project-thread" },

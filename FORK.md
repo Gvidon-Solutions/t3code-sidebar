@@ -120,11 +120,46 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How:** a shared pure strip model combines layout representations, live replica status and legacy member environments. Identical chips show primaries, one ⇄ separator, then replicas; only unsynced replicas have status dots. Three chips fit before overflow. Strips open Machines; scratch creation uses the selected machine’s scratch project rather than creating a replica.
 - **Where:** `packages/client-runtime/src/state/meshLayout/projectMachineStrip.ts`, `projectGrouping.ts`; web `components/workspaces/{ProjectMachineStrip,WorkspaceSidebar}`; mobile `features/workspaces/{ProjectMachineStrip,WorkspaceChrome,workspaceNavigator,useWorkspaceHome}`, `HomeScreen` and `WorkspaceDrawer`.
 
+### 2026-11-03 — T3 Mesh — Stage J global agent instructions
+
+- **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to gor.
+- **How:** staged `t3ctl agents sync/status` uses local file operations or pinned SSH routes, with offline render/diff/backup/isolation tests and real Codex/OpenCode eval evidence. Mesh routing resolves configured names and project paths, searches across machines, and runs git on a replica’s primary. General dispatch rules cover API prerequisites and execution location; compact skill tables are excluded from the formatter.
+- **Where:** `docs/skill-t3-next/`, `docs/agents-global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
+
+### 2026-11-03 — T3 Mesh — Stage M session identity and thread access
+
+- **What:** agents can identify their thread and project representation, query threads across the mesh, and address remote threads by id alone. The staged CLI supports the same commands and current pending-question tools.
+- **How:** read-only `t3_thread_self` reads local layout, replica runtime and thread lineage; each mesh turn receives a compact identity note (≤600 bytes). MCP routing probes unknown ids through `callRouted`, caches locations and fans out list/search with concurrency four, deadlines and partial failures. Link credentials and mode checks remain authoritative; a full-access intermediary can relay reads to a fenced destination, whose own credential refuses writes. The tool-list budget grows by 242 bytes for the self tool; the dynamic note has its own measured 600-byte ceiling, avoiding full layout injection.
+- **Where:** server `mcp/toolkits/thread/self.ts`, `mesh/MeshThreadAccess.ts`, `McpToolAccess.ts`, UI toolkit, `mesh/MeshRelay.ts` and `replicas/ReplicaInstructions.ts`; seams in turn start, Claude's read-only allowlist and additive MCP list/search result fields. Staged skill review copy: `docs/skill-t3-next/`. No mesh CRDT contracts or service interfaces changed.
+
 ### 2026-11-02 — T3 Mesh — round 2 replica acceptance
 
 - **What:** real Mutagen replica acceptance across gor, isolated gvidon and the VPS container, including staged `t3ctl-next`.
 - **How:** Settings-model SSH routes, authenticated MCP launches, live status, file and session assertions, conflict/retry, restart, removal and orphan checks. Build-current mode avoids the shared build checkout; deploy copies only the staged skill.
 - **Where:** `scripts/mesh-e2e/round2.sh`, `round2-routes.sh` and the accompanying run report/log. Product code is unchanged.
+
+### 2026-11-03 — T3 Mesh — cross-device QA corrections
+
+- **What.** Mesh settings use machine-wide scope; linked machines omit unavailable versions.
+  Machine names and short default tags agree across menus and file pickers. Files from another
+  machine identify their source in web tabs and the native viewer.
+- **How.** Registered replicas retain visible conflict/error rows. Independent Git checkouts can
+  split out of repository groups, and stale replica failures do not follow a Git primary. Mobile
+  preserves offline workspace folders without duplicate rows or unavailable thread actions;
+  mesh controls have accessible names, readable tags and 44-point touch targets.
+- **Where.** Fork workspace components on both clients; small seams in settings scope, file
+  navigation and web panel tabs; shared display/replica helpers in `packages/client-runtime`.
+  CRDT core, RPC contracts and server service interfaces stay unchanged.
+
+### 2026-11-02 — T3 Mesh — web accessibility QA
+
+- **What:** machine tags remain readable with pale custom colors in either theme. Pending
+  replica errors and the mesh footer expose their full text in tooltips; Retry names its machine
+  for screen readers and keyboard actions show focus.
+- **How:** tags use the theme foreground over the existing machine tint; truncated rows reuse
+  the shared Tooltip primitive. A browser regression checks pale, dark and preset tag colors.
+- **Where:** web `components/workspaces/{MachineTag,PendingReplicaRow,MeshFooterStatus}.tsx`
+  and `MachineTag.browser.test.tsx`. No mesh contracts or server interfaces change.
 
 ### 2026-11-02 — T3 Mesh — round 1 E2E
 
@@ -1446,3 +1481,26 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `packages/contracts/src/settings.ts`, `packages/client-runtime/src/state/sharedSettings.ts`,
   `apps/web/src/components/AppSidebarLayout.tsx`, `apps/web/src/components/settings/SettingsPanels.tsx`
   and `settingsSearch.ts`; UI in `apps/web/src/components/workspaces/`.
+
+### 2026-11-03 — T3 Mesh — Stage L project moves and names
+
+- **What.** Move an idle thread between projects or linked machines from the workspace sidebar or
+  the phone's long-press menu. Web supports dragging onto a project and undoing the move.
+  Rename logical project folders across connected representations.
+- **How.** `thread.move` preserves thread metadata and history and refuses unfinished work.
+  Local threads take the destination project root; worktree threads keep their checkout.
+  Cross-machine moves use a link-only, retryable handoff: copy the visible transcript and uploaded
+  attachments, seed the destination's first context without starting a turn, and archive the source
+  with reciprocal environment-aware links. Remote moves ask for confirmation and allow ten seconds
+  to undo. `t3_thread_move` and `t3ctl move --project X --on M` use the same service. Logical names use
+  `proj/<logicalKey>` LWW entries materialized as decoding-defaulted `projectTitles`; clients
+  update each reachable physical project and prefer the layout title.
+- **Where.** `apps/server/src/mesh/ThreadHandoffService.ts`, attachment upload store, orchestrator
+  and MCP thread/project toolkits; shared `meshLayout`; client-runtime
+  project grouping/thread commands; web `workspaces` and mobile `workspaces`/thread menus.
+
+### 2026-11-03 — Stage L move with target model
+
+- Move confirmation on web and mobile reuses the composer model/options picker against the destination environment. It preserves the current selection or chooses the destination catalog default with a notice.
+- `threads.move`, MCP `t3_thread_move` and `t3ctl move --agent/--model/--effort` carry the target selection. Local moves update it atomically; cross-machine moves import plain conversation context into the selected harness. Forks discard source handoff ownership so they can move independently.
+- Implementation: workspace move dialogs/sheets, shared `meshLayout/moveModel`, `ThreadHandoffService`, orchestration move command and `ThreadForkService`.

@@ -18,6 +18,7 @@ export type ThreadActionMenuId =
   | "snooze"
   | `snooze:${string}`
   | "unsnooze"
+  | "move-project"
   | "rename"
   | "regenerate-title"
   | "mark-unread"

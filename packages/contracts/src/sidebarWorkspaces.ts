@@ -99,7 +99,6 @@ export const SidebarProjectMountStatus = Schema.Struct({
 export type SidebarProjectMountStatus = typeof SidebarProjectMountStatus.Type;
 
 export const SidebarWorkspacesConfig = Schema.Struct({
-  projectTitles: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   meshAuthority: Schema.optionalKey(Schema.String),
   meshWriters: Schema.optionalKey(Schema.Array(Schema.String)),
   workspaces: Schema.Array(SidebarWorkspace).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
@@ -149,6 +148,9 @@ export const SidebarWorkspacesConfig = Schema.Struct({
   ),
   /** Environment id → how the user names and marks that machine. */
   machines: Schema.Record(Schema.String, SidebarMachine).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
+  projectTitles: Schema.Record(Schema.String, Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   /** Any project key → the logical project key it belongs to (merged projects). */

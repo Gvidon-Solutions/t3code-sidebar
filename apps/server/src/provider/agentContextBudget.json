@@ -1,5 +1,6 @@
 {
   "claudeSystemAppendBytes": 8334,
   "codexAdditionalContextBytes": 10060,
-  "mcpToolListJsonBytes": 54099
+  "mcpToolListJsonBytes": 55469,
+  "threadContextMaxBytes": 600
 }

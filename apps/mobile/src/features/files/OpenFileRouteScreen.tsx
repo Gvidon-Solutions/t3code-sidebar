@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAtomValue } from "@effect/atom-react";
-import { addRecentFile, machineTag, parseT3FileLink } from "@t3tools/client-runtime/files";
+import { addRecentFile, parseT3FileLink } from "@t3tools/client-runtime/files";
 import { EnvironmentId } from "@t3tools/contracts";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
@@ -17,6 +17,8 @@ import { filesEnvironment } from "../../state/files";
 import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import { useEnvironmentQuery } from "../../state/query";
 import { useWorkspaceEnvironments } from "../../state/workspace";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { fileRoutePathSegments } from "./filePath";
 
 const RECENT_LIMIT = 12;
@@ -35,7 +37,15 @@ export function OpenFileRouteScreen(
 ) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<ReactNavigation.RootParamList>>();
-  const environments = useWorkspaceEnvironments();
+  const { config } = useMeshLayout();
+  const environments = useWorkspaceEnvironments().map((environment) => ({
+    ...environment,
+    display: machineDisplayOf(
+      config ?? { machines: {} },
+      environment.environmentId,
+      environment.environmentLabel,
+    ),
+  }));
   const connectedIds = useAtomValue(connectedEnvironmentIdsAtom);
   const initialEnvironmentId =
     (props.route.params.environmentId as EnvironmentId | undefined) ??
@@ -44,10 +54,11 @@ export function OpenFileRouteScreen(
   const [selectedEnvironmentId, setSelectedEnvironmentId] =
     useState<EnvironmentId>(initialEnvironmentId);
   const [value, setValue] = useState(props.route.params.cwd ?? "~/");
+  const [recentError, setRecentError] = useState<string | null>(null);
   const [recents, setRecents] = useState<ReadonlyArray<string>>([]);
 
   const selectedLabel =
-    environments.find((entry) => entry.environmentId === selectedEnvironmentId)?.environmentLabel ??
+    environments.find((entry) => entry.environmentId === selectedEnvironmentId)?.display.label ??
     String(selectedEnvironmentId);
   const targetConnected = connectedIds.includes(selectedEnvironmentId);
   const callEnvironmentId = targetConnected ? selectedEnvironmentId : (connectedIds[0] ?? null);
@@ -78,13 +89,23 @@ export function OpenFileRouteScreen(
     let cancelled = false;
     AsyncStorage.getItem(`t3code:recent-files:${selectedEnvironmentId}`)
       .then((raw) => {
-        if (cancelled || raw === null) return;
+        if (cancelled) return;
+        setRecentError(null);
+        if (raw === null) {
+          setRecents([]);
+          return;
+        }
         const parsed: unknown = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           setRecents(parsed.filter((entry): entry is string => typeof entry === "string"));
         }
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRecents([]);
+          setRecentError(String(error));
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -94,11 +115,12 @@ export function OpenFileRouteScreen(
     const next = addRecentFile(recents, absolutePath, RECENT_LIMIT);
     setRecents(next);
     void AsyncStorage.setItem(`t3code:recent-files:${environmentId}`, JSON.stringify(next)).catch(
-      () => undefined,
+      (error: unknown) => setRecentError(String(error)),
     );
     const otherMachine = environmentId !== props.route.params.environmentId;
     navigation.navigate("ThreadFile", {
       environmentId: String(environmentId),
+      sourceEnvironmentId: props.route.params.environmentId,
       ...(otherMachine
         ? { cwd: "/", projectName: selectedLabel }
         : props.route.params.threadId !== undefined
@@ -141,8 +163,9 @@ export function OpenFileRouteScreen(
             const connected = connectedIds.includes(environment.environmentId);
             return (
               <Chip
+                size="touch"
                 key={environment.environmentId}
-                label={`${machineTag(environment.environmentLabel)} ${environment.environmentLabel}`}
+                label={`${environment.display.tag} ${environment.display.label}`}
                 selected={environment.environmentId === selectedEnvironmentId}
                 disabled={!connected}
                 onPress={() => {
@@ -167,6 +190,8 @@ export function OpenFileRouteScreen(
           autoCapitalize="none"
           autoCorrect={false}
           value={value}
+          accessibilityLabel="File path"
+          className="min-h-[45px]"
           placeholder="/srv/app/README.md or ~/notes.md"
           onChangeText={setValue}
           onSubmitEditing={open}
@@ -177,7 +202,9 @@ export function OpenFileRouteScreen(
             {entries.map((entry) => (
               <Pressable
                 key={entry.absolutePath}
-                className="flex-row items-center justify-between gap-3 px-4 py-3 active:opacity-60"
+                accessibilityRole="button"
+                accessibilityLabel={`${entry.name}, ${entry.kind}`}
+                className="min-h-[45px] flex-row items-center justify-between gap-3 px-4 py-3 active:opacity-60"
                 onPress={() => {
                   if (entry.kind === "directory") {
                     setValue(`${entry.absolutePath}/`);
@@ -205,13 +232,20 @@ export function OpenFileRouteScreen(
           <Text className="text-xs font-t3-medium text-foreground-muted">
             Recent on {selectedLabel}
           </Text>
+          {recentError === null ? null : (
+            <Text accessibilityRole="alert" className="text-sm text-warning-foreground">
+              Could not save or load recent files: {recentError}
+            </Text>
+          )}
           {recents.length === 0 ? (
             <Text className="text-sm text-foreground-muted">No files opened here yet.</Text>
           ) : (
             recents.map((file) => (
               <Pressable
                 key={file}
-                className="rounded-xl bg-grouped-card px-3 py-2 active:opacity-60"
+                accessibilityRole="button"
+                accessibilityLabel={file}
+                className="min-h-[45px] justify-center rounded-xl bg-grouped-card px-3 py-2 active:opacity-60"
                 onPress={() => {
                   if (!targetConnected) return;
                   openPath(selectedEnvironmentId, file);

@@ -1,12 +1,12 @@
 import type { EnvironmentId } from "@t3tools/contracts";
+import { machineDisplayOf } from "./state/machineDisplay.ts";
 
 /** T3 Mesh (fork): routing a file request to the machine that holds it. */
 export const T3_FILE_URL_PREFIX = "t3-file://";
 
-/** The tag two uppercase letters or digits of a label, as the machine picker shows it. */
+/** Uses the sidebar's default tag rule in file machine pickers. */
 export function machineTag(label: string): string {
-  const alphanumerics = label.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return (alphanumerics.slice(0, 2) || "??").padEnd(2, "?");
+  return machineDisplayOf({ machines: {} }, "?", label).tag;
 }
 
 /**

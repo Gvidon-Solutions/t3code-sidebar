@@ -17,7 +17,7 @@ export function Chip(props: {
   readonly selected?: boolean;
   readonly icon?: AppSymbolName;
   readonly trailingIcon?: AppSymbolName;
-  readonly size?: "small" | "default";
+  readonly size?: "small" | "default" | "touch";
   readonly glass?: boolean;
   readonly colorScheme?: "light" | "dark";
   readonly onPress?: () => void;
@@ -27,7 +27,7 @@ export function Chip(props: {
   const small = props.size === "small";
   const layout = cn(
     "flex-row items-center gap-1.5 rounded-2xl px-3",
-    small ? "py-1" : "min-h-8 py-1.5",
+    small ? "py-1" : props.size === "touch" ? "min-h-[45px] py-1.5" : "min-h-8 py-1.5",
   );
   const iconColor = props.selected ? "accent-primary-foreground" : "accent-icon-muted";
   const content = (
@@ -79,7 +79,7 @@ export function Chip(props: {
       accessibilityState={{ selected: props.selected, disabled: Boolean(props.disabled) }}
       disabled={props.disabled}
       onPress={props.onPress}
-      hitSlop={6}
+      hitSlop={props.size === "touch" ? 0 : 6}
       className={props.disabled ? "opacity-45" : "active:opacity-70"}
     >
       {body}

@@ -16,6 +16,17 @@ Act immediately: map the owner's request, often voice-typed and messy, to `t3ctl
 
 With several servers linked, the mesh is one sidebar: `--all` covers every linked machine, `--on <M>` targets one, and `machines` / `mesh status` show the whole picture. See [Mesh](#mesh-several-machines-one-sidebar).
 
+## Mesh: choose the action first
+
+Read this skill once, then act; do not explore infrastructure files. Use the listed CLI command when it covers the request: it handles resolution, enumeration and defaults. For covered create/mutate operations use the documented CLI command so its configured defaults are applied; native MCP does not inherit CLI-only defaults. Use native MCP for display and gaps in the CLI; inspect its schema before invoking it. Resolve the operation’s execution location before inspecting state; the current shell directory does not determine the target. Names beginning with `t3_` are MCP tools, invoked through `t3ctl tool <name> '<json>'`, not CLI subcommands. On an API error, follow its recovery or use the documented CLI command; a missing API field does not establish that configured command defaults are unavailable. Preserve full returned identifiers and the target environment in follow-up commands. Machine names: `t3ctl machines` is authoritative (labels/tags; Russian names like «гвидон», «опералия», «гор(а)», «впс» resolve too). Never create or remove links unless the owner asks.
+
+- **Find or open a thread anywhere** → `t3ctl find "<topic>" --all --json` (try the Russian words and their English equivalents), take the best **title** match, then `ui_open` with its full `threadId` and `environmentId`. A printed link alone does not open the owner's screen.
+- **New thread in project X on machine M** → `t3ctl new --project X --on M "task"`; it places a replica when needed and launches there. Keep the configured default agent/model unless asked.
+- **Put X on M** → `t3ctl place X --on M --wait` (replica of the first primary; `--primary --path` for an existing checkout); check role and state in the output.
+- **A file from X on M** → `t3_project_machines` for X, then construct an **absolute** path under M's representation and read/open it with M's `environmentId`.
+- **What runs everywhere / which machines** → `t3ctl status --all`; `t3ctl machines` (or `mesh status`).
+- **Git, builds, tests in a replica** (even `git status`) → on its primary: `ssh <reach> 'cd <primaryPath> && …'`; the exact command is in the thread context and `t3_thread_self`. Never `git init` or commit in a replica; verify the result on the primary.
+
 ## Commands
 
 | Goal | Command |
@@ -52,6 +63,7 @@ With several servers linked, the mesh is one sidebar: `--all` covers every linke
 | Add / create / clone a project | `t3ctl project-add ~/path [--title T] [--mkdir]`, `t3ctl project-new "title"` (T3 creates a fresh git repo), `t3ctl project-clone <url\|owner/name> [--dest PATH\|--dir PARENT]` |
 | Rename / configure / remove a project | `t3ctl project-rename <P> "title"`, `t3ctl project-set <P> [--agent/--model/--effort] [--root PATH] [--auto-pull true] [--env-mode local\|worktree] [--emoji 🚀] [--json '{…}']`, `t3ctl project-remove <P> --yes [--force]` |
 | Sidebar workspaces (tiles) | `t3ctl ws` (list with their projects), `ws add "Name" [--icon XY] [--color #hex]`, `ws rename <W> "Name"`, `ws set <W> [--icon XY\|none] [--color #hex]`, `ws assign <P> <W>` (only there), `ws show <P> <W>` / `ws hide <P> <W>` (a project can show in several workspaces, "No project" too; needs sidebar.21+), `ws unassign <P>`, `ws default <W>`, `ws move <W> <pos>`, `ws rm <W> --yes`, `ws rule add "<glob>" <W>` / `ws rule rm "<glob>"`, `ws quiet <days>`, `ws fold <P> quiet | active | auto [<W>]`(per workspace: move a project into "Quiet projects" by hand in workspace W — it stays there until moved back;`active`= never folds there;`auto`= folds by itself; W is required when P shows in several workspaces;`ws always-show <P> [<W>]`=`fold active`; needs sidebar.23+) |
+| Global harness instructions | `t3ctl agents sync [--to all\|machine,…] [--home /isolated/home] [--apply]` (diff first, backups + verification); `t3ctl agents status` |
 | Machines and mesh | `t3ctl machines [--json] [--probe]`, `t3ctl mesh status [--json]`, `t3ctl mesh link <M> [--url URL] [--ssh DEST]` (full access; pairing code minted over ssh), `t3ctl mesh unlink <M> --yes` |
 | A project on another machine | `t3ctl place <P> --on <M> [--primary] [--source <M2>] [--path PATH] [--wait [dur]]`, `t3ctl unplace <P> --on <M> --yes`, `t3ctl replicas [--json]`, `t3ctl replica retry <P> --on <M>` |
 | A new thread on another machine | `t3ctl new --project P --on M [other new options] "task"`: places a replica when needed, waits, then launches there |
@@ -67,7 +79,7 @@ With several servers linked, the mesh is one sidebar: `--all` covers every linke
 ### Agents and models
 
 - `--agent` is a T3 provider instance (`t3ctl models` lists them): `codex`, `claude` (= `claudeAgent`), `grok`, `pi`, `cursor`, `opencode`… Aliases also work as `--agent` or `--model`: `luna`, `astra`, `sol` (Codex), `opus`, `sonnet`, `fable`, `haiku` (Claude), `deepseek` / `1017` (OpenCode + DeepSeek V4.1 Flash 1017).
-- **The default is Claude Opus 5.5 (`claude-opus-5-5`)** (owner rule of 2026-10-15): when the owner asks to spawn/start an agent without naming one, run Opus 5.5, so plain `t3ctl new` needs no `--agent`. Use Codex only when the owner asks for Codex or names a Codex model; Codex then runs on Luna (`gpt-6-luna`, the default Codex model), never Astra, unless the owner names another model.
+- **Unless `T3CTL_AGENT` supplies an explicit runtime default, the default is Claude Opus 5.5 (`claude-opus-5-5`)** (owner rule of 2026-10-15): when the owner asks to spawn/start an agent without naming one, run Opus 5.5, so plain `t3ctl new` needs no `--agent`. Use Codex only when the owner asks for Codex or names a Codex model; Codex then runs on Luna (`gpt-6-luna`, the default Codex model), never Astra, unless the owner names another model.
 - **DeepSeek is always 1017.** When the owner asks for a DeepSeek agent/thread, use `--agent deepseek` (or `--agent 1017`; shorthand for `opencode` + `deepseek/deepseek-flash`, DeepSeek V4.1 Flash 1017), or spell out `--agent opencode --model deepseek/deepseek-flash`. Never use `deepseek/deepseek-v4-pro` unless the owner explicitly names V4 Pro.
 - `--effort` maps to the model's effort option (`low…max`, Claude also `ultrathink`/`ultracode`). `--fast` sets Codex's priority tier or Claude's fast mode. `--opt key=value` sets any other model option shown by `t3ctl models`.
 - `--mode` sets permissions: `full-access` (default) `| auto | auto-accept-edits | approval-required`. `--plan` starts in plan mode.
@@ -90,6 +102,7 @@ With several servers linked, the mesh is one sidebar: `--all` covers every linke
 
 A machine (`<M>`) is this server, a linked server, or one the layout knows. Resolve it by environment id/prefix, label, tag, ssh alias, or the owner's Russian name (`гвидон`, `гора`, `опералия`); `t3ctl machines` lists them with tags. A logical project has **primaries** (own `.git`, builds there) and **replicas** (Mutagen working copies synced from a primary). On a replica, run git, builds and tests on its primary: `ssh <reach> 'cd <primaryPath> && …'`, never `git init`/commit there. Which machine is primary is layout configuration, not code.
 
+- Canonical instructions: `global/GLOBAL.md` + `global/machines.json`; `agents sync` adds each machine’s header and updates only installed harness directories.
 - "What machines / what's in the mesh?" → `t3ctl machines`, `t3ctl mesh status`.
 - "New thread in X on Operalia / на горе" → `t3ctl new --project X --on <M> "…"`. It places a replica when X is not there, waits for registration and launches there; do not place by hand first.
 - "Make X a replica on M / поставь X на гору" → `t3ctl place X --on <M> [--source <primary>] [--wait]`. Adding a second primary needs `--primary --path <existing checkout>`.
@@ -112,28 +125,9 @@ A machine (`<M>`) is this server, a linked server, or one the layout knows. Reso
 2. On a version `t3ctl` was not tested on, run the selftest **on gor** (it creates and deletes a temp project and threads and spends a few cheap Codex turns): copy the `scripts/` directory there and run the isolated mesh selftest with `T3CTL_FULL_SELFTEST=1 T3CTL_MESH_E2E=1 T3CTL_AGENT=codex T3CTL_ORIGIN=http://127.0.0.1:13795 T3CODE_HOME=<test-base> T3CTL_T3_BIN=<test-runtime>/t3 bash scripts/selftest.sh`; `T3CTL_OFFLINE_ONLY=1` runs only offline tests. Use Node 22+ (`PATH=$HOME/.nvm/versions/node/v23.11.1/bin:$PATH`). To put gor on the same build: `t3ctl server install` on gvidon, ship the version dir to gor's `~/.t3-sidebar-server/runtime/versions/`, then run `t3ctl server use <ver> --yes` on gor (no permission needed there).
 3. Fix `scripts/t3ctl.mjs` against the new schemas (`t3ctl schema <tool>`; RPC and command types in the fork's `packages/contracts/src/`), rerun the selftest, then add the version to `TESTED_VERSIONS`.
 
-## Infrastructure around T3 (state of 2026-10-14)
+## Infrastructure
 
-**gvidon (this machine, the owner's main box).**
-
-- Server: `t3code-sidebar.service` (user unit, hand-written, `~/.config/systemd/user/`), `t3 serve --base-dir ~/.t3-sidebar-server --host 127.0.0.1 --port 3774`. Runtime builds in `~/.t3-sidebar-server/runtime/versions/<ver>/`; the unit's `ExecStart` picks one (`0.0.45-sidebar.23` since 2026-10-15; older builds stay installed for rollback). Log: `~/.t3-sidebar-server/serve.log`. Data: `~/.t3-sidebar-server/userdata/` (`statev2.sqlite` is the live DB; `state.sqlite` there is a stale pre-migration copy; `settings.json` holds server settings incl. `sidebarWorkspaces`; `server-runtime.json` holds pid/port). Scratch threads live in `~/.t3-sidebar-server/scratch`, worktrees in `~/.t3-sidebar-server/worktrees/<project>/<branch>`.
-- `t3` CLI: `~/.local/bin/t3` runs the runtime the unit runs (so CLI commands never touch the live DB with another version). Useful: `t3 auth pairing create`, `t3 auth session issue`, `t3 pair --ttl 1h` (phone/browser pairing link; for the phone replace the host with `happier.nobodyshurt.com`).
-- Desktop app: T3 Code Sidebar (`com.gvidon.T3CodeSidebar`, deb), talks to the :3774 server. Updates arrive from the fork's GitHub releases; a `.deb` install asks for the system password.
-- Old upstream T3 (`t3code.service`, `~/.t3`, :3773) was removed on 2026-10-14; archive in `~/.local/share/t3-archive/`. The old `t3ctl` (SQLite + v1 API) is archived in `~/.local/share/t3-archive/t3ctl-v1-20261014/`.
-
-**Remote access.**
-
-- Phone/remote: `https://happier.nobodyshurt.com` → RU relay (80.78.248.120) container `t3-frp-visitor` (172.18.0.1:13773) → FRP stcp → gvidon `frp-t3-provider.service` → `127.0.0.1:3774`. `frp-t3-provider` starts after `t3code-sidebar`. Restarting `frp-t3-provider` cuts phone access only, not threads; still tell the owner first.
-- Other FRP units on gvidon: `frp-workstation` (desktop access), `frp-sshd` (key-only sshd 127.0.0.1:22222). Reverse SSH fallbacks: `nobodyshurt-reverse-ssh` (RU 127.0.0.1:2222 → gvidon:22) and `fi-reverse-ssh` (FI 127.0.0.1:2222 → gvidon:22; `ssh -J root@152.89.244.57 -p 2222 user@127.0.0.1`).
-- `gvidon.vpn`: reverse tunnel hub (`gvidon-bridge.service`, xray) that lands on gvidon's LAN address, not 127.0.0.1. Anything the owner should open remotely must listen on `0.0.0.0` or the LAN IP; hand out `http://gvidon.vpn:<port>`. The :3774 server listens on 127.0.0.1 only (on purpose; the phone goes through FRP). Details: `~/Repos/vpn-research/ops/REVERSE-GVIDON.md`.
-
-**gor (the owner's second machine, test bed).** `gor.local`, user `user`; SSH: `ssh -F ~/.local/share/gor-transfer/ssh_config -i ~/.ssh/id_malaniya_25519 -o IdentitiesOnly=yes gor` (pinned host key; stop if it mismatches). Runs its own T3 Code Sidebar server, set up 2026-10-14 the same way: `t3code-sidebar.service`, `~/.t3-sidebar-server`, `127.0.0.1:3774`, now on `0.0.45-sidebar.17`. Its old upstream `~/.t3` is archived in `~/.local/share/t3-archive/gor-t3-0.0.45-20261014.tar.zst`. Restarting gor's server is fine for tests. Default `node` there is 18; use `~/.nvm/versions/node/v23.11.1/bin/node` (gor's `~/.local/bin/t3ctl` already does). Claude's login on gor has expired (`claude` needs `/login` there); Codex works. There is also `t3-gvidon-tunnel.service` on gor (127.0.0.1:13773 → gvidon:3773), which still points at the removed :3773 server.
-
-**t3-ws (VPS 152.89.244.57, Finland).** Isolated test container of the fork for sidebar UI work: compose in `/opt/t3-ws`, data `/opt/t3-ws/home`, `127.0.0.1:3790` only. Open with `t3-ws` (`~/.local/bin/t3-ws` → `deploy/t3-ws/open.sh`: SSH tunnel + pairing link). Codex only.
-
-**Fork and releases.** Source: `~/Repos/t3/t3code` (branch `ws`, GitHub `Gvidon-Solutions/t3code-sidebar`; rules in its `AGENTS.md` and `FORK.md`). Every push to `ws` runs `.github/workflows/sidebar-desktop.yml`, which publishes release `sidebar-v<ver>` (deb, AppImage, exe, apk) that installed apps update to. The server runtime is the run's `cli-linux-x64` artifact; `sidebar.N` is CI run number N. Push only verified changes, and only when the owner wants a release.
-
-**Docs and logs.** Infra changes go into `~/Repos/vpn-research/ops/CHANGELOG.md` (date, request, objects, backup, change, check, rollback); summary in its `OPERATIONS.md` §9. Owner-level rules for this area: `~/Repos/t3/CLAUDE.md`.
+Use `~/Repos/t3/CLAUDE.md` on gvidon for infrastructure details only when the task needs them. Resolve current mesh names and paths through T3, not old ports or installation notes.
 
 ## Known limits
 
@@ -144,3 +138,7 @@ A machine (`<M>`) is this server, a linked server, or one the layout knows. Reso
 - Mesh commands need a server build with `meshLayout`, `replicas.*`, `files.*` and `t3_project_place`/`t3_project_machines`. On older servers `machines`/`mesh status` fall back to the legacy `sidebarWorkspaces` setting and say so; `place`, `replica retry` and `cat` fail with "needs the mesh build". The linked-environments beta (`linkedEnvironmentsEnabled`) and `replicasEnabled` must be on for links and replicas.
 - `t3ctl open` / `open-file` are an outside MCP client: `ui_open` acts as the calling thread, so they print the web/`t3-thread://`/`t3-file://` links instead of driving the owner's screen. An agent inside a thread can `ui_open` it directly.
 - Archived threads are per machine; `threads --all` lists active ones, and `--archived` stays local.
+
+## Session identity and thread ids across the mesh
+
+Call `t3_thread_self` to identify the current thread, machine, project, primary/replica paths and sync state. `t3ctl self` uses thread-scoped `T3_MCP_URL` and `T3_MCP_BEARER_TOKEN`; outside a thread it explains the missing context. `show`, `send`, `wait`, `stop`, `requests` and `answer` resolve full thread ids across the mesh. Preserve the full `mcp:…` id. MCP thread-addressed tools find remote ids without `environmentId`; list/search accept `environmentId: "all"` and return machine tags plus `unreachable` results. Pending questions use `t3_pending_request` actions `list`, `read`, `respond`.

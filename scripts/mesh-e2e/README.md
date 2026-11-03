@@ -95,9 +95,8 @@ on gvidon and on gor) and keeps these forwards:
 `172.17.0.1` is the VPS `docker0` address, reachable from the container on its
 bridge network; host loopback is not.
 
-gor's own `t3-gvidon-tunnel.service` is fixed from the dead `:3773` to gvidon's
-live T3 `:3774`: `http://127.0.0.1:13773` on gor. It is not used by the mesh
-test bed (the gvidon test server is `:3795` and gor→gvidon test is not routed).
+The bed does not manage gor's live T3 tunnel or probe gvidon's live `:3774`.
+Its deployment only updates the three test nodes listed above and preserves existing demo edits.
 
 ### Server-to-server origins
 

@@ -1,3 +1,4 @@
+import { ThreadMoveRpc } from "./threadHandoff.ts";
 import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
@@ -2227,5 +2228,6 @@ export const WsRpcGroup = RpcGroup.make(
   // Fork: agents asking clients to show something.
   ...UI_REQUESTS_RPCS,
   // Fork: the shared T3 Mesh layout document.
+  ThreadMoveRpc,
   ...MeshRpcs,
 ).middleware(RpcScopeAuthorization);

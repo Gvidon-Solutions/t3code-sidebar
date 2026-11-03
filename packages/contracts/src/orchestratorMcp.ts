@@ -353,6 +353,8 @@ export const OrchestratorMcpThreadPullRequest = Schema.Struct({
 export type OrchestratorMcpThreadPullRequest = typeof OrchestratorMcpThreadPullRequest.Type;
 
 export const OrchestratorMcpThreadListItem = Schema.Struct({
+  environmentId: Schema.optional(EnvironmentId),
+  machineTag: Schema.optional(Schema.String),
   threadId: ThreadId,
   projectId: ProjectId,
   title: Schema.String,
@@ -380,6 +382,9 @@ export const OrchestratorMcpThreadListItem = Schema.Struct({
 export type OrchestratorMcpThreadListItem = typeof OrchestratorMcpThreadListItem.Type;
 
 export const OrchestratorMcpThreadListResult = Schema.Struct({
+  unreachable: Schema.optional(
+    Schema.Array(Schema.Struct({ environmentId: EnvironmentId, message: Schema.String })),
+  ),
   /** null with `allProjects`. */
   projectId: Schema.NullOr(ProjectId),
   currentThreadId: Schema.NullOr(ThreadId),

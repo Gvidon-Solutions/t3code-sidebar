@@ -190,7 +190,7 @@ describe("pendingRows", () => {
     expect(rows[0]?.status.state).toBe("watching");
   });
 
-  it("counts conflicts and ignores registered representations", () => {
+  it("keeps registered replicas with conflicts visible until synchronization recovers", () => {
     const config = withReps([
       primary("alpha"),
       { ...replica("beta", "alpha"), projectId: "p2" },
@@ -200,8 +200,15 @@ describe("pendingRows", () => {
       status("beta", "conflict", { conflicts: ["a.ts"] }),
       status("gamma", "conflict", { conflicts: ["b.ts", "c.ts"] }),
     ]);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ conflicts: 2, projectId: null });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ conflicts: 1, projectId: "p2" });
+    expect(rows[1]).toMatchObject({ conflicts: 2, projectId: null });
+    expect(
+      pendingRows(config, [status("beta", "watching")]).map((row) => row.rep.environmentId),
+    ).toEqual(["gamma"]);
+    expect(
+      pendingRows(config, [status("beta", "error", { message: "Disk full" })])[0],
+    ).toMatchObject({ rep: { environmentId: "beta" }, message: "Disk full" });
   });
 });
 
@@ -211,6 +218,11 @@ describe("representationRow", () => {
     const row = representationRow(config, [], "demo", config.projectMounts.demo![0]!);
     expect(row.text).toBe("Synced");
     expect(row.retry).toBeNull();
+    const stale = status("alpha", "error", { message: "Old replica route failed" });
+    expect(pendingRows(config, [stale])).toEqual([]);
+    expect(
+      representationRow(config, [stale], "demo", config.projectMounts.demo![0]!),
+    ).toMatchObject({ text: "Synced", retry: null });
   });
 
   it("uses the live error and offers a retry with the row a dialog needs", () => {
@@ -310,14 +322,14 @@ describe("replicaStatusCopy", () => {
     expect(replicaStatusCopy({ ...base, state: "conflict", conflicts: 1 })).toBe("1 conflict");
     expect(replicaStatusCopy({ ...base, state: "conflict", conflicts: 2 })).toBe("2 conflicts");
   });
-  it("turns unreachable errors into the Settings › Machines route hint", () => {
+  it("turns unreachable errors into the Settings › Mesh route hint", () => {
     expect(
       replicaStatusCopy({
         ...base,
         state: "error",
         message: "Operalia cannot reach gvidon and back. Add an ssh route.",
       }),
-    ).toBe("Can't reach gvidon from Operalia. Add a route in Settings › Machines");
+    ).toBe("Can't reach gvidon from Operalia. Add a route in Settings › Mesh");
     expect(replicaStatusCopy({ ...base, state: "error", message: "Disk is full" })).toBe(
       "Disk is full",
     );

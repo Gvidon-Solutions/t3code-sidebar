@@ -83,6 +83,7 @@ import type { HomeListFilterMenuEnvironment } from "./home-list-filter-menu";
 import {
   buildHomeProjectScopes,
   findHomeProjectScope,
+  shouldShowHomeEmptyState,
   type HomeProjectSortOrder,
 } from "./homeThreadList";
 import { createSwipeRowActivation } from "./swipe-row-activation";
@@ -932,7 +933,7 @@ export function HomeScreen(props: HomeScreenProps) {
     projectCount: props.projects.length,
   });
 
-  if (!hasAnyThreads) {
+  if (shouldShowHomeEmptyState(hasAnyThreads, homeListItems)) {
     return (
       <View className={containerClassName}>
         <View

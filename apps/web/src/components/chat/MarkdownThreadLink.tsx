@@ -2,6 +2,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId } from "@t3tools/contracts";
 import {
   formatThreadLink,
+  explicitThreadLinkRef,
   guessThreadLinkRef,
   percentDecodedThreadLinkId,
   type ThreadLink,
@@ -29,6 +30,16 @@ export function MarkdownThreadLink(props: {
   const refs = useThreadRefs(guess);
   const remote = useThreadShell(guess ? guessThreadLinkRef(props.link, refs) : null);
   const thread = local ?? remote;
+  const explicit = explicitThreadLinkRef(props.link);
+  if (thread === null && explicit !== null) {
+    const title = props.label || "Conversation";
+    return (
+      <ThreadContextChip
+        record={{ ...explicit, title }}
+        copyMarkdown={formatThreadLink(explicit, title)}
+      />
+    );
+  }
   if (thread === null) {
     const unknown = unknownThreadLinkLabel(props.link, props.environmentId);
     return <UnresolvedChip label={props.label ?? unknown} tooltip={unknown} />;

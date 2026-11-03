@@ -54,7 +54,7 @@ export function WorkspaceThreadLine(props: {
   return (
     <View
       className={cn(
-        "min-h-[40px] flex-row items-center gap-2.5 py-2 pr-5",
+        "min-h-[45px] flex-row items-center gap-2.5 py-2 pr-5",
         props.nested ? "pl-[48px]" : "pl-7",
       )}
     >
@@ -81,10 +81,7 @@ export function WorkspaceThreadLine(props: {
           className="shrink-0 rounded px-1 py-0.5"
           style={{ backgroundColor: machineTagBackground(props.machineTag.color) }}
         >
-          <Text
-            className="text-3xs font-t3-bold uppercase"
-            style={{ color: props.machineTag.color }}
-          >
+          <Text className="text-3xs font-t3-bold uppercase text-foreground">
             {props.machineTag.tag}
           </Text>
         </View>

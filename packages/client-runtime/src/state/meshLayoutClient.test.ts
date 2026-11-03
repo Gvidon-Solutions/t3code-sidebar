@@ -341,6 +341,10 @@ describe("logical project helpers", () => {
     expect(machineTag(config, "env-b")).toBe("OP");
     expect(machineTag(config, "env-z", "Operalia")).toBe("OP");
     expect(machineTag(config, "env-z")).toBe("EN");
+    expect(machineTag(config, "env-z", "gor")).toBe("GOR");
+    expect(
+      machineTag({ ...config, machines: { "env-z": { label: "vps" } } }, "env-z", "server name"),
+    ).toBe("VPS");
   });
 
   it("lists a project only when every representation is unreachable", () => {

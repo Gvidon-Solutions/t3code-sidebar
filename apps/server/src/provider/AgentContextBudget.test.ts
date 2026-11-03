@@ -46,6 +46,7 @@ import { VcsStatusBroadcaster } from "../vcs/VcsStatusBroadcaster.ts";
 import { buildCodexAdditionalContext } from "./CodexDeveloperInstructions.ts";
 import { DocumentText } from "./DocumentText.ts";
 import { ProviderRegistry } from "./ProviderRegistry.ts";
+import { threadContextNote } from "../replicas/ReplicaInstructions.ts";
 import budget from "./agentContextBudget.json" with { type: "json" };
 
 // Registration only stores tool definitions, so the handlers' services are never called.
@@ -120,6 +121,9 @@ it.effect("agent context matches the committed budget", () =>
   Effect.gen(function* () {
     const mcp = yield* McpServer.McpServer;
     const measured = {
+      threadContextMaxBytes: utf8Bytes(
+        threadContextNote("mcp:thread", "machine", "x".repeat(1000)),
+      ),
       claudeSystemAppendBytes: utf8Bytes(claudeSystemAppend()),
       codexAdditionalContextBytes: utf8Bytes(codexAdditionalContext()),
       // The model sees these fields. outputSchema and annotations are protocol metadata.

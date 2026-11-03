@@ -28,9 +28,14 @@ export function MeshLinkForm(props: {
 }) {
   const { environments } = useEnvironments();
   const permitted = useEnvironmentsWithScope(environments, AuthAccessWriteScope);
-  const sources = meshLinkSourceOptions(environments).filter((source) =>
-    permitted.has(source.environmentId),
-  );
+  const sources = meshLinkSourceOptions(environments)
+    .filter((source) => permitted.has(source.environmentId))
+    .map((source) => ({
+      ...source,
+      label:
+        props.machines.find((machine) => machine.environmentId === source.environmentId)?.label ??
+        source.label,
+    }));
   const [source, setSource] = useState(sources[0]?.environmentId ?? null);
   const [target, setTarget] = useState<MeshMachine | null>(null);
   const canMint =
@@ -81,6 +86,8 @@ export function MeshLinkForm(props: {
       <Text>Link from</Text>
       {sources.map((e) => (
         <Pressable
+          accessibilityRole="button"
+          className="min-h-[45px] justify-center"
           key={e.environmentId}
           disabled={busy}
           onPress={() => {
@@ -97,6 +104,8 @@ export function MeshLinkForm(props: {
       <Text>Link to</Text>
       {meshLinkTargets(props.machines, source).map((m) => (
         <Pressable
+          accessibilityRole="button"
+          className="min-h-[45px] justify-center"
           key={m.environmentId}
           disabled={busy}
           onPress={() => {
@@ -113,11 +122,17 @@ export function MeshLinkForm(props: {
       ))}
       <>
         {(target?.urls ?? []).map((address) => (
-          <Pressable key={address} onPress={() => setUrl(address)}>
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-[45px] justify-center"
+            key={address}
+            onPress={() => setUrl(address)}
+          >
             <Text>{address}</Text>
           </Pressable>
         ))}
         <AppTextInput
+          className="min-h-[45px]"
           accessibilityLabel="Machine address"
           value={url}
           onChangeText={setUrl}
@@ -128,6 +143,7 @@ export function MeshLinkForm(props: {
           <Text>A pairing code will be created for you.</Text>
         ) : (
           <AppTextInput
+            className="min-h-[45px]"
             accessibilityLabel="Pairing code"
             value={code}
             onChangeText={setCode}
@@ -135,6 +151,8 @@ export function MeshLinkForm(props: {
           />
         )}
         <Pressable
+          accessibilityRole="button"
+          className="min-h-[45px] justify-center"
           disabled={busy || !source || !url.trim() || (!canMint && !code.trim())}
           onPress={() => void submit()}
         >
@@ -144,6 +162,8 @@ export function MeshLinkForm(props: {
       {props.machines.flatMap((m) =>
         m.linkedWith.map((from) => (
           <Pressable
+            accessibilityRole="button"
+            className="min-h-[45px] justify-center"
             key={`${from.environmentId}:${m.environmentId}`}
             onPress={() =>
               Dialog.confirm({

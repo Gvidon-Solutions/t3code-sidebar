@@ -1,6 +1,7 @@
 import { meshAuthorityOf } from "@t3tools/shared/meshLayout";
 import { linkRequestFailureMessage } from "@t3tools/client-runtime/link-request";
 import {
+  machineDisplayOf,
   setMachineDisplay,
   type MachineDisplayPatch,
 } from "@t3tools/client-runtime/state/machine-display";
@@ -16,7 +17,11 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { WORKSPACE_COLORS } from "@t3tools/client-runtime/state/sidebar-workspaces";
-import { AuthAccessWriteScope, type EnvironmentId } from "@t3tools/contracts";
+import {
+  AuthAccessWriteScope,
+  AuthSettingsWriteScope,
+  type EnvironmentId,
+} from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import { Link2Icon, MonitorIcon, PlusIcon } from "lucide-react";
@@ -34,14 +39,10 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
-import {
-  useScopedSettings,
-  useScopedSettingsWriteAllowed,
-  useUpdateScopedSettings,
-} from "../settings/useScopedSettings";
-import { useEnvironments } from "../../state/environments";
+import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
+import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { AddEnvironmentDialog } from "../settings/AddEnvironmentDialog";
-import { ScopedSwitch } from "../settings/ScopedSwitch";
+import { Switch } from "../ui/switch";
 import { searchableSetting } from "../settings/settingsSearch";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
@@ -121,6 +122,7 @@ function MachineEditor(props: {
   return (
     <SettingsSection
       id={`machine-${machine.environmentId}`}
+      headerLayout="responsive"
       title={machine.label}
       titleAction={<MachineTag machine={machine} />}
       headerAction={
@@ -179,7 +181,7 @@ function MachineEditor(props: {
         description="Used by the tag chip and its tooltip."
         control={<ColorPicker value={machine.color} onChange={props.onEdit} />}
       />
-      <SettingsRow title="Version" status={machine.version ?? "Unknown"} />
+      {machine.version === null ? null : <SettingsRow title="Version" status={machine.version} />}
       <SettingsRow
         title="Last layout sync"
         description={props.now === 0 ? undefined : meshMachineLastSync(machine, props.now)}
@@ -471,9 +473,9 @@ function LinkWithDialog(props: {
 
 export function MeshSettingsPanel() {
   const mesh = useMeshLayout();
-  const settings = useScopedSettings();
-  const updateSettings = useUpdateScopedSettings();
-  const canWrite = useScopedSettingsWriteAllowed();
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
+  const canWrite = useEnvironmentScope(usePrimaryEnvironmentId(), AuthSettingsWriteScope);
   const config = mesh.config ?? settings.sidebarWorkspaces;
   const { machines, links } = useMeshOverview({ config });
   const updateConfig = (edit: (current: typeof config) => typeof config) => {
@@ -481,7 +483,12 @@ export function MeshSettingsPanel() {
     else updateSettings({ sidebarWorkspaces: edit(config) });
   };
   const unlink = useAtomCommand(peerLinkEnvironment.unlink, { label: "unlink environment" });
-  const sources = usePermittedLinkSources();
+  const sources = usePermittedLinkSources().map((source) => ({
+    ...source,
+    label:
+      machines.find((machine) => machine.environmentId === source.environmentId)?.label ??
+      source.label,
+  }));
   const [linkOpen, setLinkOpen] = useState(false);
   const [connectMachine, setConnectMachine] = useState<
     ReturnType<typeof useMeshOverview>["machines"][number] | null
@@ -501,8 +508,11 @@ export function MeshSettingsPanel() {
   const footer = meshFooterText(deriveMeshFooterStatus({ enabled: meshOn, machines, now }));
   const { environments } = useEnvironments();
   const forget = async (sourceEnvironmentId: string, target: string) => {
+    const labelOf = (environmentId: string) =>
+      machines.find((machine) => machine.environmentId === environmentId)?.label ??
+      machineDisplayOf(config, environmentId, environmentId).label;
     const confirmed = await (requestConfirmDialog(
-      `Unlink ${target} from ${sourceEnvironmentId}? The layout they share stays on both machines.`,
+      `Unlink ${labelOf(target)} from ${labelOf(sourceEnvironmentId)}? The layout they share stays on both machines.`,
       { variant: "destructive" },
     ) ?? Promise.resolve(false));
     if (!confirmed) return;
@@ -523,13 +533,10 @@ export function MeshSettingsPanel() {
         icon={<MonitorIcon className="size-4" />}
       >
         <SettingsRow
-          serverScoped
-          settingKeys={["linkedEnvironmentsEnabled", "meshEnabled"]}
           title="Use the mesh on this machine"
           description="Enables linked environments and keeps the workspace layout in sync with linked machines."
           control={
-            <ScopedSwitch
-              settingKeys={["linkedEnvironmentsEnabled", "meshEnabled"]}
+            <Switch
               checked={meshOn}
               disabled={!canWrite}
               onCheckedChange={(checked) =>

@@ -66,6 +66,7 @@ import { WorkspaceFileVideoPreview } from "./WorkspaceFileVideoPreview";
 import { WorkspaceFileSvgPreview, WorkspaceFileWebPreview } from "./WorkspaceFileWebPreview";
 import { WorkspaceFilePdfPreview } from "./WorkspaceFilePdfPreview";
 import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
+import { FileMachineTag } from "../workspaces/FileMachineTag";
 import { useThreadPager } from "../panels/threadPagerContext";
 import { useThreadTabPosition } from "../tabs/useThreadTabPosition";
 import {
@@ -380,6 +381,7 @@ type ThreadFilesRouteScreenProps = StaticScreenProps<{
 
 type ThreadFileRouteScreenProps = StaticScreenProps<{
   readonly environmentId: string;
+  readonly sourceEnvironmentId?: string;
   readonly threadId?: string;
   readonly path: string[];
   readonly line?: string;
@@ -839,6 +841,7 @@ export function ThreadFileView(
       navigation.dispatch(
         StackActions.push("NewTaskFile", {
           environmentId: String(environmentId),
+          sourceEnvironmentId: params.sourceEnvironmentId,
           ...(cwd === null ? {} : { cwd }),
           projectName,
           path: segments,
@@ -848,6 +851,7 @@ export function ThreadFileView(
     }
     const destination = {
       environmentId: String(environmentId),
+      sourceEnvironmentId: params.sourceEnvironmentId,
       threadId: String(threadId),
       path: segments,
     };
@@ -1105,6 +1109,12 @@ export function ThreadFileView(
         onReturnToThread={handleReturnToThread}
         actions={fileMenuActions}
       />
+      <View className="px-4">
+        <FileMachineTag
+          fileEnvironmentId={String(environmentId)}
+          threadEnvironmentId={params.sourceEnvironmentId}
+        />
+      </View>
       {threadId !== null ? (
         <ThreadTabStrip
           environmentId={String(environmentId)}

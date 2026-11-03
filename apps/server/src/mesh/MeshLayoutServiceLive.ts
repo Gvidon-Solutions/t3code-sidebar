@@ -135,7 +135,8 @@ export const layer = Layer.effect(
               ...(after.meshAuthority === undefined && before.meshAuthority
                 ? { meshAuthority: before.meshAuthority }
                 : {}),
-              ...(after.projectTitles === undefined && before.projectTitles
+              ...(Object.keys(after.projectTitles ?? {}).length === 0 &&
+              Object.keys(before.projectTitles).length > 0
                 ? { projectTitles: before.projectTitles }
                 : {}),
             };

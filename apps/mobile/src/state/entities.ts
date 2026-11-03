@@ -18,6 +18,7 @@ import {
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   guessThreadLinkRef,
+  explicitThreadLinkRef,
   hasThreadLinks,
   parseThreadLinkHref,
   relabelThreadLinks,
@@ -223,7 +224,7 @@ export function resolveThreadLink(
   if (known) return known;
   return link.environmentId === null
     ? guessThreadLinkRef(link, read(environmentThreadShells.threadRefsAtom))
-    : null;
+    : explicitThreadLinkRef(link);
 }
 
 export function useThreadChipIcons(

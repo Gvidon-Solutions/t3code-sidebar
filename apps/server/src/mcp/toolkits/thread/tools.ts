@@ -1,5 +1,7 @@
 import {
   OrchestratorMcpEnvironmentTarget,
+  ReplicaLiveStatus,
+  SidebarProjectMount,
   ScheduledTaskId,
   ScheduledTask,
   OrchestrationSearchThreadsInput,
@@ -19,6 +21,7 @@ import {
   RunId,
   NonNegativeInt,
   ProjectId,
+  ThreadMoveResult,
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Schema from "effect/Schema";
@@ -31,11 +34,12 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
-    "Pin, snooze, settle, archive, or mark a thread unread. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
+    "Move, pin, snooze, settle, archive, or mark a thread unread. Move requires projectId on the source machine; targetEnvironmentId hands the conversation off to that machine. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
     action: Schema.Literals([
+      "move",
       "pin",
       "unpin",
       "snooze",
@@ -46,9 +50,12 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
       "unarchive",
       "mark_unread",
     ]),
+    projectId: Schema.optional(ProjectId),
+    targetEnvironmentId: Schema.optional(Schema.String),
     snoozedUntil: Schema.optional(IsoDateTime),
   }),
   success: Schema.Union([
+    ThreadMoveResult,
     OrchestrationV2DispatchCommandResult,
     Schema.Struct({ settlesWhenTurnEnds: Schema.Literal(true) }),
   ]),
@@ -162,6 +169,24 @@ const ThreadConfigureTool = Tool.make("t3_thread_configure", {
   success: Schema.Union([threadConfiguration, OrchestrationV2DispatchCommandResult]),
 }).annotate(Tool.Destructive, true);
 
+const ThreadMoveTool = Tool.make("t3_thread_move", {
+  ...commandTool,
+  description:
+    "Move an idle conversation to a project here or hand it off to targetEnvironmentId. Its transcript and attachments continue there; the original is archived with a link. projectId is the target representation, or omit it to use the same logical project there. modelSelection chooses the target provider, model and options. message optionally starts a follow-up there. Retry a handoff with the same clientRequestId. undoHandoffId reverses it within 10 seconds.",
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    threadId: Schema.optional(ThreadId),
+    projectId: Schema.optional(ProjectId),
+    targetEnvironmentId: Schema.optional(Schema.String),
+    logicalKey: Schema.optional(Schema.String),
+    modelSelection: Schema.optional(ModelSelection),
+    message: Schema.optional(Schema.String),
+    clientRequestId: Schema.optional(Schema.String),
+    undoHandoffId: Schema.optional(Schema.String),
+  }),
+  success: ThreadMoveResult,
+}).annotate(Tool.Destructive, true);
+
 const ThreadTransferTool = Tool.make("t3_thread_transfer", {
   ...commandTool,
   description:
@@ -199,8 +224,13 @@ const ThreadSearchTool = Tool.make("t3_thread_search", {
     projectId: Schema.optional(ProjectId),
   }),
   success: Schema.Struct({
+    unreachable: Schema.optional(
+      Schema.Array(Schema.Struct({ environmentId: Schema.String, message: Schema.String })),
+    ),
     matches: Schema.Array(
       Schema.Struct({
+        environmentId: Schema.optional(Schema.String),
+        machineTag: Schema.optional(Schema.String),
         threadId: OrchestrationThreadSearchMatch.fields.threadId,
         projectId: OrchestrationThreadSearchMatch.fields.projectId,
         title: Schema.String,
@@ -237,11 +267,83 @@ const ScheduledTaskRunTool = Tool.make("run_scheduled_task_now", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
+const machine = Schema.Struct({
+  environmentId: Schema.String,
+  label: Schema.String,
+  tag: Schema.String,
+});
+const ThreadSelfTool = Tool.make("t3_thread_self", {
+  description:
+    "Identify this calling thread, machine, project, primary and replica paths, sync state, links and child threads. Read-only; no mesh probes.",
+  parameters: Tool.EmptyParams,
+  success: Schema.Struct({
+    threadId: ThreadId,
+    title: Schema.String,
+    link: Schema.String,
+    machine,
+    project: Schema.NullOr(
+      Schema.Struct({
+        id: ProjectId,
+        title: Schema.String,
+        logicalKey: Schema.NullOr(Schema.String),
+        logicalTitle: Schema.String,
+      }),
+    ),
+    workingDirectory: Schema.NullOr(Schema.String),
+    worktreePath: Schema.NullOr(Schema.String),
+    branch: Schema.NullOr(Schema.String),
+    representation: Schema.Struct({
+      role: Schema.Literals(["primary", "replica"]),
+      transport: Schema.String,
+      source: Schema.NullOr(Schema.Struct({ machine, path: Schema.NullOr(Schema.String) })),
+      sync: Schema.NullOr(ReplicaLiveStatus),
+    }),
+    primaries: Schema.Array(
+      Schema.Struct({ machine, path: Schema.String, ssh: Schema.NullOr(Schema.String) }),
+    ),
+    representations: Schema.Array(SidebarProjectMount),
+    linkedMachines: Schema.Array(
+      Schema.Struct({
+        ...machine.fields,
+        status: Schema.String,
+        access: Schema.String,
+        lastError: Schema.NullOr(Schema.String),
+      }),
+    ),
+    delegatedTasks: Schema.Array(
+      Schema.Struct({
+        taskId: Schema.String,
+        title: Schema.NullOr(Schema.String),
+        status: Schema.String,
+        threadId: Schema.NullOr(ThreadId),
+        environmentId: Schema.String,
+      }),
+    ),
+    parent: Schema.NullOr(
+      Schema.Struct({
+        threadId: ThreadId,
+        environmentId: Schema.String,
+        link: Schema.String,
+        title: Schema.NullOr(Schema.String),
+      }),
+    ),
+    parentThreadId: Schema.NullOr(ThreadId),
+    children: Schema.Array(
+      Schema.Struct({ threadId: ThreadId, title: Schema.String, link: Schema.String }),
+    ),
+  }),
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: commandTool.dependencies,
+}).annotate(Tool.Readonly, true);
+
 export const ThreadToolkit = Toolkit.make(
+  ThreadSelfTool,
   ScheduledTaskRunTool,
   ThreadSearchTool,
   ThreadConfigureTool,
   ThreadTransferTool,
+  ThreadMoveTool,
   ThreadOrganizeTool,
   PendingRequestTool,
   QueueTool,

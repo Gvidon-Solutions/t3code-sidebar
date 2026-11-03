@@ -34,8 +34,8 @@ if (process.env.T3CTL_TEST_REMOTE_DRIVER)
   config.machines[peer].reach = { [self]: { ssh: "gvidon" } };
 const snapshot = { environmentId: self, config, document: {} };
 const thread = {
-  threadId: "thread-1",
-  title: "mount work",
+  threadId: process.env.T3CTL_TEST_FULL_ID ? "mcp:full-thread-example-0123456789" : "thread-1",
+  title: process.env.T3CTL_TEST_LONG_TITLE ? "Mount: a long thread title that needs mesh name resolution" : "mount work",
   projectId: "p",
   status: "completed",
   updatedAt: new Date().toISOString(),
@@ -56,8 +56,9 @@ function call(name, args) {
     case "t3_project_list":
       return { projects: [{ id: "p", title: "Demo", workspaceRoot: "/repo" }], nextCursor: null };
     case "t3_thread_list":
-      return { threads: [thread], nextCursor: null };
+      return { threads: [{ ...thread, environmentId: args.environmentId === "all" ? peer : args.environmentId || self }], nextCursor: null };
     case "t3_thread_read":
+      if (process.env.T3CTL_TEST_LONG_TITLE && args.threadId === thread.title) throw Error(JSON.stringify({ code: "thread_not_found", message: "No id matches that title." }));
       return { thread, items: [{ type: "assistant_message", text: "done" }], hasMore: false };
     case "t3_thread_search":
       if (args.environmentId === "all" && process.env.T3CTL_TEST_FALLBACK)
@@ -83,10 +84,17 @@ function call(name, args) {
           args.action === "remove" ? null : { ...rep, environmentId: peer, projectId: "remote-p" },
         ready: true,
       };
+    case "t3_thread_send":
+    case "t3_thread_interrupt":
+      return { sequence: 1 };
+    case "t3_thread_self":
+      return { threadId: thread.threadId, representation: { role: "replica" } };
     case "t3_thread_wait":
       return { status: "completed", timedOut: false };
     case "t3_pending_request":
-      return { requestIds: [] };
+      if (args.action === "read") return { requestId: args.requestId, questions: [{ id: "q", question: "Which?", options: [] }] };
+      if (args.action === "respond") return { sequence: 1 };
+      return { requestIds: process.env.T3CTL_TEST_QUESTION ? ["request"] : [] };
     case "t3_thread_launch":
       return { ...thread, modelSelection: args.modelSelection };
     case "ui_open":

@@ -11,7 +11,6 @@ import type {
 } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "./document.ts";
 export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
-  const projectTitles: Record<string, string> = {};
   const workspaces: (SidebarWorkspace & { sort: string })[] = [];
   const rules: (SidebarWorkspaceRule & { sort: string; id: string })[] = [];
   const placements: Record<string, string[]> = {};
@@ -19,6 +18,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const workspaceProjectOrder: Record<string, string[]> = {};
   const workspaceFold: Record<string, Record<string, "quiet" | "active">> = {};
   const machines: Record<string, SidebarMachine> = {};
+  const projectTitles: Record<string, string> = {};
   const projectAliases: Record<string, string> = {};
   const projectMounts: Record<string, SidebarProjectMount[]> = {};
   const projectMountStatus: Record<string, Record<string, SidebarProjectMountStatus>> = {};
@@ -35,7 +35,8 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   for (const [key, { v }] of Object.entries(doc).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (v === null) continue;
     if (key.startsWith("proj/") && key.endsWith(".title") && typeof v === "string") {
-      projectTitles[decodeURIComponent(key.slice(5, -6))] = v;
+      const id = decodeURIComponent(key.slice(5, -6));
+      if ((doc[keys.project(id)]?.h ?? "") <= doc[key]!.h) projectTitles[id] = v;
       continue;
     }
     const [family, a = "", b = ""] = key.split("/").map(decodeURIComponent);
@@ -64,6 +65,15 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         break;
       case "machine":
         machines[a] = v as SidebarMachine;
+        break;
+      case "proj":
+        if (
+          typeof v === "object" &&
+          "title" in v &&
+          typeof v.title === "string" &&
+          (doc[keys.projectTitle(a)]?.h ?? "") < doc[key]!.h
+        )
+          projectTitles[a] = v.title;
         break;
       case "alias":
         projectAliases[a] = v as string;
@@ -146,7 +156,6 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     ...(typeof doc["mesh.authority"]?.v === "string"
       ? { meshAuthority: doc["mesh.authority"].v }
       : {}),
-    ...(Object.keys(projectTitles).length ? { projectTitles } : {}),
     ...(writers.length ? { meshWriters: writers } : {}),
     workspaces: workspaces.map(({ sort: _sort, ...w }) => w),
     rules: rules.map(({ sort: _sort, id: _id, ...r }) => r),
@@ -155,6 +164,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     workspaceProjectOrder,
     workspaceFold,
     machines,
+    projectTitles,
     projectAliases,
     projectMounts,
     projectMountStatus,

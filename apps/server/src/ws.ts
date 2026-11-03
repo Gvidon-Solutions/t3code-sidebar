@@ -1,3 +1,4 @@
+import { ThreadHandoffService } from "./mesh/ThreadHandoffService.ts";
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
 import { MESH_WS_METHODS, ServerSettingsError } from "@t3tools/contracts";
 import * as ReplicaRpc from "./replicas/ReplicaRpc.ts";
@@ -1342,6 +1343,7 @@ export const layerWsRpc = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      const threadHandoffs = yield* ThreadHandoffService;
       const modelManifest = yield* ModelManifest.ModelManifest;
       const providerLatestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
       const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
@@ -1889,6 +1891,11 @@ export const layerWsRpc = (
 
       const handlers = ServerWsRpcGroup.of({
         ...ReplicaRpc.handlers,
+        "threads.move": (input) =>
+          threadHandoffs.move(input, {
+            runtimeMode: "full-access",
+            interactionMode: "default",
+          }),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
@@ -3336,6 +3343,7 @@ export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const mesh = yield* MeshLayoutService;
     const meshReplicator = yield* MeshReplicator;
+    const threadHandoffs = yield* ThreadHandoffService;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const npmRelease = yield* NpmRelease.NpmRelease;
@@ -3426,6 +3434,7 @@ export const layer = Layer.unwrap(
               ),
               Layer.provide(Layer.succeed(MeshLayoutService, mesh)),
               Layer.provide(Layer.succeed(MeshReplicator, meshReplicator)),
+              Layer.provide(Layer.succeed(ThreadHandoffService, threadHandoffs)),
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
               Layer.provide(

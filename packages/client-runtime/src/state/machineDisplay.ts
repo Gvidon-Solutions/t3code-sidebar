@@ -40,7 +40,12 @@ function defaultMachineTag(label: string, environmentId: string): string {
     letters.length > 0
       ? letters
       : graphemes(environmentId).filter((part) => LETTER_OR_DIGIT.test(part));
-  return source.slice(0, 2).join("").toUpperCase() || "?";
+  return (
+    source
+      .slice(0, source.length <= 3 ? 3 : 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
 }
 
 /** How the sidebar shows a machine: the user's name, tag and colour, with stable fallbacks. */

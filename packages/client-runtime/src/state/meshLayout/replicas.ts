@@ -157,8 +157,7 @@ export interface PendingReplicaRow {
 const PENDING_STATUS: SidebarProjectMountStatus = { state: "pending", updatedAt: "" };
 
 /**
- * Every representation still waiting for a project id, with the machine's live status merged
- * over the last one written into the layout. A folder filters by `logicalKey`.
+ * Unregistered copies and synchronization failures stay visible in their folder.
  */
 export function pendingRows(
   config: SidebarWorkspacesConfig,
@@ -171,7 +170,8 @@ export function pendingRows(
   const rows: PendingReplicaRow[] = [];
   for (const [logicalKey, reps] of Object.entries(config.projectMounts)) {
     for (const rep of reps) {
-      if (rep.projectId !== undefined) continue;
+      if (rep.role === "primary" && rep.transport === "git" && rep.projectId !== undefined)
+        continue;
       const liveStatus = live.get(`${logicalKey}\0${rep.environmentId}`) ?? null;
       const stored = config.projectMountStatus[logicalKey]?.[rep.environmentId];
       const status: SidebarProjectMountStatus = liveStatus
@@ -182,6 +182,8 @@ export function pendingRows(
             updatedAt: liveStatus.updatedAt,
           }
         : (stored ?? PENDING_STATUS);
+      if (rep.projectId !== undefined && status.state !== "conflict" && status.state !== "error")
+        continue;
       rows.push({
         logicalKey,
         rep,
@@ -190,7 +192,7 @@ export function pendingRows(
         progress: liveStatus?.progress ?? null,
         conflicts: liveStatus ? liveStatus.conflicts.length : (stored?.conflicts ?? 0),
         message: liveStatus?.message ?? stored?.message ?? null,
-        projectId: liveStatus?.projectId ?? null,
+        projectId: rep.projectId ?? liveStatus?.projectId ?? null,
       });
     }
   }
@@ -223,7 +225,10 @@ export function representationRow(
       (status) => status.logicalKey === logicalKey && status.environmentId === rep.environmentId,
     ) ?? null;
   const stored = config.projectMountStatus[logicalKey]?.[rep.environmentId];
-  if (!live && !stored && rep.projectId !== undefined) {
+  if (
+    rep.projectId !== undefined &&
+    ((!live && !stored) || (rep.role === "primary" && rep.transport === "git"))
+  ) {
     return { rep, status: { state: "watching", updatedAt: "" }, text: "Synced", retry: null };
   }
   const state = live?.state ?? stored?.state ?? "pending";
@@ -356,7 +361,7 @@ export interface ReplicaStatusCopyInput {
 /** One short line for a pending row: "Mounting on Operalia… 42%", "2 conflicts", … */
 export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
   if (input.message?.startsWith("Resolved ") && input.state !== "error") return input.message;
-  const unreachable = `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Add a route in Settings › Machines`;
+  const unreachable = `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Add a route in Settings › Mesh`;
   switch (input.state) {
     case "pending":
       return `Preparing ${input.targetLabel}…`;

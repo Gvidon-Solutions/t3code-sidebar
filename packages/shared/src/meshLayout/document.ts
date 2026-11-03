@@ -19,6 +19,7 @@ export const keys = {
   place: (project: string, workspace: string) => `place/${part(project)}/${part(workspace)}`,
   order: (project: string) => `order/${part(project)}`,
   fold: (workspace: string, project: string) => `fold/${part(workspace)}/${part(project)}`,
+  project: (key: string) => `proj/${part(key)}`,
   alias: (key: string) => `alias/${part(key)}`,
   representation: (logical: string, env: string) => `rep/${part(logical)}/${part(env)}`,
   representationStatus: (logical: string, env: string) => `repstatus/${part(logical)}/${part(env)}`,

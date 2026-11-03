@@ -21,8 +21,8 @@ export function MachineTag({
           <span
             role="img"
             aria-label={`Machine: ${machine.label}`}
-            className="flex h-4 shrink-0 items-center gap-0.5 rounded px-1 font-mono text-3xs font-semibold tracking-tight uppercase"
-            style={{ color: machine.color, backgroundColor: machineTagBackground(machine.color) }}
+            className="flex h-4 shrink-0 items-center gap-0.5 rounded px-1 font-mono text-3xs font-semibold tracking-tight text-foreground uppercase"
+            style={{ backgroundColor: machineTagBackground(machine.color) }}
           />
         }
       >
