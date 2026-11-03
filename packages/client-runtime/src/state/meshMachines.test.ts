@@ -16,20 +16,20 @@ import {
 const base: SidebarWorkspacesConfig = {
   ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   machines: {
-    operatia: { label: "Operalia", tag: "OP", color: "#123456" },
+    boreal: { label: "Boreal", tag: "BO", color: "#123456", aliases: ["studio", "研究室"] },
   },
   projectMounts: {
     "project-a": [
       {
-        environmentId: "operatia",
+        environmentId: "boreal",
         path: "/srv/app",
         transport: "mutagen",
         role: "replica",
-        source: "gvidon",
+        source: "atlas",
         createdAt: "2026-01-01T00:00:00.000Z",
       },
       {
-        environmentId: "gvidon",
+        environmentId: "atlas",
         path: "/home/app",
         transport: "git",
         role: "primary",
@@ -39,7 +39,7 @@ const base: SidebarWorkspacesConfig = {
   },
   projectMountStatus: {
     "project-a": {
-      operatia: { state: "conflict", conflicts: 2, updatedAt: "2026-01-01T00:00:00.000Z" },
+      boreal: { state: "conflict", conflicts: 2, updatedAt: "2026-01-01T00:00:00.000Z" },
     },
   },
 };
@@ -49,21 +49,21 @@ describe("buildMeshMachines", () => {
     const machines = buildMeshMachines({
       config: base,
       connections: [
-        { environmentId: "gvidon", label: "Gvidon", version: "0.1.5", connected: true },
-        { environmentId: "gor", label: "gor", connected: false },
+        { environmentId: "atlas", label: "Atlas", version: "0.1.5", connected: true },
+        { environmentId: "lab", label: "lab", connected: false },
       ],
       links: [
         {
-          environmentId: "gvidon",
+          environmentId: "atlas",
           links: [
-            { environmentId: "operatia", label: "Operalia", urls: ["https://op.example"] },
+            { environmentId: "boreal", label: "Boreal", urls: ["https://bo.example"] },
             { environmentId: "vps", label: "VPS" },
           ],
         },
       ],
       peerStates: [
         {
-          environmentId: "operatia",
+          environmentId: "boreal",
           lastExchangeAt: null,
           lastError: null,
           sentSeq: 0,
@@ -79,34 +79,35 @@ describe("buildMeshMachines", () => {
       ],
     });
     expect(machines.map((machine) => machine.environmentId)).toEqual([
-      "gor",
-      "gvidon",
-      "operatia",
+      "atlas",
+      "boreal",
+      "lab",
       "vps",
     ]);
-    const operatia = machines.find((machine) => machine.environmentId === "operatia")!;
-    expect(operatia).toMatchObject({
-      label: "Operalia",
-      tag: "OP",
+    const boreal = machines.find((machine) => machine.environmentId === "boreal")!;
+    expect(boreal).toMatchObject({
+      label: "Boreal",
+      tag: "BO",
       color: "#123456",
+      aliases: ["studio", "研究室"],
       connectedHere: false,
       version: null,
       replicas: 1,
       primaries: 0,
       conflicts: 2,
-      urls: ["https://op.example"],
+      urls: ["https://bo.example"],
     });
     expect(
       machines
-        .find((machine) => machine.environmentId === "gvidon")
+        .find((machine) => machine.environmentId === "atlas")
         ?.linkedWith.map((peer) => peer.environmentId),
-    ).toContain("operatia");
-    expect(operatia.linkedWith).toEqual([{ environmentId: "gvidon", label: "Gvidon", tag: "GV" }]);
-    const gvidon = machines.find((machine) => machine.environmentId === "gvidon")!;
-    expect(gvidon.connectedHere).toBe(true);
-    expect(gvidon.version).toBe("0.1.5");
-    expect(gvidon.primaries).toBe(1);
-    expect(gvidon.conflicts).toBe(0);
+    ).toContain("boreal");
+    expect(boreal.linkedWith).toEqual([{ environmentId: "atlas", label: "Atlas", tag: "AT" }]);
+    const atlas = machines.find((machine) => machine.environmentId === "atlas")!;
+    expect(atlas.connectedHere).toBe(true);
+    expect(atlas.version).toBe("0.1.5");
+    expect(atlas.primaries).toBe(1);
+    expect(atlas.conflicts).toBe(0);
   });
 
   it("merges the same peer's state from several servers", () => {
@@ -114,14 +115,14 @@ describe("buildMeshMachines", () => {
       config: base,
       peerStates: [
         {
-          environmentId: "operatia",
+          environmentId: "boreal",
           lastExchangeAt: "2026-01-01T00:00:00.000Z",
           lastError: null,
           sentSeq: 1,
           receivedSeq: 2,
         },
         {
-          environmentId: "operatia",
+          environmentId: "boreal",
           lastExchangeAt: "2026-01-01T00:02:00.000Z",
           lastError: null,
           sentSeq: 3,
@@ -129,7 +130,7 @@ describe("buildMeshMachines", () => {
         },
       ],
     });
-    expect(machines.find((machine) => machine.environmentId === "operatia")).toMatchObject({
+    expect(machines.find((machine) => machine.environmentId === "boreal")).toMatchObject({
       lastExchangeAt: "2026-01-01T00:02:00.000Z",
       sentSeq: 3,
       receivedSeq: 2,
@@ -142,24 +143,24 @@ describe("buildMeshMachines", () => {
       ...base,
       projectMountStatus: {
         "project-a": {
-          operatia: { state: "conflict", updatedAt: "2026-01-01T00:00:00.000Z" },
+          boreal: { state: "conflict", updatedAt: "2026-01-01T00:00:00.000Z" },
         },
       },
     };
-    const operatia = buildMeshMachines({ config }).find(
-      (machine) => machine.environmentId === "operatia",
+    const boreal = buildMeshMachines({ config }).find(
+      (machine) => machine.environmentId === "boreal",
     )!;
-    expect(operatia.conflicts).toBe(1);
+    expect(boreal.conflicts).toBe(1);
   });
 });
 
 describe("deriveMeshFooterStatus", () => {
   const machines = buildMeshMachines({
     config: base,
-    connections: [{ environmentId: "gvidon", label: "Gvidon", connected: true }],
+    connections: [{ environmentId: "atlas", label: "Atlas", connected: true }],
     peerStates: [
       {
-        environmentId: "operatia",
+        environmentId: "boreal",
         lastExchangeAt: "2026-01-01T00:00:00.000Z",
         lastError: null,
         sentSeq: 0,
@@ -187,10 +188,10 @@ describe("deriveMeshFooterStatus", () => {
   it("names the first failing machine and how long it has been failing", () => {
     const failing = buildMeshMachines({
       config: base,
-      connections: [{ environmentId: "gvidon", label: "Gvidon", connected: true }],
+      connections: [{ environmentId: "atlas", label: "Atlas", connected: true }],
       peerStates: [
         {
-          environmentId: "operatia",
+          environmentId: "boreal",
           lastExchangeAt: "2026-01-01T00:00:00.000Z",
           lastError: "unreachable",
           sentSeq: 0,
@@ -206,12 +207,12 @@ describe("deriveMeshFooterStatus", () => {
     expect(status).toEqual({
       kind: "unreachable",
       count: 2,
-      environmentId: "operatia",
-      label: "Operalia",
-      tag: "OP",
+      environmentId: "boreal",
+      label: "Boreal",
+      tag: "BO",
       minutes: 5,
     });
-    expect(meshFooterText(status)).toBe("Mesh · OP unreachable for 5 min");
+    expect(meshFooterText(status)).toBe("Mesh · BO unreachable for 5 min");
   });
 });
 
@@ -220,14 +221,14 @@ describe("meshMachineLastSync", () => {
     config: base,
     peerStates: [
       {
-        environmentId: "operatia",
+        environmentId: "boreal",
         lastExchangeAt: "2026-01-01T00:00:00.000Z",
         lastError: null,
         sentSeq: 0,
         receivedSeq: 0,
       },
     ],
-  }).find((entry) => entry.environmentId === "operatia")!;
+  }).find((entry) => entry.environmentId === "boreal")!;
 
   it("describes minutes and hours since the last exchange", () => {
     expect(meshMachineLastSync(machine, Date.parse("2026-01-01T00:00:30.000Z"))).toBe(
@@ -249,26 +250,26 @@ describe("meshMachineLastSync", () => {
 
 describe("ssh routes", () => {
   it("saves a destination and identity file under the source machine", () => {
-    const next = setMachineReach(base, "operatia", "gvidon", {
-      ssh: "gvidon",
+    const next = setMachineReach(base, "boreal", "atlas", {
+      ssh: "atlas",
       identityFile: "~/.ssh/id_ed25519",
     });
-    expect(machineReachOf(next, "operatia", "gvidon")).toEqual({
-      ssh: "gvidon",
+    expect(machineReachOf(next, "boreal", "atlas")).toEqual({
+      ssh: "atlas",
       identityFile: "~/.ssh/id_ed25519",
     });
-    expect(machineReachOf(base, "operatia", "gvidon")).toBeNull();
+    expect(machineReachOf(base, "boreal", "atlas")).toBeNull();
   });
 
   it("drops the identity file when empty and removes a route with an empty destination", () => {
-    const withFile = setMachineReach(base, "operatia", "gvidon", {
-      ssh: " gvidon ",
+    const withFile = setMachineReach(base, "boreal", "atlas", {
+      ssh: " atlas ",
       identityFile: "  ",
     });
-    expect(machineReachOf(withFile, "operatia", "gvidon")).toEqual({ ssh: "gvidon" });
-    const removed = setMachineReach(withFile, "operatia", "gvidon", { ssh: "   " });
-    expect(machineReachOf(removed, "operatia", "gvidon")).toBeNull();
-    expect(removed.machines.operatia).toEqual({ label: "Operalia", tag: "OP", color: "#123456" });
+    expect(machineReachOf(withFile, "boreal", "atlas")).toEqual({ ssh: "atlas" });
+    const removed = setMachineReach(withFile, "boreal", "atlas", { ssh: "   " });
+    expect(machineReachOf(removed, "boreal", "atlas")).toBeNull();
+    expect(removed.machines.boreal).toEqual(base.machines.boreal);
   });
 });
 
