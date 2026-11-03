@@ -11,5 +11,8 @@ it("injects identity on primary and replica turns within 600 UTF-8 bytes", () =>
     expect(context).toContain("Call t3_thread_self for details");
     expect(new TextEncoder().encode(context).length).toBeLessThanOrEqual(600);
     expect(context).toContain(note ? "primary" : "primary on this machine");
+    const longIdentity = threadContextNote("t".repeat(2000), "м".repeat(2000), note);
+    expect(new TextEncoder().encode(longIdentity).length).toBeLessThanOrEqual(600);
+    expect(longIdentity).toContain("Call t3_thread_self for details");
   }
 });

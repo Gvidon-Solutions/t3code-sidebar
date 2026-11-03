@@ -39,16 +39,26 @@ export function replicaContextNote(
   return `This project is a synchronized replica. Run git and builds on the primary (${primary.environmentId}), using ${command} ${quote(`cd ${quote(primary.path)} && <command>`)}. Mutagen synchronizes working files in both directions; .git and build dependencies stay on the primary.`;
 }
 
+const fitUtf8 = (value: string, budget: number) => {
+  const encoder = new TextEncoder();
+  if (encoder.encode(value).length <= budget) return value;
+  const prefix: string[] = [];
+  let used = 0;
+  for (const character of value) {
+    const size = encoder.encode(character).length;
+    if (used + size > budget - 3) break;
+    prefix.push(character);
+    used += size;
+  }
+  return `${prefix.join("")}…`;
+};
+
 export function threadContextNote(
   threadId: string,
   environmentId: string,
   replicaNote: string,
 ): string {
-  const prefix = `Thread ${threadId}; machine ${environmentId}. Call t3_thread_self for details.`;
+  const prefix = `Thread ${fitUtf8(threadId, 160)}; machine ${fitUtf8(environmentId, 80)}. Call t3_thread_self for details.`;
   const note = replicaNote || "This project is primary on this machine.";
-  const bytes = new TextEncoder();
-  let detail = note;
-  while (bytes.encode(`${prefix} ${detail}`).length > 600 && detail.length > 0)
-    detail = detail.slice(0, -1);
-  return `${prefix} ${detail}`;
+  return fitUtf8(`${prefix} ${note}`, 600);
 }
