@@ -6,14 +6,17 @@ import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import { ReplicaError } from "@t3tools/contracts";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 
-const begin = "# t3-mesh begin";
-const end = "# t3-mesh end";
 export function managedSshConfig(
   original: string,
   routes: NonNullable<SidebarWorkspacesConfig["machines"][string]>["reach"],
+  owner?: string,
 ): string {
-  const starts = [...original.matchAll(/^# t3-mesh begin$/gm)];
-  const stops = [...original.matchAll(/^# t3-mesh end$/gm)];
+  if (owner && !/^[a-zA-Z0-9._-]+$/.test(owner))
+    throw new Error("Invalid SSH configuration owner.");
+  const begin = owner ? `# t3-mesh ${owner} begin` : "# t3-mesh begin";
+  const end = owner ? `# t3-mesh ${owner} end` : "# t3-mesh end";
+  const starts = [...original.matchAll(new RegExp(`^${begin.replaceAll(".", "\\.")}$`, "gm"))];
+  const stops = [...original.matchAll(new RegExp(`^${end.replaceAll(".", "\\.")}$`, "gm"))];
   const start = starts[0]?.index ?? -1;
   const stop = stops[0]?.index ?? -1;
   if (
@@ -41,13 +44,15 @@ export function managedSshConfig(
   }
   const block = lines.length ? `${begin}\n${lines.join("\n")}\n${end}` : "";
   if (start >= 0) return original.slice(0, start) + block + original.slice(stop + end.length);
-  return block
-    ? `${original}${original.endsWith("\n") || !original ? "" : "\n"}${block}\n`
-    : original;
+  if (!block) return original;
+  return owner
+    ? `${block}\n${original}`
+    : `${original}${original.endsWith("\n") || !original ? "" : "\n"}${block}\n`;
 }
 
 export const syncManagedSshConfig = Effect.fn("ManagedSshConfig.sync")(function* (
   routes: SidebarWorkspacesConfig["machines"][string]["reach"],
+  owner?: string,
 ) {
   if (routes === undefined) return;
   const fs = yield* FileSystem.FileSystem;
@@ -56,7 +61,7 @@ export const syncManagedSshConfig = Effect.fn("ManagedSshConfig.sync")(function*
   const filePath = path.join(home, ".ssh", "config");
   const original = (yield* fs.exists(filePath)) ? yield* fs.readFileString(filePath) : "";
   const contents = yield* Effect.try({
-    try: () => managedSshConfig(original, routes),
+    try: () => managedSshConfig(original, routes, owner),
     catch: (cause) =>
       new ReplicaError({ reason: "storage", message: "Invalid managed SSH configuration.", cause }),
   });

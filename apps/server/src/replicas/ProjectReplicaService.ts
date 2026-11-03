@@ -349,7 +349,10 @@ const make = Effect.gen(function* () {
     }
     const ignoresChanged =
       session?.ignore?.paths !== undefined &&
-      !NodeUtil.isDeepStrictEqual([...new Set(session.ignore.paths)].sort(), [...new Set(createInput.ignores)].sort());
+      !NodeUtil.isDeepStrictEqual(
+        [...new Set(session.ignore.paths)].sort(),
+        [...new Set(createInput.ignores)].sort(),
+      );
     known.set(key, identity.name);
     if (
       session &&
@@ -507,7 +510,10 @@ const make = Effect.gen(function* () {
           );
         }
     }
-    yield* syncManagedSshConfig(config.machines[mesh.environmentId]?.reach).pipe(
+    yield* syncManagedSshConfig(
+      config.machines[mesh.environmentId]?.reach,
+      mesh.environmentId,
+    ).pipe(
       Effect.provideService(FileSystem.FileSystem, fs),
       Effect.provideService(Path.Path, path),
       Effect.provideService(HostProcess.HomeDirectory, home),

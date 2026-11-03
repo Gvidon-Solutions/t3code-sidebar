@@ -43,3 +43,22 @@ it.effect("writes only the managed block in an isolated home and removes retired
     expect(yield* fs.readFileString(config)).toBe("Host personal\n  HostName personal.test\n\n");
   }).pipe(Effect.provide(NodeServices.layer)),
 );
+
+it("keeps isolated servers from overwriting each other's SSH identities", () => {
+  const live = managedSshConfig("Host personal\n HostName personal.test\n", {
+    live: { ssh: "live.test", identityFile: "/keys/live" },
+  });
+  const bed = managedSshConfig(
+    live,
+    { bed: { ssh: "bed.test", identityFile: "/keys/bed" } },
+    "bed-server",
+  );
+  expect(bed).toContain(live);
+  expect(managedSshConfig(bed, {}, "bed-server")).toContain(live);
+  expect(
+    managedSshConfig(bed, { live: { ssh: "changed.test", identityFile: "/keys/live2" } }),
+  ).toContain("Host t3-mesh-bed");
+  expect(
+    managedSshConfig(bed, { bed: { ssh: "bed.test", identityFile: "/keys/bed" } }, "bed-server"),
+  ).toBe(bed);
+});
