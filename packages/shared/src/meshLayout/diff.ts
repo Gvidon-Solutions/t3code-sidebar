@@ -45,6 +45,9 @@ export function encode(
   doc: MeshLayoutDocument = {},
 ): Record<string, Json> {
   const values: Record<string, Json> = {};
+  for (const [id, title] of Object.entries(config.projectTitles ?? {}))
+    values[keys.projectTitle(id)] = title;
+  if (config.meshAuthority) values[keys.authority] = config.meshAuthority;
   const put = (key: string, value: unknown) => {
     values[key] = JSON.parse(JSON.stringify(value)) as Json;
   };

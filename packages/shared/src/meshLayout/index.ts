@@ -7,3 +7,5 @@ export { materialize } from "./materialize.ts";
 export { diff, encode } from "./diff.ts";
 export * from "./importLegacy.ts";
 export { adoptLegacy } from "./adoptLegacy.ts";
+
+export { meshAuthorityOf, conflictWinner } from "./authority.ts";

@@ -1,3 +1,6 @@
+import { normalizeProjectPathForComparison } from "../path.ts";
+import { meshAuthorityOf } from "./authority.ts";
+import { keys } from "./document.ts";
 import type {
   SidebarWorkspacesConfig,
   SidebarWorkspace,
@@ -8,6 +11,7 @@ import type {
 } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "./document.ts";
 export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
+  const projectTitles: Record<string, string> = {};
   const workspaces: (SidebarWorkspace & { sort: string })[] = [];
   const rules: (SidebarWorkspaceRule & { sort: string; id: string })[] = [];
   const placements: Record<string, string[]> = {};
@@ -30,6 +34,10 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const legacy: Record<string, Json> = {};
   for (const [key, { v }] of Object.entries(doc).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (v === null) continue;
+    if (key.startsWith("proj/") && key.endsWith(".title") && typeof v === "string") {
+      projectTitles[decodeURIComponent(key.slice(5, -6))] = v;
+      continue;
+    }
     const [family, a = "", b = ""] = key.split("/").map(decodeURIComponent);
     switch (family) {
       case "ws":
@@ -99,7 +107,47 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     );
     assignments[project] = ids[0]!;
   }
+  const writers = [
+    ...new Set(
+      Object.keys(doc)
+        .filter((key) => key.startsWith("writer/"))
+        .map((key) => decodeURIComponent(key.slice(7))),
+    ),
+  ].sort();
+  const authority = meshAuthorityOf({
+    meshWriters: writers,
+    ...(typeof doc["mesh.authority"]?.v === "string"
+      ? { meshAuthority: doc["mesh.authority"].v }
+      : {}),
+  });
+  const claims = Object.entries(projectMounts).flatMap(([logical, reps]) =>
+    reps.map((rep) => ({
+      logical,
+      rep,
+      entry: doc[keys.representation(logical, rep.environmentId)]!,
+    })),
+  );
+  claims.sort(
+    (a, b) =>
+      Number(b.entry.h.slice(20) === authority) - Number(a.entry.h.slice(20) === authority) ||
+      (a.logical < b.logical ? -1 : a.logical > b.logical ? 1 : 0),
+  );
+  const claimed = new Set<string>();
+  for (const { logical, rep } of claims) {
+    const identity = JSON.stringify([
+      rep.environmentId,
+      normalizeProjectPathForComparison(rep.path),
+    ]);
+    if (claimed.has(identity))
+      projectMounts[logical] = projectMounts[logical]!.filter((other) => other !== rep);
+    else claimed.add(identity);
+  }
   return {
+    ...(typeof doc["mesh.authority"]?.v === "string"
+      ? { meshAuthority: doc["mesh.authority"].v }
+      : {}),
+    ...(Object.keys(projectTitles).length ? { projectTitles } : {}),
+    ...(writers.length ? { meshWriters: writers } : {}),
     workspaces: workspaces.map(({ sort: _sort, ...w }) => w),
     rules: rules.map(({ sort: _sort, id: _id, ...r }) => r),
     assignments,

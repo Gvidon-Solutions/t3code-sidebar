@@ -1318,6 +1318,7 @@ export const ServerSettings = Schema.Struct({
         ".turbo",
         "coverage",
         ".t3",
+        ".t3-conflicts",
         ".claude/worktrees",
         ".DS_Store",
       ]),

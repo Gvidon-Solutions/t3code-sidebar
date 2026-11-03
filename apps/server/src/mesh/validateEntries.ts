@@ -5,7 +5,7 @@ import * as Schema from "effect/Schema";
 
 const entryJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const keyPattern =
-  /^(?:ws\.(?:default|quietAfterDays)|(?:ws|rule|order|alias|machine|workspaceOrder|legacy)\/[^/]+|(?:place|fold|rep|repstatus|empty)\/[^/]+\/[^/]+)$/;
+  /^(?:mesh\.authority|proj\/[^/]+\.title|ws\.(?:default|quietAfterDays)|(?:ws|rule|order|alias|machine|writer|workspaceOrder|legacy)\/[^/]+|(?:place|fold|rep|repstatus|empty)\/[^/]+\/[^/]+)$/;
 export const validateEntries = Effect.fn("MeshLayout.validateEntries")(function* (
   entries: MeshLayoutDocument,
 ) {

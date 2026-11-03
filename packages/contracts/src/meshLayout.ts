@@ -41,6 +41,9 @@ export class MeshLayoutError extends Schema.TaggedError<MeshLayoutError>()("Mesh
 
 /** Live state of one replica on the machine that drives or holds it. */
 export const ReplicaLiveStatus = Schema.Struct({
+  conflictCopies: Schema.optionalKey(
+    Schema.Struct({ environmentId: Schema.String, path: Schema.String }),
+  ),
   logicalKey: Schema.String,
   environmentId: Schema.String,
   state: SidebarProjectMountState,
@@ -157,6 +160,7 @@ export const ProjectPlaceResult = Schema.Struct({
 });
 export type ProjectPlaceResult = typeof ProjectPlaceResult.Type;
 export const ProjectMachinesResult = Schema.Struct({
+  authorityEnvironmentId: Schema.optionalKey(Schema.String),
   logicalKey: Schema.String,
   representations: Schema.Array(
     Schema.Struct({

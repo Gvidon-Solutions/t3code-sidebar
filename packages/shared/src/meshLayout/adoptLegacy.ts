@@ -1,3 +1,4 @@
+import { meshAuthorityOf } from "./authority.ts";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { diff } from "./diff.ts";
 import { keys, merge, type MeshLayoutDocument } from "./document.ts";
@@ -10,10 +11,15 @@ export function adoptLegacy(
   doc: MeshLayoutDocument,
 ): MeshLayoutDocument {
   const before = materialize(doc);
+  const authority = meshAuthorityOf(before);
   const existing = new Map<string, string>();
-  for (const workspace of [...before.workspaces].sort((a, b) => (a.id < b.id ? 1 : -1))) {
+  for (const workspace of [...before.workspaces].sort(
+    (a, b) =>
+      Number(doc[keys.workspace(a.id)]?.h.slice(20) === authority) -
+        Number(doc[keys.workspace(b.id)]?.h.slice(20) === authority) || (a.id < b.id ? 1 : -1),
+  )) {
     const entry = doc[keys.workspace(workspace.id)];
-    if (entry && !entry.h.startsWith("0000000000000."))
+    if (entry && (!entry.h.startsWith("0000000000000.") || entry.h.slice(20) === authority))
       existing.set(workspace.name.trim().toLowerCase(), workspace.id);
   }
   const normalize = (source: SidebarWorkspacesConfig): SidebarWorkspacesConfig => {
@@ -71,6 +77,7 @@ export function adoptLegacy(
     diff(
       before,
       {
+        ...before,
         ...unified,
         placements,
         assignments: Object.fromEntries(

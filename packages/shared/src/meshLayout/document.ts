@@ -10,6 +10,8 @@ export type MeshLayoutEntry = { readonly v: Json | null; readonly h: Hlc };
 export type MeshLayoutDocument = Record<string, MeshLayoutEntry>;
 const part = encodeURIComponent;
 export const keys = {
+  authority: "mesh.authority",
+  projectTitle: (id: string) => `proj/${part(id)}.title`,
   workspace: (id: string) => `ws/${part(id)}`,
   defaultWorkspace: "ws.default",
   quietAfterDays: "ws.quietAfterDays",

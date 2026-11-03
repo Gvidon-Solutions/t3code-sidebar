@@ -88,6 +88,9 @@ export type SidebarProjectMountState = typeof SidebarProjectMountState.Type;
 
 /** What the machine holding a replica last reported about it; changes only on state changes. */
 export const SidebarProjectMountStatus = Schema.Struct({
+  conflictCopies: Schema.optionalKey(
+    Schema.Struct({ environmentId: Schema.String, path: Schema.String }),
+  ),
   state: SidebarProjectMountState,
   message: Schema.optionalKey(Schema.String),
   conflicts: Schema.optionalKey(Schema.Number),
@@ -96,6 +99,9 @@ export const SidebarProjectMountStatus = Schema.Struct({
 export type SidebarProjectMountStatus = typeof SidebarProjectMountStatus.Type;
 
 export const SidebarWorkspacesConfig = Schema.Struct({
+  projectTitles: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  meshAuthority: Schema.optionalKey(Schema.String),
+  meshWriters: Schema.optionalKey(Schema.Array(Schema.String)),
   workspaces: Schema.Array(SidebarWorkspace).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   /**
    * Logical project key → workspace id. Wins over rules. Since `placements`,

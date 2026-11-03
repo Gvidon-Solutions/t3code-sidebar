@@ -46,7 +46,9 @@ it.effect(
       const lateRows = yield* sql<{
         key: string;
       }>`SELECT key FROM mesh_layout_entries WHERE seq > ${watermark}`;
-      expect(lateRows.map((r) => r.key)).toEqual(["machine/late"]);
+      expect(lateRows.filter((r) => !r.key.startsWith("writer/")).map((r) => r.key)).toEqual([
+        "machine/late",
+      ]);
       const seq = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
       yield* service.apply(late);
       expect((yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq).toBe(seq);

@@ -259,3 +259,11 @@ export function mergeSuggestionsFor<T extends Project & { readonly title: string
   }
   return suggestions;
 }
+
+export function logicalProjectTitle(
+  config: SidebarWorkspacesConfig,
+  id: string,
+  fallback: string,
+): string {
+  return config.projectTitles?.[follow(id, config)]?.trim() || fallback;
+}
