@@ -78,13 +78,42 @@ export function targetOperation(input) {
   });
 }
 
+export const shellQuote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+
+export function sshTransport(machines, source, target, command, visited = [], remote = false) {
+  const hop = `${source}->${target.id}`;
+  if (visited.includes(hop)) throw new Error("Cyclic SSH route: " + [...visited, hop].join(" -> "));
+  const via = target.via?.[source];
+  if (via) {
+    if (via === target.id) throw new Error("Cyclic SSH route: " + hop);
+    const relay = machines.find((machine) => machine.id === via);
+    if (!relay) throw new Error("Unknown relay " + via);
+    const inner = sshTransport(machines, via, target, command, [...visited, hop], true);
+    const nested = ["ssh", ...inner]
+      .map((value) =>
+        value.startsWith("~/") ? '"$HOME"/' + shellQuote(value.slice(2)) : shellQuote(value),
+      )
+      .join(" ");
+    return sshTransport(machines, source, relay, nested, [...visited, hop], remote);
+  }
+  const destination = target.ssh?.[source];
+  if (!destination) throw new Error(`No SSH route from ${source} to ${target.id}`);
+  const options = (target.sshOptions?.[source] ?? []).map((value) =>
+    remote ? value : value.replace(/^~\//, os.homedir() + "/"),
+  );
+  return ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", ...options, destination, command];
+}
+
 export function runAgents(pos, opt) {
   const operation = pos[0];
   if (!["sync", "status"].includes(operation))
     throw new Error(
       "Usage: t3ctl agents sync [--to all|machine,…] [--home /isolated/home] [--apply] | status [--to …] [--home /isolated/home]",
     );
-  const root = url.fileURLToPath(new URL("../global/", import.meta.url));
+  const root =
+    opt.config ||
+    process.env.T3CTL_AGENTS_CONFIG ||
+    url.fileURLToPath(new URL("../global/", import.meta.url));
   const machines = JSON.parse(fs.readFileSync(path.join(root, "machines.json"), "utf8"));
   const body = fs.readFileSync(path.join(root, "GLOBAL.md"), "utf8");
   const source = os.hostname().split(".")[0].toLowerCase();
@@ -118,22 +147,8 @@ export function runAgents(pos, opt) {
     let rows;
     if (source === machine.id) rows = targetOperation(input);
     else {
-      const destination = machine.ssh[source];
-      if (!destination) throw new Error(`No SSH route from ${source} to ${machine.id}`);
-      const expand = (s) => s.replace(/^~\//, `${os.homedir()}/`);
-      const args = [
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "ConnectTimeout=10",
-        ...(machine.sshOptions?.[source] || []).map(expand),
-        destination,
-      ];
-      const quote = (s) => `'${s.replaceAll("'", "'\\''")}'`;
-      let command = `export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$HOME/.nvm/versions/node/v23.11.1/bin:$PATH; node --input-type=module -e ${quote(remoteScript)}`;
-      if (machine.via?.[source])
-        command = `ssh -F ~/.local/share/gor-transfer/ssh_config -i ~/.ssh/id_malaniya_25519 -o IdentitiesOnly=yes -o BatchMode=yes gor ${quote(command)}`;
-      const result = cp.spawnSync("ssh", [...args, command], {
+      const command = `${machine.nodeCommand || "node"} --input-type=module -e ${shellQuote(remoteScript)}`;
+      const result = cp.spawnSync("ssh", sshTransport(machines, source, machine, command), {
         input: JSON.stringify(input),
         encoding: "utf8",
         maxBuffer: 16 * 1024 * 1024,

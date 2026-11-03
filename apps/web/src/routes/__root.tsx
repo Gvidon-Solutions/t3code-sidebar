@@ -1,3 +1,4 @@
+import { PendingMeshDraftCoordinator } from "../components/workspaces/PendingMeshDraftCoordinator";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
@@ -220,6 +221,7 @@ function RootRouteBranch() {
         <GuestShareDialogHost />
         <ProjectCloneToastCoordinator />
         <AddProjectToMachineDialogHost />
+        <PendingMeshDraftCoordinator />
         {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
         {primaryEnvironmentAuthenticated ? (
           <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />

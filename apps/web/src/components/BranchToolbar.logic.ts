@@ -16,6 +16,10 @@ export interface EnvironmentOption {
   label: string;
   isPrimary: boolean;
   machine: EnvironmentMachineKind;
+  display?: import("@t3tools/client-runtime/state/machine-display").MachineDisplay | undefined;
+  status?: string;
+  connected?: boolean;
+  supportsMesh?: boolean;
 }
 
 /** "Add to another machine" stays muted until hovered: easy to find, quieter than the machines. */

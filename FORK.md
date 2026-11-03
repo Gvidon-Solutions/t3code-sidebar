@@ -114,6 +114,22 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How:** the existing CRDT carries `mesh.authority`, server membership, browser-edit authorship and `proj/<id>.title`. Legacy project keys migrate deterministically to opaque ids and remain aliases; existing session identities survive migration. The driver keeps two-way-safe, preserves the losing files locally or over SSH, then resets and flushes. Manual sessions are paused before takeover and terminated only after private sync watches. Requested paths are validated without reallocating them; obsolete asynchronous checks cannot replace a corrected request. First placements reuse migrated title/repository aliases through one shared record-identity helper; MCP lists and details read the same shared title without rewriting local storage. Moves prefer a local representation and can prepare one before moving. CLI service control detects user/system units and installs from public releases or linked caches without requiring `gh` authentication.
 - **Where:** shared `meshLayout`, contracts, server `mesh/`, `replicas/` and thread context; shared client grouping/moves/status and the `projectEntities.ts` title reader, web/mobile Mesh and Machines; CLI review copy; isolated-bed `scripts/mesh-e2e/round3*.sh`. The rule-by-rule test ledger is [mesh-conformance.md](docs/mesh-conformance.md).
 
+### 2026-11-03 — T3 Mesh — Stage P draft machine selection
+
+- **What:** new-thread composers offer machine tags, connection state and project-copy availability. Drafts retain their text while a replica mounts; a send waits for registration. Model availability offers a machine or local-model correction.
+- **How:** both clients reuse logical project resolution and the replica plan, consume replica status for progress and Retry, and persist sends before acknowledgement in a shared outbox, delivered by app-root workers after navigation or restart. Fixed receipt IDs make response-loss retries idempotent. Device preferences remember the project’s selected machine. Provider catalogs follow the destination and unavailable mobile models stay visible and disabled with their reason. Machine names prefer mesh layout identities and label collisions are disambiguated and logged.
+- **Where:** client-runtime `meshLayout/{draftMachine,draftMachineChoices,pendingDraftSend}`; web composer routing, environment selector and `DraftMachineHint`; mobile new-task flow, environment control and picker, model options and device preferences. Mesh contracts and server interfaces are unchanged.
+
+### 2026-11-03 — T3 Mesh — agent kit and the mesh guide
+
+- **What.** The `t3` skill (t3ctl), the owner's canonical agent instructions and their machine map now
+  live in this repository and are installed from it; one guide explains the whole mesh to agents.
+- **How.** `agent-kit/skills/t3` is the source of truth; `agent-kit/install.sh` (dry run by default,
+  `--apply` with backups, `--dest` for test beds) copies the skill to every machine and renders the
+  instructions through `t3ctl agents sync`. `docs/mesh/README.md` maps the object model, code,
+  interfaces, testing, live operations and past lessons; AGENTS.md points to it.
+- **Where.** `agent-kit/`, `docs/mesh/README.md`, `AGENTS.md`, `vite.config.ts` (format exclusions).
+
 ### 2026-11-03 — T3 Mesh — Stage K project machine strips
 
 - **What:** project folder rows show primary and replica machine tags, sync status and overflow; all scratch threads share one “No project” folder on web and mobile, including the drawer.
@@ -124,13 +140,13 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 - **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to gor.
 - **How:** staged `t3ctl agents sync/status` uses local file operations or pinned SSH routes, with offline render/diff/backup/isolation tests and real Codex/OpenCode eval evidence. Mesh routing resolves configured names and project paths, searches across machines, and runs git on a replica’s primary. General dispatch rules cover API prerequisites and execution location; compact skill tables are excluded from the formatter.
-- **Where:** `docs/skill-t3-next/`, `docs/agents-global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
+- **Where:** `agent-kit/skills/t3/`, `agent-kit/skills/t3/global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
 
 ### 2026-11-03 — T3 Mesh — Stage M session identity and thread access
 
 - **What:** agents can identify their thread and project representation, query threads across the mesh, and address remote threads by id alone. The staged CLI supports the same commands and current pending-question tools.
 - **How:** read-only `t3_thread_self` reads local layout, replica runtime and thread lineage; each mesh turn receives a compact identity note (≤600 bytes). MCP routing probes unknown ids through `callRouted`, caches locations and fans out list/search with concurrency four, deadlines and partial failures. Link credentials and mode checks remain authoritative; a full-access intermediary can relay reads to a fenced destination, whose own credential refuses writes. The tool-list budget grows by 242 bytes for the self tool; the dynamic note has its own measured 600-byte ceiling, avoiding full layout injection.
-- **Where:** server `mcp/toolkits/thread/self.ts`, `mesh/MeshThreadAccess.ts`, `McpToolAccess.ts`, UI toolkit, `mesh/MeshRelay.ts` and `replicas/ReplicaInstructions.ts`; seams in turn start, Claude's read-only allowlist and additive MCP list/search result fields. Staged skill review copy: `docs/skill-t3-next/`. No mesh CRDT contracts or service interfaces changed.
+- **Where:** server `mcp/toolkits/thread/self.ts`, `mesh/MeshThreadAccess.ts`, `McpToolAccess.ts`, UI toolkit, `mesh/MeshRelay.ts` and `replicas/ReplicaInstructions.ts`; seams in turn start, Claude's read-only allowlist and additive MCP list/search result fields. Staged skill review copy: `agent-kit/skills/t3/`. No mesh CRDT contracts or service interfaces changed.
 
 ### 2026-11-02 — T3 Mesh — round 2 replica acceptance
 
@@ -189,10 +205,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   with full access. Legacy layouts are encoded with the same rules as
   `@t3tools/shared/meshLayout` into zero-HLC entries, so the server runs `adoptLegacy`; backups go
   to `~/.local/state/t3-mesh-migrate/` first.
-- **Where.** The skill itself stays outside the repo (`~/.agents/skills/t3-next`;
-  `scripts/t3ctl.mjs`, `scripts/selftest.sh`, new `scripts/t3ctl.unit.test.mjs`, `SKILL.md`). The
-  review copy is `docs/skill-t3-next/` (`SKILL.md`, `scripts/t3ctl.mjs`, offline and transport tests, `scripts/selftest.sh`
-  and `t3ctl-changes.md`). No server contracts or app code changed.
+- **Where.** `agent-kit/skills/t3/` (`SKILL.md`, `scripts/t3ctl.mjs`, offline and transport tests,
+  `scripts/selftest.sh`); staged test-bed installs go to `~/.agents/skills/t3-next`. No server
+  contracts or app code changed.
 
 ### 2026-11-02 — T3 Mesh — Stage C server replication
 
@@ -1504,3 +1519,9 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - Move confirmation on web and mobile reuses the composer model/options picker against the destination environment. It preserves the current selection or chooses the destination catalog default with a notice.
 - `threads.move`, MCP `t3_thread_move` and `t3ctl move --agent/--model/--effort` carry the target selection. Local moves update it atomically; cross-machine moves import plain conversation context into the selected harness. Forks discard source handoff ownership so they can move independently.
 - Implementation: workspace move dialogs/sheets, shared `meshLayout/moveModel`, `ThreadHandoffService`, orchestration move command and `ThreadForkService`.
+
+### 2026-11-03 — Stage P customer-independent machine configuration
+
+- **What.** Machine aliases are editable in Settings › Mesh on web/desktop and mobile, and with `t3ctl machines alias`. Machine names and provider defaults come from customer configuration.
+- **How.** Optional aliases share the existing `machine/*` CRDT entry. The CLI matches ids, labels, tags, aliases and SSH destinations without a built-in machine dictionary, preserves other machine fields, and advances beyond observed layout clocks. Unspecified thread model/permissions stay with the destination's defaults; explicit model discovery targets that machine. Agent-kit installation and instruction sync use registry-defined SSH routes, relays, home-relative paths and remote Node commands.
+- **Where.** `SidebarMachine`, client-runtime machine display/overview helpers, web `MeshSettingsPanel`, mobile `SettingsMachinesRouteScreen`, and `agent-kit/`. Regression fixtures use synthetic customer names and paths; personal installation data stays in `agent-kit/skills/t3/global/`.

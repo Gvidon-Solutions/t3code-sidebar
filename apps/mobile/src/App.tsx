@@ -1,3 +1,4 @@
+import { PendingMeshDraftCoordinator } from "./features/workspaces/PendingMeshDraftCoordinator";
 import { MoveThreadSheet } from "./features/workspaces/MoveThreadSheet";
 import { installPermissionUpdateNotice } from "./features/connection/permissionUpdateNotice";
 import { installComposerAttachmentUploads } from "./state/composer-attachment-uploads";
@@ -233,6 +234,7 @@ function AppContent() {
     <>
       <SplashScreenCoordinator />
       <SubscriptionUsageCoordinator />
+      <PendingMeshDraftCoordinator />
       <GestureHandlerRootView className="flex-1">
         <KeyboardProvider statusBarTranslucent>
           <SafeAreaProvider>

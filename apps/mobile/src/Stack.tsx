@@ -766,7 +766,7 @@ const RootStackConfig = createWorkspaceStackNavigator({
     NewTaskEnvironment: createNativeStackScreen({
       linking: "new/draft/environment",
       screen: NewTaskEnvironmentPickerRouteScreen,
-      options: { ...GLASS_HEADER_OPTIONS, title: "Environment" },
+      options: { ...GLASS_HEADER_OPTIONS, title: "Machine" },
     }),
     NewTaskBranch: createNativeStackScreen({
       linking: "new/draft/branch",

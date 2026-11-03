@@ -214,6 +214,7 @@ export interface ThreadComposerProps {
   readonly placeholder: string;
   readonly contentMaxWidth?: number;
   readonly draftControls?: ReactNode;
+  readonly draftFooter?: ReactNode;
   readonly bottomInset?: number;
   /** Window y the full-screen editor grows up to, just below the screen's header. */
   readonly fullScreenTop?: number | null;
@@ -1420,6 +1421,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
             </ComposerDictationToolbar>
           </Animated.View>
         </ComposerSurface>
+        {props.draftFooter}
 
         {props.connectionState === "connected" && !props.canOperateThread ? (
           <Text className="pt-2 text-xs text-foreground-muted">

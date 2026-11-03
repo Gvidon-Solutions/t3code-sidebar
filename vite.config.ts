@@ -158,10 +158,9 @@ export default defineConfig({
   fmt: {
     ignorePatterns: [
       // Owner-authored canonical instructions are synced byte for byte.
-      "docs/agents-global/GLOBAL.md",
-      "docs/skill-t3-next/global/GLOBAL.md",
+      "agent-kit/skills/t3/global/GLOBAL.md",
       // Compact skill tables keep agent context small.
-      "docs/skill-t3-next/SKILL.md",
+      "agent-kit/skills/t3/SKILL.md",
       ".repos/**",
       "infra/task-cache/vendor/**",
       // Macroscope requires one glob per line; Markdown formatting corrupts it.

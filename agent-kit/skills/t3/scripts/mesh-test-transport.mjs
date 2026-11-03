@@ -14,8 +14,8 @@ const rep = {
 const config = {
   workspaces: [],
   machines: {
-    [self]: { label: "gvidon", tag: "GV", reach: { [peer]: { ssh: "gor" } } },
-    [peer]: { label: "gor", tag: "GO" },
+    [self]: { label: "atlas", tag: "AT", aliases: ["офис"], reach: { [peer]: { ssh: "lab" } } },
+    [peer]: { label: "lab", tag: "LB", aliases: ["лаборатория", "лаборатории"], color: "#123456" },
   },
   projectMounts: {
     repo: [
@@ -35,7 +35,7 @@ config.projectMounts["lp-remote"] = [
   { ...rep, environmentId: peer, path: "/remote", projectId: "remote-p" },
 ];
 if (process.env.T3CTL_TEST_REMOTE_DRIVER)
-  config.machines[peer].reach = { [self]: { ssh: "gvidon" } };
+  config.machines[peer].reach = { [self]: { ssh: "atlas" } };
 const snapshot = { environmentId: self, config, document: {} };
 const thread = {
   threadId: process.env.T3CTL_TEST_FULL_ID ? "mcp:full-thread-example-0123456789" : "thread-1",
@@ -48,7 +48,7 @@ const thread = {
 };
 const env = (id = self) => ({
   environmentId: id,
-  label: id === self ? "gvidon" : "gor",
+  label: id === self ? "atlas" : "lab",
   serverVersion: "0.1.5",
 });
 const tools = ["t3_project_place", "t3_project_machines", "t3_pending_request"].map((name) => ({
@@ -124,6 +124,16 @@ function call(name, args) {
         };
       if (args.action === "respond") return { sequence: 1 };
       return { requestIds: process.env.T3CTL_TEST_QUESTION ? ["request"] : [] };
+    case "orchestrator_capabilities":
+      return {
+        providers: [
+          {
+            providerInstanceId: "custom",
+            driverKind: "codex",
+            models: [{ id: "model-from-destination", isDefault: true, options: [] }],
+          },
+        ],
+      };
     case "t3_thread_launch":
       return { ...thread, modelSelection: args.modelSelection };
     case "ui_open":
@@ -131,7 +141,10 @@ function call(name, args) {
     case "meshLayout.get":
       return snapshot;
     case "meshLayout.apply":
-      if (readdirSync(`${process.env.XDG_STATE_HOME}/t3-mesh-migrate`).length < 2)
+      if (
+        Object.values(args.entries).some((entry) => entry.h.startsWith("0000000000000.")) &&
+        readdirSync(`${process.env.XDG_STATE_HOME}/t3-mesh-migrate`).length < 2
+      )
         throw Error("backups missing before apply");
       return snapshot;
     case "peerLinks.list":
@@ -140,7 +153,7 @@ function call(name, args) {
           {
             ...env(peer),
             status: "reachable",
-            label: "gor",
+            label: "lab",
             urls: ["http://peer"],
             access: "full-access",
           },
@@ -155,7 +168,7 @@ function call(name, args) {
     case "replicas.retry":
       return { state: "watching" };
     case "files.read":
-      return { contents: "hello from gor", byteLength: 14, truncated: false };
+      return { contents: "hello from lab", byteLength: 14, truncated: false };
     case "server.getConfig":
       return { settings: { sidebarWorkspaces: config, meshEnabled: true } };
     default:

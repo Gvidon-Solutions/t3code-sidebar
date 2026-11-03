@@ -23,8 +23,8 @@ import { diff } from "./index.ts";
 import { materialize } from "./index.ts";
 import { importLegacy, mergeLegacyConfigs } from "./index.ts";
 import * as logical from "./logicalProjects.ts";
-import gvidon from "./fixtures/gvidon.json" with { type: "json" };
-import operalia from "./fixtures/operalia.json" with { type: "json" };
+import atlas from "./fixtures/atlas.json" with { type: "json" };
+import boreal from "./fixtures/boreal.json" with { type: "json" };
 
 const decodeConfig = Schema.decodeUnknownSync(SidebarWorkspacesConfig);
 const low = "0000000000000.00000.seed";
@@ -95,7 +95,7 @@ describe("LWW document", () => {
     for (let trial = 0; trial < 600; trial++) {
       const replicas: MeshLayoutDocument[] = [{}, {}, {}];
       const clocks = [low, low, low];
-      for (let op = 0; op < 30; op++) {
+      for (let bo = 0; bo < 30; bo++) {
         const i = Math.floor(random() * 3),
           key = `order/${Math.floor(random() * 8)}`;
         clocks[i] = tick(Math.floor(random() * 100), clocks[i]!, String(i));
@@ -221,7 +221,7 @@ describe("concurrent layout edits", () => {
       const replicas = [initial, initial, initial];
       for (let machine = 0; machine < 3; machine++) {
         let clock = low;
-        for (let op = 0; op < 5; op++) {
+        for (let bo = 0; bo < 5; bo++) {
           const doc = replicas[machine]!,
             before = materialize(doc);
           const ws = before.workspaces[Math.floor(random() * 3)]!.id;
@@ -273,7 +273,7 @@ describe("collection removals", () => {
 });
 describe("legacy configs", () => {
   it("imports both sanitized real server fixtures without pruning offline project keys and unifies main", () => {
-    const configs = [gvidon, operalia].map((c) => decodeConfig(c));
+    const configs = [atlas, boreal].map((c) => decodeConfig(c));
     const sources = configs.map((config, i) => ({ config, envId: String(i) }));
     const merged = mergeLegacyConfigs(sources, low);
     expect(mergeLegacyConfigs([...sources].reverse(), low)).toEqual(merged);

@@ -177,6 +177,21 @@ function MachineEditor(props: {
         }
       />
       <SettingsRow
+        title="Aliases"
+        description="Alternative names for commands and voice requests, separated by commas."
+        control={
+          <Input
+            key={`aliases:${machine.environmentId}:${machine.aliases.join(",")}`}
+            aria-label={`Aliases for ${machine.label}`}
+            defaultValue={machine.aliases.join(", ")}
+            onBlur={(event) => props.onEdit({ aliases: event.currentTarget.value.split(",") })}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+            }}
+          />
+        }
+      />
+      <SettingsRow
         title="Color"
         description="Used by the tag chip and its tooltip."
         control={<ColorPicker value={machine.color} onChange={props.onEdit} />}

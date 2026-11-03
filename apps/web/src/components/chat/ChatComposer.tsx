@@ -385,6 +385,7 @@ export interface ChatComposerProps {
   promptHistoryMessages: ReadonlyArray<ChatMessage>;
   forceExpandedOnMobile: boolean;
   projectSelectionRequired: boolean;
+  draftSendQueued?: boolean;
 
   phase: SessionPhase;
   canInterrupt: boolean;
@@ -538,6 +539,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     promptHistoryMessages,
     forceExpandedOnMobile,
     projectSelectionRequired,
+    draftSendQueued = false,
     phase,
     canInterrupt,
     isSendBusy,
@@ -3489,6 +3491,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 : DEFAULT_COMPOSER_PLACEHOLDER
                     }
                     disabled={
+                      draftSendQueued ||
                       projectSelectionRequired ||
                       isChoiceOnlyPendingQuestion ||
                       activePendingIsResponding

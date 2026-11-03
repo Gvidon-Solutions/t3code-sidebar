@@ -1,3 +1,4 @@
+import { draftModelUnavailableReason } from "@t3tools/client-runtime/state/mesh-layout";
 import {
   normalizeProviderAccentColor,
   resolveProviderInstanceDisplayName,
@@ -38,6 +39,7 @@ export type ModelOption = {
   readonly isDefault: boolean;
   readonly isLegacy: boolean;
   readonly isUnavailable?: boolean;
+  readonly unavailableReason?: string | undefined;
   readonly isHidden?: boolean;
   readonly canHide?: boolean;
   readonly capabilities: ModelCapabilities | null;
@@ -243,6 +245,7 @@ export function buildModelOptions(
   providerInstanceId: ModelSelection["instanceId"] | undefined,
   projectId: ProjectId | null,
   includeHidden = false,
+  includeUnavailable = false,
 ): ReadonlyArray<ModelOption> {
   const options = new Map<string, ModelOption>();
   const nicknames = new Map(
@@ -307,9 +310,10 @@ export function buildModelOptions(
     if (
       !matchesLockedProvider(provider) ||
       !isProviderEnabledForProject(config, provider, projectId) ||
-      !provider.installed ||
-      provider.auth.status === "unauthenticated" ||
-      (provider.driver === "antigravity" && provider.availability === "unavailable")
+      (!includeUnavailable &&
+        (!provider.installed ||
+          provider.auth.status === "unauthenticated" ||
+          provider.availability === "unavailable"))
     ) {
       continue;
     }
@@ -425,7 +429,16 @@ export function buildModelOptions(
     }
   }
 
-  return [...options.values()];
+  return [...options.values()].map((option) =>
+    includeUnavailable
+      ? {
+          ...option,
+          isUnavailable: draftModelUnavailableReason(config, option.selection, projectId) !== null,
+          unavailableReason:
+            draftModelUnavailableReason(config, option.selection, projectId) ?? undefined,
+        }
+      : option,
+  );
 }
 
 export function groupByProvider(options: ReadonlyArray<ModelOption>): ReadonlyArray<ProviderGroup> {

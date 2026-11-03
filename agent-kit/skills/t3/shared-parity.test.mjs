@@ -8,7 +8,7 @@ import {
   adoptLegacy,
   materialize,
   importLegacy,
-} from "../../packages/shared/src/meshLayout/index.ts";
+} from "../../../packages/shared/src/meshLayout/index.ts";
 import { encodeLegacyEntries, importLegacyEntries } from "./scripts/t3ctl.mjs";
 const empty = {
   workspaces: [],
@@ -23,6 +23,7 @@ const empty = {
   alwaysShow: [],
   alwaysQuiet: [],
   machines: {},
+  projectTitles: {},
   projectAliases: {},
   projectMounts: {},
   projectMountStatus: {},
@@ -36,6 +37,7 @@ test("standalone encoder agrees with shared core and clocks can be received", ()
       placements: { "offline:/path": ["z"] },
       machines: { offline: { label: "Offline" } },
       projectMounts: { x: [] },
+      projectTitles: { x: "Shared project title" },
     },
   ]) {
     assert.deepEqual(encodeLegacyEntries(config), encode(config));
@@ -55,4 +57,27 @@ test("zero-clock legacy entries use server shared adoption without losing offlin
   const config = materialize(result);
   assert.equal(config.workspaces.length, 1);
   assert.deepEqual(config.placements["offline:/path"], ["a"]);
+});
+
+test("alias writes advance beyond observed clocks, including counter overflow", async () => {
+  const { nextMachineClock } = await import("./scripts/t3ctl.mjs");
+  const { tick } = await import("../../../packages/shared/src/meshLayout/index.ts");
+  for (const last of [null, "9999999999998.00042.peer", "9999999999998.99999.peer"]) {
+    const document = last
+      ? { "machine/remote": { v: { aliases: ["office", "研究室"] }, h: last } }
+      : {};
+    for (const now of [0, 42, 42.8])
+      assert.equal(nextMachineClock(document, now, "client"), tick(now, last, "client"));
+  }
+  const config = {
+    ...empty,
+    machines: {
+      remote: {
+        label: "Worker",
+        aliases: ["office", "研究室"],
+        reach: { local: { ssh: "user@node" } },
+      },
+    },
+  };
+  assert.deepEqual(materialize(importLegacyEntries(config, "local")).machines, config.machines);
 });

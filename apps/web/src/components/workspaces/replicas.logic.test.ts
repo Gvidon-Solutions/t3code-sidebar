@@ -34,8 +34,8 @@ const replica = (environmentId: string, source: string): SidebarProjectMount => 
 const config: SidebarWorkspacesConfig = {
   ...empty,
   machines: {
-    alpha: { label: "gvidon", tag: "GV" },
-    beta: { label: "Operalia", tag: "OP" },
+    alpha: { label: "atlas", tag: "AT" },
+    beta: { label: "Boreal", tag: "BO" },
   },
   projectMounts: { demo: [primary("alpha"), replica("beta", "alpha")] },
 };
@@ -53,13 +53,13 @@ const live = (environmentId: string, patch: Partial<ReplicaLiveStatus>): Replica
 describe("folderMachineChoices", () => {
   it("lists connected machines with their tags and disables servers without the mesh", () => {
     const choices = folderMachineChoices(config, [
-      { environmentId: "alpha", label: "gvidon", connected: true, supportsMesh: true },
-      { environmentId: "beta", label: "Operalia", connected: true, supportsMesh: false },
-      { environmentId: "gamma", label: "gor", connected: false, supportsMesh: true },
+      { environmentId: "alpha", label: "atlas", connected: true, supportsMesh: true },
+      { environmentId: "beta", label: "Boreal", connected: true, supportsMesh: false },
+      { environmentId: "gamma", label: "lab", connected: false, supportsMesh: true },
     ]);
     expect(choices.map((choice) => [choice.tag, choice.label])).toEqual([
-      ["GV", "gvidon"],
-      ["OP", "Operalia"],
+      ["AT", "atlas"],
+      ["BO", "Boreal"],
     ]);
     expect(choices[1]?.disabled).toBe(true);
   });
@@ -69,15 +69,15 @@ describe("machineMenuItems", () => {
   it("puts the reason into a disabled item's label", () => {
     const items = machineMenuItems(
       folderMachineChoices(config, [
-        { environmentId: "alpha", label: "gvidon", connected: true, supportsMesh: true },
-        { environmentId: "beta", label: "Operalia", connected: true, supportsMesh: false },
+        { environmentId: "alpha", label: "atlas", connected: true, supportsMesh: true },
+        { environmentId: "beta", label: "Boreal", connected: true, supportsMesh: false },
       ]),
     );
     expect(items).toEqual([
-      { id: "machine:alpha", label: "GV  gvidon", disabled: false },
+      { id: "machine:alpha", label: "AT  atlas", disabled: false },
       {
         id: "machine:beta",
-        label: "OP  Operalia (update this server to use the mesh)",
+        label: "BO  Boreal (update this server to use the mesh)",
         disabled: true,
       },
     ]);

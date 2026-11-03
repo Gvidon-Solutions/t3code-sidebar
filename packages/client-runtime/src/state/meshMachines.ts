@@ -51,6 +51,7 @@ export interface MeshLinkedWith {
 }
 
 export interface MeshMachine extends MachineDisplay {
+  readonly aliases: readonly string[];
   readonly environmentId: string;
   readonly connectedHere: boolean;
   /** Machines connected by an incoming or outgoing peer link. */
@@ -208,6 +209,7 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
       };
       return {
         environmentId,
+        aliases: config.machines[environmentId]?.aliases ?? [],
         label: display.label,
         tag: display.tag,
         color: display.color,

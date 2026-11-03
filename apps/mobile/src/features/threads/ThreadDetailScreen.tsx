@@ -212,6 +212,7 @@ export interface ThreadDetailScreenProps {
       availableHeight: number,
     ) => React.ReactNode;
     readonly controls: React.ReactNode;
+    readonly footer?: React.ReactNode;
     readonly editorRef: React.RefObject<ComposerEditorHandle | null>;
     readonly sendBlockedReason: string | null;
     readonly interactionLocked: boolean;
@@ -1684,6 +1685,7 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
                         }
                         contentMaxWidth={contentMaxWidth}
                         draftControls={props.draftMode?.controls}
+                        draftFooter={props.draftMode?.footer}
                         connectionState={props.connectionStateLabel}
                         environmentLabel={props.environmentLabel}
                         selectedThread={props.selectedThread}

@@ -1,13 +1,13 @@
 import { expect, it } from "@effect/vitest";
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import gvidon from "../../../client-runtime/src/state/meshLayout/fixtures/gvidon.json" with { type: "json" };
-import operalia from "../../../client-runtime/src/state/meshLayout/fixtures/operalia.json" with { type: "json" };
+import atlas from "../../../client-runtime/src/state/meshLayout/fixtures/atlas.json" with { type: "json" };
+import boreal from "../../../client-runtime/src/state/meshLayout/fixtures/boreal.json" with { type: "json" };
 import { adoptLegacy, importLegacy, materialize } from "./index.ts";
 
 it.each([
-  [gvidon, operalia],
-  [operalia, gvidon],
+  [atlas, boreal],
+  [boreal, atlas],
 ])(
   "unifies legacy workspace names and keeps every placement in either join order",
   (first, second) => {
@@ -33,8 +33,8 @@ it.each([
 const decodeConfig = Schema.decodeUnknownSync(SidebarWorkspacesConfig);
 
 it("adopts legacy into a workspace already edited by a peer without recreating its old id", () => {
-  const a = decodeConfig(gvidon);
-  const b = decodeConfig(operalia);
+  const a = decodeConfig(atlas);
+  const b = decodeConfig(boreal);
   const existing = importLegacy(a, "peer", "0000000000100.00000.peer");
   const result = materialize(adoptLegacy(b, existing));
   expect(result.workspaces.filter((w) => w.name === "main")).toEqual([
@@ -60,4 +60,21 @@ it("keeps both orders and folds when a received document already contains both l
   expect(result.workspaceProjectOrder.main).toEqual(expect.arrayContaining(["a", "b"]));
   expect(result.workspaceFold.main).toEqual({ a: "quiet", b: "active" });
   expect(result.placements).toEqual({ a: ["main"], b: ["main"] });
+});
+
+it("replicates user-defined machine aliases while decoding older machines without aliases", () => {
+  const before = decodeConfig({
+    machines: {
+      local: {
+        label: "Build",
+        tag: "BLD",
+        aliases: ["office", "研究室"],
+        reach: { remote: { ssh: "customer@worker" } },
+      },
+      remote: { label: "Remote" },
+    },
+  });
+  const result = materialize(importLegacy(before, "local", "0000000000100.00000.local"));
+  expect(decodeConfig(result).machines).toEqual(before.machines);
+  expect(result.machines.remote?.aliases).toBeUndefined();
 });

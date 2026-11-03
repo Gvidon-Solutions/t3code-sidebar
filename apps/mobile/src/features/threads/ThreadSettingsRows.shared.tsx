@@ -62,7 +62,12 @@ export function ModelRowContent(
       )}
     >
       <Pressable
-        accessibilityLabel={[props.displayLabel ?? props.option.label, props.detail, subtitle]
+        accessibilityLabel={[
+          props.displayLabel ?? props.option.label,
+          props.detail,
+          subtitle,
+          props.option.unavailableReason,
+        ]
           .filter(Boolean)
           .join(", ")}
         accessibilityRole="radio"
@@ -104,10 +109,12 @@ export function ModelRowContent(
             {props.option.isHidden ? (
               <Text className="text-xs text-foreground-muted">Hidden</Text>
             ) : null}
-            {props.option.isUnavailable ? (
-              <Text className="text-xs text-foreground">Unavailable</Text>
-            ) : null}
           </View>
+          {props.option.isUnavailable ? (
+            <Text className="text-xs text-foreground-muted">
+              {props.option.unavailableReason ?? "Unavailable"}
+            </Text>
+          ) : null}
           {subtitle ? (
             <Text
               className="text-xs text-foreground-muted"

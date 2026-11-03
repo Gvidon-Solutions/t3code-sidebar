@@ -23,29 +23,32 @@ import {
 
 const MACHINES = [
   {
-    environmentId: "a714f2fb-3139-4661-ae0a-6fbcaf76e853",
-    label: "gvidon",
-    tag: "GV",
-    sshAlias: "gvidon",
+    environmentId: "11111111-1111-4111-8111-111111111111",
+    label: "atlas",
+    tag: "AT",
+    sshAlias: "atlas",
+    aliases: ["офис"],
   },
   {
-    environmentId: "34e33796-4717-4293-a955-88c2f740db4d",
-    label: "gor",
-    tag: "GO",
-    sshAlias: "gor",
+    environmentId: "22222222-2222-4222-8222-222222222222",
+    label: "lab",
+    tag: "LB",
+    sshAlias: "lab",
+    aliases: ["лаборатория", "лаборатории", "研究室"],
   },
   {
-    environmentId: "7c65a175-ae89-41e0-82d9-8cbd3d2d7e39",
-    label: "Operalia",
-    tag: "OP",
-    sshAlias: "root@operalia",
+    environmentId: "33333333-3333-4333-8333-333333333333",
+    label: "Boreal",
+    tag: "BO",
+    sshAlias: "root@boreal",
+    aliases: ["студия"],
   },
 ];
 
 NodeTest.test("parseArgs keeps values, repeatable --from and optional --wait duration", () => {
-  const a = parseArgs(["--on", "гор", "--wait", "90", "--yes", "status"]);
+  const a = parseArgs(["--on", "лаборатория", "--wait", "90", "--yes", "status"]);
   NodeAssert.deepEqual(a.pos, ["status"]);
-  NodeAssert.equal(a.opt.on, "гор");
+  NodeAssert.equal(a.opt.on, "лаборатория");
   NodeAssert.equal(a.opt.wait, "90");
   NodeAssert.equal(a.opt.yes, true);
 
@@ -64,26 +67,38 @@ NodeTest.test("parseArgs keeps values, repeatable --from and optional --wait dur
   NodeAssert.equal(parseArgs(["--dry-run"]).opt.dryRun, true);
 });
 
-NodeTest.test("machine names cover ids, labels, tags, ssh aliases and Russian voice forms", () => {
-  NodeAssert.equal(resolveMachineRef("гвидон", MACHINES).label, "gvidon");
-  NodeAssert.equal(resolveMachineRef("на горе", MACHINES).label, "gor");
-  NodeAssert.equal(resolveMachineRef("гора", MACHINES).label, "gor");
-  NodeAssert.equal(resolveMachineRef("опералия", MACHINES).label, "Operalia");
-  NodeAssert.equal(resolveMachineRef("OP", MACHINES).label, "Operalia");
-  NodeAssert.equal(resolveMachineRef("root@operalia", MACHINES).label, "Operalia");
-  NodeAssert.equal(resolveMachineRef("34e3", MACHINES).label, "gor");
-  NodeAssert.equal(resolveMachineRef("gvidon", MACHINES).label, "gvidon");
-  NodeAssert.equal(normalizeMachineName("На горе"), "нагоре");
-  NodeAssert.throws(() => resolveMachineRef("нет такой", MACHINES), /no machine/);
-});
+NodeTest.test(
+  "machine names cover ids, labels, tags, ssh aliases and user-defined multilingual aliases",
+  () => {
+    NodeAssert.equal(resolveMachineRef("офис", MACHINES).label, "atlas");
+    NodeAssert.equal(resolveMachineRef("на лаборатории", MACHINES).label, "lab");
+    NodeAssert.equal(resolveMachineRef("лаборатория", MACHINES).label, "lab");
+    NodeAssert.equal(resolveMachineRef("студия", MACHINES).label, "Boreal");
+    NodeAssert.equal(resolveMachineRef("BO", MACHINES).label, "Boreal");
+    NodeAssert.equal(resolveMachineRef("root@boreal", MACHINES).label, "Boreal");
+    NodeAssert.equal(resolveMachineRef("2222", MACHINES).label, "lab");
+    NodeAssert.equal(resolveMachineRef("atlas", MACHINES).label, "atlas");
+    NodeAssert.equal(normalizeMachineName("На лаборатории"), "налаборатории");
+    NodeAssert.equal(resolveMachineRef("研究室", MACHINES).label, "lab");
+    NodeAssert.throws(() => resolveMachineRef("нет такой", MACHINES), /no machine/);
+    NodeAssert.throws(
+      () =>
+        resolveMachineRef(
+          "shared",
+          MACHINES.map((machine) => ({ ...machine, aliases: ["shared"] })),
+        ),
+      /matches 3 machines/,
+    );
+  },
+);
 
 NodeTest.test("an exact label wins over a longer different machine", () => {
   const machines = [
     ...MACHINES,
-    { environmentId: "11111111-1111-1111-1111-111111111111", label: "gor-old", tag: "G2" },
+    { environmentId: "11111111-1111-1111-1111-111111111111", label: "lab-old", tag: "G2" },
   ];
-  NodeAssert.equal(resolveMachineRef("gor", machines).label, "gor");
-  NodeAssert.equal(resolveMachineRef("gor-old", machines).label, "gor-old");
+  NodeAssert.equal(resolveMachineRef("lab", machines).label, "lab");
+  NodeAssert.equal(resolveMachineRef("lab-old", machines).label, "lab-old");
 });
 
 NodeTest.test("fractional encoding matches @t3tools/shared/meshLayout for a full config", () => {
@@ -103,7 +118,7 @@ NodeTest.test("fractional encoding matches @t3tools/shared/meshLayout for a full
     alwaysShow: ["github.com/a/b"],
     alwaysQuiet: [],
     machines: {
-      "env-1": { label: "Operalia", tag: "OP", reach: { "env-2": { ssh: "root@operalia" } } },
+      "env-1": { label: "Boreal", tag: "BO", reach: { "env-2": { ssh: "root@boreal" } } },
     },
     projectAliases: { "env-2:/root/x": "github.com/a/b" },
     projectMounts: {
@@ -133,7 +148,7 @@ NodeTest.test("fractional encoding matches @t3tools/shared/meshLayout for a full
     "workspaceOrder/w2": true,
     "place/github.com%2Fa%2Fb/w2": { placementIndex: 1, ordered: false, sort: "V" },
     "fold/w1/github.com%2Fa%2Fb": "active",
-    "machine/env-1": { label: "Operalia", tag: "OP", reach: { "env-2": { ssh: "root@operalia" } } },
+    "machine/env-1": { label: "Boreal", tag: "BO", reach: { "env-2": { ssh: "root@boreal" } } },
     "alias/env-2%3A%2Froot%2Fx": "github.com/a/b",
     "rep/github.com%2Fa%2Fb/env-1": {
       environmentId: "env-1",
@@ -215,18 +230,18 @@ NodeTest.test("argument builders and deep links are shared with the commands", (
   NodeAssert.equal(threadDeepLink("e", "t"), "t3-thread://v2/e/t");
   NodeAssert.equal(threadWebUrl("http://127.0.0.1:3795/", "e", "t"), "http://127.0.0.1:3795/e/t");
   NodeAssert.equal(fileDeepLink("e", "/a b.md", 12), "t3-file://e/%2Fa%20b.md%3A12");
-  NodeAssert.equal(defaultMachineTag("Operalia", "x"), "OP");
+  NodeAssert.equal(defaultMachineTag("Boreal", "x"), "BO");
   NodeAssert.equal(defaultMachineTag("", "3rd machine"), "3R");
 });
 
 NodeTest.test("duplicate labels are ambiguous and server labels resolve", () => {
   NodeAssert.throws(
-    () => resolveMachineRef("gor", [...MACHINES, { environmentId: "cccccccc", label: "gor" }]),
+    () => resolveMachineRef("lab", [...MACHINES, { environmentId: "cccccccc", label: "lab" }]),
     /matches/,
   );
   NodeAssert.equal(
     resolveMachineRef("Custom Host", [{ ...MACHINES[0], serverLabel: "Custom Host" }]).label,
-    "gvidon",
+    "atlas",
   );
 });
 

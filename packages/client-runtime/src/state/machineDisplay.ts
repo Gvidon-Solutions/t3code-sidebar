@@ -1,4 +1,4 @@
-import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
+import type { SidebarMachine, SidebarWorkspacesConfig } from "@t3tools/contracts";
 
 import { workspaceColor } from "./sidebarWorkspaces.ts";
 
@@ -70,6 +70,7 @@ export interface MachineDisplayPatch {
   readonly label?: string | null;
   readonly tag?: string | null;
   readonly color?: string | null;
+  readonly aliases?: readonly string[] | null;
 }
 
 /** Edits one machine entry; clearing every field removes the entry. Never mutates `config`. */
@@ -78,9 +79,21 @@ export function setMachineDisplay(
   environmentId: string,
   patch: MachineDisplayPatch,
 ): SidebarWorkspacesConfig {
-  const next: { label?: string; tag?: string; color?: string } = {
+  const next: { -readonly [K in keyof SidebarMachine]: SidebarMachine[K] } = {
     ...config.machines[environmentId],
   };
+  if (patch.aliases !== undefined) {
+    const aliases = [
+      ...new Map(
+        (patch.aliases ?? [])
+          .map((alias) => alias.trim())
+          .filter(Boolean)
+          .map((alias) => [alias.normalize("NFKC").toLowerCase(), alias]),
+      ).values(),
+    ];
+    if (aliases.length) next.aliases = aliases;
+    else delete next.aliases;
+  }
   if (patch.label !== undefined) {
     const label = patch.label?.trim();
     if (label) next.label = label;

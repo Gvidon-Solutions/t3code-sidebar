@@ -36,7 +36,12 @@ function MachineEditor(props: {
   readonly children: ReactNode;
   readonly environmentId: string;
   readonly display: MachineDisplay;
-  readonly configured: { readonly label?: string; readonly tag?: string; readonly color?: string };
+  readonly configured: {
+    readonly label?: string;
+    readonly tag?: string;
+    readonly color?: string;
+    readonly aliases?: readonly string[];
+  };
   readonly serverLabel: string;
   readonly connected: boolean;
   readonly onChange: (patch: MachineDisplayPatch) => void;
@@ -88,6 +93,21 @@ function MachineEditor(props: {
           onEndEditing={(event) => props.onChange({ tag: event.nativeEvent.text })}
         />
         <Text className="text-xs text-foreground-muted">Up to three characters.</Text>
+      </View>
+      <View className="gap-3 border-t border-border-subtle px-4 py-3">
+        <Text className="text-sm text-foreground-muted">Aliases</Text>
+        <AppTextInput
+          key={`aliases:${props.configured.aliases?.join(",") ?? ""}`}
+          accessibilityLabel="Machine aliases"
+          defaultValue={props.configured.aliases?.join(", ") ?? ""}
+          autoCapitalize="none"
+          autoCorrect={false}
+          className="min-h-[45px] rounded-xl px-3 py-2 text-base text-foreground"
+          onEndEditing={(event) => props.onChange({ aliases: event.nativeEvent.text.split(",") })}
+        />
+        <Text className="text-xs text-foreground-muted">
+          Separate alternative names with commas.
+        </Text>
       </View>
       <View className="gap-3 border-t border-border-subtle px-4 py-3">
         <Text className="text-sm text-foreground-muted">Color</Text>

@@ -367,7 +367,7 @@ export interface ReplicaStatusCopyInput {
   readonly sourceLabel: string;
 }
 
-/** One short line for a pending row: "Mounting on Operalia… 42%", "2 conflicts", … */
+/** One short line for a pending row: "Mounting on Remote… 42%", "2 conflicts", … */
 export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
   if (
     input.message &&
