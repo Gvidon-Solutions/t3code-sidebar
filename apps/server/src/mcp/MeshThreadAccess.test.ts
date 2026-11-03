@@ -56,6 +56,8 @@ it.effect(
   "fans out with partial results, resolves bare ids through a relay, and preserves write refusal",
   () => {
     const caller = liveThreadShell(ThreadId.make("mcp:caller"));
+    let route = "remote";
+    let failNextRead = false;
     const calls: { tool: string; environmentId: string; arguments: Record<string, unknown> }[] = [];
     const peer = (id: string) => ({
       environmentId: EnvironmentId.make(id),
@@ -82,12 +84,24 @@ it.effect(
             new OrchestratorMcpFailure({ code: "orchestration_error", message: "offline" }),
           );
         if (input.tool === "t3_mesh_routes")
-          return Effect.succeed(["remote"] as typeof input.success.Type);
+          return Effect.succeed([route] as typeof input.success.Type);
         if (input.tool === "t3_thread_read")
           return Effect.fail(
             new OrchestratorMcpFailure({ code: "thread_not_found", message: "not here" }),
           );
         const tool = input.tool === "t3_mesh_relay" ? input.arguments.tool : input.tool;
+        const args = (
+          input.tool === "t3_mesh_relay" ? input.arguments.arguments : input.arguments
+        ) as Record<string, unknown>;
+        if (tool === "t3_thread_read" && failNextRead && args.limit === undefined) {
+          failNextRead = false;
+          return Effect.fail(
+            new OrchestratorMcpFailure({
+              code: "thread_not_found",
+              message: "Thread was removed.",
+            }),
+          );
+        }
         if (tool === "t3_thread_send")
           return Effect.fail(
             new OrchestratorMcpFailure({
@@ -227,6 +241,20 @@ it.effect(
         message: expect.stringContaining("read-only"),
       });
       expect(calls.length).toBe(beforeRefusal);
+      failNextRead = true;
+      const missing = yield* tools
+        .handle("t3_thread_read", { threadId: ThreadId.make("remote-thread") })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(missing.at(-1)?.result).toMatchObject({ code: "thread_not_found" });
+      route = "moved";
+      const afterMissing = calls.length;
+      const moved = yield* tools
+        .handle("t3_thread_read", { threadId: ThreadId.make("remote-thread") })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(moved.at(-1)?.result).toEqual({ thread: { threadId: "mcp:remote-thread" } });
+      expect(calls.slice(afterMissing)).not.toContainEqual(
+        expect.objectContaining({ environmentId: "remote", tool: "t3_thread_read" }),
+      );
     }).pipe(
       Effect.provide(
         Layer.mergeAll(dependencies, Forwarding.layer.pipe(Layer.provide(dependencies))),

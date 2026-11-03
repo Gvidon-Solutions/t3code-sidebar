@@ -388,6 +388,10 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
   const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
   const handlers: Record<string, unknown> = { ...checked };
   const locations = new Map<string, EnvironmentId>();
+  const forgetLocation = (id: string) => {
+    locations.delete(id);
+    locations.delete(id.startsWith("mcp:") ? id.slice(4) : `mcp:${id}`);
+  };
   for (const [name, declaration] of Object.entries<Declaration<unknown>>(declarations)) {
     const tool = toolkit.tools[name];
     if (tool === undefined || !takesLinkedEnvironment(tool)) continue;
@@ -526,7 +530,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
                 params = { ...params, threadId: found.success.thread.threadId };
                 break;
               }
-              locations.delete(requested);
+              forgetLocation(requested);
               yield* Effect.logDebug("Thread location probe failed", found.failure);
             }
           }
@@ -574,7 +578,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
                 Predicate.hasProperty(params, "threadId") &&
                 typeof params.threadId === "string"
               )
-                locations.delete(params.threadId);
+                forgetLocation(params.threadId);
               return Effect.void;
             }),
           );
