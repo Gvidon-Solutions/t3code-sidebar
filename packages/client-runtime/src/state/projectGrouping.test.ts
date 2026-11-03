@@ -1,3 +1,4 @@
+import { renameLogicalProject } from "./meshLayout/logicalProjects.ts";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { EnvironmentId, ProjectId, SourceControlProviderKind } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
@@ -132,6 +133,7 @@ describe("buildProjectGroups", () => {
     ];
     const layout = {
       ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      projectTitles: { logical: "Shared name" },
       projectAliases: { physical: "logical" },
       projectMounts: {
         physical: projects.map((p) => ({
@@ -147,7 +149,18 @@ describe("buildProjectGroups", () => {
     const groups = buildProjectGroups({ projects, settings: settings("separate"), layout });
     expect(groups).toHaveLength(1);
     expect(groups[0]?.key).toBe("logical");
+    expect(groups[0]?.label).toBe("Shared name");
     expect(groups[0]?.memberProjectRefs).toHaveLength(2);
+    const renamed = renameLogicalProject(layout, "logical", "  Renamed  ", projects);
+    const next = buildProjectGroups({
+      projects: projects.map((p) => ({ ...p, title: "Renamed" })),
+      settings: settings("title"),
+      layout: renamed,
+    });
+    expect(next).toHaveLength(1);
+    expect(next[0]?.key).toBe("logical");
+    expect(next[0]?.label).toBe("Renamed");
+    expect(renameLogicalProject(renamed, "logical", " ", projects)).toBe(renamed);
   });
   it.each(["repository", "repository_path", "separate"] as const)(
     "keeps scratch project ownership separate by default in %s mode",

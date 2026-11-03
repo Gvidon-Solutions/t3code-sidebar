@@ -1,4 +1,5 @@
 import { ProjectMachineStrip } from "./ProjectMachineStrip";
+import * as Dialog from "../../components/ui/Dialog";
 import type { Icon } from "@tabler/icons-react-native/types";
 import IconBook from "@tabler/icons-react-native/IconBook";
 import IconBriefcase from "@tabler/icons-react-native/IconBriefcase";
@@ -290,6 +291,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     }>;
     readonly canSplit: boolean;
     readonly suggestions: ReadonlyArray<{ readonly key: string; readonly tag: string }>;
+    readonly onRename: (title: string) => void;
     readonly onMerge: (key: string) => void;
     readonly onSplit: (environmentId: string) => void;
   };
@@ -309,6 +311,9 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     if (offline) return [{ id: "connect", title: "Connect this machine", image: "link" }];
     const shownIn = item.workspaceIds;
     return [
+      ...(!props.mesh || item.isScratch
+        ? []
+        : [{ id: "rename-project", title: "Rename…", image: "square.and.pencil" }]),
       { id: "new", title: "New thread", image: "square.and.pencil" },
       ...(props.machineSubactions.length === 0
         ? []
@@ -389,6 +394,15 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   const handleAction = ({ nativeEvent }: NativeActionEvent) => {
     if (nativeEvent.event === "connect")
       openSettings(navigation as Parameters<typeof openSettings>[0], "SettingsEnvironments");
+    else if (nativeEvent.event === "rename-project")
+      Dialog.prompt({
+        title: "Rename project",
+        initialValue: item.title,
+        confirmText: "Rename",
+        onConfirm: (title) => {
+          if (title.trim()) props.mesh?.onRename(title.trim());
+        },
+      });
     else if (nativeEvent.event === "new") props.onNewThread(item.project);
     else if (nativeEvent.event.startsWith("machine:")) {
       props.onNewThreadOnMachine(item.projectKey, nativeEvent.event.slice("machine:".length));

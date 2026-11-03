@@ -134,6 +134,7 @@ describe("serverSettings helpers", () => {
       alwaysQuiet: [],
       quietAfterDays: 5,
       machines: {},
+      projectTitles: {},
       projectAliases: {},
       projectMounts: {},
       projectMountStatus: {},

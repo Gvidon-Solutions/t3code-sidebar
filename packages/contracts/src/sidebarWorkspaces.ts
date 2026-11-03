@@ -145,6 +145,9 @@ export const SidebarWorkspacesConfig = Schema.Struct({
   machines: Schema.Record(Schema.String, SidebarMachine).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
+  projectTitles: Schema.Record(Schema.String, Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   /** Any project key → the logical project key it belongs to (merged projects). */
   projectAliases: Schema.Record(Schema.String, Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),

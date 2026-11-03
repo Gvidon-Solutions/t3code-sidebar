@@ -1,6 +1,12 @@
+import { useAtomCommand } from "../../state/use-atom-command";
+import { projectEnvironment } from "../../state/projects";
 import { useAtomValue } from "@effect/atom-react";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
-import { machineTag, suggestMerges } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  machineTag,
+  renameLogicalProject,
+  suggestMerges,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import {
   projectFoldModeOf,
@@ -50,6 +56,7 @@ export function useWorkspaceHome(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
 }) {
   const workspaces = useSidebarWorkspaces();
+  const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: true });
   const {
     config,
     currentWorkspaceId,
@@ -357,12 +364,22 @@ export function useWorkspaceHome(input: {
         canSplit:
           scope.projects.length > 1 || Object.values(config.projectAliases).includes(projectKey),
         suggestions: suggestionsByScope.get(projectKey) ?? [],
+        onRename: (title: string) => {
+          workspaces.updateConfig((current) =>
+            renameLogicalProject(current, projectKey, title, scope.projects),
+          );
+          for (const project of scope.projects)
+            void updateProject({
+              environmentId: project.environmentId,
+              input: { projectId: project.id, title },
+            });
+        },
         onMerge: (into: string) => workspaces.edit.mergeProject(projectKey, into),
         onSplit: (environmentId: string) =>
           workspaces.edit.splitProject(projectKey, environmentId, `${projectKey}~${environmentId}`),
       };
     },
-    [config, input.projectScopes, suggestionsByScope, workspaces.edit],
+    [config, input.projectScopes, suggestionsByScope, workspaces, updateProject],
   );
 
   const workspace =

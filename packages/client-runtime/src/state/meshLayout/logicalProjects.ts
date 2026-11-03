@@ -259,3 +259,26 @@ export function mergeSuggestionsFor<T extends Project & { readonly title: string
   }
   return suggestions;
 }
+
+export function renameLogicalProject(
+  config: SidebarWorkspacesConfig,
+  key: string,
+  title: string,
+  projects: readonly Project[],
+): SidebarWorkspacesConfig {
+  const trimmed = title.trim();
+  if (!trimmed) return config;
+  return {
+    ...config,
+    projectTitles: { ...config.projectTitles, [key]: trimmed },
+    projectAliases: {
+      ...config.projectAliases,
+      ...Object.fromEntries(
+        projects.map((project) => [
+          `${project.environmentId}:${normalizeProjectPathForComparison(project.workspaceRoot)}`,
+          key,
+        ]),
+      ),
+    },
+  };
+}

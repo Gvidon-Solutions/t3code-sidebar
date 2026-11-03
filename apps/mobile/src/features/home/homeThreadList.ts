@@ -84,7 +84,10 @@ export function buildHomeProjectScopes(input: {
   const offline = offlineLogicalProjects(input.layout, input.connectedEnvironmentIds)
     .filter((entry) => !existing.has(entry.logicalKey))
     .map((entry): HomeProjectScope => {
-      const title = entry.path.split(/[\\/]/).filter(Boolean).at(-1) ?? entry.logicalKey;
+      const title =
+        input.layout?.projectTitles[entry.logicalKey] ??
+        entry.path.split(/[\\/]/).filter(Boolean).at(-1) ??
+        entry.logicalKey;
       const project = {
         id: `mesh:${entry.logicalKey}:${entry.environmentId}`,
         environmentId: entry.environmentId,
