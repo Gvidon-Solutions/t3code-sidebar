@@ -1157,7 +1157,7 @@ async function resolveThreadAcross(ref, { on } = {}) {
       });
     } catch (error) {
       // No mesh here (links off, or a server that predates "all"): look on this machine only.
-      if (machine || !(error instanceof Fail) || !/capability_denied|environmentId|Linked environments/.test(error.message))
+      if (machine || !(error instanceof Fail) || !/capability_denied|environmentId|Linked environments|not linked to all|invalid_request/.test(error.message))
         throw error;
       page = await m.call("t3_thread_list", args);
     }
