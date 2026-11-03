@@ -18,6 +18,7 @@ if [ -f "$UNIT" ]; then
   if ! node --test "$UNIT"; then echo "selftest: unit checks failed"; exit 1; fi
 fi
 if ! node --test "$(dirname "$T3CTL")/t3ctl.integration.test.mjs"; then exit 1; fi
+if ! node --test "$(dirname "$T3CTL")/agents-sync.test.mjs"; then exit 1; fi
 if [ "${T3CTL_OFFLINE_ONLY:-0}" = 1 ]; then exit 0; fi
 # Validate before any authentication or write, including the original regression suite.
 case "${T3CTL_ORIGIN:-}" in

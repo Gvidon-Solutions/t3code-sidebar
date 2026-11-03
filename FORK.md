@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-03 — T3 Mesh — Stage J global agent instructions
+
+- **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Applied only to gor.
+- **How:** staged `t3ctl agents sync/status` uses local file operations or pinned SSH routes, with offline render/diff/backup tests and real model eval evidence.
+- **Where:** `docs/skill-t3-next/`, `docs/agents-global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
+
 ### 2026-11-02 — T3 Mesh — round 2 replica acceptance
 
 - **What:** real Mutagen replica acceptance across gor, isolated gvidon and the VPS container, including staged `t3ctl-next`.

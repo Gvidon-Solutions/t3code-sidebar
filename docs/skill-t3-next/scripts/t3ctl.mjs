@@ -1673,6 +1673,7 @@ function placeProject(cfg, key, root, ids, scratch = false) {
 const THREAD_ORGANIZE = ["pin", "unpin", "settle", "unsettle", "archive", "unarchive", "unsnooze"];
 
 const commands = {
+  agents: async (pos, opt) => (await import("./agents-sync.mjs")).runAgents(pos, opt),
   // Agent inbox (fork). Agents' side through MCP (t3ctl posts as an MCP client, not a thread);
   // the owner's side (reply, dismiss, reopen) through the UI's WS RPC.
   async inbox(pos, opt) {
@@ -2170,18 +2171,20 @@ const commands = {
       };
       if (opt.json) return json(result);
       const local = result.local;
+      const tagOf = (environmentId) =>
+        machines.find((m) => m.environmentId === environmentId)?.tag ?? short(environmentId);
       console.log(
         `mesh ${local ? `${local.tag} ${local.label} (${local.environmentId})` : "?"} · ${result.layout.legacy ? "legacy layout (no meshLayout RPC)" : `${result.layout.entries} layout entries, revision ${result.layout.revision || "-"}`} · ${result.layout.workspaces} workspace(s) · ${result.layout.representations} representation(s)`,
       );
       for (const link of links)
         console.log(
-          `  link ${link.status.padEnd(11)} ${link.label}  ${link.environmentId}  ${link.urls?.join(", ")}${link.lastReachedAt ? `  last ${ago(link.lastReachedAt)}` : ""}${link.lastError ? `  ${clip(link.lastError, 80)}` : ""}`,
+          `  link ${link.status.padEnd(11)} ${tagOf(link.environmentId).padEnd(3)} ${link.label}  ${link.environmentId}  ${link.urls?.join(", ")}${link.lastReachedAt ? `  last ${ago(link.lastReachedAt)}` : ""}${link.lastError ? `  ${clip(link.lastError, 80)}` : ""}`,
         );
       if (!links.length)
         console.log(`  no links${linksError ? ` (${clip(linksError, 120)})` : ""}`);
       for (const row of rows)
         console.log(
-          `  ${row.rep.role.padEnd(8)} ${row.rep.environmentId.slice(0, 8)} ${clip(row.logicalKey, 38).padEnd(38)} ${replicaStateText(row)}`,
+          `  ${row.rep.role.padEnd(8)} ${tagOf(row.rep.environmentId).padEnd(3)} ${clip(row.rep.path || row.logicalKey, 48).padEnd(48)} ${replicaStateText(row)}`,
         );
       if (live.error && !live.disabled) console.log(`  replicas: ${clip(live.error, 160)}`);
       return;
@@ -3844,6 +3847,10 @@ PROJECTS
   project-rename <P> "title"
   project-set <P> [--agent/--model/--effort] [--root PATH] [--auto-pull true] [--env-mode local|worktree] [--emoji 🚀] [--json '{…}']
   project-remove <P> --yes [--force]      remove from T3 (files stay); --force also deletes its threads
+
+AGENT INSTRUCTIONS
+  agents sync [--to all|machine,…] [--apply]   diff by default; backup and verify on apply
+  agents status [--to all|machine,…]           per-machine harness file drift
 
 MESH (M = environment id/prefix, label, tag, ssh alias, or a Russian name like «гора»)
   place <P> --on <M> [--primary] [--source <M2>] [--path PATH] [--wait [dur]]
