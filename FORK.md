@@ -114,6 +114,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How:** a shared pure strip model combines layout representations, live replica status and legacy member environments. Identical chips show primaries, one ⇄ separator, then replicas; only unsynced replicas have status dots. Three chips fit before overflow. Strips open Machines; scratch creation uses the selected machine’s scratch project rather than creating a replica.
 - **Where:** `packages/client-runtime/src/state/meshLayout/projectMachineStrip.ts`, `projectGrouping.ts`; web `components/workspaces/{ProjectMachineStrip,WorkspaceSidebar}`; mobile `features/workspaces/{ProjectMachineStrip,WorkspaceChrome,workspaceNavigator,useWorkspaceHome}`, `HomeScreen` and `WorkspaceDrawer`.
 
+### 2026-11-03 — T3 Mesh — Stage J global agent instructions
+
+- **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to gor.
+- **How:** staged `t3ctl agents sync/status` uses local file operations or pinned SSH routes, with offline render/diff/backup/isolation tests and real Codex/OpenCode eval evidence. Mesh routing resolves configured names and project paths, searches across machines, and runs git on a replica’s primary. General dispatch rules cover API prerequisites and execution location; compact skill tables are excluded from the formatter.
+- **Where:** `docs/skill-t3-next/`, `docs/agents-global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
+
 ### 2026-11-02 — T3 Mesh — round 2 replica acceptance
 
 - **What:** real Mutagen replica acceptance across gor, isolated gvidon and the VPS container, including staged `t3ctl-next`.
