@@ -145,6 +145,29 @@ it.effect(
         code: "capability_denied",
         message: expect.stringContaining("read-only"),
       });
+      const beforeRefusal = calls.length;
+      const denied = yield* tools.handle("t3_thread_send", { threadId: caller.id }).pipe(
+        Stream.unwrap,
+        Stream.runCollect,
+        Effect.provideService(McpInvocationContext, {
+          environmentId: EnvironmentId.make("local"),
+          requestNamespace: "read-only-link",
+          capabilities: new Set(["orchestration" as const]),
+          issuedAt: 0,
+          thread: undefined,
+          client: {
+            sessionId: "read-only-link",
+            label: "Read-only peer",
+            access: "read-only",
+            linked: true,
+          },
+        }),
+      );
+      expect(denied.at(-1)?.result).toMatchObject({
+        code: "capability_denied",
+        message: expect.stringContaining("read-only"),
+      });
+      expect(calls.length).toBe(beforeRefusal);
     }).pipe(
       Effect.provide(
         Layer.mergeAll(dependencies, Forwarding.layer.pipe(Layer.provide(dependencies))),

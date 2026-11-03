@@ -5,6 +5,8 @@ import {
   EnvironmentId,
   ProviderInstanceId,
   ThreadId,
+  NodeId,
+  ProviderDriverKind,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -21,7 +23,19 @@ import { ProjectReplicaService } from "../../../replicas/ProjectReplicaService.t
 import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 
 it.effect.each(["primary", "replica", "no project"] as const)("self describes %s", (role) => {
-  const shell = liveThreadShell(ThreadId.make("mcp:self"));
+  const base = liveThreadShell(ThreadId.make("mcp:self"));
+  const shell = {
+    ...base,
+    lineage: { ...base.lineage, parentThreadId: ThreadId.make("mcp:parent") },
+  };
+  const child = {
+    ...liveThreadShell(ThreadId.make("mcp:child")),
+    lineage: {
+      ...base.lineage,
+      parentThreadId: shell.id,
+      relationshipToParent: "subagent" as const,
+    },
+  };
   const config = {
     ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces,
     machines: {
@@ -56,6 +70,12 @@ it.effect.each(["primary", "replica", "no project"] as const)("self describes %s
       .pipe(Stream.unwrap, Stream.runCollect);
     const result = results.at(-1)?.result;
     expect(result).toMatchObject({
+      parentThreadId: "mcp:parent",
+      parent: { threadId: "mcp:parent" },
+      children: [{ threadId: "mcp:child" }],
+      delegatedTasks: [
+        { threadId: "mcp:remote-child", environmentId: "remote", status: "running" },
+      ],
       threadId: "mcp:self",
       machine: { tag: "LO" },
       representation: {
@@ -89,8 +109,39 @@ it.effect.each(["primary", "replica", "no project"] as const)("self describes %s
         }),
         Layer.mock(ThreadManagementService)({
           getThreadShell: () => Effect.succeed(shell),
-          getProjectThreadRecords: () => Effect.succeed(idleThreadProjection(shell)),
-          listProjectThreads: () => Effect.succeed([]),
+          getProjectThreadRecords: () =>
+            Effect.succeed({
+              ...idleThreadProjection(shell),
+              subagents: [
+                {
+                  id: NodeId.make("task"),
+                  threadId: shell.id,
+                  runId: null,
+                  parentNodeId: NodeId.make("root"),
+                  origin: "app_owned",
+                  createdBy: "agent",
+                  driver: ProviderDriverKind.make("codex"),
+                  providerInstanceId: shell.providerInstanceId,
+                  providerThreadId: null,
+                  childThreadId: null,
+                  remoteChild: {
+                    environmentId: EnvironmentId.make("remote"),
+                    threadId: ThreadId.make("mcp:remote-child"),
+                    label: "Remote",
+                  },
+                  nativeTaskRef: null,
+                  prompt: "task",
+                  title: "Task",
+                  model: null,
+                  status: "running",
+                  result: null,
+                  startedAt: null,
+                  completedAt: null,
+                  updatedAt: shell.updatedAt,
+                },
+              ],
+            }),
+          listProjectThreads: () => Effect.succeed([child]),
         }),
         Layer.mock(ProjectService)({
           getById: () =>
