@@ -34,7 +34,7 @@ if (process.env.T3CTL_TEST_REMOTE_DRIVER)
   config.machines[peer].reach = { [self]: { ssh: "gvidon" } };
 const snapshot = { environmentId: self, config, document: {} };
 const thread = {
-  threadId: "thread-1",
+  threadId: process.env.T3CTL_TEST_FULL_ID ? "mcp:full-thread-example-0123456789" : "thread-1",
   title: "mount work",
   projectId: "p",
   status: "completed",

@@ -233,3 +233,9 @@ test("session commands resolve ids in the mesh and pending questions use current
   });
   assert.ok(self.calls.some((c) => c.name === "t3_thread_self"));
 });
+
+test("thread ids in printed output retain the full MCP prefix and body", () => {
+  const id = "mcp:full-thread-example-0123456789";
+  const sent = run(["send", id, "hello"], { T3CTL_TEST_FULL_ID: "1" });
+  assert.ok(sent.out.includes(id), sent.out);
+});

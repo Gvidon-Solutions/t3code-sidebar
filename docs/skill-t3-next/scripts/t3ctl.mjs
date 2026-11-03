@@ -1169,7 +1169,7 @@ async function resolveThreadAcross(ref, { on } = {}) {
   die(
     `"${ref}" is ambiguous:\n${fuzzy
       .slice(0, 15)
-      .map((t) => `  ${short(t.threadId)}  [${t.machineTag}] [${t.project}] ${t.title}`)
+      .map((t) => `  ${t.threadId}  [${t.machineTag}] [${t.project}] ${t.title}`)
       .join("\n")}`,
   );
 }
@@ -1420,13 +1420,13 @@ async function resolveThread(ref, { projectRef, includeArchived } = {}) {
   die(
     `"${ref}" is ambiguous:\n${fuzzy
       .slice(0, 15)
-      .map((t) => `  ${short(t.threadId)}  [${t.project}] ${t.title}`)
+      .map((t) => `  ${t.threadId}  [${t.project}] ${t.title}`)
       .join("\n")}`,
   );
 }
 
 const threadLine = (t) =>
-  `${short(t.threadId).padEnd(8)}  ${String(t.pendingRequestCount ? "waiting" : t.status).padEnd(11)} ${ago(t.updatedAt).padStart(8)}  ${clip(`${t.providerInstanceId === "claudeAgent" ? "claude" : t.providerInstanceId}:${t.model}`, 26).padEnd(26)} ${t.machineTag ? `[${t.machineTag}] ` : ""}[${clip(t.project, 18)}] ${t.title}${t.parentThreadId ? `  (${t.relationshipToParent ?? "child"})` : ""}${t.settled ? "  (settled)" : ""}${t.snoozed ? "  (snoozed)" : ""}${t.archived ? "  (archived)" : ""}`;
+  `${t.threadId.padEnd(8)}  ${String(t.pendingRequestCount ? "waiting" : t.status).padEnd(11)} ${ago(t.updatedAt).padStart(8)}  ${clip(`${t.providerInstanceId === "claudeAgent" ? "claude" : t.providerInstanceId}:${t.model}`, 26).padEnd(26)} ${t.machineTag ? `[${t.machineTag}] ` : ""}[${clip(t.project, 18)}] ${t.title}${t.parentThreadId ? `  (${t.relationshipToParent ?? "child"})` : ""}${t.settled ? "  (settled)" : ""}${t.snoozed ? "  (snoozed)" : ""}${t.archived ? "  (archived)" : ""}`;
 
 async function modelSelection(opt, { required = true } = {}) {
   if (!opt.agent && !opt.model && !opt.effort && !opt.fast && !opt.opt)
@@ -1725,7 +1725,7 @@ const commands = {
           e.author === "owner"
             ? "owner"
             : e.author === "agent"
-              ? `agent${e.threadId ? ` ${short(e.threadId)}` : ""}`
+              ? `agent${e.threadId ? ` ${e.threadId}` : ""}`
               : "system";
         const failed = e.deliveries
           .filter((d) => d.status === "failed")
@@ -2694,7 +2694,7 @@ const commands = {
     if (opt.json) return json(r);
     for (const x of r.matches ?? r.threads ?? r.results ?? [])
       console.log(
-        `${short(x.threadId)}  ${clip(x.title, 60)}  ${clip(x.snippet ?? x.matchText ?? "", 80)}`,
+        `${x.threadId}  ${clip(x.title, 60)}  ${clip(x.snippet ?? x.matchText ?? "", 80)}`,
       );
   },
 
@@ -2749,7 +2749,7 @@ const commands = {
     if (!matches.length) console.log(`no matches for "${query}"`);
     for (const x of matches)
       console.log(
-        `${String(x.machineTag ?? "??").padEnd(3)} ${short(x.threadId)}  ${clip(x.title, 60)}  ${clip(x.snippet ?? x.matchText ?? "", 80)}`,
+        `${String(x.machineTag ?? "??").padEnd(3)} ${x.threadId}  ${clip(x.title, 60)}  ${clip(x.snippet ?? x.matchText ?? "", 80)}`,
       );
     for (const s of skipped) console.error(`skipped ${s}`);
   },
@@ -2784,7 +2784,7 @@ const commands = {
         clients: ui.clients,
         note: ui.note,
       });
-    console.log(`${t.title}  [${machine?.tag ?? "??"}] ${short(t.threadId)}`);
+    console.log(`${t.title}  [${machine?.tag ?? "??"}] ${t.threadId}`);
     console.log(`web:   ${webUrl}`);
     console.log(`link:  ${deepLink}`);
     if (ui.clients !== null) console.log(`opened on ${ui.clients} client(s)`);
@@ -2969,7 +2969,7 @@ const commands = {
             : opt.sendMode || undefined;
       await m.call("t3_thread_send", { threadId: t.threadId, message, ...(mode ? { mode } : {}) });
     }
-    if (!opt.wait) console.log(`sent to ${short(t.threadId)} "${t.title}"`);
+    if (!opt.wait) console.log(`sent to ${t.threadId} "${t.title}"`);
     else await waitAndPrint(t.threadId, opt);
   },
 
@@ -2993,7 +2993,7 @@ const commands = {
     for (const p of pending) {
       if (p.kind === "approval") {
         console.log(
-          `approval  ${clip(p.text, 600)}\n  → t3ctl approve ${short(t.threadId)} accept|decline   (request ${p.requestId})`,
+          `approval  ${clip(p.text, 600)}\n  → t3ctl approve ${t.threadId} accept|decline   (request ${p.requestId})`,
         );
         continue;
       }
@@ -3003,7 +3003,7 @@ const commands = {
           `  [${q.id}] ${q.question}${q.multiSelect ? " (multi)" : ""}${(q.options || []).length ? `\n     options: ${q.options.map((o) => o.label).join(" | ")}` : ""}`,
         );
       console.log(
-        `  → t3ctl answer ${short(t.threadId)} "<answer>"${p.questions.length > 1 ? ' "<answer 2>" …' : ""}`,
+        `  → t3ctl answer ${t.threadId} "<answer>"${p.questions.length > 1 ? ' "<answer 2>" …' : ""}`,
       );
     }
   },
@@ -3099,7 +3099,7 @@ const commands = {
     const m = await mcp();
     if (!title || opt.auto) {
       await m.call("t3_thread_update", { threadId: t.threadId, action: "regenerate_title" });
-      return console.log(`title regeneration requested for ${short(t.threadId)}`);
+      return console.log(`title regeneration requested for ${t.threadId}`);
     }
     await m.call("t3_thread_update", { threadId: t.threadId, action: "rename", title });
     console.log(`renamed "${t.title}" → "${title}"`);
