@@ -33,6 +33,7 @@ it.effect.each([
   "remote parent",
   "allocated replica",
   "descriptor",
+  "renamed",
 ] as const)("self describes %s", (role) => {
   const base = liveThreadShell(ThreadId.make("mcp:self"));
   const shell = {
@@ -63,6 +64,7 @@ it.effect.each([
   };
   const initial: SidebarWorkspacesConfig = {
     ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces,
+    projectTitles: role === "renamed" ? { repo: "N-shared project title" } : {},
     machines: {
       local: { label: "Local", tag: "LO", reach: { source: { ssh: "gor" } } },
       source: { label: "Gor", tag: "GO" },
@@ -140,6 +142,10 @@ it.effect.each([
     if (role === "alias") expect(result).toHaveProperty("project.logicalKey", "canonical");
     if (role === "remote parent")
       expect(result).toHaveProperty("parent.environmentId", "parent-machine");
+    if (role === "renamed") {
+      expect(result).toHaveProperty("project.logicalTitle", "N-shared project title");
+      expect(result).toHaveProperty("project.title", "N-shared project title");
+    }
     if (role === "allocated replica")
       expect(result).toHaveProperty("project.logicalTitle", "primary");
   }).pipe(

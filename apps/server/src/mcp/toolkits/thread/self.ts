@@ -104,12 +104,13 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
   const basename = (path: string) =>
     path.replaceAll("\\", "/").replace(/\/+$/, "").split("/").at(-1) ?? path;
   const logicalTitle =
-    project &&
+    (logicalKey ? config.projectTitles[logicalKey] : undefined) ??
+    (project &&
     representation?.role === "replica" &&
     primary &&
     project.title === basename(project.workspaceRoot)
       ? basename(primary.path)
-      : project?.title;
+      : project?.title);
   const linked = Option.isSome(links)
     ? yield* links.value.list.pipe(Effect.mapError(unavailable))
     : [];
@@ -121,7 +122,7 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
     project: project
       ? {
           id: project.id,
-          title: project.title,
+          title: logicalTitle ?? project.title,
           logicalKey,
           logicalTitle: logicalTitle ?? project.title,
         }

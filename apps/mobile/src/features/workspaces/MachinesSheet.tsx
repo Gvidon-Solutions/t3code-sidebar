@@ -4,7 +4,10 @@ import {
   representationRow,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
-import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
+import {
+  machineDisplayOf,
+  machineTagBackground,
+} from "@t3tools/client-runtime/state/machine-display";
 import type {
   ReplicaLiveStatus,
   SidebarProjectMount,
@@ -80,12 +83,10 @@ export function MachinesSheet(props: {
           const copies =
             props.config.projectMountStatus[props.projectKey]?.[rep.environmentId]?.conflictCopies;
           const row = representationRow(props.config, props.liveStatuses, props.projectKey, rep);
-          const display = props.machines.find(
-            (machine) => machine.environmentId === rep.environmentId,
-          );
-          const label = display?.label ?? rep.environmentId;
-          const tag = display?.tag ?? rep.environmentId.slice(0, 2).toUpperCase();
-          const color = display?.color ?? "#888888";
+          const display =
+            props.machines.find((machine) => machine.environmentId === rep.environmentId) ??
+            machineDisplayOf(props.config, rep.environmentId, "Unknown machine");
+          const { label, tag, color } = display;
           return (
             <View
               key={rep.environmentId}
