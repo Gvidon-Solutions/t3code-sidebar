@@ -755,21 +755,23 @@ it.effect("project update writes the shared logical title", () => {
     expect((yield* mesh.read).config.projectTitles.logical).toBe("Shared title");
   }).pipe(
     Effect.provide(
-      Layer.mock(Project.ProjectService)({
-        update: () =>
-          Effect.succeed({
-            id: base.projectId,
-            title: "Shared title",
-            workspaceRoot: "/repo",
-            repositoryIdentity: null,
-            defaultModelSelection: null,
-            scripts: [],
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-            deletedAt: null,
-          }),
-      }),
+      Layer.mergeAll(
+        dependencies,
+        Layer.mock(Project.ProjectService)({
+          update: () =>
+            Effect.succeed({
+              id: base.projectId,
+              title: "Shared title",
+              workspaceRoot: "/repo",
+              repositoryIdentity: null,
+              defaultModelSelection: null,
+              scripts: [],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+              deletedAt: null,
+            }),
+        }),
+      ),
     ),
-    Effect.provide(dependencies),
   );
 });
