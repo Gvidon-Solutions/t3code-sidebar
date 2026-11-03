@@ -59,7 +59,7 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
           environmentTag: "local",
           alpha,
           beta,
-          ignores: ["node_modules", ".t3-conflicts"],
+          ignores: ["node_modules", "!.t3-conflicts"],
         });
         yield* runner.flush("t3-integration");
         expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe("alpha");

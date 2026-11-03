@@ -1,3 +1,4 @@
+import { replicaIgnorePatterns } from "./replicaModel.ts";
 import { replicaManifestScript } from "./replicaManifestScript.ts";
 import { preserveConflictCommand } from "./conflictResolution.ts";
 import { ReplicaError } from "@t3tools/contracts";
@@ -291,10 +292,11 @@ const make = Effect.gen(function* () {
       run([
         "sync",
         "create",
+        "--no-global-configuration",
         "--mode",
         "two-way-safe",
         "--ignore-vcs",
-        ...input.ignores.flatMap((ignore) => ["-i", ignore]),
+        ...replicaIgnorePatterns(input.ignores).flatMap((ignore) => ["-i", ignore]),
         "--default-file-mode-beta=0644",
         "--default-directory-mode-beta=0755",
         "--symlink-mode=portable",

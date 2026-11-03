@@ -3,7 +3,13 @@ import fixture from "./fixtures/mutagen-0.18.1.json" with { type: "json" };
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { decodeSessions } from "./MutagenRunner.ts";
-import { replicaDriver, sessionIdentity, sessionStatus, sshEndpoint } from "./replicaModel.ts";
+import {
+  replicaIgnorePatterns,
+  replicaDriver,
+  sessionIdentity,
+  sessionStatus,
+  sshEndpoint,
+} from "./replicaModel.ts";
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
@@ -103,4 +109,19 @@ it("formats SSH aliases, ports and managed identity routes for Mutagen", () => {
   expect(sshEndpoint({ ssh: "user@peer:2222", identityFile: "/key" }, "env", "/source")).toBe(
     "t3-mesh-env:/source",
   );
+});
+
+it("keeps user ignore order and duplicate overrides while protecting VCS and conflict copies", () => {
+  const patterns = replicaIgnorePatterns([
+    ".git",
+    "cache",
+    "!cache",
+    "cache",
+    "!.git",
+    "!.t3-conflicts",
+  ]);
+  expect(patterns.slice(0, 3)).toEqual(["cache", "!cache", "cache"]);
+  expect(patterns.indexOf(".git")).toBeGreaterThan(patterns.indexOf("!.git"));
+  expect(patterns.at(-1)).toBe(".t3-conflicts");
+  expect(replicaIgnorePatterns(patterns)).toEqual(patterns);
 });

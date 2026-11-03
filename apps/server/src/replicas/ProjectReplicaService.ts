@@ -45,7 +45,13 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as MutagenRunner from "./MutagenRunner.ts";
 import { syncManagedSshConfig } from "./ManagedSshConfig.ts";
-import { replicaDriver, sessionIdentity, sessionStatus, sshEndpoint } from "./replicaModel.ts";
+import {
+  replicaIgnorePatterns,
+  replicaDriver,
+  sessionIdentity,
+  sessionStatus,
+  sshEndpoint,
+} from "./replicaModel.ts";
 
 /** A layout write that failed here is a replica storage failure for the caller. */
 const asReplicaError = (error: MeshLayoutError) =>
@@ -304,7 +310,7 @@ const make = Effect.gen(function* () {
       });
     const createInput = {
       ...identity,
-      ignores: [...new Set([".t3-conflicts", ...defaults.replicaIgnores, ...(rep.ignores ?? [])])],
+      ignores: replicaIgnorePatterns([...defaults.replicaIgnores, ...(rep.ignores ?? [])]),
       alpha:
         driver === source.environmentId
           ? source.path
@@ -349,10 +355,7 @@ const make = Effect.gen(function* () {
     }
     const ignoresChanged =
       session?.ignore?.paths !== undefined &&
-      !NodeUtil.isDeepStrictEqual(
-        [...new Set(session.ignore.paths)].sort(),
-        [...new Set(createInput.ignores)].sort(),
-      );
+      !NodeUtil.isDeepStrictEqual(session.ignore.paths, createInput.ignores);
     known.set(key, identity.name);
     if (
       session &&

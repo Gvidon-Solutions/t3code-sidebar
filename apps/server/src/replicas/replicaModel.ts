@@ -92,3 +92,11 @@ export function remoteRepresentation(
   }
   return config.projectMounts[key]?.find((rep) => rep.environmentId === target);
 }
+
+const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", ".t3-conflicts"];
+export function replicaIgnorePatterns(configured: readonly string[]): string[] {
+  return [
+    ...configured.filter((pattern) => !protectedIgnores.includes(pattern)),
+    ...protectedIgnores,
+  ];
+}
