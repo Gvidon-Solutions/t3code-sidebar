@@ -71,8 +71,12 @@ gor_ssh() {
 }
 
 gor_scp() {
+  local control=()
+  if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
+    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/gor")
+  fi
   scp -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes \
-    -o ConnectTimeout=10 "$@"
+    -o ConnectTimeout=10 "${control[@]}" "$@"
 }
 
 vps_ssh() {
