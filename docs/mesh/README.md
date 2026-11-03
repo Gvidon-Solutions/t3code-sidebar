@@ -53,7 +53,9 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen
   machine with `planThreadOnMachine`. Replica status supplies progress and registration; the
   destination's provider catalog drives model choices. Shared selection and availability logic is
-  in `packages/client-runtime/src/state/meshLayout/draftMachine.ts`.
+  in `packages/client-runtime/src/state/meshLayout/draftMachine.ts`. Pending sends live outside
+  route lifetimes: IndexedDB on web, an atomic document file on native, and the shared
+  `PendingDraftOutbox` reconciles registration with fixed server command/thread/message IDs.
 - **Files anywhere.** `apps/server/src/files/` (`files.read/list`, forwarded via `callRouted`;
   error reasons travel as `[files:<reason>]`).
 - **Context injection.** Every turn gets a short machine/project/representation note (budget in
@@ -129,9 +131,13 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   servers must not overlap other agents' runs.
 - A draft's machine list must include machines without a representation of its project; deriving
   choices only from existing physical projects hides the very destination that needs a replica.
-- Replica registration is asynchronous. Retaining draft text is not enough: queued-send intent
-  must survive leaving the draft screen. Stage P's component-local send gate does not yet meet
-  that lifecycle requirement; do not treat its unit test as proof of a background launch.
+- Replica registration is asynchronous. Persist the complete send intent before acknowledging
+  Send; keep delivery at the app root. A restart or lost server response must reuse the receipt
+  IDs. Test navigation, storage reopening, registration and exactly one destination launch.
+- Saved connection labels can be identical hostnames for different server instances. Draft
+  pickers prefer layout identities, deduplicate environment IDs, disambiguate equal labels by
+  distinct configured tag then endpoint host/port, and log collisions. Cached provider health
+  on an unreachable connection must never produce a model's switch-machine suggestion.
 - Provider authentication and model availability belong to the destination machine. Keep an
   unavailable explicit selection visible, and test catalog caching when adding pending targets.
 - The standalone CLI layout encoder must stay in parity with shared core, including `proj/*`
