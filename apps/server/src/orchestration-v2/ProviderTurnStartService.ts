@@ -1,4 +1,4 @@
-import { replicaContextNote } from "../replicas/ReplicaInstructions.ts";
+import { replicaContextNote, threadContextNote } from "../replicas/ReplicaInstructions.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { projectComposerContextForProvider } from "@t3tools/shared/composerContextReferences";
@@ -1537,11 +1537,18 @@ export const layer: Layer.Layer<
         });
       });
       const mesh = yield* Effect.serviceOption(MeshLayoutService);
-      const replicaNote = Option.isSome(mesh)
+      const replicaDetail = Option.isSome(mesh)
         ? replicaContextNote(
             (yield* mesh.value.read).config,
             mesh.value.environmentId,
             projection.thread.projectId,
+          )
+        : "";
+      const replicaNote = Option.isSome(mesh)
+        ? threadContextNote(
+            projection.thread.id,
+            Option.isSome(mesh) ? mesh.value.environmentId : "local",
+            replicaDetail,
           )
         : "";
       const startWithHandoffs = Effect.fn("ProviderTurnStartService.startWithHandoffs")(

@@ -1,0 +1,154 @@
+import { expect, it } from "@effect/vitest";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import {
+  EnvironmentId,
+  OrchestratorMcpEnvironmentTarget,
+  OrchestratorMcpFailure,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import { Tool, Toolkit } from "effect/ai";
+import { PeerLinks } from "../peer/PeerLinks.ts";
+import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
+import * as Forwarding from "../peer/PeerForwarding.ts";
+import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
+import { McpInvocationContext } from "./McpInvocationContext.ts";
+import * as Access from "./McpToolAccess.ts";
+import { liveThreadShell } from "./McpToolAccess.testkit.ts";
+
+const declaration = {
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    threadId: Schema.optional(ThreadId),
+  }),
+  success: Schema.Unknown,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return" as const,
+  dependencies: [McpInvocationContext, ThreadManagementService],
+};
+const toolkit = Toolkit.make(
+  Tool.make("t3_thread_list", declaration),
+  Tool.make("t3_thread_read", declaration),
+  Tool.make("t3_thread_send", declaration),
+);
+const handlers = Access.toLayer(toolkit, {
+  t3_thread_list: Access.reads(() => Effect.succeed({ threads: [{ threadId: "mcp:local" }] })),
+  t3_thread_read: Access.reads((input) => Effect.succeed({ thread: { threadId: input.threadId } })),
+  t3_thread_send: Access.writesThreads(
+    (input) => [input.threadId],
+    () => Effect.succeed({ sent: true }),
+  ),
+});
+
+it.effect(
+  "fans out with partial results, resolves bare ids through a relay, and preserves write refusal",
+  () => {
+    const caller = liveThreadShell(ThreadId.make("mcp:caller"));
+    const calls: { tool: string; environmentId: string; arguments: Record<string, unknown> }[] = [];
+    const peer = (id: string) => ({
+      environmentId: EnvironmentId.make(id),
+      label: id,
+      urls: [],
+      access: "full-access" as const,
+      status: "reachable" as const,
+      linkedAt: DateTime.makeUnsafe(0),
+      expiresAt: DateTime.makeUnsafe(9999999999999),
+      lastReachedAt: null,
+      lastError: null,
+    });
+    const links = Layer.mock(PeerLinks)({
+      enabled: Effect.succeed(true),
+      list: Effect.succeed([peer("relay"), peer("offline")]),
+      get: (id) =>
+        Effect.succeed(id === "relay" || id === "offline" ? Option.some(peer(id)) : Option.none()),
+    });
+    const peers = Layer.succeed(PeerMcpClient, {
+      call: (input) => {
+        calls.push(input);
+        if (input.environmentId === "offline")
+          return Effect.fail(
+            new OrchestratorMcpFailure({ code: "orchestration_error", message: "offline" }),
+          );
+        if (input.tool === "t3_mesh_routes")
+          return Effect.succeed(["remote"] as typeof input.success.Type);
+        if (input.tool === "t3_thread_read")
+          return Effect.fail(
+            new OrchestratorMcpFailure({ code: "thread_not_found", message: "not here" }),
+          );
+        const tool = input.tool === "t3_mesh_relay" ? input.arguments.tool : input.tool;
+        if (tool === "t3_thread_send")
+          return Effect.fail(
+            new OrchestratorMcpFailure({
+              code: "capability_denied",
+              message: "This link has read-only access.",
+            }),
+          );
+        return Effect.succeed(
+          (tool === "t3_thread_read"
+            ? { thread: { threadId: "mcp:remote-thread" } }
+            : { threads: [{ threadId: "mcp:remote-thread" }] }) as typeof input.success.Type,
+        );
+      },
+    });
+    const dependencies = Layer.mergeAll(
+      NodeCrypto.layer,
+      links,
+      peers,
+      Layer.succeed(McpInvocationContext, {
+        environmentId: EnvironmentId.make("local"),
+        requestNamespace: "mesh-test",
+        capabilities: new Set(["orchestration" as const]),
+        issuedAt: 0,
+        thread: {
+          threadId: caller.id,
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          providerSessionId: "test",
+        },
+        client: undefined,
+      }),
+      Layer.mock(ThreadManagementService)({
+        getThreadShell: (id) => Effect.succeed(id === caller.id ? caller : null),
+      }),
+    );
+    return Effect.gen(function* () {
+      const tools = yield* toolkit.pipe(Effect.provide(Access.HandlersLayer.layer(handlers)));
+      const list = yield* tools
+        .handle("t3_thread_list", { environmentId: EnvironmentId.make("all") })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(list.at(-1)?.result).toMatchObject({
+        threads: expect.arrayContaining([
+          expect.objectContaining({ environmentId: "local" }),
+          expect.objectContaining({ environmentId: "remote" }),
+        ]),
+        unreachable: [{ environmentId: "offline", message: expect.stringContaining("offline") }],
+      });
+      const read = yield* tools
+        .handle("t3_thread_read", { threadId: ThreadId.make("remote-thread") })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(read.at(-1)?.result).toEqual({ thread: { threadId: "mcp:remote-thread" } });
+      expect(calls).toContainEqual(
+        expect.objectContaining({
+          tool: "t3_mesh_relay",
+          arguments: expect.objectContaining({ tool: "t3_thread_read", environmentId: "remote" }),
+        }),
+      );
+      const send = yield* tools
+        .handle("t3_thread_send", { threadId: ThreadId.make("remote-thread") })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(send.at(-1)?.result).toMatchObject({
+        code: "capability_denied",
+        message: expect.stringContaining("read-only"),
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(dependencies, Forwarding.layer.pipe(Layer.provide(dependencies))),
+      ),
+    );
+  },
+);

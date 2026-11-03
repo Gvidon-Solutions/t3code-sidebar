@@ -1,4 +1,7 @@
-import { ProjectId } from "@t3tools/contracts";
+import { discoverThreadMachines, probeThread } from "../mesh/MeshThreadAccess.ts";
+import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
+import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
+import { ThreadId, ProjectId } from "@t3tools/contracts";
 import { resolveLaunchProject } from "../replicas/RemoteReplicaLaunch.ts";
 import {
   type EnvironmentId,
@@ -7,7 +10,6 @@ import {
   OrchestratorMcpFailure,
   type ProviderInteractionMode,
   type RuntimeMode,
-  type ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -385,9 +387,11 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
   // Optional so toolkits that never leave this environment build without it.
   const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
   const handlers: Record<string, unknown> = { ...checked };
+  const locations = new Map<string, EnvironmentId>();
   for (const [name, declaration] of Object.entries<Declaration<unknown>>(declarations)) {
     const tool = toolkit.tools[name];
     if (tool === undefined || !takesLinkedEnvironment(tool)) continue;
+    const routedTool = tool;
     const remote = remoteCheckOf(declaration);
     if (remote === undefined)
       return yield* Effect.die(
@@ -396,10 +400,131 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
     const here = handlers[name] as (
       params: object,
     ) => Effect.Effect<unknown, Tool.Failure<Tools[keyof Tools]>>;
-    handlers[name] = ({ environmentId, ...params }: { readonly environmentId?: EnvironmentId }) =>
-      Effect.gen(function* () {
+    handlers[name] = ({
+      environmentId,
+      ...inputParams
+    }: {
+      readonly environmentId?: EnvironmentId;
+    }) => {
+      let params: object = inputParams;
+      return Effect.gen(function* () {
         const scope = yield* McpInvocationContext.McpInvocationContext;
-        const target = PeerForwarding.remoteTarget(scope, environmentId);
+        let target = PeerForwarding.remoteTarget(scope, environmentId);
+        if (environmentId === "all" && (name === "t3_thread_list" || name === "t3_thread_search")) {
+          if (Option.isNone(forwarding)) return yield* linksUnavailable;
+          const field = name === "t3_thread_list" ? "threads" : "matches";
+          const mesh = yield* Effect.serviceOption(MeshLayoutService);
+          const config = Option.isSome(mesh)
+            ? (yield* mesh.value.read.pipe(Effect.mapError(unavailable))).config
+            : undefined;
+          const machines = [scope.environmentId, ...(yield* discoverThreadMachines())];
+          const results = yield* Effect.forEach(
+            machines,
+            (id) =>
+              Effect.gen(function* () {
+                const input = name === "t3_thread_list" ? { ...params, allProjects: true } : params;
+                const value =
+                  id === scope.environmentId
+                    ? yield* here(input).pipe(
+                        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+                          ...scope,
+                          thread: undefined,
+                        }),
+                      )
+                    : yield* forwarding.value.call(scope, routedTool, id, input);
+                return { id, value: value as Record<string, unknown> };
+              }).pipe(Effect.timeout("10 seconds"), Effect.result),
+            { concurrency: 4 },
+          );
+          const items: unknown[] = [];
+          const unreachable: { environmentId: EnvironmentId; message: string }[] = [];
+          for (const [index, result] of results.entries()) {
+            if (result._tag === "Failure") {
+              unreachable.push({
+                environmentId: machines[index]!,
+                message: String(result.failure),
+              });
+              continue;
+            }
+            const { id, value } = result.success;
+            const rows = value[field];
+            if (Array.isArray(rows))
+              for (const row of rows as unknown[]) {
+                if (!Predicate.isObject(row)) continue;
+                items.push({
+                  ...row,
+                  environmentId: id,
+                  machineTag:
+                    config?.machines[id]?.tag ??
+                    config?.machines[id]?.label?.slice(0, 2).toUpperCase() ??
+                    id.slice(0, 2).toUpperCase(),
+                });
+              }
+          }
+          return name === "t3_thread_list"
+            ? {
+                projectId: null,
+                currentThreadId: scope.thread?.threadId ?? null,
+                threads: items,
+                nextCursor: null,
+                total: items.length,
+                unreachable,
+              }
+            : { matches: items, unreachable };
+        }
+        if (
+          [
+            "t3_thread_read",
+            "t3_thread_send",
+            "t3_thread_wait",
+            "t3_thread_interrupt",
+            "t3_thread_configure",
+            "t3_thread_update",
+            "t3_queue",
+            "t3_pending_request",
+            "t3_thread_organize",
+          ].includes(name) &&
+          (environmentId === undefined || environmentId === scope.environmentId) &&
+          Predicate.hasProperty(params, "threadId") &&
+          typeof params.threadId === "string"
+        ) {
+          const threads = yield* ThreadManagementService;
+          const requested = params.threadId;
+          let shell = yield* threads
+            .getThreadShell(ThreadId.make(requested))
+            .pipe(Effect.mapError(unavailable));
+          if (!shell && !requested.startsWith("mcp:"))
+            shell = yield* threads
+              .getThreadShell(ThreadId.make(`mcp:${requested}`))
+              .pipe(Effect.mapError(unavailable));
+          if (shell && shell.deletedAt === null) params = { ...params, threadId: shell.id };
+          else if (
+            scope.linkedEnvironments !== false &&
+            !scope.client?.linked &&
+            Option.isSome(forwarding)
+          ) {
+            const cached = locations.get(requested);
+            const machines = cached
+              ? [cached, ...(yield* discoverThreadMachines()).filter((id) => id !== cached)]
+              : yield* discoverThreadMachines();
+            for (const id of machines) {
+              const found = yield* probeThread(id, ThreadId.make(requested)).pipe(
+                Effect.timeout("5 seconds"),
+                Effect.result,
+              );
+              if (found._tag === "Success") {
+                target = id;
+                if (locations.size >= 2048) locations.clear();
+                locations.set(requested, id);
+                locations.set(found.success.thread.threadId, id);
+                params = { ...params, threadId: found.success.thread.threadId };
+                break;
+              }
+              locations.delete(requested);
+              yield* Effect.logDebug("Thread location probe failed", found.failure);
+            }
+          }
+        }
         if (target === undefined) return yield* here(params);
         if (scope.linkedEnvironments === false) return yield* PeerForwarding.linkedEnvironmentsOff;
         yield* (remote as RemoteCheck<typeof params>)(params);
@@ -434,8 +559,21 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
               ),
             };
         }
-        return yield* forwarding.value.call(scope, tool, target, { ...forwarded, environmentId });
+        return yield* forwarding.value
+          .call(scope, routedTool, target, { ...forwarded, environmentId: target })
+          .pipe(
+            Effect.tapError((error) => {
+              if (
+                error.code === "thread_not_found" &&
+                Predicate.hasProperty(params, "threadId") &&
+                typeof params.threadId === "string"
+              )
+                locations.delete(params.threadId);
+              return Effect.void;
+            }),
+          );
       });
+    };
   }
   return handlers as Toolkit.HandlersFrom<Tools>;
 });

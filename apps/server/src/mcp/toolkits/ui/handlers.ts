@@ -1,4 +1,5 @@
-import { OrchestratorMcpFailure, type ThreadId } from "@t3tools/contracts";
+import { OrchestratorMcpFailure, ThreadId } from "@t3tools/contracts";
+import { discoverThreadMachines, probeThread } from "../../../mesh/MeshThreadAccess.ts";
 import * as Effect from "effect/Effect";
 
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -43,7 +44,32 @@ export const layer = McpToolAccess.toLayer(UiToolkit, {
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const { thread } = yield* McpInvocationContext.requireThreadScope(scope, "ui_open");
       const uiRequests = yield* UiRequests.UiRequests;
-      const clients = yield* uiRequests.open({ threadId: thread.threadId, target });
+      let resolved = target;
+      if (target.kind === "thread" && target.environmentId === undefined) {
+        const threads = yield* ThreadManagementService.ThreadManagementService;
+        const shell = yield* threads
+          .getThreadShell(target.threadId)
+          .pipe(Effect.mapError(unavailable));
+        const prefixed =
+          shell ??
+          (yield* threads
+            .getThreadShell(ThreadId.make(`mcp:${target.threadId}`))
+            .pipe(Effect.mapError(unavailable)));
+        if (prefixed) resolved = { ...target, threadId: prefixed.id };
+        else
+          for (const environmentId of yield* discoverThreadMachines()) {
+            const found = yield* probeThread(environmentId, target.threadId).pipe(
+              Effect.timeout("5 seconds"),
+              Effect.result,
+            );
+            if (found._tag === "Success") {
+              resolved = { ...target, threadId: found.success.thread.threadId, environmentId };
+              break;
+            }
+            yield* Effect.logDebug("UI thread location probe failed", found.failure);
+          }
+      }
+      const clients = yield* uiRequests.open({ threadId: thread.threadId, target: resolved });
       return { clients };
     }),
   ),
