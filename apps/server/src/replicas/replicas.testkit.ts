@@ -93,7 +93,7 @@ export const makeReplicaHarness = (
       terminate: (name) =>
         Effect.sync(() => {
           terminated.push(name);
-          sessions = sessions.filter((s) => s.name !== name);
+          sessions = sessions.filter((s) => s.name !== name && s.identifier !== name);
         }),
       pause: () => Effect.void,
       resume: () =>
@@ -173,6 +173,11 @@ export const makeReplicaHarness = (
     registrations: () => registrations,
     setSession: (patch: Partial<Runner.MutagenSession>) => {
       sessions = sessions.map((s) => ({ ...s, ...patch }));
+    },
+    addDuplicate: () => {
+      const session = sessions[0];
+      if (!session) throw new Error("Create a session before duplicating it");
+      sessions = [...sessions, { ...session, identifier: "duplicate-session" }];
     },
     addOrphan: (named = true) => {
       sessions = [

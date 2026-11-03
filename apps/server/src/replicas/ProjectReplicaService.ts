@@ -123,10 +123,11 @@ const make = Effect.gen(function* () {
     const current = (yield* mesh.read).config.projectMountStatus[status.logicalKey]?.[
       status.environmentId
     ];
+    const conflictCopies = status.conflictCopies ?? current?.conflictCopies;
     if (
       current?.state !== status.state ||
       current?.message !== status.message ||
-      current?.conflictCopies?.path !== status.conflictCopies?.path
+      current?.conflictCopies?.path !== conflictCopies?.path
     )
       yield* mesh.edit((config) => ({
         ...config,
@@ -138,13 +139,13 @@ const make = Effect.gen(function* () {
               state: status.state,
               conflicts: status.conflicts.length,
               ...(status.message ? { message: status.message } : {}),
-              ...(status.conflictCopies ? { conflictCopies: status.conflictCopies } : {}),
+              ...(conflictCopies ? { conflictCopies } : {}),
               updatedAt: status.updatedAt,
             },
           },
         },
       }));
-    yield* updateLive(status);
+    yield* updateLive({ ...status, ...(conflictCopies ? { conflictCopies } : {}) });
   });
   const register = Effect.fn("ProjectReplicaService.register")(function* (
     logicalKey: string,
@@ -244,12 +245,14 @@ const make = Effect.gen(function* () {
     if (!rep.pathAllocated && !rep.projectId) return;
     const identity = sessionIdentity(logicalKey, rep.environmentId);
     const key = refKey(logicalKey, rep.environmentId);
-    const session = sessions.find(
+    const matching = sessions.filter(
       (candidate) =>
         candidate.name === identity.name &&
         candidate.labels?.["t3-logical"] === identity.logicalHash &&
         candidate.labels?.["t3-env"] === identity.environmentTag,
     );
+    const session = matching[0];
+    for (const duplicate of matching.slice(1)) yield* runner.terminate(duplicate.identifier);
     const source = config.projectMounts[logicalKey]?.find(
       (candidate) => candidate.environmentId === rep.source,
     );
@@ -286,11 +289,12 @@ const make = Effect.gen(function* () {
     } else {
       if (session.paused) yield* runner.resume(identity.name);
       const previous = config.projectMountStatus[logicalKey]?.[rep.environmentId];
+      const liveState = sessionStatus(session);
       const status = {
         ...base,
         sessionName: identity.name,
-        ...sessionStatus(session),
-        ...(previous?.message?.startsWith("Resolved ")
+        ...liveState,
+        ...(previous?.message?.startsWith("Resolved ") && liveState.state !== "error"
           ? {
               message: previous.message,
               ...(previous.conflictCopies ? { conflictCopies: previous.conflictCopies } : {}),

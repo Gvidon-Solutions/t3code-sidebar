@@ -498,3 +498,82 @@ it.effect(
     }).pipe(Effect.provide(h.layer));
   },
 );
+
+it.effect("workspaces do not alter a replica's endpoints, driver or session identity", () => {
+  const h = harness();
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    yield* service.reconcile;
+    const original = h.created[0];
+    yield* mesh.edit((c) => ({
+      ...c,
+      workspaces: [{ id: "quiet", name: "Quiet" }],
+      defaultWorkspace: "quiet",
+      assignments: { repo: "quiet" },
+      placements: { repo: ["quiet"] },
+      workspaceProjectOrder: { quiet: ["repo"] },
+      workspaceFold: { quiet: { repo: "quiet" } },
+      rules: [{ match: "*", workspace: "quiet" }],
+    }));
+    const document = (yield* mesh.read).document;
+    yield* service.reconcile;
+    expect(h.created).toEqual([original]);
+    expect(h.terminated).toEqual([]);
+    expect((yield* mesh.read).document).toEqual(document);
+  }).pipe(Effect.provide(h.layer));
+});
+
+it.effect(
+  "recreates a legacy conflict session with the mandatory copies ignore before propagating",
+  () => {
+    const h = harness();
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      yield* service.reconcile;
+      h.setSession({ ignore: { paths: [] }, conflicts: [{ root: "file" }] });
+      yield* service.reconcile;
+      expect(h.preserved).toHaveLength(1);
+      expect(h.terminated).toEqual([h.created[0]!.name]);
+      expect(h.created).toHaveLength(2);
+      expect(h.created[1]).toEqual(h.created[0]);
+      expect(h.created[1]?.ignores).toContain(".t3-conflicts");
+    }).pipe(Effect.provide(h.layer));
+  },
+);
+
+it.effect("rejects a replica as another replica's primary source", () => {
+  const h = harness();
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    yield* mesh.edit((c) => ({
+      ...c,
+      projectMounts: {
+        repo: c.projectMounts.repo!.map((rep) =>
+          rep.environmentId === "source" ? { ...rep, role: "replica" } : rep,
+        ),
+      },
+    }));
+    yield* service.reconcile;
+    expect(h.created).toEqual([]);
+    expect((yield* service.status)[0]).toMatchObject({
+      state: "error",
+      message: "Replica source representation is missing.",
+    });
+  }).pipe(Effect.provide(h.layer));
+});
+
+it.effect("adopts one managed session and removes an accidental duplicate by identifier", () => {
+  const h = harness();
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    yield* service.reconcile;
+    h.addDuplicate();
+    yield* service.reconcile;
+    expect(h.terminated).toEqual(["duplicate-session"]);
+    yield* service.reconcile;
+    expect(h.created).toHaveLength(1);
+    expect(h.terminated).toEqual(["duplicate-session"]);
+  }).pipe(Effect.provide(h.layer));
+});
