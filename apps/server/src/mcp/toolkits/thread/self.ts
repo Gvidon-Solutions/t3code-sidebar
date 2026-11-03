@@ -38,7 +38,7 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
       id,
     tag: config.machines[id]?.tag ?? (config.machines[id]?.label ?? id).slice(0, 2).toUpperCase(),
   });
-  const logicalKey =
+  let logicalKey =
     Object.keys(config.projectMounts).find((key) =>
       config.projectMounts[key]!.some(
         (rep) =>
@@ -46,6 +46,17 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
           (rep.projectId === thread.projectId || rep.path === project?.workspaceRoot),
       ),
     ) ?? (project ? `${scope.environmentId}:${project.workspaceRoot}` : null);
+  const seen = new Set<string>();
+  for (let hop = 0; logicalKey && hop < 8; hop++) {
+    if (seen.has(logicalKey)) {
+      logicalKey = [...seen, logicalKey].sort()[0]!;
+      break;
+    }
+    seen.add(logicalKey);
+    const alias = config.projectAliases[logicalKey];
+    if (!alias) break;
+    logicalKey = alias;
+  }
   const representations = logicalKey
     ? (config.projectMounts[logicalKey] ??
       (project

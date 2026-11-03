@@ -28,8 +28,9 @@ ctl() {
 }
 tool() { local m=$1 name=$2; shift 2; ctl "$m" tool "$name" "$@"; }
 MARK=stage-m-$(date +%s)
-tool vps t3_project_list '{"limit":100}' > "$WORK/vps-projects.json"
-PROJECT=$(jq -r '.projects[] | select(.workspaceRoot | contains("demo")) | .id' "$WORK/vps-projects.json" | head -1)
+ctl vps rpc meshLayout.get '{}' > "$WORK/layout.json"
+VPS_ENV=$(descriptor_env "$VPS_ORIGIN")
+PROJECT=$(jq -r --arg e "$VPS_ENV" '.config.projectMounts | to_entries[] | select(.key | endswith(":/home/user/xdev-e2e/demo")) | .value[] | select(.environmentId==$e and .role=="replica") | .projectId' "$WORK/layout.json" | head -1)
 [ -n "$PROJECT" ] || { echo 'Missing demo replica on VPS'; exit 1; }
 tool vps t3_thread_launch "$(jq -nc --arg p "$PROJECT" --arg mark "$MARK-self" '{projectId:$p,title:$mark,clientRequestId:$mark,modelSelection:{instanceId:"codex",model:"gpt-6-luna"},runtimeMode:"full-access",message:"Call t3_thread_self exactly once. Then report JSON containing representation.role, primary machine label/path, sync sessionName and state from that result. Do nothing else."}')" > "$WORK/vps-launch.json"
 VPS_THREAD=$(jq -r .threadId "$WORK/vps-launch.json")
