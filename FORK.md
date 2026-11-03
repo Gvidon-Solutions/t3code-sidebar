@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-03 — T3 Mesh — Stage P draft machine selection
+
+- **What:** new-thread composers offer machine tags, connection state and project-copy availability. Drafts retain their text while a replica mounts; a send waits for registration. Model availability offers a machine or local-model correction.
+- **How:** both clients reuse logical project resolution and the replica plan, consume replica status for progress and Retry, and retain sends in a shared gate. Device preferences remember the project’s selected machine. Provider catalogs follow the destination and unavailable mobile models stay visible and disabled.
+- **Where:** client-runtime `meshLayout/draftMachine`; web composer routing, environment selector and `DraftMachineHint`; mobile new-task flow, environment control and picker, model options and device preferences. Mesh contracts and server interfaces are unchanged.
+
 ### 2026-11-03 — T3 Mesh — Stage K project machine strips
 
 - **What:** project folder rows show primary and replica machine tags, sync status and overflow; all scratch threads share one “No project” folder on web and mobile, including the drawer.
