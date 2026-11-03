@@ -49,6 +49,20 @@ ws_rpc gv meshLayout.apply "$(entry "proj/$feature_id.title" "$(jq -nc --arg tit
 wait_converged 'N shared project title rename'
 ctl gor tool t3_project_machines "$(jq -nc --arg p "$feature_project" '{project:$p}')" > "$WORK/N-named-machines.json"
 jq -e --arg title "$renamed_title" '.title==$title' "$WORK/N-named-machines.json" >/dev/null
+ctl gor tool t3_project_read "$(jq -nc --arg p "$feature_project" '{projectId:$p}')" > "$WORK/N-named-project-read.json"
+jq -e --arg title "$renamed_title" '.title==$title' "$WORK/N-named-project-read.json" >/dev/null
+named_cursor=0
+while :; do
+  ctl gor tool t3_project_list "$(jq -nc --argjson cursor "$named_cursor" '{cursor:$cursor,limit:100}')" > "$WORK/N-named-project-page.json"
+  if jq -e --arg id "$feature_project" 'any(.projects[]; .id==$id)' "$WORK/N-named-project-page.json" >/dev/null; then
+    jq -e --arg id "$feature_project" --arg title "$renamed_title" '.projects[] | select(.id==$id) | .title==$title' "$WORK/N-named-project-page.json" >/dev/null
+    break
+  fi
+  named_cursor=$(jq -r '.nextCursor // empty' "$WORK/N-named-project-page.json")
+  [ -n "$named_cursor" ] || die 'Renamed project is absent from MCP pages'
+done
+ctl gor projects --json > "$WORK/N-named-cli-projects.json"
+jq -e --arg id "$feature_project" --arg title "$renamed_title" '.[] | select(.id==$id) | .title==$title' "$WORK/N-named-cli-projects.json" >/dev/null
 ctl gv replicas > "$WORK/N-replicas-text.log"
 ctl gv mesh status > "$WORK/N-mesh-text.log"
 for output in "$WORK/N-replicas-text.log" "$WORK/N-mesh-text.log"; do
