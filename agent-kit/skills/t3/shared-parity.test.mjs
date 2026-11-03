@@ -23,6 +23,7 @@ const empty = {
   alwaysShow: [],
   alwaysQuiet: [],
   machines: {},
+  projectTitles: {},
   projectAliases: {},
   projectMounts: {},
   projectMountStatus: {},
@@ -36,6 +37,7 @@ test("standalone encoder agrees with shared core and clocks can be received", ()
       placements: { "offline:/path": ["z"] },
       machines: { offline: { label: "Offline" } },
       projectMounts: { x: [] },
+      projectTitles: { x: "Shared project title" },
     },
   ]) {
     assert.deepEqual(encodeLegacyEntries(config), encode(config));

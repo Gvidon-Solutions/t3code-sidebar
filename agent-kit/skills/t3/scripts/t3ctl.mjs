@@ -466,6 +466,7 @@ const MESH_KEYS = {
   order: (project) => `order/${encodeURIComponent(project)}`,
   fold: (workspace, project) =>
     `fold/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}`,
+  project: (key) => `proj/${encodeURIComponent(key)}`,
   alias: (key) => `alias/${encodeURIComponent(key)}`,
   representation: (logical, env) => `rep/${encodeURIComponent(logical)}/${encodeURIComponent(env)}`,
   representationStatus: (logical, env) =>
@@ -565,6 +566,8 @@ export function encodeLegacyEntries(config, doc = {}) {
     for (const [p, mode] of Object.entries(folds)) put(MESH_KEYS.fold(ws, p), mode);
   for (const [env, machine] of Object.entries(config.machines ?? {}))
     put(MESH_KEYS.machine(env), machine);
+  for (const [key, title] of Object.entries(config.projectTitles ?? {}))
+    put(MESH_KEYS.project(key), { title });
   for (const [alias, logical] of Object.entries(config.projectAliases ?? {}))
     put(MESH_KEYS.alias(alias), logical);
   for (const [logical, reps] of Object.entries(config.projectMounts ?? {}))
