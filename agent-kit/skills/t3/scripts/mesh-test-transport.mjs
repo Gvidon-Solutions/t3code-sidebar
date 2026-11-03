@@ -14,8 +14,8 @@ const rep = {
 const config = {
   workspaces: [],
   machines: {
-    [self]: { label: "gvidon", tag: "GV", reach: { [peer]: { ssh: "gor" } } },
-    [peer]: { label: "gor", tag: "GO" },
+    [self]: { label: "atlas", tag: "AT", aliases: ["офис"], reach: { [peer]: { ssh: "lab" } } },
+    [peer]: { label: "lab", tag: "LB", aliases: ["лаборатория", "лаборатории"], color: "#123456" },
   },
   projectMounts: {
     repo: [
@@ -31,18 +31,20 @@ const config = {
   },
 };
 if (process.env.T3CTL_TEST_REMOTE_DRIVER)
-  config.machines[peer].reach = { [self]: { ssh: "gvidon" } };
+  config.machines[peer].reach = { [self]: { ssh: "atlas" } };
 const snapshot = { environmentId: self, config, document: {} };
 const thread = {
   threadId: process.env.T3CTL_TEST_FULL_ID ? "mcp:full-thread-example-0123456789" : "thread-1",
-  title: process.env.T3CTL_TEST_LONG_TITLE ? "Mount: a long thread title that needs mesh name resolution" : "mount work",
+  title: process.env.T3CTL_TEST_LONG_TITLE
+    ? "Mount: a long thread title that needs mesh name resolution"
+    : "mount work",
   projectId: "p",
   status: "completed",
   updatedAt: new Date().toISOString(),
 };
 const env = (id = self) => ({
   environmentId: id,
-  label: id === self ? "gvidon" : "gor",
+  label: id === self ? "atlas" : "lab",
   serverVersion: "0.1.5",
 });
 const tools = ["t3_project_place", "t3_project_machines", "t3_pending_request"].map((name) => ({
@@ -56,9 +58,20 @@ function call(name, args) {
     case "t3_project_list":
       return { projects: [{ id: "p", title: "Demo", workspaceRoot: "/repo" }], nextCursor: null };
     case "t3_thread_list":
-      return { threads: [{ ...thread, environmentId: args.environmentId === "all" ? peer : args.environmentId || self }], nextCursor: null };
+      return {
+        threads: [
+          {
+            ...thread,
+            environmentId: args.environmentId === "all" ? peer : args.environmentId || self,
+          },
+        ],
+        nextCursor: null,
+      };
     case "t3_thread_read":
-      if (process.env.T3CTL_TEST_LONG_TITLE && args.threadId === thread.title) throw Error(JSON.stringify({ code: "thread_not_found", message: "No id matches that title." }));
+      if (process.env.T3CTL_TEST_LONG_TITLE && args.threadId === thread.title)
+        throw Error(
+          JSON.stringify({ code: "thread_not_found", message: "No id matches that title." }),
+        );
       return { thread, items: [{ type: "assistant_message", text: "done" }], hasMore: false };
     case "t3_thread_search":
       if (args.environmentId === "all" && process.env.T3CTL_TEST_FALLBACK)
@@ -92,9 +105,23 @@ function call(name, args) {
     case "t3_thread_wait":
       return { status: "completed", timedOut: false };
     case "t3_pending_request":
-      if (args.action === "read") return { requestId: args.requestId, questions: [{ id: "q", question: "Which?", options: [] }] };
+      if (args.action === "read")
+        return {
+          requestId: args.requestId,
+          questions: [{ id: "q", question: "Which?", options: [] }],
+        };
       if (args.action === "respond") return { sequence: 1 };
       return { requestIds: process.env.T3CTL_TEST_QUESTION ? ["request"] : [] };
+    case "orchestrator_capabilities":
+      return {
+        providers: [
+          {
+            providerInstanceId: "custom",
+            driverKind: "codex",
+            models: [{ id: "model-from-destination", isDefault: true, options: [] }],
+          },
+        ],
+      };
     case "t3_thread_launch":
       return { ...thread, modelSelection: args.modelSelection };
     case "ui_open":
@@ -102,7 +129,10 @@ function call(name, args) {
     case "meshLayout.get":
       return snapshot;
     case "meshLayout.apply":
-      if (readdirSync(`${process.env.XDG_STATE_HOME}/t3-mesh-migrate`).length < 2)
+      if (
+        Object.values(args.entries).some((entry) => entry.h.startsWith("0000000000000.")) &&
+        readdirSync(`${process.env.XDG_STATE_HOME}/t3-mesh-migrate`).length < 2
+      )
         throw Error("backups missing before apply");
       return snapshot;
     case "peerLinks.list":
@@ -111,7 +141,7 @@ function call(name, args) {
           {
             ...env(peer),
             status: "reachable",
-            label: "gor",
+            label: "lab",
             urls: ["http://peer"],
             access: "full-access",
           },
@@ -126,7 +156,7 @@ function call(name, args) {
     case "replicas.retry":
       return { state: "watching" };
     case "files.read":
-      return { contents: "hello from gor", byteLength: 14, truncated: false };
+      return { contents: "hello from lab", byteLength: 14, truncated: false };
     case "server.getConfig":
       return { settings: { sidebarWorkspaces: config, meshEnabled: true } };
     default:

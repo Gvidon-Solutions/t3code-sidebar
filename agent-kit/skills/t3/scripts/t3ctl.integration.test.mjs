@@ -30,7 +30,7 @@ function run(args, extra = {}) {
     writeFileSync(cli, "#!/bin/sh\necho test-token\n", { mode: 0o700 });
     writeFileSync(
       join(dir, "ssh"),
-      '#!/usr/bin/env node\nconst fs=require("node:fs");fs.appendFileSync(process.env.T3CTL_TEST_LOG,JSON.stringify({name:"ssh",args:process.argv.slice(2)})+"\\n");console.log(JSON.stringify({credential:"pairing-test",state:"watching",environmentId:"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",label:"gor"}));\n',
+      '#!/usr/bin/env node\nconst fs=require("node:fs");fs.appendFileSync(process.env.T3CTL_TEST_LOG,JSON.stringify({name:"ssh",args:process.argv.slice(2)})+"\\n");console.log(JSON.stringify({credential:"pairing-test",state:"watching",environmentId:"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",label:"lab"}));\n',
       { mode: 0o700 },
     );
     const r = spawnSync(
@@ -67,15 +67,15 @@ test("machine inventory, mesh status, replicas and layout reach transports", () 
     assert.ok(run(args).calls.some((c) => c.name === "meshLayout.get"));
 });
 test("place, unplace, retry resolve Russian machine and send server contracts", () => {
-  const primary = run(["place", "Demo", "--on", "гор", "--primary", "--path", "/checkout"]);
+  const primary = run(["place", "Demo", "--on", "лаборатория", "--primary", "--path", "/checkout"]);
   assert.equal(primary.calls.find((c) => c.name === "t3_project_place").args.role, "primary");
   const placed = run([
     "place",
     "Demo",
     "--on",
-    "на горе",
+    "на лаборатории",
     "--source",
-    "гвидон",
+    "офис",
     "--wait",
     "2m",
     "--path",
@@ -89,19 +89,19 @@ test("place, unplace, retry resolve Russian machine and send server contracts", 
     wait: 120,
   });
   assert.equal(
-    run(["unplace", "Demo", "--on", "гор", "--yes"]).calls.find(
+    run(["unplace", "Demo", "--on", "лаборатория", "--yes"]).calls.find(
       (c) => c.name === "t3_project_place",
     ).args.action,
     "remove",
   );
   assert.deepEqual(
-    run(["replica", "retry", "Demo", "--on", "GO"]).calls.find((c) => c.name === "replicas.retry")
+    run(["replica", "retry", "Demo", "--on", "LB"]).calls.find((c) => c.name === "replicas.retry")
       .args,
     { logicalKey: "repo", environmentId: peer },
   );
 });
 test("remote new places before launch and reuses registered representation", () => {
-  const args = ["new", "--project", "Demo", "--on", "гор", "--json", "task"];
+  const args = ["new", "--project", "Demo", "--on", "лаборатория", "--json", "task"];
   for (const existing of ["", "1"]) {
     const { calls } = run(args, { T3CTL_TEST_EXISTING: existing });
     const launch = calls.find((c) => c.name === "t3_thread_launch");
@@ -118,7 +118,7 @@ test("remote new places before launch and reuses registered representation", () 
 test("find all and legacy fallback retain machine tags; thread and status fan out", () => {
   for (const fallback of ["", "1"]) {
     const r = run(["find", "mount", "--json"], { T3CTL_TEST_FALLBACK: fallback });
-    assert.equal(JSON.parse(r.out).matches.at(-1).machineTag, "GO");
+    assert.equal(JSON.parse(r.out).matches.at(-1).machineTag, "LB");
   }
   for (const cmd of ["threads", "status"]) {
     const r = run([cmd, "--all", "--json"]);
@@ -126,11 +126,11 @@ test("find all and legacy fallback retain machine tags; thread and status fan ou
   }
 });
 test("open thread/file and cat preserve destination and remote home path", () => {
-  const r = run(["open", "mount", "--on", "гор", "--json"]);
+  const r = run(["open", "mount", "--on", "лаборатория", "--json"]);
   assert.equal(JSON.parse(r.out).environmentId, peer);
   for (const args of [
-    ["open-file", "~/a b.md", "--on", "гор", "--json"],
-    ["cat", "~/a b.md", "--on", "гор"],
+    ["open-file", "~/a b.md", "--on", "лаборатория", "--json"],
+    ["cat", "~/a b.md", "--on", "лаборатория"],
   ]) {
     const r = run(args);
     assert.ok(
@@ -139,19 +139,20 @@ test("open thread/file and cat preserve destination and remote home path", () =>
   }
 });
 test("link mints a code over ssh and unlink uses the resolved environment", () => {
-  const r = run(["mesh", "link", "гор", "--url", "http://peer"]);
+  const r = run(["mesh", "link", "лаборатория", "--url", "http://peer"]);
   const input = r.calls.find((c) => c.name === "peerLinks.link").args;
   assert.equal(input.pairingCode, "pairing-test");
   assert.equal(input.access, "full-access");
   assert.equal(input.expectedEnvironmentId, peer);
   assert.deepEqual(
-    run(["mesh", "unlink", "гор", "--yes"]).calls.find((c) => c.name === "peerLinks.unlink").args,
+    run(["mesh", "unlink", "лаборатория", "--yes"]).calls.find((c) => c.name === "peerLinks.unlink")
+      .args,
     { environmentId: peer },
   );
 });
 test("layout dry run never writes; apply sends the document through server adoption", () => {
   for (const flag of ["--dry-run", "--apply"]) {
-    const r = run(["layout", "merge", "--from", "гвидон", flag]);
+    const r = run(["layout", "merge", "--from", "офис", flag]);
     assert.equal(
       r.calls.some((c) => c.name === "meshLayout.apply"),
       flag === "--apply",
@@ -160,7 +161,7 @@ test("layout dry run never writes; apply sends the document through server adopt
 });
 
 test("remote new wait and history remain on destination", () => {
-  const r = run(["new", "--project", "Demo", "--on", "гор", "--wait", "1s", "task"]);
+  const r = run(["new", "--project", "Demo", "--on", "лаборатория", "--wait", "1s", "task"]);
   for (const name of ["t3_thread_wait", "t3_thread_read"])
     assert.equal(r.calls.find((c) => c.name === name).args.environmentId, peer);
 });
@@ -171,8 +172,8 @@ test("existing requests command supports the consolidated pending-request API", 
 
 test("destructive mesh commands require yes before sending mutations", () => {
   for (const args of [
-    ["mesh", "unlink", "гор"],
-    ["unplace", "Demo", "--on", "гор"],
+    ["mesh", "unlink", "лаборатория"],
+    ["unplace", "Demo", "--on", "лаборатория"],
   ]) {
     const r = run(args, { expectedCode: "1" });
     assert.ok(!r.calls.some((c) => ["peerLinks.unlink", "t3_project_place"].includes(c.name)));
@@ -180,7 +181,9 @@ test("destructive mesh commands require yes before sending mutations", () => {
 });
 
 test("retry follows the remote replica driver over ssh", () => {
-  const r = run(["replica", "retry", "Demo", "--on", "гор"], { T3CTL_TEST_REMOTE_DRIVER: "1" });
+  const r = run(["replica", "retry", "Demo", "--on", "лаборатория"], {
+    T3CTL_TEST_REMOTE_DRIVER: "1",
+  });
   assert.ok(
     r.calls.some((c) => c.name === "ssh" && c.args.some((a) => a.includes("replicas.retry"))),
   );
@@ -188,25 +191,53 @@ test("retry follows the remote replica driver over ssh", () => {
 });
 
 test("link discovers an unknown machine over ssh before pairing", () => {
-  const r = run(["mesh", "link", "new-host", "--ssh", "gor", "--url", "http://peer"]);
+  const r = run(["mesh", "link", "new-host", "--ssh", "lab", "--url", "http://peer"]);
   assert.ok(r.calls.some((c) => c.name === "ssh" && c.args.some((a) => a.includes("env"))));
   assert.equal(r.calls.find((c) => c.name === "peerLinks.link").args.expectedEnvironmentId, peer);
 });
 
 test("session commands resolve ids in the mesh and pending questions use current MCP actions", () => {
-  for (const [command, tool, rest] of [["show", "t3_thread_read", []], ["send", "t3_thread_send", ["hello"]], ["wait", "t3_thread_wait", []], ["stop", "t3_thread_interrupt", []]]) {
+  for (const [command, tool, rest] of [
+    ["show", "t3_thread_read", []],
+    ["send", "t3_thread_send", ["hello"]],
+    ["wait", "t3_thread_wait", []],
+    ["stop", "t3_thread_interrupt", []],
+  ]) {
     const r = run([command, "mcp:remote-thread", ...rest]);
     assert.ok(r.calls.some((c) => c.name === tool));
-    assert.ok(r.calls.some((c) => c.name === "t3_thread_read" && c.args.threadId === "mcp:remote-thread" && c.args.environmentId === undefined));
+    assert.ok(
+      r.calls.some(
+        (c) =>
+          c.name === "t3_thread_read" &&
+          c.args.threadId === "mcp:remote-thread" &&
+          c.args.environmentId === undefined,
+      ),
+    );
   }
   const requests = run(["requests", "mcp:remote-thread"], { T3CTL_TEST_QUESTION: "1" });
-  assert.ok(requests.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "list"));
-  assert.ok(requests.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "read"));
+  assert.ok(
+    requests.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "list"),
+  );
+  assert.ok(
+    requests.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "read"),
+  );
   const answered = run(["answer", "mcp:remote-thread", "yes"], { T3CTL_TEST_QUESTION: "1" });
-  assert.ok(answered.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "respond" && c.args.answers.q === "yes"));
-  const self = run(["self"], { T3_MCP_URL: "http://fixture/mcp", T3_MCP_BEARER_TOKEN: "scoped-test" });
+  assert.ok(
+    answered.calls.some(
+      (c) =>
+        c.name === "t3_pending_request" &&
+        c.args.action === "respond" &&
+        c.args.answers.q === "yes",
+    ),
+  );
+  const self = run(["self"], {
+    T3_MCP_URL: "http://fixture/mcp",
+    T3_MCP_BEARER_TOKEN: "scoped-test",
+  });
   assert.ok(self.calls.some((c) => c.name === "t3_thread_self"));
-  const named = run(["show", "Mount: a long thread title that needs mesh name resolution"], { T3CTL_TEST_LONG_TITLE: "1" });
+  const named = run(["show", "Mount: a long thread title that needs mesh name resolution"], {
+    T3CTL_TEST_LONG_TITLE: "1",
+  });
   assert.ok(named.calls.some((c) => c.name === "t3_thread_list" && c.args.environmentId === "all"));
 });
 
@@ -214,4 +245,44 @@ test("thread ids in printed output retain the full MCP prefix and body", () => {
   const id = "mcp:full-thread-example-0123456789";
   const sent = run(["send", id, "hello"], { T3CTL_TEST_FULL_ID: "1" });
   assert.ok(sent.out.includes(id), sent.out);
+});
+
+test("aliases read and edit the layout machine without replacing other fields", () => {
+  const listing = run(["machines", "alias", "lab", "list", "--json"]);
+  assert.deepEqual(JSON.parse(listing.out).aliases, ["лаборатория", "лаборатории"]);
+  assert.ok(!listing.calls.some((call) => call.name === "meshLayout.apply"));
+  for (const [operation, rest, expected] of [
+    ["add", [" Studio ", "STUDIO", "研究室"], ["лаборатория", "лаборатории", "STUDIO", "研究室"]],
+    ["remove", ["ЛАБОРАТОРИЯ"], ["лаборатории"]],
+    ["clear", [], undefined],
+  ]) {
+    const result = run(["machines", "alias", "лаборатория", operation, ...rest, "--json"]);
+    const entries = result.calls.find((call) => call.name === "meshLayout.apply").args.entries;
+    assert.deepEqual(Object.keys(entries), [`machine/${peer}`]);
+    const entry = entries[`machine/${peer}`];
+    assert.deepEqual(entry.v, {
+      label: "lab",
+      tag: "LB",
+      color: "#123456",
+      ...(expected ? { aliases: expected } : {}),
+    });
+    assert.ok(entry.h > "0000000000000.00000.fixture");
+  }
+});
+
+test("new uses destination defaults and resolves explicit models against destination capabilities", () => {
+  const implicit = run(["new", "--project", "Demo", "--on", "lab", "task"]);
+  const input = implicit.calls.find((call) => call.name === "t3_thread_launch").args;
+  assert.equal(input.environmentId, peer);
+  assert.equal(input.modelSelection, undefined);
+  assert.equal(input.runtimeMode, undefined);
+  assert.ok(!implicit.calls.some((call) => call.name === "orchestrator_capabilities"));
+  const explicit = run(["new", "--project", "Demo", "--on", "lab", "--agent", "custom", "task"]);
+  assert.deepEqual(explicit.calls.find((call) => call.name === "orchestrator_capabilities").args, {
+    environmentId: peer,
+  });
+  const selection = explicit.calls.find((call) => call.name === "t3_thread_launch").args
+    .modelSelection;
+  assert.equal(selection.instanceId, "custom");
+  assert.equal(selection.model, "model-from-destination");
 });

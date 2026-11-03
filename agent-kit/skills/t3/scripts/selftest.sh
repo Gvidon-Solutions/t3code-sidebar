@@ -1,14 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end check of t3ctl against a T3 server: creates a temp project, threads, workspace,
-# exercises every write path, then deletes what it made. Spends a few cheap Codex turns.
-# Run it on a test server (gor, or T3CODE_HOME=<isolated base dir>), not on the owner's live one,
-# unless the owner asked for it. Usage: selftest.sh [path/to/t3ctl.mjs]
-#
-# Offline first: scripts/t3ctl.unit.test.mjs checks argument parsing, the machine resolver and
-# the legacy layout encoder; it needs no server. With T3CTL_MESH_E2E=1 it also reads the mesh
-# test bed through T3CTL_ORIGIN (127.0.0.1:13795 / 13797 / 13791 from gvidon); it refuses :3774
-# and Operalia. For the isolated gvidon test server also set T3CODE_HOME/T3CTL_T3_BIN so the
-# pairing code is minted there.
+# Live checks require an explicitly isolated origin and opt-in.
 set -uo pipefail
 T3CTL=${1:-$(dirname "$(readlink -f "$0")")/t3ctl.mjs}
 t() { node "$T3CTL" "$@"; }
@@ -21,10 +12,9 @@ if ! node --test "$(dirname "$T3CTL")/t3ctl.integration.test.mjs"; then exit 1; 
 if ! node --test "$(dirname "$T3CTL")/agents-sync.test.mjs"; then exit 1; fi
 if [ "${T3CTL_OFFLINE_ONLY:-0}" = 1 ]; then exit 0; fi
 # Validate before any authentication or write, including the original regression suite.
-case "${T3CTL_ORIGIN:-}" in
-  http://127.0.0.1:13795|http://127.0.0.1:13797|http://127.0.0.1:13791) ;;
-  *) echo "selftest: set T3CTL_ORIGIN to an isolated mesh test-bed origin"; exit 1 ;;
-esac
+if [ "${T3CTL_ISOLATED_TEST:-0}" != 1 ] || [ -z "${T3CTL_ORIGIN:-}" ]; then
+  echo "selftest: set T3CTL_ISOLATED_TEST=1 and T3CTL_ORIGIN for an isolated test server"; exit 1
+fi
 pass=0; fail=0
 check() { # name, command..., expects exit 0 and optional grep pattern in $EXPECT
   local name=$1; shift
@@ -96,11 +86,6 @@ rm -rf "$DIR" "$NOTE"
 fi
 
 mesh_live() {
-  : "${T3CTL_ORIGIN:?set T3CTL_ORIGIN to an e2e bed origin (127.0.0.1:13795, :13797 or :13791)}"
-  case "$T3CTL_ORIGIN" in
-    *:3774*|*operalia*|*happier*)
-      echo "selftest: refusing mesh checks against a live server ($T3CTL_ORIGIN)"; return 1 ;;
-  esac
   echo "== mesh live checks ($T3CTL_ORIGIN) =="
   EXPECT='environmentId' check mesh-env t env --json
   EXPECT='environmentId' check mesh-machines t machines --json

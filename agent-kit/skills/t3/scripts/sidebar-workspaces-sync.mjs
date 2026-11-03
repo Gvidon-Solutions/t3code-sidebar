@@ -14,8 +14,8 @@ const argv = process.argv.slice(2);
 const has = (name) => argv.includes(name);
 if (has("--help") || has("-h")) {
   console.log(
-    "usage: sidebar-workspaces-sync.mjs [--from local|HOST] [--to HOST] [--apply] [--json]\n" +
-      "  default: --from local --to operalia, dry run",
+    "usage: sidebar-workspaces-sync.mjs [--from local|HOST] --to HOST [--apply] [--json]\n" +
+      "  default: --from local, dry run; --to is required",
   );
   process.exit(0);
 }
@@ -27,7 +27,8 @@ const valueOf = (name, fallback) => {
   return v;
 };
 const from = valueOf("--from", "local");
-const to = valueOf("--to", "operalia");
+const to = valueOf("--to");
+if (!to) die("--to HOST is required");
 const apply = has("--apply");
 const asJson = has("--json");
 

@@ -58,3 +58,25 @@ test("zero-clock legacy entries use server shared adoption without losing offlin
   assert.equal(config.workspaces.length, 1);
   assert.deepEqual(config.placements["offline:/path"], ["a"]);
 });
+
+test("alias writes advance beyond observed clocks, including counter overflow", async () => {
+  const { nextMachineClock } = await import("./scripts/t3ctl.mjs");
+  const { tick } = await import("../../../packages/shared/src/meshLayout/index.ts");
+  for (const last of [null, "9999999999998.00042.peer", "9999999999998.99999.peer"]) {
+    const document = last
+      ? { "machine/remote": { v: { aliases: ["office", "研究室"] }, h: last } }
+      : {};
+    assert.equal(nextMachineClock(document, 42, "client"), tick(42, last, "client"));
+  }
+  const config = {
+    ...empty,
+    machines: {
+      remote: {
+        label: "Worker",
+        aliases: ["office", "研究室"],
+        reach: { local: { ssh: "user@node" } },
+      },
+    },
+  };
+  assert.deepEqual(materialize(importLegacyEntries(config, "local")).machines, config.machines);
+});

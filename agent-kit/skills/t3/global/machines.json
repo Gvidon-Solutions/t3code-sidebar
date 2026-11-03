@@ -3,24 +3,39 @@
     "id": "gvidon",
     "label": "gvidon",
     "tag": "GV",
-    "ssh": { "gvidon": null, "operalia": "gvidon", "gor": "gvidon" },
+    "ssh": {
+      "gvidon": null,
+      "operalia": "gvidon",
+      "gor": "gvidon"
+    },
     "role": "Главная машина: git, сборки, тесты и docker большинства проектов",
-    "harnessFiles": [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"]
+    "harnessFiles": [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"],
+    "nodeCommand": "$HOME/.nvm/versions/node/v26.12.1/bin/node"
   },
   {
     "id": "operalia",
     "label": "Operalia",
     "tag": "OP",
-    "ssh": { "gvidon": "operalia", "operalia": null },
+    "ssh": {
+      "gvidon": "operalia",
+      "operalia": null
+    },
     "role": "VPS, здесь работают Claude-агенты",
-    "harnessFiles": [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"]
+    "harnessFiles": [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"],
+    "nodeCommand": "$HOME/.nvm/versions/node/v26.12.1/bin/node"
   },
   {
     "id": "gor",
     "label": "gor",
     "tag": "GOR",
-    "ssh": { "gvidon": "gor", "operalia": "gvidon", "gor": null },
-    "via": { "operalia": "gvidon" },
+    "ssh": {
+      "gvidon": "gor",
+      "operalia": "gvidon",
+      "gor": null
+    },
+    "via": {
+      "operalia": "gvidon"
+    },
     "sshOptions": {
       "gvidon": [
         "-F",
@@ -32,6 +47,7 @@
       ]
     },
     "role": "Вторая домашняя машина, тестовый стенд T3; обновлять и перезапускать можно",
-    "harnessFiles": [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"]
+    "harnessFiles": [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"],
+    "nodeCommand": "$HOME/.nvm/versions/node/v26.12.1/bin/node"
   }
 ]
