@@ -3849,8 +3849,8 @@ PROJECTS
   project-remove <P> --yes [--force]      remove from T3 (files stay); --force also deletes its threads
 
 AGENT INSTRUCTIONS
-  agents sync [--to all|machine,…] [--apply]   diff by default; backup and verify on apply
-  agents status [--to all|machine,…]           per-machine harness file drift
+  agents sync [--to all|machine,…] [--home /isolated/home] [--apply]   diff by default; backup and verify on apply
+  agents status [--to all|machine,…] [--home /isolated/home]           per-machine harness file drift
 
 MESH (M = environment id/prefix, label, tag, ssh alias, or a Russian name like «гора»)
   place <P> --on <M> [--primary] [--source <M2>] [--path PATH] [--wait [dur]]

@@ -66,12 +66,12 @@ test.test("target read is non-mutating; apply backs up, verifies, and is idempot
   }
 });
 
-test.test("canonical owner body retains its original bytes", async () => {
+test.test("canonical body retains the reviewed mesh clarification bytes", async () => {
   const { createHash } = await import("node:crypto");
   const body = fs.readFileSync(new URL("../global/GLOBAL.md", import.meta.url));
   assert.equal(
     createHash("sha256").update(body).digest("hex"),
-    "3b3855c24f8c1e6193dacd47bdfbf14b26cf19b54927e1ee40e30af39a2d781d",
+    "6eec8c6fdcbd00cf74c86d2630ca488fb881fc905dbab2f01b073b1f170f64ce",
   );
 });
 
@@ -149,6 +149,54 @@ test.test(
       const unknown = call({ to: "unknown" });
       assert.notEqual(unknown.status, 0);
       assert.match(unknown.stderr, /Unknown machine unknown/);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  },
+);
+
+test.test(
+  "explicit isolated HOME targets only local files and rejects remote or relative targets",
+  async () => {
+    const { spawnSync } = await import("node:child_process");
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "t3-agents-home-"));
+    const isolated = path.join(home, "isolated");
+    try {
+      fs.mkdirSync(path.join(home, ".codex"));
+      fs.mkdirSync(path.join(isolated, ".codex"), { recursive: true });
+      fs.writeFileSync(path.join(home, ".codex/AGENTS.md"), "untouched");
+      const moduleUrl = new URL("./agents-sync.mjs", import.meta.url).href;
+      const call = (opt, operation = "sync") =>
+        spawnSync(
+          process.execPath,
+          [
+            "--input-type=module",
+            "-e",
+            `import os from 'node:os'; import {syncBuiltinESMExports} from 'node:module'; os.hostname=()=> 'gvidon'; syncBuiltinESMExports(); const {runAgents}=await import(${JSON.stringify(moduleUrl)}); runAgents([${JSON.stringify(operation)}],${JSON.stringify(opt)});`,
+          ],
+          { encoding: "utf8", env: { ...process.env, HOME: home } },
+        );
+      const dry = call({ home: isolated });
+      assert.equal(dry.status, 0, dry.stderr);
+      assert.match(dry.stdout, /missing/);
+      assert.equal(fs.existsSync(path.join(isolated, ".codex/AGENTS.md")), false);
+      const apply = call({ home: isolated, apply: true });
+      assert.equal(apply.status, 0, apply.stderr);
+      assert.match(call({ home: isolated }, "status").stdout, /in sync/);
+      assert.match(
+        fs.readFileSync(path.join(isolated, ".codex/AGENTS.md"), "utf8"),
+        /Эта машина — \*\*gvidon\*\*/,
+      );
+      assert.equal(fs.readFileSync(path.join(home, ".codex/AGENTS.md"), "utf8"), "untouched");
+      for (const opt of [
+        { home: "relative" },
+        { home: isolated, to: "gor" },
+        { home: isolated, to: "all" },
+      ]) {
+        const rejected = call(opt);
+        assert.notEqual(rejected.status, 0);
+        assert.match(rejected.stderr, /--home requires/);
+      }
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }

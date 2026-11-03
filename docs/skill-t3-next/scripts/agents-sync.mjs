@@ -47,7 +47,7 @@ export function unifiedDiff(before, after, name) {
 // Executed in the target HOME, locally or through SSH; stdin carries only JSON.
 export function targetOperation(input) {
   const { operation, files, content, stamp } = input;
-  const home = os.homedir();
+  const home = input.home ?? os.homedir();
   return files.map((file) => {
     if (![".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"].includes(file))
       throw new Error(`Invalid harness file: ${file}`);
@@ -81,13 +81,15 @@ export function targetOperation(input) {
 export function runAgents(pos, opt) {
   const operation = pos[0];
   if (!["sync", "status"].includes(operation))
-    throw new Error("Usage: t3ctl agents sync [--to all|machine,…] [--apply] | status [--to …]");
+    throw new Error(
+      "Usage: t3ctl agents sync [--to all|machine,…] [--home /isolated/home] [--apply] | status [--to …] [--home /isolated/home]",
+    );
   const root = url.fileURLToPath(new URL("../global/", import.meta.url));
   const machines = JSON.parse(fs.readFileSync(path.join(root, "machines.json"), "utf8"));
   const body = fs.readFileSync(path.join(root, "GLOBAL.md"), "utf8");
   const source = os.hostname().split(".")[0].toLowerCase();
   if (!machines.some((m) => m.id === source)) throw new Error(`Unknown source machine ${source}`);
-  const ids = String(opt.to || "all")
+  const ids = String(opt.to || (opt.home ? source : "all"))
     .toLowerCase()
     .split(",");
   const selected = ids.includes("all")
@@ -97,6 +99,11 @@ export function runAgents(pos, opt) {
         if (!machine) throw new Error(`Unknown machine ${id}`);
         return machine;
       });
+  if (
+    opt.home &&
+    (!path.isAbsolute(opt.home) || selected.length !== 1 || selected[0].id !== source)
+  )
+    throw new Error("--home requires an absolute path and only the local machine target");
   const stamp = `${new Date().toISOString().replace(/[:.]/g, "-")}-${process.pid}`;
   const remoteScript = `import * as fs from 'node:fs'; import * as os from 'node:os'; import * as path from 'node:path'; const targetOperation = ${targetOperation.toString()}; try { console.log(JSON.stringify(targetOperation(JSON.parse(fs.readFileSync(0,'utf8'))))); } catch(e) { console.error(e.stack); process.exitCode=1; }`;
   for (const machine of selected) {
@@ -106,6 +113,7 @@ export function runAgents(pos, opt) {
       files: machine.harnessFiles,
       content,
       stamp,
+      ...(opt.home ? { home: opt.home } : {}),
     };
     let rows;
     if (source === machine.id) rows = targetOperation(input);
