@@ -18,7 +18,7 @@ export function draftModelUnavailableReason(
   if (!resolveProjectProviderInstanceEnabled(config.settings, projectId, provider.instanceId))
     return "Provider disabled for this project";
   if (!provider.installed) return "Provider not installed";
-  if (provider.auth.status === "unauthenticated") return "Provider unauthenticated";
+  if (provider.auth.status === "unauthenticated") return "Provider not authenticated";
   if (provider.status === "error" || provider.availability === "unavailable")
     return "Provider unavailable";
   if (!provider.models.some((model) => model.slug === selection.model)) return "Model unavailable";
@@ -30,6 +30,22 @@ export interface DraftMachineCandidate {
   readonly connected: boolean;
   readonly usable: boolean;
   readonly primary: boolean;
+}
+
+export function machineForDraftModel<
+  T extends {
+    connected: boolean;
+    config: Pick<ServerConfig, "providers" | "settings"> | null | undefined;
+    projectId: ProjectId | null;
+  },
+>(machines: readonly T[], selection: ModelSelection): T | null {
+  return (
+    machines.find(
+      (machine) =>
+        machine.connected &&
+        draftModelUnavailableReason(machine.config, selection, machine.projectId) === null,
+    ) ?? null
+  );
 }
 
 export function defaultDraftMachine(
@@ -44,21 +60,6 @@ export function defaultDraftMachine(
       machines[0]
     )?.environmentId ?? null
   );
-}
-
-export class DraftMachineSendQueue {
-  private queued = false;
-
-  defer(switching: boolean): boolean {
-    this.queued = switching;
-    return switching;
-  }
-
-  resume(switching: boolean, send: () => void): void {
-    if (switching || !this.queued) return;
-    this.queued = false;
-    send();
-  }
 }
 
 export function defaultUsableDraftModel(

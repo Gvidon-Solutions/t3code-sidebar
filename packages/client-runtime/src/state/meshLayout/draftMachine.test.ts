@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { defaultDraftMachine } from "./draftMachine.ts";
+import { defaultDraftMachine, machineForDraftModel } from "./draftMachine.ts";
 
 describe("draft machine defaults", () => {
   const machines = [
@@ -53,7 +53,7 @@ it("maps authentication, installation, availability and missing models", () => {
   expect(draftModelUnavailableReason(config(), selection, null)).toBeNull();
   expect(
     draftModelUnavailableReason(config({ auth: { status: "unauthenticated" } }), selection, null),
-  ).toBe("Provider unauthenticated");
+  ).toBe("Provider not authenticated");
   expect(draftModelUnavailableReason(config({ installed: false }), selection, null)).toBe(
     "Provider not installed",
   );
@@ -69,28 +69,6 @@ it("maps authentication, installation, availability and missing models", () => {
   expect(draftModelUnavailableReason(null, selection, null)).toBe(
     "Machine configuration unavailable",
   );
-});
-
-import { DraftMachineSendQueue } from "./draftMachine.ts";
-
-it("retains a send through mounting and retry, then dispatches once with the registered destination", () => {
-  const queue = new DraftMachineSendQueue();
-  const draft = { text: "Keep this message", attachments: ["image.png"], machine: "primary" };
-  const sent: (typeof draft)[] = [];
-  const send = () => sent.push({ ...draft });
-  expect(queue.defer(true)).toBe(true);
-  queue.resume(true, send);
-  expect(sent).toEqual([]);
-  queue.defer(true);
-  queue.resume(true, send);
-  expect(draft.text).toBe("Keep this message");
-  draft.machine = "registered-replica";
-  queue.resume(false, send);
-  queue.resume(false, send);
-  expect(sent).toEqual([
-    { text: "Keep this message", attachments: ["image.png"], machine: "registered-replica" },
-  ]);
-  expect(queue.defer(false)).toBe(false);
 });
 
 import { defaultUsableDraftModel } from "./draftMachine.ts";
@@ -110,6 +88,27 @@ it("uses the configured usable local default before catalog order", () => {
     ],
   } as unknown as Pick<ServerConfig, "providers" | "settings">;
   expect(defaultUsableDraftModel(config, null)).toEqual(selection);
+  expect(
+    machineForDraftModel(
+      [
+        { environmentId: "offline", connected: false, config, projectId: null },
+        {
+          environmentId: "unauthenticated",
+          connected: true,
+          config: {
+            ...config,
+            providers: config.providers.map((provider) => ({
+              ...provider,
+              auth: { status: "unauthenticated" as const },
+            })),
+          },
+          projectId: null,
+        },
+        { environmentId: "authenticated", connected: true, config, projectId: null },
+      ],
+      selection,
+    )?.environmentId,
+  ).toBe("authenticated");
   expect(
     defaultUsableDraftModel(
       {
