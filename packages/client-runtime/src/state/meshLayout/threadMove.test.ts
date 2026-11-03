@@ -1,5 +1,11 @@
 import { expect, it, vi } from "vite-plus/test";
-import { EnvironmentId, ProjectId, ThreadId, type ThreadMoveInput } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProjectId,
+  ThreadId,
+  ProviderInstanceId,
+  type ThreadMoveInput,
+} from "@t3tools/contracts";
 import { moveThreadWithConfirmation, threadMoveValidity } from "./threadMove.ts";
 
 it.each([
@@ -64,4 +70,18 @@ it("waits for confirmation, cancels without moving, and routes an accepted hando
   });
   expect(local?.input).toEqual({ threadId: source.id, projectId: ProjectId.make("two") });
   expect(confirm).not.toHaveBeenCalled();
+  const modelSelection = {
+    instanceId: ProviderInstanceId.make("claude"),
+    model: "haiku",
+    options: [{ id: "effort", value: "high" }],
+  };
+  const changed = await moveThreadWithConfirmation({
+    source,
+    target: { ...target, environmentId: source.environmentId },
+    modelSelection,
+    machine: "Here",
+    confirm,
+    move,
+  });
+  expect(changed?.input.modelSelection).toEqual(modelSelection);
 });

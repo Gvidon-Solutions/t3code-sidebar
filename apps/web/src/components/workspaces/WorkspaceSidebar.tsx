@@ -1,3 +1,5 @@
+import type { ModelSelection } from "@t3tools/contracts";
+import { MoveThreadModelDialog } from "./MoveThreadModelDialog";
 import { useScratchProject } from "../../hooks/useScratchProject";
 import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
 import { ProjectMachineStrip } from "./ProjectMachineStrip";
@@ -605,14 +607,29 @@ export default function WorkspaceSidebar() {
   const [threadDrop, setThreadDrop] = useState<string | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const moveThreadCommand = useAtomCommand(threadEnvironment.move, { reportFailure: false });
-  const moveToProject = async (thread: SidebarThreadSummary, target: (typeof projects)[number]) => {
+  const [moveModel, setMoveModel] = useState<{
+    thread: SidebarThreadSummary;
+    target: (typeof projects)[number];
+  } | null>(null);
+  const moveToProject = async (
+    thread: SidebarThreadSummary,
+    target: (typeof projects)[number],
+    modelSelection?: ModelSelection,
+  ) => {
+    if (!modelSelection) {
+      setMovingThread(null);
+      setMoveModel({ thread, target });
+      return;
+    }
+    setMoveModel(null);
     setMovingThread(null);
     const validity = threadMoveValidity(thread, target);
     const result = await moveThreadWithConfirmation({
       source: thread,
       target,
+      modelSelection,
       machine: machineTag(config, target.environmentId),
-      confirm: async (message) => (await readLocalApi()?.dialogs.confirm(message)) ?? false,
+      confirm: async () => true,
       move: moveThreadCommand,
     });
     if (result === null) return;
@@ -643,7 +660,7 @@ export default function WorkspaceSidebar() {
                 threadId: thread.id,
                 ...(result.value.handoffId
                   ? { undoHandoffId: result.value.handoffId }
-                  : { projectId: thread.projectId }),
+                  : { projectId: thread.projectId, modelSelection: thread.modelSelection }),
               },
             }),
           );
@@ -2064,6 +2081,17 @@ export default function WorkspaceSidebar() {
             onSelect={(icon) => void setFolderIcon(iconPickerFolder, icon)}
           />
         </Suspense>
+      ) : null}
+      {moveModel ? (
+        <MoveThreadModelDialog
+          environmentId={moveModel.target.environmentId}
+          projectId={moveModel.target.id}
+          current={moveModel.thread.modelSelection}
+          machine={machineTag(config, moveModel.target.environmentId)}
+          crossMachine={moveModel.thread.environmentId !== moveModel.target.environmentId}
+          onClose={() => setMoveModel(null)}
+          onMove={(selection) => void moveToProject(moveModel.thread, moveModel.target, selection)}
+        />
       ) : null}
       {movingThread ? (
         <MoveProjectDialog

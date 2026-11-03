@@ -1,17 +1,15 @@
+import { MoveThreadTargetModel } from "./MoveThreadTargetModel";
 import { Toast } from "../../components/ui/Toast";
 import { machineTag } from "@t3tools/client-runtime/state/mesh-layout";
 import { useEffect } from "react";
 import type { ThreadMoveResult } from "@t3tools/contracts";
 import { mobileMoveProjectLabel } from "./threadMove.logic";
 import { useAtomValue } from "@effect/atom-react";
-import { Atom } from "effect/reactivity";
+import { movingThread } from "./moveThreadState";
 import { useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import {
-  moveThreadWithConfirmation,
-  threadMoveValidity,
-} from "@t3tools/client-runtime/state/mesh-layout";
+import { moveThreadWithConfirmation } from "@t3tools/client-runtime/state/mesh-layout";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { Sheet } from "../../components/ui/Sheet";
 import { AppText } from "../../components/ui/AppText";
@@ -23,16 +21,13 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { useSidebarWorkspaces } from "./useSidebarWorkspaces";
 import * as Cause from "effect/Cause";
 
-const movingThread = Atom.make<EnvironmentThreadShell | null>(null);
-export function openMoveThreadSheet(thread: EnvironmentThreadShell) {
-  appAtomRegistry.set(movingThread, thread);
-}
 export function MoveThreadSheet() {
   const thread = useAtomValue(movingThread);
   const projects = useProjects();
   const { config } = useSidebarWorkspaces();
   const move = useAtomCommand(threadEnvironment.move, { reportFailure: false });
   const [query, setQuery] = useState("");
+  const [target, setTarget] = useState<(typeof projects)[number] | null>(null);
   const [undo, setUndo] = useState<{
     source: EnvironmentThreadShell;
     result: ThreadMoveResult;
@@ -46,6 +41,7 @@ export function MoveThreadSheet() {
   const close = () => {
     appAtomRegistry.set(movingThread, null);
     setQuery("");
+    setTarget(null);
   };
   if (!thread)
     return undo ? (
@@ -72,6 +68,33 @@ export function MoveThreadSheet() {
         />
       </View>
     ) : null;
+  if (target)
+    return (
+      <MoveThreadTargetModel
+        target={target}
+        current={thread.modelSelection}
+        runtimeMode={thread.runtimeMode}
+        machine={machineTag(config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG, target.environmentId)}
+        crossMachine={thread.environmentId !== target.environmentId}
+        onClose={() => setTarget(null)}
+        onMove={(modelSelection) => {
+          void moveThreadWithConfirmation({
+            source: thread,
+            target,
+            modelSelection,
+            machine: machineTag(config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG, target.environmentId),
+            confirm: async () => true,
+            move,
+          }).then((result) => {
+            if (result === null) return;
+            if (result._tag === "Success") {
+              if (result.value.handoffId) setUndo({ source: thread, result: result.value });
+              close();
+            } else Dialog.alert("Could not move thread", String(Cause.squash(result.cause)));
+          });
+        }}
+      />
+    );
   return (
     <Sheet title="Move to project…" onClose={close}>
       <TextInput
@@ -91,38 +114,7 @@ export function MoveThreadSheet() {
             <Pressable
               key={`${project.environmentId}:${project.id}`}
               className="p-4"
-              onPress={() => {
-                const validity = threadMoveValidity(thread, project);
-                if (validity === "same-project") {
-                  close();
-                  return;
-                }
-                void moveThreadWithConfirmation({
-                  source: thread,
-                  target: project,
-                  machine: machineTag(
-                    config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-                    project.environmentId,
-                  ),
-                  confirm: (message) =>
-                    new Promise<boolean>((resolve) =>
-                      Dialog.confirm({
-                        title: "Move conversation",
-                        message,
-                        confirmText: "Move",
-                        onConfirm: () => resolve(true),
-                        onCancel: () => resolve(false),
-                      }),
-                    ),
-                  move,
-                }).then((result) => {
-                  if (result === null) return;
-                  if (result._tag === "Success") {
-                    if (result.value.handoffId) setUndo({ source: thread, result: result.value });
-                    close();
-                  } else Dialog.alert("Could not move thread", String(Cause.squash(result.cause)));
-                });
-              }}
+              onPress={() => setTarget(project)}
             >
               <AppText>
                 {mobileMoveProjectLabel(project, config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG)}

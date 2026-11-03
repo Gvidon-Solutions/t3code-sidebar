@@ -1,4 +1,10 @@
-import type { EnvironmentId, ProjectId, ThreadId, ThreadMoveInput } from "@t3tools/contracts";
+import type {
+  ModelSelection,
+  EnvironmentId,
+  ProjectId,
+  ThreadId,
+  ThreadMoveInput,
+} from "@t3tools/contracts";
 
 export const THREAD_DRAG_TYPE = "application/x-t3-thread";
 function threadMoveConfirmation(machine: string): string {
@@ -20,6 +26,7 @@ export async function moveThreadWithConfirmation<Result>(options: {
     readonly projectId: ProjectId;
   };
   readonly target: { readonly id: ProjectId; readonly environmentId: EnvironmentId };
+  readonly modelSelection?: ModelSelection;
   readonly machine: string;
   readonly confirm: (message: string) => Promise<boolean>;
   readonly move: (request: {
@@ -28,7 +35,7 @@ export async function moveThreadWithConfirmation<Result>(options: {
   }) => Promise<Result>;
 }): Promise<Result | null> {
   const validity = threadMoveValidity(options.source, options.target);
-  if (validity === "same-project") return null;
+  if (validity === "same-project" && options.modelSelection === undefined) return null;
   if (
     validity === "cross-machine" &&
     !(await options.confirm(threadMoveConfirmation(options.machine)))
@@ -38,6 +45,7 @@ export async function moveThreadWithConfirmation<Result>(options: {
     environmentId: options.source.environmentId,
     input: {
       threadId: options.source.id,
+      ...(options.modelSelection ? { modelSelection: options.modelSelection } : {}),
       projectId: options.target.id,
       ...(validity === "cross-machine"
         ? { targetEnvironmentId: options.target.environmentId }
