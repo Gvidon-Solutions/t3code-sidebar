@@ -1406,7 +1406,16 @@ async function listProjects() {
   return out;
 }
 
-async function resolveProject(ref, projects) {
+async function resolveMeshProject(ref) {
+  const result = await (await mcp()).call("t3_project_machines", { project: String(ref) });
+  return {
+    id: result.logicalKey,
+    title: result.title || "Untitled project",
+    workspaceRoot: result.representations[0]?.path || "",
+  };
+}
+
+async function resolveProject(ref, projects, meshFallback = false) {
   if (!ref) die("project is required (name, id prefix or folder path)");
   projects ??= await listProjects();
   const r = String(ref);
@@ -1414,6 +1423,7 @@ async function resolveProject(ref, projects) {
   if (path) {
     const p = projects.find((x) => x.workspaceRoot === path);
     if (p) return p;
+    if (meshFallback) return resolveMeshProject(ref);
     die(`no project at ${path}`);
   }
   const byId = projects.filter(
@@ -1429,6 +1439,7 @@ async function resolveProject(ref, projects) {
     lower.split(/\s+/).every((w) => `${p.title} ${p.workspaceRoot}`.toLowerCase().includes(w)),
   );
   if (fuzzy.length === 1) return fuzzy[0];
+  if (!fuzzy.length && meshFallback) return resolveMeshProject(ref);
   if (!fuzzy.length) die(`no project matches "${ref}" (see: t3ctl projects)`);
   die(
     `"${ref}" is ambiguous:\n${fuzzy.map((p) => `  ${short(p.id)}  ${p.title}  ${p.workspaceRoot}`).join("\n")}`,
@@ -2375,7 +2386,7 @@ const commands = {
         "usage: t3ctl place <project> --on <machine> [--primary] [--source <machine>] [--path PATH] [--ignore PATTERN] [--transport mutagen|sshfs|manual] [--wait [dur]]",
       );
     if (!opt.on) die("place needs --on <machine>");
-    const project = await resolveProject(pos[0]);
+    const project = await resolveProject(pos[0], undefined, true);
     const machine = await getMachine(opt.on);
     const tools = await (await mcp()).tools();
     if (!tools.some((t) => t.name === "t3_project_place"))
@@ -2403,7 +2414,7 @@ const commands = {
   async unplace(pos, opt) {
     if (!pos[0]) die("usage: t3ctl unplace <project> --on <machine> --yes");
     if (!opt.on) die("unplace needs --on <machine>");
-    const project = await resolveProject(pos[0]);
+    const project = await resolveProject(pos[0], undefined, true);
     const machine = await getMachine(opt.on);
     if (!opt.yes)
       die(
@@ -2481,7 +2492,7 @@ const commands = {
       const key = matches[0];
       const project = key
         ? { id: key, title: meshProjectTitle(config, key) }
-        : await resolveProject(opt.project);
+        : await resolveProject(opt.project, undefined, true);
       const r = await withWs((c) =>
         c.rpc("replicas.adopt", {
           project: project.id,
@@ -2499,12 +2510,13 @@ const commands = {
     if (sub !== "retry") die("usage: t3ctl replica retry <project> --on <machine>");
     if (!pos[1]) die("usage: t3ctl replica retry <project> --on <machine>");
     if (!opt.on) die("replica retry needs --on <machine>");
-    const project = await resolveProject(pos[1]);
+    const project = await resolveProject(pos[1], undefined, true);
     const machine = await getMachine(opt.on);
     const layout = await layoutSnapshot();
     const normalize = (p) => String(p).replaceAll("\\", "/").replace(/\/+$/, "");
     const entries = Object.entries(layout.config.projectMounts ?? {});
     const logicalKey =
+      (layout.config.projectMounts[project.id] ? project.id : undefined) ??
       entries.find(([, reps]) => reps.some((rep) => rep.projectId === project.id))?.[0] ??
       entries.find(([, reps]) =>
         reps.some(

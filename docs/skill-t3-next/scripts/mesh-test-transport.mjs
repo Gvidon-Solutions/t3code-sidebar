@@ -89,6 +89,12 @@ function call(name, args) {
         ],
       };
     case "t3_project_machines":
+      if (args.project === "Remote project")
+        return {
+          logicalKey: "lp-remote",
+          title: "Remote project",
+          representations: config.projectMounts["lp-remote"],
+        };
       return {
         representations: process.env.T3CTL_TEST_EXISTING
           ? [{ ...rep, environmentId: peer, projectId: "remote-p" }]

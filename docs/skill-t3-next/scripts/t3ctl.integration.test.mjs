@@ -288,6 +288,20 @@ test("mesh and replica text use the project title, and adoption reaches the mana
     session: "N-remote",
   });
   assert.match(remote.out, /Remote project/);
+  for (const command of [
+    ["place", "Remote project", "--on", "GO", "--json"],
+    ["unplace", "Remote project", "--on", "GO", "--yes", "--json"],
+  ]) {
+    const result = run(command);
+    assert.equal(
+      result.calls.find((call) => call.name === "t3_project_machines").args.project,
+      "Remote project",
+    );
+    assert.equal(
+      result.calls.find((call) => call.name === "t3_project_place").args.project,
+      "lp-remote",
+    );
+  }
   const placed = run([
     "place",
     "Demo",
