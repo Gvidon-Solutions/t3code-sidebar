@@ -26,7 +26,7 @@ import { useDraftEnvironmentRouting } from "../chat/useDraftEnvironmentRouting";
 import { DraftId, useComposerDraftStore } from "../../composerDraftStore";
 import { render } from "../../../test/render";
 import { PendingDraftDelivery } from "./PendingDraftDelivery";
-import { createPendingMeshDrafts } from "../../state/pendingMeshDrafts";
+import { createPendingMeshDrafts, completePendingMeshDraft } from "../../state/pendingMeshDrafts";
 import { BranchToolbarEnvironmentSelector } from "../BranchToolbarEnvironmentSelector";
 
 type FixtureMesh = {
@@ -122,6 +122,7 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
   const threads = new Map<string, { environmentId: string; projectId: string; text: string }>();
   const launches = vi.fn(async (send: PendingDraftSend, projectId: string) => {
     threads.set(send.threadId, { environmentId: send.environmentId, projectId, text: send.text });
+    completePendingMeshDraft(send);
   });
   const errors = vi.fn();
   function Draft() {
@@ -210,7 +211,10 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
         <textarea
           aria-label="Message"
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
+          onChange={(event) => {
+            setMessage(event.target.value);
+            useComposerDraftStore.getState().setPrompt(draftId, event.target.value);
+          }}
         />
         <button
           onClick={() => {
@@ -224,6 +228,7 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
               threadId: ThreadId.make("durable-thread"),
               messageId: MessageId.make("durable-message"),
               text: message,
+              originalPrompt: message,
               modelSelection: { instanceId, model: "model" },
               runtimeMode: "full-access",
               interactionMode: "default",
@@ -289,4 +294,13 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
     { environmentId: "op", projectId: "op-project", text: "Run this after mounting" },
   ]);
   expect(errors).not.toHaveBeenCalled();
+  expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.prompt).toBe("");
+  expect(useComposerDraftStore.getState().getDraftSession(draftId)?.promotedTo?.environmentId).toBe(
+    op,
+  );
+  useComposerDraftStore.getState().setPrompt(draftId, "A follow-up typed after restart");
+  completePendingMeshDraft(restored.getSnapshot()[0]!);
+  expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.prompt).toBe(
+    "A follow-up typed after restart",
+  );
 });

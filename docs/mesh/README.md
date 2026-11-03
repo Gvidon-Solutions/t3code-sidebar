@@ -134,6 +134,8 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - Replica registration is asynchronous. Persist the complete send intent before acknowledging
   Send; keep delivery at the app root. A restart or lost server response must reuse the receipt
   IDs. Test navigation, storage reopening, registration and exactly one destination launch.
+  After acknowledgement, clear the submitted composer content only if its raw prompt still
+  matches the persisted submission; a newer edit must survive promotion to the thread.
 - Saved connection labels can be identical hostnames for different server instances. Draft
   pickers prefer layout identities, deduplicate environment IDs, disambiguate equal labels by
   distinct configured tag then endpoint host/port, and log collisions. Cached provider health

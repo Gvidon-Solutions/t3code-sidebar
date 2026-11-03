@@ -32,6 +32,7 @@ export const PendingDraftSend = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   text: Schema.String,
+  originalPrompt: Schema.optional(Schema.String),
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,

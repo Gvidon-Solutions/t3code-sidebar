@@ -3,6 +3,9 @@ import {
   decodePendingDraftSends,
   type PendingDraftSend,
 } from "@t3tools/client-runtime/state/mesh-layout";
+import { EnvironmentId } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { DraftId, useComposerDraftStore } from "../composerDraftStore";
 
 function database(name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -50,6 +53,17 @@ export function createPendingMeshDrafts(name: string) {
   });
 }
 export const pendingMeshDrafts = createPendingMeshDrafts("t3.mesh-draft-outbox");
+
+export function completePendingMeshDraft(send: PendingDraftSend): void {
+  const draftId = DraftId.make(send.draftId);
+  const store = useComposerDraftStore.getState();
+  if (store.getComposerDraft(draftId)?.prompt === (send.originalPrompt ?? send.text))
+    store.clearComposerContent(draftId);
+  store.markDraftThreadPromoting(
+    draftId,
+    scopeThreadRef(EnvironmentId.make(send.environmentId), send.threadId),
+  );
+}
 
 export function blobDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {

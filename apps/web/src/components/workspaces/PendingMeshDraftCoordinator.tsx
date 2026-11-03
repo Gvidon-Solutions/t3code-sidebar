@@ -1,8 +1,6 @@
 import * as Schema from "effect/Schema";
 import { AttachmentCreateUploadUrlInput } from "@t3tools/contracts";
 import { PendingDraftDelivery } from "./PendingDraftDelivery";
-import { EnvironmentId } from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   pendingDraftStartInput,
   uploadPendingDraftAttachments,
@@ -11,13 +9,12 @@ import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtim
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useEnvironments, useEnvironmentProviders } from "../../state/environments";
 import { useReplicaStatuses } from "../../state/meshReplicas";
-import { pendingMeshDrafts } from "../../state/pendingMeshDrafts";
+import { pendingMeshDrafts, completePendingMeshDraft } from "../../state/pendingMeshDrafts";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { threadEnvironment } from "../../state/threads";
 import { projectEnvironment } from "../../state/projects";
 import { attachmentEnvironment } from "../../state/attachments";
 import { readPreparedConnection } from "../../state/session";
-import { DraftId, useComposerDraftStore } from "../../composerDraftStore";
 import { toastManager } from "../ui/toast";
 
 const decodeUpload = Schema.decodeUnknownSync(AttachmentCreateUploadUrlInput);
@@ -69,12 +66,7 @@ export function PendingMeshDraftCoordinator() {
       input: pendingDraftStartInput(send, projectId, attachments),
     });
     if (result._tag === "Failure") throw squashAtomCommandFailure(result);
-    useComposerDraftStore
-      .getState()
-      .markDraftThreadPromoting(
-        DraftId.make(send.draftId),
-        scopeThreadRef(EnvironmentId.make(send.environmentId), send.threadId),
-      );
+    completePendingMeshDraft(send);
   };
   return (
     <PendingDraftDelivery

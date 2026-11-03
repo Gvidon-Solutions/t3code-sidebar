@@ -971,6 +971,7 @@ export function useComposerSend(input: ComposerSendInput) {
           commandId: CommandId.make(`mesh-draft:${draftId}`),
           messageId: messageIdForSend,
           text: outgoingMessageText,
+          originalPrompt: promptAtSend,
           modelSelection: ctxSelectedModelSelection,
           runtimeMode,
           interactionMode: sendInteractionMode,
