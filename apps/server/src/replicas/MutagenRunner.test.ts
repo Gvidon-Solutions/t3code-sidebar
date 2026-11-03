@@ -68,7 +68,30 @@ describe("Mutagen 0.18.1", () => {
             scanProblems: [{ path: "private", error: "permission denied" }],
           },
         }),
-      ).toMatchObject({ state: "error", problems: ["private: permission denied"] });
+      ).toMatchObject({
+        state: "watching",
+        problems: [],
+        skipped: 1,
+        skippedPaths: [{ path: "private", error: "permission denied" }],
+        message: "1 file skipped (unreadable files)",
+      });
+      for (const sessionWithBlocker of [
+        { ...session!, lastError: "connection lost" },
+        { ...session!, beta: { path: "/beta", connected: false } },
+        {
+          ...session!,
+          alpha: {
+            path: "/alpha",
+            transitionProblems: [{ path: "file", error: "permission denied" }],
+          },
+        },
+      ]) {
+        expect(sessionStatus(sessionWithBlocker)).toMatchObject({
+          state: "error",
+          message: expect.any(String),
+        });
+        expect(sessionStatus(sessionWithBlocker).message?.length).toBeGreaterThan(0);
+      }
       expect(sessionStatus({ ...session!, lastError: "disconnected" }).state).toBe("error");
     }),
   );
@@ -125,3 +148,26 @@ it("keeps user ignore order and duplicate overrides while protecting VCS and con
   expect(patterns.at(-1)).toBe(".t3-conflicts");
   expect(replicaIgnorePatterns(patterns)).toEqual(patterns);
 });
+
+it.effect("counts scan diagnostics omitted by Mutagen and bounds the paths sent to clients", () =>
+  Effect.gen(function* () {
+    const [session] = yield* decodeSessions(fixtureJson);
+    const [decoded] = yield* decodeSessions(
+      JSON.stringify([
+        {
+          ...session!,
+          alpha: {
+            ...session!.alpha,
+            scanProblems: Array.from({ length: 12 }, (_, i) => ({
+              path: `link-${i}`,
+              error: "invalid symbolic link: target is absolute",
+            })),
+            excludedScanProblems: 8,
+          },
+        },
+      ]),
+    );
+    expect(sessionStatus(decoded!)).toMatchObject({ state: "watching", skipped: 20, problems: [] });
+    expect(sessionStatus(decoded!).skippedPaths).toHaveLength(10);
+  }),
+);

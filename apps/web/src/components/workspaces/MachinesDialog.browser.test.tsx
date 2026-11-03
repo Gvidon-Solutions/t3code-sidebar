@@ -122,3 +122,53 @@ it("confirms the actual primary or replica being removed, with cancellation pres
     .not.toBeInTheDocument();
   expect(remove).not.toHaveBeenCalled();
 });
+
+it("shows skipped file diagnostics calmly without offering retry for a healthy copy", async () => {
+  const rep: SidebarProjectMount = {
+    environmentId: "copy",
+    path: "/copy",
+    role: "replica",
+    transport: "mutagen",
+    source: "primary",
+    projectId: "ready",
+    createdAt: "",
+  };
+  await using _screen = await render(
+    <MachinesDialog
+      open
+      logicalKey="project"
+      title="Project"
+      config={{
+        ...empty,
+        projectMounts: { project: [rep] },
+        projectMountStatus: {
+          project: {
+            copy: {
+              state: "watching",
+              skipped: 1,
+              skippedPaths: [{ path: "outside-link", error: "absolute symlink" }],
+              message: "1 file skipped (symlinks outside the project)",
+              updatedAt: "",
+            },
+          },
+        },
+      }}
+      machines={[]}
+      liveStatuses={[]}
+      onOpenChange={vi.fn()}
+      onAddReplica={vi.fn()}
+      onMakePrimary={vi.fn()}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
+    />,
+  );
+  await expect
+    .element(page.getByText("1 file skipped (symlinks outside the project)", { exact: true }))
+    .toBeVisible();
+  await expect
+    .element(page.getByText("outside-link: absolute symlink", { exact: true }))
+    .toBeVisible();
+  await expect
+    .element(page.getByRole("button", { name: "Retry", exact: true }))
+    .not.toBeInTheDocument();
+});

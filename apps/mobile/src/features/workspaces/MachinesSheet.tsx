@@ -141,6 +141,15 @@ export function MachinesSheet(props: {
               >
                 {row.text}
               </Text>
+              {row.status.skippedPaths?.length ? (
+                <View accessibilityLabel="Skipped files" className="gap-1">
+                  {row.status.skippedPaths.map((problem) => (
+                    <Text key={problem.path} className="text-xs text-foreground-muted">
+                      {problem.path}: {problem.error}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
               <View className="flex-row flex-wrap gap-2">
                 {rep.role === "replica" ? (
                   <Button

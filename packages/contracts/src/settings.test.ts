@@ -348,6 +348,11 @@ describe("ServerSettings replica defaults", () => {
       ".t3-conflicts",
       ".claude/worktrees",
       ".DS_Store",
+      "SingletonSocket",
+      "SingletonLock",
+      "SingletonCookie",
+      ".codex/tmp",
+      "tmp/arg0",
     ]);
     expect(
       decodeServerSettingsPatch({

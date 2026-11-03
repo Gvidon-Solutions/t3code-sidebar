@@ -112,6 +112,18 @@ export function MachinesDialog(props: {
                     <div className="break-all font-mono text-2xs text-muted-foreground">
                       {rep.path}
                     </div>
+                    {status.status.skippedPaths?.length ? (
+                      <ul
+                        aria-label="Skipped files"
+                        className="space-y-1 text-xs text-muted-foreground"
+                      >
+                        {status.status.skippedPaths.map((problem) => (
+                          <li key={problem.path} className="break-all">
+                            {problem.path}: {problem.error}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span
                         className={

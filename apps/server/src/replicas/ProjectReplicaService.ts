@@ -160,6 +160,8 @@ const make = Effect.gen(function* () {
     if (
       current?.state !== status.state ||
       current?.message !== status.message ||
+      current?.skipped !== status.skipped ||
+      !NodeUtil.isDeepStrictEqual(current?.skippedPaths, status.skippedPaths) ||
       current?.conflictCopies?.path !== conflictCopies?.path
     )
       yield* mesh.edit((config) =>
@@ -175,6 +177,9 @@ const make = Effect.gen(function* () {
                     state: status.state,
                     conflicts: status.conflicts.length,
                     ...(status.message ? { message: status.message } : {}),
+                    ...(status.skipped
+                      ? { skipped: status.skipped, skippedPaths: status.skippedPaths ?? [] }
+                      : {}),
                     ...(conflictCopies ? { conflictCopies } : {}),
                     updatedAt: status.updatedAt,
                   },
@@ -298,6 +303,9 @@ const make = Effect.gen(function* () {
           ...base,
           state: persisted?.state ?? "pending",
           ...(persisted?.message ? { message: persisted.message } : {}),
+          ...(persisted?.skipped
+            ? { skipped: persisted.skipped, skippedPaths: persisted.skippedPaths ?? [] }
+            : {}),
           ...(current?.projectId ? { projectId: current.projectId } : {}),
         };
         if (placementMatches(snapshot, logicalKey, rep)) yield* updateLive(status);
@@ -379,8 +387,8 @@ const make = Effect.gen(function* () {
       return;
     }
     const ignoresChanged =
-      session?.ignore?.paths !== undefined &&
-      !NodeUtil.isDeepStrictEqual(session.ignore.paths, createInput.ignores);
+      session !== undefined &&
+      !NodeUtil.isDeepStrictEqual(session.ignore?.paths ?? [], createInput.ignores);
     known.set(key, identity.name);
     if (
       session &&
@@ -405,12 +413,14 @@ const make = Effect.gen(function* () {
         ...liveState,
         ...(previous?.message?.startsWith("Resolved ") && liveState.state !== "error"
           ? {
-              message: previous.message,
+              message: [previous.message.split(" · ").slice(0, 2).join(" · "), liveState.message]
+                .filter(Boolean)
+                .join(" · "),
               ...(previous.conflictCopies ? { conflictCopies: previous.conflictCopies } : {}),
             }
           : {}),
       };
-      if (status.conflicts.length) {
+      if (status.conflicts.length && status.state !== "error") {
         const loser =
           conflictWinner(config, source.environmentId, rep.environmentId) === "alpha"
             ? rep
@@ -465,39 +475,58 @@ const make = Effect.gen(function* () {
       for (const rep of reps) {
         const adoption = rep.adoption;
         if (!adoption || adoption.environmentId !== mesh.environmentId) continue;
-        const old = (yield* runner.foreignList).find(
-          (session) => session.identifier === adoption.sessionIdentifier,
-        );
-        let clear = false;
-        if (!adoption.paused) {
-          if (!old)
-            return yield* new ReplicaError({
-              reason: "not_found",
-              message:
-                "The original sync session disappeared before it could be paused. Its folders are unchanged.",
-            });
-          yield* runner.foreignAction("pause", old.identifier);
-        } else if (
-          initial.projectMountStatus[logicalKey]?.[rep.environmentId]?.state === "watching"
-        ) {
-          if (old) yield* runner.foreignAction("terminate", old.identifier);
-          clear = true;
-        } else continue;
-        yield* mesh.edit((current) => ({
-          ...current,
-          projectMounts: {
-            ...current.projectMounts,
-            [logicalKey]: (current.projectMounts[logicalKey] ?? []).map((entry) => {
-              if (
-                entry.environmentId !== rep.environmentId ||
-                entry.adoption?.sessionIdentifier !== adoption.sessionIdentifier
-              )
-                return entry;
-              const { adoption: _old, ...rest } = entry;
-              return clear ? rest : { ...entry, adoption: { ...adoption, paused: true } };
+        yield* Effect.gen(function* () {
+          const old = (yield* runner.foreignList).find(
+            (session) => session.identifier === adoption.sessionIdentifier,
+          );
+          let clear = false;
+          if (!adoption.paused) {
+            if (!old)
+              return yield* new ReplicaError({
+                reason: "not_found",
+                message:
+                  "The original sync session disappeared before it could be paused. Its folders are unchanged.",
+              });
+            yield* runner.foreignAction("pause", old.identifier);
+          } else if (
+            initial.projectMountStatus[logicalKey]?.[rep.environmentId]?.state === "watching"
+          ) {
+            if (old) yield* runner.foreignAction("terminate", old.identifier);
+            clear = true;
+          } else return;
+          yield* mesh.edit((current) => ({
+            ...current,
+            projectMounts: {
+              ...current.projectMounts,
+              [logicalKey]: (current.projectMounts[logicalKey] ?? []).map((entry) => {
+                if (
+                  entry.environmentId !== rep.environmentId ||
+                  entry.adoption?.sessionIdentifier !== adoption.sessionIdentifier
+                )
+                  return entry;
+                const { adoption: _old, ...rest } = entry;
+                return clear ? rest : { ...entry, adoption: { ...adoption, paused: true } };
+              }),
+            },
+          }));
+        }).pipe(
+          Effect.catch((cause) =>
+            Effect.gen(function* () {
+              yield* publish(
+                {
+                  logicalKey,
+                  environmentId: rep.environmentId,
+                  state: "error",
+                  conflicts: [],
+                  problems: [mapError(cause).message],
+                  message: mapError(cause).message,
+                  updatedAt: DateTime.formatIso(yield* DateTime.now),
+                },
+                rep,
+              );
             }),
-          },
-        }));
+          ),
+        );
       }
     }
     const { config, document } = yield* mesh.read;
@@ -574,7 +603,6 @@ const make = Effect.gen(function* () {
         ),
       );
     }
-    const sessions = yield* driven.length > 0 ? runner.list() : runner.listExisting;
     for (const { logicalKey, rep } of driven) {
       const attempt = { rep };
       yield* locks.withLock(
@@ -598,6 +626,7 @@ const make = Effect.gen(function* () {
         ),
       );
     }
+    const sessions = yield* runner.listExisting;
     for (const { logicalKey, rep } of entries) {
       const identity = sessionIdentity(rep.syncKey ?? logicalKey, rep.environmentId);
       if (
@@ -732,37 +761,9 @@ const make = Effect.gen(function* () {
     }
     yield* PubSub.publish(updates, { replicas: yield* Ref.get(statuses) });
   });
-  const reconcileSafely = reconciliationLock
-    .withPermit(
-      reconcile().pipe(
-        Effect.mapError(mapError),
-        Effect.tapError((error) =>
-          Effect.gen(function* () {
-            const { config } = yield* mesh.read;
-            const updatedAt = DateTime.formatIso(yield* DateTime.now);
-            for (const [logicalKey, reps] of Object.entries(config.projectMounts)) {
-              for (const rep of reps)
-                if (
-                  rep.role === "replica" &&
-                  rep.transport === "mutagen" &&
-                  replicaDriver(config, rep) === mesh.environmentId
-                ) {
-                  yield* publish({
-                    logicalKey,
-                    environmentId: rep.environmentId,
-                    state: "error",
-                    conflicts: [],
-                    problems: [error.message],
-                    message: error.message,
-                    updatedAt,
-                  });
-                }
-            }
-          }),
-        ),
-      ),
-    )
-    .pipe(Effect.catchTags({ MeshLayoutError: asReplicaError }));
+  const reconcileSafely = reconciliationLock.withPermit(
+    reconcile().pipe(Effect.mapError(mapError)),
+  );
   const readSettings = settings.getSettings.pipe(Effect.mapError(mapError));
   const resolveMachine = (config: SidebarWorkspacesConfig, name: string) => {
     const candidates = [

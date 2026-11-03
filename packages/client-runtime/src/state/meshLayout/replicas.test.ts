@@ -350,3 +350,41 @@ it("shows automatic resolutions as a calm note during mounting and after sync", 
     ).toBe("Resolved 2 conflicts automatically · copies in .t3-conflicts");
   }
 });
+
+it("keeps skipped paths calm through mounting, persisted status and live recovery", () => {
+  const rep = { ...replica("beta", "alpha"), projectId: "ready" };
+  const warning = {
+    state: "watching" as const,
+    skipped: 1,
+    skippedPaths: [{ path: "outside", error: "absolute symlink" }],
+    message: "1 file skipped (symlinks outside the project)",
+    updatedAt: "",
+  };
+  const config = {
+    ...empty,
+    projectMounts: { demo: [rep] },
+    projectMountStatus: { demo: { beta: warning } },
+  };
+  expect(representationRow(config, [], "demo", rep)).toMatchObject({
+    text: warning.message,
+    status: { skipped: 1, skippedPaths: warning.skippedPaths },
+    retry: null,
+  });
+  expect(
+    replicaStatusCopy({
+      state: "mounting",
+      progress: 0.5,
+      conflicts: 0,
+      message: warning.message,
+      targetLabel: "Beta",
+      sourceLabel: "Alpha",
+    }),
+  ).toBe(warning.message);
+  expect(representationRow(config, [status("beta", "watching")], "demo", rep)).toMatchObject({
+    text: "Synced",
+    retry: null,
+  });
+  expect(
+    representationRow(config, [status("beta", "watching")], "demo", rep).status.skipped,
+  ).toBeUndefined();
+});

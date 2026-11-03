@@ -96,8 +96,12 @@ export const SidebarProjectMountState = Schema.Literals([
 ]);
 export type SidebarProjectMountState = typeof SidebarProjectMountState.Type;
 
-/** What the machine holding a replica last reported about it; changes only on state changes. */
+const ReplicaSkippedPath = Schema.Struct({ path: Schema.String, error: Schema.String });
+
+/** What the machine holding a replica last reported about synchronization. */
 export const SidebarProjectMountStatus = Schema.Struct({
+  skipped: Schema.optionalKey(Schema.Number),
+  skippedPaths: Schema.optionalKey(Schema.Array(ReplicaSkippedPath)),
   conflictCopies: Schema.optionalKey(
     Schema.Struct({ environmentId: Schema.String, path: Schema.String }),
   ),

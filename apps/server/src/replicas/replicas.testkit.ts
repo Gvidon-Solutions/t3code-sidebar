@@ -26,6 +26,7 @@ export const makeReplicaHarness = (
   onList: Effect.Effect<void, ReplicaError> = Effect.void,
   onRegister: Effect.Effect<void, ProjectService.ProjectServiceError> = Effect.void,
   onCreate: Effect.Effect<void, ReplicaError> = Effect.void,
+  onListExisting: Effect.Effect<void, ReplicaError> = Effect.void,
 ) => {
   const replica: SidebarProjectMount = {
     environmentId: "replica",
@@ -87,7 +88,7 @@ export const makeReplicaHarness = (
           preserved.push(input);
         }),
       list: () => Effect.sync(() => sessions).pipe(Effect.tap(() => onList)),
-      listExisting: Effect.sync(() => sessions),
+      listExisting: Effect.sync(() => sessions).pipe(Effect.tap(() => onListExisting)),
       create: (input) =>
         onCreate.pipe(
           Effect.andThen(

@@ -311,7 +311,7 @@ it.effect(
       yield* Effect.gen(function* () {
         const service = yield* ReplicaService.ProjectReplicaService;
         const mesh = yield* MeshLayoutService;
-        expect((yield* service.reconcile.pipe(Effect.flip)).reason).toBe("mutagen");
+        yield* service.reconcile;
         expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
           state: "error",
           message: "Mutagen download failed.",
@@ -864,5 +864,153 @@ it.effect("keeps an unmounted legacy project's id when its local record is first
     const placed = yield* service.place({ project: "primary", machine: "replica" });
     expect(placed.logicalKey).toBe("canonical");
     expect((yield* mesh.read).config.projectTitles.canonical).toBe("Shared renamed title");
+  }).pipe(Effect.provide(h.layer));
+});
+
+it.effect(
+  "registers a watching copy with skipped scan paths, persists warnings and clears them on recovery",
+  () => {
+    const h = harness();
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const mesh = yield* MeshLayoutService;
+      yield* service.reconcile;
+      h.setSession({
+        status: "watching",
+        alpha: {
+          path: "/source",
+          scanProblems: [
+            { path: "outside", error: "absolute symlink" },
+            { path: "private", error: "permission denied" },
+          ],
+        },
+      });
+      yield* service.reconcile;
+      expect(h.registrations()).toBe(1);
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+        state: "watching",
+        skipped: 2,
+        skippedPaths: [{ path: "outside" }, { path: "private" }],
+        message: expect.stringContaining("2 files skipped"),
+      });
+      expect((yield* service.status)[0]).toMatchObject({ state: "watching", skipped: 2 });
+      h.setSession({ alpha: { path: "/source" } });
+      yield* service.reconcile;
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica?.skipped).toBeUndefined();
+      h.setSession({ lastError: "Source disconnected", conflicts: [{ root: "file" }] });
+      yield* service.reconcile;
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+        state: "error",
+        message: "Source disconnected",
+      });
+      expect(h.preserved).toHaveLength(0);
+    }).pipe(Effect.provide(h.layer));
+  },
+);
+
+it.effect(
+  "recreates a session whose ignore configuration is absent instead of keeping old ignores",
+  () => {
+    const h = harness();
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      yield* service.reconcile;
+      h.setSession({ status: "watching", ignore: {} });
+      yield* service.place({ project: "repo", machine: "replica", ignores: ["new-ignore"] });
+      yield* service.reconcile;
+      expect(h.created).toHaveLength(2);
+      expect(h.created[1]?.ignores).toContain("new-ignore");
+      expect(h.terminated).toHaveLength(1);
+    }).pipe(Effect.provide(h.layer));
+  },
+);
+
+it.effect(
+  "a shared daemon inspection failure never fabricates an error on every healthy copy",
+  () => {
+    let failed = false;
+    const h = harness(
+      "source",
+      true,
+      Effect.void,
+      Effect.void,
+      Effect.void,
+      Effect.suspend(() =>
+        failed
+          ? Effect.fail(new ReplicaError({ reason: "mutagen", message: "Cannot inspect daemon" }))
+          : Effect.void,
+      ),
+    );
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.edit((c) => ({
+        ...c,
+        machines: {
+          ...c.machines,
+          source: { reach: { replica: { ssh: "replica" }, other: { ssh: "other" } } },
+        },
+        projectMounts: {
+          ...c.projectMounts,
+          repo: [
+            ...c.projectMounts.repo!,
+            {
+              ...c.projectMounts.repo!.find((rep) => rep.role === "replica")!,
+              environmentId: "other",
+              path: "/other",
+            },
+          ],
+        },
+      }));
+      yield* service.reconcile;
+      h.setSession({ status: "watching" });
+      yield* service.reconcile;
+      expect(
+        Object.values((yield* mesh.read).config.projectMountStatus.repo!).map((s) => s.state),
+      ).toEqual(["watching", "watching"]);
+      failed = true;
+      expect(yield* service.reconcile.pipe(Effect.isFailure)).toBe(true);
+      expect(
+        Object.values((yield* mesh.read).config.projectMountStatus.repo!).map((s) => s.state),
+      ).toEqual(["watching", "watching"]);
+    }).pipe(Effect.provide(h.layer));
+  },
+);
+
+it.effect("a missing foreign adoption session only blocks its own copy", () => {
+  const h = harness("source", true);
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    yield* mesh.edit((c) => {
+      const copy = c.projectMounts.repo!.find((rep) => rep.role === "replica")!;
+      return {
+        ...c,
+        machines: {
+          ...c.machines,
+          source: { reach: { replica: { ssh: "replica" }, other: { ssh: "other" } } },
+        },
+        projectMounts: {
+          ...c.projectMounts,
+          repo: [
+            c.projectMounts.repo!.find((rep) => rep.role === "primary")!,
+            {
+              ...copy,
+              adoption: { environmentId: "source", sessionIdentifier: "missing", paused: false },
+            },
+            { ...copy, environmentId: "other", path: "/other" },
+          ],
+        },
+      };
+    });
+    yield* service.reconcile;
+    h.setSession({ status: "watching" });
+    yield* service.reconcile;
+    const states = (yield* mesh.read).config.projectMountStatus.repo!;
+    expect(states.replica).toMatchObject({
+      state: "error",
+      message: expect.stringContaining("disappeared"),
+    });
+    expect(states.other?.state).toBe("watching");
   }).pipe(Effect.provide(h.layer));
 });

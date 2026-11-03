@@ -179,6 +179,9 @@ export function pendingRows(
             state: liveStatus.state,
             conflicts: liveStatus.conflicts.length,
             ...(liveStatus.message ? { message: liveStatus.message } : {}),
+            ...(liveStatus.skipped
+              ? { skipped: liveStatus.skipped, skippedPaths: liveStatus.skippedPaths ?? [] }
+              : {}),
             updatedAt: liveStatus.updatedAt,
           }
         : (stored ?? PENDING_STATUS);
@@ -191,7 +194,7 @@ export function pendingRows(
         live: liveStatus,
         progress: liveStatus?.progress ?? null,
         conflicts: liveStatus ? liveStatus.conflicts.length : (stored?.conflicts ?? 0),
-        message: liveStatus?.message ?? stored?.message ?? null,
+        message: liveStatus ? (liveStatus.message ?? null) : (stored?.message ?? null),
         projectId: rep.projectId ?? liveStatus?.projectId ?? null,
       });
     }
@@ -233,11 +236,17 @@ export function representationRow(
   }
   const state = live?.state ?? stored?.state ?? "pending";
   const conflicts = live ? live.conflicts.length : (stored?.conflicts ?? 0);
-  const message = live?.message ?? stored?.message ?? null;
+  const message = live ? (live.message ?? null) : (stored?.message ?? null);
   const status: SidebarProjectMountStatus = {
     state,
     conflicts,
     ...(message ? { message } : {}),
+    ...((live ? live.skipped : stored?.skipped)
+      ? {
+          skipped: live ? live.skipped! : stored!.skipped!,
+          skippedPaths: live ? (live.skippedPaths ?? []) : (stored?.skippedPaths ?? []),
+        }
+      : {}),
     updatedAt: live?.updatedAt ?? stored?.updatedAt ?? "",
   };
   return {
@@ -360,7 +369,12 @@ export interface ReplicaStatusCopyInput {
 
 /** One short line for a pending row: "Mounting on Operalia… 42%", "2 conflicts", … */
 export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
-  if (input.message?.startsWith("Resolved ") && input.state !== "error") return input.message;
+  if (
+    input.message &&
+    input.state !== "error" &&
+    (input.message.startsWith("Resolved ") || /^\d+ files? skipped/u.test(input.message))
+  )
+    return input.message;
   const unreachable = `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Add a route in Settings › Mesh`;
   switch (input.state) {
     case "pending":

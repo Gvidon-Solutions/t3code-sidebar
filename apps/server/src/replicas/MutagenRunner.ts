@@ -19,7 +19,9 @@ const Endpoint = Schema.Struct({
   port: Schema.optionalKey(Schema.Number),
   connected: Schema.optionalKey(Schema.Boolean),
   scanProblems: Schema.optionalKey(Schema.Array(Problem)),
+  excludedScanProblems: Schema.optionalKey(Schema.Number),
   transitionProblems: Schema.optionalKey(Schema.Array(Problem)),
+  excludedTransitionProblems: Schema.optionalKey(Schema.Number),
   stagingProgress: Schema.optionalKey(
     Schema.Struct({
       receivedSize: Schema.Number,

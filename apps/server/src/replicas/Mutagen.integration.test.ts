@@ -53,6 +53,8 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         yield* runner.assertReplicaPath(comparison);
         yield* fs.remove(path.join(beta, "ignored.tmp"));
         yield* fs.remove(path.join(beta, "hello"));
+        yield* fs.symlink(path.join(root, "outside"), path.join(alpha, "absolute-link"));
+        yield* fs.symlink("../outside", path.join(alpha, "relative-outside"));
         yield* runner.create({
           name: "t3-integration",
           logicalHash: "integration",
@@ -65,7 +67,13 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe("alpha");
         expect(yield* fs.exists(path.join(beta, ".git"))).toBe(false);
         expect(yield* fs.exists(path.join(beta, "node_modules"))).toBe(false);
-        expect(sessionStatus((yield* runner.list())[0]!).state).toBe("watching");
+        expect(sessionStatus((yield* runner.list())[0]!)).toMatchObject({
+          state: "watching",
+          skipped: 2,
+          problems: [],
+        });
+        expect(yield* fs.exists(path.join(beta, "absolute-link"))).toBe(false);
+        expect(yield* fs.exists(path.join(beta, "relative-outside"))).toBe(false);
         yield* fs.writeFileString(path.join(beta, "hello"), "beta edit");
         yield* runner.flush("t3-integration");
         expect(yield* fs.readFileString(path.join(alpha, "hello"))).toBe("beta edit");
