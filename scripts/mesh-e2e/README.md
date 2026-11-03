@@ -26,6 +26,11 @@ RAM, 2 CPUs, no `docker.sock`, loopback-only port. Its image is built from
 `scripts/mesh-e2e/Dockerfile` (a copy of `deploy/t3-ws/Dockerfile` plus Mutagen
 0.18.1 with a pinned SHA-256 and OpenSSH).
 
+Both `/home/t3` and `/tmp` persist on the VPS host. On the first deployment with
+the `/tmp` mount, `deploy.sh` copies the stopped container's existing temporary
+folders with ownership intact before recreating it, then verifies its canary.
+This keeps fixture projects and `.t3-conflicts` copies across deployments.
+
 The gor demo repository is `~/xdev-e2e/demo`: a git repo with `node_modules/x.js`
 and `.venv/a` present but ignored, for replica/sync tests.
 
@@ -63,6 +68,7 @@ scripts/mesh-e2e/deploy.sh              # deploy the artifacts from build.sh
 scripts/mesh-e2e/tunnels.sh up|down     # tunnels only
 scripts/mesh-e2e/pair.sh [ttl]          # pairing URLs (default 2h)
 scripts/mesh-e2e/status.sh              # health of all directions
+scripts/mesh-e2e/round3.sh              # N rollout cases and destructive recovery acceptance
 scripts/mesh-e2e/teardown.sh            # stop test baggage, keep gor running
 scripts/mesh-e2e/teardown.sh --purge    # also delete test data, demo, artifacts
 ```
@@ -73,9 +79,15 @@ the `cli-linux-x64` archive, and builds `t3-mesh-e2e:dev`. Artifacts and
 `build.env` live in `~/.cache/t3-mesh-e2e/artifacts`. Override with
 `MESH_E2E_BUILD_DIR` / `MESH_E2E_ARTIFACTS` / `MESH_E2E_GVIDON_IP` / `MESH_E2E_GOR_IP`.
 
-`deploy.sh` also copies the latest `t3ctl.mjs` / `selftest.sh` from the gvidon
-`t3-next` skill to gor's staged `t3-next` directory. The installed `t3` skill
-and the `~/.local/bin/t3ctl` wrapper are not modified.
+For an isolated stage worktree, set `MESH_E2E_BUILD_CURRENT=1` and use your own
+`MESH_E2E_ARTIFACTS` directory to build that checkout. `round3.sh` refuses a
+different runtime/image or a running QA/L/M task and creates only `N-` fixtures.
+Bed units disable systemd's start limit so repeated intentional crashes do not
+require a manual reset.
+
+`deploy.sh` copies the review CLI from this checkout's `docs/skill-t3-next` to
+gor's staged `t3-next` directory. The installed gvidon/Operalia skills and the
+`~/.local/bin/t3ctl` wrapper are not modified.
 
 ## URLs from gvidon
 

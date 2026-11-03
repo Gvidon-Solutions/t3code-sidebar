@@ -110,9 +110,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ### 2026-11-03 — T3 Mesh — Stage N authority and automatic conflict copies
 
-- **What:** a configurable mesh authority, automatic conflict resolution with preserved losing versions, and recovery of removed sessions after driver restart.
-- **How:** `mesh.authority` and persistent server-writer membership materialize through the existing CRDT. The driver keeps two-way-safe, pauses before preserving the loser locally or over SSH, resets/recreates and flushes, and retains a calm resolution note with the copies' location. Authority-authored legacy workspace/path claims win ambiguous adoption. A common title reader consumes L's exact `proj/<id>.title` key.
-- **Where:** shared `meshLayout`, contracts and server `mesh/` and `replicas/`; client grouping/status; web/mobile Mesh and Machines, web file picker; CLI review copy; guarded `scripts/mesh-e2e/round3.sh`. Acceptance gaps are recorded in `docs/mesh-conformance.md`; the shared bed was busy during N verification.
+- **What:** a configurable authority, automatic conflict copies, stable project identities, explicit replica folders, safe takeover of manual Mutagen sessions, and recovery across server/daemon/tunnel interruptions.
+- **How:** the existing CRDT carries `mesh.authority`, server membership, browser-edit authorship and `proj/<id>.title`. Legacy project keys migrate deterministically to opaque ids and remain aliases; existing session identities survive migration. The driver keeps two-way-safe, preserves the losing files locally or over SSH, then resets and flushes. Manual sessions are paused before takeover and terminated only after private sync watches. Requested paths are validated without reallocating them. Moves prefer a local representation and can prepare one before moving. CLI service control detects user/system units and installs from public releases or linked caches without requiring `gh` authentication.
+- **Where:** shared `meshLayout`, contracts, server `mesh/`, `replicas/` and thread context; shared client grouping/moves/status and the `projectEntities.ts` title reader, web/mobile Mesh and Machines; CLI review copy; isolated-bed `scripts/mesh-e2e/round3*.sh`. The rule-by-rule test ledger is [mesh-conformance.md](docs/mesh-conformance.md).
 
 ### 2026-11-03 — T3 Mesh — Stage K project machine strips
 
