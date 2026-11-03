@@ -6,11 +6,14 @@ import { Routes } from "./MeshRelay.ts";
 import { callRouted } from "./MeshRouting.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
 import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
+import { assertNotLinked } from "../mcp/linkOrigin.ts";
 import { readCaller } from "../mcp/threadAccess.ts";
 
 export const discoverThreadMachines = Effect.fn("MeshThreadAccess.discover")(function* () {
-  const { scope, limits } = yield* readCaller();
+  const caller = yield* readCaller();
+  const { scope, limits } = caller;
   if (scope.linkedEnvironments === false || scope.client?.linked) return [];
+  yield* assertNotLinked(caller, "use this environment’s links");
   const links = yield* Effect.serviceOption(PeerLinks);
   const peers = yield* Effect.serviceOption(PeerMcpClient);
   if (Option.isNone(links) || Option.isNone(peers)) return [];
@@ -52,7 +55,9 @@ export const probeThread = Effect.fn("MeshThreadAccess.probe")(function* (
   environmentId: EnvironmentId,
   threadId: ThreadId,
 ) {
-  const { scope, limits } = yield* readCaller();
+  const caller = yield* readCaller();
+  const { scope, limits } = caller;
+  yield* assertNotLinked(caller, "use this environment’s links");
   const linkOption = yield* Effect.serviceOption(PeerLinks);
   const peerOption = yield* Effect.serviceOption(PeerMcpClient);
   if (Option.isNone(linkOption) || Option.isNone(peerOption))

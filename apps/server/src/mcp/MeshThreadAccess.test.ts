@@ -178,6 +178,32 @@ it.effect(
           target: { kind: "thread", threadId: "mcp:remote-thread", environmentId: "remote" },
         },
       ]);
+      const beforeFence = calls.length;
+      const fenced = {
+        ...caller,
+        runtimeMode: "approval-required" as const,
+        linkOrigin: {
+          sessionId: "fenced",
+          label: "Fenced peer",
+          access: "approval-required" as const,
+        },
+      };
+      const fenceResult = yield* tools
+        .handle("t3_thread_list", { environmentId: EnvironmentId.make("all") })
+        .pipe(
+          Stream.unwrap,
+          Stream.runCollect,
+          Effect.provide(
+            Layer.mock(ThreadManagementService)({
+              getThreadShell: (id) => Effect.succeed(id === caller.id ? fenced : null),
+            }),
+          ),
+        );
+      expect(fenceResult.at(-1)?.result).toMatchObject({
+        code: "capability_denied",
+        message: expect.stringContaining("linked environment"),
+      });
+      expect(calls.length).toBe(beforeFence);
       const beforeRefusal = calls.length;
       const denied = yield* tools.handle("t3_thread_send", { threadId: caller.id }).pipe(
         Stream.unwrap,
