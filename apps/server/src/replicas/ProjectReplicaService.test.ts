@@ -785,6 +785,17 @@ it.effect(
       });
       expect(changed.ready).toBe(false);
       expect((yield* mesh.read).config.projectMountStatus.repo?.replica?.state).toBe("pending");
+      yield* service.reconcile;
+      h.setSession({ status: "watching" });
+      yield* service.reconcile;
+      yield* service.place({ project: "repo", machine: "replica", ignores: ["cache", "!cache"] });
+      yield* service.reconcile;
+      h.setSession({ status: "watching" });
+      yield* service.reconcile;
+      const beforeReorder = h.created.length;
+      yield* service.place({ project: "repo", machine: "replica", ignores: ["!cache", "cache"] });
+      yield* service.reconcile;
+      expect(h.created).toHaveLength(beforeReorder + 1);
     }).pipe(Effect.provide(h.layer));
   },
 );
