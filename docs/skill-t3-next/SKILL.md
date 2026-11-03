@@ -148,3 +148,5 @@ A machine (`<M>`) is this server, a linked server, or one the layout knows. Reso
 - Mesh commands need a server build with `meshLayout`, `replicas.*`, `files.*` and `t3_project_place`/`t3_project_machines`. On older servers `machines`/`mesh status` fall back to the legacy `sidebarWorkspaces` setting and say so; `place`, `replica retry` and `cat` fail with "needs the mesh build". The linked-environments beta (`linkedEnvironmentsEnabled`) and `replicasEnabled` must be on for links and replicas.
 - `t3ctl open` / `open-file` are an outside MCP client: `ui_open` acts as the calling thread, so they print the web/`t3-thread://`/`t3-file://` links instead of driving the owner's screen. An agent inside a thread can `ui_open` it directly.
 - Archived threads are per machine; `threads --all` lists active ones, and `--archived` stays local.
+
+For a move with a different target harness/model, pass `--agent INSTANCE --model MODEL --effort LEVEL` to `t3ctl move`; model discovery and option validation use the target machine. MCP uses `t3_thread_move.modelSelection` (`instanceId`, `model`, `options`). Omit it to preserve the source selection.

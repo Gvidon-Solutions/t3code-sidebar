@@ -51,6 +51,21 @@ const tools = ["t3_project_place", "t3_project_machines", "t3_pending_request"].
 function call(name, args) {
   log(name, args);
   switch (name) {
+    case "orchestrator_capabilities":
+      return {
+        providers: [
+          {
+            providerInstanceId: "claude",
+            driverKind: "claudeAgent",
+            models: [
+              {
+                id: "claude-haiku-5-5",
+                options: [{ id: "effort", type: "select", options: [{ id: "high" }] }],
+              },
+            ],
+          },
+        ],
+      };
     case "t3_environment_read":
       return env(args.environmentId);
     case "t3_project_list":

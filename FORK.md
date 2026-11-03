@@ -1457,3 +1457,9 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** `apps/server/src/mesh/ThreadHandoffService.ts`, attachment upload store, orchestrator
   and MCP thread/project toolkits; shared `meshLayout`; client-runtime
   project grouping/thread commands; web `workspaces` and mobile `workspaces`/thread menus.
+
+### 2026-11-03 — Stage L move with target model
+
+- Move confirmation on web and mobile reuses the composer model/options picker against the destination environment. It preserves the current selection or chooses the destination catalog default with a notice.
+- `threads.move`, MCP `t3_thread_move` and `t3ctl move --agent/--model/--effort` carry the target selection. Local moves update it atomically; cross-machine moves import plain conversation context into the selected harness. Forks discard source handoff ownership so they can move independently.
+- Implementation: workspace move dialogs/sheets, shared `meshLayout/moveModel`, `ThreadHandoffService`, orchestration move command and `ThreadForkService`.

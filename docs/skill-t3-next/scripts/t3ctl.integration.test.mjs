@@ -205,10 +205,25 @@ test("move preserves the source route and sends the chosen project, machine and 
     "Continue with cedar",
     "--key",
     "L-move",
+    "--agent",
+    "claude",
+    "--model",
+    "claude-haiku-5-5",
+    "--effort",
+    "high",
     "--json",
   ]);
   const call = r.calls.find((call) => call.name === "t3_thread_move");
   assert.equal(call.args.threadId, "thread-1");
+  assert.deepEqual(call.args.modelSelection, {
+    instanceId: "claude",
+    model: "claude-haiku-5-5",
+    options: [{ id: "effort", value: "high" }],
+  });
+  assert.equal(
+    r.calls.find((call) => call.name === "orchestrator_capabilities").args.environmentId,
+    peer,
+  );
   assert.equal(call.args.projectId, "remote-p");
   assert.ok(r.calls.findIndex((call) => call.name === "t3_project_place") < r.calls.indexOf(call));
   assert.equal(call.args.targetEnvironmentId, peer);

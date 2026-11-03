@@ -1420,7 +1420,7 @@ async function resolveThread(ref, { projectRef, includeArchived } = {}) {
 const threadLine = (t) =>
   `${short(t.threadId).padEnd(8)}  ${String(t.pendingRequestCount ? "waiting" : t.status).padEnd(11)} ${ago(t.updatedAt).padStart(8)}  ${clip(`${t.providerInstanceId === "claudeAgent" ? "claude" : t.providerInstanceId}:${t.model}`, 26).padEnd(26)} ${t.machineTag ? `[${t.machineTag}] ` : ""}[${clip(t.project, 18)}] ${t.title}${t.parentThreadId ? `  (${t.relationshipToParent ?? "child"})` : ""}${t.settled ? "  (settled)" : ""}${t.snoozed ? "  (snoozed)" : ""}${t.archived ? "  (archived)" : ""}`;
 
-async function modelSelection(opt, { required = true } = {}) {
+async function modelSelection(opt, { required = true, environmentId } = {}) {
   if (!opt.agent && !opt.model && !opt.effort && !opt.fast && !opt.opt)
     return required ? defaultSelection() : null;
   let agent = String(opt.agent || "").trim();
@@ -1429,7 +1429,9 @@ async function modelSelection(opt, { required = true } = {}) {
   const aliasModel = MODEL_ALIASES[agent.toLowerCase()];
   if (aliasModel && !model) model = aliasModel;
   if (agent) agent = AGENT_ALIASES[agent.toLowerCase()] ?? agent;
-  const caps = await (await mcp()).call("orchestrator_capabilities");
+  const caps = await (
+    await mcp()
+  ).call("orchestrator_capabilities", environmentId ? { environmentId } : {});
   const providers = caps.providers || [];
   if (!agent && model)
     agent = providers.find((p) => p.models.some((x) => x.id === model))?.providerInstanceId ?? "";
@@ -2730,7 +2732,7 @@ const commands = {
   },
 
   async move(pos, opt) {
-    if (!pos[0]) die("usage: t3ctl move <T> --project X [--on M]");
+    if (!pos[0]) die("usage: t3ctl move <T> --project X [--on M] [--agent A --model M --effort E]");
     const thread = await resolveThreadAcross(pos[0]);
     let project = opt.project
       ? await resolveProject(opt.project, await listProjects(thread.environmentId))
@@ -2756,6 +2758,13 @@ const commands = {
       environmentId: thread.environmentId,
       ...(project ? { projectId: project.id } : {}),
       ...(target ? { targetEnvironmentId: target.environmentId } : {}),
+      ...(opt.agent || opt.model || opt.effort || opt.opt || opt.fast
+        ? {
+            modelSelection: await modelSelection(opt, {
+              environmentId: target?.environmentId ?? thread.environmentId,
+            }),
+          }
+        : {}),
       ...(opt.message ? { message: opt.message } : {}),
       ...(opt.key ? { clientRequestId: opt.key } : {}),
     });
@@ -3840,7 +3849,7 @@ READ
   mesh unlink <M> --yes                   forget a link here (the other machine stays)
 
 THREADS
-  move <T> --project X [--on M]        move locally or hand off the conversation
+  move <T> --project X [--on M] [--agent A --model M --effort E]        move locally or hand off the conversation
   new [--project P | --scratch] [opts] "message"   start a thread (no project = scratch)
       --agent claude|codex|deepseek|1017|<instance> (default claude, Opus 5.5)  --model M (aliases: opus sonnet fable haiku luna astra sol deepseek 1017)
       --effort low|medium|high|xhigh|max  --fast  --opt key=value (any model option)

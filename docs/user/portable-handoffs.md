@@ -59,3 +59,7 @@ attachments reserve 4,096 each for their references. Existing context is estimat
 activity when usage telemetry is unavailable. Known smaller windows still constrain the handoff.
 These are fallback estimates, not exact token counts. Image resolution, custom models, and hidden
 native context can differ, so the provider may still reject an input.
+
+When moving a conversation, choose its destination model in the confirmation. The picker lists that machine’s providers and model options. Your current selection stays selected when available; otherwise the destination default is selected with a notice. You can also change the model during a move on the same machine. A different harness receives the conversation as context.
+
+Agents can pass `modelSelection` to `t3_thread_move`. The CLI accepts `t3ctl move <thread> --project <project> --on <machine> --agent <instance> --model <model> --effort <level>`; these choices resolve on the destination.
