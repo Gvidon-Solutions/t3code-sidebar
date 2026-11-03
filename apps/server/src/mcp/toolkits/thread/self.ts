@@ -31,22 +31,17 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
   const project = Option.getOrUndefined(projectOption);
   const server = yield* Effect.serviceOption(ServerEnvironment);
   const descriptor = Option.isSome(server) ? yield* server.value.getDescriptor : undefined;
-  const machine = (id: string) => ({
-    environmentId: id,
-    label:
+  const machine = (id: string) => {
+    const label =
       config.machines[id]?.label ??
       (id === scope.environmentId ? descriptor?.label : undefined) ??
-      id,
-    tag:
-      config.machines[id]?.tag ??
-      (
-        config.machines[id]?.label ??
-        (id === scope.environmentId ? descriptor?.label : undefined) ??
-        id
-      )
-        .slice(0, 2)
-        .toUpperCase(),
-  });
+      "Unknown machine";
+    return {
+      environmentId: id,
+      label,
+      tag: config.machines[id]?.tag ?? label.slice(0, 2).toUpperCase(),
+    };
+  };
   const logicalKey = project
     ? logicalProjectKeyForRecord(
         config,
