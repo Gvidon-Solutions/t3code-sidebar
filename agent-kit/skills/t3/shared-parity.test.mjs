@@ -66,7 +66,8 @@ test("alias writes advance beyond observed clocks, including counter overflow", 
     const document = last
       ? { "machine/remote": { v: { aliases: ["office", "研究室"] }, h: last } }
       : {};
-    assert.equal(nextMachineClock(document, 42, "client"), tick(42, last, "client"));
+    for (const now of [0, 42, 42.8])
+      assert.equal(nextMachineClock(document, now, "client"), tick(now, last, "client"));
   }
   const config = {
     ...empty,

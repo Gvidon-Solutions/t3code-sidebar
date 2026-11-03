@@ -286,3 +286,19 @@ test("new uses destination defaults and resolves explicit models against destina
   assert.equal(selection.instanceId, "custom");
   assert.equal(selection.model, "model-from-destination");
 });
+
+test("full selftest requires an explicit provider and models before any server operation", () => {
+  const result = spawnSync("bash", [join(base, "selftest.sh")], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      T3CTL_FULL_SELFTEST: "1",
+      T3CTL_SELFTEST_AGENT: "",
+      T3CTL_SELFTEST_MODEL: "",
+      T3CTL_SELFTEST_ALT_MODEL: "",
+    },
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /set T3CTL_SELFTEST_AGENT from the test server's model catalog/);
+  assert.equal(result.stdout, "");
+});

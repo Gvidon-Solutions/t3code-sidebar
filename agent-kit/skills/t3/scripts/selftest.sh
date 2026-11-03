@@ -2,7 +2,16 @@
 # Live checks require an explicitly isolated origin and opt-in.
 set -uo pipefail
 T3CTL=${1:-$(dirname "$(readlink -f "$0")")/t3ctl.mjs}
-t() { node "$T3CTL" "$@"; }
+if [ "${T3CTL_FULL_SELFTEST:-0}" = 1 ]; then
+  for required in T3CTL_SELFTEST_AGENT T3CTL_SELFTEST_MODEL T3CTL_SELFTEST_ALT_MODEL; do
+    if [ -z "${!required:-}" ]; then echo "selftest: set $required from the test server's model catalog" >&2; exit 1; fi
+  done
+fi
+t() {
+  if [ "${T3CTL_FULL_SELFTEST:-0}" = 1 ] && [ "${1:-}" = new ]; then
+    node "$T3CTL" "$@" --agent "$T3CTL_SELFTEST_AGENT" --model "$T3CTL_SELFTEST_MODEL"
+  else node "$T3CTL" "$@"; fi
+}
 UNIT="$(dirname "$(readlink -f "$T3CTL")")/t3ctl.unit.test.mjs"
 if [ -f "$UNIT" ]; then
   echo "== offline unit checks =="
@@ -31,8 +40,8 @@ P=selftest-$(basename "$DIR")
 
 EXPECT='ok +ws rpc' check doctor t doctor
 EXPECT='added project' check project-add t project-add "$DIR" --title "$P"
-EXPECT=codex       check models t models codex
-EXPECT='started thread' check new t new --project "$P" --effort low --title "st-main" "Reply with exactly: ALPHA"
+EXPECT=providers   check models t models --json
+EXPECT='started thread' check new t new --project "$P" --title "st-main" "Reply with exactly: ALPHA"
 EXPECT='completed' check wait t wait st-main --timeout 5m
 EXPECT='^ALPHA'    check output t output st-main
 EXPECT='BETA'      check send-wait t send st-main "Reply with exactly: BETA" --wait --timeout 5m
@@ -41,30 +50,30 @@ EXPECT='renamed'   check rename t rename st-main "st-renamed"
 for a in pin unpin settle unsettle unread; do EXPECT="$a" check "$a" t "$a" st-renamed; done
 EXPECT='snoozed'   check snooze t snooze st-renamed --for 1h
 EXPECT='unsnooze'  check unsnooze t unsnooze st-renamed
-EXPECT='astra'     check set-model t set-model st-renamed --model astra --effort low
+check set-model t set-model st-renamed --agent "$T3CTL_SELFTEST_AGENT" --model "$T3CTL_SELFTEST_ALT_MODEL"
 EXPECT='plan'      check set-mode-plan t set-mode st-renamed plan
 EXPECT='default'   check set-mode-default t set-mode st-renamed default
-EXPECT='luna'      check set-model-back t set-model st-renamed --model luna --effort low
+check set-model-back t set-model st-renamed --agent "$T3CTL_SELFTEST_AGENT" --model "$T3CTL_SELFTEST_MODEL"
 EXPECT='forked'    check fork t fork st-renamed --title st-fork --message "Reply with the last word you said before this message, only that word."
 EXPECT='completed' check fork-wait t wait st-fork --timeout 5m
 EXPECT='BETA'      check fork-context t output st-fork
-EXPECT='started'   check approval-new t new --project "$P" --effort low --mode approval-required --title st-approve "Create a file named ok.txt containing yes with a shell command, then reply DONE."
+EXPECT='started'   check approval-new t new --project "$P" --mode approval-required --title st-approve "Create a file named ok.txt containing yes with a shell command, then reply DONE."
 for i in $(seq 1 30); do t requests st-approve 2>/dev/null | grep -q approval && break; sleep 3; done
 EXPECT='approval'  check requests t requests st-approve
 EXPECT='accept'    check approve t approve st-approve acceptForSession
 for i in $(seq 1 20); do [ -f "$DIR/ok.txt" ] && break; sleep 3; done
 check approved-file test -f "$DIR/ok.txt"
 t wait st-approve --timeout 3m >/dev/null 2>&1
-EXPECT='started'   check question-new t new --project "$P" --effort low --plan --title st-ask "Use your request_user_input tool to ask me one question: red or blue (two options). Then reply with my answer."
+EXPECT='started'   check question-new t new --project "$P" --plan --title st-ask "Use your request_user_input tool to ask me one question: red or blue (two options). Then reply with my answer."
 for i in $(seq 1 30); do t requests st-ask 2>/dev/null | grep -q question && break; sleep 3; done
 EXPECT='question'  check question-requests t requests st-ask
 EXPECT='=Blue'     check answer t answer st-ask blue
-EXPECT='started'   check stop-new t new --project "$P" --effort low --title st-stop "Run 'sleep 120' in the shell, then reply DONE."
+EXPECT='started'   check stop-new t new --project "$P" --title st-stop "Run 'sleep 120' in the shell, then reply DONE."
 sleep 15
 EXPECT='interrupt' check stop t stop st-stop
-EXPECT='feature/st' check worktree t new --project "$P" --worktree feature/st --base "$BR" --effort low --title st-wt "Run git branch --show-current and reply with its output only." --wait --timeout 5m
+EXPECT='feature/st' check worktree t new --project "$P" --worktree feature/st --base "$BR" --title st-wt "Run git branch --show-current and reply with its output only." --wait --timeout 5m
 NOTE="$DIR.note.txt"; echo "secret: KIWI" >"$NOTE"
-EXPECT='kiwi'      check attach t new --project "$P" --effort low --title st-attach --attach "$NOTE" "What is the secret in the attached file? Reply with the word only." --wait --timeout 5m
+EXPECT='kiwi'      check attach t new --project "$P" --title st-attach --attach "$NOTE" "What is the secret in the attached file? Reply with the word only." --wait --timeout 5m
 EXPECT='added workspace' check ws-add t ws add "Selftest WS"
 EXPECT='workspace' check ws-assign t ws assign "$P" "Selftest WS"
 EXPECT="$P"        check ws-list t ws

@@ -57,6 +57,6 @@ Customer-specific agent instructions and SSH routes belong in `global/GLOBAL.md`
 
 `server install` requires `T3CTL_RELEASE_REPO=organization/repository`. Version installation does not authorize activating or restarting it. Use the printed backup to roll back an authorized activation.
 
-Run `T3CTL_OFFLINE_ONLY=1 bash scripts/selftest.sh` for offline checks. Live checks require `T3CTL_ISOLATED_TEST=1` and an explicit `T3CTL_ORIGIN`; use a disposable server base directory and runtime. Full selftests can spend real model turns: run them only when that behavior is needed and authorized. Do not use a customer's live state for tests.
+Run `T3CTL_OFFLINE_ONLY=1 bash scripts/selftest.sh` for offline checks. Live checks require `T3CTL_ISOLATED_TEST=1` and an explicit `T3CTL_ORIGIN`; use a disposable server base directory and runtime. Full selftests require `T3CTL_SELFTEST_AGENT`, `T3CTL_SELFTEST_MODEL` and `T3CTL_SELFTEST_ALT_MODEL` from the test server's catalog. They can spend real model turns: run them only when that behavior is needed and authorized. Do not use a customer's live state for tests.
 
 The mesh requires meshLayout, replicas, files and project placement APIs. Older servers fall back to legacy layout reads; placement and alias edits explain that a mesh build is required. Legacy layout migration is dry-run first, preserves offline keys, and backs up configs before applying. Never create or remove links or representations unless requested.
