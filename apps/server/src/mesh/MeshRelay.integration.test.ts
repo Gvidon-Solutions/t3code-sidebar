@@ -20,6 +20,7 @@ import * as Relay from "./MeshRelay.ts";
 
 const result = Schema.Struct({ ok: Schema.Boolean });
 const toolkit = Toolkit.make(
+  Tool.make("missing", { success: result, failure: OrchestratorMcpFailure, failureMode: "return" }),
   Tool.make("probe", {
     description: "Probe relay destination",
     success: result,
@@ -29,7 +30,14 @@ const toolkit = Toolkit.make(
 );
 const tools = Mcp.toolkitRegistration(
   toolkit,
-  Access.toLayer(toolkit, { probe: Access.reads(() => Effect.succeed({ ok: true })) }),
+  Access.toLayer(toolkit, {
+    probe: Access.reads(() => Effect.succeed({ ok: true })),
+    missing: Access.reads(() =>
+      Effect.fail(
+        new OrchestratorMcpFailure({ code: "thread_not_found", message: "Thread was removed." }),
+      ),
+    ),
+  }),
 );
 it.effect("relays across two real peer links and refuses a third hop and a loop", () =>
   Effect.gen(function* () {
@@ -44,16 +52,21 @@ it.effect("relays across two real peer links and refuses a third hop and a loop"
     const aContext = yield* Layer.build(layerLinkingEnvironment(descriptorOf("A", "A")));
     yield* linkTo(Context.get(aContext, PeerLinks), b, "full-access");
     const peer = Context.get(aContext, PeerMcpClient);
-    const call = (hops: readonly string[]) =>
+    const call = (hops: readonly string[], tool = "probe") =>
       peer.call({
         environmentId: EnvironmentId.make("B"),
         tool: "t3_mesh_relay",
-        arguments: { environmentId: "C", tool: "probe", arguments: {} },
+        arguments: { environmentId: "C", tool, arguments: {} },
         hops,
         limits: { runtimeMode: "full-access", interactionMode: "default" },
         success: result,
       });
     expect(yield* call(["A"])).toEqual({ ok: true });
+    expect(
+      yield* call(["A"], "missing").pipe(
+        Effect.match({ onFailure: (error) => error.code, onSuccess: () => "unexpected" }),
+      ),
+    ).toBe("thread_not_found");
     for (const hops of [["A", "other"], ["B"]])
       expect(
         yield* call(hops).pipe(

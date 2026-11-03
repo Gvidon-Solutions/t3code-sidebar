@@ -1,5 +1,7 @@
 import {
   OrchestratorMcpEnvironmentTarget,
+  ReplicaLiveStatus,
+  SidebarProjectMount,
   ScheduledTaskId,
   ScheduledTask,
   OrchestrationSearchThreadsInput,
@@ -202,8 +204,13 @@ const ThreadSearchTool = Tool.make("t3_thread_search", {
     projectId: Schema.optional(ProjectId),
   }),
   success: Schema.Struct({
+    unreachable: Schema.optional(
+      Schema.Array(Schema.Struct({ environmentId: Schema.String, message: Schema.String })),
+    ),
     matches: Schema.Array(
       Schema.Struct({
+        environmentId: Schema.optional(Schema.String),
+        machineTag: Schema.optional(Schema.String),
         threadId: OrchestrationThreadSearchMatch.fields.threadId,
         projectId: OrchestrationThreadSearchMatch.fields.projectId,
         title: Schema.String,
@@ -240,7 +247,78 @@ const ScheduledTaskRunTool = Tool.make("run_scheduled_task_now", {
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
+const machine = Schema.Struct({
+  environmentId: Schema.String,
+  label: Schema.String,
+  tag: Schema.String,
+});
+const ThreadSelfTool = Tool.make("t3_thread_self", {
+  description:
+    "Identify this calling thread, machine, project, primary and replica paths, sync state, links and child threads. Read-only; no mesh probes.",
+  parameters: Tool.EmptyParams,
+  success: Schema.Struct({
+    threadId: ThreadId,
+    title: Schema.String,
+    link: Schema.String,
+    machine,
+    project: Schema.NullOr(
+      Schema.Struct({
+        id: ProjectId,
+        title: Schema.String,
+        logicalKey: Schema.NullOr(Schema.String),
+        logicalTitle: Schema.String,
+      }),
+    ),
+    workingDirectory: Schema.NullOr(Schema.String),
+    worktreePath: Schema.NullOr(Schema.String),
+    branch: Schema.NullOr(Schema.String),
+    representation: Schema.Struct({
+      role: Schema.Literals(["primary", "replica"]),
+      transport: Schema.String,
+      source: Schema.NullOr(Schema.Struct({ machine, path: Schema.NullOr(Schema.String) })),
+      sync: Schema.NullOr(ReplicaLiveStatus),
+    }),
+    primaries: Schema.Array(
+      Schema.Struct({ machine, path: Schema.String, ssh: Schema.NullOr(Schema.String) }),
+    ),
+    representations: Schema.Array(SidebarProjectMount),
+    linkedMachines: Schema.Array(
+      Schema.Struct({
+        ...machine.fields,
+        status: Schema.String,
+        access: Schema.String,
+        lastError: Schema.NullOr(Schema.String),
+      }),
+    ),
+    delegatedTasks: Schema.Array(
+      Schema.Struct({
+        taskId: Schema.String,
+        title: Schema.NullOr(Schema.String),
+        status: Schema.String,
+        threadId: Schema.NullOr(ThreadId),
+        environmentId: Schema.String,
+      }),
+    ),
+    parent: Schema.NullOr(
+      Schema.Struct({
+        threadId: ThreadId,
+        environmentId: Schema.String,
+        link: Schema.String,
+        title: Schema.NullOr(Schema.String),
+      }),
+    ),
+    parentThreadId: Schema.NullOr(ThreadId),
+    children: Schema.Array(
+      Schema.Struct({ threadId: ThreadId, title: Schema.String, link: Schema.String }),
+    ),
+  }),
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: commandTool.dependencies,
+}).annotate(Tool.Readonly, true);
+
 export const ThreadToolkit = Toolkit.make(
+  ThreadSelfTool,
   ScheduledTaskRunTool,
   ThreadSearchTool,
   ThreadConfigureTool,

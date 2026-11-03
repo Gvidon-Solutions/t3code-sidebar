@@ -209,8 +209,10 @@ log "preparing demo repo on gor"
 gor_ssh 'bash -s' <<'EOF'
 set -euo pipefail
 repo="$HOME/xdev-e2e/demo"
+seed_repo=0
 mkdir -p "$repo/src" "$repo/scripts" "$repo/node_modules" "$repo/.venv"
 if [ ! -d "$repo/.git" ]; then
+  seed_repo=1
   git init -q "$repo"
   git -C "$repo" symbolic-ref HEAD refs/heads/main
 fi
@@ -218,13 +220,15 @@ fi
 [ -f "$repo/src/main.txt" ] || printf 'hello from gor\n' >"$repo/src/main.txt"
 [ -f "$repo/scripts/run.sh" ] || printf '#!/bin/sh\ncat src/main.txt\n' >"$repo/scripts/run.sh"
 [ -f "$repo/.gitignore" ] || printf 'node_modules/\n.venv/\n' >"$repo/.gitignore"
-printf 'module.exports = 1;\n' >"$repo/node_modules/x.js"
-printf 'venv marker\n' >"$repo/.venv/a"
+[ -f "$repo/node_modules/x.js" ] || printf 'module.exports = 1;\n' >"$repo/node_modules/x.js"
+[ -f "$repo/.venv/a" ] || printf 'venv marker\n' >"$repo/.venv/a"
 chmod +x "$repo/scripts/run.sh"
-git -C "$repo" add -A
-if ! git -C "$repo" diff --cached --quiet; then
+if [ "$seed_repo" = 1 ]; then
+  git -C "$repo" add -A
+  if ! git -C "$repo" diff --cached --quiet; then
   git -C "$repo" -c user.name='T3 Mesh E2E' -c user.email='mesh-e2e@localhost' \
     commit -q -m 'mesh e2e demo seed'
+  fi
 fi
 EOF
 
@@ -241,47 +245,6 @@ GOR_STOPPED=0
 if ! gor_ssh "for i in \$(seq 1 90); do curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:$GOR_PORT/.well-known/t3/environment 2>/dev/null && exit 0; sleep 1; done; exit 1"; then
   gor_ssh "journalctl --user -u $GOR_UNIT -n 80 --no-pager" || true
   die "gor main server did not become healthy on the new build"
-fi
-
-log "preparing gor -> gvidon tunnel key"
-gor_ssh 'bash -s' <<'EOF'
-set -euo pipefail
-key="$HOME/.ssh/id_t3_mesh_e2e_gvidon"
-[ -f "$key" ] || ssh-keygen -q -t ed25519 -N '' -C t3-gvidon-tunnel -f "$key"
-chmod 600 "$key"; chmod 644 "$key.pub"
-EOF
-PUB_GVIDON_TUNNEL="$(key_body "$(gor_ssh 'cat ~/.ssh/id_t3_mesh_e2e_gvidon.pub')")"
-authorize_line "$HOME/.ssh/authorized_keys" \
-  'from="192.168.1.10",restrict,port-forwarding,permitopen="127.0.0.1:3774"' \
-  "$PUB_GVIDON_TUNNEL" t3-gvidon-tunnel
-
-log "fixing gor -> gvidon tunnel (3773 -> 3774, dedicated key)"
-gor_ssh 'bash -s' <<'EOF'
-set -euo pipefail
-unit="$HOME/.config/systemd/user/t3-gvidon-tunnel.service"
-[ -f "$unit" ] || exit 0
-find "$HOME/.config/systemd/user" -maxdepth 1 -name "t3-gvidon-tunnel.service.bak-t3-mesh-e2e-*" -print -quit | grep -q . \
-  || cp -p "$unit" "$unit.bak-t3-mesh-e2e-$(date -u +%Y%m%dT%H%M%SZ)"
-cat >"$unit" <<UNIT
-[Unit]
-Description=SSH tunnel to T3 on gvidon (127.0.0.1:13773 -> gvidon:3774)
-After=network-online.target
-
-[Service]
-ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new -i %h/.ssh/id_t3_mesh_e2e_gvidon -o IdentitiesOnly=yes -L 127.0.0.1:13773:127.0.0.1:3774 user@192.168.1.17
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-UNIT
-systemctl --user daemon-reload
-systemctl --user restart t3-gvidon-tunnel.service
-EOF
-if gor_ssh "curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:13773/.well-known/t3/environment"; then
-  log "gor -> gvidon route is up at http://127.0.0.1:13773"
-else
-  warn "gor -> gvidon tunnel (13773) is not answering; check t3-gvidon-tunnel.service"
 fi
 
 # ---------------------------------------------------------------------------

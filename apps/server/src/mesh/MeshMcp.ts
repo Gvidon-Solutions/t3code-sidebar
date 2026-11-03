@@ -56,8 +56,10 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
                 {
                   type: "text",
                   text: encodeMeshJson({
-                    code: "capability_denied",
-                    message: String(error),
+                    code:
+                      error._tag === "OrchestratorMcpFailure" ? error.code : "capability_denied",
+                    message:
+                      error._tag === "OrchestratorMcpFailure" ? error.message : String(error),
                   }),
                 },
               ],

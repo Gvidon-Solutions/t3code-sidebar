@@ -138,3 +138,7 @@ Use `~/Repos/t3/CLAUDE.md` on gvidon for infrastructure details only when the ta
 - Mesh commands need a server build with `meshLayout`, `replicas.*`, `files.*` and `t3_project_place`/`t3_project_machines`. On older servers `machines`/`mesh status` fall back to the legacy `sidebarWorkspaces` setting and say so; `place`, `replica retry` and `cat` fail with "needs the mesh build". The linked-environments beta (`linkedEnvironmentsEnabled`) and `replicasEnabled` must be on for links and replicas.
 - `t3ctl open` / `open-file` are an outside MCP client: `ui_open` acts as the calling thread, so they print the web/`t3-thread://`/`t3-file://` links instead of driving the owner's screen. An agent inside a thread can `ui_open` it directly.
 - Archived threads are per machine; `threads --all` lists active ones, and `--archived` stays local.
+
+## Session identity and thread ids across the mesh
+
+Call `t3_thread_self` to identify the current thread, machine, project, primary/replica paths and sync state. `t3ctl self` uses thread-scoped `T3_MCP_URL` and `T3_MCP_BEARER_TOKEN`; outside a thread it explains the missing context. `show`, `send`, `wait`, `stop`, `requests` and `answer` resolve full thread ids across the mesh. Preserve the full `mcp:…` id. MCP thread-addressed tools find remote ids without `environmentId`; list/search accept `environmentId: "all"` and return machine tags plus `unreachable` results. Pending questions use `t3_pending_request` actions `list`, `read`, `respond`.
