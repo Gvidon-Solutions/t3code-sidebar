@@ -52,6 +52,28 @@ describe("mobile model options", () => {
       model: "github-copilot/claude-fable-5",
     };
 
+    const unavailableConfig: ServerConfig = {
+      ...config,
+      settings: {
+        ...DEFAULT_SERVER_SETTINGS,
+        providerInstances: {
+          [ProviderInstanceId.make("opencode_work")]: {
+            driver: ProviderDriverKind.make("opencode"),
+            enabled: true,
+            config: {},
+          },
+        },
+      },
+      providers: config.providers.map((provider) => ({
+        ...provider,
+        auth: { ...provider.auth, status: "unauthenticated" },
+      })),
+    };
+    expect(
+      buildModelOptions(unavailableConfig, selection, undefined, null, false, true).map(
+        (option) => option.isUnavailable,
+      ),
+    ).toEqual([true, true, true]);
     const options = buildModelOptions(config, selection, undefined, null);
 
     expect(options).toMatchObject(

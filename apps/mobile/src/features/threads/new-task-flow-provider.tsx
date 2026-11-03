@@ -1,11 +1,24 @@
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import { AsyncResult } from "effect/reactivity";
+import {
+  defaultDraftMachine,
+  draftModelUnavailableReason,
+  planThreadOnMachine,
+  resolveLogicalProjectKey,
+  representationRow,
+  replicaProjectId,
+  replicaDriverEnvironment,
+} from "@t3tools/client-runtime/state/mesh-layout";
+import { EnvironmentId } from "@t3tools/contracts";
+import { useReplicaStatuses, replicaStatusEnvironment } from "../../state/meshReplicas";
 import { ActiveNewTaskContext } from "../../state/active-new-task";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { useNowMinuteMs } from "../../lib/clock";
 import * as Dialog from "../../components/ui/Dialog";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import type {
-  EnvironmentId,
   ModelSelection,
   ProviderInteractionMode,
   ProviderOptionSelection,
@@ -16,7 +29,6 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   MessageId,
-  repositoryGroupingKeyOf,
   ThreadId,
 } from "@t3tools/contracts";
 import { threadContextsOutsideEnvironment } from "@t3tools/shared/composerContextReferences";
@@ -36,7 +48,7 @@ import {
   resolveSelectableModelSelection,
 } from "../../lib/modelOptions";
 import { scopedProjectKey } from "../../lib/scopedEntities";
-import { useAtomValue } from "@effect/atom-react";
+import { useAtomValue, useAtomSet } from "@effect/atom-react";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { projectEnvironment } from "../../state/projects";
 import { useLinkedEnvironments } from "../../state/peerLinks";
@@ -162,6 +174,7 @@ type NewTaskFlowContextValue = {
   readonly environments: ReadonlyArray<{
     readonly environmentId: EnvironmentId;
     readonly environmentLabel: string;
+    readonly disabled?: boolean;
   }>;
   readonly selectedProject: EnvironmentProject | null;
   /** The machines the selected project's environment links to, whose threads it can read. */
@@ -184,6 +197,8 @@ type NewTaskFlowContextValue = {
   readonly selectEnvironment: (environmentId: EnvironmentId) => void;
   readonly switchEnvironment: (environmentId: EnvironmentId) => Promise<boolean>;
   readonly switchingToEnvironmentId: EnvironmentId | null;
+  readonly mountingStatus: string | null;
+  readonly retryMount: (() => void) | null;
   readonly setSelectedModelKey: (
     key: string | null,
     options?: ReadonlyArray<ProviderOptionSelection>,
@@ -227,6 +242,16 @@ export function NewTaskFlowProvider(
   }>,
 ) {
   const meshLayout = useMeshLayout();
+  const statuses = useReplicaStatuses();
+  const retryReplica = useAtomCommand(replicaStatusEnvironment.retry);
+  const [pendingMount, setPendingMount] = useState<{
+    environmentId: EnvironmentId;
+    logicalKey: string;
+  } | null>(null);
+
+  const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : {};
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const projects = useProjects();
   const threads = useThreadShells();
   const { savedConnectionsById } = useSavedRemoteConnections();
@@ -337,10 +362,12 @@ export function NewTaskFlowProvider(
   const linkedEnvironments = useLinkedEnvironments(selectedProject?.environmentId ?? null);
   const storedStickyModelSelection = useStickyComposerModelSelection();
   const modelSelectionNow = useNowMinuteMs();
-  const projectDefaults = useNewTaskProjectDefaults(selectedProject);
-  const selectedEnvironmentServerConfig = projectDefaults.serverConfig;
-  const isScratchDraft = projectDefaults.isScratch;
   const serverConfigs = useServerConfigs();
+  const projectDefaults = useNewTaskProjectDefaults(selectedProject);
+  const selectedEnvironmentServerConfig = pendingMount
+    ? (serverConfigs.get(pendingMount.environmentId) ?? null)
+    : projectDefaults.serverConfig;
+  const isScratchDraft = projectDefaults.isScratch;
   const { connectedEnvironments } = useRemoteConnectionStatus();
   const selectedProjectDraftKey = selectedProject ? activeDraftKey : null;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- creates the persistent draft in the new-task flow store once a project is selected, before the composer mounts
@@ -429,26 +456,30 @@ export function NewTaskFlowProvider(
 
   // Antigravity keeps unavailable selections so sign-out or a catalog change
   // cannot switch the user's model.
-  const draftModelSelection = resolveSelectableModelSelection(
-    selectedEnvironmentServerConfig,
-    selectedProjectDraft.modelSelection ?? null,
-    selectedProject?.id ?? null,
-  );
+  const draftModelSelection = selectedProjectDraft.modelSelection ?? null;
   const projectDefaultModelSelection = resolveDefaultableModelSelection(
     selectedEnvironmentServerConfig,
     projectSettings.settings.defaultModelSelection,
     selectedProject?.id ?? null,
   );
-  const stickyModelSelection = resolveDefaultableModelSelection(
-    selectedEnvironmentServerConfig,
-    storedStickyModelSelection,
-    selectedProject?.id ?? null,
-  );
-  const modelOptions = buildModelOptions(
-    selectedEnvironmentServerConfig,
-    draftModelSelection ?? projectDefaultModelSelection ?? stickyModelSelection,
-    undefined,
-    selectedProject?.id ?? null,
+  const stickyModelSelection = storedStickyModelSelection;
+  const modelOptions = useMemo(
+    () =>
+      buildModelOptions(
+        selectedEnvironmentServerConfig,
+        draftModelSelection ?? projectDefaultModelSelection ?? stickyModelSelection,
+        undefined,
+        selectedProject?.id ?? null,
+        false,
+        true,
+      ),
+    [
+      selectedEnvironmentServerConfig,
+      draftModelSelection,
+      projectDefaultModelSelection,
+      stickyModelSelection,
+      selectedProject?.id,
+    ],
   );
 
   const selectedDefaultModel = resolveNewTaskModelSelection({
@@ -604,14 +635,74 @@ export function NewTaskFlowProvider(
     null,
   );
   const latestSwitchRef = useRef<object | null>(null);
+  const preferenceScope = projectScopes.find((scope) =>
+    scope.projects.some(
+      (project) =>
+        project.environmentId === selectedProject?.environmentId &&
+        project.id === selectedProject?.id,
+    ),
+  );
+  const preferenceKey = isScratchDraft ? "scratch" : preferenceScope?.key;
   const switchEnvironment = async (environmentId: EnvironmentId): Promise<boolean> => {
+    if (preferenceKey)
+      savePreferences({
+        transform: (current) => ({
+          draftMachines: { ...current.draftMachines, [preferenceKey]: environmentId },
+        }),
+      });
+    setPendingMount(null);
     if (environmentId === selectedEnvironmentId) {
       latestSwitchRef.current = null;
       setSwitchingToEnvironmentId(null);
       return true;
     }
     if (!isScratchDraft) {
-      selectEnvironment(environmentId);
+      if (!selectedProject || !meshLayout.config) return false;
+      const scope = projectScopes.find((scope) =>
+        scope.projects.some(
+          (project) =>
+            project.id === selectedProject.id &&
+            project.environmentId === selectedProject.environmentId,
+        ),
+      );
+      if (!scope) return false;
+      const logicalKey = resolveLogicalProjectKey(
+        selectedProject,
+        meshLayout.config,
+        () => scope.key,
+      );
+      const plan = planThreadOnMachine({
+        config: meshLayout.config,
+        logicalKey,
+        targetEnvironmentId: environmentId,
+        seed: {
+          environmentId: selectedProject.environmentId,
+          projectId: selectedProject.id,
+          path: selectedProject.workspaceRoot,
+        },
+      });
+      const target = projects.find(
+        (project) => project.environmentId === environmentId && project.id === plan.projectId,
+      );
+      if (target) {
+        setProject(target);
+        return true;
+      }
+      meshLayout.edit(
+        (current) =>
+          planThreadOnMachine({
+            config: current,
+            logicalKey,
+            targetEnvironmentId: environmentId,
+            seed: {
+              environmentId: selectedProject.environmentId,
+              projectId: selectedProject.id,
+              path: selectedProject.workspaceRoot,
+            },
+          }).config,
+      );
+      setPendingMount({ environmentId, logicalKey });
+      setSwitchingToEnvironmentId(environmentId);
       return true;
     }
     const request = {};
@@ -797,59 +888,105 @@ export function NewTaskFlowProvider(
       ) !== null,
   );
 
-  const selectedRepositoryKey = selectedProject?.repositoryIdentity
-    ? repositoryGroupingKeyOf(selectedProject.repositoryIdentity)
-    : null;
-  // Use || null: placeholder workspaceRoot can be empty, and an empty basename rejects real hosts.
-  const selectedWorkspaceBasename = selectedProject?.workspaceRoot.split("/").at(-1) || null;
-  const selectedProjectTitle = selectedProject?.title ?? null;
-  const environments = (() => {
-    if (isScratchDraft) {
-      return scratchEnvironments.map((environment) => ({
+  const environments = isScratchDraft
+    ? scratchEnvironments.map((environment) => ({
         environmentId: environment.environmentId,
         environmentLabel: environment.environmentLabel,
-      }));
-    }
-    const seen = new Set<EnvironmentId>();
-    const result: Array<{
-      readonly environmentId: EnvironmentId;
-      readonly environmentLabel: string;
-    }> = [];
-    const hostsSelectedRepository = (project: EnvironmentProject) => {
-      if (selectedRepositoryKey === null && selectedWorkspaceBasename === null) {
-        return true;
-      }
-      const projectKey = project.repositoryIdentity
-        ? repositoryGroupingKeyOf(project.repositoryIdentity)
-        : null;
-      if (selectedRepositoryKey !== null && projectKey !== null) {
-        return projectKey === selectedRepositoryKey;
-      }
-      return (
-        project.workspaceRoot.split("/").at(-1) === selectedWorkspaceBasename ||
-        (selectedProjectTitle !== null && project.title === selectedProjectTitle)
-      );
-    };
-    for (const project of projects) {
-      if (!hostsSelectedRepository(project)) {
-        continue;
-      }
-      if (seen.has(project.environmentId)) {
-        continue;
-      }
-      const environment = savedConnectionsById[project.environmentId];
-      if (!environment) {
-        continue;
-      }
-      seen.add(project.environmentId);
-      result.push({
-        environmentId: project.environmentId,
-        environmentLabel: environment.environmentLabel,
+      }))
+    : [
+        ...new Set([...serverConfigs.keys(), ...Object.keys(meshLayout.config?.machines ?? {})]),
+      ].map((id) => {
+        const environmentId = EnvironmentId.make(id);
+        return {
+          environmentId,
+          environmentLabel: machineDisplayOf(
+            meshLayout.config ?? { machines: {} },
+            id,
+            savedConnectionsById[environmentId]?.environmentLabel ?? "Machine",
+          ).label,
+          disabled:
+            !connectedEnvironments.some(
+              (environment) =>
+                environment.environmentId === id && environment.connectionState === "connected",
+            ) || !serverConfigs.get(environmentId)?.environment.capabilities.replicas,
+        };
       });
-    }
-    return result;
-  })();
+  const mountRep =
+    pendingMount &&
+    meshLayout.config?.projectMounts[pendingMount.logicalKey]?.find(
+      (rep) => rep.environmentId === pendingMount.environmentId,
+    );
+  const mountRow =
+    pendingMount && mountRep && meshLayout.config
+      ? representationRow(meshLayout.config, statuses, pendingMount.logicalKey, mountRep)
+      : null;
+  const registeredId =
+    pendingMount && meshLayout.config
+      ? replicaProjectId(
+          meshLayout.config,
+          statuses,
+          pendingMount.logicalKey,
+          pendingMount.environmentId,
+        )
+      : null;
+  const finishMount = useEffectEvent((project: EnvironmentProject) => {
+    setProject(project);
+    setPendingMount(null);
+    setSwitchingToEnvironmentId(null);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- retargets the persistent draft when the replica service registers its destination project
+  useEffect(() => {
+    if (!pendingMount || !registeredId) return;
+    const project = projects.find(
+      (project) =>
+        project.environmentId === pendingMount.environmentId && project.id === registeredId,
+    );
+    if (!project) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- completes the external replica-service registration subscription
+    finishMount(project);
+  }, [pendingMount, registeredId, projects]);
 
+  const defaultApplied = useRef<string | null>(null);
+  const applyMachineDefault = useEffectEvent(() => {
+    if (
+      !activeDraftKey ||
+      !preferenceKey ||
+      !meshLayout.config ||
+      !AsyncResult.isSuccess(preferencesResult) ||
+      defaultApplied.current === activeDraftKey
+    )
+      return;
+    defaultApplied.current = activeDraftKey;
+    const target = defaultDraftMachine(
+      environments.map((machine) => ({
+        environmentId: machine.environmentId,
+        connected: connectedEnvironments.some(
+          (environment) =>
+            environment.environmentId === machine.environmentId &&
+            environment.connectionState === "connected",
+        ),
+        usable:
+          selectedModel !== null &&
+          draftModelUnavailableReason(
+            serverConfigs.get(machine.environmentId),
+            selectedModel,
+            null,
+          ) === null,
+        primary:
+          meshLayout.config!.projectMounts[preferenceKey]?.some(
+            (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
+          ) ?? machine.environmentId === selectedEnvironmentId,
+      })),
+      preferences.draftMachines?.[preferenceKey] ?? null,
+    );
+    if (target && target !== selectedEnvironmentId)
+      void switchEnvironment(EnvironmentId.make(target));
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies a hydrated per-device machine preference to a new persistent draft
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- synchronizes the draft target with hydrated device preferences
+    applyMachineDefault();
+  });
   const value = {
     activeNewTask,
     projectScopes,
@@ -892,6 +1029,25 @@ export function NewTaskFlowProvider(
     selectEnvironment,
     switchEnvironment,
     switchingToEnvironmentId,
+    mountingStatus: mountRow?.text ?? null,
+    retryMount:
+      mountRow?.retry && meshLayout.config
+        ? () => {
+            const driver = replicaDriverEnvironment(meshLayout.config!, mountRow.rep);
+            if (!driver) {
+              Dialog.alert("Cannot retry replica", "Add an SSH route in Settings › Mesh.");
+              return;
+            }
+            if (driver)
+              void retryReplica({
+                environmentId: EnvironmentId.make(driver),
+                input: {
+                  logicalKey: pendingMount!.logicalKey,
+                  environmentId: pendingMount!.environmentId,
+                },
+              });
+          }
+        : null,
     setSelectedModelKey,
     setWorkspaceMode,
     selectBranch,

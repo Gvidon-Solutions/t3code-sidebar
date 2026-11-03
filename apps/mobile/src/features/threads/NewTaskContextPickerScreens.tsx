@@ -1,3 +1,5 @@
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { SearchField } from "../../components/ui/SearchField";
 import { Button } from "../../components/ui/Button";
@@ -67,6 +69,28 @@ function EnvironmentPickerRow(props: {
   onPress: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const flow = useNewTaskFlow();
+  const { config } = useMeshLayout();
+  const machine = machineDisplayOf(config ?? { machines: {} }, props.environmentId, props.title);
+  const hasLocalProject = flow.projectScopes.some(
+    (scope) =>
+      scope.projects.some(
+        (project) =>
+          project.id === flow.selectedProject?.id &&
+          project.environmentId === flow.selectedProject?.environmentId,
+      ) && scope.projects.some((project) => project.environmentId === props.environmentId),
+  );
+  const here =
+    hasLocalProject ||
+    config?.projectMounts[
+      flow.projectScopes.find((scope) =>
+        scope.projects.some(
+          (project) =>
+            project.id === flow.selectedProject?.id &&
+            project.environmentId === flow.selectedProject?.environmentId,
+        ),
+      )?.key ?? ""
+    ]?.some((rep) => rep.environmentId === props.environmentId);
   const { presentation } = useEnvironmentPresentation(props.environmentId);
   const { diagnosis, state } = useConnectionDiagnosis(props.environmentId, presentation);
   const { onReconnectEnvironment } = useRemoteConnections();
@@ -92,12 +116,12 @@ function EnvironmentPickerRow(props: {
           />
           <View className="min-w-0 flex-1 gap-1">
             <Text className="text-base font-t3-medium text-foreground" numberOfLines={1}>
-              {props.title}
+              {machine.tag} · {machine.label}
             </Text>
             <View className="flex-row items-center gap-1.5">
               <ConnectionStatusDot state={connection?.phase ?? "offline"} pulse={false} size={6} />
               <Text className="shrink text-xs text-foreground-muted" numberOfLines={2}>
-                {status}
+                {status} · {here || flow.isScratchDraft ? "here" : "copy will be created"}
               </Text>
             </View>
           </View>
@@ -217,7 +241,7 @@ export function NewTaskEnvironmentPickerRouteScreen() {
                 key={String(environment.environmentId)}
                 environmentId={environment.environmentId}
                 isLast={index === flow.environments.length - 1}
-                disabled={flow.switchingToEnvironmentId !== null}
+                disabled={environment.disabled === true}
                 onPress={() => {
                   void Haptics.selectionAsync();
                   void flow.switchEnvironment(environment.environmentId).then((switched) => {

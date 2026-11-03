@@ -1,3 +1,9 @@
+import { useServerConfigs } from "../../state/entities";
+import {
+  DraftMachineSendQueue,
+  draftModelUnavailableReason,
+} from "@t3tools/client-runtime/state/mesh-layout";
+import { useEffectEvent } from "react";
 import { DraftEnvironmentControl } from "./DraftEnvironmentControl";
 import { NativeScrollEdgeEffectsContext } from "../../native/NativeScrollViewMarker";
 import { DraftThreadHeader } from "./DraftThreadHeader";
@@ -159,6 +165,7 @@ export function NewTaskDraftScreen(props: {
   const [creationMetadata] = useState(makeTurnCommandMetadata);
   const projects = useProjects();
   const flow = useNewTaskFlow();
+  const machineConfigs = useServerConfigs();
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const goBack = useWorkspaceBackNavigation("threads");
@@ -560,7 +567,18 @@ export function NewTaskDraftScreen(props: {
   });
   const createVoiceThread = useCreateVoiceThread();
 
+  const modelUnavailable = flow.selectedModel
+    ? draftModelUnavailableReason(
+        selectedEnvironmentServerConfig,
+        flow.selectedModel,
+        selectedProject?.id ?? null,
+      )
+    : null;
+  const queuedMachineSend = useRef(new DraftMachineSendQueue());
   async function handleStart(): Promise<import("@t3tools/contracts").MessageId | null> {
+    if (queuedMachineSend.current.defer(flow.switchingToEnvironmentId !== null)) {
+      return null;
+    }
     const selectedProject = flow.selectedProject;
     const draftKey = flow.draftKey;
     if (
@@ -599,6 +617,10 @@ export function NewTaskDraftScreen(props: {
       flow.submitting ||
       (workspaceMode === "worktree" && !selectedBranchName)
     ) {
+      return null;
+    }
+    if (modelUnavailable) {
+      Dialog.alert("Model unavailable", modelUnavailable);
       return null;
     }
     if (
@@ -747,6 +769,15 @@ export function NewTaskDraftScreen(props: {
     void voiceMode.start(target);
   }
 
+  const resumeMachineSend = useEffectEvent(() => {
+    queuedMachineSend.current.resume(flow.switchingToEnvironmentId !== null, () => {
+      void handleStart();
+    });
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- resumes a send retained while its destination project was mounting
+  useEffect(() => {
+    resumeMachineSend();
+  });
   // Keep the current surface until the local draft selection is ready. Publishing
   // an empty loading surface here flashes between two already-cached threads.
   if (!selectedProject) return null;
@@ -778,14 +809,58 @@ export function NewTaskDraftScreen(props: {
     navigation.navigate(routeName);
   };
 
+  const modelMachine =
+    modelUnavailable && flow.selectedModel
+      ? flow.environments.find(
+          (machine) =>
+            draftModelUnavailableReason(
+              machineConfigs.get(machine.environmentId),
+              flow.selectedModel!,
+              null,
+            ) === null,
+        )
+      : null;
+  const modelHere = modelUnavailable
+    ? flow.modelOptions.find((option) => !option.isUnavailable)
+    : null;
   const environmentControl = (
-    <DraftEnvironmentControl
-      connectionState={connectionState}
-      label={selectedEnvironmentLabel}
-      machineKind={resolveEnvironmentMachineKind(selectedEnvironmentServerConfig)}
-      disabled={isComposerInteractionLocked}
-      onChooseEnvironment={() => openContextPicker("NewTaskEnvironment")}
-    />
+    <View>
+      {modelUnavailable && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            if (modelMachine) void flow.switchEnvironment(modelMachine.environmentId);
+            else if (modelHere) flow.setSelectedModelKey(modelHere.key);
+          }}
+        >
+          <Text textRole="footnote">
+            {modelMachine
+              ? `${flow.selectedModel?.instanceId} works on ${modelMachine.environmentLabel}. Switch machine`
+              : modelHere
+                ? `Use ${modelHere.label} here`
+                : modelUnavailable}
+          </Text>
+        </Pressable>
+      )}
+      {flow.mountingStatus && (
+        <Text accessibilityRole="text" textRole="footnote">
+          {flow.mountingStatus}
+        </Text>
+      )}
+      {flow.retryMount && (
+        <Pressable accessibilityRole="button" onPress={flow.retryMount}>
+          <Text>Retry</Text>
+        </Pressable>
+      )}
+      <DraftEnvironmentControl
+        environmentId={flow.switchingToEnvironmentId ?? selectedProject.environmentId}
+        connectionState={connectionState}
+        label={selectedEnvironmentLabel}
+        machineKind={resolveEnvironmentMachineKind(selectedEnvironmentServerConfig)}
+        disabled={isComposerInteractionLocked}
+        onChooseEnvironment={() => openContextPicker("NewTaskEnvironment")}
+      />
+    </View>
   );
   const shareUnavailableNotice = isIncomingShareUnavailable ? (
     <Text textRole="footnote" className="text-center text-foreground-muted">

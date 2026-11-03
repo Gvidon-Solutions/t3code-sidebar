@@ -118,6 +118,7 @@ export interface Preferences {
   readonly planModeEnabled?: boolean;
   readonly workingShelfEnabled?: boolean;
   readonly useLastProjectForNewThreads?: boolean;
+  readonly draftMachines?: Readonly<Record<string, string>>;
   readonly lastThreadProject?: typeof ThreadProject.Type;
   readonly modelFavorites?: ReadonlyArray<{
     readonly provider: ProviderInstanceId;
@@ -208,6 +209,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     planModeEnabled?: boolean;
     workingShelfEnabled?: boolean;
     useLastProjectForNewThreads?: boolean;
+    draftMachines?: Readonly<Record<string, string>>;
     lastThreadProject?: typeof ThreadProject.Type;
     modelFavorites?: Preferences["modelFavorites"];
     threadListSettledShelfExpanded?: boolean;
@@ -370,6 +372,17 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   }
   if (typeof parsed.useLastProjectForNewThreads === "boolean") {
     preferences.useLastProjectForNewThreads = parsed.useLastProjectForNewThreads;
+  }
+  if (
+    typeof parsed.draftMachines === "object" &&
+    parsed.draftMachines !== null &&
+    !Array.isArray(parsed.draftMachines)
+  ) {
+    preferences.draftMachines = Object.fromEntries(
+      Object.entries(parsed.draftMachines).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
   }
   if (isThreadProject(parsed.lastThreadProject)) {
     preferences.lastThreadProject = parsed.lastThreadProject;
