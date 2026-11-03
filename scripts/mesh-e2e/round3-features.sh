@@ -120,6 +120,7 @@ rexec gor sh -c "rg -l 'N-adopt-loser' '$feature_root-adopt/.t3-conflicts'" > "$
 test "$(rexec gor cat "$feature_root-adopt/both")" = N-authority-wins
 ws_rpc gv meshLayout.apply "$(entry mesh.authority "\"$GOR_ENV\"")" > "$WORK/N-adopt-restore-authority.json"
 wait_converged 'N feature acceptance after adoption' 
+. "$MESH_DIR/round3-live-regressions.sh"
 printf 'PASS N features: explicit/refused paths, display titles, local/copy moves, ignores/transports, adopted conflict copies; evidence %s\n' "$WORK"
 
 assert_feature_recovery() {
@@ -132,4 +133,5 @@ assert_feature_recovery() {
   jq -e --arg b "$feature_root-adopt-target" '[.[] | select(.beta.path==$b)]|length==1' "$WORK/N-feature-sessions-after.json" >/dev/null
   foreign_mut sync list --template '{{json .}}' > "$WORK/N-foreign-after-recovery.json"
   jq -e --arg n "$foreign_name" 'all(.[]; .name!=$n)' "$WORK/N-foreign-after-recovery.json" >/dev/null
+  assert_live_regression_recovery
 }
