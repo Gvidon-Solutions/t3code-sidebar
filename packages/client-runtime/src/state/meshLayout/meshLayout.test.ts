@@ -350,6 +350,24 @@ describe("logical projects", () => {
     const split = logical.splitLogicalProject(merged, "p", "b", "separate");
     expect(split.projectMounts.separate).toHaveLength(1);
     expect(split.projectMountStatus.separate?.b?.state).toBe("watching");
+    const checkout = { environmentId: "c", workspaceRoot: "/independent", id: "checkout" };
+    const groupedCheckout = {
+      ...merged,
+      projectAliases: { ...merged.projectAliases, "c:/independent": "p" },
+    };
+    const splitCheckout = logical.splitLogicalProject(
+      groupedCheckout,
+      "p",
+      "c",
+      "checkout",
+      checkout,
+    );
+    expect(logical.resolveLogicalProjectKey(checkout, splitCheckout, () => "p")).toBe("checkout");
+    expect(splitCheckout.projectMounts.checkout?.[0]).toMatchObject({
+      role: "primary",
+      projectId: "checkout",
+    });
+    expect(splitCheckout.projectMounts.p).toEqual(merged.projectMounts.p);
     expect(logical.setPrimary(split, "separate", "b").projectMounts.separate?.[0]).toMatchObject({
       role: "primary",
     });

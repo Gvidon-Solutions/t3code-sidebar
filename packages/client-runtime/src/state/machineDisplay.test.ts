@@ -22,12 +22,21 @@ const config: SidebarWorkspacesConfig = {
 };
 
 describe("machineDisplayOf", () => {
-  it("uses the server label and its first two letters as the tag", () => {
+  it("keeps short alphanumeric labels whole and abbreviates longer labels", () => {
     expect(machineDisplayOf(config, "gor", "gor")).toEqual({
       label: "gor",
-      tag: "GO",
+      tag: "GOR",
       color: workspaceColor({ id: "gor" }),
     });
+    for (const [label, tag] of [
+      ["a", "A"],
+      ["p2", "P2"],
+      ["v-p-s", "VPS"],
+      ["Гор", "ГОР"],
+      ["gvidon", "GV"],
+    ] as const) {
+      expect(machineDisplayOf(config, "test", label).tag).toBe(tag);
+    }
   });
 
   it("takes digits as tag characters and skips other characters", () => {

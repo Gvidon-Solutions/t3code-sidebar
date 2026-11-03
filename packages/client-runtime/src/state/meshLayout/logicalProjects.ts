@@ -1,5 +1,6 @@
 import type { SidebarWorkspacesConfig, SidebarProjectMount } from "@t3tools/contracts";
 import { normalizeProjectPathForComparison } from "../projects.ts";
+import { machineDisplayOf } from "../machineDisplay.ts";
 type Project = { readonly environmentId: string; readonly workspaceRoot: string };
 function follow(key: string, config: SidebarWorkspacesConfig): string {
   const seen: string[] = [];
@@ -151,8 +152,20 @@ export function splitLogicalProject(
   from: string,
   environmentId: string,
   into: string,
+  project?: { readonly workspaceRoot: string; readonly id: string },
 ): SidebarWorkspacesConfig {
-  const rep = config.projectMounts[from]?.find((r) => r.environmentId === environmentId);
+  const rep =
+    config.projectMounts[from]?.find((r) => r.environmentId === environmentId) ??
+    (project === undefined
+      ? undefined
+      : {
+          environmentId,
+          path: project.workspaceRoot,
+          projectId: project.id,
+          transport: "git" as const,
+          role: "primary" as const,
+          createdAt: "",
+        });
   if (!rep || from === into) return config;
   const status = config.projectMountStatus[from]?.[environmentId];
   let next = addRepresentation(removeRepresentation(config, from, environmentId), into, rep);
@@ -190,13 +203,7 @@ export function machineTag(
   environmentId: string,
   label?: string | null,
 ): string {
-  const configured = config.machines[environmentId]?.tag?.trim();
-  if (configured) return configured;
-  const letters = (label ?? environmentId)
-    .replace(/[^A-Za-z0-9]/g, "")
-    .slice(0, 2)
-    .toUpperCase();
-  return letters || environmentId.slice(0, 2).toUpperCase();
+  return machineDisplayOf(config, environmentId, label ?? environmentId).tag;
 }
 
 export interface OfflineLogicalProject {
