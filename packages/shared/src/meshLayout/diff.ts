@@ -98,6 +98,8 @@ export function encode(
   for (const [ws, folds] of Object.entries(config.workspaceFold))
     for (const [p, mode] of Object.entries(folds)) put(keys.fold(ws, p), mode);
   for (const [env, machine] of Object.entries(config.machines)) put(keys.machine(env), machine);
+  for (const [key, title] of Object.entries(config.projectTitles))
+    put(keys.project(key), { title });
   for (const [alias, logical] of Object.entries(config.projectAliases))
     put(keys.alias(alias), logical);
   for (const [logical, reps] of Object.entries(config.projectMounts))

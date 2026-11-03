@@ -724,3 +724,52 @@ it.effect(
       }).pipe(Effect.provide(dependencies));
     }),
 );
+
+it.effect("project update writes the shared logical title", () => {
+  const base = clientLaunchHarness({ runtimeModeCeiling: "full-access", launched: [] });
+  const h = makeReplicaHarness("environment");
+  const dependencies = Layer.mergeAll(base.dependencies, h.layer);
+  return Effect.gen(function* () {
+    const mesh = yield* MeshLayoutService;
+    yield* mesh.edit((config) => ({
+      ...config,
+      projectMounts: {
+        logical: [
+          {
+            environmentId: "environment",
+            path: "/repo",
+            projectId: base.projectId,
+            transport: "git",
+            role: "primary",
+            createdAt: "",
+          },
+        ],
+      },
+    }));
+    const toolkit = yield* ProjectToolkit.pipe(
+      Effect.provide(McpToolAccess.HandlersLayer.layer(ProjectHandlers.layer)),
+    );
+    yield* toolkit
+      .handle("t3_project_update", { projectId: base.projectId, title: "Shared title" })
+      .pipe(Stream.unwrap, Stream.runCollect);
+    expect((yield* mesh.read).config.projectTitles.logical).toBe("Shared title");
+  }).pipe(
+    Effect.provide(
+      Layer.mock(Project.ProjectService)({
+        update: () =>
+          Effect.succeed({
+            id: base.projectId,
+            title: "Shared title",
+            workspaceRoot: "/repo",
+            repositoryIdentity: null,
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            deletedAt: null,
+          }),
+      }),
+    ),
+    Effect.provide(dependencies),
+  );
+});

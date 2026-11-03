@@ -15,6 +15,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const workspaceProjectOrder: Record<string, string[]> = {};
   const workspaceFold: Record<string, Record<string, "quiet" | "active">> = {};
   const machines: Record<string, SidebarMachine> = {};
+  const projectTitles: Record<string, string> = {};
   const projectAliases: Record<string, string> = {};
   const projectMounts: Record<string, SidebarProjectMount[]> = {};
   const projectMountStatus: Record<string, Record<string, SidebarProjectMountStatus>> = {};
@@ -56,6 +57,10 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         break;
       case "machine":
         machines[a] = v as SidebarMachine;
+        break;
+      case "proj":
+        if (typeof v === "object" && "title" in v && typeof v.title === "string")
+          projectTitles[a] = v.title;
         break;
       case "alias":
         projectAliases[a] = v as string;
@@ -107,6 +112,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     workspaceProjectOrder,
     workspaceFold,
     machines,
+    projectTitles,
     projectAliases,
     projectMounts,
     projectMountStatus,

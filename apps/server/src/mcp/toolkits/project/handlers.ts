@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as MeshLayout from "../../../mesh/MeshLayoutService.ts";
 import * as Hex from "effect/encoding/Hex";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -428,9 +429,28 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
   t3_project_update: McpToolAccess.writesEnvironment((input) =>
     Effect.gen(function* () {
       const projects = yield* Project.ProjectService;
-      return yield* projects
+      const project = yield* projects
         .update({ ...input, commandId: yield* newCommandId() })
         .pipe(Effect.mapError(projectFailure));
+      const mesh = yield* Effect.serviceOption(MeshLayout.MeshLayoutService);
+      if (input.title !== undefined && Option.isSome(mesh)) {
+        const title = input.title;
+        yield* mesh.value
+          .edit((config) => {
+            const key = Object.keys(config.projectMounts).find((key) =>
+              config.projectMounts[key]?.some(
+                (rep) =>
+                  rep.environmentId === mesh.value.environmentId &&
+                  (rep.projectId === input.projectId || rep.path === project.workspaceRoot),
+              ),
+            );
+            return key === undefined
+              ? config
+              : { ...config, projectTitles: { ...config.projectTitles, [key]: title } };
+          })
+          .pipe(Effect.mapError(unavailable));
+      }
+      return project;
     }),
   ),
   t3_project_delete: McpToolAccess.writesEnvironment((input) =>

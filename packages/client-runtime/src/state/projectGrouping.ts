@@ -380,12 +380,13 @@ export function buildProjectGroups<TProject extends EnvironmentProject>(input: {
       label:
         input.groupScratchProjects && representative.isScratch
           ? "No project"
-          : members.length > 1
-            ? deriveProjectGroupLabel({
-                representative,
-                members: members.map((member) => member.project),
-              })
-            : representative.title,
+          : (input.layout?.projectTitles[key] ??
+            (members.length > 1
+              ? deriveProjectGroupLabel({
+                  representative,
+                  members: members.map((member) => member.project),
+                })
+              : representative.title)),
       representative,
       members,
       memberProjectRefs: projectRefsByLogicalKey.get(key) ?? [],
