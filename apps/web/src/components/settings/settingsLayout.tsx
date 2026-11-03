@@ -242,12 +242,16 @@ export function SettingsSection({
           )}
         >
           <div className="flex min-w-0 max-w-full items-center gap-1">
-            <h2
-              title={headerLayout === "responsive" ? title : undefined}
-              className="flex min-h-7 min-w-0 items-center gap-2 text-base font-semibold text-foreground"
-            >
+            <h2 className="flex min-h-7 min-w-0 items-center gap-2 text-base font-semibold text-foreground">
               {icon}
-              {headerLayout === "responsive" ? <span className="truncate">{title}</span> : title}
+              {headerLayout === "responsive" ? (
+                <Tooltip>
+                  <TooltipTrigger render={<span className="truncate" />}>{title}</TooltipTrigger>
+                  <TooltipPopup>{title}</TooltipPopup>
+                </Tooltip>
+              ) : (
+                title
+              )}
             </h2>
             {titleAction}
           </div>
