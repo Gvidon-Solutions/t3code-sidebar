@@ -62,11 +62,7 @@ export function MoveThreadTargetModel(props: {
             disabled={copying}
             onPress={async () => {
               setCopying(true);
-              try {
-                await props.copyHere?.run();
-              } finally {
-                setCopying(false);
-              }
+              await props.copyHere?.run().finally(() => setCopying(false));
             }}
           >
             <AppText>{copying ? "Preparing copy…" : props.copyHere.label}</AppText>

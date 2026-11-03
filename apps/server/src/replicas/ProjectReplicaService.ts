@@ -1,5 +1,5 @@
 import { adoptionSides } from "./adoptionModel.ts";
-import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
+import { normalizeRepresentationPath } from "@t3tools/shared/meshLayout";
 import {
   opaqueProjectId,
   meshMachineLabel,
@@ -923,8 +923,7 @@ const make = Effect.gen(function* () {
                 reps.some(
                   (entry) =>
                     entry.environmentId === environmentId &&
-                    normalizeProjectPathForComparison(entry.path) ===
-                      normalizeProjectPathForComparison(root),
+                    normalizeRepresentationPath(entry.path) === normalizeRepresentationPath(root),
                 ),
             )
           )
@@ -1089,8 +1088,8 @@ const make = Effect.gen(function* () {
                   mounts.some(
                     (rep) =>
                       rep.environmentId === sides.machine &&
-                      normalizeProjectPathForComparison(rep.path) ===
-                        normalizeProjectPathForComparison(sides.destination.path),
+                      normalizeRepresentationPath(rep.path) ===
+                        normalizeRepresentationPath(sides.destination.path),
                   )
                 )
                   return yield* new ReplicaError({

@@ -13,3 +13,5 @@ export { meshAuthorityOf, conflictWinner } from "./authority.ts";
 export { meshMachineLabel } from "./machineNames.ts";
 export { threadProjectTarget } from "./threadTarget.ts";
 export { opaqueProjectId, migrateLogicalProjectIds } from "./logicalIds.ts";
+
+export { normalizeRepresentationPath } from "./representationPath.ts";

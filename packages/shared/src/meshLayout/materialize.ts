@@ -1,4 +1,4 @@
-import { normalizeProjectPathForComparison } from "../path.ts";
+import { normalizeRepresentationPath } from "./representationPath.ts";
 import { meshAuthorityOf } from "./authority.ts";
 import { keys } from "./document.ts";
 import type {
@@ -144,10 +144,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   );
   const claimed = new Set<string>();
   for (const { logical, rep } of claims) {
-    const identity = JSON.stringify([
-      rep.environmentId,
-      normalizeProjectPathForComparison(rep.path),
-    ]);
+    const identity = JSON.stringify([rep.environmentId, normalizeRepresentationPath(rep.path)]);
     if (claimed.has(identity))
       projectMounts[logical] = projectMounts[logical]!.filter((other) => other !== rep);
     else claimed.add(identity);

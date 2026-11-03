@@ -53,7 +53,7 @@ const make = Effect.gen(function* () {
             reason: "storage",
             message: "The requested replica path is not a folder.",
           });
-        return root;
+        return path.normalize(root);
       }).pipe(
         Effect.mapError((cause) =>
           isReplicaError(cause)

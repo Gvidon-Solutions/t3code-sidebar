@@ -54,22 +54,10 @@ export function normalizeProjectPathForDispatch(value: string): string {
 
 export function normalizeProjectPathForComparison(value: string): string {
   const normalized = normalizeProjectPathForDispatch(value);
-  const windows = isWindowsDrivePath(normalized) || isUncPath(normalized);
-  const uniform = windows ? normalized.replaceAll("\\", "/").toLowerCase() : normalized;
-  const prefix = uniform.startsWith("//")
-    ? "//"
-    : uniform.startsWith("/")
-      ? "/"
-      : (uniform.match(/^[a-z]:\//)?.[0] ?? "");
-  const parts: string[] = [];
-  const protectedParts = prefix === "//" ? 2 : 0;
-  for (const part of uniform.slice(prefix.length).split("/")) {
-    if (!part || part === ".") continue;
-    if (part === ".." && parts.length > protectedParts && parts.at(-1) !== "..") parts.pop();
-    else if (part !== ".." || !prefix) parts.push(part);
+  if (isWindowsDrivePath(normalized) || isUncPath(normalized)) {
+    return normalized.replaceAll("/", "\\").toLowerCase();
   }
-  const result = prefix + parts.join("/");
-  return windows ? result.replaceAll("/", "\\") : result || (normalized ? "." : "");
+  return normalized;
 }
 
 // Windows refuses these as file names, with or without an extension.

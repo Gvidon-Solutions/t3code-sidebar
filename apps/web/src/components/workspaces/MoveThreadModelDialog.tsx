@@ -95,11 +95,7 @@ export function MoveThreadModelDialog(props: {
               disabled={copying}
               onClick={async () => {
                 setCopying(true);
-                try {
-                  await props.copyHere?.run();
-                } finally {
-                  setCopying(false);
-                }
+                await props.copyHere?.run().finally(() => setCopying(false));
               }}
             >
               {copying ? "Preparing copy…" : props.copyHere.label}

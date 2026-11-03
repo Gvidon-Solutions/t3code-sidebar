@@ -20,8 +20,6 @@ describe("path helpers", () => {
   it("normalizes a bare Windows drive root the same as one with a trailing separator", () => {
     expect(normalizeProjectPathForDispatch("C:")).toBe("C:\\");
     expect(normalizeProjectPathForComparison("C:")).toBe("c:\\");
-    expect(normalizeProjectPathForComparison("C:/repo/x/.././")).toBe("c:\\repo");
-    expect(normalizeProjectPathForComparison("/repo/x/.././")).toBe("/repo");
     expect(normalizeProjectPathForComparison("C:")).toBe(normalizeProjectPathForComparison("C:\\"));
     expect(normalizeProjectPathForComparison("C:")).toBe(normalizeProjectPathForComparison("C:/"));
     expect(normalizeProjectPathForDispatch("C:\\repo\\")).toBe("C:\\repo");

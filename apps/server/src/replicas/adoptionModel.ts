@@ -1,8 +1,8 @@
 import type { SidebarWorkspacesConfig, SidebarProjectMount } from "@t3tools/contracts";
-import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
+import { normalizeRepresentationPath } from "@t3tools/shared/meshLayout";
 import type { MutagenSession } from "./MutagenRunner.ts";
 
-export function endpointMachine(
+function endpointMachine(
   config: SidebarWorkspacesConfig,
   origin: string,
   endpoint: MutagenSession["alpha"],
@@ -44,8 +44,7 @@ export function adoptionSides(
       (rep) =>
         rep.role === "primary" &&
         rep.environmentId === sourceEnvironment &&
-        normalizeProjectPathForComparison(rep.path) ===
-          normalizeProjectPathForComparison(sourceEndpoint.path),
+        normalizeRepresentationPath(rep.path) === normalizeRepresentationPath(sourceEndpoint.path),
     );
     const machine = targetMachine ?? endpointMachine(config, origin, destination);
     if (source && machine && machine !== source.environmentId)
