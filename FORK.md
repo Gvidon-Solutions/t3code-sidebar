@@ -134,13 +134,13 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 - **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to gor.
 - **How:** staged `t3ctl agents sync/status` uses local file operations or pinned SSH routes, with offline render/diff/backup/isolation tests and real Codex/OpenCode eval evidence. Mesh routing resolves configured names and project paths, searches across machines, and runs git on a replica’s primary. General dispatch rules cover API prerequisites and execution location; compact skill tables are excluded from the formatter.
-- **Where:** `docs/skill-t3-next/`, `docs/agents-global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
+- **Where:** `agent-kit/skills/t3/`, `agent-kit/skills/t3/global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
 
 ### 2026-11-03 — T3 Mesh — Stage M session identity and thread access
 
 - **What:** agents can identify their thread and project representation, query threads across the mesh, and address remote threads by id alone. The staged CLI supports the same commands and current pending-question tools.
 - **How:** read-only `t3_thread_self` reads local layout, replica runtime and thread lineage; each mesh turn receives a compact identity note (≤600 bytes). MCP routing probes unknown ids through `callRouted`, caches locations and fans out list/search with concurrency four, deadlines and partial failures. Link credentials and mode checks remain authoritative; a full-access intermediary can relay reads to a fenced destination, whose own credential refuses writes. The tool-list budget grows by 242 bytes for the self tool; the dynamic note has its own measured 600-byte ceiling, avoiding full layout injection.
-- **Where:** server `mcp/toolkits/thread/self.ts`, `mesh/MeshThreadAccess.ts`, `McpToolAccess.ts`, UI toolkit, `mesh/MeshRelay.ts` and `replicas/ReplicaInstructions.ts`; seams in turn start, Claude's read-only allowlist and additive MCP list/search result fields. Staged skill review copy: `docs/skill-t3-next/`. No mesh CRDT contracts or service interfaces changed.
+- **Where:** server `mcp/toolkits/thread/self.ts`, `mesh/MeshThreadAccess.ts`, `McpToolAccess.ts`, UI toolkit, `mesh/MeshRelay.ts` and `replicas/ReplicaInstructions.ts`; seams in turn start, Claude's read-only allowlist and additive MCP list/search result fields. Staged skill review copy: `agent-kit/skills/t3/`. No mesh CRDT contracts or service interfaces changed.
 
 ### 2026-11-02 — T3 Mesh — round 2 replica acceptance
 
@@ -199,10 +199,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   with full access. Legacy layouts are encoded with the same rules as
   `@t3tools/shared/meshLayout` into zero-HLC entries, so the server runs `adoptLegacy`; backups go
   to `~/.local/state/t3-mesh-migrate/` first.
-- **Where.** The skill itself stays outside the repo (`~/.agents/skills/t3-next`;
-  `scripts/t3ctl.mjs`, `scripts/selftest.sh`, new `scripts/t3ctl.unit.test.mjs`, `SKILL.md`). The
-  review copy is `docs/skill-t3-next/` (`SKILL.md`, `scripts/t3ctl.mjs`, offline and transport tests, `scripts/selftest.sh`
-  and `t3ctl-changes.md`). No server contracts or app code changed.
+- **Where.** `agent-kit/skills/t3/` (`SKILL.md`, `scripts/t3ctl.mjs`, offline and transport tests,
+  `scripts/selftest.sh`); staged test-bed installs go to `~/.agents/skills/t3-next`. No server
+  contracts or app code changed.
 
 ### 2026-11-02 — T3 Mesh — Stage C server replication
 

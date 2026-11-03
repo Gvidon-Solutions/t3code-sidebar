@@ -14,16 +14,16 @@ readable from anywhere, and agents that know where they are.
 
 ## Object model (short; full text in the spec §0)
 
-| Entity | What it is | Where it lives |
-|---|---|---|
-| Machine | one T3 server (`environmentId`), label/tag/color, SSH routes to other machines | layout `machine/<env>` |
-| Link | server-to-server MCP session (pairing code, full access for the mesh) | each server's PeerLinks table |
-| Mesh | machines + links; one **authority** machine (`mesh.authority`, the owner's is gvidon) | layout |
-| Project (logical) | opaque id (the logical key, never shown) + **title** + representations | layout `proj/<id>`, `rep/<id>/<env>`, `alias/*` |
-| Representation | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores) | layout `rep/*` |
-| Sync session | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
-| Thread | lives on one machine, working dir inside one representation (or "No project") | that machine's DB |
-| Workspace | presentation only: placement, order, fold | layout `ws/*`, `place/*`, `fold/*` |
+| Entity            | What it is                                                                                                      | Where it lives                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Machine           | one T3 server (`environmentId`), label/tag/color, SSH routes to other machines                                  | layout `machine/<env>`                                        |
+| Link              | server-to-server MCP session (pairing code, full access for the mesh)                                           | each server's PeerLinks table                                 |
+| Mesh              | machines + links; one **authority** machine (`mesh.authority`, the owner's is gvidon)                           | layout                                                        |
+| Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>`, `rep/<id>/<env>`, `alias/*`               |
+| Representation    | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores)                            | layout `rep/*`                                                |
+| Sync session      | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
+| Thread            | lives on one machine, working dir inside one representation (or "No project")                                   | that machine's DB                                             |
+| Workspace         | presentation only: placement, order, fold                                                                       | layout `ws/*`, `place/*`, `fold/*`                            |
 
 Invariants I1–I6 (spec §0) are tested; keep them true: one project per (machine, path), one
 session per replica, one title everywhere, **no opaque id or legacy key ever shown to a person**,
@@ -49,6 +49,11 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   (`MeshThreadAccess.ts`), moves: same machine = project change (`threadMove`), other machine =
   **handoff** (`ThreadHandoffService.ts`, `handoffBundle.ts`: transcript + attachments as context,
   any harness/model on the target, original archived with a link).
+- **Draft machine selection.** Web `components/chat/useDraftEnvironmentRouting.ts` and mobile
+  `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen
+  machine with `planThreadOnMachine`. Replica status supplies progress and registration; the
+  destination's provider catalog drives model choices. Shared selection and availability logic is
+  in `packages/client-runtime/src/state/meshLayout/draftMachine.ts`.
 - **Files anywhere.** `apps/server/src/files/` (`files.read/list`, forwarded via `callRouted`;
   error reasons travel as `[files:<reason>]`).
 - **Context injection.** Every turn gets a short machine/project/representation note (budget in
@@ -69,7 +74,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   `t3_thread_*` with `environmentId` (or none — ids resolve across the mesh), `t3_files_read/list`,
   `ui_open` with `environmentId`, link-only `t3_mesh_*` and handoff tools.
 - **Agent instructions:** `agent-kit/skills/t3/global/GLOBAL.md` (the owner's canonical text, Russian)
-  + `machines.json`; rendered per machine with a one-line header into `~/.claude/CLAUDE.md`,
+  and `machines.json`; rendered per machine with a one-line header into `~/.claude/CLAUDE.md`,
   `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`.
 
 ## The agent kit (skills and instructions live in this repo)
@@ -122,3 +127,13 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - Calendar-dependent tests break (UsageService); use `Clock`, relative dates.
 - Many parallel agents on one emulator/bed collide: coordinate devices; bed runs that restart
   servers must not overlap other agents' runs.
+- A draft's machine list must include machines without a representation of its project; deriving
+  choices only from existing physical projects hides the very destination that needs a replica.
+- Replica registration is asynchronous. Retaining draft text is not enough: queued-send intent
+  must survive leaving the draft screen. Stage P's component-local send gate does not yet meet
+  that lifecycle requirement; do not treat its unit test as proof of a background launch.
+- Provider authentication and model availability belong to the destination machine. Keep an
+  unavailable explicit selection visible, and test catalog caching when adding pending targets.
+- The standalone CLI layout encoder must stay in parity with shared core, including `proj/*`
+  title entries. Extend `agent-kit/skills/t3/shared-parity.test.mjs` when adding layout fields;
+  CLI-only fixtures can otherwise miss data silently.
