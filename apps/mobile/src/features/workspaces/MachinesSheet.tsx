@@ -29,7 +29,7 @@ function ReplicaTag(props: {
       className="h-4 items-center justify-center rounded px-1"
       style={{ backgroundColor: machineTagBackground(props.color) }}
     >
-      <Text className="font-mono text-[10px] font-t3-bold uppercase" style={{ color: props.color }}>
+      <Text className="font-mono text-[10px] font-t3-bold uppercase text-foreground">
         {props.tag}
       </Text>
     </View>
@@ -134,9 +134,8 @@ export function MachinesSheet(props: {
                   tone="secondary"
                   onPress={() =>
                     Dialog.confirm({
-                      title: "Remove this replica?",
-                      message:
-                        "The sync stops and its representation is removed. Files already on the machine stay where they are.",
+                      title: `Remove this ${rep.role}?`,
+                      message: `${rep.role === "replica" ? "Synchronization stops and the replica is removed from this mesh folder." : "The primary is removed from this mesh folder."} Files already on the machine stay where they are.`,
                       confirmText: "Remove",
                       destructive: true,
                       onConfirm: () => props.onRemove(rep.environmentId),
@@ -157,10 +156,12 @@ export function MachinesSheet(props: {
                   accessibilityRole="button"
                   accessibilityLabel={`Add replica on ${machine.label}`}
                   onPress={() => props.onAddReplica(machine.environmentId)}
-                  className="flex-row items-center gap-1.5 rounded-full border border-border px-3 py-1.5"
+                  className="min-h-[45px] max-w-full flex-row items-center gap-1.5 rounded-full border border-border px-3 py-1.5"
                 >
                   <ReplicaTag label={machine.label} tag={machine.tag} color={machine.color} />
-                  <Text className="text-sm text-foreground">{machine.label}</Text>
+                  <Text numberOfLines={1} className="shrink text-sm text-foreground">
+                    {machine.label}
+                  </Text>
                 </Pressable>
               ))}
             </View>

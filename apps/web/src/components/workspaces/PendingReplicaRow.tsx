@@ -8,6 +8,7 @@ import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 
 import { MachineTag } from "./MachineTag";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { useEnvironments } from "../../state/environments";
 
 /** Fork: a machine mounting this folder, above its threads until the project registers. */
 export function PendingReplicaRow(props: {
@@ -16,9 +17,12 @@ export function PendingReplicaRow(props: {
   readonly onRetry: (row: PendingReplicaRowModel) => void;
 }) {
   const { row, config } = props;
-  const machine = machineDisplayOf(config, row.rep.environmentId, row.rep.environmentId);
+  const { environments } = useEnvironments();
+  const labelOf = (id: string) =>
+    environments.find((environment) => environment.environmentId === id)?.label ?? id;
+  const machine = machineDisplayOf(config, row.rep.environmentId, labelOf(row.rep.environmentId));
   const source = row.rep.source
-    ? machineDisplayOf(config, row.rep.source, row.rep.source).label
+    ? machineDisplayOf(config, row.rep.source, labelOf(row.rep.source)).label
     : "the source";
   const text = replicaStatusCopy({
     state: row.status.state,
