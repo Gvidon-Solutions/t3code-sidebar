@@ -191,9 +191,9 @@ gor_ssh 'chmod 755 ~/.local/bin/mutagen; ~/.local/bin/mutagen version'
 
 log "updating gor t3ctl / staged t3-next skill"
 gor_ssh 'mkdir -p ~/.agents/skills/t3-next/scripts'
-for f in t3ctl.mjs selftest.sh sidebar-workspaces-sync.mjs; do
-  if [ -f "$HOME/.agents/skills/t3-next/scripts/$f" ]; then
-    gor_scp "$HOME/.agents/skills/t3-next/scripts/$f" "$GOR_HOST:.agents/skills/t3-next/scripts/"
+for f in t3ctl.mjs server-runtime.mjs selftest.sh sidebar-workspaces-sync.mjs; do
+  if [ -f "$REPO_ROOT/docs/skill-t3-next/scripts/$f" ]; then
+    gor_scp "$REPO_ROOT/docs/skill-t3-next/scripts/$f" "$GOR_HOST:.agents/skills/t3-next/scripts/"
   fi
 done
 gor_ssh 'bash -s' <<'EOF'

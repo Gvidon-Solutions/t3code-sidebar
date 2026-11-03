@@ -257,3 +257,27 @@ NodeTest.test(
     });
   },
 );
+
+NodeTest.test("place retains repeated ignore patterns and the requested transport", () => {
+  const parsed = parseArgs([
+    "Project",
+    "--on",
+    "OP",
+    "--ignore",
+    "*.tmp",
+    "--ignore",
+    "cache",
+    "--transport",
+    "manual",
+  ]);
+  NodeAssert.deepEqual(parsed.opt.ignore, ["*.tmp", "cache"]);
+  NodeAssert.deepEqual(
+    buildPlaceInput({
+      project: "p",
+      machine: "op",
+      ignores: parsed.opt.ignore,
+      transport: parsed.opt.transport,
+    }),
+    { project: "p", machine: "op", ignores: ["*.tmp", "cache"], transport: "manual" },
+  );
+});

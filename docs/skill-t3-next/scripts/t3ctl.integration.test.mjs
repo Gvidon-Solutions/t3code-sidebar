@@ -194,19 +194,47 @@ test("link discovers an unknown machine over ssh before pairing", () => {
 });
 
 test("session commands resolve ids in the mesh and pending questions use current MCP actions", () => {
-  for (const [command, tool, rest] of [["show", "t3_thread_read", []], ["send", "t3_thread_send", ["hello"]], ["wait", "t3_thread_wait", []], ["stop", "t3_thread_interrupt", []]]) {
+  for (const [command, tool, rest] of [
+    ["show", "t3_thread_read", []],
+    ["send", "t3_thread_send", ["hello"]],
+    ["wait", "t3_thread_wait", []],
+    ["stop", "t3_thread_interrupt", []],
+  ]) {
     const r = run([command, "mcp:remote-thread", ...rest]);
     assert.ok(r.calls.some((c) => c.name === tool));
-    assert.ok(r.calls.some((c) => c.name === "t3_thread_read" && c.args.threadId === "mcp:remote-thread" && c.args.environmentId === undefined));
+    assert.ok(
+      r.calls.some(
+        (c) =>
+          c.name === "t3_thread_read" &&
+          c.args.threadId === "mcp:remote-thread" &&
+          c.args.environmentId === undefined,
+      ),
+    );
   }
   const requests = run(["requests", "mcp:remote-thread"], { T3CTL_TEST_QUESTION: "1" });
-  assert.ok(requests.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "list"));
-  assert.ok(requests.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "read"));
+  assert.ok(
+    requests.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "list"),
+  );
+  assert.ok(
+    requests.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "read"),
+  );
   const answered = run(["answer", "mcp:remote-thread", "yes"], { T3CTL_TEST_QUESTION: "1" });
-  assert.ok(answered.calls.some((c) => c.name === "t3_pending_request" && c.args.action === "respond" && c.args.answers.q === "yes"));
-  const self = run(["self"], { T3_MCP_URL: "http://fixture/mcp", T3_MCP_BEARER_TOKEN: "scoped-test" });
+  assert.ok(
+    answered.calls.some(
+      (c) =>
+        c.name === "t3_pending_request" &&
+        c.args.action === "respond" &&
+        c.args.answers.q === "yes",
+    ),
+  );
+  const self = run(["self"], {
+    T3_MCP_URL: "http://fixture/mcp",
+    T3_MCP_BEARER_TOKEN: "scoped-test",
+  });
   assert.ok(self.calls.some((c) => c.name === "t3_thread_self"));
-  const named = run(["show", "Mount: a long thread title that needs mesh name resolution"], { T3CTL_TEST_LONG_TITLE: "1" });
+  const named = run(["show", "Mount: a long thread title that needs mesh name resolution"], {
+    T3CTL_TEST_LONG_TITLE: "1",
+  });
   assert.ok(named.calls.some((c) => c.name === "t3_thread_list" && c.args.environmentId === "all"));
 });
 
@@ -214,4 +242,36 @@ test("thread ids in printed output retain the full MCP prefix and body", () => {
   const id = "mcp:full-thread-example-0123456789";
   const sent = run(["send", id, "hello"], { T3CTL_TEST_FULL_ID: "1" });
   assert.ok(sent.out.includes(id), sent.out);
+});
+
+test("mesh and replica text use the project title, and adoption reaches the management service", () => {
+  for (const command of [["mesh", "status"], ["replicas"]]) {
+    const result = run(command);
+    assert.match(result.out, /Demo/);
+    assert.doesNotMatch(result.out, /\srepo\s/);
+  }
+  const result = run(["replica", "adopt", "N-manual", "--project", "Demo"]);
+  assert.deepEqual(result.calls.find((call) => call.name === "replicas.adopt").args, {
+    project: "p",
+    session: "N-manual",
+  });
+  assert.match(result.out, /original session stays paused/);
+  const placed = run([
+    "place",
+    "Demo",
+    "--on",
+    "GO",
+    "--path",
+    "/explicit/path",
+    "--ignore",
+    "*.cache",
+    "--ignore",
+    "scratch",
+    "--transport",
+    "manual",
+  ]);
+  const input = placed.calls.find((call) => call.name === "t3_project_place").args;
+  assert.equal(input.path, "/explicit/path");
+  assert.equal(input.transport, "manual");
+  assert.deepEqual(input.ignores, ["*.cache", "scratch"]);
 });
