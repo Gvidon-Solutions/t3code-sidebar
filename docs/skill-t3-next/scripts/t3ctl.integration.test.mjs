@@ -232,6 +232,10 @@ test("session commands resolve ids in the mesh and pending questions use current
     T3_MCP_BEARER_TOKEN: "scoped-test",
   });
   assert.ok(self.calls.some((c) => c.name === "t3_thread_self"));
+  const named = run(["show", "Mount: a long thread title that needs mesh name resolution"], {
+    T3CTL_TEST_LONG_TITLE: "1",
+  });
+  assert.ok(named.calls.some((c) => c.name === "t3_thread_list" && c.args.environmentId === "all"));
 });
 
 test("thread ids in printed output retain the full MCP prefix and body", () => {

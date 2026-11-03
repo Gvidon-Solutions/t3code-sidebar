@@ -1117,24 +1117,28 @@ async function resolveThreadAcross(ref, { on } = {}) {
   const r = String(ref);
   const m = await mcp();
   if (r.length > 30 || r.includes(":")) {
-    const t = (
-      await m.call("t3_thread_read", {
-        threadId: r,
-        limit: 1,
-        ...(machine ? { environmentId: machine.environmentId } : {}),
-      })
-    ).thread;
-    return {
-      ...t,
-      project: t.projectId,
-      ...(machine
-        ? {
-            environmentId: machine.environmentId,
-            machineLabel: machine.label,
-            machineTag: machine.tag,
-          }
-        : {}),
-    };
+    try {
+      const t = (
+        await m.call("t3_thread_read", {
+          threadId: r,
+          limit: 1,
+          ...(machine ? { environmentId: machine.environmentId } : {}),
+        })
+      ).thread;
+      return {
+        ...t,
+        project: t.projectId,
+        ...(machine
+          ? {
+              environmentId: machine.environmentId,
+              machineLabel: machine.label,
+              machineTag: machine.tag,
+            }
+          : {}),
+      };
+    } catch (error) {
+      if (!(error instanceof Fail) || !error.message.includes("thread_not_found")) throw error;
+    }
   }
   const candidates = [];
   let cursor;

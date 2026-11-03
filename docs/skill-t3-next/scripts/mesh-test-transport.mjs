@@ -35,7 +35,9 @@ if (process.env.T3CTL_TEST_REMOTE_DRIVER)
 const snapshot = { environmentId: self, config, document: {} };
 const thread = {
   threadId: process.env.T3CTL_TEST_FULL_ID ? "mcp:full-thread-example-0123456789" : "thread-1",
-  title: "mount work",
+  title: process.env.T3CTL_TEST_LONG_TITLE
+    ? "Mount: a long thread title that needs mesh name resolution"
+    : "mount work",
   projectId: "p",
   status: "completed",
   updatedAt: new Date().toISOString(),
@@ -66,6 +68,10 @@ function call(name, args) {
         nextCursor: null,
       };
     case "t3_thread_read":
+      if (process.env.T3CTL_TEST_LONG_TITLE && args.threadId === thread.title)
+        throw Error(
+          JSON.stringify({ code: "thread_not_found", message: "No id matches that title." }),
+        );
       return { thread, items: [{ type: "assistant_message", text: "done" }], hasMore: false };
     case "t3_thread_search":
       if (args.environmentId === "all" && process.env.T3CTL_TEST_FALLBACK)
