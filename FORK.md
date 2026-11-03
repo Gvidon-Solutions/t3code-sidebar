@@ -1513,3 +1513,9 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - Move confirmation on web and mobile reuses the composer model/options picker against the destination environment. It preserves the current selection or chooses the destination catalog default with a notice.
 - `threads.move`, MCP `t3_thread_move` and `t3ctl move --agent/--model/--effort` carry the target selection. Local moves update it atomically; cross-machine moves import plain conversation context into the selected harness. Forks discard source handoff ownership so they can move independently.
 - Implementation: workspace move dialogs/sheets, shared `meshLayout/moveModel`, `ThreadHandoffService`, orchestration move command and `ThreadForkService`.
+
+### 2026-11-03 — Stage P customer-independent machine configuration
+
+- **What.** Machine aliases are editable in Settings › Mesh on web/desktop and mobile, and with `t3ctl machines alias`. Machine names and provider defaults come from customer configuration.
+- **How.** Optional aliases share the existing `machine/*` CRDT entry. The CLI matches ids, labels, tags, aliases and SSH destinations without a built-in machine dictionary, preserves other machine fields, and advances beyond observed layout clocks. Unspecified thread model/permissions stay with the destination's defaults; explicit model discovery targets that machine. Agent-kit installation and instruction sync use registry-defined SSH routes, relays, home-relative paths and remote Node commands.
+- **Where.** `SidebarMachine`, client-runtime machine display/overview helpers, web `MeshSettingsPanel`, mobile `SettingsMachinesRouteScreen`, and `agent-kit/`. Regression fixtures use synthetic customer names and paths; personal installation data stays in `agent-kit/skills/t3/global/`.

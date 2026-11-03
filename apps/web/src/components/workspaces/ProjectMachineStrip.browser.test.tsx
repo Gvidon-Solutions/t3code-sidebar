@@ -12,7 +12,7 @@ it("opens Machines without toggling its folder, including after a live status ch
     projectMounts: {
       demo: [
         {
-          environmentId: "gor",
+          environmentId: "lab",
           role: "primary" as const,
           path: "/demo",
           transport: "git" as const,
@@ -26,7 +26,7 @@ it("opens Machines without toggling its folder, including after a live status ch
           createdAt: "",
         },
         {
-          environmentId: "gv",
+          environmentId: "at",
           role: "replica" as const,
           path: "/demo",
           transport: "mutagen" as const,
@@ -35,7 +35,7 @@ it("opens Machines without toggling its folder, including after a live status ch
       ],
     },
   };
-  const group = { projectKey: "demo", environmentIds: ["gv"], knownEnvironmentIds: ["gor", "gv"] };
+  const group = { projectKey: "demo", environmentIds: ["at"], knownEnvironmentIds: ["lab", "at"] };
   const model = projectMachineStrip(config, group, []);
   await using screen = await render(
     <div onClick={toggle}>
@@ -48,13 +48,13 @@ it("opens Machines without toggling its folder, including after a live status ch
     screen.getByRole("button", { name: model.description }).element().textContent?.match(/⇄/g),
   ).toHaveLength(1);
   expect(
-    screen.getByRole("img", { name: "Machine: gv" }).element().querySelector("[aria-hidden]"),
+    screen.getByRole("img", { name: "Machine: at" }).element().querySelector("[aria-hidden]"),
   ).not.toBeNull();
   expect(toggle).not.toHaveBeenCalled();
   const synced = projectMachineStrip(config, group, [
     {
       logicalKey: "demo",
-      environmentId: "gv",
+      environmentId: "at",
       state: "watching",
       conflicts: [],
       problems: [],
@@ -68,7 +68,7 @@ it("opens Machines without toggling its folder, including after a live status ch
   );
   await expect.element(screen.getByRole("button", { name: synced.description })).toBeVisible();
   expect(
-    screen.getByRole("img", { name: "Machine: gv" }).element().querySelector("[aria-hidden]"),
+    screen.getByRole("img", { name: "Machine: at" }).element().querySelector("[aria-hidden]"),
   ).toBeNull();
   const primaries = projectMachineStrip(
     {

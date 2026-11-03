@@ -7,7 +7,7 @@ import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSele
 vi.mock("../hooks/useMeshLayout", () => ({
   useMeshLayout: () => ({
     config: {
-      machines: { op: { label: "Operalia", tag: "OP" }, gv: { label: "gvidon", tag: "GV" } },
+      machines: { bo: { label: "Boreal", tag: "BO" }, at: { label: "atlas", tag: "AT" } },
     },
   }),
 }));
@@ -17,21 +17,21 @@ it("offers a project copy on another machine and disables an unreachable machine
   await using screen = await render(
     <BranchToolbarEnvironmentSelector
       envLocked={false}
-      environmentId={EnvironmentId.make("gv")}
+      environmentId={EnvironmentId.make("at")}
       onEnvironmentChange={onChange}
       availableEnvironments={[
         {
-          environmentId: EnvironmentId.make("gv"),
+          environmentId: EnvironmentId.make("at"),
           projectId: ProjectId.make("project"),
-          label: "gvidon",
+          label: "atlas",
           isPrimary: true,
           machine: "server",
           connected: true,
         },
         {
-          environmentId: EnvironmentId.make("op"),
+          environmentId: EnvironmentId.make("bo"),
           projectId: null,
-          label: "Operalia",
+          label: "Boreal",
           isPrimary: false,
           machine: "server",
           connected: true,
@@ -52,5 +52,5 @@ it("offers a project copy on another machine and disables an unreachable machine
     .element(screen.getByRole("option", { name: /Offline/ }))
     .toHaveAttribute("aria-disabled", "true");
   await userEvent.keyboard("{ArrowDown}{Enter}");
-  expect(onChange).toHaveBeenCalledWith("op");
+  expect(onChange).toHaveBeenCalledWith("bo");
 });

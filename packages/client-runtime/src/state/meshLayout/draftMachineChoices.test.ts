@@ -7,37 +7,37 @@ import {
 
 it("distinguishes isolated servers sharing a hostname and deduplicates one environment", () => {
   const machines = [
-    { environmentId: "old", label: "gvidon", url: "http://10.0.2.2:3795" },
-    { environmentId: "other", descriptorLabel: "gvidon", url: "http://10.0.2.2:3805" },
-    { environmentId: "current", descriptorLabel: "gvidon", url: "http://10.0.2.2:16155" },
+    { environmentId: "old", label: "atlas", url: "http://10.0.2.2:3795" },
+    { environmentId: "other", descriptorLabel: "atlas", url: "http://10.0.2.2:3805" },
+    { environmentId: "current", descriptorLabel: "atlas", url: "http://10.0.2.2:16155" },
   ];
   const result = draftMachineDisplays({ machines: {} }, [...machines, machines[0]!]);
   expect(result.rows.map((row) => row.label)).toEqual([
-    "gvidon (10.0.2.2:3795)",
-    "gvidon (10.0.2.2:3805)",
-    "gvidon (10.0.2.2:16155)",
+    "atlas (10.0.2.2:3795)",
+    "atlas (10.0.2.2:3805)",
+    "atlas (10.0.2.2:16155)",
   ]);
   expect(result.collisions).toEqual([
-    { label: "gvidon", environmentIds: ["current", "old", "other"] },
+    { label: "atlas", environmentIds: ["current", "old", "other"] },
   ]);
 });
 it("prefers the layout name, then descriptor; distinct layout tags disambiguate before endpoints", () => {
   const result = draftMachineDisplays(
-    { machines: { a: { label: "Server", tag: "OP" }, b: { label: "Server", tag: "GV" } } },
+    { machines: { a: { label: "Server", tag: "BO" }, b: { label: "Server", tag: "AT" } } },
     [
-      { environmentId: "a", descriptorLabel: "Operalia", label: "stale" },
-      { environmentId: "b", descriptorLabel: "gvidon" },
+      { environmentId: "a", descriptorLabel: "Boreal", label: "stale" },
+      { environmentId: "b", descriptorLabel: "atlas" },
     ],
   );
   expect(result.rows.map((row) => [row.tag, row.label])).toEqual([
-    ["OP", "Server (OP)"],
-    ["GV", "Server (GV)"],
+    ["BO", "Server (BO)"],
+    ["AT", "Server (AT)"],
   ]);
   expect(
     draftMachineDisplays({ machines: {} }, [
-      { environmentId: "a", label: "old", descriptorLabel: "Operalia" },
+      { environmentId: "a", label: "old", descriptorLabel: "Boreal" },
     ]).rows[0]?.label,
-  ).toBe("Operalia");
+  ).toBe("Boreal");
 });
 it("never prints opaque ids even when two stale connections have no usable endpoint", () => {
   const rows = draftMachineDisplays({ machines: {} }, [

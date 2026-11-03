@@ -60,8 +60,8 @@ vi.mock("../../hooks/useLoadBalancedEnvironment", () => ({
 }));
 
 it("persists send while mounting, leaves the composer, restarts, then launches exactly once on the registered machine", async () => {
-  const gv = EnvironmentId.make("gv"),
-    op = EnvironmentId.make("op");
+  const at = EnvironmentId.make("at"),
+    bo = EnvironmentId.make("bo");
   const instanceId = ProviderInstanceId.make("codex");
   fixture.useMesh = function useFixtureMesh() {
     const mesh = useContext(MeshContext);
@@ -70,8 +70,8 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
   };
   fixture.projects = [
     {
-      environmentId: gv,
-      id: ProjectId.make("gv-project"),
+      environmentId: at,
+      id: ProjectId.make("at-project"),
       title: "demo",
       workspaceRoot: "/demo",
       repositoryIdentity: null,
@@ -80,7 +80,7 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
   const draftId = DraftId.make("durable-draft");
   useComposerDraftStore
     .getState()
-    .setProjectDraftThreadId(scopeProjectRef(gv, ProjectId.make("gv-project")), draftId, {
+    .setProjectDraftThreadId(scopeProjectRef(at, ProjectId.make("at-project")), draftId, {
       threadId: ThreadId.make("durable-thread"),
       environmentSelection: "manual",
     });
@@ -89,15 +89,15 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
   const config: SidebarWorkspacesConfig = {
     ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
     machines: {
-      gv: { label: "gvidon", tag: "GV", color: "#667788" },
-      op: { label: "Operalia", tag: "OP", color: "#778899" },
+      at: { label: "atlas", tag: "AT", color: "#667788" },
+      bo: { label: "Boreal", tag: "BO", color: "#778899" },
     },
     projectMounts: {
       demo: [
         {
-          environmentId: gv,
+          environmentId: at,
           path: "/demo",
-          projectId: "gv-project",
+          projectId: "at-project",
           role: "primary",
           transport: "git",
           createdAt: "",
@@ -117,7 +117,7 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
     ],
   } as unknown as ServerConfig;
   const machines: PendingDraftMesh["machines"] = new Map([
-    [op, { connected: true, config: server }],
+    [bo, { connected: true, config: server }],
   ]);
   const threads = new Map<string, { environmentId: string; projectId: string; text: string }>();
   const launches = vi.fn(async (send: PendingDraftSend, projectId: string) => {
@@ -139,17 +139,17 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
     const draftThread = useComposerDraftStore((store) => store.getDraftSession(draftId));
     const availableEnvironments = [
       {
-        environmentId: gv,
-        projectId: ProjectId.make("gv-project"),
-        label: "gvidon",
+        environmentId: at,
+        projectId: ProjectId.make("at-project"),
+        label: "atlas",
         isPrimary: true,
         machine: "server" as const,
         connected: true,
       },
       {
-        environmentId: op,
+        environmentId: bo,
         projectId: null,
-        label: "Operalia",
+        label: "Boreal",
         isPrimary: false,
         machine: "server" as const,
         connected: true,
@@ -187,20 +187,20 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
         />
         <BranchToolbarEnvironmentSelector
           envLocked={false}
-          environmentId={routing.pendingDraftMachineId ?? gv}
+          environmentId={routing.pendingDraftMachineId ?? at}
           availableEnvironments={[
             {
-              environmentId: gv,
-              projectId: ProjectId.make("gv-project"),
-              label: "gvidon",
+              environmentId: at,
+              projectId: ProjectId.make("at-project"),
+              label: "atlas",
               isPrimary: true,
               machine: "server",
               connected: true,
             },
             {
-              environmentId: op,
+              environmentId: bo,
               projectId: null,
-              label: "Operalia",
+              label: "Boreal",
               isPrimary: false,
               machine: "server",
               connected: true,
@@ -241,18 +241,18 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
         >
           Send
         </button>
-        {layout.projectMounts.demo?.some((rep) => rep.environmentId === op) && (
-          <div role="status">Mounting on Operalia</div>
+        {layout.projectMounts.demo?.some((rep) => rep.environmentId === bo) && (
+          <div role="status">Mounting on Boreal</div>
         )}
       </>
     );
   }
   await using screen = await render(<Draft />);
   await screen.getByRole("combobox", { name: "Machine" }).click();
-  await screen.getByRole("option", { name: /Operalia/ }).click();
+  await screen.getByRole("option", { name: /Boreal/ }).click();
   await userEvent.fill(screen.getByRole("textbox", { name: "Message" }), "Run this after mounting");
   await screen.getByRole("button", { name: "Send", exact: true }).click();
-  await expect.element(screen.getByRole("status")).toHaveTextContent("Mounting on Operalia");
+  await expect.element(screen.getByRole("status")).toHaveTextContent("Mounting on Boreal");
   await vi.waitFor(() => expect(outbox.getSnapshot()[0]?.text).toBe("Run this after mounting"));
   expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.prompt).toBe(
     "Run this after mounting",
@@ -268,12 +268,12 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
       demo: [
         ...config.projectMounts.demo!,
         {
-          environmentId: op,
+          environmentId: bo,
           path: "/replica/demo",
-          projectId: "op-project",
+          projectId: "bo-project",
           role: "replica" as const,
           transport: "mutagen" as const,
-          source: gv,
+          source: at,
           createdAt: "",
         },
       ],
@@ -294,12 +294,12 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
   await restored.drain({ config: registered, statuses: [], machines }, launches);
   expect(launches).toHaveBeenCalledTimes(1);
   expect([...threads.values()]).toEqual([
-    { environmentId: "op", projectId: "op-project", text: "Run this after mounting" },
+    { environmentId: "bo", projectId: "bo-project", text: "Run this after mounting" },
   ]);
   expect(errors).not.toHaveBeenCalled();
   expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.prompt ?? "").toBe("");
   expect(useComposerDraftStore.getState().getDraftSession(draftId)?.promotedTo?.environmentId).toBe(
-    op,
+    bo,
   );
   useComposerDraftStore.getState().setPrompt(draftId, "A follow-up typed after restart");
   completePendingMeshDraft(restored.getSnapshot()[0]!);

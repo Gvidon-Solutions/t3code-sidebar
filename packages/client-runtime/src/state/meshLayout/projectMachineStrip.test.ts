@@ -13,7 +13,7 @@ const rep = (environmentId: string, role: "primary" | "replica"): SidebarProject
   transport: role === "primary" ? "git" : "mutagen",
   createdAt: "",
 });
-const group = { projectKey: "demo", environmentIds: ["gor"], knownEnvironmentIds: ["gor", "gv"] };
+const group = { projectKey: "demo", environmentIds: ["lab"], knownEnvironmentIds: ["lab", "at"] };
 
 describe("projectMachineStrip", () => {
   it.each([
@@ -27,12 +27,12 @@ describe("projectMachineStrip", () => {
   ] as const)("shows %s from live status over stored status", (state, tone, pending, copy) => {
     const config = {
       ...empty,
-      projectMounts: { demo: [rep("gv", "replica")] },
-      projectMountStatus: { demo: { gv: { state: "error" as const, updatedAt: "" } } },
+      projectMounts: { demo: [rep("at", "replica")] },
+      projectMountStatus: { demo: { at: { state: "error" as const, updatedAt: "" } } },
     };
     const live: ReplicaLiveStatus = {
       logicalKey: "demo",
-      environmentId: "gv",
+      environmentId: "at",
       state,
       updatedAt: "",
       conflicts: ["a", "b"],
@@ -40,7 +40,7 @@ describe("projectMachineStrip", () => {
     };
     const model = projectMachineStrip(config, group, [live]);
     expect(model.chips[0]).toMatchObject({ state, tone, pending });
-    expect(model.description).toBe(`Replica on gv (${copy})`);
+    expect(model.description).toBe(`Replica on at (${copy})`);
     expect(projectMachineStrip(config, group, []).chips[0]?.state).toBe("error");
   });
   it("orders primaries in layout order, then replicas, and counts all hidden chips", () => {
@@ -49,8 +49,8 @@ describe("projectMachineStrip", () => {
       projectMounts: {
         demo: [
           rep("vps", "replica"),
-          rep("gor", "primary"),
-          rep("gv", "primary"),
+          rep("lab", "primary"),
+          rep("at", "primary"),
           rep("other", "replica"),
         ],
       },
@@ -60,20 +60,20 @@ describe("projectMachineStrip", () => {
       tag: id,
       color: "#123456",
     }));
-    expect(model.chips.map((chip) => chip.environmentId)).toEqual(["gor", "gv", "vps"]);
+    expect(model.chips.map((chip) => chip.environmentId)).toEqual(["lab", "at", "vps"]);
     expect(model.overflow).toBe(1);
     expect(model.description).toBe(
-      "Primary on GOR · Primary on GV · Replica on VPS (pending) · Replica on OTHER (pending)",
+      "Primary on LAB · Primary on AT · Replica on VPS (pending) · Replica on OTHER (pending)",
     );
   });
   it("hides single-machine strips and uses legacy members on a multi-machine client", () => {
     expect(
-      projectMachineStrip(empty, { ...group, knownEnvironmentIds: ["gor"] }, []).chips,
+      projectMachineStrip(empty, { ...group, knownEnvironmentIds: ["lab"] }, []).chips,
     ).toEqual([]);
-    expect(projectMachineStrip(empty, group, []).chips[0]?.environmentId).toBe("gor");
+    expect(projectMachineStrip(empty, group, []).chips[0]?.environmentId).toBe("lab");
     expect(
       projectMachineStrip(
-        { ...empty, machines: { gv: {} } },
+        { ...empty, machines: { at: {} } },
         { ...group, knownEnvironmentIds: [] },
         [],
       ).chips,
@@ -83,10 +83,10 @@ describe("projectMachineStrip", () => {
     const config = { ...empty, projectMounts: { demo: [rep("vps", "replica")] } };
     const model = projectMachineStrip(
       config,
-      { ...group, isScratch: true, environmentIds: ["gv", "gor", "gv"] },
+      { ...group, isScratch: true, environmentIds: ["at", "lab", "at"] },
       [],
     );
-    expect(model.chips.map((chip) => chip.environmentId)).toEqual(["gv", "gor"]);
-    expect(model.description).toBe("Scratch on gv · Scratch on gor");
+    expect(model.chips.map((chip) => chip.environmentId)).toEqual(["at", "lab"]);
+    expect(model.description).toBe("Scratch on at · Scratch on lab");
   });
 });

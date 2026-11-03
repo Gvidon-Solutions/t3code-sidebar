@@ -20,8 +20,8 @@ vi.mock("../../state/environments", () => ({
   useEnvironmentProviders: () => fixtures.providers,
 }));
 function setup() {
-  const gv = EnvironmentId.make("gv"),
-    op = EnvironmentId.make("op");
+  const at = EnvironmentId.make("at"),
+    bo = EnvironmentId.make("bo");
   const claude = ProviderInstanceId.make("claude");
   const codex = ProviderInstanceId.make("codex");
   const settings = {
@@ -38,19 +38,19 @@ function setup() {
     models: models.map((slug) => ({ slug })),
   });
   fixtures.providers = new Map([
-    [gv, [provider(claude, false, ["sonnet"]), provider(codex, true, ["first", "luna"])]],
-    [op, [provider(claude, true, ["sonnet"])]],
+    [at, [provider(claude, false, ["sonnet"]), provider(codex, true, ["first", "luna"])]],
+    [bo, [provider(claude, true, ["sonnet"])]],
   ]) as unknown as typeof fixtures.providers;
-  fixtures.environments = [gv, op].map((environmentId) => ({
+  fixtures.environments = [at, bo].map((environmentId) => ({
     environmentId,
     serverConfig: { settings },
   })) as unknown as EnvironmentPresentation[];
-  return { gv, op, claude, codex };
+  return { at, bo, claude, codex };
 }
 it("keeps an unusable Claude selection and switches to its authenticated machine in one click", async () => {
-  const { gv, op, claude } = setup();
+  const { at, bo, claude } = setup();
   function Draft() {
-    const [machine, setMachine] = useState(gv);
+    const [machine, setMachine] = useState(at);
     const [model, setModel] = useState<ModelSelection>({ instanceId: claude, model: "sonnet" });
     return (
       <>
@@ -62,17 +62,17 @@ it("keeps an unusable Claude selection and switches to its authenticated machine
           environmentId={machine}
           machines={[
             {
-              environmentId: gv,
+              environmentId: at,
               projectId: null,
-              label: "gvidon",
+              label: "atlas",
               connected: true,
               machine: "server",
               isPrimary: true,
             },
             {
-              environmentId: op,
+              environmentId: bo,
               projectId: null,
-              label: "Operalia",
+              label: "Boreal",
               connected: true,
               machine: "server",
               isPrimary: false,
@@ -85,13 +85,13 @@ it("keeps an unusable Claude selection and switches to its authenticated machine
     );
   }
   await using screen = await render(<Draft />);
-  await expect.element(screen.getByText("gv:sonnet")).toBeVisible();
-  await screen.getByRole("button", { name: "Claude works on Operalia. Switch machine" }).click();
-  await expect.element(screen.getByText("op:sonnet")).toBeVisible();
+  await expect.element(screen.getByText("at:sonnet")).toBeVisible();
+  await screen.getByRole("button", { name: "Claude works on Boreal. Switch machine" }).click();
+  await expect.element(screen.getByText("bo:sonnet")).toBeVisible();
   await expect.element(screen.getByRole("button", { name: /works on/ })).not.toBeInTheDocument();
 });
 it("uses the configured usable default locally rather than the first catalog model", async () => {
-  const { gv, claude } = setup();
+  const { at, claude } = setup();
   function Draft() {
     const [model, setModel] = useState<ModelSelection>({ instanceId: claude, model: "sonnet" });
     return (
@@ -101,12 +101,12 @@ it("uses the configured usable default locally rather than the first catalog mod
         </output>
         <DraftMachineHint
           selection={model}
-          environmentId={gv}
+          environmentId={at}
           machines={[
             {
-              environmentId: gv,
+              environmentId: at,
               projectId: null,
-              label: "gvidon",
+              label: "atlas",
               connected: true,
               machine: "server",
               isPrimary: true,

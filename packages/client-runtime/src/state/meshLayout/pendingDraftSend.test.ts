@@ -17,7 +17,7 @@ import {
 } from "./pendingDraftSend.ts";
 
 function setup() {
-  const environmentId = EnvironmentId.make("op");
+  const environmentId = EnvironmentId.make("bo");
   const instanceId = ProviderInstanceId.make("codex");
   let disk: readonly PendingDraftSend[] = [];
   const storage = {
@@ -63,7 +63,7 @@ function setup() {
             path: "/demo",
             role: "replica",
             transport: "mutagen",
-            source: "gv",
+            source: "at",
             createdAt: "",
           },
         ],
@@ -77,7 +77,7 @@ function setup() {
     config: {
       ...mesh.config,
       projectMounts: {
-        demo: mesh.config.projectMounts.demo!.map((rep) => ({ ...rep, projectId: "op-project" })),
+        demo: mesh.config.projectMounts.demo!.map((rep) => ({ ...rep, projectId: "bo-project" })),
       },
     },
   };
@@ -97,7 +97,7 @@ it("hydrates a persisted send after restart, waits for registration and acknowle
   await restarted.drain(registered, launch);
   await restarted.drain(registered, launch);
   await new PendingDraftOutbox(storage).drain(registered, launch);
-  expect(calls).toEqual(["op:op-project:Keep this message"]);
+  expect(calls).toEqual(["bo:bo-project:Keep this message"]);
   expect(restarted.getSnapshot()[0]?.state).toBe("sent");
 });
 it("replays the same receipt IDs after a server commit followed by response loss", async () => {
@@ -127,13 +127,13 @@ it("restores a no-project send and opens scratch on its selected machine", async
   const restored = new PendingDraftOutbox(storage);
   const openScratch = async (environmentId: EnvironmentId) => {
     opened.push(environmentId);
-    return { id: "op-scratch", workspaceRoot: "/scratch" };
+    return { id: "bo-scratch", workspaceRoot: "/scratch" };
   };
   const launch = async (item: PendingDraftSend, project: string) => {
     launched.push(`${item.environmentId}:${project}:${item.text}`);
   };
   await restored.drain(mesh, launch, openScratch);
   await restored.drain(mesh, launch, openScratch);
-  expect(opened).toEqual(["op"]);
-  expect(launched).toEqual(["op:op-scratch:Keep this message"]);
+  expect(opened).toEqual(["bo"]);
+  expect(launched).toEqual(["bo:bo-scratch:Keep this message"]);
 });

@@ -292,7 +292,7 @@ describe("workspace config helpers", () => {
 describe("logical project helpers", () => {
   const config: SidebarWorkspacesConfig = {
     ...base,
-    machines: { "env-b": { tag: "OP" } },
+    machines: { "env-b": { tag: "BO" } },
     projectMounts: {
       "logical-a": [
         {
@@ -338,10 +338,10 @@ describe("logical project helpers", () => {
   };
 
   it("derives machine tags from the layout or the label", () => {
-    expect(machineTag(config, "env-b")).toBe("OP");
-    expect(machineTag(config, "env-z", "Operalia")).toBe("OP");
+    expect(machineTag(config, "env-b")).toBe("BO");
+    expect(machineTag(config, "env-z", "Boreal")).toBe("BO");
     expect(machineTag(config, "env-z")).toBe("EN");
-    expect(machineTag(config, "env-z", "gor")).toBe("GOR");
+    expect(machineTag(config, "env-z", "lab")).toBe("LAB");
     expect(
       machineTag({ ...config, machines: { "env-z": { label: "vps" } } }, "env-z", "server name"),
     ).toBe("VPS");
@@ -350,7 +350,7 @@ describe("logical project helpers", () => {
   it("lists a project only when every representation is unreachable", () => {
     const offline = offlineLogicalProjects(config, new Set(["env-a"]));
     expect(offline.map((entry) => entry.logicalKey)).toEqual(["logical-b"]);
-    expect(offline[0]).toMatchObject({ environmentId: "env-b", state: "watching", tag: "OP" });
+    expect(offline[0]).toMatchObject({ environmentId: "env-b", state: "watching", tag: "BO" });
   });
 
   it("suggests a merge by title across machines", () => {
@@ -366,7 +366,7 @@ describe("logical project helpers", () => {
       (project) => `${project.environmentId}:${project.title.toLowerCase()}`,
     );
     expect(suggestions).toHaveLength(1);
-    expect(suggestions[0]).toMatchObject({ tag: "OP" });
+    expect(suggestions[0]).toMatchObject({ tag: "BO" });
     expect(suggestions[0]?.project.environmentId).toBe("env-b");
   });
 });

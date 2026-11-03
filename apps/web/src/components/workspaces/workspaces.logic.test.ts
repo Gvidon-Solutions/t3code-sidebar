@@ -181,7 +181,7 @@ describe("reorderWorkspaces", () => {
     expect(ids(reorderWorkspaces(list, "c", 1))).toEqual(["a", "c", "b", "d"]);
   });
 
-  it("returns the same order for no-op moves and unknown ids", () => {
+  it("returns the same order for no-bo moves and unknown ids", () => {
     expect(reorderWorkspaces(list, "b", 1)).toBe(list);
     expect(reorderWorkspaces(list, "b", 2)).toBe(list);
     expect(reorderWorkspaces(list, "zz", 0)).toBe(list);

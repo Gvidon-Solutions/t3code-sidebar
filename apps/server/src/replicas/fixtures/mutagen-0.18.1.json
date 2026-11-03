@@ -6,7 +6,7 @@
     "creatingVersion": "0.18.1",
     "alpha": {
       "protocol": "local",
-      "path": "/home/user/Repos/example",
+      "path": "/home/tester/Repos/example",
       "ignore": {},
       "symlink": {},
       "watch": {},
@@ -72,7 +72,7 @@
     "creatingVersion": "0.18.1",
     "alpha": {
       "protocol": "local",
-      "path": "/home/user/Repos/example",
+      "path": "/home/tester/Repos/example",
       "ignore": {},
       "symlink": {},
       "watch": {},

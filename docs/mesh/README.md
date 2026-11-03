@@ -7,7 +7,7 @@ invariants, authority rule). Keep both current when you change behaviour.
 
 ## What it is
 
-The owner runs one T3 Code Sidebar server per machine (gvidon, Operalia, gor, …). Linked
+Each installation runs one T3 Code Sidebar server per machine. Linked
 together they form a **mesh**: one replicated sidebar layout, projects that live on several
 machines, threads that can be created, found, opened, moved and driven on any machine, files
 readable from anywhere, and agents that know where they are.
@@ -16,9 +16,9 @@ readable from anywhere, and agents that know where they are.
 
 | Entity            | What it is                                                                                                      | Where it lives                                                |
 | ----------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Machine           | one T3 server (`environmentId`), label/tag/color, SSH routes to other machines                                  | layout `machine/<env>`                                        |
+| Machine           | one T3 server (`environmentId`), label/tag/color/aliases, SSH routes to other machines                          | layout `machine/<env>`                                        |
 | Link              | server-to-server MCP session (pairing code, full access for the mesh)                                           | each server's PeerLinks table                                 |
-| Mesh              | machines + links; one **authority** machine (`mesh.authority`, the owner's is gvidon)                           | layout                                                        |
+| Mesh              | machines + links; one **authority** machine (`mesh.authority`)                                                  | layout                                                        |
 | Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>`, `rep/<id>/<env>`, `alias/*`               |
 | Representation    | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores)                            | layout `rep/*`                                                |
 | Sync session      | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
@@ -62,7 +62,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   `apps/server/src/provider/agentContextBudget.json`; update it to the measured size when you add
   tools or text, and justify growth).
 - **UI.** Web `apps/web/src/components/workspaces/` (MachineTag, ProjectMachineStrip
-  `GV ⇄ OP GOR`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
+  `A ⇄ B C`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
   MoveThreadModelDialog, MeshFooterStatus, FileMachineTag); mobile
   `apps/mobile/src/features/workspaces/` (same names). Pure logic lives in
   `packages/client-runtime/src/state/{meshLayout/*,machineDisplay,meshMachines}.ts`.
@@ -70,7 +70,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 ## Interfaces
 
 - **CLI / skill:** `agent-kit/skills/t3` (`SKILL.md`, `scripts/t3ctl.mjs`). Mesh commands:
-  `machines`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,
+  `machines`, `machines alias <M> list|add|remove|clear`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,
   `threads/status --all`, `open`, `open-file`, `cat`, `move`, `layout get|merge`, `agents sync|status`, `self`.
 - **MCP tools** (in the server): `t3_project_place`, `t3_project_machines`, `t3_thread_self`,
   `t3_thread_*` with `environmentId` (or none — ids resolve across the mesh), `t3_files_read/list`,
@@ -85,9 +85,19 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 
 ```bash
 agent-kit/install.sh            # dry run: skill diff per machine + instruction diff
-agent-kit/install.sh --apply    # install on gvidon, Operalia, gor (backups under ~/.local/state/t3-agent-kit/)
+agent-kit/install.sh --apply    # install on registry machines (backups under ~/.local/state/t3-agent-kit/)
 agent-kit/install.sh --dest ~/.agents/skills/t3-next   # stage for the test bed only
 ```
+
+Machine names, tags and aliases are runtime layout data, not CLI constants. Settings › Mesh and
+`machines alias` edit the same optional `aliases` array on `machine/<env>`. Alias edits retain the
+other machine fields; standalone CLI writes must advance beyond every observed HLC. Unspecified
+thread model and permissions are resolved by the destination server, never by owner preferences
+compiled into the CLI.
+
+Installation routes and personal agent instructions stay in `global/`; `T3CTL_AGENTS_CONFIG` selects
+another registry directory. SSH options, relay ids (`via`) and remote `nodeCommand` are data.
+`server install` requires an explicit `T3CTL_RELEASE_REPO`.
 
 Never edit `~/.agents/skills/t3` on a machine directly (it is overwritten), and never run
 `vp fmt` on the skill or GLOBAL.md (formatting is excluded on purpose: padded tables waste every
@@ -145,3 +155,8 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - The standalone CLI layout encoder must stay in parity with shared core, including `proj/*`
   title entries. Extend `agent-kit/skills/t3/shared-parity.test.mjs` when adding layout fields;
   CLI-only fixtures can otherwise miss data silently.
+
+- Owner-specific host dictionaries and remote shell commands survive copied test fixtures unless
+  audited explicitly. Product code and skill instructions must resolve customer data; keep personal
+  topology only in agent-kit `global/` and clearly identified documentation examples. Test alias edits
+  with unrelated labels, multilingual aliases, relay routes and destination-provided model defaults.
