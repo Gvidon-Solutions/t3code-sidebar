@@ -92,12 +92,20 @@ it.effect(
         ),
       );
       const wrapped = yield* Settings.ServerSettingsService.pipe(Effect.provide(wrappedContext));
+      yield* mesh.edit((c) => ({ ...c, meshAuthority: "A", projectTitles: { project: "Shared" } }));
+      const {
+        meshAuthority: _authority,
+        projectTitles: _titles,
+        ...oldClientConfig
+      } = (yield* mesh.read).config;
       const sql = yield* SqlClient.SqlClient;
       const seq = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
       yield* wrapped.updateSettings({
-        sidebarWorkspaces: { ...result.config, quietAfterDays: 17 },
+        sidebarWorkspaces: { ...oldClientConfig, quietAfterDays: 17 },
       });
       expect((yield* mesh.read).config.quietAfterDays).toBe(17);
+      expect((yield* mesh.read).config.meshAuthority).toBe("A");
+      expect((yield* mesh.read).config.projectTitles).toEqual({ project: "Shared" });
       expect((yield* raw.getSettings).sidebarWorkspaces).toEqual((yield* mesh.read).config);
       expect(
         (yield* sql<{ key: string }>`SELECT key FROM mesh_layout_entries WHERE seq > ${seq}`).map(

@@ -130,7 +130,16 @@ export const layer = Layer.effect(
       editLegacy: Effect.fn("MeshLayoutService.editLegacy")((before, after) =>
         lock.withPermit(
           Effect.gen(function* () {
-            return yield* persist(diff(before, after, document, yield* nextHlc));
+            const compatible = {
+              ...after,
+              ...(after.meshAuthority === undefined && before.meshAuthority
+                ? { meshAuthority: before.meshAuthority }
+                : {}),
+              ...(after.projectTitles === undefined && before.projectTitles
+                ? { projectTitles: before.projectTitles }
+                : {}),
+            };
+            return yield* persist(diff(before, compatible, document, yield* nextHlc));
           }),
         ),
       ),
