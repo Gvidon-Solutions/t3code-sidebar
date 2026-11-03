@@ -1,6 +1,7 @@
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import { it, expect } from "@effect/vitest";
 import {
+  MeshRpcs,
   WsReplicasStatusRpc,
   WsReplicasRetryRpc,
   RpcScopeAuthorization,
@@ -18,9 +19,12 @@ import * as Replicas from "./ProjectReplicaService.ts";
 import * as Rpc from "./ReplicaRpc.ts";
 import { makeReplicaHarness } from "./replicas.testkit.ts";
 
-const group = RpcGroup.make(WsReplicasStatusRpc, WsReplicasRetryRpc).middleware(
-  RpcScopeAuthorization,
-);
+const group = RpcGroup.make(
+  WsReplicasStatusRpc,
+  WsReplicasRetryRpc,
+  MeshRpcs[6],
+  MeshRpcs[7],
+).middleware(RpcScopeAuthorization);
 it.effect(
   "real replica RPC handlers stream status, retry, and require project operation permission on both endpoints",
   () =>
@@ -41,6 +45,15 @@ it.effect(
           }).pipe(Effect.flip),
         ).toMatchObject({ requiredPermission: AuthOrchestrationOperateScope });
         expect(
+          yield* denied[MESH_WS_METHODS.replicasAdopt]({
+            project: "repo",
+            session: "N-manual",
+          }).pipe(Effect.flip),
+        ).toMatchObject({ requiredPermission: AuthOrchestrationOperateScope });
+        expect(
+          yield* denied[MESH_WS_METHODS.replicasUnmanaged]({}).pipe(Effect.flip),
+        ).toMatchObject({ requiredPermission: AuthOrchestrationOperateScope });
+        expect(
           yield* denied[MESH_WS_METHODS.replicasStatus]({}).pipe(Stream.runCollect, Effect.flip),
         ).toMatchObject({ requiredPermission: AuthOrchestrationOperateScope });
         const allowed = yield* RpcTest.makeClient(group).pipe(
@@ -54,6 +67,7 @@ it.effect(
             Stream.runCollect,
           ),
         ).toMatchObject([{ replicas: [{ logicalKey: "repo", state: "mounting" }] }]);
+        expect(yield* allowed[MESH_WS_METHODS.replicasUnmanaged]({})).toEqual([]);
         h.setSession({ paused: true });
         expect(
           yield* allowed[MESH_WS_METHODS.replicasRetry]({

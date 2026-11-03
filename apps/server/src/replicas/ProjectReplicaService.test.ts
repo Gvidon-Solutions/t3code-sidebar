@@ -642,7 +642,7 @@ it.effect(
       },
     ];
     return Effect.gen(function* () {
-      const service = yield* ReplicaService.ProjectReplicaService;
+      let service = yield* ReplicaService.ProjectReplicaService;
       expect(yield* service.unmanaged).toHaveLength(1);
       expect(
         (yield* service.adopt({ project: "repo", session: "N-manual" })).representation?.path,
@@ -653,6 +653,9 @@ it.effect(
       expect(h.created).toHaveLength(1);
       expect(h.created[0]?.ignores).toContain("*.cache");
       expect(h.created[0]?.ignores).toContain(".t3-conflicts");
+      service = yield* ReplicaService.ProjectReplicaService.pipe(
+        Effect.provide(ReplicaService.layer),
+      );
       h.setSession({ conflicts: [{ root: "both.txt" }], status: "watching" });
       yield* service.reconcile;
       expect(h.preserved).toMatchObject([{ root: "/replica", paths: ["both.txt"] }]);
@@ -660,6 +663,9 @@ it.effect(
       h.setSession({ conflicts: [], status: "watching" });
       yield* service.reconcile;
       expect(h.foreignActions).toEqual(["pause:manual-id"]);
+      service = yield* ReplicaService.ProjectReplicaService.pipe(
+        Effect.provide(ReplicaService.layer),
+      );
       yield* service.reconcile;
       expect(h.foreignActions).toEqual(["pause:manual-id", "terminate:manual-id"]);
       expect(
@@ -741,3 +747,44 @@ it.effect("after restart terminates the session of a path claim suppressed by au
     ).toBe(false);
   }).pipe(Effect.provide(h.layer));
 });
+
+it.effect(
+  "a corrected placement clears a stale failure and waits for the new configuration to watch",
+  () => {
+    const h = harness();
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const mesh = yield* MeshLayoutService;
+      yield* service.reconcile;
+      h.setSession({ status: "watching" });
+      yield* service.reconcile;
+      yield* mesh.edit((current) => ({
+        ...current,
+        projectMountStatus: {
+          ...current.projectMountStatus,
+          repo: { replica: { state: "error", message: "Previous folder differs", updatedAt: "" } },
+        },
+      }));
+      const corrected = yield* service.place({
+        project: "repo",
+        machine: "replica",
+        ignores: ["*.cache"],
+      });
+      expect(corrected.ready).toBe(false);
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+        state: "pending",
+      });
+      yield* service.reconcile;
+      h.setSession({ status: "watching" });
+      yield* service.reconcile;
+      expect(yield* service.waitForProject("repo", "replica", 30)).toBeDefined();
+      const changed = yield* service.place({
+        project: "repo",
+        machine: "replica",
+        ignores: ["*.other"],
+      });
+      expect(changed.ready).toBe(false);
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica?.state).toBe("pending");
+    }).pipe(Effect.provide(h.layer));
+  },
+);

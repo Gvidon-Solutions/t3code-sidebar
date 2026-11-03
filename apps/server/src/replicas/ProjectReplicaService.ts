@@ -1013,8 +1013,24 @@ const make = Effect.gen(function* () {
             createdAt: DateTime.formatIso(yieldDate),
           };
           const created = rep;
-          yield* mesh.edit((current) => ({
+          config = (yield* mesh.edit((current) => ({
             ...current,
+            projectMountStatus: {
+              ...current.projectMountStatus,
+              [logicalKey]: {
+                ...current.projectMountStatus[logicalKey],
+                [environmentId]: {
+                  state: role === "primary" ? "watching" : "pending",
+                  updatedAt: DateTime.formatIso(yieldDate),
+                  ...(current.projectMountStatus[logicalKey]?.[environmentId]?.conflictCopies
+                    ? {
+                        conflictCopies:
+                          current.projectMountStatus[logicalKey]![environmentId]!.conflictCopies,
+                      }
+                    : {}),
+                },
+              },
+            },
             projectMounts: {
               ...current.projectMounts,
               [logicalKey]: [
@@ -1024,7 +1040,7 @@ const make = Effect.gen(function* () {
                 created,
               ],
             },
-          }));
+          }))).config;
         }
         return {
           logicalKey,
