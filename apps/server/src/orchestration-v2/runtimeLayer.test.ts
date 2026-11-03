@@ -1,3 +1,24 @@
+import * as Handoffs from "../mesh/ThreadHandoffService.ts";
+import * as MeshLayout from "../mesh/MeshLayoutService.ts";
+import * as Replicas from "../replicas/ProjectReplicaService.ts";
+import * as ReplicaRuntime from "../replicas/ReplicaRuntime.ts";
+import * as PeerLinks from "../peer/PeerLinks.ts";
+import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
+import * as HandoffSecrets from "../auth/ServerSecretStore.ts";
+import * as HandoffDocuments from "../provider/DocumentText.ts";
+import { ReceiveHandoffInput } from "../mesh/handoffTransport.ts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
+import * as Ref from "effect/Ref";
+import * as Context from "effect/Context";
+import * as Schema from "effect/Schema";
+const decodeReceiveHandoff = Schema.decodeUnknownEffect(ReceiveHandoffInput);
+const decodePeerResponse = <S extends Schema.Decoder<unknown>>(schema: S, value: unknown) =>
+  Schema.decodeUnknownEffect(schema)(value);
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import { limitRecoveryCommand } from "./UsageLimitRecoveryWorker.ts";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
@@ -7018,10 +7039,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("snooze projection", (it) => {
       const remoteMove = yield* move(idleThreadId, otherProjectId, "remote", "other-machine").pipe(
         Effect.flip,
       );
-      assert.include(
-        String(remoteMove.cause),
-        "Move to another machine needs a history export/import protocol",
-      );
+      assert.include(String(remoteMove.cause), "threads.move service for a cross-machine handoff");
       yield* orchestrator.dispatch({
         type: "thread.pin",
         commandId: CommandId.make("move-pin"),
@@ -8476,3 +8494,254 @@ it.layer(layerQueueResumeDisabledInstanceTest)(
     );
   },
 );
+
+it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
+  it.effect(
+    "receives once, ensures the representation, archives with links and undoes the handoff",
+    () =>
+      Effect.gen(function* () {
+        const orchestrator = yield* Orchestrator.OrchestratorV2;
+        const projects = yield* ProjectService.ProjectService;
+        const sourceId = ThreadId.make("L-handoff-source");
+        const sourceProject = ProjectId.make("L-handoff-source-project");
+        const targetProject = ProjectId.make("L-handoff-target-project");
+        for (const id of [sourceProject, targetProject])
+          yield* projects.create({
+            commandId: CommandId.make(`${id}-create`),
+            projectId: id,
+            title: "L-project",
+            workspaceRoot: `/tmp/${id}`,
+          });
+        yield* orchestrator.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("L-source-create"),
+          threadId: sourceId,
+          projectId: sourceProject,
+          title: "L-real transcript",
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdBy: "user",
+          creationSource: "web",
+        });
+        yield* orchestrator.dispatch({
+          type: "thread.handoff.record",
+          commandId: CommandId.make("L-source-history"),
+          threadId: sourceId,
+          state: {
+            id: "L-history",
+            phase: "received",
+            environmentId: EnvironmentId.make("before"),
+            threadId: ThreadId.make("before-thread"),
+            tag: "BE",
+            link: "t3-thread://v2/before/before-thread",
+            undoUntil: 0,
+          },
+          entries: [
+            { role: "user", text: "Remember the secret word cedar", attachments: [] },
+            { role: "assistant", text: "I will remember cedar", attachments: [] },
+          ],
+        });
+        const config = yield* Ref.make<SidebarWorkspacesConfig>({
+          ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+          machines: { A: { tag: "AA" }, B: { tag: "BB" } },
+          projectMounts: {
+            logical: [
+              {
+                environmentId: "A",
+                path: `/tmp/${sourceProject}`,
+                projectId: sourceProject,
+                role: "primary" as const,
+                transport: "git" as const,
+                createdAt: "",
+              },
+            ],
+          },
+        });
+        let placed = 0;
+        let target: Handoffs.ThreadHandoffService["Service"] | undefined;
+        const limits = { runtimeMode: "full-access" as const, interactionMode: "default" as const };
+        const make = Effect.fn("test.makeHandoff")(function* (self: string) {
+          const mesh = Layer.mock(MeshLayout.MeshLayoutService)({
+            environmentId: self,
+            read: Ref.get(config).pipe(Effect.map((config) => ({ document: {}, config }))),
+            edit: (update) =>
+              Ref.updateAndGet(config, (current) => update(current)).pipe(
+                Effect.map((config) => ({ document: {}, config })),
+              ),
+          });
+          const replica = Layer.mock(Replicas.ProjectReplicaService)({
+            machines: (project) =>
+              Ref.get(config).pipe(
+                Effect.tap(() => Effect.sync(() => assert.equal(project, sourceProject))),
+                Effect.map((config) => ({
+                  logicalKey: "logical",
+                  representations: config.projectMounts.logical!.map((rep) => ({
+                    ...rep,
+                    machine: rep.environmentId,
+                  })),
+                })),
+              ),
+            place: () =>
+              Effect.gen(function* () {
+                placed++;
+                const rep = {
+                  environmentId: "B",
+                  projectId: targetProject,
+                  path: `/tmp/${targetProject}`,
+                  role: "primary" as const,
+                  transport: "git" as const,
+                  createdAt: "",
+                };
+                yield* Ref.update(config, (current) => ({
+                  ...current,
+                  projectMounts: {
+                    logical: [
+                      ...current.projectMounts.logical!.filter((rep) => rep.environmentId !== "B"),
+                      rep,
+                    ],
+                  },
+                }));
+                return { logicalKey: "logical", representation: rep, ready: true };
+              }),
+          });
+          const runtime = Layer.effect(
+            ReplicaRuntime.ReplicaRuntime,
+            Effect.map(Replicas.ProjectReplicaService, (service) => ({
+              get: Effect.succeed(service),
+            })),
+          ).pipe(Layer.provideMerge(replica));
+          const peerLinks = Layer.mock(PeerLinks.PeerLinks)({
+            enabled: Effect.succeed(true),
+            get: (environmentId) =>
+              Effect.succeedSome({
+                environmentId,
+                label: "B",
+                urls: ["http://peer.invalid"],
+                access: "full-access",
+                linkedAt: DateTime.makeUnsafe(0),
+                expiresAt: DateTime.makeUnsafe(9999999999999),
+                lastReachedAt: null,
+                lastError: null,
+              }),
+          });
+          const peer = Layer.mock(PeerMcpClient.PeerMcpClient)({
+            call: (input) =>
+              decodeReceiveHandoff(input.arguments).pipe(
+                Effect.orDie,
+                Effect.flatMap((input) => {
+                  if (!target) return Effect.die("Target was not constructed.");
+                  return target.receive(input, limits);
+                }),
+                Effect.flatMap((result) =>
+                  decodePeerResponse(input.success, result).pipe(Effect.orDie),
+                ),
+              ),
+          });
+          const extras = Layer.mergeAll(
+            mesh,
+            runtime,
+            peerLinks,
+            peer,
+            Layer.mock(ProviderRegistry.ProviderRegistry)({
+              getProviders: Effect.succeed([
+                {
+                  instanceId: modelSelection.instanceId,
+                  driver: ProviderDriverKind.make("codex"),
+                  enabled: true,
+                  installed: true,
+                  status: "ready",
+                  auth: { status: "authenticated" },
+                  version: null,
+                  checkedAt: "2026-11-03T00:00:00Z",
+                  models: [],
+                  slashCommands: [],
+                  skills: [],
+                },
+              ]),
+            }),
+            HandoffSecrets.layer.pipe(
+              Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "L-handoff-" })),
+            ),
+            HandoffDocuments.layer,
+          ).pipe(Layer.provideMerge(NodeServices.layer));
+          const context = yield* Layer.build(
+            Handoffs.layer.pipe(Layer.provide(extras), Layer.provide(ProjectionStore.layer)),
+          );
+          return Context.get(context, Handoffs.ThreadHandoffService);
+        });
+        target = yield* make("B");
+        const source = yield* make("A");
+        const bundle = {
+          id: "L-direct",
+          sourceEnvironmentId: EnvironmentId.make("A"),
+          sourceThreadId: sourceId,
+          sourceTag: "AA",
+          sourceLink: "t3-thread://v2/A/L-handoff-source",
+          date: "2026-11-03",
+          logicalKey: "logical",
+          projectTitle: "L-project",
+          title: "L-direct target",
+          modelSelection,
+          runtimeMode: "full-access" as const,
+          interactionMode: "default" as const,
+          entries: [{ role: "user" as const, text: "cedar", attachments: [] }],
+        };
+        const direct = yield* target.receive({ action: "receive", bundle }, limits);
+        assert.deepEqual(yield* target.receive({ action: "receive", bundle }, limits), direct);
+        assert.equal(placed, 1);
+        const input = {
+          commandId: CommandId.make("L-move"),
+          threadId: sourceId,
+          targetEnvironmentId: EnvironmentId.make("B"),
+        };
+        const moved = yield* source.move(input, limits);
+        assert.deepEqual(yield* source.move(input, limits), moved);
+        assert.isNotNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
+        const received = yield* orchestrator.getThreadProjection(moved.threadId);
+        assert.equal(received.runs.length, 0);
+        assert.include(received.messages.map((message) => message.text).join("\n"), "cedar");
+        assert.include(received.messages[0]!.text, "Moved from AA");
+        assert.include(
+          (yield* orchestrator.getThreadProjection(sourceId)).messages.at(-1)!.text,
+          "Moved to BB",
+        );
+        yield* source.move({ threadId: sourceId, undoHandoffId: moved.handoffId! }, limits);
+        assert.isNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
+        assert.isNotNull(
+          (yield* orchestrator.getThreadProjection(moved.threadId)).thread.archivedAt,
+        );
+        const explicit = yield* source.move(
+          { ...input, commandId: CommandId.make("L-explicit-target"), projectId: targetProject },
+          limits,
+        );
+        assert.equal(
+          (yield* orchestrator.getThreadProjection(explicit.threadId)).thread.projectId,
+          targetProject,
+        );
+        yield* source.move({ threadId: sourceId, undoHandoffId: explicit.handoffId! }, limits);
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("L-busy-message"),
+          threadId: sourceId,
+          messageId: MessageId.make("L-busy-message"),
+          text: "Continue",
+          attachments: [],
+          createdBy: "user",
+          creationSource: "web",
+          dispatchMode: { type: "queue_after_active" },
+        });
+        const refused = yield* source
+          .move({ ...input, commandId: CommandId.make("L-busy-move") }, limits)
+          .pipe(Effect.flip);
+        assert.include(refused.message, "running turn");
+        const starting = yield* orchestrator.getThreadProjection(sourceId);
+        assert.include(
+          starting.contextHandoffs.map((handoff) => handoff.summaryText).join("\n"),
+          "cedar",
+        );
+      }).pipe(Effect.scoped),
+  );
+});

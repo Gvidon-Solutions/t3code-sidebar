@@ -1,3 +1,4 @@
+import { ThreadHandoffService } from "./mesh/ThreadHandoffService.ts";
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
 import { MESH_WS_METHODS, ServerSettingsError } from "@t3tools/contracts";
 import * as ReplicaRpc from "./replicas/ReplicaRpc.ts";
@@ -25,6 +26,7 @@ import { rpcInitialItems } from "./rpcInitialItems.ts";
 import { subscribeChatGptHandoff } from "./provider/CodexChatGptHandoff.ts";
 import {
   AcpRegistryOperationError,
+  OrchestratorMcpFailure,
   CommandId,
   authScopeResponse,
   AuthAccessStreamError,
@@ -1342,6 +1344,7 @@ export const layerWsRpc = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      const threadHandoffs = yield* Effect.serviceOption(ThreadHandoffService);
       const modelManifest = yield* ModelManifest.ModelManifest;
       const providerLatestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
       const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
@@ -1889,6 +1892,18 @@ export const layerWsRpc = (
 
       const handlers = ServerWsRpcGroup.of({
         ...ReplicaRpc.handlers,
+        "threads.move": (input) =>
+          Option.isSome(threadHandoffs)
+            ? threadHandoffs.value.move(input, {
+                runtimeMode: "full-access",
+                interactionMode: "default",
+              })
+            : Effect.fail(
+                new OrchestratorMcpFailure({
+                  code: "orchestration_error",
+                  message: "Thread handoff service is unavailable.",
+                }),
+              ),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,

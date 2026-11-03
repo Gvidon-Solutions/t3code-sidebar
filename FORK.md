@@ -1443,13 +1443,17 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 
 ### 2026-11-03 — T3 Mesh — Stage L project moves and names
 
-- **What.** Move an idle thread between projects on its machine from the workspace sidebar or
+- **What.** Move an idle thread between projects or linked machines from the workspace sidebar or
   the phone's long-press menu. Web supports dragging onto a project and undoing the move.
   Rename logical project folders across connected representations.
 - **How.** `thread.move` preserves thread metadata and history and refuses unfinished work.
   Local threads take the destination project root; worktree threads keep their checkout.
-  Cross-machine moves report the missing history export/import protocol. Logical names use
+  Cross-machine moves use a link-only, retryable handoff: copy the visible transcript and uploaded
+  attachments, seed the destination's first context without starting a turn, and archive the source
+  with reciprocal environment-aware links. Remote moves ask for confirmation and allow ten seconds
+  to undo. `t3_thread_move` and `t3ctl move --project X --on M` use the same service. Logical names use
   `proj/<logicalKey>` LWW entries materialized as decoding-defaulted `projectTitles`; clients
   update each reachable physical project and prefer the layout title.
-- **Where.** Orchestrator and MCP thread/project toolkits; shared `meshLayout`; client-runtime
+- **Where.** `apps/server/src/mesh/ThreadHandoffService.ts`, attachment upload store, orchestrator
+  and MCP thread/project toolkits; shared `meshLayout`; client-runtime
   project grouping/thread commands; web `workspaces` and mobile `workspaces`/thread menus.

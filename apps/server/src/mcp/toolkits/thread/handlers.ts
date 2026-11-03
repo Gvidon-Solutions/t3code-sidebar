@@ -1,3 +1,7 @@
+import { ThreadHandoffService } from "../../../mesh/ThreadHandoffService.ts";
+import { assertNotLinked } from "../../linkOrigin.ts";
+import * as Option from "effect/Option";
+import { CommandId as HandoffCommandId, EnvironmentId } from "@t3tools/contracts";
 import {
   type CommandId,
   type RuntimeRequestId,
@@ -132,6 +136,33 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           link: McpInvocationContext.threadLinkFor(scope, match.threadId),
         })),
       };
+    }),
+  ),
+  t3_thread_move: writesThread((input) =>
+    Effect.gen(function* () {
+      const caller = yield* readCaller();
+      yield* assertNotLinked(caller, "move conversations through other links.");
+      const { projection } = yield* readThread(input.threadId);
+      const service = yield* Effect.serviceOption(ThreadHandoffService);
+      if (Option.isNone(service)) return yield* unavailable();
+      return yield* service.value.move(
+        {
+          commandId: input.clientRequestId
+            ? HandoffCommandId.make(
+                `${caller.scope.requestNamespace}:move:${input.clientRequestId}`,
+              )
+            : yield* newCommandId(),
+          threadId: projection.thread.id,
+          ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
+          ...(input.targetEnvironmentId === undefined
+            ? {}
+            : { targetEnvironmentId: EnvironmentId.make(input.targetEnvironmentId) }),
+          ...(input.logicalKey === undefined ? {} : { logicalKey: input.logicalKey }),
+          ...(input.message === undefined ? {} : { message: input.message }),
+          ...(input.undoHandoffId === undefined ? {} : { undoHandoffId: input.undoHandoffId }),
+        },
+        caller.limits,
+      );
     }),
   ),
   t3_thread_transfer: McpToolAccess.either(
@@ -331,6 +362,20 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     Effect.gen(function* () {
       const { threads, projection, caller } = yield* readThread(input.threadId);
       const common = { commandId: yield* newCommandId(), threadId: projection.thread.id };
+      if (input.action === "move" && input.targetEnvironmentId !== undefined) {
+        const scope = yield* readCaller();
+        yield* assertNotLinked(scope, "move conversations through other links.");
+        const service = yield* Effect.serviceOption(ThreadHandoffService);
+        if (Option.isNone(service)) return yield* unavailable();
+        return yield* service.value.move(
+          {
+            ...common,
+            ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
+            targetEnvironmentId: EnvironmentId.make(input.targetEnvironmentId),
+          },
+          scope.limits,
+        );
+      }
       if (input.action === "settle") {
         return yield* threads
           .settleThread({ ...common, byOwnAgent: caller?.id === projection.thread.id })
