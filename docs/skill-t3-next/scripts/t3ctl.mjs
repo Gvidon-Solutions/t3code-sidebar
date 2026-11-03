@@ -3848,6 +3848,7 @@ READ
   mesh unlink <M> --yes                   forget a link here (the other machine stays)
 
 THREADS
+  self                                  current thread identity (thread-scoped MCP environment)
   new [--project P | --scratch] [opts] "message"   start a thread (no project = scratch)
       --agent claude|codex|deepseek|1017|<instance> (default claude, Opus 5.5)  --model M (aliases: opus sonnet fable haiku luna astra sol deepseek 1017)
       --effort low|medium|high|xhigh|max  --fast  --opt key=value (any model option)
