@@ -67,7 +67,7 @@ export function planHandoffRecord(input: {
       meshHandoff: state,
       updatedAt: now,
       ...(messages.length > 0 ? { historyOrigin: "v1_import" as const } : {}),
-      ...(state.phase === "completed" ? { archivedAt: now } : {}),
+      ...(state.phase === "completed" || state.phase === "retracted" ? { archivedAt: now } : {}),
       ...(state.phase === "undone" ? { archivedAt: null } : {}),
     },
     messages,

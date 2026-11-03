@@ -13063,6 +13063,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         break;
       case "thread.handoff.record": {
         const projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+        const history = yield* projectionStore
+          .getThreadRecords(command.threadId, ["turnItems"])
+          .pipe(
+            Effect.mapError(
+              (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+            ),
+          );
         if (threadHasUnfinishedWork(projection))
           return yield* new OrchestratorDispatchError({
             commandId: command.commandId,
@@ -13071,7 +13078,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           });
         if (
           command.state.phase === "received" &&
-          (projection.runs.length > 0 || projection.turnItems.length > 0)
+          (projection.runs.length > 0 || history.turnItems.length > 0)
         )
           return yield* new OrchestratorDispatchError({
             commandId: command.commandId,
@@ -13083,14 +13090,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           thread: projection.thread,
           state: command.state,
           now,
-          ordinal: Math.max(0, ...projection.turnItems.map((item) => item.ordinal + 1)),
+          ordinal: history.turnItems.reduce((next, item) => Math.max(next, item.ordinal + 1), 0),
           ...(command.entries === undefined ? {} : { entries: command.entries }),
           ...(command.marker === undefined ? {} : { marker: command.marker }),
         });
         const emitEvent = emit(events, command);
         yield* emitEvent({
           type:
-            command.state.phase === "completed"
+            command.state.phase === "completed" || command.state.phase === "retracted"
               ? "thread.archived"
               : command.state.phase === "undone"
                 ? "thread.unarchived"

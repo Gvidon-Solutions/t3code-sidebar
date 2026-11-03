@@ -12,7 +12,7 @@ export const HandoffEntry = Schema.Struct({
 export type HandoffEntry = typeof HandoffEntry.Type;
 export const ThreadHandoffState = Schema.Struct({
   id: TrimmedNonEmptyString,
-  phase: Schema.Literals(["preparing", "received", "completed", "undone"]),
+  phase: Schema.Literals(["preparing", "received", "completed", "undone", "retracted"]),
   environmentId: EnvironmentId,
   threadId: ThreadId,
   link: Schema.String,

@@ -8561,6 +8561,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
           },
         });
         let placed = 0;
+        let placementReady = false;
         let target: Handoffs.ThreadHandoffService["Service"] | undefined;
         const limits = { runtimeMode: "full-access" as const, interactionMode: "default" as const };
         const make = Effect.fn("test.makeHandoff")(function* (self: string) {
@@ -8587,6 +8588,8 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
             place: () =>
               Effect.gen(function* () {
                 placed++;
+                if (!placementReady)
+                  return { logicalKey: "logical", representation: null, ready: false };
                 const rep = {
                   environmentId: "B",
                   projectId: targetProject,
@@ -8684,19 +8687,55 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
           logicalKey: "logical",
           projectTitle: "L-project",
           title: "L-direct target",
-          modelSelection,
+          modelSelection: {
+            ...modelSelection,
+            instanceId: ProviderInstanceId.make("only_on_source"),
+          },
           runtimeMode: "full-access" as const,
           interactionMode: "default" as const,
           entries: [{ role: "user" as const, text: "cedar", attachments: [] }],
         };
+        assert.include(
+          (yield* target.receive({ action: "receive", bundle }, limits).pipe(Effect.flip)).message,
+          "did not become ready",
+        );
+        assert.isUndefined(
+          (yield* orchestrator.getShellSnapshot()).threads.find(
+            (thread) => thread.title === bundle.title,
+          ),
+        );
+        placementReady = true;
         const direct = yield* target.receive({ action: "receive", bundle }, limits);
         assert.deepEqual(yield* target.receive({ action: "receive", bundle }, limits), direct);
-        assert.equal(placed, 1);
+        assert.equal(placed, 2);
+        if (!("threadId" in direct)) return yield* Effect.die("Missing received thread");
+        const idle = yield* orchestrator.getThreadProjection(direct.threadId);
+        assert.equal(idle.thread.modelSelection.instanceId, "only_on_source");
+        assert.equal(idle.runs.length, 0);
         const input = {
           commandId: CommandId.make("L-move"),
           threadId: sourceId,
           targetEnvironmentId: EnvironmentId.make("B"),
         };
+        const historyStore = yield* EventSink.EventSinkV2;
+        const history = yield* orchestrator.getThreadProjection(sourceId);
+        const finalItem = history.turnItems.at(-1)!;
+        yield* historyStore.write({
+          events: [
+            {
+              id: EventId.make("L-finished-history-tail"),
+              type: "turn-item.updated",
+              threadId: sourceId,
+              occurredAt: yield* DateTime.now,
+              payload: { ...finalItem, id: TurnItemId.make("L-history-tail"), ordinal: 2_000_003 },
+            },
+          ],
+        });
+        const originalLastOrdinal = Math.max(
+          ...(yield* orchestrator.getThreadProjection(sourceId)).turnItems.map(
+            (item) => item.ordinal,
+          ),
+        );
         const moved = yield* source.move(input, limits);
         assert.deepEqual(yield* source.move(input, limits), moved);
         assert.isNotNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
@@ -8708,6 +8747,10 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
           (yield* orchestrator.getThreadProjection(sourceId)).messages.at(-1)!.text,
           "Moved to BB",
         );
+        const sourceMarker = (yield* orchestrator.getThreadProjection(sourceId)).turnItems.find(
+          (item) => item.type === "assistant_message" && item.text.includes("Moved to BB"),
+        );
+        assert.isAbove(sourceMarker!.ordinal, originalLastOrdinal);
         yield* source.move({ threadId: sourceId, undoHandoffId: moved.handoffId! }, limits);
         assert.isNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
         assert.isNotNull(
@@ -8721,7 +8764,21 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
           (yield* orchestrator.getThreadProjection(explicit.threadId)).thread.projectId,
           targetProject,
         );
-        yield* source.move({ threadId: sourceId, undoHandoffId: explicit.handoffId! }, limits);
+        yield* TestClock.adjust("11 seconds");
+        assert.include(
+          (yield* source
+            .move({ threadId: sourceId, undoHandoffId: explicit.handoffId! }, limits)
+            .pipe(Effect.flip)).message,
+          "expired",
+        );
+        assert.isNull(
+          (yield* orchestrator.getThreadProjection(explicit.threadId)).thread.archivedAt,
+        );
+        yield* orchestrator.dispatch({
+          type: "thread.unarchive",
+          commandId: CommandId.make("L-reopen-original"),
+          threadId: sourceId,
+        });
         yield* orchestrator.dispatch({
           type: "message.dispatch",
           commandId: CommandId.make("L-busy-message"),

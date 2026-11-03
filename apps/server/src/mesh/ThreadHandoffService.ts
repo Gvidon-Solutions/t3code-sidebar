@@ -17,7 +17,6 @@ import {
   type HandoffBundle,
   type ThreadHandoffState,
   type ChatAttachment,
-  ProviderInstanceId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -27,6 +26,7 @@ import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as Hex from "effect/encoding/Hex";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
+import { threadLinkHref } from "@t3tools/shared/threadLinks";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import { callRouted } from "./MeshRouting.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
@@ -51,8 +51,8 @@ const failure = (error: { readonly message: string }) =>
   new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message });
 const invalid = (message: string) =>
   new OrchestratorMcpFailure({ code: "invalid_request", message });
-const link = (env: string, thread: string) =>
-  `t3-thread://v2/${encodeURIComponent(env)}/${encodeURIComponent(thread)}`;
+const link = (environmentId: EnvironmentId, threadId: ThreadId) =>
+  threadLinkHref({ environmentId, threadId });
 const CHUNK = 512 * 1024;
 export class ThreadHandoffService extends Context.Service<
   ThreadHandoffService,
@@ -205,11 +205,11 @@ export const layer = Layer.effect(
             if (input.action === "undo") {
               if (threadHasUnfinishedWork(projection))
                 return yield* invalid("Stop the running turn before undoing this move.");
-              yield* dispatch({
-                type: "thread.archive",
-                commandId: CommandId.make(`${key}:undo-target`),
+              yield* record(
                 threadId,
-              });
+                { ...projection.thread.meshHandoff, phase: "retracted" },
+                `Move undone → [Restored original](${projection.thread.meshHandoff.link})`,
+              );
               return { ok: true };
             }
             yield* dispatch({
@@ -273,10 +273,9 @@ export const layer = Layer.effect(
             (provider) =>
               provider.instanceId === bundle.modelSelection.instanceId && provider.enabled,
           );
-          if (!exact)
-            return yield* invalid(
-              "The target machine needs the source provider instance enabled before this conversation can move.",
-            );
+          const providerNote = exact
+            ? ""
+            : `\n\nProvider instance ${bundle.modelSelection.instanceId} is unavailable on this machine. Choose an enabled provider before sending a message.`;
           if (exceededDispatchModeLimit(limits, bundle))
             return yield* invalid("The target link does not permit this thread's modes.");
           yield* dispatch({
@@ -285,10 +284,7 @@ export const layer = Layer.effect(
             threadId,
             projectId: ProjectId.make(rep.projectId!),
             title: bundle.title,
-            modelSelection: {
-              ...bundle.modelSelection,
-              instanceId: ProviderInstanceId.make(exact.instanceId),
-            },
+            modelSelection: bundle.modelSelection,
             runtimeMode: bundle.runtimeMode,
             interactionMode: bundle.interactionMode,
             branch: null,
@@ -330,7 +326,7 @@ export const layer = Layer.effect(
           yield* record(
             threadId,
             state,
-            `Moved from ${bundle.sourceTag} ← [Original conversation](${bundle.sourceLink})\n\nMoved from ${bundle.sourceTag} · ${bundle.date} · original: ${bundle.sourceLink}`,
+            `Moved from ${bundle.sourceTag} ← [Original conversation](${bundle.sourceLink})\n\nMoved from ${bundle.sourceTag} · ${bundle.date} · original: ${bundle.sourceLink}${providerNote}`,
             entries,
           );
           return {
@@ -573,7 +569,7 @@ export const layer = Layer.effect(
             ...state,
             phase: "completed",
             threadId: received.threadId,
-            link: received.link,
+            link: link(input.targetEnvironmentId, received.threadId),
             undoUntil: (yield* Clock.currentTimeMillis) + 10_000,
           };
           yield* record(
