@@ -114,6 +114,16 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How:** both clients reuse logical project resolution and the replica plan, consume replica status for progress and Retry, and retain sends in a shared gate. Device preferences remember the project’s selected machine. Provider catalogs follow the destination and unavailable mobile models stay visible and disabled.
 - **Where:** client-runtime `meshLayout/draftMachine`; web composer routing, environment selector and `DraftMachineHint`; mobile new-task flow, environment control and picker, model options and device preferences. Mesh contracts and server interfaces are unchanged.
 
+### 2026-11-03 — T3 Mesh — agent kit and the mesh guide
+
+- **What.** The `t3` skill (t3ctl), the owner's canonical agent instructions and their machine map now
+  live in this repository and are installed from it; one guide explains the whole mesh to agents.
+- **How.** `agent-kit/skills/t3` is the source of truth; `agent-kit/install.sh` (dry run by default,
+  `--apply` with backups, `--dest` for test beds) copies the skill to every machine and renders the
+  instructions through `t3ctl agents sync`. `docs/mesh/README.md` maps the object model, code,
+  interfaces, testing, live operations and past lessons; AGENTS.md points to it.
+- **Where.** `agent-kit/`, `docs/mesh/README.md`, `AGENTS.md`, `vite.config.ts` (format exclusions).
+
 ### 2026-11-03 — T3 Mesh — Stage K project machine strips
 
 - **What:** project folder rows show primary and replica machine tags, sync status and overflow; all scratch threads share one “No project” folder on web and mobile, including the drawer.

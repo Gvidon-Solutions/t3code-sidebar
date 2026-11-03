@@ -5,7 +5,7 @@
     "tag": "GV",
     "ssh": { "gvidon": null, "operalia": "gvidon", "gor": "gvidon" },
     "role": "Главная машина: git, сборки, тесты и docker большинства проектов",
-    "harnessFiles": [".codex/AGENTS.md", ".config/opencode/AGENTS.md"]
+    "harnessFiles": [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"]
   },
   {
     "id": "operalia",
