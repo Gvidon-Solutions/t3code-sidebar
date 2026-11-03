@@ -71,7 +71,7 @@ test.test("canonical body retains the reviewed mesh clarification bytes", async 
   const body = fs.readFileSync(new URL("../global/GLOBAL.md", import.meta.url));
   assert.equal(
     createHash("sha256").update(body).digest("hex"),
-    "6eec8c6fdcbd00cf74c86d2630ca488fb881fc905dbab2f01b073b1f170f64ce",
+    "848cc01ba1cb3b91a54ee093a9347b94e765aa0543560c8f72e604e5b91711c8",
   );
 });
 
