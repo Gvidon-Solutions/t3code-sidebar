@@ -299,6 +299,7 @@ const ThreadSelfTool = Tool.make("t3_thread_self", {
     parent: Schema.NullOr(
       Schema.Struct({
         threadId: ThreadId,
+        environmentId: Schema.String,
         link: Schema.String,
         title: Schema.NullOr(Schema.String),
       }),

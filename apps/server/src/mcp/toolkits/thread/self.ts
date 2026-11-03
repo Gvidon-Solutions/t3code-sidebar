@@ -88,6 +88,20 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
   const related = yield* threads
     .listProjectThreads({ includeSubagents: true })
     .pipe(Effect.mapError(unavailable));
+  const parentId = thread.lineage.parentThreadId ?? thread.delegatedFrom?.threadId ?? null;
+  const parentEnvironmentId = thread.lineage.parentThreadId
+    ? scope.environmentId
+    : (thread.delegatedFrom?.environmentId ?? scope.environmentId);
+  const primary = representations.find((rep) => rep.role === "primary");
+  const basename = (path: string) =>
+    path.replaceAll("\\", "/").replace(/\/+$/, "").split("/").at(-1) ?? path;
+  const logicalTitle =
+    project &&
+    representation?.role === "replica" &&
+    primary &&
+    project.title === basename(project.workspaceRoot)
+      ? basename(primary.path)
+      : project?.title;
   const linked = Option.isSome(links)
     ? yield* links.value.list.pipe(Effect.mapError(unavailable))
     : [];
@@ -97,7 +111,12 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
     link: threadLinkFor(scope, thread.id),
     machine: machine(scope.environmentId),
     project: project
-      ? { id: project.id, title: project.title, logicalKey, logicalTitle: project.title }
+      ? {
+          id: project.id,
+          title: project.title,
+          logicalKey,
+          logicalTitle: logicalTitle ?? project.title,
+        }
       : null,
     workingDirectory: thread.worktreePath ?? project?.workspaceRoot ?? null,
     worktreePath: thread.worktreePath,
@@ -129,7 +148,7 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
       access: link.access,
       lastError: link.lastError,
     })),
-    parentThreadId: thread.lineage.parentThreadId,
+    parentThreadId: parentId,
     delegatedTasks: subagents.map((task) => ({
       taskId: task.id,
       title: task.title,
@@ -137,11 +156,15 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
       threadId: task.remoteChild?.threadId ?? task.childThreadId,
       environmentId: task.remoteChild?.environmentId ?? scope.environmentId,
     })),
-    parent: thread.lineage.parentThreadId
+    parent: parentId
       ? {
-          threadId: thread.lineage.parentThreadId,
-          link: threadLinkFor(scope, thread.lineage.parentThreadId),
-          title: related.find((row) => row.id === thread.lineage.parentThreadId)?.title ?? null,
+          threadId: parentId,
+          environmentId: parentEnvironmentId,
+          link: threadLinkFor({ ...scope, environmentId: parentEnvironmentId }, parentId),
+          title:
+            thread.delegatedFrom?.title ??
+            related.find((row) => row.id === parentId)?.title ??
+            null,
         }
       : null,
     children: related
