@@ -1,3 +1,4 @@
+import * as MeshProjects from "./mesh/MeshProjectDirectory.ts";
 import * as ThreadHandoffs from "./mesh/ThreadHandoffService.ts";
 import * as MeshSettings from "./mesh/MeshSettings.ts";
 import * as MeshRelayLive from "./mesh/MeshRelay.ts";
@@ -543,6 +544,8 @@ const layerScheduledTaskWebhookOrigin = Layer.effect(
 );
 
 const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
+  Layer.provide(MeshProjects.layer),
+  Layer.provide(PeerMcpClient.layer.pipe(Layer.provideMerge(PeerLinks.layer))),
   Layer.provide(layerScheduledTaskWebhookOrigin),
   Layer.provide(ProviderEventIngestor.layerAnalytics),
   Layer.provide(layerCheckpointStore),
@@ -794,6 +797,8 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.provide(PreviewBrowser.layer),
   Layer.provide(
     Layer.merge(MeshRelayLive.layer, MeshReplication.layer).pipe(
+      Layer.provide(MeshProjects.layer),
+      Layer.provide(RuntimeLayer.layerProjectService),
       Layer.provideMerge(PeerMcpClient.layer),
       Layer.provideMerge(PeerLinks.layer),
       Layer.provideMerge(layerMesh),

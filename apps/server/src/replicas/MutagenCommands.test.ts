@@ -56,6 +56,19 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
         "--template",
         "{{json .}}",
       ]);
+      yield* runner.create({
+        name: "N-protected",
+        logicalHash: "test",
+        environmentTag: "test",
+        alpha: "/a",
+        beta: "/b",
+        ignores: ["cache", ".t3-conflicts", "!.t3-conflicts"],
+      });
+      const args = calls.at(-1)?.args ?? [];
+      const patterns = args.flatMap((arg, index) => (arg === "-i" ? [args[index + 1]] : []));
+      expect(patterns.at(-1)).toBe(".t3-conflicts");
+      expect(patterns.indexOf(".t3-conflicts")).toBeGreaterThan(patterns.indexOf("!.t3-conflicts"));
+      expect(args).toContain("--no-global-configuration");
       fail = true;
       expect((yield* runner.reset("session").pipe(Effect.flip)).reason).toBe("mutagen");
     }).pipe(

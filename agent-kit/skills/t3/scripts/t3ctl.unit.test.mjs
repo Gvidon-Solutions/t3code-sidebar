@@ -6,6 +6,8 @@ import * as NodeTest from "node:test";
 import {
   buildMeshLinkInput,
   buildPlaceInput,
+  meshProjectTitle,
+  meshAuthorityEdit,
   buildUiOpenTarget,
   defaultMachineTag,
   encodeLegacyEntries,
@@ -240,5 +242,57 @@ NodeTest.test("duplicate labels are ambiguous and server labels resolve", () => 
   NodeAssert.equal(
     resolveMachineRef("Custom Host", [{ ...MACHINES[0], serverLabel: "Custom Host" }]).label,
     "atlas",
+  );
+});
+
+NodeTest.test("mesh display names never expose logical or legacy keys", () => {
+  for (const key of ["opaque-123", "github.com/owner/repo", "env:/path", "title:legacy"]) {
+    NodeAssert.equal(meshProjectTitle({}, key, "/checkout/Project"), "Project");
+    NodeAssert.equal(
+      meshProjectTitle({ projectTitles: { [key]: "Renamed" } }, key, "/Project"),
+      "Renamed",
+    );
+    NodeAssert.equal(meshProjectTitle({}, key, "/"), "Untitled project");
+  }
+});
+NodeTest.test(
+  "authority edits advance past a future remote clock without electing a CLI device",
+  () => {
+    const edit = meshAuthorityEdit(
+      {
+        environmentId: "server",
+        document: { "mesh.authority": { h: "9999999999000.99999.remote", v: "old" } },
+      },
+      "new",
+      1,
+    );
+    NodeAssert.deepEqual(edit.entries["mesh.authority"], {
+      h: "9999999999001.00000.server",
+      v: "new",
+    });
+  },
+);
+
+NodeTest.test("place retains repeated ignore patterns and the requested transport", () => {
+  const parsed = parseArgs([
+    "Project",
+    "--on",
+    "OP",
+    "--ignore",
+    "*.tmp",
+    "--ignore",
+    "cache",
+    "--transport",
+    "manual",
+  ]);
+  NodeAssert.deepEqual(parsed.opt.ignore, ["*.tmp", "cache"]);
+  NodeAssert.deepEqual(
+    buildPlaceInput({
+      project: "p",
+      machine: "op",
+      ignores: parsed.opt.ignore,
+      transport: parsed.opt.transport,
+    }),
+    { project: "p", machine: "op", ignores: ["*.tmp", "cache"], transport: "manual" },
   );
 });

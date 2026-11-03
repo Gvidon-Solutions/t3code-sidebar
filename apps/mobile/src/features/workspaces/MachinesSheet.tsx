@@ -1,8 +1,13 @@
+import { AdoptReplicaAction } from "./AdoptReplicaAction";
+import { useNavigation } from "@react-navigation/native";
 import {
   representationRow,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
-import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
+import {
+  machineDisplayOf,
+  machineTagBackground,
+} from "@t3tools/client-runtime/state/machine-display";
 import type {
   ReplicaLiveStatus,
   SidebarProjectMount,
@@ -49,6 +54,7 @@ export function MachinesSheet(props: {
   readonly onRemove: (environmentId: string) => void;
   readonly onRetry: (row: PendingReplicaRow) => void;
 }) {
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const reps: ReadonlyArray<SidebarProjectMount> =
     props.config.projectMounts[props.projectKey] ?? [];
@@ -74,19 +80,42 @@ export function MachinesSheet(props: {
           <Text className="text-sm text-foreground-muted">No machines have this project yet.</Text>
         ) : null}
         {reps.map((rep) => {
+          const copies =
+            props.config.projectMountStatus[props.projectKey]?.[rep.environmentId]?.conflictCopies;
           const row = representationRow(props.config, props.liveStatuses, props.projectKey, rep);
-          const display = props.machines.find(
-            (machine) => machine.environmentId === rep.environmentId,
-          );
-          const label = display?.label ?? rep.environmentId;
-          const tag = display?.tag ?? rep.environmentId.slice(0, 2).toUpperCase();
-          const color = display?.color ?? "#888888";
+          const display =
+            props.machines.find((machine) => machine.environmentId === rep.environmentId) ??
+            machineDisplayOf(props.config, rep.environmentId, "Unknown machine");
+          const { label, tag, color } = display;
           return (
             <View
               key={rep.environmentId}
               className="gap-2 rounded-2xl border border-border bg-grouped-card p-3"
               testID={`machine-representation-${rep.environmentId}`}
             >
+              {rep.role === "primary" ? (
+                <AdoptReplicaAction
+                  environmentId={rep.environmentId}
+                  logicalKey={props.projectKey}
+                />
+              ) : null}
+              {copies && !row.text.startsWith("Resolved ") ? (
+                <Text className="text-sm text-foreground-muted">Last automatic resolution</Text>
+              ) : null}
+              {copies ? (
+                <Button
+                  label="Open copies"
+                  tone="secondary"
+                  onPress={() => {
+                    props.onClose();
+                    navigation.navigate("OpenFile", {
+                      environmentId: copies.environmentId,
+                      cwd: copies.path,
+                      projectName: props.title,
+                    });
+                  }}
+                />
+              ) : null}
               <View className="flex-row items-center gap-2">
                 <ReplicaTag label={label} tag={tag} color={color} />
                 <Text
@@ -112,6 +141,15 @@ export function MachinesSheet(props: {
               >
                 {row.text}
               </Text>
+              {row.status.skippedPaths?.length ? (
+                <View accessibilityLabel="Skipped files" className="gap-1">
+                  {row.status.skippedPaths.map((problem) => (
+                    <Text key={problem.path} className="text-xs text-foreground-muted">
+                      {problem.path}: {problem.error}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
               <View className="flex-row flex-wrap gap-2">
                 {rep.role === "replica" ? (
                   <Button

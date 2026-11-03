@@ -49,11 +49,13 @@ export function projectMachineStrip(
           const state = status.state;
           const machine = displayOf(rep.environmentId);
           const detail =
-            state === "watching"
-              ? "synced"
-              : state === "conflict" && status.conflicts
-                ? `${status.conflicts} conflict${status.conflicts === 1 ? "" : "s"}`
-                : state;
+            status.message && (status.message.startsWith("Resolved ") || Boolean(status.skipped))
+              ? status.message
+              : state === "watching"
+                ? "synced"
+                : state === "conflict" && status.conflicts
+                  ? `${status.conflicts} conflict${status.conflicts === 1 ? "" : "s"}`
+                  : state;
           return {
             environmentId: rep.environmentId,
             machine,

@@ -9,13 +9,15 @@ it("defaults old layouts and merges project renames independently of other entri
   const before = decodeConfig({});
   expect(before.projectTitles).toEqual({});
   const key = "github.com/acme/app";
+  const legacy = { [keys.project(key)]: { v: { title: "Legacy" }, h: "0000000000000.00000.a" } };
+  expect(materialize(legacy).projectTitles[key]).toBe("Legacy");
   const entries = diff(
     before,
     { ...before, projectTitles: { [key]: "New name" } },
     {},
     "0000000000001.00000.a",
   );
-  expect(entries[keys.project(key)]?.v).toEqual({ title: "New name" });
+  expect(entries[keys.projectTitle(key)]?.v).toEqual("New name");
   const other = diff(
     before,
     { ...before, machines: { a: { label: "Machine" } } },

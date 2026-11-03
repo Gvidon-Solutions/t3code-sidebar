@@ -1,3 +1,6 @@
+import * as Directory from "./MeshProjectDirectory.ts";
+import { ProjectService } from "../project/ProjectService.ts";
+import { ProjectId } from "@t3tools/contracts";
 import { it, expect } from "@effect/vitest";
 import { EnvironmentId, OrchestratorMcpFailure, type PeerLinkSummary } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -27,9 +30,35 @@ it.effect(
           mesh: MeshLayoutService["Service"];
           replicator: MeshReplicator["Service"];
           settings: Settings.ServerSettingsService["Service"];
+          directory: Directory.MeshProjectDirectory["Service"];
         }
       >();
       let ready = false;
+      let localProjects = [
+        {
+          id: ProjectId.make("A-project"),
+          title: "Remote-only project",
+          workspaceRoot: "/A/project",
+          repositoryIdentity: {
+            canonicalKey: "host/owner/project",
+            locator: {
+              source: "git-remote" as const,
+              remoteName: "origin",
+              remoteUrl: "https://example.test/private-source",
+            },
+            origin: {
+              canonicalKey: "host/owner/project",
+              remoteUrl: "https://example.test/private-origin",
+            },
+          },
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: "",
+          updatedAt: "",
+          deletedAt: null,
+        },
+      ];
+      const catalogsSent: number[] = [];
       let partition = false;
       for (const [id, adjacent] of [
         ["A", ["B"]],
@@ -44,6 +73,11 @@ it.effect(
             limits: import("../peer/PeerMcpClient.ts").PeerCallLimits;
             success: S;
           }) {
+            catalogsSent.push(
+              Array.isArray(input.arguments.projectCatalogs)
+                ? input.arguments.projectCatalogs.length
+                : 0,
+            );
             if (partition)
               return yield* new OrchestratorMcpFailure({
                 code: "orchestration_error",
@@ -97,6 +131,13 @@ it.effect(
               Layer.mergeAll(
                 peers,
                 links,
+                Directory.layer,
+                Layer.mock(ProjectService)({
+                  snapshot: Effect.sync(() => ({
+                    projects: id === "A" ? localProjects : [],
+                    updatedAt: "",
+                  })),
+                }),
                 env,
                 Settings.layerTest({ linkedEnvironmentsEnabled: true }),
                 Sqlite.layerMemory,
@@ -110,6 +151,7 @@ it.effect(
         nodes.set(id, {
           mesh,
           replicator,
+          directory: yield* Directory.MeshProjectDirectory.pipe(Effect.provide(context)),
           settings: yield* Settings.ServerSettingsService.pipe(Effect.provide(context)),
         });
       }
@@ -132,6 +174,29 @@ it.effect(
       }));
       yield* settle;
       expect(yield* a.mesh.read).toEqual(yield* c.mesh.read);
+      expect(
+        (yield* c.directory.read).find((catalog) => catalog.environmentId === "A")?.projects,
+      ).toEqual([
+        {
+          id: "A-project",
+          title: "Remote-only project",
+          workspaceRoot: "/A/project",
+          repositoryIdentity: {
+            canonicalKey: "host/owner/project",
+            origin: { canonicalKey: "host/owner/project" },
+          },
+          createdAt: "",
+        },
+      ]);
+      expect((yield* c.mesh.read).config.projectMounts).toEqual({});
+      catalogsSent.length = 0;
+      yield* settle;
+      expect(catalogsSent.every((count) => count === 0)).toBe(true);
+      localProjects = [];
+      yield* settle;
+      expect(
+        (yield* c.directory.read).find((catalog) => catalog.environmentId === "A")?.projects,
+      ).toEqual([]);
       yield* a.settings.updateSettings({ meshEnabled: false });
       yield* a.mesh.apply({
         "machine/gated": { v: { label: "gated" }, h: "0000000000001.00000.gated" },

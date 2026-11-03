@@ -1,3 +1,5 @@
+import { threadProjectTarget } from "@t3tools/shared/meshLayout";
+import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import type {
   ModelSelection,
   EnvironmentId,
@@ -52,4 +54,24 @@ export async function moveThreadWithConfirmation<Result>(options: {
         : {}),
     },
   });
+}
+
+export function localThreadMoveTarget<
+  T extends { readonly environmentId: string; readonly id: string },
+>(
+  config: SidebarWorkspacesConfig,
+  sourceEnvironmentId: string,
+  target: T,
+  projects: readonly T[],
+): T {
+  const resolved = threadProjectTarget(config, sourceEnvironmentId, {
+    environmentId: target.environmentId,
+    projectId: target.id,
+  });
+  return (
+    projects.find(
+      (project) =>
+        project.environmentId === sourceEnvironmentId && project.id === resolved.local?.projectId,
+    ) ?? target
+  );
 }

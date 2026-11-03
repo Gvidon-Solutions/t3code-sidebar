@@ -15,6 +15,7 @@ export function MoveThreadTargetModel(props: {
   readonly runtimeMode: RuntimeMode;
   readonly machine: string;
   readonly crossMachine: boolean;
+  readonly copyHere?: { readonly label: string; readonly run: () => Promise<void> } | undefined;
   readonly onMove: (selection: ModelSelection) => void;
   readonly onClose: () => void;
 }) {
@@ -28,6 +29,7 @@ export function MoveThreadTargetModel(props: {
     config?.settings.projectSettingsOverrides[props.target.id]?.defaultModelSelection ??
       config?.settings.defaultModelSelection,
   );
+  const [copying, setCopying] = useState(false);
   const [chosen, setChosen] = useState<ModelSelection | null>(null);
   const [picker, setPicker] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -54,15 +56,27 @@ export function MoveThreadTargetModel(props: {
         >
           <AppText>Model: {selected?.label ?? "No enabled models"}</AppText>
         </Pressable>
+        {props.copyHere ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={copying}
+            onPress={async () => {
+              setCopying(true);
+              await props.copyHere?.run().finally(() => setCopying(false));
+            }}
+          >
+            <AppText>{copying ? "Preparing copy…" : props.copyHere.label}</AppText>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Confirm move"
-          disabled={!selection}
+          disabled={copying || !selection}
           onPress={() => {
             if (selection) props.onMove(selection);
           }}
         >
-          <AppText>Move</AppText>
+          <AppText>{props.crossMachine ? `Move to ${props.machine}` : "Move"}</AppText>
         </Pressable>
       </View>
       <Modal visible={picker} onRequestClose={() => setPicker(false)}>

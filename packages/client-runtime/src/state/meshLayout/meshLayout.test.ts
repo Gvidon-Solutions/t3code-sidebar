@@ -292,7 +292,7 @@ describe("legacy configs", () => {
   });
 });
 describe("logical projects", () => {
-  it("resolves representations, physical aliases, cycles and the eight-hop bound", () => {
+  it("resolves representations, physical aliases, cycles and long alias chains", () => {
     const c = logical.addRepresentation(
       { ...empty, projectAliases: { logical: "final" } },
       "logical",
@@ -329,7 +329,7 @@ describe("logical projects", () => {
         { ...empty, projectAliases: aliases },
         () => "0",
       ),
-    ).toBe("8");
+    ).toBe("10");
   });
   it("merges references, splits representations, promotes and removes without mutating inputs", () => {
     let c = logical.addRepresentation(logical.addRepresentation(config, "p", rep("a")), "q", {

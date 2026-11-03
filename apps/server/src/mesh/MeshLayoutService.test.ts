@@ -36,8 +36,12 @@ it.effect(
       );
       const service = yield* MeshLayoutService.pipe(Effect.provide(first));
       expect((yield* service.read).config.workspaces).toEqual([{ id: "main", name: "main" }]);
+      expect((yield* service.read).config.meshWriters).toEqual(["A"]);
       const settings = yield* Settings.ServerSettingsService.pipe(Effect.provide(context));
       yield* service.apply({ "machine/new": { v: { label: "new" }, h: "9999999999000.00000.B" } });
+      expect((yield* service.read).config.meshWriters).toEqual(["A"]);
+      yield* service.apply({ "writer/Z": { v: true, h: "0000000000000.00000.Z" } });
+      expect((yield* service.read).config.meshWriters).toEqual(["A", "Z"]);
       const sql = yield* SqlClient.SqlClient.pipe(Effect.provide(context));
       expect((yield* service.nextHlc) > "9999999999000.00000.B").toBe(true);
       const watermark = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
@@ -46,7 +50,9 @@ it.effect(
       const lateRows = yield* sql<{
         key: string;
       }>`SELECT key FROM mesh_layout_entries WHERE seq > ${watermark}`;
-      expect(lateRows.map((r) => r.key)).toEqual(["machine/late"]);
+      expect(lateRows.filter((r) => !r.key.startsWith("writer/")).map((r) => r.key)).toEqual([
+        "machine/late",
+      ]);
       const seq = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
       yield* service.apply(late);
       expect((yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq).toBe(seq);
@@ -90,12 +96,20 @@ it.effect(
         ),
       );
       const wrapped = yield* Settings.ServerSettingsService.pipe(Effect.provide(wrappedContext));
+      yield* mesh.edit((c) => ({ ...c, meshAuthority: "A", projectTitles: { project: "Shared" } }));
+      const {
+        meshAuthority: _authority,
+        projectTitles: _titles,
+        ...oldClientConfig
+      } = (yield* mesh.read).config;
       const sql = yield* SqlClient.SqlClient;
       const seq = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
       yield* wrapped.updateSettings({
-        sidebarWorkspaces: { ...result.config, quietAfterDays: 17 },
+        sidebarWorkspaces: { ...oldClientConfig, projectTitles: {}, quietAfterDays: 17 },
       });
       expect((yield* mesh.read).config.quietAfterDays).toBe(17);
+      expect((yield* mesh.read).config.meshAuthority).toBe("A");
+      expect((yield* mesh.read).config.projectTitles).toEqual({ project: "Shared" });
       expect((yield* raw.getSettings).sidebarWorkspaces).toEqual((yield* mesh.read).config);
       expect(
         (yield* sql<{ key: string }>`SELECT key FROM mesh_layout_entries WHERE seq > ${seq}`).map(

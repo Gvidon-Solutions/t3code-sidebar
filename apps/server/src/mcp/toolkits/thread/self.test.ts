@@ -33,6 +33,8 @@ it.effect.each([
   "remote parent",
   "allocated replica",
   "descriptor",
+  "renamed",
+  "unknown machine",
 ] as const)("self describes %s", (role) => {
   const base = liveThreadShell(ThreadId.make("mcp:self"));
   const shell = {
@@ -63,9 +65,10 @@ it.effect.each([
   };
   const initial: SidebarWorkspacesConfig = {
     ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces,
+    projectTitles: role === "renamed" ? { repo: "N-shared project title" } : {},
     machines: {
-      local: { label: "Local", tag: "LO", reach: { source: { ssh: "gor" } } },
-      source: { label: "Gor", tag: "GO" },
+      local: { label: "Local", tag: "LO", reach: { source: { ssh: "worker" } } },
+      source: { label: "Worker", tag: "WK" },
     },
     projectMounts: {
       repo: [
@@ -100,12 +103,14 @@ it.effect.each([
         }
       : initial;
   const config =
-    role === "descriptor"
-      ? {
-          ...namedConfig,
-          machines: { ...namedConfig.machines, local: { reach: { source: { ssh: "gor" } } } },
-        }
-      : namedConfig;
+    role === "unknown machine"
+      ? { ...namedConfig, machines: { local: namedConfig.machines.local! } }
+      : role === "descriptor"
+        ? {
+            ...namedConfig,
+            machines: { ...namedConfig.machines, local: { reach: { source: { ssh: "worker" } } } },
+          }
+        : namedConfig;
   return Effect.gen(function* () {
     const tools = yield* ThreadToolkit.pipe(Effect.provide(HandlersLayer.layer(layer)));
     const results = yield* tools
@@ -123,16 +128,20 @@ it.effect.each([
       worktreePath: "/copy/worktree",
       branch: "topic",
       threadId: "mcp:self",
-      machine: { tag: role === "descriptor" ? "GO" : "LO" },
+      machine: { tag: role === "descriptor" ? "WO" : "LO" },
       representation: {
         role: role === "replica" || role === "allocated replica" ? "replica" : "primary",
         sync: { sessionName: "t3-repo-local", state: "conflict", conflicts: ["file"] },
       },
       primaries: expect.arrayContaining([
         expect.objectContaining({
-          machine: { environmentId: "source", label: "Gor", tag: "GO" },
+          machine: {
+            environmentId: "source",
+            label: role === "unknown machine" ? "Unknown machine" : "Worker",
+            tag: role === "unknown machine" ? "UN" : "WK",
+          },
           path: "/primary",
-          ssh: expect.stringContaining("ssh 'gor'"),
+          ssh: expect.stringContaining("ssh 'worker'"),
         }),
       ]),
     });
@@ -140,6 +149,10 @@ it.effect.each([
     if (role === "alias") expect(result).toHaveProperty("project.logicalKey", "canonical");
     if (role === "remote parent")
       expect(result).toHaveProperty("parent.environmentId", "parent-machine");
+    if (role === "renamed") {
+      expect(result).toHaveProperty("project.logicalTitle", "N-shared project title");
+      expect(result).toHaveProperty("project.title", "N-shared project title");
+    }
     if (role === "allocated replica")
       expect(result).toHaveProperty("project.logicalTitle", "primary");
   }).pipe(
@@ -147,7 +160,7 @@ it.effect.each([
       Layer.mergeAll(
         NodeCrypto.layer,
         Layer.mock(ServerEnvironment)({
-          getDescriptor: Effect.succeed(descriptorOf("local", "Gor")),
+          getDescriptor: Effect.succeed(descriptorOf("local", "Worker")),
         }),
         Layer.succeed(McpInvocationContext, {
           environmentId: EnvironmentId.make("local"),

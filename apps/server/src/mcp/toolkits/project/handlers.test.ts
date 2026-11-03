@@ -9,6 +9,7 @@ import * as ProviderRegistry from "../../../provider/ProviderRegistry.ts";
 import { expect, it } from "@effect/vitest";
 import {
   ThreadId,
+  OrchestratorMcpFailure,
   EnvironmentId,
   ProjectId,
   ProviderInstanceId,
@@ -775,3 +776,137 @@ it.effect("project update writes the shared logical title", () => {
     ),
   );
 });
+
+it.effect(
+  "project reads share renamed titles in pages and record details without changing storage",
+  () => {
+    const base = clientLaunchHarness({ runtimeModeCeiling: "full-access", launched: [] });
+    const h = makeReplicaHarness("environment");
+    const stored: ProjectRecord = {
+      id: base.projectId,
+      title: "Original title",
+      workspaceRoot: "/repo",
+      repositoryIdentity: null,
+      defaultModelSelection: null,
+      scripts: [],
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      deletedAt: null,
+    };
+    return Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMounts: {},
+        projectAliases: { "title:original title": "logical" },
+        projectTitles: { logical: "Renamed on another machine" },
+      }));
+      const toolkit = yield* ProjectToolkit.pipe(
+        Effect.provide(McpToolAccess.HandlersLayer.layer(ProjectHandlers.layer)),
+      );
+      const page = yield* toolkit
+        .handle("t3_project_list", { limit: 1, cursor: 2 })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(page.at(-1)?.result).toMatchObject({
+        projects: [{ id: stored.id, title: "Renamed on another machine" }],
+        nextCursor: 3,
+      });
+      const detail = yield* toolkit
+        .handle("t3_project_read", { projectId: stored.id })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(detail.at(-1)?.result).toMatchObject({
+        id: stored.id,
+        title: "Renamed on another machine",
+      });
+      expect(stored.title).toBe("Original title");
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          base.dependencies,
+          h.layer,
+          Layer.mock(Project.ProjectService)({
+            getById: () => Effect.succeedSome(stored),
+            listPage: () => Effect.succeed({ projects: [stored], nextCursor: 3 }),
+          }),
+        ),
+      ),
+    );
+  },
+);
+
+it.effect(
+  "an unavailable live-query route preserves the driver's persisted warnings and errors",
+  () => {
+    const base = clientLaunchHarness({ runtimeModeCeiling: "full-access", launched: [] });
+    const h = makeReplicaHarness("environment");
+    const runtime = Layer.effect(
+      ReplicaRuntime.ReplicaRuntime,
+      Effect.map(Replicas.ProjectReplicaService, (service) => ({ get: Effect.succeed(service) })),
+    );
+    const dependencies = Layer.mergeAll(
+      runtime,
+      Layer.mock(PeerForwarding.PeerForwarding)({
+        call: () =>
+          Effect.fail(
+            new OrchestratorMcpFailure({ code: "invalid_request", message: "No outbound route" }),
+          ),
+      }),
+    ).pipe(Layer.provideMerge(Layer.mergeAll(base.dependencies, h.layer)));
+    return Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectTitles: { repo: "Warnings project" },
+        projectMountStatus: {
+          repo: {
+            replica: {
+              state: "watching",
+              updatedAt: "2026-01-01T00:00:00Z",
+              skipped: 1,
+              skippedPaths: [{ path: "outside", error: "invalid symlink" }],
+              message: "1 files skipped (symlinks outside the project)",
+            },
+          },
+        },
+      }));
+      const toolkit = yield* ProjectToolkit.pipe(
+        Effect.provide(McpToolAccess.HandlersLayer.layer(ProjectHandlers.layer)),
+      );
+      const query = toolkit
+        .handle("t3_project_machines", { project: "repo" })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      const result = yield* query;
+      expect(result.at(-1)?.result).toMatchObject({
+        representations: expect.arrayContaining([
+          expect.objectContaining({
+            environmentId: "replica",
+            status: expect.objectContaining({ state: "watching", skipped: 1 }),
+          }),
+        ]),
+      });
+      expect(JSON.stringify(result)).not.toContain("The driving server is unavailable");
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMountStatus: {
+          repo: {
+            replica: {
+              state: "error",
+              updatedAt: "2026-01-01T00:00:01Z",
+              message: "The endpoint could not connect.",
+            },
+          },
+        },
+      }));
+      expect((yield* query).at(-1)?.result).toMatchObject({
+        representations: expect.arrayContaining([
+          expect.objectContaining({
+            status: expect.objectContaining({
+              state: "error",
+              message: "The endpoint could not connect.",
+            }),
+          }),
+        ]),
+      });
+    }).pipe(Effect.provide(dependencies));
+  },
+);

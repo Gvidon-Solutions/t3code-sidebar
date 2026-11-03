@@ -1,3 +1,4 @@
+import { meshMachineLabel } from "@t3tools/shared/meshLayout";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -32,13 +33,14 @@ export function replicaContextNote(
   if (!replica) return "";
   if (!primary)
     return "This project is a synchronized replica. Its primary representation is unavailable; restore it before running git or builds.";
+  const primaryName = meshMachineLabel(config, primary.environmentId, "the primary machine");
   const route = config.machines[environmentId]?.reach?.[primary.environmentId];
   if (!route)
-    return `This project is a synchronized replica of ${primary.environmentId}:${primary.path}. Run git and builds on that primary. Add an SSH reach route before running those commands.`;
+    return `This project is a synchronized replica of ${primaryName} at ${primary.path}. Run git and builds on that primary. Add an SSH reach route before running those commands.`;
   const ssh = route.identityFile ? `t3-mesh-${primary.environmentId}` : route.ssh;
   const port = /^(.*):(\d+)$/.exec(ssh);
   const command = port ? `ssh -p ${port[2]} ${quote(port[1]!)}` : `ssh ${quote(ssh)}`;
-  return `This project is a synchronized replica. Run git and builds on the primary (${primary.environmentId}), using ${command} ${quote(`cd ${quote(primary.path)} && <command>`)}. Mutagen synchronizes working files in both directions; .git and build dependencies stay on the primary.`;
+  return `This project is a synchronized replica. Run git and builds on ${primaryName}, using ${command} ${quote(`cd ${quote(primary.path)} && <command>`)}. Mutagen synchronizes working files in both directions; .git and build dependencies stay on the primary.`;
 }
 
 const fitUtf8 = (value: string, budget: number) => {

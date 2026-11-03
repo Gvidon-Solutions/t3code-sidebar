@@ -11,6 +11,7 @@ import { threadDropProject } from "./threadDrop.logic";
  */
 import { MoveProjectDialog } from "./MoveProjectDialog";
 import {
+  localThreadMoveTarget,
   threadMoveValidity,
   moveThreadWithConfirmation,
 } from "@t3tools/client-runtime/state/mesh-layout";
@@ -616,6 +617,7 @@ export default function WorkspaceSidebar() {
     target: (typeof projects)[number],
     modelSelection?: ModelSelection,
   ) => {
+    target = localThreadMoveTarget(config, thread.environmentId, target, projects);
     if (!modelSelection) {
       setMovingThread(null);
       setMoveModel({ thread, target });
@@ -2093,6 +2095,30 @@ export default function WorkspaceSidebar() {
           current={moveModel.thread.modelSelection}
           machine={machineTag(config, moveModel.target.environmentId)}
           crossMachine={moveModel.thread.environmentId !== moveModel.target.environmentId}
+          copyHere={
+            moveModel.thread.environmentId !== moveModel.target.environmentId
+              ? {
+                  label: `Create a copy of ${moveModel.target.title} on ${machineTag(config, moveModel.thread.environmentId)} and move here`,
+                  run: async () => {
+                    const result = await moveThreadCommand({
+                      environmentId: moveModel.thread.environmentId,
+                      input: {
+                        threadId: moveModel.thread.id,
+                        projectId: moveModel.target.id,
+                        targetEnvironmentId: moveModel.target.environmentId,
+                        createCopy: true,
+                      },
+                    });
+                    if (result._tag === "Failure") {
+                      failureToast("Could not move thread", squashAtomCommandFailure(result));
+                    } else {
+                      setMoveModel(null);
+                      toastManager.add({ title: `Moved to ${moveModel.target.title}` });
+                    }
+                  },
+                }
+              : undefined
+          }
           onClose={() => setMoveModel(null)}
           onMove={(selection) => void moveToProject(moveModel.thread, moveModel.target, selection)}
         />

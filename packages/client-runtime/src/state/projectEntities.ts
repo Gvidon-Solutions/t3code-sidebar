@@ -13,6 +13,7 @@ import { scopeProject } from "./models.ts";
 import { isScratchProject } from "./projects.ts";
 import { type EnvironmentCatalogState, enabledEnvironmentIds } from "./connections.ts";
 import { arrayElementsEqual, parseProjectKey, projectKey, projectRefsEqual } from "./entities.ts";
+import { logicalProjectTitle, resolveLogicalProjectKey } from "./meshLayout/logicalProjects.ts";
 
 const EMPTY_PROJECTS: ReadonlyArray<OrchestrationProjectShell> = Object.freeze([]);
 const EMPTY_PROJECT_INDEX: ReadonlyMap<ProjectId, OrchestrationProjectShell> = new Map();
@@ -22,9 +23,12 @@ export function createEnvironmentProjectAtoms(input: {
   readonly snapshotAtom: (
     environmentId: EnvironmentId,
   ) => Atom.Atom<OrchestrationV2ShellSnapshot | null>;
-  readonly serverConfigValueAtom?: (
-    environmentId: EnvironmentId,
-  ) => Atom.Atom<Pick<ServerConfig, "scratchWorkspaceRoot"> | null>;
+  readonly serverConfigValueAtom?: (environmentId: EnvironmentId) => Atom.Atom<
+    | (Pick<ServerConfig, "scratchWorkspaceRoot"> & {
+        readonly settings?: Pick<ServerConfig["settings"], "sidebarWorkspaces">;
+      })
+    | null
+  >;
 }) {
   const environmentProjectsAtom = Atom.family((environmentId: EnvironmentId) =>
     Atom.make(
@@ -62,27 +66,39 @@ export function createEnvironmentProjectAtoms(input: {
     const ref = parseProjectKey(key);
     let previousSource: OrchestrationProjectShell | null = null;
     let previousIsScratch = false;
+    let previousTitle: string | undefined;
     let previousValue: EnvironmentProject | null = null;
     return Atom.make((get) => {
       const source = get(environmentProjectIndexAtom(ref.environmentId)).get(ref.projectId) ?? null;
-      const scratch =
-        source !== null &&
-        isScratchProject(
-          source,
-          input.serverConfigValueAtom
-            ? get(input.serverConfigValueAtom(ref.environmentId))?.scratchWorkspaceRoot
-            : null,
-        );
-      if (source === previousSource && scratch === previousIsScratch) {
+      const config = input.serverConfigValueAtom
+        ? get(input.serverConfigValueAtom(ref.environmentId))
+        : null;
+      const scratch = source !== null && isScratchProject(source, config?.scratchWorkspaceRoot);
+      const layout = config?.settings?.sidebarWorkspaces;
+      const title =
+        source && layout && !scratch
+          ? logicalProjectTitle(
+              layout,
+              resolveLogicalProjectKey(
+                { ...source, environmentId: ref.environmentId },
+                layout,
+                () => "",
+              ),
+              source.title,
+            )
+          : source?.title;
+      if (source === previousSource && scratch === previousIsScratch && title === previousTitle) {
         return previousValue;
       }
       previousSource = source;
       previousIsScratch = scratch;
+      previousTitle = title;
       previousValue =
         source === null
           ? null
           : {
               ...scopeProject(ref.environmentId, source),
+              title: title ?? source.title,
               ...(scratch ? { isScratch: true as const } : {}),
             };
       return previousValue;

@@ -1,3 +1,12 @@
+import * as NodeUtil from "node:util";
+import {
+  MeshProjectDirectory,
+  ProjectCatalog,
+  CatalogClocks,
+  type ProjectHandle,
+} from "./MeshProjectDirectory.ts";
+import { ProjectService } from "../project/ProjectService.ts";
+import * as Option from "effect/Option";
 import * as DateTime from "effect/DateTime";
 import { EnvironmentId, MeshLayoutEntries, MeshLayoutError } from "@t3tools/contracts";
 import type { MeshLayoutDocument } from "@t3tools/shared/meshLayout";
@@ -16,12 +25,19 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 
 export const ExchangeInput = Schema.Struct({
+  projectCatalogs: Schema.optionalKey(Schema.Array(ProjectCatalog)),
+  knownProjects: Schema.optionalKey(CatalogClocks),
   fromEnvironmentId: Schema.String,
   entries: MeshLayoutEntries,
   seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   ackReceivedSeq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
-const ExchangeOutput = Schema.Struct({ entries: MeshLayoutEntries, seq: Schema.Int });
+const ExchangeOutput = Schema.Struct({
+  entries: MeshLayoutEntries,
+  seq: Schema.Int,
+  projectCatalogs: Schema.optionalKey(Schema.Array(ProjectCatalog)),
+  knownProjects: Schema.optionalKey(CatalogClocks),
+});
 type PeerState = { sent_seq: number; received_seq: number };
 export interface PeerStatus {
   readonly environmentId: string;
@@ -50,6 +66,60 @@ export const layer = Layer.effect(
     const peers = yield* PeerMcpClient;
     const links = yield* PeerLinks;
     const settings = yield* ServerSettingsService;
+    const directory = yield* Effect.serviceOption(MeshProjectDirectory);
+    const projects = yield* Effect.serviceOption(ProjectService);
+    const peerCatalogClocks = new Map<string, typeof CatalogClocks.Type>();
+    const captureCatalogs = Effect.fn("MeshReplicator.captureCatalogs")(function* () {
+      if (Option.isNone(directory)) return [] as readonly ProjectCatalog[];
+      if (Option.isSome(projects)) {
+        yield* Effect.gen(function* () {
+          const snapshot = yield* projects.value.snapshot;
+          const handles: ProjectHandle[] = snapshot.projects
+            .filter((project) => project.deletedAt === null)
+            .map((project) => ({
+              id: project.id,
+              title: project.title,
+              workspaceRoot: project.workspaceRoot,
+              createdAt: project.createdAt,
+              ...(project.repositoryIdentity !== undefined
+                ? {
+                    repositoryIdentity: project.repositoryIdentity
+                      ? {
+                          canonicalKey: project.repositoryIdentity.canonicalKey,
+                          ...(project.repositoryIdentity.origin
+                            ? {
+                                origin: {
+                                  canonicalKey: project.repositoryIdentity.origin.canonicalKey,
+                                },
+                              }
+                            : {}),
+                        }
+                      : null,
+                  }
+                : {}),
+            }))
+            .sort((a, b) => a.id.localeCompare(b.id));
+          const previous = (yield* directory.value.read).find(
+            (catalog) => catalog.environmentId === mesh.environmentId,
+          );
+          if (!NodeUtil.isDeepStrictEqual(previous?.projects, handles))
+            yield* directory.value.accept([
+              { environmentId: mesh.environmentId, h: yield* mesh.nextHlc, projects: handles },
+            ]);
+        }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Local mesh project catalog could not be refreshed", error),
+          ),
+        );
+      }
+      return yield* directory.value.read;
+    });
+    const clocks = (catalogs: readonly ProjectCatalog[]) =>
+      Object.fromEntries(catalogs.map((catalog) => [catalog.environmentId, catalog.h]));
+    const newerCatalogs = (
+      catalogs: readonly ProjectCatalog[],
+      known: typeof CatalogClocks.Type = {},
+    ) => catalogs.filter((catalog) => (known[catalog.environmentId] ?? "") < catalog.h);
     const lock = yield* Semaphore.make(1);
     const nextPeriodic = new Map<string, number>();
     const retries = new Map<string, { failures: number; after: number }>();
@@ -128,11 +198,26 @@ export const layer = Layer.effect(
             message: "Mesh replication is disabled",
           });
         yield* mesh.apply(input.entries as MeshLayoutDocument);
+        if (Option.isSome(directory))
+          yield* directory.value.accept(
+            (input.projectCatalogs ?? []).filter(
+              (catalog) => catalog.environmentId !== mesh.environmentId,
+            ),
+          );
         const output = yield* changesSince(input.ackReceivedSeq);
         yield* record(input.fromEnvironmentId, input.ackReceivedSeq, input.seq);
         // The peer just reached us, so it is up again: stop backing off from it.
         retries.delete(input.fromEnvironmentId);
-        return output;
+        const catalogs = yield* captureCatalogs();
+        return {
+          ...output,
+          ...(Option.isSome(directory)
+            ? {
+                projectCatalogs: newerCatalogs(catalogs, input.knownProjects),
+                knownProjects: clocks(catalogs),
+              }
+            : {}),
+        };
       },
       Effect.mapError((cause) =>
         isMeshError(cause)
@@ -153,10 +238,20 @@ export const layer = Layer.effect(
               yield* Effect.gen(function* () {
                 const watermark = yield* state(peer.environmentId);
                 const outgoing = yield* changesSince(watermark.sent_seq);
+                const catalogs = yield* captureCatalogs();
                 const incoming = yield* peers.call({
                   environmentId: EnvironmentId.make(peer.environmentId),
                   tool: "t3_mesh_exchange",
                   arguments: {
+                    ...(Option.isSome(directory)
+                      ? {
+                          projectCatalogs: newerCatalogs(
+                            catalogs,
+                            peerCatalogClocks.get(peer.environmentId),
+                          ),
+                          knownProjects: clocks(catalogs),
+                        }
+                      : {}),
                     fromEnvironmentId: mesh.environmentId,
                     ...outgoing,
                     ackReceivedSeq: watermark.received_seq,
@@ -164,7 +259,15 @@ export const layer = Layer.effect(
                   limits: { runtimeMode: "full-access", interactionMode: "default" },
                   success: ExchangeOutput,
                 });
+                if (incoming.knownProjects)
+                  peerCatalogClocks.set(peer.environmentId, incoming.knownProjects);
                 yield* mesh.apply(incoming.entries as MeshLayoutDocument);
+                if (Option.isSome(directory))
+                  yield* directory.value.accept(
+                    (incoming.projectCatalogs ?? []).filter(
+                      (catalog) => catalog.environmentId !== mesh.environmentId,
+                    ),
+                  );
                 yield* record(peer.environmentId, outgoing.seq, incoming.seq);
                 retries.delete(peer.environmentId);
                 nextPeriodic.set(peer.environmentId, now + PERIODIC_PULL_MS);

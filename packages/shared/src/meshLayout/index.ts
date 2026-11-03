@@ -7,3 +7,15 @@ export { materialize } from "./materialize.ts";
 export { diff, encode } from "./diff.ts";
 export * from "./importLegacy.ts";
 export { adoptLegacy } from "./adoptLegacy.ts";
+
+export { meshAuthorityOf, conflictWinner } from "./authority.ts";
+
+export { meshMachineLabel } from "./machineNames.ts";
+export { threadProjectTarget } from "./threadTarget.ts";
+export { opaqueProjectId, migrateLogicalProjectIds } from "./logicalIds.ts";
+
+export { normalizeRepresentationPath } from "./representationPath.ts";
+
+export { recordLayoutAuthors } from "./authorship.ts";
+
+export { logicalProjectKeyForRecord } from "./projectRecord.ts";

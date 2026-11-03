@@ -14,7 +14,7 @@ export const layer = Layer.effect(
     ) {
       if (patch.sidebarWorkspaces !== undefined)
         yield* mesh
-          .edit(() => patch.sidebarWorkspaces!)
+          .editLegacy((yield* mesh.read).config, patch.sidebarWorkspaces)
           .pipe(
             Effect.mapError(
               (cause) =>

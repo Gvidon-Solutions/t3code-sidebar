@@ -1,5 +1,7 @@
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import { EnvironmentId } from "@t3tools/contracts";
+import type { Project as ProjectRecord } from "@t3tools/contracts";
+import { logicalProjectKeyForRecord } from "@t3tools/shared/meshLayout";
 import * as ReplicaRuntime from "../../../replicas/ReplicaRuntime.ts";
 import {
   CommandId,
@@ -81,6 +83,22 @@ const access = Effect.gen(function* () {
   yield* readCaller();
   return yield* Project.ProjectService;
 });
+const sharedProjectTitles = Effect.fn("mcp.sharedProjectTitles")(function* (
+  projects: readonly ProjectRecord[],
+) {
+  const mesh = yield* Effect.serviceOption(MeshLayout.MeshLayoutService);
+  if (Option.isNone(mesh)) return projects;
+  const config = (yield* mesh.value.read).config;
+  return projects.map((project) => {
+    const key = logicalProjectKeyForRecord(
+      config,
+      { ...project, environmentId: mesh.value.environmentId },
+      "",
+    );
+    const title = config.projectTitles[key]?.trim() || project.title;
+    return title === project.title ? project : { ...project, title };
+  });
+});
 export const layer = McpToolAccess.toLayer(ProjectToolkit, {
   t3_project_place: McpToolAccess.writesEnvironment((input) =>
     ReplicaRuntime.getService.pipe(
@@ -111,7 +129,6 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
       if (Option.isNone(forwarding)) return result;
-      const now = DateTime.formatIso(yield* DateTime.now);
       const drivers = [
         ...new Set(
           result.representations.flatMap((rep) =>
@@ -130,8 +147,13 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
               live: false,
             })
             .pipe(
-              Effect.map((value) => ({ driver, value, error: undefined })),
-              Effect.catch((error) => Effect.succeed({ driver, value: undefined, error })),
+              Effect.map((value) => ({ driver, value })),
+              Effect.catch((error) =>
+                Effect.logWarning("Replica live query unavailable; retaining replicated status", {
+                  driver,
+                  message: error.message,
+                }).pipe(Effect.as({ driver, value: undefined })),
+              ),
             ),
         { concurrency: 4 },
       );
@@ -143,19 +165,6 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             (row) => row.environmentId === rep.environmentId,
           )?.live;
           if (live) return { ...rep, live };
-          if (response?.error)
-            return {
-              ...rep,
-              live: {
-                logicalKey: result.logicalKey,
-                environmentId: rep.environmentId,
-                state: "error" as const,
-                conflicts: [],
-                problems: [response.error.message],
-                message: "The driving server is unavailable.",
-                updatedAt: now,
-              },
-            };
           return rep;
         }),
       };
@@ -361,9 +370,10 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
     Effect.gen(function* () {
       const projects = yield* access;
       // Identities are resolved: linked environments find this side's project by repository.
-      return yield* projects
+      const page = yield* projects
         .listPage({ cursor: input.cursor ?? 0, limit: input.limit ?? 20 })
         .pipe(Effect.mapError(unavailable));
+      return { ...page, projects: yield* sharedProjectTitles(page.projects) };
     }),
   ),
   t3_project_read: McpToolAccess.reads((input) =>
@@ -375,7 +385,7 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
           code: "invalid_request",
           message: "The project was not found.",
         });
-      return result.value;
+      return (yield* sharedProjectTitles([result.value]))[0]!;
     }),
   ),
   t3_project_create: McpToolAccess.writesEnvironment(

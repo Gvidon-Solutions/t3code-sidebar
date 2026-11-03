@@ -1,3 +1,6 @@
+import { AdoptReplicaAction } from "./AdoptReplicaAction";
+import { EnvironmentId } from "@t3tools/contracts";
+import { openOpenFileDialog } from "../files/openFileDialogState";
 import {
   representationRow,
   type PendingReplicaRow,
@@ -87,6 +90,9 @@ export function MachinesDialog(props: {
                   props.logicalKey,
                   rep,
                 );
+                const copies =
+                  props.config.projectMountStatus[props.logicalKey]?.[rep.environmentId]
+                    ?.conflictCopies;
                 const retry = status.retry;
                 return (
                   <div
@@ -106,6 +112,18 @@ export function MachinesDialog(props: {
                     <div className="break-all font-mono text-2xs text-muted-foreground">
                       {rep.path}
                     </div>
+                    {status.status.skippedPaths?.length ? (
+                      <ul
+                        aria-label="Skipped files"
+                        className="space-y-1 text-xs text-muted-foreground"
+                      >
+                        {status.status.skippedPaths.map((problem) => (
+                          <li key={problem.path} className="break-all">
+                            {problem.path}: {problem.error}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span
                         className={
@@ -116,6 +134,30 @@ export function MachinesDialog(props: {
                       >
                         {status.text}
                       </span>
+                      {copies && !status.text.startsWith("Resolved ") ? (
+                        <span className="text-muted-foreground">Last automatic resolution</span>
+                      ) : null}
+                      {copies ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            props.onOpenChange(false);
+                            openOpenFileDialog(
+                              EnvironmentId.make(copies.environmentId),
+                              copies.path,
+                            );
+                          }}
+                        >
+                          Open copies
+                        </Button>
+                      ) : null}
+                      {rep.role === "primary" ? (
+                        <AdoptReplicaAction
+                          environmentId={rep.environmentId}
+                          logicalKey={props.logicalKey}
+                        />
+                      ) : null}
                       {rep.role === "replica" ? (
                         <Button
                           size="sm"

@@ -66,6 +66,16 @@ export const SidebarProjectMount = Schema.Struct({
   transport: SidebarProjectMountTransport,
   /** Reserved by the destination server before its driver starts copying. */
   pathAllocated: Schema.optionalKey(Schema.Boolean),
+  adoption: Schema.optionalKey(
+    Schema.Struct({
+      environmentId: Schema.String,
+      sessionIdentifier: Schema.String,
+      paused: Schema.Boolean,
+    }),
+  ),
+  syncKey: Schema.optionalKey(Schema.String),
+  explicitPath: Schema.optionalKey(Schema.Boolean),
+  pathValidated: Schema.optionalKey(Schema.Boolean),
   /** "primary" owns `.git` and computes; "replica" is a synced working copy of `source`. */
   role: Schema.Literals(["primary", "replica"]),
   /** For a replica: the environment whose representation it syncs with. */
@@ -87,8 +97,15 @@ export const SidebarProjectMountState = Schema.Literals([
 ]);
 export type SidebarProjectMountState = typeof SidebarProjectMountState.Type;
 
-/** What the machine holding a replica last reported about it; changes only on state changes. */
+const ReplicaSkippedPath = Schema.Struct({ path: Schema.String, error: Schema.String });
+
+/** What the machine holding a replica last reported about synchronization. */
 export const SidebarProjectMountStatus = Schema.Struct({
+  skipped: Schema.optionalKey(Schema.Number),
+  skippedPaths: Schema.optionalKey(Schema.Array(ReplicaSkippedPath)),
+  conflictCopies: Schema.optionalKey(
+    Schema.Struct({ environmentId: Schema.String, path: Schema.String }),
+  ),
   state: SidebarProjectMountState,
   message: Schema.optionalKey(Schema.String),
   conflicts: Schema.optionalKey(Schema.Number),
@@ -97,6 +114,8 @@ export const SidebarProjectMountStatus = Schema.Struct({
 export type SidebarProjectMountStatus = typeof SidebarProjectMountStatus.Type;
 
 export const SidebarWorkspacesConfig = Schema.Struct({
+  meshAuthority: Schema.optionalKey(Schema.String),
+  meshWriters: Schema.optionalKey(Schema.Array(Schema.String)),
   workspaces: Schema.Array(SidebarWorkspace).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   /**
    * Logical project key → workspace id. Wins over rules. Since `placements`,

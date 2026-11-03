@@ -124,10 +124,11 @@ it.effect(
           representations: expect.arrayContaining([
             expect.objectContaining({
               environmentId: "replica",
-              live: expect.objectContaining({ state: "error", problems: ["offline"] }),
+              driverEnvironmentId: "replica",
             }),
           ]),
         });
+        expect(JSON.stringify(offline.at(-1)?.result)).not.toContain('"state":"error"');
         const denied = yield* tools
           .handle("t3_project_place", { project: "repo", machine: "NP", action: "remove" })
           .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(client("read-only")));

@@ -1,3 +1,7 @@
+import { authoredBy } from "./authorship.ts";
+import { normalizeRepresentationPath } from "./representationPath.ts";
+import { meshAuthorityOf } from "./authority.ts";
+import { keys } from "./document.ts";
 import type {
   SidebarWorkspacesConfig,
   SidebarWorkspace,
@@ -31,6 +35,11 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const legacy: Record<string, Json> = {};
   for (const [key, { v }] of Object.entries(doc).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (v === null) continue;
+    if (key.startsWith("proj/") && key.endsWith(".title") && typeof v === "string") {
+      const id = decodeURIComponent(key.slice(5, -6));
+      if ((doc[keys.project(id)]?.h ?? "") <= doc[key]!.h) projectTitles[id] = v;
+      continue;
+    }
     const [family, a = "", b = ""] = key.split("/").map(decodeURIComponent);
     switch (family) {
       case "ws":
@@ -59,7 +68,12 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         machines[a] = v as SidebarMachine;
         break;
       case "proj":
-        if (typeof v === "object" && "title" in v && typeof v.title === "string")
+        if (
+          typeof v === "object" &&
+          "title" in v &&
+          typeof v.title === "string" &&
+          (doc[keys.projectTitle(a)]?.h ?? "") < doc[key]!.h
+        )
           projectTitles[a] = v.title;
         break;
       case "alias":
@@ -104,7 +118,43 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     );
     assignments[project] = ids[0]!;
   }
+  const writers = [
+    ...new Set(
+      Object.keys(doc)
+        .filter((key) => key.startsWith("writer/"))
+        .map((key) => decodeURIComponent(key.slice(7))),
+    ),
+  ].sort();
+  const authority = meshAuthorityOf({
+    meshWriters: writers,
+    ...(typeof doc["mesh.authority"]?.v === "string"
+      ? { meshAuthority: doc["mesh.authority"].v }
+      : {}),
+  });
+  const claims = Object.entries(projectMounts).flatMap(([logical, reps]) =>
+    reps.map((rep) => ({
+      logical,
+      rep,
+      entry: doc[keys.representation(logical, rep.environmentId)]!,
+    })),
+  );
+  claims.sort(
+    (a, b) =>
+      Number(authoredBy(doc, b.entry, authority)) - Number(authoredBy(doc, a.entry, authority)) ||
+      (a.logical < b.logical ? -1 : a.logical > b.logical ? 1 : 0),
+  );
+  const claimed = new Set<string>();
+  for (const { logical, rep } of claims) {
+    const identity = JSON.stringify([rep.environmentId, normalizeRepresentationPath(rep.path)]);
+    if (claimed.has(identity))
+      projectMounts[logical] = projectMounts[logical]!.filter((other) => other !== rep);
+    else claimed.add(identity);
+  }
   return {
+    ...(typeof doc["mesh.authority"]?.v === "string"
+      ? { meshAuthority: doc["mesh.authority"].v }
+      : {}),
+    ...(writers.length ? { meshWriters: writers } : {}),
     workspaces: workspaces.map(({ sort: _sort, ...w }) => w),
     rules: rules.map(({ sort: _sort, id: _id, ...r }) => r),
     assignments,

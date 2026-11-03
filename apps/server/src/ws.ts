@@ -1,3 +1,4 @@
+import { recordLayoutAuthors } from "@t3tools/shared/meshLayout";
 import { ThreadHandoffService } from "./mesh/ThreadHandoffService.ts";
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
 import { MESH_WS_METHODS, ServerSettingsError } from "@t3tools/contracts";
@@ -2169,7 +2170,12 @@ export const layerWsRpc = (
         [MESH_WS_METHODS.layoutGet]: () => mesh.read.pipe(Effect.map(meshSnapshot)),
         [MESH_WS_METHODS.layoutApply]: ({ entries }) =>
           mesh
-            .apply(entries as import("@t3tools/shared/meshLayout").MeshLayoutDocument)
+            .apply(
+              recordLayoutAuthors(
+                entries as import("@t3tools/shared/meshLayout").MeshLayoutDocument,
+                mesh.environmentId,
+              ),
+            )
             .pipe(Effect.map(meshSnapshot)),
         [MESH_WS_METHODS.layoutSubscribe]: () => mesh.changes.pipe(Stream.map(meshSnapshot)),
         [MESH_WS_METHODS.status]: () => meshReplicator.status,

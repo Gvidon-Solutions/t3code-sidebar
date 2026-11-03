@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { detectServerUnit, installPublicRuntime, installSshRuntime } from "./server-runtime.mjs";
 // Uses MCP for agent tools and WebSocket RPC for UI operations.
 // Nothing reads the server's sqlite; nothing here restarts the server except `server restart`.
 import * as NodeChildProcess from "node:child_process";
@@ -128,7 +129,8 @@ export function parseArgs(argv) {
             : argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")
               ? argv[++i]
               : true;
-      if (key === "opt" || key === "attach" || key === "from") val = [...(opt[key] || []), val];
+      if (key === "opt" || key === "attach" || key === "from" || key === "ignore")
+        val = [...(opt[key] || []), val];
       opt[key] = val;
     } else pos.push(a);
   }
@@ -328,6 +330,67 @@ export function resolveMachineRef(ref, machines) {
   );
 }
 
+export function meshProjectTitle(config, logicalKey, path) {
+  return (
+    config.projectTitles?.[logicalKey]?.trim() ||
+    String(path ?? "")
+      .replaceAll("\\", "/")
+      .split("/")
+      .filter(Boolean)
+      .at(-1) ||
+    "Untitled project"
+  );
+}
+
+async function meshDisplayConfig(layout, machines) {
+  const projectTitles = { ...layout.config.projectTitles };
+  const cache = new Map();
+  for (const [key, reps] of Object.entries(layout.config.projectMounts ?? {})) {
+    if (projectTitles[key]?.trim()) continue;
+    const candidates = [...reps].sort(
+      (a, b) => Number(b.role === "primary") - Number(a.role === "primary"),
+    );
+    for (const rep of candidates) {
+      const machine = machines.find((machine) => machine.environmentId === rep.environmentId);
+      if (!machine || (!machine.local && !machine.linked)) continue;
+      if (!cache.has(machine.environmentId)) {
+        try {
+          cache.set(machine.environmentId, await projectsInEnvironment(machine));
+        } catch (error) {
+          console.error(`Cannot read project names on ${machine.label}: ${error.message}`);
+          cache.set(machine.environmentId, []);
+        }
+      }
+      const project = cache
+        .get(machine.environmentId)
+        .find((project) => project.id === rep.projectId || project.workspaceRoot === rep.path);
+      if (project?.title) {
+        projectTitles[key] = project.title;
+        break;
+      }
+    }
+  }
+  return { ...layout.config, projectTitles };
+}
+
+export function meshAuthorityEdit(layout, environmentId, now) {
+  const last = layout.document?.["mesh.authority"]?.h ?? "0000000000000.00000.seed";
+  let ms = Math.max(now, Number(last.slice(0, 13)));
+  let counter = ms === Number(last.slice(0, 13)) ? Number(last.slice(14, 19)) + 1 : 0;
+  if (counter >= 100000) {
+    ms++;
+    counter = 0;
+  }
+  return {
+    entries: {
+      "mesh.authority": {
+        v: environmentId,
+        h: `${String(ms).padStart(13, "0")}.${String(counter).padStart(5, "0")}.${layout.environmentId}`,
+      },
+    },
+  };
+}
+
 export function waitSeconds(value) {
   if (value === undefined || value === false) return undefined;
   if (value === true) return 600;
@@ -335,7 +398,17 @@ export function waitSeconds(value) {
   const seconds = /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : parseDuration(text) / 1000;
   return Math.max(0, Math.min(600, Math.round(seconds)));
 }
-export function buildPlaceInput({ project, machine, role, source, path, wait, action }) {
+export function buildPlaceInput({
+  project,
+  machine,
+  role,
+  source,
+  path,
+  wait,
+  action,
+  ignores,
+  transport,
+}) {
   return {
     project,
     machine,
@@ -343,6 +416,8 @@ export function buildPlaceInput({ project, machine, role, source, path, wait, ac
     ...(role ? { role } : {}),
     ...(source ? { source } : {}),
     ...(path ? { path } : {}),
+    ...(ignores ? { ignores } : {}),
+    ...(transport ? { transport } : {}),
     ...(wait !== undefined ? { wait } : {}),
   };
 }
@@ -440,7 +515,7 @@ const MESH_KEYS = {
   order: (project) => `order/${encodeURIComponent(project)}`,
   fold: (workspace, project) =>
     `fold/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}`,
-  project: (key) => `proj/${encodeURIComponent(key)}`,
+  projectTitle: (key) => `proj/${encodeURIComponent(key)}.title`,
   alias: (key) => `alias/${encodeURIComponent(key)}`,
   representation: (logical, env) => `rep/${encodeURIComponent(logical)}/${encodeURIComponent(env)}`,
   representationStatus: (logical, env) =>
@@ -541,7 +616,8 @@ export function encodeLegacyEntries(config, doc = {}) {
   for (const [env, machine] of Object.entries(config.machines ?? {}))
     put(MESH_KEYS.machine(env), machine);
   for (const [key, title] of Object.entries(config.projectTitles ?? {}))
-    put(MESH_KEYS.project(key), { title });
+    put(MESH_KEYS.projectTitle(key), title);
+  if (config.meshAuthority) put("mesh.authority", config.meshAuthority);
   for (const [alias, logical] of Object.entries(config.projectAliases ?? {}))
     put(MESH_KEYS.alias(alias), logical);
   for (const [logical, reps] of Object.entries(config.projectMounts ?? {}))
@@ -636,13 +712,12 @@ async function editMachineAliases(pos, opt) {
 function serverInfo() {
   if (process.env.T3CTL_ORIGIN) return { origin: process.env.T3CTL_ORIGIN.replace(/\/$/, "") };
   const f = join(USERDATA, "server-runtime.json");
-  if (!existsSync(f))
-    die(`T3 server is not running (no ${f}). Check: systemctl --user status ${UNIT}`);
+  if (!existsSync(f)) die(`T3 server is not running (no ${f}). Check: t3ctl server status`);
   const info = JSON.parse(readFileSync(f, "utf8"));
   try {
     process.kill(info.pid, 0);
   } catch {
-    die(`T3 server (pid ${info.pid}) is not running. Check: systemctl --user status ${UNIT}`);
+    die(`T3 server (pid ${info.pid}) is not running. Check: t3ctl server status`);
   }
   return info;
 }
@@ -651,10 +726,7 @@ function serverInfo() {
 function t3bin() {
   if (process.env.T3CTL_T3_BIN) return process.env.T3CTL_T3_BIN;
   try {
-    const unit = execFileSync("systemctl", ["--user", "cat", UNIT], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
+    const unit = detectServerUnit(UNIT)?.text ?? "";
     const m = /^ExecStart=(\S+\/runtime\/versions\/[^/]+\/t3)\s/m.exec(unit);
     if (m) {
       const bin = m[1].replace(/^%h/, homedir());
@@ -1384,7 +1456,16 @@ async function listProjects() {
   return out;
 }
 
-async function resolveProject(ref, projects) {
+async function resolveMeshProject(ref) {
+  const result = await (await mcp()).call("t3_project_machines", { project: String(ref) });
+  return {
+    id: result.logicalKey,
+    title: result.title || "Untitled project",
+    workspaceRoot: result.representations[0]?.path || "",
+  };
+}
+
+async function resolveProject(ref, projects, meshFallback = false) {
   if (!ref) die("project is required (name, id prefix or folder path)");
   projects ??= await listProjects();
   const r = String(ref);
@@ -1392,6 +1473,7 @@ async function resolveProject(ref, projects) {
   if (path) {
     const p = projects.find((x) => x.workspaceRoot === path);
     if (p) return p;
+    if (meshFallback) return resolveMeshProject(ref);
     die(`no project at ${path}`);
   }
   const byId = projects.filter(
@@ -1407,6 +1489,7 @@ async function resolveProject(ref, projects) {
     lower.split(/\s+/).every((w) => `${p.title} ${p.workspaceRoot}`.toLowerCase().includes(w)),
   );
   if (fuzzy.length === 1) return fuzzy[0];
+  if (!fuzzy.length && meshFallback) return resolveMeshProject(ref);
   if (!fuzzy.length) die(`no project matches "${ref}" (see: t3ctl projects)`);
   die(
     `"${ref}" is ambiguous:\n${fuzzy.map((p) => `  ${short(p.id)}  ${p.title}  ${p.workspaceRoot}`).join("\n")}`,
@@ -1991,9 +2074,13 @@ const commands = {
       bad("ws rpc", e.message);
     }
     try {
-      const st = execFileSync("systemctl", ["--user", "is-active", UNIT], {
-        encoding: "utf8",
-      }).trim();
+      const st = execFileSync(
+        "systemctl",
+        [...(detectServerUnit(UNIT)?.prefix ?? []), "is-active", UNIT],
+        {
+          encoding: "utf8",
+        },
+      ).trim();
       ok("unit", `${UNIT} ${st}`);
     } catch {
       lines.push(
@@ -2207,10 +2294,26 @@ const commands = {
 
   async mesh(pos, opt) {
     const sub = pos[0] || "status";
+    if (sub === "authority") {
+      let layout = await layoutSnapshot();
+      if (pos[1]) {
+        const machine = resolveMachineRef(pos[1], await collectMachines({ layout }));
+        layout = await withWs((c) =>
+          c.rpc("meshLayout.apply", meshAuthorityEdit(layout, machine.environmentId, Date.now())),
+        );
+      }
+      const id = layout.config.meshAuthority || [...(layout.config.meshWriters ?? [])].sort()[0];
+      const machine = (await collectMachines({ layout })).find((m) => m.environmentId === id);
+      if (opt.json)
+        return json({ authorityEnvironmentId: id ?? null, label: machine?.label ?? null });
+      console.log(`Authority: ${machine?.label ?? "Automatic"}`);
+      return;
+    }
     if (sub === "status") {
       const layout = await layoutSnapshot();
       const { links, error: linksError } = await peerLinksSummary();
       const machines = await collectMachines({ layout, links });
+      const displayConfig = await meshDisplayConfig(layout, machines);
       const live = await replicaLiveStatus();
       const settings = await serverSettings();
       const rows = replicaRows(layout.config, live.replicas);
@@ -2266,7 +2369,7 @@ const commands = {
         console.log(`  no links${linksError ? ` (${clip(linksError, 120)})` : ""}`);
       for (const row of rows)
         console.log(
-          `  ${row.rep.role.padEnd(8)} ${tagOf(row.rep.environmentId).padEnd(3)} ${clip(row.rep.path || row.logicalKey, 48).padEnd(48)} ${replicaStateText(row)}`,
+          `  ${row.rep.role.padEnd(8)} ${tagOf(row.rep.environmentId).padEnd(3)} ${clip(meshProjectTitle(displayConfig, row.logicalKey, row.rep.path), 38).padEnd(38)} ${replicaStateText(row)}`,
         );
       if (live.error && !live.disabled) console.log(`  replicas: ${clip(live.error, 160)}`);
       return;
@@ -2335,10 +2438,10 @@ const commands = {
   async place(pos, opt) {
     if (!pos[0])
       die(
-        "usage: t3ctl place <project> --on <machine> [--primary] [--source <machine>] [--path PATH] [--wait [dur]]",
+        "usage: t3ctl place <project> --on <machine> [--primary] [--source <machine>] [--path PATH] [--ignore PATTERN] [--transport mutagen|sshfs|manual] [--wait [dur]]",
       );
     if (!opt.on) die("place needs --on <machine>");
-    const project = await resolveProject(pos[0]);
+    const project = await resolveProject(pos[0], undefined, true);
     const machine = await getMachine(opt.on);
     const tools = await (await mcp()).tools();
     if (!tools.some((t) => t.name === "t3_project_place"))
@@ -2349,6 +2452,8 @@ const commands = {
       project: project.id,
       machine: machine.environmentId,
       role: opt.primary ? "primary" : undefined,
+      ignores: opt.ignore,
+      transport: opt.transport,
       source,
       path: opt.path ? (machine.local ? expandHome(opt.path) : String(opt.path)) : undefined,
       wait,
@@ -2364,7 +2469,7 @@ const commands = {
   async unplace(pos, opt) {
     if (!pos[0]) die("usage: t3ctl unplace <project> --on <machine> --yes");
     if (!opt.on) die("unplace needs --on <machine>");
-    const project = await resolveProject(pos[0]);
+    const project = await resolveProject(pos[0], undefined, true);
     const machine = await getMachine(opt.on);
     if (!opt.yes)
       die(
@@ -2387,12 +2492,14 @@ const commands = {
     const layout = await layoutSnapshot();
     const live = await replicaLiveStatus();
     const rows = replicaRows(layout.config, live.replicas);
-    const machines = new Map((await collectMachines({ layout })).map((m) => [m.environmentId, m]));
+    const inventory = await collectMachines({ layout });
+    const displayConfig = await meshDisplayConfig(layout, inventory);
+    const machines = new Map(inventory.map((m) => [m.environmentId, m]));
     const out = rows.map((row) => {
       const machine = machines.get(row.rep.environmentId);
       return {
         logicalKey: row.logicalKey,
-        machine: machine?.label ?? row.rep.environmentId,
+        machine: machine?.label ?? "Unknown machine",
         tag: machine?.tag ?? defaultMachineTag(row.rep.environmentId, row.rep.environmentId),
         environmentId: row.rep.environmentId,
         role: row.rep.role,
@@ -2419,7 +2526,7 @@ const commands = {
     for (const row of out) {
       const conflict = row.conflicts.length ? `  ${row.conflicts.length} conflict(s)` : "";
       console.log(
-        `${String(row.tag).padEnd(3)} ${String(row.machine).padEnd(16)} ${row.role.padEnd(8)} ${row.state.padEnd(10)}${row.progress !== null && row.progress !== undefined ? ` ${Math.round(row.progress * 100)}%` : ""}  ${clip(row.logicalKey, 36)}  ${row.path}${conflict}${row.message ? ` — ${clip(row.message, 80)}` : ""}`,
+        `${String(row.tag).padEnd(3)} ${String(row.machine).padEnd(16)} ${row.role.padEnd(8)} ${row.state.padEnd(10)}${row.progress !== null && row.progress !== undefined ? ` ${Math.round(row.progress * 100)}%` : ""}  ${clip(meshProjectTitle(displayConfig, row.logicalKey, row.path), 36)}  ${row.path}${conflict}${row.message ? ` — ${clip(row.message, 80)}` : ""}`,
       );
     }
     if (live.disabled) console.log("replicas are disabled on this server");
@@ -2427,16 +2534,44 @@ const commands = {
   },
 
   async replica(pos, opt) {
+    if (pos[0] === "adopt") {
+      if (pos[0] !== "adopt" || !pos[1] || !opt.project)
+        die("usage: t3ctl replica adopt <session> --project P [--on MACHINE]");
+      const { config } = await layoutSnapshot();
+      const matches = Object.keys(config.projectMounts ?? {}).filter(
+        (key) =>
+          key === opt.project ||
+          config.projectTitles?.[key]?.toLowerCase() === String(opt.project).toLowerCase(),
+      );
+      if (matches.length > 1) die(`"${opt.project}" is ambiguous; use its project id`);
+      const key = matches[0];
+      const project = key
+        ? { id: key, title: meshProjectTitle(config, key) }
+        : await resolveProject(opt.project, undefined, true);
+      const r = await withWs((c) =>
+        c.rpc("replicas.adopt", {
+          project: project.id,
+          session: pos[1],
+          ...(opt.on ? { machine: opt.on } : {}),
+        }),
+      );
+      if (opt.json) return json(r);
+      console.log(
+        `Taking over sync for "${project.title}". The original session stays paused until the new copy is ready.`,
+      );
+      return;
+    }
     const sub = pos[0];
     if (sub !== "retry") die("usage: t3ctl replica retry <project> --on <machine>");
     if (!pos[1]) die("usage: t3ctl replica retry <project> --on <machine>");
     if (!opt.on) die("replica retry needs --on <machine>");
-    const project = await resolveProject(pos[1]);
+    const project = await resolveProject(pos[1], undefined, true);
     const machine = await getMachine(opt.on);
     const layout = await layoutSnapshot();
     const normalize = (p) => String(p).replaceAll("\\", "/").replace(/\/+$/, "");
     const entries = Object.entries(layout.config.projectMounts ?? {});
     const logicalKey =
+      (layout.config.projectMounts[project.id] ? project.id : undefined) ??
       entries.find(([, reps]) => reps.some((rep) => rep.projectId === project.id))?.[0] ??
       entries.find(([, reps]) =>
         reps.some(
@@ -2469,7 +2604,7 @@ const commands = {
         );
     if (opt.json) return json(r);
     console.log(
-      `retry requested for ${clip(logicalKey, 40)} on ${machine.label}: ${r.state}${r.message ? ` — ${r.message}` : ""}`,
+      `retry requested for ${clip(meshProjectTitle(layout.config, logicalKey, rep.path), 40)} on ${machine.label}: ${r.state}${r.message ? ` — ${r.message}` : ""}`,
     );
   },
 
@@ -3554,10 +3689,15 @@ const commands = {
 
   async server(pos, opt) {
     const sub = pos[0] || "status";
+    const service = detectServerUnit(UNIT);
     if (sub === "status") {
-      const r = spawnSync("systemctl", ["--user", "status", UNIT, "--no-pager", "-n", "0"], {
-        encoding: "utf8",
-      });
+      const r = spawnSync(
+        "systemctl",
+        [...(service?.prefix ?? []), "status", UNIT, "--no-pager", "-n", "0"],
+        {
+          encoding: "utf8",
+        },
+      );
       console.log(r.stdout.trim());
       try {
         const i = serverInfo();
@@ -3568,15 +3708,36 @@ const commands = {
       return;
     }
     if (sub === "logs") {
-      const f = join(HOME, "serve.log");
-      console.log(execFileSync("tail", ["-n", String(opt.n || 80), f], { encoding: "utf8" }));
+      if (service)
+        console.log(
+          execFileSync(
+            "journalctl",
+            [...service.prefix, "--unit", UNIT, "--no-pager", "--lines", String(opt.n || 80)],
+            { encoding: "utf8" },
+          ),
+        );
+      else
+        console.log(
+          execFileSync("tail", ["-n", String(opt.n || 80), join(HOME, "serve.log")], {
+            encoding: "utf8",
+          }),
+        );
       return;
     }
     if (sub === "versions") {
       const dir = join(HOME, "runtime", "versions");
-      const unit = execFileSync("systemctl", ["--user", "cat", UNIT], { encoding: "utf8" });
+      const unit = service?.text ?? "";
       const cur = /versions\/([^/]+)\/t3/.exec(unit)?.[1];
-      for (const v of readdirSync(dir).sort()) console.log(`${v === cur ? "* " : "  "}${v}`);
+      const versions = readdirSync(dir).sort();
+      if (opt.json)
+        return json(
+          versions.map((version) => ({
+            version,
+            path: join(dir, version),
+            current: version === cur,
+          })),
+        );
+      for (const v of versions) console.log(`${v === cur ? "* " : "  "}${v}`);
       return;
     }
     if (sub === "install") {
@@ -3585,73 +3746,117 @@ const commands = {
       const repo = process.env.T3CTL_RELEASE_REPO;
       if (!repo) die("Set T3CTL_RELEASE_REPO to the release repository (organization/repository)");
       const want = String(pos[1] || "latest");
-      const runs = JSON.parse(
+      try {
+        const runs = JSON.parse(
+          execFileSync(
+            "gh",
+            [
+              "run",
+              "list",
+              "--repo",
+              repo,
+              "--workflow",
+              "sidebar-desktop.yml",
+              "--limit",
+              "40",
+              "--json",
+              "databaseId,number,conclusion,headSha,displayTitle",
+            ],
+            { encoding: "utf8" },
+          ),
+        );
+        const n = /(\d+)$/.exec(want)?.[1];
+        const run =
+          want === "latest"
+            ? runs.find((r) => r.conclusion === "success")
+            : runs.find((r) => String(r.number) === n || String(r.databaseId) === want);
+        if (!run)
+          die(
+            `no CI run for "${want}" (recent: ${runs
+              .slice(0, 5)
+              .map((r) => `#${r.number} ${r.conclusion}`)
+              .join(", ")})`,
+          );
+        if (run.conclusion !== "success") die(`CI run #${run.number} ended "${run.conclusion}"`);
+        const tmp = join(HOME, "caches", `t3ctl-install-${run.number}`);
+        execFileSync("rm", ["-rf", tmp]);
+        mkdirSync(tmp, { recursive: true });
+        console.log(
+          `downloading cli-linux-x64 of run #${run.number} (${run.headSha.slice(0, 10)} ${clip(run.displayTitle, 60)})…`,
+        );
         execFileSync(
           "gh",
           [
             "run",
-            "list",
+            "download",
+            String(run.databaseId),
             "--repo",
             repo,
-            "--workflow",
-            "sidebar-desktop.yml",
-            "--limit",
-            "40",
-            "--json",
-            "databaseId,number,conclusion,headSha,displayTitle",
+            "-n",
+            "cli-linux-x64",
+            "-D",
+            tmp,
           ],
-          { encoding: "utf8" },
-        ),
-      );
-      const n = /(\d+)$/.exec(want)?.[1];
-      const run =
-        want === "latest"
-          ? runs.find((r) => r.conclusion === "success")
-          : runs.find((r) => String(r.number) === n || String(r.databaseId) === want);
-      if (!run)
-        die(
-          `no CI run for "${want}" (recent: ${runs
-            .slice(0, 5)
-            .map((r) => `#${r.number} ${r.conclusion}`)
-            .join(", ")})`,
+          { stdio: "inherit" },
         );
-      if (run.conclusion !== "success") die(`CI run #${run.number} ended "${run.conclusion}"`);
-      const tmp = join(HOME, "caches", `t3ctl-install-${run.number}`);
-      execFileSync("rm", ["-rf", tmp]);
-      mkdirSync(tmp, { recursive: true });
-      console.log(
-        `downloading cli-linux-x64 of run #${run.number} (${run.headSha.slice(0, 10)} ${clip(run.displayTitle, 60)})…`,
-      );
-      execFileSync(
-        "gh",
-        [
-          "run",
-          "download",
-          String(run.databaseId),
-          "--repo",
-          repo,
-          "-n",
-          "cli-linux-x64",
-          "-D",
-          tmp,
-        ],
-        { stdio: "inherit" },
-      );
-      const archive = readdirSync(tmp).find((f) => f.endsWith(".tar.gz"));
-      const version = /^t3-(.+)-linux-x64\.tar\.gz$/.exec(archive || "")?.[1];
-      if (!version) die(`unexpected artifact contents in ${tmp}`);
-      const dest = join(HOME, "runtime", "versions", version);
-      if (existsSync(join(dest, "t3"))) {
-        console.log(`${version} is already installed (${dest})`);
+        const archive = readdirSync(tmp).find((f) => f.endsWith(".tar.gz"));
+        const version = /^t3-(.+)-linux-x64\.tar\.gz$/.exec(archive || "")?.[1];
+        if (!version) die(`unexpected artifact contents in ${tmp}`);
+        const dest = join(HOME, "runtime", "versions", version);
+        if (existsSync(join(dest, "t3"))) {
+          console.log(`${version} is already installed (${dest})`);
+          return;
+        }
+        mkdirSync(dest, { recursive: true });
+        execFileSync("tar", ["xzf", join(tmp, archive), "-C", dest, "--strip-components=1"]);
+        execFileSync("rm", ["-rf", tmp]);
+        console.log(
+          `installed ${version} → ${dest}\nnot running yet; switch with: t3ctl server use ${version} --yes   (owner's go-ahead first)`,
+        );
         return;
+      } catch (ciError) {
+        const failures = [`CI: ${ciError.message}`];
+        try {
+          const result = await installPublicRuntime({ home: HOME, repository: repo, want });
+          console.log(`installed ${result.version} → ${result.path}; not running yet`);
+          return;
+        } catch (error) {
+          failures.push(`Public release: ${error.message}`);
+        }
+        try {
+          const layout = await layoutSnapshot();
+          const known = await collectMachines({ layout });
+          const refs = opt.from ? (Array.isArray(opt.from) ? opt.from : [opt.from]) : null;
+          const machines = refs
+            ? refs.map((ref) => resolveMachineRef(ref, known))
+            : known.filter((machine) => machine.linked && !machine.local && machine.sshAlias);
+          for (const machine of machines) {
+            try {
+              const route =
+                layout.config.machines?.[layout.environmentId]?.reach?.[machine.environmentId];
+              const result = installSshRuntime({
+                home: HOME,
+                want,
+                destination:
+                  route?.ssh || machine.sshAlias || die(`No SSH route to ${machine.label}`),
+                ...(route?.identityFile ? { identityFile: route.identityFile } : {}),
+                remoteHome: process.env.T3CTL_REMOTE_HOME,
+              });
+              console.log(
+                `installed ${result.version} from ${machine.label} → ${result.path}; not running yet`,
+              );
+              return;
+            } catch (error) {
+              failures.push(`Copy from ${machine.label}: ${error.message}`);
+            }
+          }
+        } catch (error) {
+          failures.push(`Linked machines: ${error.message}`);
+        }
+        die(
+          `Could not install ${want}. ${failures.join("\n")}\nTry --from <linked machine> with that version installed.`,
+        );
       }
-      mkdirSync(dest, { recursive: true });
-      execFileSync("tar", ["xzf", join(tmp, archive), "-C", dest, "--strip-components=1"]);
-      execFileSync("rm", ["-rf", tmp]);
-      console.log(
-        `installed ${version} → ${dest}\nnot running yet; switch with: t3ctl server use ${version} --yes   (owner's go-ahead first)`,
-      );
-      return;
     }
     if (sub === "restart" || sub === "use") {
       // Owner rule (2026-10-14): the live server restarts only after the owner said yes.
@@ -3662,13 +3867,17 @@ const commands = {
         die(
           `${sub === "use" ? `switching the server to ${target} restarts it` : "restarting the server"}: every running T3 thread is cut off, including the agent that runs this command.\nOnly with the owner's explicit go-ahead. Re-run with --yes.`,
         );
+      if (!service)
+        die(
+          `No user or system service named ${UNIT} was found. Start or configure the server service first.`,
+        );
       if (target) {
         const bin = join(HOME, "runtime", "versions", target, "t3");
         if (!existsSync(bin))
           die(`no runtime ${bin} (put the release's cli-linux-x64 there first)`);
         const unitPath = execFileSync(
           "systemctl",
-          ["--user", "show", "-p", "FragmentPath", "--value", UNIT],
+          [...service.prefix, "show", "-p", "FragmentPath", "--value", UNIT],
           { encoding: "utf8" },
         ).trim();
         const text = readFileSync(unitPath, "utf8");
@@ -3678,7 +3887,7 @@ const commands = {
         const backup = `${unitPath}.bak-${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}`;
         copyFileSync(unitPath, backup);
         writeFileSync(unitPath, next);
-        execFileSync("systemctl", ["--user", "daemon-reload"]);
+        execFileSync("systemctl", [...service.prefix, "daemon-reload"]);
         console.log(`unit now runs ${target} (backup ${backup})`);
       }
       console.log("restarting in 2s…");
@@ -3686,21 +3895,23 @@ const commands = {
       const before = existsSync(join(USERDATA, "server-runtime.json"))
         ? JSON.parse(readFileSync(join(USERDATA, "server-runtime.json"), "utf8")).pid
         : null;
-      spawnSync(
+      const scheduled = spawnSync(
         "systemd-run",
         [
-          "--user",
+          ...service.prefix,
           "--quiet",
           "--on-active=2",
           "--unit",
           `t3ctl-restart-${Date.now()}`,
           "systemctl",
-          "--user",
+          ...service.prefix,
           "restart",
           UNIT,
         ],
         { stdio: "inherit" },
       );
+      if (scheduled.status !== 0)
+        die("Could not schedule the server restart. Check systemd permissions.");
       // Wait for the new process to answer (a caller inside T3 is cut off here, which is expected).
       const deadline = Date.now() + 120000;
       while (Date.now() < deadline) {
@@ -3914,6 +4125,7 @@ READ
   models [agent]                          harnesses (provider instances), models, options
   env | doctor                            server identity | health check after updates
   machines [--json] [--probe]             every known machine: tag, label, id, version, links, replicas
+  mesh authority [<machine>]             show or set the authority
   machines alias <M> [list|add <alias>…|remove <alias>…|clear]  shared machine aliases
   mesh status [--json]                    links, layout revision, replicas
   mesh link <M> [--url URL] [--ssh DEST]  link a machine (full access; pairing code minted over ssh)
@@ -3969,6 +4181,7 @@ MESH (M = environment id/prefix, label, tag, ssh destination, or a user-defined 
   place <P> --on <M> [--primary] [--source <M2>] [--path PATH] [--wait [dur]]
                                           add a representation (replica by default); --wait for watching
   unplace <P> --on <M> --yes              remove a representation (files and the project stay)
+  replica adopt SESSION --project P      take over an existing Mutagen session safely
   replicas [--json]                       every representation, live state, conflicts
   replica retry <P> --on <M>              recreate/resume a replica session
   layout get [--json]                     the shared layout (legacy settings when the server is old)

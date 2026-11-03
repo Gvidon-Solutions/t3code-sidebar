@@ -19,6 +19,11 @@ if [ -f "$UNIT" ]; then
 fi
 if ! node --test "$(dirname "$T3CTL")/t3ctl.integration.test.mjs"; then exit 1; fi
 if ! node --test "$(dirname "$T3CTL")/agents-sync.test.mjs"; then exit 1; fi
+if ! node --test "$(dirname "$T3CTL")/server-runtime.test.mjs"; then exit 1; fi
+PARITY="$(dirname "$T3CTL")/../shared-parity.test.mjs"
+if [ -f "$PARITY" ]; then
+  if ! node --test "$PARITY"; then echo "selftest: shared parity checks failed"; exit 1; fi
+fi
 if [ "${T3CTL_OFFLINE_ONLY:-0}" = 1 ]; then exit 0; fi
 # Validate before any authentication or write, including the original regression suite.
 if [ "${T3CTL_ISOLATED_TEST:-0}" != 1 ] || [ -z "${T3CTL_ORIGIN:-}" ]; then

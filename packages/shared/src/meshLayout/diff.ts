@@ -45,6 +45,9 @@ export function encode(
   doc: MeshLayoutDocument = {},
 ): Record<string, Json> {
   const values: Record<string, Json> = {};
+  for (const [id, title] of Object.entries(config.projectTitles ?? {}))
+    values[keys.projectTitle(id)] = title;
+  if (config.meshAuthority) values[keys.authority] = config.meshAuthority;
   const put = (key: string, value: unknown) => {
     values[key] = JSON.parse(JSON.stringify(value)) as Json;
   };
@@ -98,8 +101,6 @@ export function encode(
   for (const [ws, folds] of Object.entries(config.workspaceFold))
     for (const [p, mode] of Object.entries(folds)) put(keys.fold(ws, p), mode);
   for (const [env, machine] of Object.entries(config.machines)) put(keys.machine(env), machine);
-  for (const [key, title] of Object.entries(config.projectTitles))
-    put(keys.project(key), { title });
   for (const [alias, logical] of Object.entries(config.projectAliases))
     put(keys.alias(alias), logical);
   for (const [logical, reps] of Object.entries(config.projectMounts))

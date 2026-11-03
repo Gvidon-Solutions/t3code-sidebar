@@ -21,16 +21,52 @@ export function replicaDriver(config: SidebarWorkspacesConfig, replica: SidebarP
 }
 export function sessionStatus(
   session: MutagenSession,
-): Pick<ReplicaLiveStatus, "state" | "progress" | "conflicts" | "problems"> {
+): Pick<
+  ReplicaLiveStatus,
+  "state" | "progress" | "conflicts" | "problems" | "message" | "skipped" | "skippedPaths"
+> {
   const conflicts = session.conflicts?.map((conflict) => conflict.root) ?? [];
   const problems = [
     session.lastError,
     ...[session.alpha, session.beta].flatMap((endpoint) =>
-      [...(endpoint.scanProblems ?? []), ...(endpoint.transitionProblems ?? [])].map(
-        (problem) => `${problem.path}: ${problem.error}`,
-      ),
+      (endpoint.transitionProblems ?? []).map((problem) => `${problem.path}: ${problem.error}`),
     ),
   ].filter((value): value is string => Boolean(value));
+  const excludedTransitions =
+    (session.alpha.excludedTransitionProblems ?? 0) +
+    (session.beta.excludedTransitionProblems ?? 0);
+  if (excludedTransitions > 0)
+    problems.push(`${excludedTransitions} additional transition problems`);
+  // First connection attempts are mounting; failed attempts carry lastError.
+  if (!session.status.startsWith("connecting-")) {
+    if (session.alpha.connected === false) problems.push("Primary is disconnected.");
+    if (session.beta.connected === false) problems.push("Replica is disconnected.");
+  }
+  const skippedPaths = [
+    ...new Map(
+      [session.alpha, session.beta]
+        .flatMap((endpoint) => endpoint.scanProblems ?? [])
+        .map((problem) => [problem.path, problem]),
+    ).values(),
+  ];
+  const skipped = [session.alpha, session.beta].reduce(
+    (count, endpoint) =>
+      count + (endpoint.scanProblems?.length ?? 0) + (endpoint.excludedScanProblems ?? 0),
+    0,
+  );
+  const reasons = [
+    skippedPaths.some((problem) => /symlink|symbolic link/iu.test(problem.error))
+      ? "symlinks outside the project"
+      : "",
+    skippedPaths.some((problem) => /permission|unreadable|access denied/iu.test(problem.error))
+      ? "unreadable files"
+      : "",
+  ].filter(Boolean);
+  const message = problems.length
+    ? problems.slice(0, 3).join("; ")
+    : skipped
+      ? `${skipped} ${skipped === 1 ? "file" : "files"} skipped (${reasons.join(", ") || "scan problems"})`
+      : undefined;
   const staging = session.beta.stagingProgress ?? session.alpha.stagingProgress;
   return {
     state: session.paused
@@ -57,6 +93,8 @@ export function sessionStatus(
       : {}),
     conflicts,
     problems,
+    ...(message ? { message } : {}),
+    ...(skipped ? { skipped, skippedPaths: skippedPaths.slice(0, 10) } : {}),
   };
 }
 
@@ -91,4 +129,12 @@ export function remoteRepresentation(
     key = config.projectAliases[key]!;
   }
   return config.projectMounts[key]?.find((rep) => rep.environmentId === target);
+}
+
+const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", ".t3-conflicts"];
+export function replicaIgnorePatterns(configured: readonly string[]): string[] {
+  return [
+    ...configured.filter((pattern) => !protectedIgnores.includes(pattern)),
+    ...protectedIgnores,
+  ];
 }

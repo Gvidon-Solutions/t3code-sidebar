@@ -1,4 +1,9 @@
-import { EnvironmentId, ProjectId, type ServerConfig } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  ProjectId,
+  type ServerConfig,
+} from "@t3tools/contracts";
 import { Atom, AtomRegistry } from "effect/reactivity";
 import * as Option from "effect/Option";
 import { describe, expect, it } from "vite-plus/test";
@@ -26,7 +31,13 @@ function makeHarness(withConfig = true) {
     }),
   );
   const configAtom = Atom.family((_environmentId: EnvironmentId) =>
-    Atom.make<(Pick<ServerConfig, "scratchWorkspaceRoot"> & { revision?: number }) | null>(null),
+    Atom.make<
+      | (Pick<ServerConfig, "scratchWorkspaceRoot"> & {
+          revision?: number;
+          settings?: Pick<ServerConfig["settings"], "sidebarWorkspaces">;
+        })
+      | null
+    >(null),
   );
   const catalogValueAtom = Atom.make({
     isReady: true,
@@ -116,6 +127,43 @@ describe("project scratch identity", () => {
 
       registry.set(configAtom(environmentId), null);
       expect(registry.get(projects.projectsAtom).every((project) => !project.isScratch)).toBe(true);
+      const layout = {
+        ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+        projectAliases: { legacy: "opaque" },
+        projectTitles: { opaque: "Shared title" },
+        projectMounts: {
+          legacy: [environmentId, remoteEnvironmentId].map((id) => ({
+            environmentId: id,
+            path: "/repo",
+            projectId: "ordinary",
+            role: "primary" as const,
+            transport: "git" as const,
+            createdAt: "",
+          })),
+        },
+      };
+      for (const id of [environmentId, remoteEnvironmentId])
+        registry.set(configAtom(id), { settings: { sidebarWorkspaces: layout } });
+      const titled = registry.get(projects.projectsAtom);
+      expect(
+        titled.filter((project) => project.id === "ordinary").map((project) => project.title),
+      ).toEqual(["Shared title", "Shared title"]);
+      expect(registry.get(snapshotAtom(environmentId))).toBe(source);
+      registry.set(configAtom(environmentId), {
+        revision: 2,
+        settings: { sidebarWorkspaces: { ...layout } },
+      });
+      expect(registry.get(projects.projectsAtom)).toBe(titled);
+      for (const id of [environmentId, remoteEnvironmentId])
+        registry.set(configAtom(id), {
+          settings: { sidebarWorkspaces: { ...layout, projectTitles: { opaque: "Renamed" } } },
+        });
+      expect(
+        registry
+          .get(projects.projectsAtom)
+          .filter((project) => project.id === "ordinary")
+          .map((project) => project.title),
+      ).toEqual(["Renamed", "Renamed"]);
     } finally {
       registry.dispose();
     }

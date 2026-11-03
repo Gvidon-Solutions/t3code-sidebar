@@ -19,7 +19,7 @@ readable from anywhere, and agents that know where they are.
 | Machine           | one T3 server (`environmentId`), label/tag/color/aliases, SSH routes to other machines                          | layout `machine/<env>`                                        |
 | Link              | server-to-server MCP session (pairing code, full access for the mesh)                                           | each server's PeerLinks table                                 |
 | Mesh              | machines + links; one **authority** machine (`mesh.authority`)                                                  | layout                                                        |
-| Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>`, `rep/<id>/<env>`, `alias/*`               |
+| Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>.title`, `rep/<id>/<env>`, `alias/*`         |
 | Representation    | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores)                            | layout `rep/*`                                                |
 | Sync session      | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
 | Thread            | lives on one machine, working dir inside one representation (or "No project")                                   | that machine's DB                                             |
@@ -45,6 +45,17 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   (reconcile on layout change + every 30 s; deterministic session names; state machine;
   registers the project on the replica machine when watching), `ReplicaPaths` (allocation),
   `ManagedSshConfig` (only the `# t3-mesh` block), `ReplicaInstructions` (the context note).
+- **Project names anywhere.** `replicas/meshProjectLookup.ts` resolves layout titles/aliases and
+  complete paginated peer project lists over the existing relay. `mesh/MeshProjectDirectory.ts`
+  also caches minimal source-stamped handles gossiped by mesh exchange, so incoming-only peers
+  can resolve projects without outbound credentials. Reads do not enroll representations; place
+  persists the actual source. Catalogs rebuild after restart, include deletions and omit unchanged
+  snapshots, repository URLs, scripts and model defaults. Missing lookups await updates for 20 s.
+- **Replica diagnostics.** Scan problems stay mounting/watching, register normally and carry
+  skipped counts plus bounded paths through live status, layout, MCP and both Machines clients.
+  Last errors, transition failures and disconnected active endpoints block with persisted messages.
+  Ignore changes recreate the session. Conflict copies remain protected from sync. A failed remote
+  live-query retains the replicated status; missing RPC reachability is not a sync failure.
 - **Threads anywhere.** `t3_thread_self` (who am I), mesh-wide list/search/read/send/wait by id
   (`MeshThreadAccess.ts`), moves: same machine = project change (`threadMove`), other machine =
   **handoff** (`ThreadHandoffService.ts`, `handoffBundle.ts`: transcript + attachments as context,
@@ -70,6 +81,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 ## Interfaces
 
 - **CLI / skill:** `agent-kit/skills/t3` (`SKILL.md`, `scripts/t3ctl.mjs`). Mesh commands:
+  `mesh authority [<machine>]`, `replica adopt <session> --project P`,
   `machines`, `machines alias <M> list|add|remove|clear`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,
   `threads/status --all`, `open`, `open-file`, `cat`, `move`, `layout get|merge`, `agents sync|status`, `self`.
 - **MCP tools** (in the server): `t3_project_place`, `t3_project_machines`, `t3_thread_self`,
@@ -105,6 +117,8 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 
 ## Testing
 
+- Skill: `T3CTL_OFFLINE_ONLY=1 bash agent-kit/skills/t3/scripts/selftest.sh` includes shared-core
+  parity when run from the checkout. `node --test agent-kit/install.test.mjs` verifies staging.
 - Unit/integration: the package suites (`pnpm -s test` per package; web with `--maxWorkers 4`),
   `vp lint` 0 errors, `typecheck` in contracts/shared/client-runtime/server/mobile and
   `vp exec tsc --noEmit -p apps/web/tsconfig.json`. Commit with `--no-verify` only because of the
@@ -161,3 +175,19 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   audited explicitly. Product code and skill instructions must resolve customer data; keep personal
   topology only in agent-kit `global/` and clearly identified documentation examples. Test alias edits
   with unrelated labels, multilingual aliases, relay routes and destination-provided model defaults.
+
+- Incoming-only links support bidirectional exchange but cannot initiate a routed RPC. Resolve
+  names from minimal catalog gossip as well as active queries; do not silently create new links.
+  A CLI local-only precheck can defeat a correct mesh resolver before the RPC is sent.
+- Session scan diagnostics may be truncated: preserve Mutagen's omitted counts, bound the path
+  list and keep scanning warnings distinct from blockers. Register watching copies despite warnings.
+- Ignore changes must reach the running session. Compare the full ordered ignore configuration;
+  missing configuration is not proof that an old session already matches.
+- Build parity fixtures from `materialize({})` so schema additions do not leave undefined maps.
+  Compare the standalone encoder with shared core for authority, titles, aliases and diagnostics.
+- A healthy replicated status must survive a failed optional live-query. Keep the persisted
+  diagnostics and log query reachability separately; do not fabricate errors for every remote
+  copy. Registered machine strips must keep skipped-file notes instead of replacing them with synced.
+- A fresh SCP connection may be rejected while an existing SSH session remains healthy during
+  bed restarts. Use the same owned control socket for deployment SSH and SCP. Deployment retries
+  happen before fault injection; they are not proof of automatic replica recovery.

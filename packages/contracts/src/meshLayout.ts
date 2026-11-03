@@ -41,6 +41,11 @@ export class MeshLayoutError extends Schema.TaggedError<MeshLayoutError>()("Mesh
 
 /** Live state of one replica on the machine that drives or holds it. */
 export const ReplicaLiveStatus = Schema.Struct({
+  skipped: SidebarProjectMountStatus.fields.skipped,
+  skippedPaths: SidebarProjectMountStatus.fields.skippedPaths,
+  conflictCopies: Schema.optionalKey(
+    Schema.Struct({ environmentId: Schema.String, path: Schema.String }),
+  ),
   logicalKey: Schema.String,
   environmentId: Schema.String,
   state: SidebarProjectMountState,
@@ -90,6 +95,8 @@ export const MESH_WS_METHODS = {
   status: "meshLayout.status",
   replicasStatus: "replicas.status",
   replicasRetry: "replicas.retry",
+  replicasUnmanaged: "replicas.unmanaged",
+  replicasAdopt: "replicas.adopt",
 } as const;
 
 const LayoutError = Schema.Union([MeshLayoutError, EnvironmentAuthorizationError]);
@@ -131,15 +138,6 @@ export const WsReplicasRetryRpc = Rpc.make(MESH_WS_METHODS.replicasRetry, {
   error: ReplicaRpcError,
 });
 
-export const MeshRpcs = [
-  WsMeshLayoutGetRpc,
-  WsMeshLayoutApplyRpc,
-  WsMeshLayoutSubscribeRpc,
-  WsMeshLayoutStatusRpc,
-  WsReplicasStatusRpc,
-  WsReplicasRetryRpc,
-] as const;
-
 export const ProjectPlaceInput = Schema.Struct({
   project: Schema.String,
   machine: Schema.String,
@@ -147,6 +145,8 @@ export const ProjectPlaceInput = Schema.Struct({
   role: Schema.optionalKey(Schema.Literals(["primary", "replica"])),
   source: Schema.optionalKey(Schema.String),
   path: Schema.optionalKey(Schema.String),
+  ignores: Schema.optionalKey(Schema.Array(Schema.String)),
+  transport: Schema.optionalKey(Schema.Literals(["mutagen", "sshfs", "manual"])),
   wait: Schema.optionalKey(Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 600 }))),
 });
 export type ProjectPlaceInput = typeof ProjectPlaceInput.Type;
@@ -157,6 +157,8 @@ export const ProjectPlaceResult = Schema.Struct({
 });
 export type ProjectPlaceResult = typeof ProjectPlaceResult.Type;
 export const ProjectMachinesResult = Schema.Struct({
+  title: Schema.optionalKey(Schema.String),
+  authorityEnvironmentId: Schema.optionalKey(Schema.String),
   logicalKey: Schema.String,
   representations: Schema.Array(
     Schema.Struct({
@@ -170,3 +172,45 @@ export const ProjectMachinesResult = Schema.Struct({
   ),
 });
 export type ProjectMachinesResult = typeof ProjectMachinesResult.Type;
+
+const SyncEndpoint = Schema.Struct({
+  path: Schema.String,
+  protocol: Schema.optionalKey(Schema.String),
+  host: Schema.optionalKey(Schema.String),
+  user: Schema.optionalKey(Schema.String),
+  port: Schema.optionalKey(Schema.Number),
+});
+export const UnmanagedSyncSession = Schema.Struct({
+  identifier: Schema.String,
+  name: Schema.optionalKey(Schema.String),
+  alpha: SyncEndpoint,
+  beta: SyncEndpoint,
+  ignores: Schema.Array(Schema.String),
+});
+export type UnmanagedSyncSession = typeof UnmanagedSyncSession.Type;
+export const ReplicaAdoptInput = Schema.Struct({
+  project: Schema.String,
+  session: Schema.String,
+  machine: Schema.optionalKey(Schema.String),
+});
+export type ReplicaAdoptInput = typeof ReplicaAdoptInput.Type;
+const WsReplicasUnmanagedRpc = Rpc.make(MESH_WS_METHODS.replicasUnmanaged, {
+  payload: Schema.Struct({}),
+  success: Schema.Array(UnmanagedSyncSession),
+  error: ReplicaRpcError,
+});
+const WsReplicasAdoptRpc = Rpc.make(MESH_WS_METHODS.replicasAdopt, {
+  payload: ReplicaAdoptInput,
+  success: ProjectPlaceResult,
+  error: ReplicaRpcError,
+});
+export const MeshRpcs = [
+  WsMeshLayoutGetRpc,
+  WsMeshLayoutApplyRpc,
+  WsMeshLayoutSubscribeRpc,
+  WsMeshLayoutStatusRpc,
+  WsReplicasStatusRpc,
+  WsReplicasRetryRpc,
+  WsReplicasUnmanagedRpc,
+  WsReplicasAdoptRpc,
+] as const;

@@ -484,17 +484,17 @@ describe("grouping by name", () => {
   it("merges the same project name across machines, whatever its folder", () => {
     const remoteEnvironmentId = EnvironmentId.make("remote");
     const projects = [
-      makeProject("wrapper", "/home/tester/Repos/publ2025-calfwrapper", {
-        title: "CALF Wrapper",
+      makeProject("wrapper", "/projects/wrapper", {
+        title: "Research Wrapper",
         repositoryIdentity: null,
       }),
-      makeProject("wrapper-remote", "/root/mnt/atlas/submission-5", {
-        title: "  CALF   wrapper ",
+      makeProject("wrapper-remote", "/copies/submission", {
+        title: "  Research   wrapper ",
         environmentId: remoteEnvironmentId,
         repositoryIdentity: null,
       }),
-      makeProject("envelope", "/home/tester/Repos/publ2024-calf", {
-        title: "CALF Envelope",
+      makeProject("envelope", "/projects/envelope", {
+        title: "Research Envelope",
         repositoryIdentity: null,
       }),
     ];
@@ -502,8 +502,8 @@ describe("grouping by name", () => {
     expect(buildProjectGroups({ projects, settings: settings("repository") })).toHaveLength(3);
     const groups = buildProjectGroups({ projects, settings: settings("title") });
     expect(groups).toHaveLength(2);
-    const wrapper = groups.find((group) => group.label !== "CALF Envelope")!;
-    expect(wrapper.label).toBe("CALF Wrapper");
+    const wrapper = groups.find((group) => group.label !== "Research Envelope")!;
+    expect(wrapper.label).toBe("Research Wrapper");
     expect(wrapper.memberProjectRefs).toEqual([
       { environmentId, projectId: ProjectId.make("wrapper") },
       { environmentId: remoteEnvironmentId, projectId: ProjectId.make("wrapper-remote") },

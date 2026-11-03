@@ -1,4 +1,4 @@
-import { resolveLogicalProjectKey } from "./meshLayout/logicalProjects.ts";
+import { resolveLogicalProjectKey, logicalProjectTitle } from "./meshLayout/logicalProjects.ts";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "../environment/scoped.ts";
 import {
@@ -376,18 +376,21 @@ export function buildProjectGroups<TProject extends EnvironmentProject>(input: {
       (preferredEnvironmentId
         ? members.find((member) => member.project.environmentId === preferredEnvironmentId)?.project
         : null) ?? members[0]!.project;
+    const fallbackLabel =
+      input.groupScratchProjects && representative.isScratch
+        ? "No project"
+        : members.length > 1
+          ? deriveProjectGroupLabel({
+              representative,
+              members: members.map((member) => member.project),
+            })
+          : representative.title;
     return {
       key,
       label:
-        input.groupScratchProjects && representative.isScratch
-          ? "No project"
-          : (input.layout?.projectTitles[key] ??
-            (members.length > 1
-              ? deriveProjectGroupLabel({
-                  representative,
-                  members: members.map((member) => member.project),
-                })
-              : representative.title)),
+        input.layout && !(input.groupScratchProjects && representative.isScratch)
+          ? logicalProjectTitle(input.layout, key, fallbackLabel)
+          : fallbackLabel,
       representative,
       members,
       memberProjectRefs: projectRefsByLogicalKey.get(key) ?? [],

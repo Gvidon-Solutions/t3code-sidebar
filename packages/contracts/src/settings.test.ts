@@ -345,8 +345,14 @@ describe("ServerSettings replica defaults", () => {
       ".turbo",
       "coverage",
       ".t3",
+      ".t3-conflicts",
       ".claude/worktrees",
       ".DS_Store",
+      "SingletonSocket",
+      "SingletonLock",
+      "SingletonCookie",
+      ".codex/tmp",
+      "tmp/arg0",
     ]);
     expect(
       decodeServerSettingsPatch({

@@ -28,9 +28,29 @@ function run(args, extra = {}) {
     );
     const cli = join(dir, "t3");
     writeFileSync(cli, "#!/bin/sh\necho test-token\n", { mode: 0o700 });
+    if (extra.T3CTL_TEST_RELEASE_FALLBACK || extra.T3CTL_TEST_SSH_INSTALL) {
+      const top = join(dir, "public", "t3-0.0.9-N");
+      mkdirSync(top, { recursive: true });
+      writeFileSync(join(top, "t3"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+      NodeChildProcess.execFileSync("tar", [
+        "-czf",
+        join(dir, "runtime.tar.gz"),
+        "-C",
+        join(dir, "public"),
+        "t3-0.0.9-N",
+      ]);
+      writeFileSync(join(dir, "gh"), "#!/bin/sh\nexit 1\n", { mode: 0o700 });
+    }
     writeFileSync(
       join(dir, "ssh"),
-      '#!/usr/bin/env node\nconst fs=require("node:fs");fs.appendFileSync(process.env.T3CTL_TEST_LOG,JSON.stringify({name:"ssh",args:process.argv.slice(2)})+"\\n");console.log(JSON.stringify({credential:"pairing-test",state:"watching",environmentId:"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",label:"lab"}));\n',
+      `#!/usr/bin/env node
+const fs=require("node:fs"),args=process.argv.slice(2);
+fs.appendFileSync(process.env.T3CTL_TEST_LOG,JSON.stringify({name:"ssh",args})+"\\n");
+if(process.env.T3CTL_TEST_SSH_INSTALL) {
+  if(args.at(-1).startsWith("tar ")) process.stdout.write(fs.readFileSync(process.env.T3CTL_TEST_PUBLIC_ARCHIVE));
+  else console.log(JSON.stringify({root:"/remote/runtime/versions",versions:["0.0.9-N"]}));
+} else console.log(JSON.stringify({credential:"pairing-test",state:"watching",environmentId:"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",label:"lab"}));
+`,
       { mode: 0o700 },
     );
     const r = spawnSync(
@@ -42,7 +62,10 @@ function run(args, extra = {}) {
           ...process.env,
           XDG_CONFIG_HOME: dir,
           XDG_STATE_HOME: dir,
+          T3CODE_HOME: join(dir, "home"),
+          T3CTL_TEST_PUBLIC_ARCHIVE: join(dir, "runtime.tar.gz"),
           T3CTL_ORIGIN: "http://fixture",
+          T3CTL_RELEASE_REPO: "example/runtime",
           T3CTL_T3_BIN: cli,
           T3CTL_TEST_LOG: log,
           PATH: dir + ":" + process.env.PATH,
@@ -51,7 +74,11 @@ function run(args, extra = {}) {
       },
     );
     assert.equal(r.status, Number(extra.expectedCode || 0), r.stderr);
-    return { out: r.stdout, calls: readFileSync(log, "utf8").trim().split("\n").map(JSON.parse) };
+    return {
+      out: r.stdout,
+      calls: readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse),
+      installed: NodeFS.existsSync(join(dir, "home/runtime/versions/0.0.9-N/t3")),
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -245,6 +272,69 @@ test("thread ids in printed output retain the full MCP prefix and body", () => {
   const id = "mcp:full-thread-example-0123456789";
   const sent = run(["send", id, "hello"], { T3CTL_TEST_FULL_ID: "1" });
   assert.ok(sent.out.includes(id), sent.out);
+});
+
+test("mesh and replica text use the project title, and adoption reaches the management service", () => {
+  for (const command of [["mesh", "status"], ["replicas"]]) {
+    const result = run(command);
+    assert.match(result.out, /Demo/);
+    assert.doesNotMatch(result.out, /\srepo\s/);
+  }
+  const result = run(["replica", "adopt", "N-manual", "--project", "Demo"]);
+  assert.deepEqual(result.calls.find((call) => call.name === "replicas.adopt").args, {
+    project: "p",
+    session: "N-manual",
+  });
+  assert.match(result.out, /original session stays paused/);
+  const remote = run(["replica", "adopt", "N-remote", "--project", "Remote project"]);
+  assert.deepEqual(remote.calls.find((call) => call.name === "replicas.adopt").args, {
+    project: "lp-remote",
+    session: "N-remote",
+  });
+  assert.match(remote.out, /Remote project/);
+  for (const command of [
+    ["place", "Remote project", "--on", "LB", "--json"],
+    ["unplace", "Remote project", "--on", "LB", "--yes", "--json"],
+  ]) {
+    const result = run(command);
+    assert.equal(
+      result.calls.find((call) => call.name === "t3_project_machines").args.project,
+      "Remote project",
+    );
+    assert.equal(
+      result.calls.find((call) => call.name === "t3_project_place").args.project,
+      "lp-remote",
+    );
+  }
+  const placed = run([
+    "place",
+    "Demo",
+    "--on",
+    "LB",
+    "--path",
+    "/explicit/path",
+    "--ignore",
+    "*.cache",
+    "--ignore",
+    "scratch",
+    "--transport",
+    "manual",
+  ]);
+  const input = placed.calls.find((call) => call.name === "t3_project_place").args;
+  assert.equal(input.path, "/explicit/path");
+  assert.equal(input.transport, "manual");
+  assert.deepEqual(input.ignores, ["*.cache", "scratch"]);
+});
+
+test("server install falls back without authenticated gh to public HTTPS or a linked SSH cache", () => {
+  const publicResult = run(["server", "install", "latest"], { T3CTL_TEST_RELEASE_FALLBACK: "1" });
+  assert.equal(publicResult.installed, true);
+  assert.match(publicResult.out, /installed 0\.0\.9-N/);
+  const sshResult = run(["server", "install", "latest", "--from", "LB"], {
+    T3CTL_TEST_SSH_INSTALL: "1",
+  });
+  assert.equal(sshResult.installed, true);
+  assert.match(sshResult.out, /from lab/);
 });
 
 test("aliases read and edit the layout machine without replacing other fields", () => {

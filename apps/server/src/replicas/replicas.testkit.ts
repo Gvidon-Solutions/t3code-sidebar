@@ -26,6 +26,7 @@ export const makeReplicaHarness = (
   onList: Effect.Effect<void, ReplicaError> = Effect.void,
   onRegister: Effect.Effect<void, ProjectService.ProjectServiceError> = Effect.void,
   onCreate: Effect.Effect<void, ReplicaError> = Effect.void,
+  onListExisting: Effect.Effect<void, ReplicaError> = Effect.void,
 ) => {
   const replica: SidebarProjectMount = {
     environmentId: "replica",
@@ -55,15 +56,39 @@ export const makeReplicaHarness = (
       : { replica: { reach: { source: { ssh: "source" } } } },
   });
   let sessions: ReadonlyArray<Runner.MutagenSession> = [];
+  const foreign: { sessions: readonly Runner.MutagenSession[] } = { sessions: [] };
+  const foreignActions: string[] = [];
   const created: Runner.CreateSession[] = [];
+  const preserved: Parameters<Runner.MutagenRunner["Service"]["preserveConflicts"]>[0][] = [];
   const terminated: string[] = [];
+  const validation = {
+    check: (
+      _input: Parameters<Runner.MutagenRunner["Service"]["assertReplicaPath"]>[0],
+    ): Effect.Effect<void, ReplicaError> => Effect.void,
+  };
   let project: Project | undefined;
   let registrations = 0;
   const runner = Layer.succeed(
     Runner.MutagenRunner,
     Runner.MutagenRunner.of({
+      foreignList: Effect.sync(() => foreign.sessions),
+      foreignAction: (action, identifier) =>
+        Effect.sync(() => {
+          foreignActions.push(`${action}:${identifier}`);
+          foreign.sessions =
+            action === "terminate"
+              ? foreign.sessions.filter((session) => session.identifier !== identifier)
+              : foreign.sessions.map((session) =>
+                  session.identifier === identifier ? { ...session, paused: true } : session,
+                );
+        }),
+      assertReplicaPath: (input) => validation.check(input),
+      preserveConflicts: (input) =>
+        Effect.sync(() => {
+          preserved.push(input);
+        }),
       list: () => Effect.sync(() => sessions).pipe(Effect.tap(() => onList)),
-      listExisting: Effect.sync(() => sessions),
+      listExisting: Effect.sync(() => sessions).pipe(Effect.tap(() => onListExisting)),
       create: (input) =>
         onCreate.pipe(
           Effect.andThen(
@@ -77,8 +102,9 @@ export const makeReplicaHarness = (
                   labels: { "t3-logical": input.logicalHash, "t3-env": input.environmentTag },
                   paused: false,
                   status: "scanning",
-                  alpha: { path: input.alpha },
-                  beta: { path: input.beta },
+                  ignore: { paths: input.ignores },
+                  alpha: { path: input.alpha.replace(/^[^/:]+:(?=\/)/, "") },
+                  beta: { path: input.beta.replace(/^[^/:]+:(?=\/)/, "") },
                 },
               ];
             }),
@@ -87,7 +113,7 @@ export const makeReplicaHarness = (
       terminate: (name) =>
         Effect.sync(() => {
           terminated.push(name);
-          sessions = sessions.filter((s) => s.name !== name);
+          sessions = sessions.filter((s) => s.name !== name && s.identifier !== name);
         }),
       pause: () => Effect.void,
       resume: () =>
@@ -162,10 +188,19 @@ export const makeReplicaHarness = (
   return {
     layer,
     created,
+    foreign,
+    foreignActions,
+    preserved,
     terminated,
+    validation,
     registrations: () => registrations,
     setSession: (patch: Partial<Runner.MutagenSession>) => {
       sessions = sessions.map((s) => ({ ...s, ...patch }));
+    },
+    addDuplicate: () => {
+      const session = sessions[0];
+      if (!session) throw new Error("Create a session before duplicating it");
+      sessions = [...sessions, { ...session, identifier: "duplicate-session" }];
     },
     addOrphan: (named = true) => {
       sessions = [

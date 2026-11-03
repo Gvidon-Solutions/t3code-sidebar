@@ -37,19 +37,43 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         const runner = yield* MutagenRunner.MutagenRunner;
         yield* Effect.addFinalizer(() => runner.daemon("stop").pipe(Effect.orDie));
         yield* runner.daemon("start");
+        const comparison = {
+          source: { environmentId: "alpha", path: alpha },
+          destination: { environmentId: "beta", path: beta },
+          ignores: ["node_modules", "*.tmp"],
+        };
+        yield* runner.assertReplicaPath(comparison);
+        yield* fs.writeFileString(path.join(beta, "hello"), "different");
+        expect((yield* runner.assertReplicaPath(comparison).pipe(Effect.flip)).message).toContain(
+          "not empty and differs",
+        );
+        expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe("different");
+        yield* fs.writeFileString(path.join(beta, "hello"), "alpha");
+        yield* fs.writeFileString(path.join(beta, "ignored.tmp"), "ignored difference");
+        yield* runner.assertReplicaPath(comparison);
+        yield* fs.remove(path.join(beta, "ignored.tmp"));
+        yield* fs.remove(path.join(beta, "hello"));
+        yield* fs.symlink(path.join(root, "outside"), path.join(alpha, "absolute-link"));
+        yield* fs.symlink("../outside", path.join(alpha, "relative-outside"));
         yield* runner.create({
           name: "t3-integration",
           logicalHash: "integration",
           environmentTag: "local",
           alpha,
           beta,
-          ignores: ["node_modules"],
+          ignores: ["node_modules", "!.t3-conflicts"],
         });
         yield* runner.flush("t3-integration");
         expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe("alpha");
         expect(yield* fs.exists(path.join(beta, ".git"))).toBe(false);
         expect(yield* fs.exists(path.join(beta, "node_modules"))).toBe(false);
-        expect(sessionStatus((yield* runner.list())[0]!).state).toBe("watching");
+        expect(sessionStatus((yield* runner.list())[0]!)).toMatchObject({
+          state: "watching",
+          skipped: 2,
+          problems: [],
+        });
+        expect(yield* fs.exists(path.join(beta, "absolute-link"))).toBe(false);
+        expect(yield* fs.exists(path.join(beta, "relative-outside"))).toBe(false);
         yield* fs.writeFileString(path.join(beta, "hello"), "beta edit");
         yield* runner.flush("t3-integration");
         expect(yield* fs.readFileString(path.join(alpha, "hello"))).toBe("beta edit");
@@ -66,10 +90,40 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         yield* runner.flush("t3-integration");
         const conflict = (yield* runner.list())[0]!;
         expect(sessionStatus(conflict)).toMatchObject({ state: "conflict", conflicts: ["hello"] });
+        for (const loser of [beta, alpha]) {
+          if (loser === alpha) {
+            yield* runner.pause("t3-integration");
+            yield* fs.writeFileString(path.join(alpha, "hello"), "alpha loses");
+            yield* fs.writeFileString(path.join(beta, "hello"), "beta wins");
+            yield* runner.resume("t3-integration");
+            yield* runner.flush("t3-integration");
+          }
+          const iso = loser === beta ? "2026-11-03T00:00:00.000Z" : "2026-11-03T00:00:01.000Z";
+          const losing = yield* fs.readFileString(path.join(loser, "hello"));
+          const winner = yield* fs.readFileString(
+            path.join(loser === alpha ? beta : alpha, "hello"),
+          );
+          yield* runner.pause("t3-integration");
+          yield* runner.preserveConflicts({
+            root: loser,
+            paths: ["hello"],
+            iso,
+            environmentId: "local",
+          });
+          yield* runner.reset("t3-integration");
+          yield* runner.resume("t3-integration");
+          yield* runner.flush("t3-integration");
+          expect(yield* fs.readFileString(path.join(alpha, "hello"))).toBe(winner);
+          expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe(winner);
+          expect(yield* fs.readFileString(path.join(loser, `.t3-conflicts/${iso}/hello`))).toBe(
+            losing,
+          );
+          expect(
+            yield* fs.exists(path.join(loser === alpha ? beta : alpha, `.t3-conflicts/${iso}`)),
+          ).toBe(false);
+        }
         yield* runner.terminate("t3-integration");
         expect(yield* runner.list()).toEqual([]);
-        expect(yield* fs.readFileString(path.join(alpha, "hello"))).toBe("conflict alpha");
-        expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe("conflict beta");
       });
       yield* run.pipe(
         Effect.provide(

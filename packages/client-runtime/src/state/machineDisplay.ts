@@ -55,7 +55,10 @@ export function machineDisplayOf(
   fallbackLabel: string,
 ): MachineDisplay {
   const machine = config.machines[environmentId];
-  const label = machine?.label?.trim() || fallbackLabel.trim() || environmentId;
+  const label =
+    machine?.label?.trim() ||
+    (!/^[a-f\d]{8}(?:-[a-f\d-]+)?$/i.test(fallbackLabel.trim()) ? fallbackLabel.trim() : "") ||
+    "Unknown machine";
   return {
     label,
     tag: normalizeMachineTag(machine?.tag ?? "") ?? defaultMachineTag(label, environmentId),

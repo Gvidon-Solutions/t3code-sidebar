@@ -41,6 +41,8 @@ const RPC_AGGREGATES = {
   [WS_METHODS.projectsMutate]: "orchestration",
   "replicas.status": "replicas",
   "replicas.retry": "replicas",
+  "replicas.adopt": "replicas",
+  "replicas.unmanaged": "replicas",
   [WS_METHODS.serverProbe]: "server",
   [WS_METHODS.serverGetConfig]: "server",
   [WS_METHODS.serverGetNpmRelease]: "server",

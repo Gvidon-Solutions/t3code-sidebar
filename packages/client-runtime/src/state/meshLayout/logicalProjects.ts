@@ -1,5 +1,8 @@
 import type { SidebarWorkspacesConfig, SidebarProjectMount } from "@t3tools/contracts";
-import { normalizeProjectPathForComparison } from "../projects.ts";
+import {
+  logicalProjectKeyForRecord,
+  normalizeRepresentationPath,
+} from "@t3tools/shared/meshLayout";
 import { machineDisplayOf } from "../machineDisplay.ts";
 type Project = { readonly environmentId: string; readonly workspaceRoot: string };
 function follow(key: string, config: SidebarWorkspacesConfig): string {
@@ -18,21 +21,7 @@ export function resolveLogicalProjectKey<T extends Project>(
   config: SidebarWorkspacesConfig,
   deriveFallback: (project: T) => string,
 ): string {
-  const path = normalizeProjectPathForComparison(project.workspaceRoot);
-  const match = Object.keys(config.projectMounts)
-    .sort()
-    .find((key) =>
-      config.projectMounts[key]!.some(
-        (rep) =>
-          rep.environmentId === project.environmentId &&
-          normalizeProjectPathForComparison(rep.path) === path,
-      ),
-    );
-  const physical = `${project.environmentId}:${path}`;
-  return follow(
-    match ?? (config.projectAliases[physical] ? physical : deriveFallback(project)),
-    config,
-  );
+  return logicalProjectKeyForRecord(config, project, deriveFallback(project));
 }
 export function addRepresentation(
   config: SidebarWorkspacesConfig,
@@ -169,7 +158,7 @@ export function splitLogicalProject(
   if (!rep || from === into) return config;
   const status = config.projectMountStatus[from]?.[environmentId];
   let next = addRepresentation(removeRepresentation(config, from, environmentId), into, rep);
-  const physical = `${environmentId}:${normalizeProjectPathForComparison(rep.path)}`;
+  const physical = `${environmentId}:${normalizeRepresentationPath(rep.path)}`;
   const projectAliases = { ...next.projectAliases };
   delete projectAliases[into];
   projectAliases[physical] = into;
@@ -267,6 +256,14 @@ export function mergeSuggestionsFor<T extends Project & { readonly title: string
   return suggestions;
 }
 
+export function logicalProjectTitle(
+  config: SidebarWorkspacesConfig,
+  id: string,
+  fallback: string,
+): string {
+  return config.projectTitles?.[follow(id, config)]?.trim() || fallback;
+}
+
 export function renameLogicalProject(
   config: SidebarWorkspacesConfig,
   key: string,
@@ -282,7 +279,7 @@ export function renameLogicalProject(
       ...config.projectAliases,
       ...Object.fromEntries(
         projects.map((project) => [
-          `${project.environmentId}:${normalizeProjectPathForComparison(project.workspaceRoot)}`,
+          `${project.environmentId}:${normalizeRepresentationPath(project.workspaceRoot)}`,
           key,
         ]),
       ),

@@ -43,6 +43,28 @@ describe("projectMachineStrip", () => {
     expect(model.description).toBe(`Replica on at (${copy})`);
     expect(projectMachineStrip(config, group, []).chips[0]?.state).toBe("error");
   });
+  it("keeps skipped-file warnings visible and calm on a registered strip", () => {
+    const model = projectMachineStrip(
+      {
+        ...empty,
+        projectMounts: { demo: [rep("at", "replica")] },
+        projectMountStatus: {
+          demo: {
+            at: {
+              state: "watching",
+              updatedAt: "",
+              skipped: 2,
+              message: "2 files skipped (unreadable files)",
+            },
+          },
+        },
+      },
+      group,
+      [],
+    );
+    expect(model.chips[0]).toMatchObject({ state: "watching", tone: "green", pending: false });
+    expect(model.description).toContain("2 files skipped (unreadable files)");
+  });
   it("orders primaries in layout order, then replicas, and counts all hidden chips", () => {
     const config = {
       ...empty,

@@ -1,3 +1,4 @@
+import * as Schema from "effect/Schema";
 import { ReplicaError } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
@@ -11,9 +12,12 @@ import * as Settings from "../serverSettings.ts";
 export class ReplicaPaths extends Context.Service<
   ReplicaPaths,
   {
+    readonly prepareExplicit: (root: string) => Effect.Effect<string, ReplicaError>;
     readonly allocate: (sourcePath: string) => Effect.Effect<string, ReplicaError>;
   }
 >()("t3/replicas/ReplicaPaths") {}
+
+const isReplicaError = Schema.is(ReplicaError);
 
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -35,6 +39,33 @@ const make = Effect.gen(function* () {
     );
   });
   return ReplicaPaths.of({
+    prepareExplicit: Effect.fn("ReplicaPaths.prepareExplicit")((root) =>
+      Effect.gen(function* () {
+        if (!path.isAbsolute(root))
+          return yield* new ReplicaError({
+            reason: "storage",
+            message: "The requested replica path must be absolute.",
+          });
+        yield* fs.makeDirectory(root, { recursive: true });
+        const info = yield* fs.stat(root);
+        if (info.type !== "Directory")
+          return yield* new ReplicaError({
+            reason: "storage",
+            message: "The requested replica path is not a folder.",
+          });
+        return path.normalize(root);
+      }).pipe(
+        Effect.mapError((cause) =>
+          isReplicaError(cause)
+            ? cause
+            : new ReplicaError({
+                reason: "storage",
+                message: "Cannot use the requested replica folder. Check that it is writable.",
+                cause,
+              }),
+        ),
+      ),
+    ),
     allocate: Effect.fn("ReplicaPaths.allocate")((sourcePath) =>
       lock
         .withPermit(

@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import {
   adoptLegacy,
+  migrateLogicalProjectIds,
   diff,
   importLegacy,
   materialize,
@@ -55,7 +56,14 @@ export const layer = Layer.effect(
     yield* sql`INSERT OR IGNORE INTO mesh_layout_meta (id, hlc, seq) VALUES (1, ${tick(0, null, environmentId)}, 0)`;
     const state = yield* SubscriptionRef.make({ document, config: materialize(document) });
     const persist = Effect.fn("MeshLayoutService.persist")(function* (entries: MeshLayoutDocument) {
-      const combined = merge(document, entries);
+      // Client clocks carry device ids; authority membership records servers, not clock writers.
+      const writers: MeshLayoutDocument = {
+        [`writer/${encodeURIComponent(environmentId)}`]: {
+          v: true,
+          h: tick(0, null, environmentId),
+        },
+      };
+      const combined = migrateLogicalProjectIds(merge(merge(document, writers), entries));
       const merged = Object.entries(combined)
         .filter(([key]) => key.startsWith("ws/"))
         .some(([, entry]) => entry.h.startsWith("0000000000000."))
@@ -91,7 +99,7 @@ export const layer = Layer.effect(
       const legacy = (yield* settings.getSettings).sidebarWorkspaces;
       yield* persist(importLegacy(legacy, environmentId, "0000000000000.00000.legacy"));
     } else {
-      yield* settings.updateSettings({ sidebarWorkspaces: materialize(document) });
+      yield* persist({});
     }
     const nextHlc = sql
       .withTransaction(
@@ -123,7 +131,17 @@ export const layer = Layer.effect(
       editLegacy: Effect.fn("MeshLayoutService.editLegacy")((before, after) =>
         lock.withPermit(
           Effect.gen(function* () {
-            return yield* persist(diff(before, after, document, yield* nextHlc));
+            const compatible = {
+              ...after,
+              ...(after.meshAuthority === undefined && before.meshAuthority
+                ? { meshAuthority: before.meshAuthority }
+                : {}),
+              ...(Object.keys(after.projectTitles ?? {}).length === 0 &&
+              Object.keys(before.projectTitles).length > 0
+                ? { projectTitles: before.projectTitles }
+                : {}),
+            };
+            return yield* persist(diff(before, compatible, document, yield* nextHlc));
           }),
         ),
       ),

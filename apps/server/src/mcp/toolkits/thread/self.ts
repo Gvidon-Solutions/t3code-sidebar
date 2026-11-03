@@ -1,3 +1,4 @@
+import { logicalProjectKeyForRecord } from "@t3tools/shared/meshLayout";
 import { ServerEnvironment } from "../../../environment/ServerEnvironment.ts";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -30,41 +31,28 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
   const project = Option.getOrUndefined(projectOption);
   const server = yield* Effect.serviceOption(ServerEnvironment);
   const descriptor = Option.isSome(server) ? yield* server.value.getDescriptor : undefined;
-  const machine = (id: string) => ({
-    environmentId: id,
-    label:
+  const machine = (id: string) => {
+    const label =
       config.machines[id]?.label ??
       (id === scope.environmentId ? descriptor?.label : undefined) ??
-      id,
-    tag:
-      config.machines[id]?.tag ??
-      (
-        config.machines[id]?.label ??
-        (id === scope.environmentId ? descriptor?.label : undefined) ??
-        id
+      "Unknown machine";
+    return {
+      environmentId: id,
+      label,
+      tag: config.machines[id]?.tag ?? label.slice(0, 2).toUpperCase(),
+    };
+  };
+  const logicalKey = project
+    ? logicalProjectKeyForRecord(
+        config,
+        { ...project, environmentId: scope.environmentId },
+        `${scope.environmentId}:${project.workspaceRoot}`,
       )
-        .slice(0, 2)
-        .toUpperCase(),
-  });
-  let logicalKey =
-    Object.keys(config.projectMounts).find((key) =>
-      config.projectMounts[key]!.some(
-        (rep) =>
-          rep.environmentId === scope.environmentId &&
-          (rep.projectId === thread.projectId || rep.path === project?.workspaceRoot),
-      ),
-    ) ?? (project ? `${scope.environmentId}:${project.workspaceRoot}` : null);
-  const seen = new Set<string>();
-  for (let hop = 0; logicalKey && hop < 8; hop++) {
-    if (seen.has(logicalKey)) {
-      logicalKey = [...seen, logicalKey].sort()[0]!;
-      break;
-    }
-    seen.add(logicalKey);
-    const alias = config.projectAliases[logicalKey];
-    if (!alias) break;
-    logicalKey = alias;
-  }
+    : (Object.keys(config.projectMounts).find((key) =>
+        config.projectMounts[key]!.some(
+          (rep) => rep.environmentId === scope.environmentId && rep.projectId === thread.projectId,
+        ),
+      ) ?? null);
   const representations = logicalKey
     ? (config.projectMounts[logicalKey] ??
       (project
@@ -104,12 +92,13 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
   const basename = (path: string) =>
     path.replaceAll("\\", "/").replace(/\/+$/, "").split("/").at(-1) ?? path;
   const logicalTitle =
-    project &&
+    (logicalKey ? config.projectTitles[logicalKey] : undefined) ??
+    (project &&
     representation?.role === "replica" &&
     primary &&
     project.title === basename(project.workspaceRoot)
       ? basename(primary.path)
-      : project?.title;
+      : project?.title);
   const linked = Option.isSome(links)
     ? yield* links.value.list.pipe(Effect.mapError(unavailable))
     : [];
@@ -121,7 +110,7 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
     project: project
       ? {
           id: project.id,
-          title: project.title,
+          title: logicalTitle ?? project.title,
           logicalKey,
           logicalTitle: logicalTitle ?? project.title,
         }

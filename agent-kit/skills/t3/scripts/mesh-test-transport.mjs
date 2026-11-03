@@ -29,7 +29,11 @@ const config = {
       },
     ],
   },
+  projectTitles: { "lp-remote": "Remote project" },
 };
+config.projectMounts["lp-remote"] = [
+  { ...rep, environmentId: peer, path: "/remote", projectId: "remote-p" },
+];
 if (process.env.T3CTL_TEST_REMOTE_DRIVER)
   config.machines[peer].reach = { [self]: { ssh: "atlas" } };
 const snapshot = { environmentId: self, config, document: {} };
@@ -85,11 +89,19 @@ function call(name, args) {
         ],
       };
     case "t3_project_machines":
+      if (args.project === "Remote project")
+        return {
+          logicalKey: "lp-remote",
+          title: "Remote project",
+          representations: config.projectMounts["lp-remote"],
+        };
       return {
         representations: process.env.T3CTL_TEST_EXISTING
           ? [{ ...rep, environmentId: peer, projectId: "remote-p" }]
           : [],
       };
+    case "replicas.adopt":
+      return { logicalKey: "repo", representation: rep, ready: false };
     case "t3_project_place":
       return {
         logicalKey: "repo",
@@ -164,6 +176,22 @@ function call(name, args) {
   }
 }
 globalThis.fetch = async (url, init) => {
+  if (String(url).startsWith("https://api.github.com/")) {
+    log("publicRelease", { url: String(url), headers: init?.headers });
+    return process.env.T3CTL_TEST_SSH_INSTALL
+      ? new Response("unavailable", { status: 404 })
+      : Response.json({
+          tag_name: "0.0.9-N",
+          assets: [
+            {
+              name: "t3-0.0.9-N-linux-x64.tar.gz",
+              browser_download_url: "https://release.example/N-archive",
+            },
+          ],
+        });
+  }
+  if (String(url) === "https://release.example/N-archive")
+    return new Response(NodeFS.readFileSync(process.env.T3CTL_TEST_PUBLIC_ARCHIVE));
   if (String(url).includes("websocket-ticket")) return Response.json({ ticket: "test" });
   const body = JSON.parse(init.body);
   let result;
