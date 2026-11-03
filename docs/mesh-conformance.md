@@ -84,6 +84,8 @@ Full round3 on final build `0.1.5-mesh.ac93fac216ee`: `/tmp/t3-mesh-e2e-N-final1
 
 The shared project entity reader also applies `logicalProjectTitle` to menus, dialogs and headers, without changing orchestration snapshots or recreating unchanged entities. `projectEntities.test.ts` proves cross-machine rename and identity preservation; Android's destination list shows the renamed title on both GV and GR.
 
+Android workflow assertions passed. During the long run the AVD also recorded `LOW_MEMORY` exits around 1.1 GB RSS; its history contains the same exit reason before N used it. Reopening restored the app's state. Native endurance is not claimed; OS evidence is `/tmp/n2-android-exit-info.txt`.
+
 ## Audit boundaries
 
 - Pure core, persistence and peer exchange: shared `meshLayout/`; server `mesh/`, including validation, browser authorship and restart migration.
