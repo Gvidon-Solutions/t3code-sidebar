@@ -1,3 +1,4 @@
+import { projectEnvironment } from "../../state/projects";
 import { uuidv4 } from "../../lib/uuid";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { snoozeWakeLabel } from "@t3tools/client-runtime/state/thread-settled";
@@ -188,7 +189,32 @@ export function WorkspaceDrawer(props: {
     [onClose, selectDetail],
   );
 
+  const openScratchProject = useAtomCommand(projectEnvironment.openScratch, {
+    reportFailure: true,
+  });
+  const startFolderThread = (project: EnvironmentProject) => {
+    if (!project.isScratch) {
+      startThread(project);
+      return;
+    }
+    const environmentId = connectedEnvironments.find(
+      (environment) => environment.connectionState === "connected",
+    )?.environmentId;
+    if (environmentId === undefined) return;
+    void openScratchProject({ environmentId, input: {} }).then((result) => {
+      if (result._tag === "Success") startThread(result.value);
+    });
+  };
   const startOnMachine = (projectKey: string, environmentId: string) => {
+    const scope = projectScopes.find((candidate) => candidate.key === projectKey);
+    if (scope?.projects.some((project) => project.isScratch)) {
+      void openScratchProject({ environmentId: EnvironmentId.make(environmentId), input: {} }).then(
+        (result) => {
+          if (result._tag === "Success") startThread(result.value);
+        },
+      );
+      return;
+    }
     const plan = planOnMachine(projectKey, environmentId);
     if (!plan) return;
     if (plan.config !== replicaConfig) workspaceHome.updateConfig(() => plan.config);
@@ -240,7 +266,7 @@ export function WorkspaceDrawer(props: {
             onToggle={workspaceHome.toggle}
             onToggleWorkspace={workspaceHome.toggleProjectIn}
             onFoldMode={workspaceHome.setFoldMode}
-            onNewThread={startThread}
+            onNewThread={startFolderThread}
             mesh={workspaceHome.meshActionsFor(item.projectKey)}
             machineSubactions={machineActions}
             onNewThreadOnMachine={startOnMachine}
@@ -250,7 +276,11 @@ export function WorkspaceDrawer(props: {
         ) : null;
       case "ws-more":
         return (
-          <WorkspaceMoreRow item={item} onToggle={workspaceHome.toggle} onNewThread={startThread} />
+          <WorkspaceMoreRow
+            item={item}
+            onToggle={workspaceHome.toggle}
+            onNewThread={startFolderThread}
+          />
         );
       case "ws-agents":
         return <WorkspaceAgentsRow item={item} onToggle={workspaceHome.toggle} />;

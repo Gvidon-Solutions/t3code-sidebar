@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-03 — T3 Mesh — Stage K project machine strips
+
+- **What:** project folder rows show primary and replica machine tags, sync status and overflow; all scratch threads share one “No project” folder on web and mobile, including the drawer.
+- **How:** a shared pure strip model combines layout representations, live replica status and legacy member environments. Primaries precede replicas; three chips fit before overflow. Strips open Machines; scratch creation uses the selected machine’s scratch project rather than creating a replica.
+- **Where:** `packages/client-runtime/src/state/meshLayout/projectMachineStrip.ts`, `projectGrouping.ts`; web `components/workspaces/{ProjectMachineStrip,WorkspaceSidebar}`; mobile `features/workspaces/{ProjectMachineStrip,WorkspaceChrome,workspaceNavigator,useWorkspaceHome}`, `HomeScreen` and `WorkspaceDrawer`.
+
 ### 2026-11-02 — T3 Mesh — round 2 replica acceptance
 
 - **What:** real Mutagen replica acceptance across gor, isolated gvidon and the VPS container, including staged `t3ctl-next`.

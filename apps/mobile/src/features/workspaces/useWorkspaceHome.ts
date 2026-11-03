@@ -173,7 +173,11 @@ export function useWorkspaceHome(input: {
       (isInCurrentWorkspace(scope) ? own : other).push({
         projectKey: scope.key,
         title: scope.title,
-        project: scope.representative,
+        project: isScratchScope(scope)
+          ? (scope.projects.find(
+              (project) => project.environmentId === connectedEnvironmentIds[0],
+            ) ?? scope.representative)
+          : scope.representative,
         projectCreatedAt: scope.representative.createdAt ?? null,
         memberKeys: scope.projectRefs.map((member) =>
           scopedProjectKey(member.environmentId, member.projectId),
@@ -193,6 +197,7 @@ export function useWorkspaceHome(input: {
   }, [
     config,
     input.projectScopes,
+    connectedEnvironmentIds,
     isInCurrentWorkspace,
     isScratchScope,
     replicaStatuses,
@@ -243,6 +248,8 @@ export function useWorkspaceHome(input: {
       // Queued new threads stay on top, as in upstream's list, under a voice conversation.
       const pending = list.base.filter((item) => item.type === "v2-pending");
       const [first, ...rest] = buildWorkspaceHomeItems({
+        config,
+        liveStatuses: replicaStatuses,
         workspaceId: currentWorkspaceId,
         folders,
         otherFolders,
@@ -256,7 +263,9 @@ export function useWorkspaceHome(input: {
         queuedThreadKeys: list.queuedThreadKeys,
         selectedThreadKey: list.selectedThreadKey,
         voiceThreadKey,
-        connectedEnvironmentIds,
+        connectedEnvironmentIds: [
+          ...new Set([...connectedEnvironmentIds, ...serverConfigs.keys()]),
+        ],
         resolveMachineDisplay,
         now: Date.now(),
         toRow: list.toRow,
@@ -271,10 +280,12 @@ export function useWorkspaceHome(input: {
       currentWorkspaceId,
       folders,
       homeThreads,
+      replicaStatuses,
       otherFolders,
       toggles,
       voiceThreadKey,
       connectedEnvironmentIds,
+      serverConfigs,
       resolveMachineDisplay,
     ],
   );

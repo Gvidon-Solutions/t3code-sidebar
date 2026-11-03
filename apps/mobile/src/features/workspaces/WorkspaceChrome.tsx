@@ -1,3 +1,4 @@
+import { ProjectMachineStrip } from "./ProjectMachineStrip";
 import type { Icon } from "@tabler/icons-react-native/types";
 import IconBook from "@tabler/icons-react-native/IconBook";
 import IconBriefcase from "@tabler/icons-react-native/IconBriefcase";
@@ -301,11 +302,9 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   const { item } = props;
   const navigation = useNavigation<NativeStackNavigationProp<ReactNavigation.RootParamList>>();
   const offline = item.meshOffline;
-  const folderTitle = item.isScratch
-    ? `${item.title} · ${item.machineLabel || item.project.environmentId}`
-    : offline
-      ? `${item.title} · on ${offline.tag}, not connected here`
-      : item.title;
+  const folderTitle = offline
+    ? `${item.title} · on ${offline.tag}, not connected here`
+    : item.title;
   const actions = useMemo((): MenuAction[] => {
     if (offline) return [{ id: "connect", title: "Connect this machine", image: "link" }];
     const shownIn = item.workspaceIds;
@@ -320,7 +319,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
               subactions: props.machineSubactions.map((action) => ({
                 id: action.id,
                 title: action.title,
-                attributes: action.disabled ? { disabled: true } : undefined,
+                attributes: !item.isScratch && action.disabled ? { disabled: true } : undefined,
               })),
             },
           ]),
@@ -454,6 +453,12 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
         <Text className="text-xs font-t3-bold tabular-nums text-adaptive-sky-600-400">
           ●{item.working}
         </Text>
+      ) : null}
+      {item.machineStrip ? (
+        <ProjectMachineStrip
+          model={item.machineStrip}
+          onOpen={() => props.onOpenMachines(item.projectKey)}
+        />
       ) : null}
       {offline ? null : (
         <Pressable

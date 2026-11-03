@@ -1,3 +1,4 @@
+import { projectEnvironment } from "../../state/projects";
 import { useActiveNewTask } from "../../state/active-new-task";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { useAndroidControlSizing } from "../../components/ui/useAndroidControlSizing";
@@ -451,7 +452,33 @@ export function HomeScreen(props: HomeScreenProps) {
       seed,
     });
   };
+  const openScratchProject = useAtomCommand(projectEnvironment.openScratch, {
+    reportFailure: true,
+  });
+  const startFolderThread = (project: EnvironmentProject) => {
+    if (!project.isScratch) {
+      props.onNewThreadInProject(project);
+      return;
+    }
+    const environmentId =
+      props.selectedEnvironmentId ??
+      props.environments.find((environment) => environment.connectionState === "connected")
+        ?.environmentId;
+    if (environmentId === undefined) return;
+    void openScratchProject({ environmentId, input: {} }).then((result) => {
+      if (result._tag === "Success") props.onNewThreadInProject(result.value);
+    });
+  };
   const startOnMachine = (projectKey: string, environmentId: string) => {
+    const scope = projectScopes.find((candidate) => candidate.key === projectKey);
+    if (scope?.projects.some((project) => project.isScratch)) {
+      void openScratchProject({ environmentId: EnvironmentId.make(environmentId), input: {} }).then(
+        (result) => {
+          if (result._tag === "Success") props.onNewThreadInProject(result.value);
+        },
+      );
+      return;
+    }
     const plan = planOnMachine(projectKey, environmentId);
     if (!plan) return;
     if (plan.config !== replicaConfig) workspaceHome.updateConfig(() => plan.config);
@@ -701,7 +728,7 @@ export function HomeScreen(props: HomeScreenProps) {
           onToggle={workspaceHome.toggle}
           onToggleWorkspace={workspaceHome.toggleProjectIn}
           onFoldMode={workspaceHome.setFoldMode}
-          onNewThread={props.onNewThreadInProject}
+          onNewThread={startFolderThread}
           mesh={workspaceHome.meshActionsFor(item.projectKey)}
           machineSubactions={machineActions}
           onNewThreadOnMachine={startOnMachine}
@@ -721,7 +748,7 @@ export function HomeScreen(props: HomeScreenProps) {
         <WorkspaceMoreRow
           item={item}
           onToggle={workspaceHome.toggle}
-          onNewThread={props.onNewThreadInProject}
+          onNewThread={startFolderThread}
         />
       );
     }
