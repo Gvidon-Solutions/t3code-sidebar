@@ -38,9 +38,7 @@ export const layer = Layer.effect(
     const self = yield* (yield* ServerEnvironment).getEnvironmentId;
     const routes = links.list.pipe(
       Effect.map((items) =>
-        items
-          .filter((p) => p.access === "full-access" && p.status !== "expired")
-          .map((p) => p.environmentId),
+        items.filter((p) => p.status !== "expired").map((p) => p.environmentId),
       ),
       Effect.mapError(
         (error) =>
@@ -61,7 +59,7 @@ export const layer = Layer.effect(
       )
         return yield* refused;
       const target = yield* links.get(input.environmentId).pipe(Effect.mapError(() => refused));
-      if (Option.isNone(target) || target.value.access !== "full-access") return yield* refused;
+      if (Option.isNone(target)) return yield* refused;
       return yield* peers.call({
         ...input,
         limits,
