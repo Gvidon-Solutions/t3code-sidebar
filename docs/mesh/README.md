@@ -116,7 +116,7 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - Agent behaviour eval: `docs/mesh-agent-eval.md` (8 voice-style requests × harnesses on an
   isolated HOME); rerun after changing SKILL.md or GLOBAL.md.
 
-## Operating the live machines
+## Operating the owner's live machines (installation example)
 
 - Releases: push to `ws` builds desktop (Windows/Linux), APK and the server runtime
   (`sidebar-desktop.yml`). Live servers restart **only with the owner's yes** (AGENTS.md).
