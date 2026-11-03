@@ -1,3 +1,4 @@
+import { useNavigation } from "@react-navigation/native";
 import {
   representationRow,
   type PendingReplicaRow,
@@ -49,6 +50,7 @@ export function MachinesSheet(props: {
   readonly onRemove: (environmentId: string) => void;
   readonly onRetry: (row: PendingReplicaRow) => void;
 }) {
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const reps: ReadonlyArray<SidebarProjectMount> =
     props.config.projectMounts[props.projectKey] ?? [];
@@ -74,6 +76,8 @@ export function MachinesSheet(props: {
           <Text className="text-sm text-foreground-muted">No machines have this project yet.</Text>
         ) : null}
         {reps.map((rep) => {
+          const copies =
+            props.config.projectMountStatus[props.projectKey]?.[rep.environmentId]?.conflictCopies;
           const row = representationRow(props.config, props.liveStatuses, props.projectKey, rep);
           const display = props.machines.find(
             (machine) => machine.environmentId === rep.environmentId,
@@ -87,6 +91,20 @@ export function MachinesSheet(props: {
               className="gap-2 rounded-2xl border border-border bg-grouped-card p-3"
               testID={`machine-representation-${rep.environmentId}`}
             >
+              {copies ? (
+                <Button
+                  label="Open copies"
+                  tone="secondary"
+                  onPress={() => {
+                    props.onClose();
+                    navigation.navigate("OpenFile", {
+                      environmentId: copies.environmentId,
+                      cwd: copies.path,
+                      projectName: props.title,
+                    });
+                  }}
+                />
+              ) : null}
               <View className="flex-row items-center gap-2">
                 <ReplicaTag label={label} tag={tag} color={color} />
                 <Text

@@ -6,6 +6,8 @@ import * as NodeTest from "node:test";
 import {
   buildMeshLinkInput,
   buildPlaceInput,
+  meshProjectTitle,
+  meshAuthorityEdit,
   buildUiOpenTarget,
   defaultMachineTag,
   encodeLegacyEntries,
@@ -227,3 +229,31 @@ NodeTest.test("duplicate labels are ambiguous and server labels resolve", () => 
     "gvidon",
   );
 });
+
+NodeTest.test("mesh display names never expose logical or legacy keys", () => {
+  for (const key of ["opaque-123", "github.com/owner/repo", "env:/path", "title:legacy"]) {
+    NodeAssert.equal(meshProjectTitle({}, key, "/home/user/Project"), "Project");
+    NodeAssert.equal(
+      meshProjectTitle({ projectTitles: { [key]: "Renamed" } }, key, "/Project"),
+      "Renamed",
+    );
+    NodeAssert.equal(meshProjectTitle({}, key, "/"), "Untitled project");
+  }
+});
+NodeTest.test(
+  "authority edits advance past a future remote clock without electing a CLI device",
+  () => {
+    const edit = meshAuthorityEdit(
+      {
+        environmentId: "server",
+        document: { "mesh.authority": { h: "9999999999000.99999.remote", v: "old" } },
+      },
+      "new",
+      1,
+    );
+    NodeAssert.deepEqual(edit.entries["mesh.authority"], {
+      h: "9999999999001.00000.server",
+      v: "new",
+    });
+  },
+);

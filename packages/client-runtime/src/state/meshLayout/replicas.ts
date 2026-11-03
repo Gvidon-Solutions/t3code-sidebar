@@ -355,6 +355,7 @@ export interface ReplicaStatusCopyInput {
 
 /** One short line for a pending row: "Mounting on Operalia… 42%", "2 conflicts", … */
 export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
+  if (input.message?.startsWith("Resolved ") && input.state !== "error") return input.message;
   const unreachable = `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Add a route in Settings › Machines`;
   switch (input.state) {
     case "pending":
@@ -364,7 +365,7 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
         ? `Mounting on ${input.targetLabel}…`
         : `Mounting on ${input.targetLabel}… ${Math.round(input.progress * 100)}%`;
     case "watching":
-      return "Synced";
+      return input.message?.startsWith("Resolved ") ? input.message : "Synced";
     case "conflict":
       return input.conflicts === 1 ? "1 conflict" : `${input.conflicts} conflicts`;
     case "paused":

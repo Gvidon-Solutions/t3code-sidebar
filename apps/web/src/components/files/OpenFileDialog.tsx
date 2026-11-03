@@ -41,8 +41,10 @@ function EnvironmentTag({ label }: { label: string }) {
 
 function OpenFileDialogContent({
   initialEnvironmentId,
+  initialPath,
 }: {
   initialEnvironmentId: EnvironmentId | null;
+  initialPath: string | null;
 }) {
   const identities = useAtomValue(environmentSummaries.identitiesAtom);
   const connectedIds = useAtomValue(environmentSummaries.connectedEnvironmentIdsAtom);
@@ -64,7 +66,9 @@ function OpenFileDialogContent({
       : (projects.find((project) => project.environmentId === selectedEnvironmentId)
           ?.workspaceRoot ?? null);
   const recents = readRecentFiles(window.localStorage, selectedEnvironmentId);
-  const [value, setValue] = useState(() => selectedProjectRoot ?? recents[0] ?? "~/");
+  const [value, setValue] = useState(
+    () => initialPath ?? selectedProjectRoot ?? recents[0] ?? "~/",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const resolved = resolveOpenFilePath({
@@ -270,6 +274,7 @@ function OpenFileDialogContent({
 }
 
 export function OpenFileDialog() {
+  const initialPath = useOpenFileDialogStore((state) => state.initialPath);
   const isOpen = useOpenFileDialogStore((state) => state.isOpen);
   const initialEnvironmentId = useOpenFileDialogStore((state) => state.initialEnvironmentId);
   if (!isOpen) return null;
@@ -277,6 +282,7 @@ export function OpenFileDialog() {
     <OpenFileDialogContent
       key={initialEnvironmentId === null ? "default" : String(initialEnvironmentId)}
       initialEnvironmentId={initialEnvironmentId}
+      initialPath={initialPath}
     />
   );
 }

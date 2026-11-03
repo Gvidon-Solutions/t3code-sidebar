@@ -1,3 +1,5 @@
+import { EnvironmentId } from "@t3tools/contracts";
+import { openOpenFileDialog } from "../files/openFileDialogState";
 import {
   representationRow,
   type PendingReplicaRow,
@@ -85,6 +87,9 @@ export function MachinesDialog(props: {
                   props.logicalKey,
                   rep,
                 );
+                const copies =
+                  props.config.projectMountStatus[props.logicalKey]?.[rep.environmentId]
+                    ?.conflictCopies;
                 const retry = status.retry;
                 return (
                   <div
@@ -114,6 +119,21 @@ export function MachinesDialog(props: {
                       >
                         {status.text}
                       </span>
+                      {copies ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            props.onOpenChange(false);
+                            openOpenFileDialog(
+                              EnvironmentId.make(copies.environmentId),
+                              copies.path,
+                            );
+                          }}
+                        >
+                          Open copies
+                        </Button>
+                      ) : null}
                       {rep.role === "replica" ? (
                         <Button
                           size="sm"

@@ -354,6 +354,36 @@ export function resolveMachineRef(ref, machines) {
   );
 }
 
+export function meshProjectTitle(config, logicalKey, path) {
+  return (
+    config.projectTitles?.[logicalKey]?.trim() ||
+    String(path ?? "")
+      .replaceAll("\\", "/")
+      .split("/")
+      .filter(Boolean)
+      .at(-1) ||
+    "Untitled project"
+  );
+}
+
+export function meshAuthorityEdit(layout, environmentId, now) {
+  const last = layout.document?.["mesh.authority"]?.h ?? "0000000000000.00000.seed";
+  let ms = Math.max(now, Number(last.slice(0, 13)));
+  let counter = ms === Number(last.slice(0, 13)) ? Number(last.slice(14, 19)) + 1 : 0;
+  if (counter >= 100000) {
+    ms++;
+    counter = 0;
+  }
+  return {
+    entries: {
+      "mesh.authority": {
+        v: environmentId,
+        h: `${String(ms).padStart(13, "0")}.${String(counter).padStart(5, "0")}.${layout.environmentId}`,
+      },
+    },
+  };
+}
+
 export function waitSeconds(value) {
   if (value === undefined || value === false) return undefined;
   if (value === true) return 600;
@@ -2124,6 +2154,21 @@ const commands = {
 
   async mesh(pos, opt) {
     const sub = pos[0] || "status";
+    if (sub === "authority") {
+      let layout = await layoutSnapshot();
+      if (pos[1]) {
+        const machine = resolveMachineRef(pos[1], await collectMachines({ layout }));
+        layout = await withWs((c) =>
+          c.rpc("meshLayout.apply", meshAuthorityEdit(layout, machine.environmentId, Date.now())),
+        );
+      }
+      const id = layout.config.meshAuthority || [...(layout.config.meshWriters ?? [])].sort()[0];
+      const machine = (await collectMachines({ layout })).find((m) => m.environmentId === id);
+      if (opt.json)
+        return json({ authorityEnvironmentId: id ?? null, label: machine?.label ?? null });
+      console.log(`Authority: ${machine?.label ?? "Automatic"}`);
+      return;
+    }
     if (sub === "status") {
       const layout = await layoutSnapshot();
       const { links, error: linksError } = await peerLinksSummary();
@@ -2181,7 +2226,7 @@ const commands = {
         console.log(`  no links${linksError ? ` (${clip(linksError, 120)})` : ""}`);
       for (const row of rows)
         console.log(
-          `  ${row.rep.role.padEnd(8)} ${row.rep.environmentId.slice(0, 8)} ${clip(row.logicalKey, 38).padEnd(38)} ${replicaStateText(row)}`,
+          `  ${row.rep.role.padEnd(8)} ${row.rep.environmentId.slice(0, 8)} ${clip(meshProjectTitle(layout.config, row.logicalKey, row.rep.path), 38).padEnd(38)} ${replicaStateText(row)}`,
         );
       if (live.error && !live.disabled) console.log(`  replicas: ${clip(live.error, 160)}`);
       return;
@@ -2334,7 +2379,7 @@ const commands = {
     for (const row of out) {
       const conflict = row.conflicts.length ? `  ${row.conflicts.length} conflict(s)` : "";
       console.log(
-        `${String(row.tag).padEnd(3)} ${String(row.machine).padEnd(16)} ${row.role.padEnd(8)} ${row.state.padEnd(10)}${row.progress !== null && row.progress !== undefined ? ` ${Math.round(row.progress * 100)}%` : ""}  ${clip(row.logicalKey, 36)}  ${row.path}${conflict}${row.message ? ` — ${clip(row.message, 80)}` : ""}`,
+        `${String(row.tag).padEnd(3)} ${String(row.machine).padEnd(16)} ${row.role.padEnd(8)} ${row.state.padEnd(10)}${row.progress !== null && row.progress !== undefined ? ` ${Math.round(row.progress * 100)}%` : ""}  ${clip(meshProjectTitle(layout.config, row.logicalKey, row.path), 36)}  ${row.path}${conflict}${row.message ? ` — ${clip(row.message, 80)}` : ""}`,
       );
     }
     if (live.disabled) console.log("replicas are disabled on this server");
@@ -2384,7 +2429,7 @@ const commands = {
         );
     if (opt.json) return json(r);
     console.log(
-      `retry requested for ${clip(logicalKey, 40)} on ${machine.label}: ${r.state}${r.message ? ` — ${r.message}` : ""}`,
+      `retry requested for ${clip(meshProjectTitle(layout.config, logicalKey, rep.path), 40)} on ${machine.label}: ${r.state}${r.message ? ` — ${r.message}` : ""}`,
     );
   },
 
@@ -3800,6 +3845,7 @@ READ
   models [agent]                          harnesses (provider instances), models, options
   env | doctor                            server identity | health check after updates
   machines [--json] [--probe]             every known machine: tag, label, id, version, links, replicas
+  mesh authority [<machine>]             show or set the authority
   mesh status [--json]                    links, layout revision, replicas
   mesh link <M> [--url URL] [--ssh DEST]  link a machine (full access; pairing code minted over ssh)
   mesh unlink <M> --yes                   forget a link here (the other machine stays)

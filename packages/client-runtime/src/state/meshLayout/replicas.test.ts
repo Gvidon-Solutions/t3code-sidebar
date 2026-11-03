@@ -323,3 +323,18 @@ describe("replicaStatusCopy", () => {
     );
   });
 });
+
+it("shows automatic resolutions as a calm note during mounting and after sync", () => {
+  for (const state of ["mounting", "watching"] as const) {
+    expect(
+      replicaStatusCopy({
+        state,
+        progress: null,
+        conflicts: 0,
+        message: "Resolved 2 conflicts automatically · copies in .t3-conflicts",
+        targetLabel: "Replica",
+        sourceLabel: "Primary",
+      }),
+    ).toBe("Resolved 2 conflicts automatically · copies in .t3-conflicts");
+  }
+});
