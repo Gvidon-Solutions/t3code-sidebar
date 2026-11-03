@@ -1,3 +1,4 @@
+import { threadDropProject } from "./threadDrop.logic";
 /**
  * Workspace sidebar (fork feature): workspace tiles at the bottom and the open workspace's projects
  * as folders of one-line threads. It reuses the default sidebar's data and mutations and owns only
@@ -1557,10 +1558,10 @@ export default function WorkspaceSidebar() {
                 onDrop={(event) => {
                   if (dragThread) {
                     event.preventDefault();
-                    const target =
-                      folder.group.memberProjects.find(
-                        (project) => project.environmentId === dragThread.environmentId,
-                      ) ?? folder.group.memberProjects[0];
+                    const target = threadDropProject(
+                      dragThread.environmentId,
+                      folder.group.memberProjects,
+                    );
                     if (target) void moveToProject(dragThread, target);
                     setDragThread(null);
                     setThreadDrop(null);
