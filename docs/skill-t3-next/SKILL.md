@@ -18,17 +18,14 @@ With several servers linked, the mesh is one sidebar: `--all` covers every linke
 
 ## Mesh: choose the action first
 
-For mesh requests, use this dispatch before the general commands below. Read the skill once, then act; do not explore infrastructure files.
+Read this skill once, then act; do not explore infrastructure files. Use the listed CLI command when it covers the request: it handles resolution, enumeration and defaults. Use native MCP for display and gaps in the CLI; inspect its schema before invoking it. Resolve the operation’s execution location before inspecting state; the current shell directory does not determine the target. Machine names: `t3ctl machines` is authoritative (labels/tags; Russian names like «гвидон», «опералия», «гор(а)», «впс» resolve too). Never create or remove links unless the owner asks.
 
-- For a commit request in a replica, the first shell operation after reading this skill is the primary SSH command supplied in the replica context: `ssh <reach> 'cd <primaryPath> && git status --short && git diff'`. This applies to status, log and diff as well as commit; start with that SSH command.
-- Resolve a named machine with `t3ctl machines`. Its configured label/tag is authoritative, even when `t3_environment_links` shows a container hostname. An existing VP/VPS is «впс»; do not call `t3_environment_link` for it.
-- «Открой тред про маунт» → `t3ctl find mount --all --json` (also try the Russian spelling when needed), prefer a matching **title**, not mentions in another thread’s messages, then `ui_open` with the match's full threadId **and environmentId**. Use CLI for cross-machine search: this bed rejects MCP `environmentId:"all"`; `find --all` handles the fan-out itself. A CLI link alone does not open the owner's screen.
-- «Найди тред про конфликт на всех машинах» → `t3ctl find конфликт --all` (the CLI searches every linked machine).
-- «Покажи README из X на гвидоне» → resolve GV with `machines`, get X's representations with `t3_project_machines`, and open/read the README at **GV's path**, with GV's environmentId. The current directory and the source primary are not the requested location.
-- «Создай тред в X на впс» → `t3ctl new --project X --on VP "задача"`. It places and launches automatically. Honor a configured `T3CTL_AGENT`/`T3CTL_CODEX_MODEL` default (test beds may set these); do not force an unavailable harness.
-- «Сделай X репликой на гвидоне» → `t3ctl place X --on GV --wait`; verify the returned role is replica and state is watching. If it is already a primary, use `t3_project_place` with explicit `role:"replica"` and a different source primary.
-- «Что работает на всех машинах» → `t3ctl status --all`. «Какие машины» → `t3ctl machines` (optionally `mesh status`); answer from the current mesh registry, not the physical-infrastructure list in global instructions.
-- Git in a named replica: inspect `t3_project_machines` to find that replica's source primary and SSH reach; run `ssh <reach> 'cd <primaryPath> && git …'`. File edits sync; `.git` does not. Verify the new commit on the primary and never initialize or commit in the replica.
+- **Find or open a thread anywhere** → `t3ctl find "<topic>" --all --json` (try the Russian words and their English equivalents), take the best **title** match, then `ui_open` with its full `threadId` and `environmentId`. A printed link alone does not open the owner's screen.
+- **New thread in project X on machine M** → `t3ctl new --project X --on M "task"`; it places a replica when needed and launches there. Keep the configured default agent/model unless asked.
+- **Put X on M** → `t3ctl place X --on M --wait` (replica of the first primary; `--primary --path` for an existing checkout); check role and state in the output.
+- **A file from X on M** → `t3_project_machines` for X, then read/open the file at **M's** path with M's `environmentId`, not the current directory.
+- **What runs everywhere / which machines** → `t3ctl status --all`; `t3ctl machines` (or `mesh status`).
+- **Git, builds, tests in a replica** (even `git status`) → on its primary: `ssh <reach> 'cd <primaryPath> && …'`; the exact command is in the thread context and `t3_thread_self`. Never `git init` or commit in a replica; verify the result on the primary.
 
 ## Commands
 

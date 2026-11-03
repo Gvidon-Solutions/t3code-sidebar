@@ -29,6 +29,8 @@ it.effect.each(["primary", "replica", "no project", "alias"] as const)(
     const base = liveThreadShell(ThreadId.make("mcp:self"));
     const shell = {
       ...base,
+      branch: "topic",
+      worktreePath: "/copy/worktree",
       lineage: { ...base.lineage, parentThreadId: ThreadId.make("mcp:parent") },
     };
     const child = {
@@ -87,6 +89,9 @@ it.effect.each(["primary", "replica", "no project", "alias"] as const)(
         delegatedTasks: [
           { threadId: "mcp:remote-child", environmentId: "remote", status: "running" },
         ],
+        workingDirectory: "/copy/worktree",
+        worktreePath: "/copy/worktree",
+        branch: "topic",
         threadId: "mcp:self",
         machine: { tag: "LO" },
         representation: {

@@ -1136,15 +1136,21 @@ async function resolveThreadAcross(ref, { on } = {}) {
         : {}),
     };
   }
-  const page = await m.call("t3_thread_list", {
-    environmentId: machine?.environmentId ?? "all",
-    allProjects: true,
-    includeSubagents: true,
-    limit: 100,
-  });
-  for (const missing of page.unreachable ?? [])
-    console.error(`${missing.environmentId}: ${missing.message}`);
-  const candidates = page.threads.map((t) => ({ ...t, project: t.project ?? t.projectId }));
+  const candidates = [];
+  let cursor;
+  do {
+    const page = await m.call("t3_thread_list", {
+      environmentId: machine?.environmentId ?? "all",
+      allProjects: true,
+      includeSubagents: true,
+      limit: 100,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    for (const missing of page.unreachable ?? [])
+      console.error(`${missing.environmentId}: ${missing.message}`);
+    candidates.push(...page.threads.map((t) => ({ ...t, project: t.project ?? t.projectId })));
+    cursor = page.nextCursor;
+  } while (cursor !== null && cursor !== undefined);
   const exact = candidates.filter(
     (t) => t.threadId === r || t.threadId.startsWith(r) || short(t.threadId).startsWith(r),
   );

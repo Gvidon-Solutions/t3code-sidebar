@@ -437,6 +437,8 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
             { concurrency: 4 },
           );
           const items: unknown[] = [];
+          let total = 0;
+          let nextCursor: number | null = null;
           const unreachable: { environmentId: EnvironmentId; message: string }[] = [];
           for (const [index, result] of results.entries()) {
             if (result._tag === "Failure") {
@@ -448,6 +450,10 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
             }
             const { id, value } = result.success;
             const rows = value[field];
+            total +=
+              typeof value.total === "number" ? value.total : Array.isArray(rows) ? rows.length : 0;
+            if (typeof value.nextCursor === "number")
+              nextCursor = Math.max(nextCursor ?? 0, value.nextCursor);
             if (Array.isArray(rows))
               for (const row of rows as unknown[]) {
                 if (!Predicate.isObject(row)) continue;
@@ -466,8 +472,8 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
                 projectId: null,
                 currentThreadId: scope.thread?.threadId ?? null,
                 threads: items,
-                nextCursor: null,
-                total: items.length,
+                nextCursor,
+                total,
                 unreachable,
               }
             : { matches: items, unreachable };

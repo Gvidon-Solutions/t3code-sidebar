@@ -20,6 +20,10 @@ import * as Forwarding from "../peer/PeerForwarding.ts";
 import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
 import { McpInvocationContext } from "./McpInvocationContext.ts";
 import * as Access from "./McpToolAccess.ts";
+import { UiToolkit } from "./toolkits/ui/tools.ts";
+import * as UiHandlers from "./toolkits/ui/handlers.ts";
+import { UiRequests } from "../uiRequests/UiRequests.ts";
+import { VoiceSessionServiceV2 } from "../orchestration-v2/VoiceSessionService.ts";
 import { liveThreadShell } from "./McpToolAccess.testkit.ts";
 
 const declaration = {
@@ -38,7 +42,9 @@ const toolkit = Toolkit.make(
   Tool.make("t3_thread_send", declaration),
 );
 const handlers = Access.toLayer(toolkit, {
-  t3_thread_list: Access.reads(() => Effect.succeed({ threads: [{ threadId: "mcp:local" }] })),
+  t3_thread_list: Access.reads(() =>
+    Effect.succeed({ threads: [{ threadId: "mcp:local" }], total: 2, nextCursor: 1 }),
+  ),
   t3_thread_read: Access.reads((input) => Effect.succeed({ thread: { threadId: input.threadId } })),
   t3_thread_send: Access.writesThreads(
     (input) => [input.threadId],
@@ -122,6 +128,8 @@ it.effect(
         .handle("t3_thread_list", { environmentId: EnvironmentId.make("all") })
         .pipe(Stream.unwrap, Stream.runCollect);
       expect(list.at(-1)?.result).toMatchObject({
+        total: 4,
+        nextCursor: 1,
         threads: expect.arrayContaining([
           expect.objectContaining({ environmentId: "local" }),
           expect.objectContaining({ environmentId: "remote" }),
@@ -145,6 +153,31 @@ it.effect(
         code: "capability_denied",
         message: expect.stringContaining("read-only"),
       });
+      const opened: unknown[] = [];
+      const uiServices = Layer.mergeAll(
+        Layer.mock(VoiceSessionServiceV2)({}),
+        Layer.mock(UiRequests)({
+          open: (input) =>
+            Effect.sync(() => {
+              opened.push(input);
+              return 1;
+            }),
+        }),
+      );
+      const ui = yield* UiToolkit.pipe(
+        Effect.provide(
+          Access.HandlersLayer.layer(UiHandlers.layer).pipe(Layer.provide(uiServices)),
+        ),
+      );
+      yield* ui
+        .handle("ui_open", { target: { kind: "thread", threadId: ThreadId.make("remote-thread") } })
+        .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(uiServices));
+      expect(opened).toEqual([
+        {
+          threadId: caller.id,
+          target: { kind: "thread", threadId: "mcp:remote-thread", environmentId: "remote" },
+        },
+      ]);
       const beforeRefusal = calls.length;
       const denied = yield* tools.handle("t3_thread_send", { threadId: caller.id }).pipe(
         Stream.unwrap,

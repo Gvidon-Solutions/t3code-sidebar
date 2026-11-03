@@ -37,6 +37,8 @@ VPS_THREAD=$(jq -r .threadId "$WORK/vps-launch.json")
 tool vps t3_thread_wait "$(jq -nc --arg t "$VPS_THREAD" '{threadId:$t,timeoutMs:180000}')" > "$WORK/self-wait.json"
 tool vps t3_thread_read "$(jq -nc --arg t "$VPS_THREAD" '{threadId:$t,view:"messages",limit:100,maxCharsPerItem:16000}')" > "$WORK/self-read.json"
 jq -e '[.items[] | select(.type=="assistant_message") | .text] | join(" ") | contains("replica") and (ascii_downcase | contains("gor"))' "$WORK/self-read.json" >/dev/null
+tool vps t3_thread_read "$(jq -nc --arg t "$VPS_THREAD" '{threadId:$t,view:"activity",limit:100,maxCharsPerItem:50000}')" > "$WORK/self-activity.json"
+jq -e 'any(.items[]; .type=="dynamic_tool" and (.text | contains("t3_thread_self")) and ((.text | fromjson).output.representation.role=="replica"))' "$WORK/self-activity.json" >/dev/null
 printf 'PASS VPS agent self role replica + gor primary; thread=%s\n' "$VPS_THREAD"
 MESSAGE="Call t3_thread_list with environmentId all. Then call t3_thread_send with threadId $VPS_THREAD and WITHOUT environmentId, message: Reply exactly $MARK-reply. Wait for that thread using t3_thread_wait by id only, then read it using t3_thread_read by id only. Finish by reporting its answer. Do not run shell commands."
 tool gv t3_thread_launch "$(jq -nc --arg mark "$MARK-drive" --arg msg "$MESSAGE" '{scratch:true,title:$mark,clientRequestId:$mark,modelSelection:{instanceId:"codex",model:"gpt-6-luna"},runtimeMode:"full-access",message:$msg}')" > "$WORK/gv-launch.json"
@@ -45,5 +47,9 @@ tool gv t3_thread_wait "$(jq -nc --arg t "$GV_THREAD" '{threadId:$t,timeoutMs:18
 tool gv t3_thread_read "$(jq -nc --arg t "$GV_THREAD" '{threadId:$t,view:"messages",limit:100,maxCharsPerItem:16000}')" > "$WORK/drive-read.json"
 jq -e --arg mark "$MARK-reply" '[.items[] | select(.type=="assistant_message") | .text] | join(" ") | contains($mark)' "$WORK/drive-read.json" >/dev/null
 printf 'PASS GV agent all-list + remote send/read by id, received reply; thread=%s\n' "$GV_THREAD"
-tool gv t3_thread_read "$(jq -nc --arg t "$GV_THREAD" '{threadId:$t,view:"activity",limit:100,maxCharsPerItem:16000,expand:"all"}')" > "$WORK/drive-activity.json"
+tool gv t3_thread_read "$(jq -nc --arg t "$GV_THREAD" '{threadId:$t,view:"activity",limit:100,maxCharsPerItem:16000}')" > "$WORK/drive-activity.json"
+jq -e 'any(.items[]; .type=="dynamic_tool" and (.text | contains("t3_thread_list")) and (.text | contains("\"environmentId\": \"all\"")))' "$WORK/drive-activity.json" >/dev/null
+for name in t3_thread_send t3_thread_wait t3_thread_read; do
+ jq -e --arg name "t3-code.$name" 'any(.items[]; .type=="dynamic_tool" and (.text | contains("\"toolName\": \""+$name+"\"")) and ((.text|fromjson) | .toolName==$name and (.input | has("environmentId")|not)))' "$WORK/drive-activity.json" >/dev/null
+done
 printf 'Evidence: %s\n' "$WORK"
