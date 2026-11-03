@@ -175,10 +175,13 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 - State machine → `repstatus` entries (state changes only) + live progress via RPC
   `replicas.status` (polled by the client showing it). First `watching` → register the project via
   ProjectService (reuse an existing project at that root) → write `projectId` into the `rep`.
-- Conflicts (two-way-safe) → `conflict` with count and paths in `replicas.status`; problems
-  (e.g. root-owned files on the source) → `error`. Never auto-chown, never auto-delete.
-  `replicas.retry` (resume/recreate), removing the `rep` entry → terminate session, keep files,
-  archive nothing. Orphan sessions (label, no entry) are reported, not touched.
+- Conflicts follow the automatic authority/copy rule in §0, while keeping two-way-safe.
+  Scan problems are non-fatal: keep mounting/watching, register on watching, and report
+  `skipped` plus bounded `skippedPaths` in live/layout status. Absolute/outside symlinks and
+  unreadable files do not prevent other paths from syncing. Blocking runtime/transition or
+  disconnected-endpoint failures use `error` with a persisted message, isolated to that copy.
+  Never auto-chown. `replicas.retry` resumes/recreates; removing the `rep` entry terminates the
+  session and keeps files, archiving nothing. Orphan sessions are reported, not touched.
 - Reverse direction works the same: any machine can be a replica of any other; a project can have
   two primaries (`transport: git`, independent checkouts) and replicas of either.
 - Disabled unless `replicasEnabled` (server setting); requires a non-fenced caller.
@@ -201,9 +204,10 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
   first use; `mutagenPath` overrides. Each T3 server uses its own `MUTAGEN_DATA_DIRECTORY` under its
   base dir so it never collides with a user's own daemon/sessions (e.g. gvidon's existing
   `mutagen-daemon.service` with sessions `calf-wrapper`, `acc-review` — never touched).
-- Existing manual sessions can be adopted: Settings › Machines lists foreign Mutagen sessions of the
-  user's daemon read-only with "Adopt as replica of <project>" (records a `rep` with
-  `transport: mutagen`, leaves the session where it is, status read from that daemon).
+- Existing manual sessions can be adopted: Settings › Machines lists the user's foreign sessions.
+  Adoption records `transport: mutagen`, pauses the original, recreates the same endpoints under
+  T3's private daemon and terminates the original only after the replacement watches. Conflicts
+  preserve the losing versions under the §0 authority rule.
 
 ### 2a. Links and routing (decided after the survey)
 

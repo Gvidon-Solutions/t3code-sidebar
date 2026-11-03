@@ -80,7 +80,7 @@ Paths below are relative to `packages/shared/src/meshLayout`, `packages/client-r
 | Android authority picker                                             | Device panel session on free `dsh_remote_test`, current checkout Metro; choose gv test, verify through CLI, restore gor                   | Passed; screenshots `/tmp/N-android-authority-{gv,gor}.png`                                                              |
 | Android copies/adoption/moves                                        | native Machines note, Open copies → remote losing file, Adopt session query, copy/wait/local move, select GR → existing GV representation | Pass — `/tmp/N-android-{resolution-note,preserved-file,adopt,copy-move-current,local-preference,shared-move-titles}.png` |
 
-Final full round3 passed on `0.1.5-mesh.f9e10cf6562f`: `/tmp/t3-mesh-e2e-N-final18`, log `/tmp/n2-round3-final18.log`, exit 0. The preceding corrected full round17 also passed. Recovery requires increased automatic restart counters after SIGKILL, captured-daemon POSIX-lock ownership and socket-only recovery without a server restart. All 26 recorded VPS conflict-copy hashes survived the final container recreation (`/tmp/n2-vps-copies-{before,after}-acceptance.sha`); final binary payload hashes match on all three machines (`/tmp/n2-final18-payload-hashes.txt`).
+Final full round3 passed on `0.1.5-mesh.47d7d7fc9fdc`: `/tmp/t3-mesh-e2e-N-live89-accepted`, log `/tmp/n5-round3.log`, exit 0. It includes 1–9, all six automatic server crash recoveries, both private-daemon recoveries without a server restart, a three-minute partition with preserved losers, and all six restart orders. Each order also rechecks the unplaced project catalog, registered scan warnings and single sessions/projects. The driver live status is checked directly; an incoming-only caller retains replicated status when an optional live query cannot route. Earlier round18 and native authority/copy/move evidence remain valid. Current warning captures are `/tmp/N-web-skipped-paths-final.png` and `/tmp/N-android-skipped-paths-final.png`.
 
 The shared project entity reader also applies `logicalProjectTitle` to menus, dialogs and headers, without changing orchestration snapshots or recreating unchanged entities. `projectEntities.test.ts` proves cross-machine rename and identity preservation; Android's destination list shows the renamed title on both GV and GR.
 
@@ -88,25 +88,41 @@ Android workflow assertions passed. During the long run the AVD also recorded `L
 
 ## Final package verification
 
-All six packages pass `pnpm -s typecheck`. Full suites use `pnpm -s test --maxWorkers=4`, except web uses `--maxWorkers=1`.
+All six packages pass `pnpm -s typecheck`. Full suites use `pnpm -s test --maxWorkers=4`. All six full suites pass.
 
 | Package        | Files passed | Tests passed | Existing quarantines |
 | -------------- | -----------: | -----------: | -------------------: |
 | contracts      |           30 |          158 |                    0 |
-| shared         |           96 |         1187 |                    2 |
-| client-runtime |          159 |         1673 |                    0 |
-| server         |          471 |         5989 |                    5 |
-| web            |          501 |         5334 |                    0 |
-| mobile         |          277 |         3279 |                    0 |
+| shared         |           96 |         1188 |                    2 |
+| client-runtime |          162 |         1686 |                    0 |
+| server         |          473 |         6004 |                    5 |
+| web            |          504 |         5344 |                    0 |
+| mobile         |          277 |         3281 |                    0 |
 
-`vp fmt` and `vp lint` pass (zero lint errors); CLI offline tests pass 35/35. `vp run knip:check` reports the same 48 existing unused-export rows as xdev `5c453556a41efcdfb8579e55a6a496b7826b1b01`, with no additions. No new tests are skipped or exclusive.
+`vp fmt` and `vp lint` pass (zero lint errors); CLI offline tests pass 42/42, with two additional installer tests. `vp run knip:check` reports the same 48 existing export/file pairs as xdev `6fffbbd40adc8513a755bb45dbc5458443876f94`, with no additions (three diagnostic namespace aliases may vary). No new tests are skipped or exclusive.
 
 ## Audit boundaries
 
 - Pure core, persistence and peer exchange: shared `meshLayout/`; server `mesh/`, including validation, browser authorship and restart migration.
 - Projects, representations and sync: server `replicas/`, project registration, file access/relay and peer routing; project/thread MCP toolkits and per-turn context.
 - Client model: `meshLayout/`, `meshLayoutClient`, `machineDisplay`, `meshMachines`, `projectGrouping`; web/desktop workspace components and mobile workspace/settings features.
-- CLI: repository review copy `docs/skill-t3-next/`. The owner's installed gvidon/Operalia skills and servers are unchanged; only the bed deploy script installs the review copy on gor.
+- CLI: repository review copy `agent-kit/skills/t3/`. The owner's installed gvidon/Operalia skills and servers are unchanged; only the bed deploy script installs the review copy on gor.
 - Every new replica operation is a service method. RPC transports are thin, mutations use the existing operation scope, and adoption controls use the command permission atom.
 
 The only new document metadata beyond the specified authority/title keys records server membership and browser-edit authorship. It prevents a client HLC id from choosing the default authority or hiding the authority's adoption decision. The `MeshLayoutService` interface was retained; wire extensions are additive.
+
+## Live rollout follow-up: 8–9
+
+| Item                                               | Enforcement                                                                                                                                                                                                             | Proving tests                                                                                                                                                                                                                                                                                                      | Status                                |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| 8 — scan problems are non-fatal and still register | `replicaModel.sessionStatus`, additive skipped fields, driver publication, shared machine strip and both Machines clients; MCP retains status when live queries cannot route                                            | `MutagenRunner.test.ts` warnings/blockers/truncated counts; `ProjectReplicaService.test.ts` registration, clear warnings and persisted blockers; real `Mutagen.integration.test.ts`; client replica/strip tests, Machines browser diagnostics and project MCP live-query fallback case                             | Pass — unit, full round3, web/Android |
+| 8 — failures stay isolated and ignores refresh     | per-copy list/adoption error boundaries; no broadcast in `reconcileSafely`; ordered/missing ignore comparison; Chrome/Codex default patterns                                                                            | service shared-daemon/adoption isolation and ignore recreation cases; `settings.test.ts`; `round3-live-regressions.sh` identifier/ignore assertions                                                                                                                                                                | Pass — unit and full round3           |
+| 9 — names resolve through the mesh                 | CLI replica commands fall back to the mesh resolver; shared resolver reads layout, paginated routed peers and `MeshProjectDirectory` snapshots from bidirectional exchange; preserves remote primary; bounded discovery | `meshProjectLookup.test.ts` remote/relay/pagination/ambiguity; `MeshProjectDirectory.test.ts` incoming-only wait and derived ids; `MeshReplicator.test.ts` delta/deletion/minimal fields; CLI integration remote placement/removal; round3 third-machine lookup/place and unplaced lookup after all restart orders | Pass — unit and full round3           |
+
+The skipped fields are additive so persisted layout, live streams, MCP and both clients carry the same warning. No existing RPC or `MeshLayoutService` interface is renamed. Mutagen's omitted diagnostic counts are included in the total; its [v0.18.1 endpoint model](https://github.com/mutagen-io/mutagen/blob/v0.18.1/pkg/api/models/synchronization/endpoint.go) defines both the visible paths and excluded counts.
+
+An incoming-only peer has no outbound credentials for routed project-list RPCs. To satisfy mesh-wide name lookup without adding links or changing §0, the internal exchange payload adds optional `projectCatalogs` and `knownProjects`. These carry source-stamped, complete minimal project-handle snapshots (id, title, root, creation time and canonical repository keys), not new layout objects. URL, scripts and model defaults are excluded. Per-source HLCs reject stale snapshots and propagate deletions; per-peer watermarks omit unchanged catalogs. The in-memory cache rebuilds through ordinary exchange after restart. Search waits on catalog/layout updates for at most 20 seconds; reads never register or promote a representation. The exchange extension is additive for older peers; `MeshLayoutService` remains unchanged.
+
+The canonical CLI/skill source is `agent-kit/skills/t3`, staged for the bed with `agent-kit/install.sh --dest ~/.agents/skills/t3-next`. Its complete offline selftest includes shared parity (42 passing tests); installer staging has two passing tests. Parity derives empty fixtures from `materialize({})` and covers title keys, authority, aliases and warnings. Customer-neutral runtime/MCP/UI/skill audits excluding `global/` match no owner machine names, home paths, research project names or installation IDs (`/tmp/n5-owner-final-audit.txt`). Generic fixtures use configured labels, tags, aliases and SSH destinations; deployment reads the remote home rather than assuming an account path.
+
+Latest totals: 1542 passing files and 17661 passing tests; seven existing quarantines are unchanged. Logs are `/tmp/n5-suite-{packages-contracts,packages-shared,apps-web,apps-mobile}.log`, `/tmp/n5-suite-client-accepted.log` and `/tmp/n5-suite-server-accepted.log`. No new skipped or exclusive tests were introduced.
