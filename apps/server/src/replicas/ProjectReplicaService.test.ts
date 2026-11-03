@@ -1,3 +1,4 @@
+import * as Runner from "./MutagenRunner.ts";
 import { ReplicaError } from "@t3tools/contracts";
 import * as Runtime from "./ReplicaRuntime.ts";
 import * as ServerConfig from "../config.ts";
@@ -42,8 +43,9 @@ it.effect(
         h.setSession({ conflicts: [{ root: "hello" }] });
         yield* service.reconcile;
         expect((yield* service.status)[0]).toMatchObject({
-          state: "conflict",
-          conflicts: ["hello"],
+          state: "mounting",
+          conflicts: [],
+          message: "Resolved 1 conflicts automatically · copies in .t3-conflicts",
         });
         h.setSession({ conflicts: [], paused: true });
         yield* service.reconcile;
@@ -432,4 +434,67 @@ it.effect(
         expect(yield* Ref.get(attempts)).toBe(2);
       }).pipe(Effect.scoped, Effect.provide(h.layer));
     }),
+);
+
+it.effect(
+  "preserves the authority-selected loser on either driver and persists the calm resolution note",
+  () =>
+    Effect.gen(function* () {
+      for (const sourceDrives of [false, true]) {
+        for (const authority of ["source", "replica", "elsewhere"]) {
+          const self = sourceDrives ? "source" : "replica";
+          const h = harness(self, sourceDrives);
+          yield* Effect.gen(function* () {
+            const service = yield* ReplicaService.ProjectReplicaService;
+            const mesh = yield* MeshLayoutService;
+            yield* mesh.edit((c) => ({ ...c, meshAuthority: authority }));
+            yield* service.reconcile;
+            expect(h.created[0]?.ignores).toContain(".t3-conflicts");
+            h.setSession({ status: "watching", conflicts: [{ root: "file" }] });
+            yield* service.reconcile;
+            const loser = authority === "replica" ? "source" : "replica";
+            expect(h.preserved).toHaveLength(1);
+            expect(h.preserved[0]).toMatchObject({
+              root: `/${loser}`,
+              paths: ["file"],
+              environmentId: loser,
+            });
+            expect(Boolean(h.preserved[0]?.route)).toBe(loser !== self);
+            expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+              state: "mounting",
+              message: "Resolved 1 conflicts automatically · copies in .t3-conflicts",
+              conflictCopies: { environmentId: loser },
+            });
+            h.setSession({ conflicts: [], status: "watching" });
+            yield* service.reconcile;
+            yield* service.reconcile;
+            expect((yield* service.status)[0]?.message).toContain("Resolved 1");
+            expect(h.created).toHaveLength(1);
+          }).pipe(Effect.provide(h.layer));
+        }
+      }
+    }),
+);
+
+it.effect(
+  "terminates a removed representation after a driver restart using its durable tombstone, keeping orphan sessions",
+  () => {
+    const h = harness();
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const runner = yield* Runner.MutagenRunner;
+      const mesh = yield* MeshLayoutService;
+      yield* runner.create({
+        ...sessionIdentity("repo", "replica"),
+        alpha: "source:/source",
+        beta: "/replica",
+        ignores: [".t3-conflicts"],
+      });
+      h.addOrphan();
+      yield* mesh.edit((config) => ({ ...config, projectMounts: {} }));
+      yield* service.reconcile;
+      expect(h.terminated).toEqual([sessionIdentity("repo", "replica").name]);
+      expect((yield* service.status).some((row) => row.sessionName === "orphan")).toBe(true);
+    }).pipe(Effect.provide(h.layer));
+  },
 );

@@ -56,12 +56,17 @@ export const makeReplicaHarness = (
   });
   let sessions: ReadonlyArray<Runner.MutagenSession> = [];
   const created: Runner.CreateSession[] = [];
+  const preserved: Parameters<Runner.MutagenRunner["Service"]["preserveConflicts"]>[0][] = [];
   const terminated: string[] = [];
   let project: Project | undefined;
   let registrations = 0;
   const runner = Layer.succeed(
     Runner.MutagenRunner,
     Runner.MutagenRunner.of({
+      preserveConflicts: (input) =>
+        Effect.sync(() => {
+          preserved.push(input);
+        }),
       list: () => Effect.sync(() => sessions).pipe(Effect.tap(() => onList)),
       listExisting: Effect.sync(() => sessions),
       create: (input) =>
@@ -77,6 +82,7 @@ export const makeReplicaHarness = (
                   labels: { "t3-logical": input.logicalHash, "t3-env": input.environmentTag },
                   paused: false,
                   status: "scanning",
+                  ignore: { paths: input.ignores },
                   alpha: { path: input.alpha },
                   beta: { path: input.beta },
                 },
@@ -162,6 +168,7 @@ export const makeReplicaHarness = (
   return {
     layer,
     created,
+    preserved,
     terminated,
     registrations: () => registrations,
     setSession: (patch: Partial<Runner.MutagenSession>) => {

@@ -1,3 +1,4 @@
+import { meshAuthorityOf, conflictWinner } from "@t3tools/shared/meshLayout";
 import { forkParked } from "../serverActivation.ts";
 import * as NodeUtil from "node:util";
 import type * as Scope from "effect/Scope";
@@ -83,6 +84,7 @@ const make = Effect.gen(function* () {
   const reconciliationInput = (config: SidebarWorkspacesConfig) => ({
     mounts: config.projectMounts,
     machines: config.machines,
+    authority: meshAuthorityOf(config),
     observed: Object.fromEntries(
       Object.entries(config.projectMountStatus)
         .map(
@@ -121,7 +123,11 @@ const make = Effect.gen(function* () {
     const current = (yield* mesh.read).config.projectMountStatus[status.logicalKey]?.[
       status.environmentId
     ];
-    if (current?.state !== status.state)
+    if (
+      current?.state !== status.state ||
+      current?.message !== status.message ||
+      current?.conflictCopies?.path !== status.conflictCopies?.path
+    )
       yield* mesh.edit((config) => ({
         ...config,
         projectMountStatus: {
@@ -132,6 +138,7 @@ const make = Effect.gen(function* () {
               state: status.state,
               conflicts: status.conflicts.length,
               ...(status.message ? { message: status.message } : {}),
+              ...(status.conflictCopies ? { conflictCopies: status.conflictCopies } : {}),
               updatedAt: status.updatedAt,
             },
           },
@@ -246,37 +253,90 @@ const make = Effect.gen(function* () {
     const source = config.projectMounts[logicalKey]?.find(
       (candidate) => candidate.environmentId === rep.source,
     );
-    if (!source)
+    if (!source || source.role !== "primary")
       return yield* new ReplicaError({
         reason: "not_found",
         message: "Replica source representation is missing.",
       });
     known.set(key, identity.name);
+    const defaults = yield* settings.getSettings;
+    const route =
+      config.machines[driver]?.reach?.[
+        driver === rep.environmentId ? source.environmentId : rep.environmentId
+      ];
+    if (!route)
+      return yield* new ReplicaError({
+        reason: "unreachable",
+        message: "Replica SSH route is missing.",
+      });
+    const createInput = {
+      ...identity,
+      ignores: [...new Set([".t3-conflicts", ...defaults.replicaIgnores, ...(rep.ignores ?? [])])],
+      alpha:
+        driver === source.environmentId
+          ? source.path
+          : sshEndpoint(route, source.environmentId, source.path),
+      beta:
+        driver === rep.environmentId ? rep.path : sshEndpoint(route, rep.environmentId, rep.path),
+    };
     if (!session) {
       yield* publish({ ...base, sessionName: identity.name, state: "pending" });
-      const defaults = yield* settings.getSettings;
-      const route =
-        config.machines[driver]?.reach?.[
-          driver === rep.environmentId ? source.environmentId : rep.environmentId
-        ];
-      if (!route)
-        return yield* new ReplicaError({
-          reason: "unreachable",
-          message: "Replica SSH route is missing.",
-        });
-      yield* runner.create({
-        ...identity,
-        ignores: [...defaults.replicaIgnores, ...(rep.ignores ?? [])],
-        alpha:
-          driver === source.environmentId
-            ? source.path
-            : sshEndpoint(route, source.environmentId, source.path),
-        beta:
-          driver === rep.environmentId ? rep.path : sshEndpoint(route, rep.environmentId, rep.path),
-      });
+      yield* runner.create(createInput);
       yield* publish({ ...base, sessionName: identity.name, state: "mounting" });
     } else {
-      const status = { ...base, sessionName: identity.name, ...sessionStatus(session) };
+      if (session.paused) yield* runner.resume(identity.name);
+      const previous = config.projectMountStatus[logicalKey]?.[rep.environmentId];
+      const status = {
+        ...base,
+        sessionName: identity.name,
+        ...sessionStatus(session),
+        ...(previous?.message?.startsWith("Resolved ")
+          ? {
+              message: previous.message,
+              ...(previous.conflictCopies ? { conflictCopies: previous.conflictCopies } : {}),
+            }
+          : {}),
+      };
+      if (status.conflicts.length) {
+        const loser =
+          conflictWinner(config, source.environmentId, rep.environmentId) === "alpha"
+            ? rep
+            : source;
+        const route =
+          loser.environmentId === mesh.environmentId
+            ? undefined
+            : config.machines[mesh.environmentId]?.reach?.[loser.environmentId];
+        if (loser.environmentId !== mesh.environmentId && !route)
+          return yield* new ReplicaError({
+            reason: "unreachable",
+            message: "Cannot reach the losing side to preserve conflict copies.",
+          });
+        yield* runner.pause(identity.name);
+        yield* runner.preserveConflicts({
+          root: loser.path,
+          environmentId: loser.environmentId,
+          paths: status.conflicts,
+          iso: now,
+          ...(route ? { route } : {}),
+        });
+        if (!session.ignore?.paths?.includes(".t3-conflicts")) {
+          yield* runner.terminate(identity.name);
+          yield* runner.create(createInput);
+        } else yield* runner.reset(identity.name);
+        yield* runner.resume(identity.name);
+        yield* runner.flush(identity.name);
+        yield* publish({
+          ...base,
+          sessionName: identity.name,
+          state: "mounting",
+          message: `Resolved ${status.conflicts.length} conflicts automatically · copies in .t3-conflicts`,
+          conflictCopies: {
+            environmentId: loser.environmentId,
+            path: `${loser.path}/.t3-conflicts/${now}/`,
+          },
+        });
+        return;
+      }
       if (status.state === "watching") yield* register(logicalKey, rep);
       yield* publish(status);
     }
@@ -287,7 +347,7 @@ const make = Effect.gen(function* () {
       : new ReplicaError({ reason: "storage", message: "Replica reconciliation failed.", cause });
   const reconcile = Effect.fn("ProjectReplicaService.reconcile")(function* () {
     if (!(yield* settings.getSettings).replicasEnabled) return;
-    const { config } = yield* mesh.read;
+    const { config, document } = yield* mesh.read;
     const entries = Object.entries(config.projectMounts).flatMap(([logicalKey, reps]) =>
       reps
         .filter((rep) => rep.role === "replica" && rep.transport === "mutagen")
@@ -370,6 +430,30 @@ const make = Effect.gen(function* () {
         known.set(refKey(logicalKey, rep.environmentId), identity.name);
     }
     const terminated = new Set<string>();
+    // Tombstones survive a driver crash between removal and session termination.
+    for (const [key, entry] of Object.entries(document)) {
+      if (!key.startsWith("rep/") || entry.v !== null) continue;
+      const [, logicalKey, environmentId] = key.split("/").map(decodeURIComponent);
+      if (
+        !logicalKey ||
+        !environmentId ||
+        config.projectMounts[logicalKey]?.some((rep) => rep.environmentId === environmentId)
+      )
+        continue;
+      const identity = sessionIdentity(logicalKey, environmentId);
+      if (
+        sessions.some(
+          (session) =>
+            session.name === identity.name &&
+            session.labels?.["t3-logical"] === identity.logicalHash &&
+            session.labels?.["t3-env"] === identity.environmentTag,
+        )
+      ) {
+        yield* locks.withLock(refKey(logicalKey, environmentId), runner.terminate(identity.name));
+        terminated.add(identity.name);
+        known.delete(refKey(logicalKey, environmentId));
+      }
+    }
     for (const [key, name] of known)
       if (
         !entries.some(
@@ -387,6 +471,9 @@ const make = Effect.gen(function* () {
             all.filter((row) => refKey(row.logicalKey, row.environmentId) !== key),
           );
       }
+    yield* Ref.update(statuses, (rows) =>
+      rows.filter((row) => !terminated.has(row.sessionName ?? "")),
+    );
     const expected = new Set(
       entries.map(({ logicalKey, rep }) => sessionIdentity(logicalKey, rep.environmentId).name),
     );
@@ -481,6 +568,15 @@ const make = Effect.gen(function* () {
   ) {
     const config = (yield* mesh.read).config;
     if (config.projectMounts[name]) return { logicalKey: name, config };
+    const titled = Object.entries(config.projectTitles ?? {}).filter(
+      ([id, title]) => config.projectMounts[id] && title.toLowerCase() === name.toLowerCase(),
+    );
+    if (titled.length === 1) return { logicalKey: titled[0]![0], config };
+    if (titled.length > 1)
+      return yield* new ReplicaError({
+        reason: "not_found",
+        message: "Project name is ambiguous; use its id.",
+      });
     const snapshot = yield* projects.snapshot.pipe(Effect.mapError(mapError));
     const matches = snapshot.projects.filter(
       (project) => project.id === name || project.title.toLowerCase() === name.toLowerCase(),
@@ -599,7 +695,7 @@ const make = Effect.gen(function* () {
           const source = config.projectMounts[logicalKey]?.find(
             (entry) => entry.environmentId === sourceId,
           );
-          if (!source)
+          if (!source || source.role !== "primary")
             return yield* new ReplicaError({
               reason: "not_found",
               message: "A source primary representation is required.",
@@ -701,6 +797,7 @@ const make = Effect.gen(function* () {
       const live = yield* Ref.get(statuses);
       return {
         logicalKey,
+        ...(meshAuthorityOf(config) ? { authorityEnvironmentId: meshAuthorityOf(config)! } : {}),
         representations: (config.projectMounts[logicalKey] ?? []).map((rep) => {
           const status = config.projectMountStatus[logicalKey]?.[rep.environmentId];
           const current = live.find(

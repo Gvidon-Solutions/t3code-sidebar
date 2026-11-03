@@ -1,3 +1,4 @@
+import { preserveConflictCommand } from "./conflictResolution.ts";
 import { ReplicaError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -24,6 +25,9 @@ const Endpoint = Schema.Struct({
 });
 export const MutagenSession = Schema.Struct({
   identifier: Schema.String,
+  ignore: Schema.optionalKey(
+    Schema.Struct({ paths: Schema.optionalKey(Schema.Array(Schema.String)) }),
+  ),
   name: Schema.optionalKey(Schema.String),
   labels: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   paused: Schema.Boolean,
@@ -55,6 +59,13 @@ export interface CreateSession {
 export class MutagenRunner extends Context.Service<
   MutagenRunner,
   {
+    readonly preserveConflicts: (input: {
+      readonly root: string;
+      readonly paths: readonly string[];
+      readonly iso: string;
+      readonly route?: { readonly ssh: string; readonly identityFile?: string };
+      readonly environmentId: string;
+    }) => Effect.Effect<void, ReplicaError>;
     readonly create: (input: CreateSession) => Effect.Effect<void, ReplicaError>;
     readonly list: (
       selector?: string,
@@ -115,6 +126,48 @@ const make = Effect.gen(function* () {
     ),
   );
   return MutagenRunner.of({
+    preserveConflicts: Effect.fn("MutagenRunner.preserveConflicts")(function* (input) {
+      const script = yield* Effect.try({
+        try: () => preserveConflictCommand(input.root, input.iso, input.paths),
+        catch: (cause) =>
+          new ReplicaError({ reason: "storage", message: "Unsafe conflict copy path.", cause }),
+      });
+      const route = input.route;
+      const port = route?.ssh.match(/:(\d+)$/);
+      const result = yield* runner
+        .run({
+          command: route ? "ssh" : "sh",
+          args: route
+            ? [
+                "-o",
+                "BatchMode=yes",
+                ...(port && !route.identityFile ? ["-p", port[1]!] : []),
+                "--",
+                route.identityFile
+                  ? `t3-mesh-${input.environmentId}`
+                  : route.ssh.replace(/:\d+$/, ""),
+                script,
+              ]
+            : ["-c", script],
+          timeout: "10 minutes",
+        })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new ReplicaError({
+                reason: "storage",
+                message: "Cannot preserve losing conflict versions.",
+                cause,
+              }),
+          ),
+        );
+      if (result.code !== 0)
+        return yield* new ReplicaError({
+          reason: "storage",
+          message: "Cannot preserve losing conflict versions.",
+          cause: result,
+        });
+    }),
     create: Effect.fn("MutagenRunner.create")((input) =>
       run([
         "sync",
