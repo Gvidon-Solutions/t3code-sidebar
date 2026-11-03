@@ -105,7 +105,7 @@ it.effect(
       const sql = yield* SqlClient.SqlClient;
       const seq = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
       yield* wrapped.updateSettings({
-        sidebarWorkspaces: { ...oldClientConfig, quietAfterDays: 17 },
+        sidebarWorkspaces: { ...oldClientConfig, projectTitles: {}, quietAfterDays: 17 },
       });
       expect((yield* mesh.read).config.quietAfterDays).toBe(17);
       expect((yield* mesh.read).config.meshAuthority).toBe("A");

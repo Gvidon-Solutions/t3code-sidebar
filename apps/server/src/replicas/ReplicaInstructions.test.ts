@@ -42,3 +42,36 @@ it("injects identity on primary and replica turns within 600 UTF-8 bytes", () =>
     "primary on this machine",
   );
 });
+
+it("names the primary machine in the injected note instead of presenting its id as a name", () => {
+  const config = {
+    ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces,
+    machines: {
+      "opaque-primary": { label: "gvidon", tag: "GV", reach: {} },
+      replica: { reach: { "opaque-primary": { ssh: "gvidon" } } },
+    },
+    projectMounts: {
+      logical: [
+        {
+          environmentId: "opaque-primary",
+          path: "/primary",
+          role: "primary",
+          transport: "git",
+          createdAt: "",
+        },
+        {
+          environmentId: "replica",
+          projectId: "p",
+          path: "/copy",
+          role: "replica",
+          transport: "mutagen",
+          source: "opaque-primary",
+          createdAt: "",
+        },
+      ],
+    },
+  } as const;
+  const note = replicaContextNote(config, "replica", "p");
+  expect(note).toContain("on gvidon (GV)");
+  expect(note).not.toContain("opaque-primary");
+});

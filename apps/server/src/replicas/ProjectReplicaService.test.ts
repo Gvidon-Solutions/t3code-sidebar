@@ -1,3 +1,4 @@
+import * as FileSystem from "effect/FileSystem";
 import * as Runner from "./MutagenRunner.ts";
 import { ReplicaError } from "@t3tools/contracts";
 import * as Runtime from "./ReplicaRuntime.ts";
@@ -577,3 +578,138 @@ it.effect("adopts one managed session and removes an accidental duplicate by ide
     expect(h.terminated).toEqual(["duplicate-session"]);
   }).pipe(Effect.provide(h.layer));
 });
+
+it.effect("retains an explicit replacement path rather than allocating another folder", () => {
+  const h = harness();
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "N-explicit-" });
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const placed = yield* service.place({
+      project: "repo",
+      machine: "replica",
+      path: `${root}/requested/nested`,
+    });
+    expect(placed.representation?.path).toBe(`${root}/requested/nested`);
+    expect(yield* fs.exists(`${root}/requested/nested`)).toBe(true);
+  }).pipe(Effect.scoped, Effect.provide(h.layer));
+});
+
+it.effect(
+  "records manual transport and per-copy ignores without starting a managed sync session",
+  () => {
+    const h = harness();
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "N-manual-" });
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const placed = yield* service.place({
+        project: "repo",
+        machine: "replica",
+        path: root,
+        transport: "manual",
+        ignores: ["*.tmp", "cache"],
+      });
+      expect(placed.representation).toMatchObject({
+        path: root,
+        transport: "manual",
+        ignores: ["*.tmp", "cache"],
+      });
+      yield* service.reconcile;
+      expect(h.created).toEqual([]);
+      expect(h.registrations()).toBe(1);
+      expect((yield* service.status)[0]).toMatchObject({
+        state: "watching",
+        message: "Manual copy",
+      });
+    }).pipe(Effect.scoped, Effect.provide(h.layer));
+  },
+);
+
+it.effect(
+  "adopts a foreign session, pauses before creating, preserves conflicts and terminates only after watching",
+  () => {
+    const h = harness("source", true);
+    h.foreign.sessions = [
+      {
+        identifier: "manual-id",
+        name: "N-manual",
+        paused: false,
+        status: "watching",
+        alpha: { protocol: "local", path: "/source" },
+        beta: { protocol: "ssh", host: "replica", path: "/replica" },
+        ignore: { paths: ["*.cache"] },
+      },
+    ];
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      expect(yield* service.unmanaged).toHaveLength(1);
+      expect(
+        (yield* service.adopt({ project: "repo", session: "N-manual" })).representation?.path,
+      ).toBe("/replica");
+      expect(h.foreignActions).toEqual([]);
+      yield* service.reconcile;
+      expect(h.foreignActions).toEqual(["pause:manual-id"]);
+      expect(h.created).toHaveLength(1);
+      expect(h.created[0]?.ignores).toContain("*.cache");
+      expect(h.created[0]?.ignores).toContain(".t3-conflicts");
+      h.setSession({ conflicts: [{ root: "both.txt" }], status: "watching" });
+      yield* service.reconcile;
+      expect(h.preserved).toMatchObject([{ root: "/replica", paths: ["both.txt"] }]);
+      expect(h.foreignActions).toEqual(["pause:manual-id"]);
+      h.setSession({ conflicts: [], status: "watching" });
+      yield* service.reconcile;
+      expect(h.foreignActions).toEqual(["pause:manual-id"]);
+      yield* service.reconcile;
+      expect(h.foreignActions).toEqual(["pause:manual-id", "terminate:manual-id"]);
+      expect(
+        (yield* (yield* MeshLayoutService).read).config.projectMounts.repo?.find(
+          (rep) => rep.environmentId === "replica",
+        )?.adoption,
+      ).toBeUndefined();
+      expect(h.created).toHaveLength(1);
+    }).pipe(Effect.provide(h.layer));
+  },
+);
+
+it.effect(
+  "keeps one existing session while a legacy logical id migrates and removes it after a restarted-driver tombstone",
+  () => {
+    const h = harness();
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const mesh = yield* MeshLayoutService;
+      yield* service.reconcile;
+      h.setSession({ status: "watching" });
+      yield* mesh.edit((current) => {
+        const { repo, ...rest } = current.projectMounts;
+        return {
+          ...current,
+          projectAliases: { repo: "opaque" },
+          projectMounts: {
+            ...rest,
+            opaque: (repo ?? []).map((rep) => ({ ...rep, syncKey: "repo" })),
+          },
+        };
+      });
+      yield* service.reconcile;
+      expect(h.created).toHaveLength(1);
+      expect(h.terminated).toEqual([]);
+      expect((yield* service.status).find((status) => status.logicalKey === "opaque")?.state).toBe(
+        "watching",
+      );
+      yield* mesh.edit((current) => ({
+        ...current,
+        projectMounts: {
+          ...current.projectMounts,
+          opaque: current.projectMounts.opaque!.filter((rep) => rep.environmentId !== "replica"),
+        },
+      }));
+      const restarted = yield* ReplicaService.ProjectReplicaService.pipe(
+        Effect.provide(ReplicaService.layer),
+      );
+      yield* restarted.reconcile;
+      expect(h.terminated).toEqual([h.created[0]!.name]);
+    }).pipe(Effect.provide(h.layer));
+  },
+);

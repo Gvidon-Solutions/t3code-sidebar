@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import {
   adoptLegacy,
+  migrateLogicalProjectIds,
   diff,
   importLegacy,
   materialize,
@@ -62,7 +63,7 @@ export const layer = Layer.effect(
           h: tick(0, null, environmentId),
         },
       };
-      const combined = merge(merge(document, writers), entries);
+      const combined = migrateLogicalProjectIds(merge(merge(document, writers), entries));
       const merged = Object.entries(combined)
         .filter(([key]) => key.startsWith("ws/"))
         .some(([, entry]) => entry.h.startsWith("0000000000000."))
@@ -98,7 +99,7 @@ export const layer = Layer.effect(
       const legacy = (yield* settings.getSettings).sidebarWorkspaces;
       yield* persist(importLegacy(legacy, environmentId, "0000000000000.00000.legacy"));
     } else {
-      yield* settings.updateSettings({ sidebarWorkspaces: materialize(document) });
+      yield* persist({});
     }
     const nextHlc = sql
       .withTransaction(

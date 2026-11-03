@@ -1,4 +1,11 @@
-import { meshAuthorityOf, conflictWinner } from "@t3tools/shared/meshLayout";
+import { adoptionSides } from "./adoptionModel.ts";
+import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
+import {
+  opaqueProjectId,
+  meshMachineLabel,
+  meshAuthorityOf,
+  conflictWinner,
+} from "@t3tools/shared/meshLayout";
 import { forkParked } from "../serverActivation.ts";
 import * as NodeUtil from "node:util";
 import type * as Scope from "effect/Scope";
@@ -13,6 +20,8 @@ import {
   ReplicaError,
   type ReplicaLiveStatus,
   type ReplicaRefInput,
+  type ReplicaAdoptInput,
+  type UnmanagedSyncSession,
   type SidebarProjectMount,
   type SidebarWorkspacesConfig,
   type ProjectPlaceInput,
@@ -45,6 +54,8 @@ const asReplicaError = (error: MeshLayoutError) =>
 export class ProjectReplicaService extends Context.Service<
   ProjectReplicaService,
   {
+    readonly unmanaged: Effect.Effect<readonly UnmanagedSyncSession[], ReplicaError>;
+    readonly adopt: (input: ReplicaAdoptInput) => Effect.Effect<ProjectPlaceResult, ReplicaError>;
     readonly place: (input: ProjectPlaceInput) => Effect.Effect<ProjectPlaceResult, ReplicaError>;
     readonly machines: (project: string) => Effect.Effect<ProjectMachinesResult, ReplicaError>;
     readonly waitForProject: (
@@ -159,7 +170,7 @@ const make = Effect.gen(function* () {
           commandId: CommandId.make(yield* crypto.randomUUIDv4().pipe(Effect.mapError(mapError))),
           projectId: ProjectId.make(yield* crypto.randomUUIDv4().pipe(Effect.mapError(mapError))),
           workspaceRoot: rep.path,
-          title: path.basename(rep.path),
+          title: (yield* mesh.read).config.projectTitles[logicalKey] || path.basename(rep.path),
         });
     yield* mesh.edit((config) => ({
       ...config,
@@ -181,9 +192,14 @@ const make = Effect.gen(function* () {
     let config = (yield* mesh.read).config;
     if (rep.environmentId === mesh.environmentId && !rep.pathAllocated && !rep.projectId) {
       const existing = sessions.find(
-        (session) => session.name === sessionIdentity(logicalKey, rep.environmentId).name,
+        (session) =>
+          session.name === sessionIdentity(rep.syncKey ?? logicalKey, rep.environmentId).name,
       );
-      const allocated = existing ? rep.path : yield* paths.allocate(rep.path);
+      const allocated = existing
+        ? rep.path
+        : rep.explicitPath || rep.transport !== "mutagen"
+          ? yield* paths.prepareExplicit(rep.path)
+          : yield* paths.allocate(rep.path);
       const snapshot = yield* mesh.edit((current) => ({
         ...current,
         projectMounts: {
@@ -200,6 +216,7 @@ const make = Effect.gen(function* () {
         (entry) => entry.environmentId === rep.environmentId,
       )!;
     }
+    if (rep.adoption && !rep.adoption.paused) return;
     const driver = replicaDriver(config, rep);
     const now = DateTime.formatIso(yield* DateTime.now);
     const base = {
@@ -211,12 +228,25 @@ const make = Effect.gen(function* () {
       ...(rep.projectId ? { projectId: rep.projectId } : {}),
       updatedAt: now,
     } satisfies Omit<ReplicaLiveStatus, "state">;
+    if (
+      rep.transport !== "mutagen" &&
+      rep.pathValidated &&
+      rep.environmentId === mesh.environmentId
+    ) {
+      yield* register(logicalKey, rep);
+      yield* publish({
+        ...base,
+        state: "watching",
+        message: rep.transport === "sshfs" ? "External folder (SSHFS)" : "Manual copy",
+      });
+      return;
+    }
     if (!driver) {
       if (rep.environmentId === mesh.environmentId)
         yield* publish({
           ...base,
           state: "error",
-          message: `${rep.environmentId} cannot reach ${rep.source ?? "source"} and back. Add an ssh route in Settings › Machines`,
+          message: `${meshMachineLabel(config, rep.environmentId)} cannot reach ${rep.source ? meshMachineLabel(config, rep.source) : "the source"}. Add an SSH route in Settings › Mesh.`,
         });
       return;
     }
@@ -243,7 +273,7 @@ const make = Effect.gen(function* () {
       return;
     }
     if (!rep.pathAllocated && !rep.projectId) return;
-    const identity = sessionIdentity(logicalKey, rep.environmentId);
+    const identity = sessionIdentity(rep.syncKey ?? logicalKey, rep.environmentId);
     const key = refKey(logicalKey, rep.environmentId);
     const matching = sessions.filter(
       (candidate) =>
@@ -251,7 +281,7 @@ const make = Effect.gen(function* () {
         candidate.labels?.["t3-logical"] === identity.logicalHash &&
         candidate.labels?.["t3-env"] === identity.environmentTag,
     );
-    const session = matching[0];
+    let session = matching[0];
     for (const duplicate of matching.slice(1)) yield* runner.terminate(duplicate.identifier);
     const source = config.projectMounts[logicalKey]?.find(
       (candidate) => candidate.environmentId === rep.source,
@@ -261,7 +291,7 @@ const make = Effect.gen(function* () {
         reason: "not_found",
         message: "Replica source representation is missing.",
       });
-    known.set(key, identity.name);
+
     const defaults = yield* settings.getSettings;
     const route =
       config.machines[driver]?.reach?.[
@@ -282,6 +312,55 @@ const make = Effect.gen(function* () {
       beta:
         driver === rep.environmentId ? rep.path : sshEndpoint(route, rep.environmentId, rep.path),
     };
+    if (rep.explicitPath && !rep.pathValidated) {
+      yield* runner.assertReplicaPath({
+        source: {
+          environmentId: source.environmentId,
+          path: source.path,
+          ...(driver !== source.environmentId ? { route } : {}),
+        },
+        destination: {
+          environmentId: rep.environmentId,
+          path: rep.path,
+          ...(driver !== rep.environmentId ? { route } : {}),
+        },
+        ignores: createInput.ignores,
+      });
+      yield* mesh.edit((current) => ({
+        ...current,
+        projectMounts: {
+          ...current.projectMounts,
+          [logicalKey]: (current.projectMounts[logicalKey] ?? []).map((entry) =>
+            entry.environmentId === rep.environmentId && entry.path === rep.path
+              ? { ...entry, pathValidated: true }
+              : entry,
+          ),
+        },
+      }));
+    }
+    if (rep.transport !== "mutagen") {
+      yield* register(logicalKey, rep);
+      yield* publish({
+        ...base,
+        state: "watching",
+        message: rep.transport === "sshfs" ? "External folder (SSHFS)" : "Manual copy",
+      });
+      return;
+    }
+    const ignoresChanged =
+      session?.ignore?.paths !== undefined &&
+      JSON.stringify([...new Set(session.ignore.paths)].sort()) !==
+        JSON.stringify([...new Set(createInput.ignores)].sort());
+    known.set(key, identity.name);
+    if (
+      session &&
+      (session.alpha.path !== source.path ||
+        session.beta.path !== rep.path ||
+        (ignoresChanged && !session.conflicts?.length))
+    ) {
+      yield* runner.terminate(session.identifier);
+      session = undefined;
+    }
     if (!session) {
       yield* publish({ ...base, sessionName: identity.name, state: "pending" });
       yield* runner.create(createInput);
@@ -323,7 +402,7 @@ const make = Effect.gen(function* () {
           iso: now,
           ...(route ? { route } : {}),
         });
-        if (!session.ignore?.paths?.includes(".t3-conflicts")) {
+        if (ignoresChanged || !session.ignore?.paths?.includes(".t3-conflicts")) {
           yield* runner.terminate(identity.name);
           yield* runner.create(createInput);
         } else yield* runner.reset(identity.name);
@@ -351,14 +430,67 @@ const make = Effect.gen(function* () {
       : new ReplicaError({ reason: "storage", message: "Replica reconciliation failed.", cause });
   const reconcile = Effect.fn("ProjectReplicaService.reconcile")(function* () {
     if (!(yield* settings.getSettings).replicasEnabled) return;
+    const initial = (yield* mesh.read).config;
+    for (const [logicalKey, reps] of Object.entries(initial.projectMounts)) {
+      for (const rep of reps) {
+        const adoption = rep.adoption;
+        if (!adoption || adoption.environmentId !== mesh.environmentId) continue;
+        const old = (yield* runner.foreignList).find(
+          (session) => session.identifier === adoption.sessionIdentifier,
+        );
+        let clear = false;
+        if (!adoption.paused) {
+          if (!old)
+            return yield* new ReplicaError({
+              reason: "not_found",
+              message:
+                "The original sync session disappeared before it could be paused. Its folders are unchanged.",
+            });
+          yield* runner.foreignAction("pause", old.identifier);
+        } else if (
+          initial.projectMountStatus[logicalKey]?.[rep.environmentId]?.state === "watching"
+        ) {
+          if (old) yield* runner.foreignAction("terminate", old.identifier);
+          clear = true;
+        } else continue;
+        yield* mesh.edit((current) => ({
+          ...current,
+          projectMounts: {
+            ...current.projectMounts,
+            [logicalKey]: (current.projectMounts[logicalKey] ?? []).map((entry) => {
+              if (
+                entry.environmentId !== rep.environmentId ||
+                entry.adoption?.sessionIdentifier !== adoption.sessionIdentifier
+              )
+                return entry;
+              const { adoption: _old, ...rest } = entry;
+              return clear ? rest : { ...entry, adoption: { ...adoption, paused: true } };
+            }),
+          },
+        }));
+      }
+    }
     const { config, document } = yield* mesh.read;
     const entries = Object.entries(config.projectMounts).flatMap(([logicalKey, reps]) =>
-      reps
-        .filter((rep) => rep.role === "replica" && rep.transport === "mutagen")
-        .map((rep) => ({ logicalKey, rep })),
+      reps.filter((rep) => rep.role === "replica").map((rep) => ({ logicalKey, rep })),
     );
     const now = DateTime.formatIso(yield* DateTime.now);
     for (const [logicalKey, reps] of Object.entries(config.projectMounts)) {
+      const primary = reps.find(
+        (rep) => rep.environmentId === mesh.environmentId && rep.role === "primary",
+      );
+      if (primary?.projectId && !config.projectTitles[logicalKey]) {
+        const project = yield* projects.getById(ProjectId.make(primary.projectId));
+        if (Option.isSome(project))
+          yield* mesh.edit((current) =>
+            current.projectTitles[logicalKey]
+              ? current
+              : {
+                  ...current,
+                  projectTitles: { ...current.projectTitles, [logicalKey]: project.value.title },
+                },
+          );
+      }
       for (const rep of reps)
         if (rep.environmentId === mesh.environmentId && rep.role === "primary" && !rep.projectId) {
           yield* register(logicalKey, rep).pipe(
@@ -381,9 +513,11 @@ const make = Effect.gen(function* () {
       Effect.provideService(Path.Path, path),
       Effect.provideService(HostProcess.HomeDirectory, home),
     );
-    const driven = entries.filter(({ rep }) => replicaDriver(config, rep) === mesh.environmentId);
+    const driven = entries.filter(
+      ({ rep }) => rep.transport === "mutagen" && replicaDriver(config, rep) === mesh.environmentId,
+    );
     for (const { logicalKey, rep } of entries.filter(
-      ({ rep }) => replicaDriver(config, rep) !== mesh.environmentId,
+      ({ rep }) => rep.transport !== "mutagen" || replicaDriver(config, rep) !== mesh.environmentId,
     )) {
       yield* locks.withLock(
         refKey(logicalKey, rep.environmentId),
@@ -422,7 +556,7 @@ const make = Effect.gen(function* () {
       );
     }
     for (const { logicalKey, rep } of entries) {
-      const identity = sessionIdentity(logicalKey, rep.environmentId);
+      const identity = sessionIdentity(rep.syncKey ?? logicalKey, rep.environmentId);
       if (
         sessions.some(
           (session) =>
@@ -438,24 +572,39 @@ const make = Effect.gen(function* () {
     for (const [key, entry] of Object.entries(document)) {
       if (!key.startsWith("rep/") || entry.v !== null) continue;
       const [, logicalKey, environmentId] = key.split("/").map(decodeURIComponent);
+      let currentKey = logicalKey;
+      const visited = new Set<string>();
+      while (currentKey && config.projectAliases[currentKey] && !visited.has(currentKey)) {
+        visited.add(currentKey);
+        currentKey = config.projectAliases[currentKey];
+      }
       if (
         !logicalKey ||
         !environmentId ||
-        config.projectMounts[logicalKey]?.some((rep) => rep.environmentId === environmentId)
+        (currentKey &&
+          config.projectMounts[currentKey]?.some((rep) => rep.environmentId === environmentId))
       )
         continue;
-      const identity = sessionIdentity(logicalKey, environmentId);
-      if (
-        sessions.some(
-          (session) =>
-            session.name === identity.name &&
-            session.labels?.["t3-logical"] === identity.logicalHash &&
-            session.labels?.["t3-env"] === identity.environmentTag,
-        )
-      ) {
-        yield* locks.withLock(refKey(logicalKey, environmentId), runner.terminate(identity.name));
-        terminated.add(identity.name);
-        known.delete(refKey(logicalKey, environmentId));
+      for (const syncKey of [
+        logicalKey,
+        ...Object.keys(config.projectAliases).filter(
+          (alias) => config.projectAliases[alias] === logicalKey,
+        ),
+      ]) {
+        const identity = sessionIdentity(syncKey, environmentId);
+        if (
+          !terminated.has(identity.name) &&
+          sessions.some(
+            (session) =>
+              session.name === identity.name &&
+              session.labels?.["t3-logical"] === identity.logicalHash &&
+              session.labels?.["t3-env"] === identity.environmentTag,
+          )
+        ) {
+          yield* locks.withLock(refKey(logicalKey, environmentId), runner.terminate(identity.name));
+          terminated.add(identity.name);
+          known.delete(refKey(logicalKey, environmentId));
+        }
       }
     }
     for (const [key, name] of known)
@@ -463,10 +612,22 @@ const make = Effect.gen(function* () {
         !entries.some(
           ({ logicalKey, rep }) =>
             key === refKey(logicalKey, rep.environmentId) &&
+            rep.transport === "mutagen" &&
             replicaDriver(config, rep) === mesh.environmentId,
         )
       ) {
-        if (sessions.some((session) => session.name === name))
+        if (
+          entries.some(
+            ({ logicalKey, rep }) =>
+              rep.transport === "mutagen" &&
+              replicaDriver(config, rep) === mesh.environmentId &&
+              sessionIdentity(rep.syncKey ?? logicalKey, rep.environmentId).name === name,
+          )
+        ) {
+          known.delete(key);
+          continue;
+        }
+        if (!terminated.has(name) && sessions.some((session) => session.name === name))
           yield* locks.withLock(key, runner.terminate(name));
         terminated.add(name);
         known.delete(key);
@@ -479,7 +640,12 @@ const make = Effect.gen(function* () {
       rows.filter((row) => !terminated.has(row.sessionName ?? "")),
     );
     const expected = new Set(
-      entries.map(({ logicalKey, rep }) => sessionIdentity(logicalKey, rep.environmentId).name),
+      entries
+        .filter(({ rep }) => rep.transport === "mutagen")
+        .map(
+          ({ logicalKey, rep }) =>
+            sessionIdentity(rep.syncKey ?? logicalKey, rep.environmentId).name,
+        ),
     );
     yield* Ref.update(statuses, (rows) =>
       rows.filter(
@@ -571,6 +737,11 @@ const make = Effect.gen(function* () {
     name: string,
   ) {
     const config = (yield* mesh.read).config;
+    const visited = new Set<string>();
+    while (config.projectAliases[name] && !visited.has(name)) {
+      visited.add(name);
+      name = config.projectAliases[name]!;
+    }
     if (config.projectMounts[name]) return { logicalKey: name, config };
     const titled = Object.entries(config.projectTitles ?? {}).filter(
       ([id, title]) => config.projectMounts[id] && title.toLowerCase() === name.toLowerCase(),
@@ -600,7 +771,8 @@ const make = Effect.gen(function* () {
           (rep.projectId === project.id || rep.path === project.workspaceRoot),
       ),
     );
-    const logicalKey = existingKey ?? `${mesh.environmentId}:${project.workspaceRoot}`;
+    const logicalKey =
+      existingKey ?? opaqueProjectId(`${mesh.environmentId}:${project.workspaceRoot}`);
     return { logicalKey, config, project };
   });
   const waitForProject = Effect.fn("ProjectReplicaService.waitForProject")(function* (
@@ -643,7 +815,8 @@ const make = Effect.gen(function* () {
     return Option.isSome(result) ? Option.getOrUndefined(result.value) : undefined;
   });
   const place = Effect.fn("ProjectReplicaService.place")(function* (input: ProjectPlaceInput) {
-    if (!(yield* readSettings).replicasEnabled)
+    const replicaSettings = yield* readSettings;
+    if (!replicaSettings.replicasEnabled)
       return yield* new ReplicaError({ reason: "disabled", message: "Replicas are disabled." });
     const resolved = yield* resolveProject(input.project);
     const yieldDate = yield* DateTime.now;
@@ -652,6 +825,12 @@ const make = Effect.gen(function* () {
       Effect.gen(function* () {
         let config = (yield* mesh.read).config;
         const logicalKey = resolved.logicalKey;
+        if (!config.projectTitles[logicalKey] && resolved.project) {
+          config = (yield* mesh.edit((current) => ({
+            ...current,
+            projectTitles: { ...current.projectTitles, [logicalKey]: resolved.project.title },
+          }))).config;
+        }
         if (input.action === "remove") {
           yield* mesh.edit((current) => {
             const projectMounts = { ...current.projectMounts };
@@ -691,7 +870,13 @@ const make = Effect.gen(function* () {
         let rep = config.projectMounts[logicalKey]?.find(
           (entry) => entry.environmentId === environmentId,
         );
-        if (!rep || (input.role && rep.role !== input.role)) {
+        if (
+          !rep ||
+          (input.role && rep.role !== input.role) ||
+          input.path !== undefined ||
+          input.transport !== undefined ||
+          input.ignores !== undefined
+        ) {
           const sourceId = input.source
             ? yield* resolveMachine(config, input.source)
             : config.projectMounts[logicalKey]?.find((entry) => entry.role === "primary")
@@ -704,7 +889,7 @@ const make = Effect.gen(function* () {
               reason: "not_found",
               message: "A source primary representation is required.",
             });
-          const role = input.role ?? "replica";
+          const role = input.role ?? rep?.role ?? "replica";
           if (role === "replica" && source.environmentId === environmentId)
             return yield* new ReplicaError({
               reason: "unreachable",
@@ -715,14 +900,63 @@ const make = Effect.gen(function* () {
               reason: "storage",
               message: "Pass the existing checkout path when adding a primary.",
             });
-          const root = rep?.path ?? input.path ?? source.path;
-          let projectId = rep?.projectId;
-          let allocated = rep?.pathAllocated ?? false;
+          const transport =
+            role === "primary" ? "git" : (input.transport ?? rep?.transport ?? "mutagen");
+          if (transport !== "git" && transport !== "mutagen" && !input.path && !rep)
+            return yield* new ReplicaError({
+              reason: "storage",
+              message:
+                "Choose the existing external folder using --path for manual or SSHFS copies.",
+            });
+          const root = input.path ?? rep?.path ?? source.path;
+          const changedPath = rep?.path !== root;
+          const explicitPath = input.path !== undefined || rep?.explicitPath === true;
+          if (
+            Object.entries(config.projectMounts).some(
+              ([key, reps]) =>
+                key !== logicalKey &&
+                reps.some(
+                  (entry) =>
+                    entry.environmentId === environmentId &&
+                    normalizeProjectPathForComparison(entry.path) ===
+                      normalizeProjectPathForComparison(root),
+                ),
+            )
+          )
+            return yield* new ReplicaError({
+              reason: "storage",
+              message:
+                "The requested folder belongs to another project. Choose another folder or merge the projects.",
+            });
+          let projectId = changedPath ? undefined : rep?.projectId;
+          let allocated = changedPath ? false : (rep?.pathAllocated ?? false);
           let destination = root;
+          let validated = !changedPath && (rep?.pathValidated ?? Boolean(rep?.projectId));
           if (environmentId === mesh.environmentId) {
-            if (role === "replica" && !rep) {
-              destination = yield* paths.allocate(root);
+            if (role === "replica" && (changedPath || !allocated)) {
+              destination = explicitPath
+                ? yield* paths.prepareExplicit(root)
+                : yield* paths.allocate(root);
               allocated = true;
+            }
+            if (role === "replica" && explicitPath && !validated) {
+              const sourceRoute =
+                config.machines[mesh.environmentId]?.reach?.[source.environmentId];
+              if (sourceRoute) {
+                yield* runner.assertReplicaPath({
+                  source: {
+                    path: source.path,
+                    environmentId: source.environmentId,
+                    route: sourceRoute,
+                  },
+                  destination: { path: destination, environmentId },
+                  ignores: [
+                    ...replicaSettings.replicaIgnores,
+                    ...(input.ignores ?? rep?.ignores ?? []),
+                  ],
+                });
+                validated = true;
+              }
             }
             if (role === "primary") {
               const existing = yield* projects
@@ -750,7 +984,12 @@ const make = Effect.gen(function* () {
             pathAllocated: allocated,
             ...(projectId ? { projectId } : {}),
             role,
-            transport: role === "primary" ? "git" : "mutagen",
+            transport,
+            ...(rep?.syncKey ? { syncKey: rep.syncKey } : {}),
+            ...(explicitPath ? { explicitPath: true, pathValidated: validated } : {}),
+            ...(input.ignores !== undefined || rep?.ignores
+              ? { ignores: input.ignores ?? rep?.ignores ?? [] }
+              : {}),
             ...(role === "replica" ? { source: source.environmentId } : {}),
             createdAt: DateTime.formatIso(yieldDate),
           };
@@ -782,6 +1021,138 @@ const make = Effect.gen(function* () {
   });
 
   return ProjectReplicaService.of({
+    unmanaged: runner.foreignList.pipe(
+      Effect.map((sessions) =>
+        sessions
+          .filter((session) => !session.labels?.["t3-logical"])
+          .map((session) => ({
+            identifier: session.identifier,
+            ...(session.name ? { name: session.name } : {}),
+            alpha: session.alpha,
+            beta: session.beta,
+            ignores: session.ignore?.paths ?? [],
+          })),
+      ),
+    ),
+    adopt: Effect.fn("ProjectReplicaService.adopt")((input) =>
+      reconciliationLock.withPermit(
+        placementLock
+          .withPermit(
+            Effect.gen(function* () {
+              if (!(yield* readSettings).replicasEnabled)
+                return yield* new ReplicaError({
+                  reason: "disabled",
+                  message: "Replicas are disabled.",
+                });
+              const resolved = yield* resolveProject(input.project);
+              const { config, logicalKey } = resolved;
+              const sessions = yield* runner.foreignList;
+              const matches = sessions.filter(
+                (session) => session.identifier === input.session || session.name === input.session,
+              );
+              if (matches.length !== 1)
+                return yield* new ReplicaError({
+                  reason: "not_found",
+                  message: "Choose one existing Mutagen session by its name.",
+                });
+              const session = matches[0]!;
+              const reps = config.projectMounts[logicalKey] ?? [];
+              const primary: SidebarProjectMount | undefined = resolved.project
+                ? {
+                    environmentId: mesh.environmentId,
+                    path: resolved.project.workspaceRoot,
+                    projectId: resolved.project.id,
+                    role: "primary",
+                    transport: "git",
+                    createdAt: "",
+                  }
+                : undefined;
+              const allReps = reps.length ? reps : primary ? [primary] : [];
+              const target = input.machine
+                ? yield* resolveMachine(config, input.machine)
+                : undefined;
+              const sides = adoptionSides(config, mesh.environmentId, allReps, session, target);
+              if (!sides)
+                return yield* new ReplicaError({
+                  reason: "unreachable",
+                  message:
+                    "This session must connect a primary folder of this project to another linked machine. Add its SSH route in Settings › Mesh, or choose the destination machine.",
+                });
+              for (const [other, mounts] of Object.entries(config.projectMounts))
+                if (
+                  other !== logicalKey &&
+                  mounts.some(
+                    (rep) =>
+                      rep.environmentId === sides.machine &&
+                      normalizeProjectPathForComparison(rep.path) ===
+                        normalizeProjectPathForComparison(sides.destination.path),
+                  )
+                )
+                  return yield* new ReplicaError({
+                    reason: "storage",
+                    message: "This folder already belongs to another project.",
+                  });
+              const existing = allReps.find((rep) => rep.environmentId === sides.machine);
+              if (existing?.adoption?.sessionIdentifier === session.identifier)
+                return { logicalKey, representation: existing, ready: false };
+              if (existing?.adoption)
+                return yield* new ReplicaError({
+                  reason: "storage",
+                  message: "Another sync session is already being adopted for this copy.",
+                });
+              const representation: SidebarProjectMount = {
+                environmentId: sides.machine,
+                path: sides.destination.path,
+                role: "replica",
+                transport: "mutagen",
+                source: sides.source.environmentId,
+                ...(existing?.path === sides.destination.path && existing.projectId
+                  ? { projectId: existing.projectId }
+                  : {}),
+                pathAllocated: true,
+                explicitPath: true,
+                pathValidated: true,
+                ignores: session.ignore?.paths ?? [],
+                createdAt: DateTime.formatIso(yield* DateTime.now),
+                adoption: {
+                  environmentId: mesh.environmentId,
+                  sessionIdentifier: session.identifier,
+                  paused: false,
+                },
+              };
+              yield* mesh.edit((current) => ({
+                ...current,
+                projectTitles: {
+                  ...current.projectTitles,
+                  ...(!current.projectTitles[logicalKey] && resolved.project
+                    ? { [logicalKey]: resolved.project.title }
+                    : {}),
+                },
+                projectMounts: {
+                  ...current.projectMounts,
+                  [logicalKey]: [
+                    ...allReps.filter((rep) => rep.environmentId !== sides.machine),
+                    representation,
+                  ],
+                },
+                projectMountStatus: {
+                  ...current.projectMountStatus,
+                  [logicalKey]: {
+                    ...current.projectMountStatus[logicalKey],
+                    [sides.machine]: {
+                      state: "pending",
+                      updatedAt: "",
+                      message: "Taking over existing sync…",
+                    },
+                  },
+                },
+              }));
+              return { logicalKey, representation, ready: false };
+            }),
+          )
+          .pipe(Effect.catchTags({ MeshLayoutError: asReplicaError })),
+      ),
+    ),
     place: Effect.fn("ProjectReplicaService.placeAndWait")(
       function* (input) {
         const result = yield* place(input);
@@ -797,10 +1168,11 @@ const make = Effect.gen(function* () {
     ),
     waitForProject,
     machines: Effect.fn("ProjectReplicaService.machines")(function* (project) {
-      const { logicalKey, config } = yield* resolveProject(project);
+      const { logicalKey, config, project: localProject } = yield* resolveProject(project);
       const live = yield* Ref.get(statuses);
       return {
         logicalKey,
+        title: config.projectTitles[logicalKey] || localProject?.title || "Untitled project",
         ...(meshAuthorityOf(config) ? { authorityEnvironmentId: meshAuthorityOf(config)! } : {}),
         representations: (config.projectMounts[logicalKey] ?? []).map((rep) => {
           const status = config.projectMountStatus[logicalKey]?.[rep.environmentId];
@@ -811,7 +1183,7 @@ const make = Effect.gen(function* () {
           const driver = replicaDriver(config, rep);
           return {
             ...rep,
-            machine: machine?.label ?? rep.environmentId,
+            machine: machine?.label ?? machine?.tag ?? "Unknown machine",
             ...(machine?.tag ? { tag: machine.tag } : {}),
             ...(driver ? { driverEnvironmentId: driver } : {}),
             ...(status ? { status } : {}),
@@ -863,7 +1235,7 @@ const make = Effect.gen(function* () {
           reason: "unreachable",
           message: "Retry on the server driving this replica.",
         });
-      const name = sessionIdentity(input.logicalKey, input.environmentId).name;
+      const name = sessionIdentity(rep.syncKey ?? input.logicalKey, input.environmentId).name;
       yield* locks.withLock(
         refKey(input.logicalKey, input.environmentId),
         Effect.gen(function* () {

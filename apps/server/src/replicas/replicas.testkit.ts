@@ -55,6 +55,8 @@ export const makeReplicaHarness = (
       : { replica: { reach: { source: { ssh: "source" } } } },
   });
   let sessions: ReadonlyArray<Runner.MutagenSession> = [];
+  const foreign: { sessions: readonly Runner.MutagenSession[] } = { sessions: [] };
+  const foreignActions: string[] = [];
   const created: Runner.CreateSession[] = [];
   const preserved: Parameters<Runner.MutagenRunner["Service"]["preserveConflicts"]>[0][] = [];
   const terminated: string[] = [];
@@ -63,6 +65,18 @@ export const makeReplicaHarness = (
   const runner = Layer.succeed(
     Runner.MutagenRunner,
     Runner.MutagenRunner.of({
+      foreignList: Effect.sync(() => foreign.sessions),
+      foreignAction: (action, identifier) =>
+        Effect.sync(() => {
+          foreignActions.push(`${action}:${identifier}`);
+          foreign.sessions =
+            action === "terminate"
+              ? foreign.sessions.filter((session) => session.identifier !== identifier)
+              : foreign.sessions.map((session) =>
+                  session.identifier === identifier ? { ...session, paused: true } : session,
+                );
+        }),
+      assertReplicaPath: () => Effect.void,
       preserveConflicts: (input) =>
         Effect.sync(() => {
           preserved.push(input);
@@ -83,8 +97,8 @@ export const makeReplicaHarness = (
                   paused: false,
                   status: "scanning",
                   ignore: { paths: input.ignores },
-                  alpha: { path: input.alpha },
-                  beta: { path: input.beta },
+                  alpha: { path: input.alpha.replace(/^[^/:]+:(?=\/)/, "") },
+                  beta: { path: input.beta.replace(/^[^/:]+:(?=\/)/, "") },
                 },
               ];
             }),
@@ -168,6 +182,8 @@ export const makeReplicaHarness = (
   return {
     layer,
     created,
+    foreign,
+    foreignActions,
     preserved,
     terminated,
     registrations: () => registrations,

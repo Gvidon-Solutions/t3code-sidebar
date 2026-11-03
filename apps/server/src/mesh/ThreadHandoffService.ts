@@ -26,6 +26,7 @@ import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as Hex from "effect/encoding/Hex";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
+import { threadProjectTarget } from "@t3tools/shared/meshLayout";
 import { threadLinkHref } from "@t3tools/shared/threadLinks";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import { callRouted } from "./MeshRouting.ts";
@@ -92,9 +93,7 @@ export const layer = Layer.effect(
     const locks = yield* KeyedLock.make<string>();
     const self = EnvironmentId.make(mesh.environmentId);
     const tagOf = (env: string, config: import("./MeshLayoutService.ts").MeshLayoutSnapshot) =>
-      config.config.machines[env]?.tag ??
-      config.config.machines[env]?.label ??
-      env.slice(0, 2).toUpperCase();
+      config.config.machines[env]?.label ?? config.config.machines[env]?.tag ?? "another machine";
     const get = (id: ThreadId) =>
       orchestrator
         .getThreadRecords(id, ["messages", "turnItems", "runs", "attempts", "runtimeRequests"])
@@ -391,8 +390,40 @@ export const layer = Layer.effect(
           }
           if (threadHasUnfinishedWork(projection))
             return yield* invalid("Finish or stop the running turn before moving this thread.");
-          if (!input.targetEnvironmentId || input.targetEnvironmentId === self) {
-            if (!input.projectId) return yield* invalid("Choose a target project.");
+          let projectId = input.projectId;
+          let targetEnvironmentId = input.targetEnvironmentId;
+          if (
+            targetEnvironmentId &&
+            targetEnvironmentId !== self &&
+            previous?.phase !== "completed" &&
+            (projectId || input.createCopy)
+          ) {
+            const snapshot = yield* mesh.read;
+            const target = threadProjectTarget(snapshot.config, self, {
+              environmentId: targetEnvironmentId,
+              projectId,
+              logicalKey: input.logicalKey,
+            });
+            if (target.local?.projectId) {
+              projectId = ProjectId.make(target.local.projectId);
+              targetEnvironmentId = self;
+            } else if (input.createCopy) {
+              if (!target.logicalKey)
+                return yield* invalid("Choose a project with an existing copy first.");
+              const replicas = yield* replicaRuntime.get.pipe(Effect.mapError(failure));
+              const placed = yield* replicas
+                .place({ project: target.logicalKey, machine: self, wait: 120 })
+                .pipe(Effect.mapError(failure));
+              if (!placed.ready || !placed.representation?.projectId)
+                return yield* invalid(
+                  "The copy is still being prepared. Try moving here again when it is ready.",
+                );
+              projectId = ProjectId.make(placed.representation.projectId);
+              targetEnvironmentId = self;
+            }
+          }
+          if (!targetEnvironmentId || targetEnvironmentId === self) {
+            if (!projectId) return yield* invalid("Choose a target project.");
             if (input.modelSelection) {
               const selection = input.modelSelection;
               const available = yield* providers.getProviders;
@@ -410,7 +441,7 @@ export const layer = Layer.effect(
               type: "thread.move",
               commandId,
               threadId: input.threadId,
-              projectId: input.projectId,
+              projectId,
               ...(input.modelSelection ? { modelSelection: input.modelSelection } : {}),
             });
             return {
@@ -425,7 +456,7 @@ export const layer = Layer.effect(
           if (!(yield* links.enabled))
             return yield* invalid("Enable mesh links before moving to another machine.");
           if (previous?.phase === "completed") {
-            if (previous.environmentId !== input.targetEnvironmentId)
+            if (previous.environmentId !== targetEnvironmentId)
               return yield* invalid("This thread has already moved to another machine.");
             if (input.message)
               yield* remote(
@@ -450,7 +481,7 @@ export const layer = Layer.effect(
           let projectTitle: string;
           if (input.projectId) {
             const prepared = yield* remote(
-              input.targetEnvironmentId,
+              targetEnvironmentId,
               {
                 action: "prepare",
                 handoffId: String(commandId),
@@ -473,7 +504,7 @@ export const layer = Layer.effect(
             const placed = yield* replicas
               .place({
                 project: snapshot.config.projectMounts[logicalKey] ? logicalKey : selected.value.id,
-                machine: input.targetEnvironmentId,
+                machine: targetEnvironmentId,
                 wait: 600,
               })
               .pipe(Effect.mapError(failure));
@@ -482,10 +513,7 @@ export const layer = Layer.effect(
             logicalKey = placed.logicalKey;
             projectTitle = snapshot.config.projectTitles[logicalKey] ?? selected.value.title;
           }
-          if (
-            previous?.phase === "preparing" &&
-            previous.environmentId !== input.targetEnvironmentId
-          )
+          if (previous?.phase === "preparing" && previous.environmentId !== targetEnvironmentId)
             return yield* invalid("Retry the in-progress move to its original destination.");
           const requestedId = `handoff-${Hex.encode(yield* crypto.digest("SHA-256", new TextEncoder().encode(`${self}:${input.threadId}:${commandId}`)).pipe(Effect.mapError(() => invalid("Cannot identify move."))))}`;
           if (previous?.phase === "undone" && previous.id === requestedId)
@@ -495,10 +523,10 @@ export const layer = Layer.effect(
           const state: ThreadHandoffState = {
             id,
             phase: "preparing",
-            environmentId: input.targetEnvironmentId,
+            environmentId: targetEnvironmentId,
             threadId: ThreadId.make("pending"),
             link: "",
-            tag: tagOf(input.targetEnvironmentId, config),
+            tag: tagOf(targetEnvironmentId, config),
             undoUntil: 0,
           };
           yield* record(input.threadId, state);
@@ -540,7 +568,7 @@ export const layer = Layer.effect(
             );
             for (let offset = 0; offset < Math.max(1, bytes.length); offset += CHUNK) {
               const uploaded = yield* remote(
-                input.targetEnvironmentId,
+                targetEnvironmentId,
                 {
                   action: "upload",
                   handoffId: id,
@@ -579,7 +607,7 @@ export const layer = Layer.effect(
             })),
           };
           const received = yield* remote(
-            input.targetEnvironmentId,
+            targetEnvironmentId,
             { action: "receive", bundle },
             limits,
           );
@@ -589,7 +617,7 @@ export const layer = Layer.effect(
             ...state,
             phase: "completed",
             threadId: received.threadId,
-            link: link(input.targetEnvironmentId, received.threadId),
+            link: link(targetEnvironmentId, received.threadId),
             undoUntil: (yield* Clock.currentTimeMillis) + 10_000,
           };
           yield* record(
@@ -599,7 +627,7 @@ export const layer = Layer.effect(
           );
           if (input.message)
             yield* remote(
-              input.targetEnvironmentId,
+              targetEnvironmentId,
               {
                 action: "followup",
                 handoffId: id,

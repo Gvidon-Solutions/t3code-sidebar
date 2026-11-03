@@ -8585,15 +8585,15 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
                   })),
                 })),
               ),
-            place: () =>
+            place: (input) =>
               Effect.gen(function* () {
                 placed++;
                 if (!placementReady)
                   return { logicalKey: "logical", representation: null, ready: false };
                 const rep = {
-                  environmentId: "B",
-                  projectId: targetProject,
-                  path: `/tmp/${targetProject}`,
+                  environmentId: input.machine,
+                  projectId: input.machine === "A" ? sourceProject : targetProject,
+                  path: `/tmp/${input.machine === "A" ? sourceProject : targetProject}`,
                   role: "primary" as const,
                   transport: "git" as const,
                   createdAt: "",
@@ -8602,7 +8602,9 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
                   ...current,
                   projectMounts: {
                     logical: [
-                      ...current.projectMounts.logical!.filter((rep) => rep.environmentId !== "B"),
+                      ...current.projectMounts.logical!.filter(
+                        (rep) => rep.environmentId !== input.machine,
+                      ),
                       rep,
                     ],
                   },
@@ -8733,6 +8735,46 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
           (yield* orchestrator.getThreadProjection(direct.threadId)).thread.modelSelection,
           modelSelection,
         );
+        const localChoice = yield* source.move(
+          {
+            threadId: sourceId,
+            projectId: targetProject,
+            targetEnvironmentId: EnvironmentId.make("B"),
+          },
+          limits,
+        );
+        assert.equal(localChoice.environmentId, "A");
+        assert.isNull(localChoice.handoffId);
+        assert.equal(
+          (yield* orchestrator.getThreadProjection(sourceId)).thread.projectId,
+          sourceProject,
+        );
+        yield* Ref.update(config, (current) => ({
+          ...current,
+          projectMounts: {
+            logical: current.projectMounts.logical!.filter((rep) => rep.environmentId !== "A"),
+          },
+        }));
+        placementReady = false;
+        const copyInput = {
+          threadId: sourceId,
+          projectId: targetProject,
+          targetEnvironmentId: EnvironmentId.make("B"),
+          createCopy: true,
+        };
+        assert.include(
+          (yield* source.move(copyInput, limits).pipe(Effect.flip)).message,
+          "copy is still being prepared",
+        );
+        assert.isNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
+        placementReady = true;
+        const copied = yield* source.move(copyInput, limits);
+        assert.equal(copied.environmentId, "A");
+        assert.isNull(copied.handoffId);
+        assert.equal(
+          (yield* orchestrator.getThreadProjection(sourceId)).thread.projectId,
+          sourceProject,
+        );
         const input = {
           commandId: CommandId.make("L-move"),
           threadId: sourceId,
@@ -8783,6 +8825,12 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
         assert.isNotNull(
           (yield* orchestrator.getThreadProjection(moved.threadId)).thread.archivedAt,
         );
+        yield* Ref.update(config, (current) => ({
+          ...current,
+          projectMounts: {
+            logical: current.projectMounts.logical!.filter((rep) => rep.environmentId !== "A"),
+          },
+        }));
         const explicit = yield* source.move(
           { ...input, commandId: CommandId.make("L-explicit-target"), projectId: targetProject },
           limits,

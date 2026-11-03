@@ -61,6 +61,12 @@ it.effect(
             environmentId: "replica",
           }),
         ).toMatchObject({ logicalKey: "repo", state: "mounting" });
+        expect(clientRpcRequiredScopes(MESH_WS_METHODS.replicasAdopt, {})).toEqual([
+          AuthOrchestrationOperateScope,
+        ]);
+        expect(clientRpcRequiredScopes(MESH_WS_METHODS.replicasUnmanaged, {})).toEqual([
+          AuthOrchestrationOperateScope,
+        ]);
         expect(clientRpcRequiredScopes(MESH_WS_METHODS.replicasRetry, {})).toEqual([
           AuthOrchestrationOperateScope,
         ]);

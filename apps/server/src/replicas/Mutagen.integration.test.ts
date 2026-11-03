@@ -37,6 +37,22 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         const runner = yield* MutagenRunner.MutagenRunner;
         yield* Effect.addFinalizer(() => runner.daemon("stop").pipe(Effect.orDie));
         yield* runner.daemon("start");
+        const comparison = {
+          source: { environmentId: "alpha", path: alpha },
+          destination: { environmentId: "beta", path: beta },
+          ignores: ["node_modules", "*.tmp"],
+        };
+        yield* runner.assertReplicaPath(comparison);
+        yield* fs.writeFileString(path.join(beta, "hello"), "different");
+        expect((yield* runner.assertReplicaPath(comparison).pipe(Effect.flip)).message).toContain(
+          "not empty and differs",
+        );
+        expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe("different");
+        yield* fs.writeFileString(path.join(beta, "hello"), "alpha");
+        yield* fs.writeFileString(path.join(beta, "ignored.tmp"), "ignored difference");
+        yield* runner.assertReplicaPath(comparison);
+        yield* fs.remove(path.join(beta, "ignored.tmp"));
+        yield* fs.remove(path.join(beta, "hello"));
         yield* runner.create({
           name: "t3-integration",
           logicalHash: "integration",

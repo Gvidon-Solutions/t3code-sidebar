@@ -1,3 +1,4 @@
+import { meshMachineLabel } from "@t3tools/shared/meshLayout";
 import { replicaContextNote, threadContextNote } from "../replicas/ReplicaInstructions.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
@@ -1547,7 +1548,11 @@ export const layer: Layer.Layer<
       const replicaNote = Option.isSome(mesh)
         ? threadContextNote(
             projection.thread.id,
-            Option.isSome(mesh) ? mesh.value.environmentId : "local",
+            meshMachineLabel(
+              (yield* mesh.value.read).config,
+              mesh.value.environmentId,
+              "this machine",
+            ),
             replicaDetail,
           )
         : "";
