@@ -36,8 +36,12 @@ it.effect(
       );
       const service = yield* MeshLayoutService.pipe(Effect.provide(first));
       expect((yield* service.read).config.workspaces).toEqual([{ id: "main", name: "main" }]);
+      expect((yield* service.read).config.meshWriters).toEqual(["A"]);
       const settings = yield* Settings.ServerSettingsService.pipe(Effect.provide(context));
       yield* service.apply({ "machine/new": { v: { label: "new" }, h: "9999999999000.00000.B" } });
+      expect((yield* service.read).config.meshWriters).toEqual(["A"]);
+      yield* service.apply({ "writer/Z": { v: true, h: "0000000000000.00000.Z" } });
+      expect((yield* service.read).config.meshWriters).toEqual(["A", "Z"]);
       const sql = yield* SqlClient.SqlClient.pipe(Effect.provide(context));
       expect((yield* service.nextHlc) > "9999999999000.00000.B").toBe(true);
       const watermark = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
