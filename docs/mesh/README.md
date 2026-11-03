@@ -113,8 +113,9 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
   `round1.sh` (layout, links, files, old clients), `round2.sh` (replicas on real Mutagen, t3ctl),
   `round3.sh` (crashes, partitions, authority). They must stay green.
-- Agent behaviour eval: `docs/mesh-agent-eval.md` (8 voice-style requests × harnesses on an
-  isolated HOME); rerun after changing SKILL.md or GLOBAL.md.
+- Agent behaviour eval: `docs/mesh-agent-eval.md` records the earlier bed methodology. After
+  changing SKILL.md or GLOBAL.md, run model-level routing cases using customer-defined machine
+  identities/aliases and configured models; do not make old owner-name translations part of the product contract.
 
 ## Operating the owner's live machines (installation example)
 
