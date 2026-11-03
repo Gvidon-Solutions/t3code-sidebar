@@ -173,6 +173,23 @@ describe("buildProjectGroups", () => {
       expect(
         buildProjectGroups({ projects, settings: settings(mode), groupScratchProjects: true }),
       ).toHaveLength(1);
+      const layout = {
+        ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+        projectAliases: Object.fromEntries(
+          projects.map((project, index) => [
+            derivePhysicalProjectKey(project),
+            `old-scratch-${index}`,
+          ]),
+        ),
+      };
+      expect(
+        buildProjectGroups({
+          projects,
+          settings: settings(mode),
+          groupScratchProjects: true,
+          layout,
+        }),
+      ).toHaveLength(1);
     },
   );
 
