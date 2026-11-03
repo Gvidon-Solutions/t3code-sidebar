@@ -125,12 +125,29 @@ log "transferring image $IMAGE to the VPS"
 docker save "$IMAGE" | gzip -1 | vps_ssh 'gunzip | docker load'
 scp -q -F "$VPS_SSH_CONFIG" "$MESH_DIR/compose.yaml" "$VPS_HOST:$VPS_DIR/compose.yaml"
 
+log "preserving VPS temporary project folders across container recreation"
+vps_ssh 'bash -s' <<EOF
+set -euo pipefail
+install -d -m 1777 '$VPS_DIR/tmp'
+if docker container inspect t3-mesh-e2e >/dev/null 2>&1; then
+  docker exec t3-mesh-e2e sh -c 'printf "%s\\n" "$COMMIT" > /tmp/N-deploy-$COMMIT_SHORT'
+  mounted=\$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/tmp"}}{{.Source}}{{end}}{{end}}' t3-mesh-e2e)
+  if [ "\$mounted" != '$VPS_DIR/tmp' ]; then
+    docker stop t3-mesh-e2e >/dev/null
+    docker cp -a t3-mesh-e2e:/tmp/. '$VPS_DIR/tmp/'
+  fi
+else
+  printf '%s\n' '$COMMIT' > '$VPS_DIR/tmp/N-deploy-$COMMIT_SHORT'
+fi
+EOF
+
 log "starting the VPS container"
 vps_ssh "cd '$VPS_DIR' && docker compose up -d --force-recreate" >/dev/null
 if ! vps_ssh "for i in \$(seq 1 60); do curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:$VPS_PORT/.well-known/t3/environment 2>/dev/null && exit 0; sleep 1; done; exit 1"; then
   vps_ssh "cd '$VPS_DIR' && docker compose logs --tail 60"
   die "VPS test server did not become healthy"
 fi
+vps_ssh "docker exec t3-mesh-e2e grep -Fx '$COMMIT' '/tmp/N-deploy-$COMMIT_SHORT'" >/dev/null
 
 # ---------------------------------------------------------------------------
 # 4. gor: retire the separate test server, back up userdata, then switch the

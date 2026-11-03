@@ -10,6 +10,7 @@ services:
       - "127.0.0.1:3791:3791"
     volumes:
       - /opt/t3-mesh-e2e/home:/home/t3
+      - /opt/t3-mesh-e2e/tmp:/tmp
     environment:
       TZ: Europe/Moscow
       MUTAGEN_DATA_DIRECTORY: /home/t3/.mutagen
