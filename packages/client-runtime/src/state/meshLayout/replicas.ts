@@ -370,7 +370,7 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
         ? `Mounting on ${input.targetLabel}…`
         : `Mounting on ${input.targetLabel}… ${Math.round(input.progress * 100)}%`;
     case "watching":
-      return input.message?.startsWith("Resolved ") ? input.message : "Synced";
+      return input.message || "Synced";
     case "conflict":
       return input.conflicts === 1 ? "1 conflict" : `${input.conflicts} conflicts`;
     case "paused":
@@ -387,6 +387,14 @@ export function createReplicaStatusAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
 ) {
   return {
+    unmanaged: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:replicas:unmanaged",
+      tag: MESH_WS_METHODS.replicasUnmanaged,
+    }),
+    adopt: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:replicas:adopt",
+      tag: MESH_WS_METHODS.replicasAdopt,
+    }),
     live: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:replicas:status",
       tag: MESH_WS_METHODS.replicasStatus,

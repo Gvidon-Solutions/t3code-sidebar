@@ -1,3 +1,4 @@
+import { AdoptReplicaAction } from "./AdoptReplicaAction";
 import { EnvironmentId } from "@t3tools/contracts";
 import { openOpenFileDialog } from "../files/openFileDialogState";
 import {
@@ -138,6 +139,12 @@ export function MachinesDialog(props: {
                         >
                           Open copies
                         </Button>
+                      ) : null}
+                      {rep.role === "primary" ? (
+                        <AdoptReplicaAction
+                          environmentId={rep.environmentId}
+                          logicalKey={props.logicalKey}
+                        />
                       ) : null}
                       {rep.role === "replica" ? (
                         <Button

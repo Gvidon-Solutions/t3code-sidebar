@@ -9,7 +9,10 @@ import { movingThread } from "./moveThreadState";
 import { useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { moveThreadWithConfirmation } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  localThreadMoveTarget,
+  moveThreadWithConfirmation,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { Sheet } from "../../components/ui/Sheet";
 import { AppText } from "../../components/ui/AppText";
@@ -76,6 +79,26 @@ export function MoveThreadSheet() {
         runtimeMode={thread.runtimeMode}
         machine={machineTag(config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG, target.environmentId)}
         crossMachine={thread.environmentId !== target.environmentId}
+        copyHere={
+          thread.environmentId !== target.environmentId
+            ? {
+                label: `Create a copy of ${target.title} on ${machineTag(config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG, thread.environmentId)} and move here`,
+                run: async () => {
+                  const result = await move({
+                    environmentId: thread.environmentId,
+                    input: {
+                      threadId: thread.id,
+                      projectId: target.id,
+                      targetEnvironmentId: target.environmentId,
+                      createCopy: true,
+                    },
+                  });
+                  if (result._tag === "Success") close();
+                  else Dialog.alert("Could not move thread", String(Cause.squash(result.cause)));
+                },
+              }
+            : undefined
+        }
         onClose={() => setTarget(null)}
         onMove={(modelSelection) => {
           void moveThreadWithConfirmation({
@@ -114,7 +137,16 @@ export function MoveThreadSheet() {
             <Pressable
               key={`${project.environmentId}:${project.id}`}
               className="p-4"
-              onPress={() => setTarget(project)}
+              onPress={() =>
+                setTarget(
+                  localThreadMoveTarget(
+                    config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+                    thread.environmentId,
+                    project,
+                    projects,
+                  ),
+                )
+              }
             >
               <AppText>
                 {mobileMoveProjectLabel(project, config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG)}

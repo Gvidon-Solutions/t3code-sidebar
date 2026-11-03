@@ -1,3 +1,4 @@
+import { AdoptReplicaAction } from "./AdoptReplicaAction";
 import { useNavigation } from "@react-navigation/native";
 import {
   representationRow,
@@ -91,6 +92,12 @@ export function MachinesSheet(props: {
               className="gap-2 rounded-2xl border border-border bg-grouped-card p-3"
               testID={`machine-representation-${rep.environmentId}`}
             >
+              {rep.role === "primary" ? (
+                <AdoptReplicaAction
+                  environmentId={rep.environmentId}
+                  logicalKey={props.projectKey}
+                />
+              ) : null}
               {copies && !row.text.startsWith("Resolved ") ? (
                 <Text className="text-sm text-foreground-muted">Last automatic resolution</Text>
               ) : null}

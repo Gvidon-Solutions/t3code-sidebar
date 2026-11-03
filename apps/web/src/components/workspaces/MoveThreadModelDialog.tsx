@@ -16,6 +16,7 @@ export function MoveThreadModelDialog(props: {
   readonly current: ModelSelection;
   readonly machine: string;
   readonly crossMachine: boolean;
+  readonly copyHere?: { readonly label: string; readonly run: () => Promise<void> } | undefined;
   readonly onMove: (selection: ModelSelection) => void;
   readonly onClose: () => void;
 }) {
@@ -37,6 +38,7 @@ export function MoveThreadModelDialog(props: {
     settings.projectSettingsOverrides[props.projectId]?.defaultModelSelection ??
       settings.defaultModelSelection,
   );
+  const [copying, setCopying] = useState(false);
   const [chosen, setChosen] = useState<ModelSelection | null>(null);
   const selection = chosen ?? initial.selection;
   const entry = entries.find((entry) => entry.instanceId === selection?.instanceId);
@@ -87,17 +89,33 @@ export function MoveThreadModelDialog(props: {
           ) : (
             <p>No enabled models on this machine.</p>
           )}
+          {props.copyHere ? (
+            <Button
+              variant="outline"
+              disabled={copying}
+              onClick={async () => {
+                setCopying(true);
+                try {
+                  await props.copyHere?.run();
+                } finally {
+                  setCopying(false);
+                }
+              }}
+            >
+              {copying ? "Preparing copy…" : props.copyHere.label}
+            </Button>
+          ) : null}
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="ghost" onClick={props.onClose}>
               Cancel
             </Button>
             <Button
-              disabled={!selection || !entry}
+              disabled={copying || !selection || !entry}
               onClick={() => {
                 if (selection) props.onMove(selection);
               }}
             >
-              Move
+              {props.crossMachine ? "Continue on this machine" : "Move"}
             </Button>
           </div>
         </DialogPanel>
