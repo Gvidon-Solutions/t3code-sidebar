@@ -19,6 +19,40 @@ replica when needed — mounted, synced, registered, placed — then the thread 
 voice can do everything by name: "создай тред в проекте X на Operalia", "открой тред про mount"
 — whatever machine it lives on.
 
+## 0. Object model (the law; code must match it exactly)
+
+Primitives (unchanged, owned by T3/upstream or the OS): **Machine** (one T3 server, `environmentId`), **Link** (PeerLink between two machines), **Folder** (a directory on one machine), **Thread** (lives on exactly one machine, has a working directory), **Sync session** (one Mutagen session keeping two folders equal), **Layout document** (the replicated CRDT).
+
+Layers built on them:
+
+1. **Mesh** = machines + links. Exactly one **authority** machine: layout entry `mesh.authority` = environmentId (configurable in Settings › Mesh; the owner's is gvidon; default when unset = the machine with the lowest environmentId among those that ever wrote, shown in the UI as "Authority: <label>"). The mesh needs connectivity, not a full graph: calls relay through linked peers (≤ 2 hops).
+2. **Project** (logical) = opaque stable id (the logical key; NEVER shown to the user anywhere — UI, CLI output, MCP text; only ids in JSON fields) + **title** (one name for the whole mesh, renameable from any machine; layout `proj/<id>.title`) + **representations**: (machine, folder path, role, transport, projectId on that machine). Roles: **primary** (owns `.git`, builds, tests; ≥ 0 per project, usually 1) and **replica** (folder kept equal to one primary by one sync session). Legacy keys (`github.com/…`, `<env>:<path>`, `title:…`) are only **aliases** of the id. A server's own project record is the representation's local handle, not the project.
+3. **Sync**: one replica ↔ exactly one sync session with its source primary (alpha = primary, beta = replica). Driver = the side that can ssh to the other (replica side first). States: pending → mounting → watching; conflict, error, paused; removed. Ignores: VCS + the configured list.
+4. **Presentation**: workspaces (placement, order, fold), machine labels/tags/colors, the per-row machine strip. Purely organisational; nothing in sync or threads depends on them.
+
+Interfaces: UI (web, desktop, mobile), CLI (`t3ctl`), MCP tools, and **context injection** (every turn knows: machine, project title, representation role, primary + how to run git/builds there, neighbours; `t3_thread_self` for the full picture).
+
+Thread rules: a thread runs on one machine; its working directory is inside one representation of its project (or no project). Moving a thread = same machine → change project/working dir; other machine → transfer (history copied, original archived with a link). Creating a thread "in X on M" = ensure a representation of X on M, then launch there.
+
+### Invariants (tests must assert each)
+
+- I1 Every representation belongs to exactly one project; a (machine, normalized path) pair maps to at most one project.
+- I2 Each replica has exactly one sync session (deterministic name), never two; removing the representation terminates it and keeps files.
+- I3 The project title is the same on every machine and every surface; renaming changes only the title, never the id.
+- I4 No user-visible surface prints an opaque id or a legacy key as a name.
+- I5 Workspaces never influence sync, threads or routing.
+- I6 Any machine can be primary, replica, both (different projects) or authority; nothing assumes gvidon except the configured authority value.
+
+### Authority and conflicts (owner rule: one machine is 100 % the source of truth)
+
+- File conflicts in a sync session are resolved automatically, no human step: the winner is the **authority's** representation if the authority holds one of the two sides, else the **primary**. Before the losing side's version is replaced, T3 copies it to `<loser folder>/.t3-conflicts/<ISO time>/<relative path>` (ignored by sync), then makes the winner's version propagate (delete/replace on the loser side, flush), and records `repstatus` message "Resolved N conflicts automatically · copies in .t3-conflicts". The UI shows this as a calm note, not an error; the user can open the copies.
+- Divergence after a crash, partition or a killed Mutagen daemon: the session is re-established automatically (adopt, resume, or recreate with the same name); if the two sides differ, the same rule decides and the losing files are copied first.
+- Layout: entries merge by LWW (no conflicts by construction); ambiguous adoptions (same workspace name, different ids; same project path claimed twice) are decided in favour of the authority's entries.
+
+### Resilience requirements (each with an automated test on the bed)
+
+Kill -9 each server mid-sync and mid-mount; kill the Mutagen daemon; cut a link/tunnel for minutes; restart the authority; reboot order permutations — everything converges without manual steps, no duplicate sessions/projects, no lost file versions (losers in .t3-conflicts), layout identical everywhere.
+
 ## Facts from the code today (verify line numbers on xdev)
 
 - Layout = `ServerSettings.sidebarWorkspaces` (`packages/contracts/src/sidebarWorkspaces.ts`),
