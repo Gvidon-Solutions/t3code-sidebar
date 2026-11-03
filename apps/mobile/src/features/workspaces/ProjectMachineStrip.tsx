@@ -1,6 +1,6 @@
 import type { ProjectMachineStripModel } from "@t3tools/client-runtime/state/mesh-layout";
 import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import Animated, {
   cancelAnimation,
   ReduceMotion,
@@ -61,28 +61,34 @@ export function ProjectMachineStrip({
       onLongPress={onOpen}
       className="flex-row items-center gap-1"
     >
-      {model.chips.map((chip) => (
-        <View
-          key={chip.environmentId}
-          className="h-4 flex-row items-center gap-0.5 rounded px-1"
-          style={{
-            borderWidth: chip.role === "replica" ? 1 : 0,
-            borderColor: chip.machine.color,
-            backgroundColor:
-              chip.role === "primary" ? machineTagBackground(chip.machine.color) : "transparent",
-          }}
-        >
-          <Text
-            className="font-mono text-[10px] font-t3-bold"
-            style={{ color: chip.machine.color }}
-          >
-            {chip.role === "replica" ? "⇄ " : ""}
-            {chip.machine.tag}
-          </Text>
-          {chip.role === "replica" ? (
-            <StatusDot pending={chip.pending} color={colors[chip.tone]} />
+      {model.chips.map((chip, index) => (
+        <Fragment key={chip.environmentId}>
+          {chip.role === "replica" && model.chips[index - 1]?.role !== "replica" ? (
+            <Text
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              className="text-[10px] text-foreground-muted"
+            >
+              ⇄
+            </Text>
           ) : null}
-        </View>
+          <View
+            className="h-4 flex-row items-center gap-0.5 rounded px-1"
+            style={{
+              backgroundColor: machineTagBackground(chip.machine.color),
+            }}
+          >
+            <Text
+              className="font-mono text-[10px] font-t3-bold"
+              style={{ color: chip.machine.color }}
+            >
+              {chip.machine.tag}
+            </Text>
+            {chip.role === "replica" && chip.state !== "watching" ? (
+              <StatusDot pending={chip.pending} color={colors[chip.tone]} />
+            ) : null}
+          </View>
+        </Fragment>
       ))}
       {model.overflow > 0 ? (
         <Text className="text-[10px] text-foreground-muted">+{model.overflow}</Text>

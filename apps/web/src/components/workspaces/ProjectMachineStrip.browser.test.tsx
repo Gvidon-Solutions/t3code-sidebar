@@ -12,6 +12,20 @@ it("opens Machines without toggling its folder, including after a live status ch
     projectMounts: {
       demo: [
         {
+          environmentId: "gor",
+          role: "primary" as const,
+          path: "/demo",
+          transport: "git" as const,
+          createdAt: "",
+        },
+        {
+          environmentId: "vps",
+          role: "replica" as const,
+          path: "/demo",
+          transport: "mutagen" as const,
+          createdAt: "",
+        },
+        {
           environmentId: "gv",
           role: "replica" as const,
           path: "/demo",
@@ -28,8 +42,14 @@ it("opens Machines without toggling its folder, including after a live status ch
       <ProjectMachineStrip model={model} onOpen={open} />
     </div>,
   );
-  await screen.getByRole("button", { name: "Replica on gv (pending)" }).click();
+  await screen.getByRole("button", { name: model.description }).click();
   expect(open).toHaveBeenCalledOnce();
+  expect(
+    screen.getByRole("button", { name: model.description }).element().textContent?.match(/⇄/g),
+  ).toHaveLength(1);
+  expect(
+    screen.getByRole("img", { name: "Machine: gv" }).element().querySelector("[aria-hidden]"),
+  ).not.toBeNull();
   expect(toggle).not.toHaveBeenCalled();
   const synced = projectMachineStrip(config, group, [
     {
@@ -46,7 +66,22 @@ it("opens Machines without toggling its folder, including after a live status ch
       <ProjectMachineStrip model={synced} onOpen={open} />
     </div>,
   );
-  await expect
-    .element(screen.getByRole("button", { name: "Replica on gv (synced)" }))
-    .toBeVisible();
+  await expect.element(screen.getByRole("button", { name: synced.description })).toBeVisible();
+  expect(
+    screen.getByRole("img", { name: "Machine: gv" }).element().querySelector("[aria-hidden]"),
+  ).toBeNull();
+  const primaries = projectMachineStrip(
+    {
+      ...config,
+      projectMounts: {
+        demo: config.projectMounts.demo.map((rep) => ({ ...rep, role: "primary" as const })),
+      },
+    },
+    group,
+    [],
+  );
+  await screen.rerender(<ProjectMachineStrip model={primaries} onOpen={open} />);
+  expect(
+    screen.getByRole("button", { name: primaries.description }).element().textContent,
+  ).not.toContain("⇄");
 });

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { ProjectMachineStripModel } from "@t3tools/client-runtime/state/mesh-layout";
 import { MachineTag } from "./MachineTag";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -34,27 +35,28 @@ export function ProjectMachineStrip({
           />
         }
       >
-        {model.chips.map((chip) =>
-          chip.role === "primary" ? (
-            <MachineTag key={chip.environmentId} machine={chip.machine} />
-          ) : (
-            <span
-              key={chip.environmentId}
-              className="flex h-4 items-center gap-0.5 rounded border px-1 font-mono text-3xs font-semibold"
-              style={{ borderColor: chip.machine.color, color: chip.machine.color }}
-            >
-              ⇄ {chip.machine.tag}
-              <span
-                className={
-                  chip.pending
-                    ? "size-1.5 rounded-full motion-safe:animate-pulse"
-                    : "size-1.5 rounded-full"
-                }
-                style={{ backgroundColor: colors[chip.tone] }}
-              />
-            </span>
-          ),
-        )}
+        {model.chips.map((chip, index) => (
+          <Fragment key={chip.environmentId}>
+            {chip.role === "replica" && model.chips[index - 1]?.role !== "replica" ? (
+              <span aria-hidden="true" className="text-3xs text-sidebar-muted-foreground">
+                ⇄
+              </span>
+            ) : null}
+            <MachineTag machine={chip.machine}>
+              {chip.role === "replica" && chip.state !== "watching" ? (
+                <span
+                  aria-hidden="true"
+                  className={
+                    chip.pending
+                      ? "size-1.5 rounded-full motion-safe:animate-pulse"
+                      : "size-1.5 rounded-full"
+                  }
+                  style={{ backgroundColor: colors[chip.tone] }}
+                />
+              ) : null}
+            </MachineTag>
+          </Fragment>
+        ))}
         {model.overflow > 0 ? <span className="text-3xs">+{model.overflow}</span> : null}
       </TooltipTrigger>
       <TooltipPopup>{model.description}</TooltipPopup>
