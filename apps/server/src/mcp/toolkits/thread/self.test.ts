@@ -67,8 +67,8 @@ it.effect.each([
     ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces,
     projectTitles: role === "renamed" ? { repo: "N-shared project title" } : {},
     machines: {
-      local: { label: "Local", tag: "LO", reach: { source: { ssh: "gor" } } },
-      source: { label: "Gor", tag: "GO" },
+      local: { label: "Local", tag: "LO", reach: { source: { ssh: "worker" } } },
+      source: { label: "Worker", tag: "WK" },
     },
     projectMounts: {
       repo: [
@@ -108,7 +108,7 @@ it.effect.each([
       : role === "descriptor"
         ? {
             ...namedConfig,
-            machines: { ...namedConfig.machines, local: { reach: { source: { ssh: "gor" } } } },
+            machines: { ...namedConfig.machines, local: { reach: { source: { ssh: "worker" } } } },
           }
         : namedConfig;
   return Effect.gen(function* () {
@@ -128,7 +128,7 @@ it.effect.each([
       worktreePath: "/copy/worktree",
       branch: "topic",
       threadId: "mcp:self",
-      machine: { tag: role === "descriptor" ? "GO" : "LO" },
+      machine: { tag: role === "descriptor" ? "WK" : "LO" },
       representation: {
         role: role === "replica" || role === "allocated replica" ? "replica" : "primary",
         sync: { sessionName: "t3-repo-local", state: "conflict", conflicts: ["file"] },
@@ -137,11 +137,11 @@ it.effect.each([
         expect.objectContaining({
           machine: {
             environmentId: "source",
-            label: role === "unknown machine" ? "Unknown machine" : "Gor",
-            tag: role === "unknown machine" ? "UN" : "GO",
+            label: role === "unknown machine" ? "Unknown machine" : "Worker",
+            tag: role === "unknown machine" ? "UN" : "WK",
           },
           path: "/primary",
-          ssh: expect.stringContaining("ssh 'gor'"),
+          ssh: expect.stringContaining("ssh 'worker'"),
         }),
       ]),
     });
@@ -160,7 +160,7 @@ it.effect.each([
       Layer.mergeAll(
         NodeCrypto.layer,
         Layer.mock(ServerEnvironment)({
-          getDescriptor: Effect.succeed(descriptorOf("local", "Gor")),
+          getDescriptor: Effect.succeed(descriptorOf("local", "Worker")),
         }),
         Layer.succeed(McpInvocationContext, {
           environmentId: EnvironmentId.make("local"),

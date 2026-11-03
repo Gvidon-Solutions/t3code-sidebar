@@ -247,7 +247,7 @@ NodeTest.test("duplicate labels are ambiguous and server labels resolve", () => 
 
 NodeTest.test("mesh display names never expose logical or legacy keys", () => {
   for (const key of ["opaque-123", "github.com/owner/repo", "env:/path", "title:legacy"]) {
-    NodeAssert.equal(meshProjectTitle({}, key, "/home/user/Project"), "Project");
+    NodeAssert.equal(meshProjectTitle({}, key, "/checkout/Project"), "Project");
     NodeAssert.equal(
       meshProjectTitle({ projectTitles: { [key]: "Renamed" } }, key, "/Project"),
       "Renamed",

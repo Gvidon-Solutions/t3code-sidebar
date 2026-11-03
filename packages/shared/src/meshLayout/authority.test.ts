@@ -12,7 +12,7 @@ describe("mesh authority", () => {
     expect(meshAuthorityOf(empty)).toBeUndefined();
     expect(meshAuthorityOf({ ...empty, meshWriters: ["z", "b", "a"] })).toBe("a");
     const config = materialize({
-      "machine/z": { v: { label: "gvidon" }, h: "0000000000001.00000.b" },
+      "machine/z": { v: { label: "worker" }, h: "0000000000001.00000.b" },
       "writer/a": { v: true, h: "0000000000002.00000.a" },
       "writer/b": { v: true, h: "0000000000001.00000.b" },
     });

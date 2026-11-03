@@ -610,7 +610,7 @@ describe("t3_worktree_handoff", () => {
     return Effect.gen(function* () {
       const input = yield* decodeHandoffInput({
         branch: "feature/elsewhere",
-        path: "/home/user/.ssh/checkout",
+        path: "/outside/.ssh/checkout",
       });
       const result = yield* runHandoff(harness, input);
       expect(harness.createWorktree).toHaveBeenCalledWith(expect.objectContaining({ path: null }));

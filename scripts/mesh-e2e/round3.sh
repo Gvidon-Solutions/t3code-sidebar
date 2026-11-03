@@ -50,7 +50,7 @@ RUNNER
 done
 ctl() {
   local m=$1; shift
-  XDG_CONFIG_HOME="$WORK/N-auth-$m" T3CODE_HOME="$(base_of "$m")" T3CTL_ORIGIN="$(origin_of "$m")" T3CTL_T3_BIN="$WORK/N-t3-$m" node "$REPO_ROOT/docs/skill-t3-next/scripts/t3ctl.mjs" "$@"
+  XDG_CONFIG_HOME="$WORK/N-auth-$m" T3CODE_HOME="$(base_of "$m")" T3CTL_ORIGIN="$(origin_of "$m")" T3CTL_T3_BIN="$WORK/N-t3-$m" node "$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs" "$@"
 }
 T_GV=$(mint_token gv); T_GOR=$(mint_token gor); T_VPS=$(mint_token vps)
 GV_ENV=$(descriptor_env "$GV_ORIGIN"); GOR_ENV=$(descriptor_env "$GOR_ORIGIN"); VPS_ENV=$(descriptor_env "$VPS_ORIGIN")
@@ -65,7 +65,8 @@ rexec() {
   esac
 }
 env_of() { case "$1" in gv) echo "$GV_ENV";; gor) echo "$GOR_ENV";; vps) echo "$VPS_ENV";; esac; }
-base_of() { case "$1" in gv) echo "$GV_BASE_DIR";; gor) echo /home/user/.t3-sidebar-server;; vps) echo /home/t3/.t3;; esac; }
+GOR_REMOTE_BASE=$(gor_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')
+base_of() { case "$1" in gv) echo "$GV_BASE_DIR";; gor) echo "$GOR_REMOTE_BASE";; vps) echo /home/t3/.t3;; esac; }
 mut_bin() {
   local m=$1 configured cache="$WORK/$N_KEY-mutagen-bin-$1"
   if [ ! -s "$cache" ]; then
@@ -308,7 +309,7 @@ assert_feature_recovery
 runtime_root="/tmp/N-runtime-$RUN_TS"
 gor_ssh "mkdir -p '$runtime_root-source/runtime/versions/0.0.4-N'; printf '#!/bin/sh\nexit 0\n' > '$runtime_root-source/runtime/versions/0.0.4-N/t3'; chmod 700 '$runtime_root-source/runtime/versions/0.0.4-N/t3'"
 vps_ssh "mkdir -p '$runtime_root'"
-tar -czf "$WORK/N-runtime-scripts.tar.gz" -C "$REPO_ROOT/docs/skill-t3-next" scripts
+tar -czf "$WORK/N-runtime-scripts.tar.gz" -C "$REPO_ROOT/agent-kit/skills/t3" scripts
 scp -q -F "$VPS_SSH_CONFIG" "$WORK/N-runtime-scripts.tar.gz" "$MESH_DIR/round3-runtime.sh" "$VPS_HOST:$runtime_root/"
 vps_ssh "tar -xzf '$runtime_root/N-runtime-scripts.tar.gz' -C '$runtime_root'; bash '$runtime_root/round3-runtime.sh' '$runtime_root'" | tee "$WORK/N-system-services.log"
 printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, authority, 6 restart orders; evidence %s\n' "$WORK"

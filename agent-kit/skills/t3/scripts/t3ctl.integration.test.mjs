@@ -65,6 +65,7 @@ if(process.env.T3CTL_TEST_SSH_INSTALL) {
           T3CODE_HOME: join(dir, "home"),
           T3CTL_TEST_PUBLIC_ARCHIVE: join(dir, "runtime.tar.gz"),
           T3CTL_ORIGIN: "http://fixture",
+          T3CTL_RELEASE_REPO: "example/runtime",
           T3CTL_T3_BIN: cli,
           T3CTL_TEST_LOG: log,
           PATH: dir + ":" + process.env.PATH,
@@ -333,7 +334,7 @@ test("server install falls back without authenticated gh to public HTTPS or a li
     T3CTL_TEST_SSH_INSTALL: "1",
   });
   assert.equal(sshResult.installed, true);
-  assert.match(sshResult.out, /from gor/);
+  assert.match(sshResult.out, /from lab/);
 });
 
 test("aliases read and edit the layout machine without replacing other fields", () => {

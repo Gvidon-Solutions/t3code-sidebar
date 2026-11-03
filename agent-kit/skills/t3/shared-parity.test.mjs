@@ -10,24 +10,8 @@ import {
   importLegacy,
 } from "../../../packages/shared/src/meshLayout/index.ts";
 import { encodeLegacyEntries, importLegacyEntries } from "./scripts/t3ctl.mjs";
-const empty = {
-  workspaces: [],
-  assignments: {},
-  placements: {},
-  rules: [],
-  defaultWorkspace: null,
-  projectOrder: [],
-  workspaceProjectOrder: {},
-  workspaceFold: {},
-  quietAfterDays: 5,
-  alwaysShow: [],
-  alwaysQuiet: [],
-  machines: {},
-  projectTitles: {},
-  projectAliases: {},
-  projectMounts: {},
-  projectMountStatus: {},
-};
+const empty = materialize({});
+
 test("standalone encoder agrees with shared core and clocks can be received", () => {
   for (const config of [
     empty,
@@ -38,6 +22,18 @@ test("standalone encoder agrees with shared core and clocks can be received", ()
       machines: { offline: { label: "Offline" } },
       projectMounts: { x: [] },
       projectTitles: { x: "Shared project title" },
+      meshAuthority: "offline",
+      projectAliases: { "legacy:/path": "x" },
+      projectMountStatus: {
+        x: {
+          offline: {
+            state: "watching",
+            updatedAt: "",
+            skipped: 1,
+            skippedPaths: [{ path: "outside", error: "invalid symlink" }],
+          },
+        },
+      },
     },
   ]) {
     assert.deepEqual(encodeLegacyEntries(config), encode(config));

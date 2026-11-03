@@ -6,12 +6,12 @@ import { materialize } from "./materialize.ts";
 
 it("migrates legacy projects, titles, placements, folds and aliases with stable clocks and ids", () => {
   const old = "github.com/owner/repository",
-    physical = "machine:/home/user/repository",
+    physical = "machine:/checkout/repository",
     id = opaqueProjectId(old);
   const h = "0000000000100.00000.machine";
   const rep = {
     environmentId: "machine",
-    path: "/home/user/repository",
+    path: "/checkout/repository",
     projectId: "local",
     role: "primary",
     transport: "git",
