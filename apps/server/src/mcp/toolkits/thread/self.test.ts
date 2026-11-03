@@ -128,7 +128,7 @@ it.effect.each([
       worktreePath: "/copy/worktree",
       branch: "topic",
       threadId: "mcp:self",
-      machine: { tag: role === "descriptor" ? "WK" : "LO" },
+      machine: { tag: role === "descriptor" ? "WO" : "LO" },
       representation: {
         role: role === "replica" || role === "allocated replica" ? "replica" : "primary",
         sync: { sessionName: "t3-repo-local", state: "conflict", conflicts: ["file"] },
