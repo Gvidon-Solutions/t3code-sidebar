@@ -119,6 +119,9 @@ export function MachinesDialog(props: {
                       >
                         {status.text}
                       </span>
+                      {copies && !status.text.startsWith("Resolved ") ? (
+                        <span className="text-muted-foreground">Last automatic resolution</span>
+                      ) : null}
                       {copies ? (
                         <Button
                           size="sm"

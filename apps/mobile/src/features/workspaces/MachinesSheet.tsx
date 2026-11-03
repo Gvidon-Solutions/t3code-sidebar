@@ -91,6 +91,9 @@ export function MachinesSheet(props: {
               className="gap-2 rounded-2xl border border-border bg-grouped-card p-3"
               testID={`machine-representation-${rep.environmentId}`}
             >
+              {copies && !row.text.startsWith("Resolved ") ? (
+                <Text className="text-sm text-foreground-muted">Last automatic resolution</Text>
+              ) : null}
               {copies ? (
                 <Button
                   label="Open copies"
