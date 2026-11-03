@@ -47,9 +47,9 @@ function MachineEditor(props: {
     >
       <View className="px-4 pt-3">
         <Text
-          accessibilityLabel={props.display.label}
+          accessibilityLabel={`Machine: ${props.display.label}`}
+          className="font-mono text-xs font-t3-bold text-foreground"
           style={{
-            color: props.display.color,
             backgroundColor: machineTagBackground(props.display.color),
             alignSelf: "flex-start",
             paddingHorizontal: 6,
@@ -68,7 +68,7 @@ function MachineEditor(props: {
           placeholder={props.serverLabel}
           autoCapitalize="words"
           autoCorrect={false}
-          className="min-h-10 rounded-xl px-3 py-2 text-base text-foreground"
+          className="min-h-[45px] rounded-xl px-3 py-2 text-base text-foreground"
           onEndEditing={(event) => props.onChange({ label: event.nativeEvent.text })}
         />
       </View>
@@ -82,14 +82,14 @@ function MachineEditor(props: {
           maxLength={3}
           autoCapitalize="characters"
           autoCorrect={false}
-          className="min-h-10 w-24 rounded-xl px-3 py-2 text-base text-foreground"
+          className="min-h-[45px] w-24 rounded-xl px-3 py-2 text-base text-foreground"
           onEndEditing={(event) => props.onChange({ tag: event.nativeEvent.text })}
         />
         <Text className="text-xs text-foreground-muted">Up to three characters.</Text>
       </View>
       <View className="gap-3 border-t border-border-subtle px-4 py-3">
         <Text className="text-sm text-foreground-muted">Color</Text>
-        <View className="flex-row flex-wrap items-center gap-3">
+        <View className="flex-row flex-wrap items-center gap-1">
           {WORKSPACE_COLORS.map((color, index) => {
             const selected = selectedColor === color;
             return (
@@ -100,15 +100,24 @@ function MachineEditor(props: {
                 accessibilityState={{ selected }}
                 onPress={() => props.onChange({ color })}
                 style={({ pressed }) => ({
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: color,
-                  borderWidth: selected ? 3 : 0,
-                  borderColor: "#ffffff",
+                  width: 45,
+                  height: 45,
+                  alignItems: "center",
+                  justifyContent: "center",
                   opacity: pressed ? 0.7 : 1,
                 })}
-              />
+              >
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: color,
+                    borderWidth: selected ? 3 : 0,
+                    borderColor: "#ffffff",
+                  }}
+                />
+              </Pressable>
             );
           })}
           <Pressable
@@ -116,7 +125,7 @@ function MachineEditor(props: {
             accessibilityLabel="Automatic color"
             onPress={() => props.onChange({ color: null })}
             className={cn(
-              "rounded-lg px-2 py-1",
+              "min-h-[45px] justify-center rounded-lg px-2 py-1",
               props.configured.color === undefined ? "bg-subtle-strong" : "bg-subtle",
             )}
           >
@@ -168,6 +177,7 @@ export function SettingsMachinesRouteScreen() {
               <View key={e.environmentId} className="flex-row items-center justify-between p-4">
                 <Text>{e.label}</Text>
                 <Switch
+                  accessibilityLabel={`Use the mesh on ${e.label}`}
                   value={meshSwitchValue(e.serverConfig?.settings ?? {})}
                   onValueChange={(enabled) =>
                     void updateSettings({
@@ -178,7 +188,12 @@ export function SettingsMachinesRouteScreen() {
                 />
               </View>
             ))}
-          <Pressable className="p-4" onPress={() => setLinkOpen(!linkOpen)}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: linkOpen }}
+            className="min-h-[45px] p-4"
+            onPress={() => setLinkOpen(!linkOpen)}
+          >
             <Text>Link with…</Text>
           </Pressable>
           {linkOpen ? (
@@ -215,7 +230,7 @@ export function SettingsMachinesRouteScreen() {
                   <Text>
                     Linked with: {machine.linkedWith.map((e) => e.tag).join(", ") || "None"}
                   </Text>
-                  <Text>Version: {machine.version ?? "Unknown"}</Text>
+                  {machine.version === null ? null : <Text>Version: {machine.version}</Text>}
                   <Text>{meshMachineLastSync(machine, now)}</Text>
                   {machine.lastError ? <Text>{machine.lastError}</Text> : null}
                   <Text>
@@ -225,6 +240,8 @@ export function SettingsMachinesRouteScreen() {
                     <>
                       <Text>{machine.urls.join("\n")}</Text>
                       <Pressable
+                        accessibilityRole="button"
+                        className="min-h-[45px] justify-center"
                         onPress={() =>
                           navigation.navigate("ConnectionsNew", {
                             initialHost: machine.urls[0] ?? "",
