@@ -138,12 +138,12 @@ describe("mobile connection storage", () => {
     mocks.setDatabaseFailures(true, true);
     await mocks.setItemAsync(
       "t3code.preferences",
-      JSON.stringify({ baseFontSize: 17, draftMachines: { demo: "operalia", invalid: 42 } }),
+      JSON.stringify({ baseFontSize: 17, draftMachines: { demo: "boreal", invalid: 42 } }),
     );
 
     await expect(loadPreferences()).resolves.toEqual({
       baseFontSize: 17,
-      draftMachines: { demo: "operalia" },
+      draftMachines: { demo: "boreal" },
     });
   });
 
