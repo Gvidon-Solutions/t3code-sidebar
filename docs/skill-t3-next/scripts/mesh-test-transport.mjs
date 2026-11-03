@@ -83,6 +83,15 @@ function call(name, args) {
           args.action === "remove" ? null : { ...rep, environmentId: peer, projectId: "remote-p" },
         ready: true,
       };
+    case "t3_thread_move":
+      return {
+        threadId: "moved-thread",
+        environmentId: args.targetEnvironmentId || args.environmentId || self,
+        machine: "GO",
+        handoffId: "L-handoff",
+        undoUntil: 10000,
+        link: "t3-thread://v2/" + peer + "/moved-thread",
+      };
     case "t3_thread_wait":
       return { status: "completed", timedOut: false };
     case "t3_pending_request":

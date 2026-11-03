@@ -1,6 +1,6 @@
 # Context in portable handoffs
 
-T3 Code transfers conversation context when you switch providers, continue through a portable
+T3 Code transfers provider context when you switch providers, continue through a portable
 restart, or use a fork that the provider cannot resume itself.
 
 Short conversations transfer intact. For longer conversations, T3 Code favors recent requests and
@@ -9,13 +9,26 @@ keep their full text, order, and user or assistant role, including partial work 
 interrupted turns. Your new request stays separate and is never shortened to make history fit.
 
 Codex receives historical messages directly when its installed version supports that operation.
-Other providers receive the same selection as attributed conversation context. A handoff does not
+Other providers receive the same selection as attributed conversation context. A provider handoff does not
 copy the outgoing provider's reasoning, tool-call state, or attachments.
 
 The handoff includes references to omitted history. The agent can use T3 Code's thread-reading tool
 to retrieve saved messages and activity, including the remainder of a long item. For an important
 constraint, you can still repeat it in your next message. A handoff is a budgeted selection, not an
 agent-written summary.
+
+## Move to another machine
+
+Choose **Move to project…** from a thread's menu, then select a project on the other machine.
+On web, you can also drag the thread onto that project's folder. Finish or stop the running turn
+first. Confirming the move copies the visible conversation and attachments, keeps the thread's
+model and modes, and archives the original with a link to its continuation. The destination stays
+idle until you send a message. For ten seconds, **Undo** restores the original and archives the
+continuation, provided no turn is running there.
+
+Each copied transcript item is limited to 32,000 characters; shortened items say how much was
+omitted and retain a link to the original conversation. Your next turn receives the copied history
+within the context limits below. Copied attachments remain available on the destination machine.
 
 ## Context limits
 

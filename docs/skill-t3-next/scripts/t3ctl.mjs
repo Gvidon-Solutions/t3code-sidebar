@@ -1292,12 +1292,13 @@ async function tryUiOpen(target) {
   }
 }
 
-async function listProjects() {
+async function listProjects(environmentId) {
   const m = await mcp();
   const out = [];
   let cursor = null;
   do {
     const page = await m.call("t3_project_list", {
+      ...(environmentId ? { environmentId } : {}),
       limit: 100,
       ...(cursor !== null ? { cursor } : {}),
     });
@@ -2728,6 +2729,40 @@ const commands = {
     for (const s of skipped) console.error(`skipped ${s}`);
   },
 
+  async move(pos, opt) {
+    if (!pos[0]) die("usage: t3ctl move <T> --project X [--on M]");
+    const thread = await resolveThreadAcross(pos[0]);
+    let project = opt.project
+      ? await resolveProject(opt.project, await listProjects(thread.environmentId))
+      : null;
+    const target = opt.on ? await getMachine(opt.on) : null;
+    if (project && target && target.environmentId !== thread.environmentId) {
+      const placed = await (
+        await mcp()
+      ).call("t3_project_place", {
+        environmentId: thread.environmentId,
+        project: project.id,
+        machine: target.environmentId,
+        wait: 600,
+      });
+      if (!placed.ready || !placed.representation?.projectId)
+        die(`the destination representation of "${project.title}" did not become ready`);
+      project = { ...project, id: placed.representation.projectId };
+    }
+    const result = await (
+      await mcp()
+    ).call("t3_thread_move", {
+      threadId: thread.threadId,
+      environmentId: thread.environmentId,
+      ...(project ? { projectId: project.id } : {}),
+      ...(target ? { targetEnvironmentId: target.environmentId } : {}),
+      ...(opt.message ? { message: opt.message } : {}),
+      ...(opt.key ? { clientRequestId: opt.key } : {}),
+    });
+    if (opt.json) return json(result);
+    console.log("Moved to " + result.machine + " · " + result.link);
+  },
+
   async open(pos, opt) {
     if (!pos[0]) die("usage: t3ctl open <thread> [--on <machine>]");
     const t = await resolveThreadAcross(pos[0], { on: opt.on });
@@ -3805,6 +3840,7 @@ READ
   mesh unlink <M> --yes                   forget a link here (the other machine stays)
 
 THREADS
+  move <T> --project X [--on M]        move locally or hand off the conversation
   new [--project P | --scratch] [opts] "message"   start a thread (no project = scratch)
       --agent claude|codex|deepseek|1017|<instance> (default claude, Opus 5.5)  --model M (aliases: opus sonnet fable haiku luna astra sol deepseek 1017)
       --effort low|medium|high|xhigh|max  --fast  --opt key=value (any model option)

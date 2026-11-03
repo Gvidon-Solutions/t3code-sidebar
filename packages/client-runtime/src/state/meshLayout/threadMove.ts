@@ -1,6 +1,9 @@
+import type { EnvironmentId, ProjectId, ThreadId, ThreadMoveInput } from "@t3tools/contracts";
+
 export const THREAD_DRAG_TYPE = "application/x-t3-thread";
-export const CROSS_MACHINE_MOVE_MESSAGE =
-  "Move to another machine needs a history export/import protocol for runs, messages, attachments, checkpoints and provider sessions. Context transfer only supports forks within one server.";
+function threadMoveConfirmation(machine: string): string {
+  return `Move to ${machine}? The conversation continues there; this thread is archived.`;
+}
 
 export function threadMoveValidity(
   source: { readonly environmentId: string; readonly projectId: string },
@@ -8,4 +11,37 @@ export function threadMoveValidity(
 ): "same-project" | "local" | "cross-machine" {
   if (source.environmentId !== target.environmentId) return "cross-machine";
   return source.projectId === target.id ? "same-project" : "local";
+}
+
+export async function moveThreadWithConfirmation<Result>(options: {
+  readonly source: {
+    readonly id: ThreadId;
+    readonly environmentId: EnvironmentId;
+    readonly projectId: ProjectId;
+  };
+  readonly target: { readonly id: ProjectId; readonly environmentId: EnvironmentId };
+  readonly machine: string;
+  readonly confirm: (message: string) => Promise<boolean>;
+  readonly move: (request: {
+    readonly environmentId: EnvironmentId;
+    readonly input: ThreadMoveInput;
+  }) => Promise<Result>;
+}): Promise<Result | null> {
+  const validity = threadMoveValidity(options.source, options.target);
+  if (validity === "same-project") return null;
+  if (
+    validity === "cross-machine" &&
+    !(await options.confirm(threadMoveConfirmation(options.machine)))
+  )
+    return null;
+  return options.move({
+    environmentId: options.source.environmentId,
+    input: {
+      threadId: options.source.id,
+      projectId: options.target.id,
+      ...(validity === "cross-machine"
+        ? { targetEnvironmentId: options.target.environmentId }
+        : {}),
+    },
+  });
 }

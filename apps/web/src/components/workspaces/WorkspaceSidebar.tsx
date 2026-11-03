@@ -10,7 +10,7 @@ import { threadDropProject } from "./threadDrop.logic";
 import { MoveProjectDialog } from "./MoveProjectDialog";
 import {
   threadMoveValidity,
-  CROSS_MACHINE_MOVE_MESSAGE,
+  moveThreadWithConfirmation,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -608,15 +608,14 @@ export default function WorkspaceSidebar() {
   const moveToProject = async (thread: SidebarThreadSummary, target: (typeof projects)[number]) => {
     setMovingThread(null);
     const validity = threadMoveValidity(thread, target);
-    if (validity === "same-project") return;
-    if (validity === "cross-machine") {
-      toastManager.add({ type: "error", title: CROSS_MACHINE_MOVE_MESSAGE });
-      return;
-    }
-    const result = await moveThreadCommand({
-      environmentId: thread.environmentId,
-      input: { threadId: thread.id, projectId: target.id },
+    const result = await moveThreadWithConfirmation({
+      source: thread,
+      target,
+      machine: machineTag(config, target.environmentId),
+      confirm: async (message) => (await readLocalApi()?.dialogs.confirm(message)) ?? false,
+      move: moveThreadCommand,
     });
+    if (result === null) return;
     if (result._tag === "Failure") {
       toastManager.add({
         type: "error",
@@ -626,14 +625,26 @@ export default function WorkspaceSidebar() {
       return;
     }
     toastManager.add({
-      title: "Moved to " + (target.isScratch ? "No project" : target.title),
+      title:
+        "Moved to " +
+        (validity === "cross-machine"
+          ? result.value.machine
+          : target.isScratch
+            ? "No project"
+            : target.title),
+      timeout: 10_000,
       actionProps: {
         children: "Undo",
         onClick: () => {
           void reportFailure("Could not undo move", () =>
             moveThreadCommand({
               environmentId: thread.environmentId,
-              input: { threadId: thread.id, projectId: thread.projectId },
+              input: {
+                threadId: thread.id,
+                ...(result.value.handoffId
+                  ? { undoHandoffId: result.value.handoffId }
+                  : { projectId: thread.projectId }),
+              },
             }),
           );
         },

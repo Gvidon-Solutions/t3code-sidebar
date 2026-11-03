@@ -55,7 +55,6 @@ import {
   unsettleThread,
   unsnoozeThread,
   updateThreadMetadata,
-  moveThread,
   visitThread,
   watchThreadPullRequest,
 } from "../operations/commands.ts";
@@ -222,9 +221,9 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
-    move: createEnvironmentCommand(runtime, {
+    move: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:thread:move",
-      execute: moveThread,
+      tag: "threads.move",
       scheduler,
       concurrency,
     }),

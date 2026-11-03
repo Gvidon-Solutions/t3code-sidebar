@@ -1,11 +1,15 @@
+import { Toast } from "../../components/ui/Toast";
+import { machineTag } from "@t3tools/client-runtime/state/mesh-layout";
+import { useEffect } from "react";
+import type { ThreadMoveResult } from "@t3tools/contracts";
 import { mobileMoveProjectLabel } from "./threadMove.logic";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
 import { useState } from "react";
-import { Pressable, ScrollView, TextInput } from "react-native";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import {
-  CROSS_MACHINE_MOVE_MESSAGE,
+  moveThreadWithConfirmation,
   threadMoveValidity,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
@@ -29,11 +33,45 @@ export function MoveThreadSheet() {
   const { config } = useSidebarWorkspaces();
   const move = useAtomCommand(threadEnvironment.move, { reportFailure: false });
   const [query, setQuery] = useState("");
+  const [undo, setUndo] = useState<{
+    source: EnvironmentThreadShell;
+    result: ThreadMoveResult;
+  } | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- the move undo action expires after the server's ten-second window
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), 10_000);
+    return () => clearTimeout(timer);
+  }, [undo]);
   const close = () => {
     appAtomRegistry.set(movingThread, null);
     setQuery("");
   };
-  if (!thread) return null;
+  if (!thread)
+    return undo ? (
+      <View className="absolute inset-x-4 bottom-8">
+        <Toast
+          message={`Moved to ${undo.result.machine}`}
+          action={{
+            label: "Undo",
+            onPress: () => {
+              const entry = undo;
+              setUndo(null);
+              void move({
+                environmentId: entry.source.environmentId,
+                input: {
+                  threadId: entry.source.id,
+                  undoHandoffId: entry.result.handoffId ?? undefined,
+                },
+              }).then((result) => {
+                if (result._tag === "Failure")
+                  Dialog.alert("Could not undo move", String(Cause.squash(result.cause)));
+              });
+            },
+          }}
+        />
+      </View>
+    ) : null;
   return (
     <Sheet title="Move to project…" onClose={close}>
       <TextInput
@@ -55,20 +93,34 @@ export function MoveThreadSheet() {
               className="p-4"
               onPress={() => {
                 const validity = threadMoveValidity(thread, project);
-                if (validity === "cross-machine") {
-                  Dialog.alert("Could not move thread", CROSS_MACHINE_MOVE_MESSAGE);
-                  return;
-                }
                 if (validity === "same-project") {
                   close();
                   return;
                 }
-                void move({
-                  environmentId: thread.environmentId,
-                  input: { threadId: thread.id, projectId: project.id },
+                void moveThreadWithConfirmation({
+                  source: thread,
+                  target: project,
+                  machine: machineTag(
+                    config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+                    project.environmentId,
+                  ),
+                  confirm: (message) =>
+                    new Promise<boolean>((resolve) =>
+                      Dialog.confirm({
+                        title: "Move conversation",
+                        message,
+                        confirmText: "Move",
+                        onConfirm: () => resolve(true),
+                        onCancel: () => resolve(false),
+                      }),
+                    ),
+                  move,
                 }).then((result) => {
-                  if (result._tag === "Success") close();
-                  else Dialog.alert("Could not move thread", String(Cause.squash(result.cause)));
+                  if (result === null) return;
+                  if (result._tag === "Success") {
+                    if (result.value.handoffId) setUndo({ source: thread, result: result.value });
+                    close();
+                  } else Dialog.alert("Could not move thread", String(Cause.squash(result.cause)));
                 });
               }}
             >
