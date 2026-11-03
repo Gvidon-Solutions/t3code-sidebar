@@ -1,0 +1,4 @@
+interface:
+  display_name: "T3 · Управление T3 Code"
+  short_description: "Всё в T3 Code Sidebar: треды на любых моделях, вывод, одобрения, форки, проекты, воркспейсы, импорт, сервер"
+  default_prompt: "Use $t3 to do what I ask in T3 Code: start threads on any model, read their output, approve, fork, organize, manage projects and sidebar workspaces, import sessions, check the server."

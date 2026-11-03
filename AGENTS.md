@@ -12,6 +12,9 @@ upstream `pingdotgg/t3code`. Read [FORK.md](FORK.md) before changing anything. I
 - The desktop app is "T3 Code Sidebar" with its own app id and `~/.t3-sidebar`. Never point it,
   or anything you run, at `~/.t3`.
 - Every user-visible fork feature gets an entry in FORK.md's feature log: what, how, where.
+- **T3 Mesh** (machines, projects on several machines, replicas, shared layout, thread moves,
+  files anywhere, the `t3` skill and agent instructions): read `docs/mesh/README.md` first. Agent
+  tooling lives in `agent-kit/` and is installed with `agent-kit/install.sh`.
 - Every push to `ws` publishes a desktop release that installed apps update to. Push only
   changes you have verified.
 - **The owner's live server restarts only with the owner's go-ahead (rule of 2026-10-14).** On

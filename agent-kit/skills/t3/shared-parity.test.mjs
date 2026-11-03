@@ -8,7 +8,7 @@ import {
   adoptLegacy,
   materialize,
   importLegacy,
-} from "../../packages/shared/src/meshLayout/index.ts";
+} from "../../../packages/shared/src/meshLayout/index.ts";
 import { encodeLegacyEntries, importLegacyEntries } from "./scripts/t3ctl.mjs";
 const empty = {
   workspaces: [],
