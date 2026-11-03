@@ -43,6 +43,15 @@ function makeSourceThread(
     id: sourceThreadId,
     projectId: ProjectId.make("project:fork-snooze"),
     title: "Snoozed source",
+    meshHandoff: {
+      id: "L-completed",
+      phase: "completed",
+      environmentId: EnvironmentId.make("other"),
+      threadId: targetThreadId,
+      link: "t3-thread://v2/other/target",
+      tag: "OT",
+      undoUntil: 0,
+    },
     providerInstanceId,
     modelSelection,
     runtimeMode: "full-access",
@@ -157,6 +166,7 @@ it.effect("keeps a fork awake when its source thread is snoozed", () =>
     assert.equal(result.targetThread.branch, sourceThread.branch);
     assert.equal(result.targetThread.worktreePath, sourceThread.worktreePath);
     assert.isNull(result.targetThread.activeProviderThreadId);
+    assert.isUndefined(result.targetThread.meshHandoff);
     assert.deepEqual(result.targetThread.lineage, {
       parentThreadId: sourceThreadId,
       relationshipToParent: "fork",
