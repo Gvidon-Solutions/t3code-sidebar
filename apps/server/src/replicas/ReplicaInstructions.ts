@@ -29,7 +29,9 @@ export function replicaContextNote(
       rep.environmentId === environmentId && rep.projectId === projectId && rep.role === "replica",
   );
   const primary = replica && reps?.find((rep) => rep.environmentId === replica.source);
-  if (!replica || !primary) return "";
+  if (!replica) return "";
+  if (!primary)
+    return "This project is a synchronized replica. Its primary representation is unavailable; restore it before running git or builds.";
   const route = config.machines[environmentId]?.reach?.[primary.environmentId];
   if (!route)
     return `This project is a synchronized replica of ${primary.environmentId}:${primary.path}. Run git and builds on that primary. Add an SSH reach route before running those commands.`;
