@@ -607,6 +607,23 @@ export const markThreadUnread = Effect.fn("EnvironmentCommands.markThreadUnread"
   });
 });
 
+export const moveThread = Effect.fn("EnvironmentCommands.moveThread")(function* (
+  input: ThreadCommandInput & {
+    readonly projectId: import("@t3tools/contracts").ProjectId;
+    readonly targetEnvironmentId?: string;
+  },
+) {
+  return yield* dispatch({
+    type: "thread.move",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    projectId: input.projectId,
+    ...(input.targetEnvironmentId === undefined
+      ? {}
+      : { targetEnvironmentId: input.targetEnvironmentId }),
+  });
+});
+
 export const updateThreadMetadata = Effect.fn("EnvironmentCommands.updateThreadMetadata")(
   function* (input: UpdateThreadMetadataInput) {
     const commandId = yield* allocateCommandId(input);

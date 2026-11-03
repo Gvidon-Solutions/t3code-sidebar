@@ -31,11 +31,12 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
-    "Pin, snooze, settle, archive, or mark a thread unread. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
+    "Move, pin, snooze, settle, archive, or mark a thread unread. Move requires projectId on the source machine; targetEnvironmentId is reserved for cross-machine transfers and currently returns an explicit unsupported error. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
     action: Schema.Literals([
+      "move",
       "pin",
       "unpin",
       "snooze",
@@ -46,6 +47,8 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
       "unarchive",
       "mark_unread",
     ]),
+    projectId: Schema.optional(ProjectId),
+    targetEnvironmentId: Schema.optional(Schema.String),
     snoozedUntil: Schema.optional(IsoDateTime),
   }),
   success: Schema.Union([

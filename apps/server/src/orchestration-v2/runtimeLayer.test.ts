@@ -7000,6 +7000,58 @@ it.layer(layerSharedApplicationDataPlaneTest)("snooze projection", (it) => {
       const moved = shell.threads.find((thread) => thread.id === idleThreadId);
       assert.equal(moved?.projectId, folderProjectId);
       assert.isNull(moved?.worktreePath);
+      const move = (
+        threadId: ThreadId,
+        projectId: ProjectId,
+        suffix: string,
+        targetEnvironmentId?: string,
+      ) =>
+        orchestrator.dispatch({
+          type: "thread.move",
+          commandId: CommandId.make(threadId + "-move-" + suffix),
+          threadId,
+          projectId,
+          ...(targetEnvironmentId === undefined ? {} : { targetEnvironmentId }),
+        });
+      const busyMove = yield* move(busyThreadId, otherProjectId, "busy").pipe(Effect.flip);
+      assert.include(String(busyMove.cause), "still has work in progress");
+      const remoteMove = yield* move(idleThreadId, otherProjectId, "remote", "other-machine").pipe(
+        Effect.flip,
+      );
+      assert.include(
+        String(remoteMove.cause),
+        "Move to another machine needs a history export/import protocol",
+      );
+      yield* orchestrator.dispatch({
+        type: "thread.pin",
+        commandId: CommandId.make("move-pin"),
+        threadId: idleThreadId,
+      });
+      const before = yield* orchestrator.getThreadProjection(idleThreadId);
+      yield* move(idleThreadId, otherProjectId, "local");
+      const after = yield* orchestrator.getThreadProjection(idleThreadId);
+      assert.deepEqual(after.thread, {
+        ...before.thread,
+        projectId: otherProjectId,
+        updatedAt: after.thread.updatedAt,
+      });
+      assert.deepEqual(after.messages, before.messages);
+      yield* move(idleThreadId, folderProjectId, "undo");
+      assert.equal(
+        (yield* orchestrator.getThreadProjection(idleThreadId)).thread.projectId,
+        folderProjectId,
+      );
+      const worktreeThreadId = ThreadId.make("move-with-worktree");
+      yield* createThread(worktreeThreadId);
+      yield* move(worktreeThreadId, otherProjectId, "worktree");
+      assert.equal(
+        (yield* orchestrator.getThreadProjection(worktreeThreadId)).thread.worktreePath,
+        folder,
+      );
+      const missingMove = yield* move(idleThreadId, ProjectId.make("missing"), "missing").pipe(
+        Effect.flip,
+      );
+      assert.include(String(missingMove.cause), "cannot move to missing project");
       const stayed = shell.threads.find((thread) => thread.id === busyThreadId);
       assert.equal(stayed?.projectId, scratchProjectId);
     }),

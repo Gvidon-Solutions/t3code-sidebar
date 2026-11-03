@@ -520,6 +520,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.pull-request-watch.sync":
     case "thread.pull-request.sync":
     case "thread.title.regeneration.complete":
+    case "thread.move":
     case "thread.project.adopt-folder":
     case "thread.runtime-mode.set":
     case "thread.interaction-mode.set":
@@ -4165,7 +4166,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   )(function* (
     command: Extract<
       OrchestrationV2ServerCommand,
-      { readonly type: "thread.project.adopt-folder" }
+      { readonly type: "thread.project.adopt-folder" | "thread.move" }
     >,
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
   ) {
@@ -4183,6 +4184,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ),
       );
     const thread = projection.thread;
+    if (command.type === "thread.move" && command.targetEnvironmentId !== undefined) {
+      return yield* reject(
+        "cannot move to another machine: Move to another machine needs a history export/import protocol for runs, messages, attachments, checkpoints and provider sessions; context transfer only supports forks within one server.",
+      );
+    }
     if (thread.deletedAt !== null) return yield* reject("is deleted.");
     if (threadHasUnfinishedWork(projection)) {
       return yield* reject("still has work in progress. Finish or stop it first.");
@@ -4194,7 +4200,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
     // The thread always lands in the project root, so the move must not change its cwd.
     const cwd = thread.worktreePath ?? Option.getOrUndefined(current)?.workspaceRoot;
-    if (cwd !== target.value.workspaceRoot) {
+    if (command.type === "thread.project.adopt-folder" && cwd !== target.value.workspaceRoot) {
       return yield* reject(`does not work in ${target.value.workspaceRoot}.`);
     }
     const now = yield* DateTime.now;
@@ -4206,7 +4212,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       threadId: command.threadId,
       providerInstanceId: thread.providerInstanceId,
       occurredAt: now,
-      payload: { ...thread, projectId: command.projectId, worktreePath: null, updatedAt: now },
+      payload: {
+        ...thread,
+        projectId: command.projectId,
+        worktreePath: command.type === "thread.move" ? thread.worktreePath : null,
+        updatedAt: now,
+      },
     });
   });
 
@@ -13044,6 +13055,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "provider-session.detach":
         yield* dispatchProviderSessionDetach(command, events, effects);
         break;
+      case "thread.move":
       case "thread.project.adopt-folder":
         yield* dispatchThreadProjectAdoptFolder(command, events);
         break;
