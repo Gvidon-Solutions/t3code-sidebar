@@ -2641,12 +2641,13 @@ const commands = {
   },
 
   async show(pos, opt) {
-    const t = await resolveThread(pos[0], {
-      projectRef: opt.project,
-      includeArchived: opt.archived,
-    });
+    const t =
+      opt.archived && !opt.on
+        ? await resolveThread(pos[0], { projectRef: opt.project, includeArchived: true })
+        : await resolveThreadAcross(pos[0], { on: opt.on });
     const view = opt.activity ? "activity" : "messages";
     const data = await readAll(t.threadId, {
+      environmentId: t.environmentId,
       view,
       maxCharsPerItem: opt.full ? 50000 : 4000,
       expand: opt.full ? "all" : false,
