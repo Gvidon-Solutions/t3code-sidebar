@@ -185,9 +185,9 @@ EOF
 
 log "installing mutagen on gor"
 gor_ssh 'mkdir -p ~/.local/bin'
-gor_scp "$HOME/.local/bin/mutagen" "$GOR_HOST:.local/bin/mutagen"
-gor_scp "$HOME/.local/bin/mutagen-agents.tar.gz" "$GOR_HOST:.local/bin/mutagen-agents.tar.gz"
-gor_ssh 'chmod 755 ~/.local/bin/mutagen; ~/.local/bin/mutagen version'
+gor_scp "$HOME/.local/bin/mutagen" "$GOR_HOST:.local/bin/mutagen.install-$COMMIT_SHORT"
+gor_scp "$HOME/.local/bin/mutagen-agents.tar.gz" "$GOR_HOST:.local/bin/mutagen-agents.install-$COMMIT_SHORT.tar.gz"
+gor_ssh "chmod 755 ~/.local/bin/mutagen.install-$COMMIT_SHORT; mv -f ~/.local/bin/mutagen.install-$COMMIT_SHORT ~/.local/bin/mutagen; mv -f ~/.local/bin/mutagen-agents.install-$COMMIT_SHORT.tar.gz ~/.local/bin/mutagen-agents.tar.gz; ~/.local/bin/mutagen version"
 
 log "updating gor t3ctl / staged t3-next skill"
 gor_ssh 'mkdir -p ~/.agents/skills/t3-next/scripts'
@@ -232,6 +232,8 @@ if [ "$seed_repo" = 1 ]; then
 fi
 EOF
 
+log "allowing repeated fault-test starts on the gor bed unit"
+gor_ssh "mkdir -p ~/.config/systemd/user/$GOR_UNIT.d; printf '[Unit]\nStartLimitIntervalSec=0\n' > ~/.config/systemd/user/$GOR_UNIT.d/90-mesh-e2e-faults.conf"
 log "switching gor main unit $GOR_UNIT to $BUILD_VERSION"
 current_ref="$(gor_ssh "grep -o 'runtime/versions/[^/]*' ~/.config/systemd/user/$GOR_UNIT | head -1" || true)"
 if [ "$current_ref" != "runtime/versions/$BUILD_VERSION" ]; then
@@ -240,7 +242,7 @@ if [ "$current_ref" != "runtime/versions/$BUILD_VERSION" ]; then
   fi
   gor_ssh "sed -i 's|^ExecStart=.*|ExecStart=%h/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 serve --base-dir %h/.t3-sidebar-server --host 127.0.0.1 --port $GOR_PORT --no-browser|' ~/.config/systemd/user/$GOR_UNIT"
 fi
-gor_ssh "systemctl --user daemon-reload && systemctl --user restart $GOR_UNIT" >/dev/null
+gor_ssh "systemctl --user daemon-reload && systemctl --user reset-failed $GOR_UNIT && systemctl --user restart $GOR_UNIT" >/dev/null
 GOR_STOPPED=0
 if ! gor_ssh "for i in \$(seq 1 90); do curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:$GOR_PORT/.well-known/t3/environment 2>/dev/null && exit 0; sleep 1; done; exit 1"; then
   gor_ssh "journalctl --user -u $GOR_UNIT -n 80 --no-pager" || true
@@ -261,8 +263,7 @@ mkdir -p "$HOME/.config/systemd/user"
 cat >"$HOME/.config/systemd/user/$GV_UNIT" <<EOF
 [Unit]
 Description=T3 Mesh E2E server on gvidon (isolated, base dir /tmp)
-StartLimitIntervalSec=300
-StartLimitBurst=5
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple

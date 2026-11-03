@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Destructive resilience acceptance, exclusively on the shared isolated bed.
-set -euo pipefail
+set -Eeuo pipefail
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
+trap 'printf "FAIL N round3 line %s, stack %s, exit %s\n" "$LINENO" "${BASH_LINENO[*]}" "$?" >&2' ERR
 running=$(t3ctl threads --project 66f7ed98 --status running --json)
 if jq -e 'any(.[]; .title | test("xdev (QA|L |M )"))' <<<"$running" >/dev/null; then
   printf 'Bed busy: QA/L/M is running. No deployment or fault injection performed.\n' >&2
@@ -11,13 +12,25 @@ export MESH_E2E_HELPERS_ONLY=1
 export MESH_E2E_ROUND1_WORK="${MESH_E2E_ROUND3_WORK:-/tmp/t3-mesh-e2e-N-round3}"
 . "$(dirname "$0")/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
+ws_rpc() {
+  local machine=$1 method=$2 payload=${3:-'{}'} first=${4:-} token
+  token=$(token_of "$machine")
+  node "$WS" rpc "$method" "$payload" ${first:+"$first"} --origin "$(origin_of "$machine")" --token "$token" --timeout 240000
+}
+printf '%s' "$$" > "$WORK/N-round3-runner.pid"
 set -e
 TIMEOUT=240
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
 git -C "$REPO_ROOT" merge-base --is-ancestor "$source_commit" "$COMMIT" || die "Build lacks N: use MESH_E2E_BUILD_CURRENT=1 build.sh xdev-n, then deploy.sh while the bed is free"
 for m in gv gor vps; do
-  test "$(descriptor_version "$(origin_of "$m")")" = "$BUILD_VERSION" || die "Wrong build on $m"
+  test "$(descriptor_version "$(origin_of "$m")")" = "${BUILD_VERSION%-mesh.*}" || die "Wrong build on $m"
 done
+systemctl --user show -p ExecStart --value "$GV_UNIT" | rg -Fq "/$BUILD_VERSION/t3" || die 'Wrong GV runtime path'
+gor_ssh "systemctl --user show -p ExecStart --value $GOR_UNIT" | rg -Fq "/$BUILD_VERSION/t3" || die 'Wrong gor runtime path'
+expected_hash=$(sha256sum "$RUNTIME_DIR/t3" | cut -d' ' -f1)
+test "$(sha256sum "$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" | cut -d' ' -f1)" = "$expected_hash" || die 'GV binary differs from build'
+test "$(gor_ssh "sha256sum ~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3" | cut -d' ' -f1)" = "$expected_hash" || die 'gor binary differs from build'
+test "$(vps_ssh 'docker inspect -f "{{.Image}}" t3-mesh-e2e')" = "$(docker image inspect -f '{{.Id}}' "$IMAGE")" || die 'Wrong VPS image'
 for m in gv gor vps; do
   cat > "$WORK/N-t3-$m" <<RUNNER
 #!/usr/bin/env bash
@@ -50,7 +63,22 @@ rexec() {
 }
 env_of() { case "$1" in gv) echo "$GV_ENV";; gor) echo "$GOR_ENV";; vps) echo "$VPS_ENV";; esac; }
 base_of() { case "$1" in gv) echo "$GV_BASE_DIR";; gor) echo /home/user/.t3-sidebar-server;; vps) echo /home/t3/.t3;; esac; }
-mut() { local m=$1; shift; local base; base=$(base_of "$m"); rexec "$m" env "MUTAGEN_DATA_DIRECTORY=$base/mutagen" "$base/bin/mutagen" "$@"; }
+mut_bin() {
+  local m=$1 configured cache="$WORK/$N_KEY-mutagen-bin-$1"
+  if [ ! -s "$cache" ]; then
+    configured=$(ws_rpc "$m" server.getConfig '{}' | jq -r '.settings.mutagenPath // empty')
+    if [ -z "$configured" ]; then
+      configured="$(base_of "$m")/bin/mutagen"
+      if ! rexec "$m" test -x "$configured"; then
+        configured=$(rexec "$m" sh -c 'command -v mutagen || { test -x "$HOME/.local/bin/mutagen" && printf "%s" "$HOME/.local/bin/mutagen"; }')
+      fi
+    fi
+    [ -n "$configured" ] || die "No Mutagen executable on $m"
+    printf '%s' "$configured" > "$cache"
+  fi
+  cat "$cache"
+}
+mut() { local m=$1; shift; local base; base=$(base_of "$m"); rexec "$m" env "MUTAGEN_DATA_DIRECTORY=$base/mutagen" "$(mut_bin "$m")" "$@"; }
 unit() {
   local m=$1 verb=$2
   case "$m" in
@@ -109,8 +137,20 @@ wait_state() {
   done
   return 1
 }
+wait_staging() {
+  local observer=$1 target=$2 end=$((SECONDS+TIMEOUT))
+  while [ "$SECONDS" -lt "$end" ]; do
+    mut "$observer" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-mid-sync-$target.json"
+    if jq -e --arg path "$N_ROOT" 'any(.[]; .beta.path==$path and (.status=="staging-alpha" or .status=="staging-beta"))' "$WORK/N-mid-sync-$target.json" >/dev/null; then
+      printf 'PASS N observed active staging before killing %s\n' "$target"
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
 assert_converged() {
-  local label=$1
+  local label=$1 m
   wait_state gv watching; wait_state vps watching
   wait_converged "$label"
   for m in gv gor vps; do
@@ -132,6 +172,7 @@ assert_converged() {
   local expected; expected=$(rexec gor sha256sum "$N_FILE" | cut -d' ' -f1)
   for m in gv vps; do test "$(rexec "$m" sha256sum "$N_FILE" | cut -d' ' -f1)" = "$expected"; done
 }
+. "$MESH_DIR/round3-features.sh"
 # Crash each server while its own representation is first mounting, then mid-sync.
 for m in gv gor vps; do
   for replica in gv vps; do
@@ -156,7 +197,8 @@ for m in gv gor vps; do
   wait_state "$mount_observer" mounting
   crash "$m"
   assert_converged "N mid-mount crash $m"
-  rexec gor sh -c "dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=32 status=none; printf '$m-sync' > '$N_FILE'"
+  rexec gor sh -c "dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=256 status=none; printf '$m-sync' > '$N_FILE'"
+  wait_staging "$mount_observer" "$m"
   crash "$m"
   assert_converged "N mid-sync crash $m"
 done
@@ -164,7 +206,7 @@ done
 for m in gv vps; do
   mut "$m" daemon stop
   base=$(base_of "$m")
-  rexec "$m" sh -c "MUTAGEN_DATA_DIRECTORY='$base/mutagen' nohup '$base/bin/mutagen' daemon run > '$N_ROOT/daemon.log' 2>&1 & echo \$! > '$N_ROOT/daemon.pid'"
+  rexec "$m" sh -c "MUTAGEN_DATA_DIRECTORY='$base/mutagen' nohup '$(mut_bin "$m")' daemon run > '$N_ROOT/daemon.log' 2>&1 & echo \$! > '$N_ROOT/daemon.pid'"
   rexec "$m" sh -c "kill -9 \$(cat '$N_ROOT/daemon.pid')"
   assert_converged "N killed daemon $m"
 done
@@ -192,4 +234,11 @@ for order in 'gv gor vps' 'gv vps gor' 'gor gv vps' 'gor vps gv' 'vps gv gor' 'v
   for m in $order; do unit "$m" start; wait_health "$(origin_of "$m")" "$TIMEOUT"; done
   assert_converged "N restart order $order"
 done
+assert_feature_recovery
+runtime_root="/tmp/N-runtime-$RUN_TS"
+gor_ssh "mkdir -p '$runtime_root-source/runtime/versions/0.0.4-N'; printf '#!/bin/sh\nexit 0\n' > '$runtime_root-source/runtime/versions/0.0.4-N/t3'; chmod 700 '$runtime_root-source/runtime/versions/0.0.4-N/t3'"
+vps_ssh "mkdir -p '$runtime_root'"
+tar -czf "$WORK/N-runtime-scripts.tar.gz" -C "$REPO_ROOT/docs/skill-t3-next" scripts
+scp -q -F "$VPS_SSH_CONFIG" "$WORK/N-runtime-scripts.tar.gz" "$MESH_DIR/round3-runtime.sh" "$VPS_HOST:$runtime_root/"
+vps_ssh "tar -xzf '$runtime_root/N-runtime-scripts.tar.gz' -C '$runtime_root'; bash '$runtime_root/round3-runtime.sh' '$runtime_root'" | tee "$WORK/N-system-services.log"
 printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, authority, 6 restart orders; evidence %s\n' "$WORK"
