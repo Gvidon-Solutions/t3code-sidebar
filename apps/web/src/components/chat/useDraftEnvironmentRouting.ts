@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+import { pendingMeshDrafts } from "../../state/pendingMeshDrafts";
 import {
   defaultDraftMachine,
   draftModelUnavailableReason,
@@ -79,13 +81,22 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     projectGroupingSettings,
     sendInFlightRef,
   } = input;
+  const environmentChangeScope = `${draftId ?? ""}:${draftThread?.environmentId ?? ""}:${draftThread?.projectId ?? ""}`;
+  const queuedSends = useSyncExternalStore(
+    pendingMeshDrafts.subscribe,
+    pendingMeshDrafts.getSnapshot,
+  );
+  const queuedSend = queuedSends.find((send) => send.draftId === draftId && send.state !== "sent");
   const allProjects = useProjects();
   const mesh = useMeshLayout();
   const statuses = useReplicaStatuses();
   const retryReplica = useAtomCommand(replicaStatusEnvironment.retry);
-  const [mount, setMount] = useState<{ environmentId: EnvironmentId; logicalKey: string } | null>(
-    null,
-  );
+  const [mountRequest, setMount] = useState<{
+    environmentId: EnvironmentId;
+    logicalKey: string;
+    scope: string;
+  } | null>(null);
+  const mount = mountRequest?.scope === environmentChangeScope ? mountRequest : null;
   const mountReadyRef = useRef<((project: (typeof allProjects)[number]) => void) | null>(null);
   const config = mesh.config;
   const mountRep =
@@ -119,8 +130,8 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       (project) => project.environmentId === mount?.environmentId && project.id === registeredId,
     );
     // oxlint-disable-next-line react/set-state-in-effect -- completes the external replica-service registration subscription
-    if (project) finishMount(project);
-  }, [registeredId, mount, allProjects]);
+    if (project && !queuedSend) finishMount(project);
+  }, [registeredId, mount, allProjects, queuedSend]);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const getDraftSession = useComposerDraftStore((store) => store.getDraftSession);
   const setLogicalProjectDraftThreadId = useComposerDraftStore(
@@ -220,7 +231,6 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     : undefined;
 
   // A change in flight belongs to the draft and project it started on.
-  const environmentChangeScope = `${draftId ?? ""}:${activeProjectKey ?? ""}`;
   const environmentChangeRef = useRef<{
     readonly environmentId: EnvironmentId;
     readonly scope: string;
@@ -241,8 +251,11 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     [environmentChangeScope],
   );
   const readPendingEnvironmentChange = () => {
+    if (mount) return mount;
     const pending = environmentChangeRef.current;
-    return pending !== null && pending.scope === environmentChangeScopeRef.current ? pending : null;
+    return pending !== null && pending.scope === environmentChangeScopeRef.current
+      ? { ...pending, logicalKey: preferenceKey }
+      : null;
   };
   // The busy state belongs to the request that set it, so an older request settling late
   // (abandoned, or superseded by a newer switch) can never clear a newer one's.
@@ -281,6 +294,10 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     } catch (error) {
       console.warn("Could not remember draft machine", error);
     }
+    setDraftThreadContext(draftId, {
+      environmentSelection: "manual",
+      loadBalancedEnvironmentId: null,
+    });
     const request = { environmentId: target.environmentId, scope: environmentChangeScope };
     environmentChangeRef.current = request;
     setBusyEnvironmentChange(null);
@@ -352,7 +369,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
             },
           }).config,
       );
-      setMount({ environmentId: target.environmentId, logicalKey });
+      setMount({ environmentId: target.environmentId, logicalKey, scope: environmentChangeScope });
       mountReadyRef.current = (project) => {
         retarget(project);
         finish();
@@ -414,10 +431,24 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   });
 
   return {
-    pendingDraftMachineId: mount?.environmentId ?? null,
-    mountingStatus: mountRow?.text ?? (mount ? "Preparing machine…" : null),
-    retryMount:
-      mountRow?.retry && config
+    hasQueuedDraftSend: queuedSend !== undefined,
+    pendingDraftMachineId: queuedSend?.environmentId ?? mount?.environmentId ?? null,
+    mountingStatus:
+      queuedSend?.error ??
+      (queuedSend
+        ? `${mountRow?.text ?? "Waiting for project registration"} · Message queued`
+        : (mountRow?.text ?? (mount ? "Preparing machine…" : null))),
+    retryMount: queuedSend?.error
+      ? () => {
+          void pendingMeshDrafts.retry(queuedSend.draftId).catch((error: unknown) => {
+            toastManager.add({
+              type: "error",
+              title: "Cannot retry send",
+              description: String(error),
+            });
+          });
+        }
+      : mountRow?.retry && config
         ? () => {
             const driver = replicaDriverEnvironment(config, mountRow.rep);
             if (!driver) {

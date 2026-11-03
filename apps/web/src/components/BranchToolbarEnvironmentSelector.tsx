@@ -8,7 +8,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { shortcutLabelForCommand } from "../keybindings";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import type { EnvironmentId } from "@t3tools/contracts";
-import { PlusIcon, ScaleIcon } from "lucide-react";
+import { ChevronDownIcon, PlusIcon, ScaleIcon } from "lucide-react";
 import { memo } from "react";
 
 import { ADD_TO_MACHINE_LABEL_CLASS, type EnvironmentOption } from "./BranchToolbar.logic";
@@ -49,6 +49,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
 }: BranchToolbarEnvironmentSelectorProps) {
   const mesh = useMeshLayout();
   const machineOf = (id: string, label: string) =>
+    availableEnvironments.find((environment) => environment.environmentId === id)?.display ??
     machineDisplayOf(mesh.config ?? { machines: {} }, id, label);
   const composerFloatingLayerProps = useComposerMenuProps();
   const shortcutLabel = shortcutLabelForCommand(
@@ -113,7 +114,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             <ComposerSelectControl
               size="xs"
               className="min-w-0 max-w-full"
-              aria-label="Run on"
+              aria-label="Machine"
               data-composer-shortcut="composer.host"
               data-composer-context-control
             />
@@ -127,6 +128,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           <ComposerContextLabel>
             <SelectValue />
           </ComposerContextLabel>
+          <ChevronDownIcon className="size-3" data-composer-control-chevron aria-hidden="true" />
         </TooltipTrigger>
         <TooltipPopup>
           {autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}
@@ -135,7 +137,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       </Tooltip>
       <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
         <SelectGroup>
-          <SelectGroupLabel>Run on</SelectGroupLabel>
+          <SelectGroupLabel>Machine</SelectGroupLabel>
           {onAutoEnvironment && (
             <SelectItem
               value={AUTO_VALUE}
@@ -162,8 +164,12 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 <MachineTag machine={machineOf(env.environmentId, env.label)} />
                 {env.label}
                 <span className="text-xs text-muted-foreground">
-                  {env.connected === false ? "Unreachable" : "Connected"} ·{" "}
-                  {env.projectId ? "here" : "copy will be created"}
+                  {env.status ??
+                    (env.connected === false
+                      ? "not connected"
+                      : env.projectId
+                        ? "here"
+                        : "copy will be created")}
                 </span>
               </span>
             </SelectItem>

@@ -1,7 +1,6 @@
-import {
-  DraftMachineSendQueue,
-  draftModelUnavailableReason,
-} from "@t3tools/client-runtime/state/mesh-layout";
+import { CommandId } from "@t3tools/contracts";
+import { pendingMeshDrafts, blobDataUrl } from "../../state/pendingMeshDrafts";
+import { draftModelUnavailableReason } from "@t3tools/client-runtime/state/mesh-layout";
 import {
   mergeDirectPreviewAnnotation,
   resolveBackgroundDraftWorkspaceOptions,
@@ -46,7 +45,7 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { createModelSelection } from "@t3tools/shared/model";
-import { type SetStateAction, useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
+import { type SetStateAction, useLayoutEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -406,7 +405,6 @@ export function useComposerSend(input: ComposerSendInput) {
     respondingRequestIdsRef.current = respondingRequestIds;
   }, [pendingApprovals, respondingRequestIds]);
 
-  const queuedMachineSend = useRef(new DraftMachineSendQueue());
   const onSend = async (
     e?: { preventDefault: () => void },
     dispatchMode: ComposerDispatchMode = "auto",
@@ -417,11 +415,12 @@ export function useComposerSend(input: ComposerSendInput) {
     },
   ) => {
     e?.preventDefault();
+    if (draftId) {
+      await pendingMeshDrafts.ready;
+      if (pendingMeshDrafts.getSnapshot().some((send) => send.draftId === draftId)) return;
+    }
     // What the user pressed send on; uploads below can take a while, and a redirect must not
     // decline approvals for a draft that changed meanwhile.
-    if (queuedMachineSend.current.defer(readPendingEnvironmentChange() !== null)) {
-      return;
-    }
     const promptAtSend = promptRef.current;
     if (
       usageLimitsOffered &&
@@ -455,7 +454,6 @@ export function useComposerSend(input: ComposerSendInput) {
       isRevertingCheckpoint ||
       !clientSettingsHydrated ||
       threadDetailLoading ||
-      readPendingEnvironmentChange() !== null ||
       sendInFlightRef.current ||
       feedbackUploadsInFlightRef.current.has(routeThreadKey)
     ) {
@@ -601,7 +599,7 @@ export function useComposerSend(input: ComposerSendInput) {
       interactionMode: sendInteractionMode,
       interactionModeEnabled: sendInteractionModeEnabled,
     } = sendCtx;
-    if (isLocalDraftThread) {
+    if (isLocalDraftThread && readPendingEnvironmentChange() === null) {
       const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
       const reason = draftModelUnavailableReason(
         config
@@ -944,6 +942,54 @@ export function useComposerSend(input: ComposerSendInput) {
       text: messageTextForSend || ATTACHMENT_ONLY_BOOTSTRAP_PROMPT,
     });
     if (composerRef.current?.validateProviderInput(outgoingMessageText) === false) {
+      return;
+    }
+
+    const pendingMachine = readPendingEnvironmentChange();
+    if (pendingMachine && draftId && pendingMachine.logicalKey) {
+      sendInFlightRef.current = true;
+      try {
+        const attachments = await Promise.all(
+          composerAttachmentsSnapshot.map(async (attachment) => {
+            if (!attachment.file)
+              throw new Error(`Attach ${attachment.name} again before sending.`);
+            return {
+              id: attachment.id,
+              type: attachment.type,
+              name: attachment.name,
+              mimeType: attachment.mimeType,
+              sizeBytes: attachment.sizeBytes,
+              dataUrl: await blobDataUrl(attachment.file),
+            };
+          }),
+        );
+        await pendingMeshDrafts.enqueue({
+          draftId,
+          logicalKey: pendingMachine.logicalKey,
+          environmentId: pendingMachine.environmentId,
+          threadId: threadIdForSend,
+          commandId: CommandId.make(`mesh-draft:${draftId}`),
+          messageId: messageIdForSend,
+          text: outgoingMessageText,
+          modelSelection: ctxSelectedModelSelection,
+          runtimeMode,
+          interactionMode: sendInteractionMode,
+          attachments,
+          ...(outgoingMessageContext ? { context: outgoingMessageContext } : {}),
+          createdAt: messageCreatedAt,
+          state: "queued",
+          error: null,
+        });
+        toastManager.add({
+          type: "info",
+          title: "Message queued",
+          description:
+            "It will be sent when the project is ready on the selected machine. You can leave this screen.",
+        });
+      } catch (error) {
+        setThreadError(activeThread.id, error instanceof Error ? error.message : String(error));
+      }
+      sendInFlightRef.current = false;
       return;
     }
 
@@ -1543,14 +1589,5 @@ export function useComposerSend(input: ComposerSendInput) {
     }
   };
 
-  const resumeMachineSend = useEffectEvent(() => {
-    queuedMachineSend.current.resume(readPendingEnvironmentChange() !== null, () => {
-      void onSend();
-    });
-  });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- sends the retained composer draft after its selected machine has registered the project
-  useEffect(() => {
-    resumeMachineSend();
-  });
   return { onSend };
 }

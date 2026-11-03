@@ -1,3 +1,9 @@
+import { useEffect } from "react";
+import {
+  draftMachineDisplays,
+  draftMachineStatus,
+  logDraftMachineCollisions,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
@@ -8,7 +14,6 @@ import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
-import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { resolveLogicalProjectKey } from "@t3tools/client-runtime/state/mesh-layout";
 import { useMeshLayout } from "./useMeshLayout";
 import { useProjects } from "../state/entities";
@@ -25,6 +30,21 @@ export function useLogicalProjectEnvironments(
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
 
+  const displays = draftMachineDisplays(mesh.config ?? { machines: {} }, [
+    ...environments.map((environment) => ({
+      environmentId: environment.environmentId,
+      label: environment.label,
+      descriptorLabel: environment.serverConfig?.environment.label,
+      url: environment.displayUrl,
+    })),
+    ...Object.keys(mesh.config?.machines ?? {})
+      .filter((id) => !environments.some((environment) => environment.environmentId === id))
+      .map((environmentId) => ({ environmentId })),
+  ]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reports ambiguous saved/descriptor machine identities to the diagnostics log
+  useEffect(() => {
+    logDraftMachineCollisions(displays.collisions);
+  }, [displays.collisions]);
   if (!activeProject) return [];
   const environmentById = new Map(
     environments.map((environment) => [environment.environmentId, environment]),
@@ -35,9 +55,13 @@ export function useLogicalProjectEnvironments(
     envs.push({
       environmentId,
       projectId,
-      label: mesh.config
-        ? machineDisplayOf(mesh.config, environmentId, environment?.label ?? "Machine").label
-        : (environment?.label ?? "Machine"),
+      label: displays.rows.find((row) => row.environmentId === environmentId)?.label ?? "Machine",
+      display: displays.rows.find((row) => row.environmentId === environmentId),
+      status: draftMachineStatus({
+        connected: environment?.connection.phase === "connected",
+        hasProject: projectId !== null,
+        error: environment?.connection.error,
+      }),
       connected: environment?.connection.phase === "connected",
       supportsMesh: environment?.serverConfig?.environment.capabilities.replicas === true,
       isPrimary: environmentId === primaryEnvironmentId,
@@ -84,6 +108,11 @@ export function useLogicalProjectEnvironments(
     }
   }
   for (const id of Object.keys(mesh.config?.machines ?? {})) {
+    if (
+      scratchDraft &&
+      !environmentById.get(EnvironmentId.make(id))?.serverConfig?.scratchWorkspaceRoot
+    )
+      continue;
     if (!envs.some((environment) => environment.environmentId === id))
       pushEnvironment(EnvironmentId.make(id), null);
   }

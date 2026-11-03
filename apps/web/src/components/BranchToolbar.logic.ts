@@ -16,6 +16,8 @@ export interface EnvironmentOption {
   label: string;
   isPrimary: boolean;
   machine: EnvironmentMachineKind;
+  display?: import("@t3tools/client-runtime/state/machine-display").MachineDisplay | undefined;
+  status?: string;
   connected?: boolean;
   supportsMesh?: boolean;
 }

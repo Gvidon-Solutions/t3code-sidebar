@@ -1707,12 +1707,11 @@ export default function ChatView(props: ChatViewProps) {
   if (providerStatusBannerKey === null && dismissedProviderStatusBannerKey !== null) {
     setDismissedProviderStatusBannerKey(null);
   }
-  const visibleProviderStatus = shouldShowProviderStatusBanner(
-    activeProviderStatus,
-    dismissedProviderStatusBannerKey,
-  )
-    ? activeProviderStatus
-    : null;
+  const visibleProviderStatus =
+    !isLocalDraftThread &&
+    shouldShowProviderStatusBanner(activeProviderStatus, dismissedProviderStatusBannerKey)
+      ? activeProviderStatus
+      : null;
   const hasTimelineTopBanner = Boolean(timelineThreadError) || visibleProviderStatus !== null;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
@@ -1795,6 +1794,7 @@ export default function ChatView(props: ChatViewProps) {
     onAutoEnvironmentStable,
     autoEnvironmentLabel,
     pendingDraftMachineId,
+    hasQueuedDraftSend,
     mountingStatus,
     retryMount,
     readPendingEnvironmentChange,
@@ -3594,7 +3594,8 @@ export default function ChatView(props: ChatViewProps) {
                           ) : null}
                           {!composerMounted ? null : (
                             <ChatComposer
-                              canOperateThread={canOperateThread}
+                              canOperateThread={canOperateThread && !hasQueuedDraftSend}
+                              draftSendQueued={hasQueuedDraftSend}
                               reportedModelSelection={reportedModelSelection}
                               multipleModelSelections={multipleModelSelections}
                               supportsMultipleModels={
