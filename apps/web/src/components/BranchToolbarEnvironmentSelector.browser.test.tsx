@@ -1,3 +1,4 @@
+import { userEvent } from "vite-plus/test/browser";
 import { expect, it, vi } from "vite-plus/test";
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { render } from "../../test/render";
@@ -50,6 +51,6 @@ it("offers a project copy on another machine and disables an unreachable machine
   await expect
     .element(screen.getByRole("option", { name: /Offline/ }))
     .toHaveAttribute("aria-disabled", "true");
-  await screen.getByRole("option", { name: /Operalia/ }).click();
+  await userEvent.keyboard("{ArrowDown}{Enter}");
   expect(onChange).toHaveBeenCalledWith("op");
 });

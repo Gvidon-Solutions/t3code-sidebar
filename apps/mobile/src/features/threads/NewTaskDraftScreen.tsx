@@ -1,6 +1,7 @@
 import { useServerConfigs } from "../../state/entities";
 import {
   DraftMachineSendQueue,
+  defaultUsableDraftModel,
   draftModelUnavailableReason,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { useEffectEvent } from "react";
@@ -195,7 +196,7 @@ export function NewTaskDraftScreen(props: {
   const environmentRuntime = useRemoteEnvironmentRuntime(selectedProject?.environmentId ?? null);
   const connectionState = environmentRuntime?.connectionState ?? "offline";
   const selectedEnvironmentServerConfig = useEnvironmentServerConfig(
-    selectedProject?.environmentId ?? null,
+    flow.switchingToEnvironmentId ?? selectedProject?.environmentId ?? null,
   );
   const environmentConnected = connectionState === "connected";
   const canOperate = useEnvironmentScope(
@@ -529,7 +530,8 @@ export function NewTaskDraftScreen(props: {
 
   const selectedEnvironmentLabel =
     flow.environments.find(
-      (environment) => environment.environmentId === flow.selectedEnvironmentId,
+      (environment) =>
+        environment.environmentId === (flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId),
     )?.environmentLabel ?? "Environment";
   const availableCurrentBranchName =
     flow.availableBranches.find((branch) => branch.current)?.name ??
@@ -820,8 +822,16 @@ export function NewTaskDraftScreen(props: {
             ) === null,
         )
       : null;
+  const defaultHere = defaultUsableDraftModel(
+    selectedEnvironmentServerConfig,
+    selectedProject?.id ?? null,
+  );
   const modelHere = modelUnavailable
-    ? flow.modelOptions.find((option) => !option.isUnavailable)
+    ? flow.modelOptions.find(
+        (option) =>
+          option.selection.instanceId === defaultHere?.instanceId &&
+          option.selection.model === defaultHere?.model,
+      )
     : null;
   const environmentControl = (
     <View>

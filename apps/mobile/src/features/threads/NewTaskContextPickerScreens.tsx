@@ -248,7 +248,10 @@ export function NewTaskEnvironmentPickerRouteScreen() {
                     if (switched) navigation.goBack();
                   });
                 }}
-                selected={flow.selectedEnvironmentId === environment.environmentId}
+                selected={
+                  (flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId) ===
+                  environment.environmentId
+                }
                 title={environment.environmentLabel}
               />
             ))}

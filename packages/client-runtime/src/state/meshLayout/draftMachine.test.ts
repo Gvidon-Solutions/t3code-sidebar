@@ -92,3 +92,32 @@ it("retains a send through mounting and retry, then dispatches once with the reg
   ]);
   expect(queue.defer(false)).toBe(false);
 });
+
+import { defaultUsableDraftModel } from "./draftMachine.ts";
+it("uses the configured usable local default before catalog order", () => {
+  const instanceId = ProviderInstanceId.make("codex");
+  const selection = { instanceId, model: "preferred" };
+  const config = {
+    settings: { ...DEFAULT_SERVER_SETTINGS, defaultModelSelection: selection },
+    providers: [
+      {
+        instanceId,
+        installed: true,
+        status: "ready",
+        auth: { status: "authenticated" },
+        models: [{ slug: "first" }, { slug: "preferred" }],
+      },
+    ],
+  } as unknown as Pick<ServerConfig, "providers" | "settings">;
+  expect(defaultUsableDraftModel(config, null)).toEqual(selection);
+  expect(
+    defaultUsableDraftModel(
+      {
+        ...config,
+        settings: { ...config.settings, defaultModelSelection: { instanceId, model: "missing" } },
+      },
+      null,
+    ),
+  ).toEqual({ instanceId, model: "first" });
+  expect(defaultUsableDraftModel(null, null)).toBeNull();
+});

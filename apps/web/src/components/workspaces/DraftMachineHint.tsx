@@ -1,4 +1,7 @@
-import { draftModelUnavailableReason } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  defaultUsableDraftModel,
+  draftModelUnavailableReason,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import type { EnvironmentId, ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
 import { useEnvironments, useEnvironmentProviders } from "../../state/environments";
 import type { EnvironmentOption } from "../BranchToolbar.logic";
@@ -34,13 +37,7 @@ export function DraftMachineHint({
       draftModelUnavailableReason(configOf(machine.environmentId), selection, machine.projectId) ===
         null,
   );
-  const local = config?.providers
-    .flatMap((provider) =>
-      provider.models.map((model) => ({ instanceId: provider.instanceId, model: model.slug })),
-    )
-    .find(
-      (model) => draftModelUnavailableReason(config, model, current?.projectId ?? null) === null,
-    );
+  const local = defaultUsableDraftModel(config, current?.projectId ?? null);
   const provider =
     config?.providers.find((provider) => provider.instanceId === selection.instanceId)
       ?.displayName ?? selection.instanceId;

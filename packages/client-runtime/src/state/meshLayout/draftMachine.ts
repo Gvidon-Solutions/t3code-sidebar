@@ -60,3 +60,21 @@ export class DraftMachineSendQueue {
     send();
   }
 }
+
+export function defaultUsableDraftModel(
+  config: Pick<ServerConfig, "providers" | "settings"> | null | undefined,
+  projectId: ProjectId | null,
+): ModelSelection | null {
+  if (!config) return null;
+  const preferred = config.settings.defaultModelSelection;
+  if (preferred && draftModelUnavailableReason(config, preferred, projectId) === null)
+    return preferred;
+  return (
+    config.providers
+      .flatMap((provider) =>
+        provider.models.map((model) => ({ instanceId: provider.instanceId, model: model.slug })),
+      )
+      .find((selection) => draftModelUnavailableReason(config, selection, projectId) === null) ??
+    null
+  );
+}
