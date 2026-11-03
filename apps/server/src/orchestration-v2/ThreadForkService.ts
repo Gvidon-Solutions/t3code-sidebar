@@ -103,8 +103,9 @@ export const layer: Layer.Layer<ThreadForkServiceV2> = Layer.succeed(
           cause: forkableSourceRunStatusError(sourceRun),
         });
       }
+      const { meshHandoff: _handoff, ...sourceThread } = input.sourceProjection.thread;
       const targetThread: OrchestrationV2AppThread = {
-        ...input.sourceProjection.thread,
+        ...sourceThread,
         // PR context follows the conversation; watching remains the source thread's responsibility.
         pullRequests: input.sourceProjection.thread.pullRequests?.map(
           ({ watch: _watch, ...link }) => link,
@@ -213,9 +214,10 @@ export function planLegacyImportFork(input: {
       TurnItemId.make(`${target}:fork-item:${String(index).padStart(6, "0")}`),
     ]),
   );
+  const { meshHandoff: _handoff, ...sourceThread } = input.sourceThread;
   return {
     targetThread: {
-      ...input.sourceThread,
+      ...sourceThread,
       createdBy: input.createdBy,
       creationSource: input.creationSource,
       id: target,

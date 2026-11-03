@@ -1143,13 +1143,24 @@ async function resolveThreadAcross(ref, { on } = {}) {
   const candidates = [];
   let cursor;
   do {
-    const page = await m.call("t3_thread_list", {
-      environmentId: machine?.environmentId ?? "all",
+    const args = {
       allProjects: true,
       includeSubagents: true,
       limit: 100,
       ...(cursor === undefined ? {} : { cursor }),
-    });
+    };
+    let page;
+    try {
+      page = await m.call("t3_thread_list", {
+        environmentId: machine?.environmentId ?? "all",
+        ...args,
+      });
+    } catch (error) {
+      // No mesh here (links off, or a server that predates "all"): look on this machine only.
+      if (machine || !(error instanceof Fail) || !/capability_denied|environmentId|Linked environments/.test(error.message))
+        throw error;
+      page = await m.call("t3_thread_list", args);
+    }
     for (const missing of page.unreachable ?? [])
       console.error(`${missing.environmentId}: ${missing.message}`);
     candidates.push(...page.threads.map((t) => ({ ...t, project: t.project ?? t.projectId })));

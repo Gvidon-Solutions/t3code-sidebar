@@ -21,6 +21,7 @@ import {
   RunId,
   NonNegativeInt,
   ProjectId,
+  ThreadMoveResult,
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Schema from "effect/Schema";
@@ -33,7 +34,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
-    "Move, pin, snooze, settle, archive, or mark a thread unread. Move requires projectId on the source machine; targetEnvironmentId is reserved for cross-machine transfers and currently returns an explicit unsupported error. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
+    "Move, pin, snooze, settle, archive, or mark a thread unread. Move requires projectId on the source machine; targetEnvironmentId hands the conversation off to that machine. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
@@ -54,6 +55,7 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
     snoozedUntil: Schema.optional(IsoDateTime),
   }),
   success: Schema.Union([
+    ThreadMoveResult,
     OrchestrationV2DispatchCommandResult,
     Schema.Struct({ settlesWhenTurnEnds: Schema.Literal(true) }),
   ]),
@@ -165,6 +167,24 @@ const ThreadConfigureTool = Tool.make("t3_thread_configure", {
     modelSelection: Schema.optional(ModelSelection),
   }),
   success: Schema.Union([threadConfiguration, OrchestrationV2DispatchCommandResult]),
+}).annotate(Tool.Destructive, true);
+
+const ThreadMoveTool = Tool.make("t3_thread_move", {
+  ...commandTool,
+  description:
+    "Move an idle conversation to a project here or hand it off to targetEnvironmentId. Its transcript and attachments continue there; the original is archived with a link. projectId is the target representation, or omit it to use the same logical project there. modelSelection chooses the target provider, model and options. message optionally starts a follow-up there. Retry a handoff with the same clientRequestId. undoHandoffId reverses it within 10 seconds.",
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    threadId: Schema.optional(ThreadId),
+    projectId: Schema.optional(ProjectId),
+    targetEnvironmentId: Schema.optional(Schema.String),
+    logicalKey: Schema.optional(Schema.String),
+    modelSelection: Schema.optional(ModelSelection),
+    message: Schema.optional(Schema.String),
+    clientRequestId: Schema.optional(Schema.String),
+    undoHandoffId: Schema.optional(Schema.String),
+  }),
+  success: ThreadMoveResult,
 }).annotate(Tool.Destructive, true);
 
 const ThreadTransferTool = Tool.make("t3_thread_transfer", {
@@ -323,6 +343,7 @@ export const ThreadToolkit = Toolkit.make(
   ThreadSearchTool,
   ThreadConfigureTool,
   ThreadTransferTool,
+  ThreadMoveTool,
   ThreadOrganizeTool,
   PendingRequestTool,
   QueueTool,

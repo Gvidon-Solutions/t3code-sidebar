@@ -1,3 +1,4 @@
+import { planHandoffRecord } from "../mesh/handoffRecord.ts";
 import type {
   GuestShareId,
   OrchestrationV2SearchThreadInput,
@@ -520,6 +521,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.pull-request-watch.sync":
     case "thread.pull-request.sync":
     case "thread.title.regeneration.complete":
+    case "thread.handoff.record":
     case "thread.move":
     case "thread.project.adopt-folder":
     case "thread.runtime-mode.set":
@@ -4185,9 +4187,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       );
     const thread = projection.thread;
     if (command.type === "thread.move" && command.targetEnvironmentId !== undefined) {
-      return yield* reject(
-        "cannot move to another machine: Move to another machine needs a history export/import protocol for runs, messages, attachments, checkpoints and provider sessions; context transfer only supports forks within one server.",
-      );
+      return yield* reject("must use the threads.move service for a cross-machine handoff.");
     }
     if (thread.deletedAt !== null) return yield* reject("is deleted.");
     if (threadHasUnfinishedWork(projection)) {
@@ -4208,13 +4208,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       events,
       command,
     )({
-      type: "thread.metadata-updated",
+      type:
+        command.type === "thread.move" &&
+        command.modelSelection &&
+        command.modelSelection.instanceId !== thread.providerInstanceId
+          ? "thread.provider-switched"
+          : "thread.metadata-updated",
       threadId: command.threadId,
       providerInstanceId: thread.providerInstanceId,
       occurredAt: now,
       payload: {
         ...thread,
         projectId: command.projectId,
+        ...(command.type === "thread.move" && command.modelSelection
+          ? {
+              modelSelection: command.modelSelection,
+              providerInstanceId: command.modelSelection.instanceId,
+            }
+          : {}),
         worktreePath: command.type === "thread.move" ? thread.worktreePath : null,
         updatedAt: now,
       },
@@ -5323,6 +5334,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
   ) {
     let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+    if (projection.thread.meshHandoff?.phase === "preparing")
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: "A move is in progress. Retry the move before sending a message.",
+      });
     if (command.manualContinuationOfRunId !== undefined) {
       const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
       const limited = latestRootProviderFailure(source ?? null, projection.turnItems);
@@ -13055,6 +13072,67 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "provider-session.detach":
         yield* dispatchProviderSessionDetach(command, events, effects);
         break;
+      case "thread.handoff.record": {
+        const projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+        const history = yield* projectionStore
+          .getThreadRecords(command.threadId, ["turnItems"])
+          .pipe(
+            Effect.mapError(
+              (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+            ),
+          );
+        if (threadHasUnfinishedWork(projection))
+          return yield* new OrchestratorDispatchError({
+            commandId: command.commandId,
+            commandType: command.type,
+            cause: "Finish or stop the running turn before moving this thread.",
+          });
+        if (
+          command.state.phase === "received" &&
+          (projection.runs.length > 0 || history.turnItems.length > 0)
+        )
+          return yield* new OrchestratorDispatchError({
+            commandId: command.commandId,
+            commandType: command.type,
+            cause: "Handoff target must be empty.",
+          });
+        const now = yield* DateTime.now;
+        const plan = planHandoffRecord({
+          thread: projection.thread,
+          state: command.state,
+          now,
+          ordinal: history.turnItems.reduce((next, item) => Math.max(next, item.ordinal + 1), 0),
+          ...(command.entries === undefined ? {} : { entries: command.entries }),
+          ...(command.marker === undefined ? {} : { marker: command.marker }),
+        });
+        const emitEvent = emit(events, command);
+        yield* emitEvent({
+          type:
+            command.state.phase === "completed" || command.state.phase === "retracted"
+              ? "thread.archived"
+              : command.state.phase === "undone"
+                ? "thread.unarchived"
+                : "thread.metadata-updated",
+          threadId: command.threadId,
+          occurredAt: now,
+          payload: plan.thread,
+        });
+        for (const message of plan.messages)
+          yield* emitEvent({
+            type: "message.updated",
+            threadId: command.threadId,
+            occurredAt: now,
+            payload: message,
+          });
+        for (const item of plan.items)
+          yield* emitEvent({
+            type: "turn-item.updated",
+            threadId: command.threadId,
+            occurredAt: now,
+            payload: item,
+          });
+        break;
+      }
       case "thread.move":
       case "thread.project.adopt-folder":
         yield* dispatchThreadProjectAdoptFolder(command, events);

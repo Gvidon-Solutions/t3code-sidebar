@@ -1,4 +1,4 @@
-import { openMoveThreadSheet } from "../workspaces/MoveThreadSheet";
+import { openMoveThreadSheet } from "../workspaces/moveThreadState";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {

@@ -76,3 +76,5 @@ export * from "./secretReference.ts";
 export * from "./settingsSecretValue.ts";
 export * from "./clientRpcPermissions.ts";
 export * from "./meshLayout.ts";
+
+export * from "./threadHandoff.ts";

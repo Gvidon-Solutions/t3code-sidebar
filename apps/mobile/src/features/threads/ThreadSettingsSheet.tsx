@@ -269,6 +269,7 @@ type ThreadSettingsSubmenuPage =
   | { readonly kind: "runtime" };
 
 export type ThreadSettingsSessionProps = {
+  readonly hideRuntimeMode?: boolean;
   readonly environmentId: EnvironmentId | null;
   readonly projectId: ProjectId | null;
   readonly providerInstanceId?: ProviderInstanceId;
@@ -294,6 +295,7 @@ export type ExistingThreadSettingsRouteParams = {
 };
 
 type ThreadSettingsSessionValue = {
+  readonly hideRuntimeMode?: boolean | undefined;
   readonly environmentId: EnvironmentId | null;
   readonly providerInstanceId?: ProviderInstanceId;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
@@ -661,6 +663,7 @@ export function ThreadSettingsSessionProvider(
     toggleHidden,
     renameModel,
     pendingHiddenKeys,
+    hideRuntimeMode: props.hideRuntimeMode,
     runtimeMode: compatibleRuntimeMode,
     runtimeModeChoices,
     onUpdateRuntimeMode: props.onUpdateRuntimeMode,
@@ -939,17 +942,19 @@ function ThreadSettingsOptionsItem(props: {
             </Animated.View>
           );
         })}
-        <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
-          <DisclosureRow
-            isLast
-            label="Runtime"
-            value={
-              session.runtimeModeChoices.find((choice) => choice.mode === session.runtimeMode)
-                ?.label
-            }
-            onPress={() => props.onOpenSubmenu({ kind: "runtime" })}
-          />
-        </Animated.View>
+        {!session.hideRuntimeMode ? (
+          <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
+            <DisclosureRow
+              isLast
+              label="Runtime"
+              value={
+                session.runtimeModeChoices.find((choice) => choice.mode === session.runtimeMode)
+                  ?.label
+              }
+              onPress={() => props.onOpenSubmenu({ kind: "runtime" })}
+            />
+          </Animated.View>
+        ) : null}
       </Animated.View>
 
       <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">Catalog</Text>
@@ -1540,6 +1545,39 @@ function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) 
         />
       </ThreadSettingsPickerStack.Navigator>
     </ThreadSettingsPickerPresentationContext.Provider>
+  );
+}
+
+function ThreadSettingsInlinePickerBody(props: { readonly onClose: () => void }) {
+  const session = useThreadSettingsSession();
+  const [submenu, setSubmenu] = useState<ThreadSettingsSubmenuPage | null>(null);
+  return (
+    <View className="flex-1 bg-sheet-solid pt-12">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back from move models"
+        onPress={() => {
+          if (submenu) setSubmenu(null);
+          else if (session.commitPendingModel()) props.onClose();
+        }}
+      >
+        <Text className="p-4">Back</Text>
+      </Pressable>
+      {submenu ? (
+        <ThreadSettingsChoiceContent submenu={submenu} onSelected={() => setSubmenu(null)} />
+      ) : (
+        <ThreadSettingsMainContent onOpenSubmenu={setSubmenu} />
+      )}
+    </View>
+  );
+}
+export function ThreadSettingsInlinePicker(
+  props: ThreadSettingsSessionProps & { readonly onClose: () => void },
+) {
+  return (
+    <ThreadSettingsSessionProvider {...props}>
+      <ThreadSettingsInlinePickerBody onClose={props.onClose} />
+    </ThreadSettingsSessionProvider>
   );
 }
 

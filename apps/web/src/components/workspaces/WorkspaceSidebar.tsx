@@ -1,3 +1,5 @@
+import type { ModelSelection } from "@t3tools/contracts";
+import { MoveThreadModelDialog } from "./MoveThreadModelDialog";
 import { useScratchProject } from "../../hooks/useScratchProject";
 import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
 import { ProjectMachineStrip } from "./ProjectMachineStrip";
@@ -10,7 +12,7 @@ import { threadDropProject } from "./threadDrop.logic";
 import { MoveProjectDialog } from "./MoveProjectDialog";
 import {
   threadMoveValidity,
-  CROSS_MACHINE_MOVE_MESSAGE,
+  moveThreadWithConfirmation,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -605,18 +607,32 @@ export default function WorkspaceSidebar() {
   const [threadDrop, setThreadDrop] = useState<string | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const moveThreadCommand = useAtomCommand(threadEnvironment.move, { reportFailure: false });
-  const moveToProject = async (thread: SidebarThreadSummary, target: (typeof projects)[number]) => {
-    setMovingThread(null);
-    const validity = threadMoveValidity(thread, target);
-    if (validity === "same-project") return;
-    if (validity === "cross-machine") {
-      toastManager.add({ type: "error", title: CROSS_MACHINE_MOVE_MESSAGE });
+  const [moveModel, setMoveModel] = useState<{
+    thread: SidebarThreadSummary;
+    target: (typeof projects)[number];
+  } | null>(null);
+  const moveToProject = async (
+    thread: SidebarThreadSummary,
+    target: (typeof projects)[number],
+    modelSelection?: ModelSelection,
+  ) => {
+    if (!modelSelection) {
+      setMovingThread(null);
+      setMoveModel({ thread, target });
       return;
     }
-    const result = await moveThreadCommand({
-      environmentId: thread.environmentId,
-      input: { threadId: thread.id, projectId: target.id },
+    setMoveModel(null);
+    setMovingThread(null);
+    const validity = threadMoveValidity(thread, target);
+    const result = await moveThreadWithConfirmation({
+      source: thread,
+      target,
+      modelSelection,
+      machine: machineTag(config, target.environmentId),
+      confirm: async () => true,
+      move: moveThreadCommand,
     });
+    if (result === null) return;
     if (result._tag === "Failure") {
       toastManager.add({
         type: "error",
@@ -626,14 +642,26 @@ export default function WorkspaceSidebar() {
       return;
     }
     toastManager.add({
-      title: "Moved to " + (target.isScratch ? "No project" : target.title),
+      title:
+        "Moved to " +
+        (validity === "cross-machine"
+          ? result.value.machine
+          : target.isScratch
+            ? "No project"
+            : target.title),
+      timeout: 10_000,
       actionProps: {
         children: "Undo",
         onClick: () => {
           void reportFailure("Could not undo move", () =>
             moveThreadCommand({
               environmentId: thread.environmentId,
-              input: { threadId: thread.id, projectId: thread.projectId },
+              input: {
+                threadId: thread.id,
+                ...(result.value.handoffId
+                  ? { undoHandoffId: result.value.handoffId }
+                  : { projectId: thread.projectId, modelSelection: thread.modelSelection }),
+              },
             }),
           );
         },
@@ -2057,6 +2085,17 @@ export default function WorkspaceSidebar() {
             onSelect={(icon) => void setFolderIcon(iconPickerFolder, icon)}
           />
         </Suspense>
+      ) : null}
+      {moveModel ? (
+        <MoveThreadModelDialog
+          environmentId={moveModel.target.environmentId}
+          projectId={moveModel.target.id}
+          current={moveModel.thread.modelSelection}
+          machine={machineTag(config, moveModel.target.environmentId)}
+          crossMachine={moveModel.thread.environmentId !== moveModel.target.environmentId}
+          onClose={() => setMoveModel(null)}
+          onMove={(selection) => void moveToProject(moveModel.thread, moveModel.target, selection)}
+        />
       ) : null}
       {movingThread ? (
         <MoveProjectDialog

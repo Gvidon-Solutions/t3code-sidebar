@@ -1,4 +1,6 @@
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
+import { ThreadHandoffService } from "./mesh/ThreadHandoffService.ts";
+import { ThreadMoveRpc } from "@t3tools/contracts";
 import { MeshReplicator } from "./mesh/MeshReplicator.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -487,6 +489,7 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
 
 // Build the production RPC layer; unrelated capabilities fail if this test calls them.
 const layerUnusedConfigRpcServices = Layer.mergeAll(
+  Layer.mock(ThreadHandoffService)({}),
   Layer.mock(DocumentText.DocumentText)({}),
   Layer.mock(ServerSecretStore.ServerSecretStore)({}),
   Layer.mock(WorkspacePaths.WorkspacePaths)({}),
@@ -749,6 +752,14 @@ it.effect(
 
 it.effect("on-demand clients get provider config without workspace snapshots", () =>
   Effect.gen(function* () {
+    const moved = {
+      threadId: ThreadId.make("L-destination"),
+      environmentId: EnvironmentId.make("peer"),
+      handoffId: "L-id",
+      undoUntil: 10000,
+      link: "t3-thread://v2/peer/L-destination",
+      machine: "VP",
+    };
     const instanceId = ProviderInstanceId.make("claudeAgent");
     const snapshotFor = (cwd: string, checkedAt: string) => ({
       cwd,
@@ -789,6 +800,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
     };
     const configRpcServices = Layer.mergeAll(
       layerUnusedConfigRpcServices,
+      Layer.mock(ThreadHandoffService)({ move: () => Effect.succeed(moved) }),
       Layer.mock(ExternalLauncher.ExternalLauncher)({
         resolveAvailableEditors: () => Effect.succeed([]),
         // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
@@ -834,7 +846,12 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       }),
     );
     const server = yield* RpcServer.makeNoSerialization(
-      RpcGroup.make(WsSubscribeServerConfigRpc, WsServerRefreshProvidersRpc, ...MeshRpcs),
+      RpcGroup.make(
+        WsSubscribeServerConfigRpc,
+        WsServerRefreshProvidersRpc,
+        ThreadMoveRpc,
+        ...MeshRpcs,
+      ),
       {
         ...WS_RPC_SERVER_OPTIONS,
         onFromServer: (response) =>
@@ -842,8 +859,11 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
             ? Effect.forEach(response.values, (value) => Queue.offer(responses, value), {
                 discard: true,
               })
-            : response._tag === "Exit" && response.exit._tag === "Success"
-              ? Queue.offer(responses, response.exit.value)
+            : response._tag === "Exit"
+              ? Queue.offer(
+                  responses,
+                  response.exit._tag === "Success" ? response.exit.value : response.exit,
+                )
               : Effect.void,
       },
     ).pipe(
@@ -868,6 +888,17 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
         ),
       ),
     );
+    yield* server.write(0, {
+      _tag: "Request",
+      id: RpcMessage.RequestId("L-move"),
+      tag: "threads.move",
+      payload: {
+        threadId: ThreadId.make("L-source"),
+        targetEnvironmentId: EnvironmentId.make("peer"),
+      },
+      headers: Headers.empty,
+    });
+    assert.deepEqual(yield* Queue.take(responses), moved);
     yield* server.write(0, {
       _tag: "Request",
       id: RpcMessage.RequestId("mesh-status"),

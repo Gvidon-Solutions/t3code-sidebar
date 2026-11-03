@@ -72,7 +72,13 @@ export function guessThreadLinkRef(
   return null;
 }
 
-function threadLinkHref(link: ThreadLink): string {
+export function explicitThreadLinkRef(link: ThreadLink): ScopedThreadRef | null {
+  return link.environmentId === null
+    ? null
+    : { environmentId: link.environmentId, threadId: link.threadId };
+}
+
+export function threadLinkHref(link: ThreadLink): string {
   return link.environmentId === null
     ? `${V1_PREFIX}${link.threadId}`
     : `${V2_PREFIX}${link.environmentId}/${link.threadId}`;
@@ -117,10 +123,7 @@ export function unknownThreadLinkLabel(
     : "Thread on another machine";
 }
 
-/**
- * Writes each link with its thread's current title. A link `title` cannot resolve becomes plain
- * text, its written label or a neutral one, except a labeled v1 link, which may open elsewhere.
- */
+/** Explicit destinations remain navigable when their archived threads are absent from the shell. */
 export function relabelThreadLinks(
   markdown: string,
   messageEnvironmentId: EnvironmentId,
@@ -143,6 +146,11 @@ export function relabelThreadLinks(
         : written.threadId;
     const current = title({ environmentId, threadId });
     if (current === undefined) {
+      if (written.environmentId !== null)
+        return formatThreadLink(
+          written,
+          groups.label?.trim() || unknownThreadLinkLabel(written, messageEnvironmentId),
+        );
       if (groups.href !== undefined && written.environmentId === null) return source;
       return groups.label?.trim() || unknownThreadLinkLabel(written, messageEnvironmentId);
     }
