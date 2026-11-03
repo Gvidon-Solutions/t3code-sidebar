@@ -22,7 +22,12 @@ mkdir -p "$ARTIFACTS_DIR" "$STATE_DIR"
 
 log "ref $REF -> $COMMIT"
 
-if [ -d "$BUILD_DIR/.git" ] || [ -f "$BUILD_DIR/.git" ]; then
+if [ "${MESH_E2E_BUILD_CURRENT:-0}" = 1 ]; then
+  COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  COMMIT_SHORT="$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD)"
+  BUILD_DIR="$REPO_ROOT"
+  log "building current checkout $BUILD_DIR at $COMMIT (requested ref: $REF)"
+elif [ -d "$BUILD_DIR/.git" ] || [ -f "$BUILD_DIR/.git" ]; then
   log "updating build worktree $BUILD_DIR"
   git -C "$BUILD_DIR" checkout --force --detach "$COMMIT"
   git -C "$BUILD_DIR" clean -ffdx \

@@ -189,22 +189,19 @@ gor_scp "$HOME/.local/bin/mutagen" "$GOR_HOST:.local/bin/mutagen"
 gor_scp "$HOME/.local/bin/mutagen-agents.tar.gz" "$GOR_HOST:.local/bin/mutagen-agents.tar.gz"
 gor_ssh 'chmod 755 ~/.local/bin/mutagen; ~/.local/bin/mutagen version'
 
-log "updating gor t3ctl / t3 skill"
-gor_ssh 'mkdir -p ~/.agents/skills/t3/scripts'
+log "updating gor t3ctl / staged t3-next skill"
+gor_ssh 'mkdir -p ~/.agents/skills/t3-next/scripts'
 for f in t3ctl.mjs selftest.sh sidebar-workspaces-sync.mjs; do
-  if [ -f "$HOME/.agents/skills/t3/scripts/$f" ]; then
-    gor_scp "$HOME/.agents/skills/t3/scripts/$f" "$GOR_HOST:.agents/skills/t3/scripts/"
+  if [ -f "$HOME/.agents/skills/t3-next/scripts/$f" ]; then
+    gor_scp "$HOME/.agents/skills/t3-next/scripts/$f" "$GOR_HOST:.agents/skills/t3-next/scripts/"
   fi
 done
 gor_ssh 'bash -s' <<'EOF'
 set -euo pipefail
-dir="$HOME/.agents/skills/t3/scripts"
+dir="$HOME/.agents/skills/t3-next/scripts"
 chmod 755 "$dir/t3ctl.mjs" "$dir/selftest.sh"
 [ -f "$dir/sidebar-workspaces-sync.mjs" ] && chmod 644 "$dir/sidebar-workspaces-sync.mjs"
 f="$dir/t3ctl.mjs"
-if ! grep -q "'0.1.5'" "$f"; then
-  sed -i "s/const TESTED_VERSIONS = \[\(.*\)\];/const TESTED_VERSIONS = [\1, '0.1.5'];/" "$f"
-fi
 "$HOME/.nvm/versions/node/v23.11.1/bin/node" --check "$f" >/dev/null
 EOF
 

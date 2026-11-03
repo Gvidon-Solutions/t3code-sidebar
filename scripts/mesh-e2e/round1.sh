@@ -5,7 +5,7 @@
 #   3. mesh settings on every server, gv↔gor and gor↔vps links (not gv↔vps)
 #   4. convergence, one "main", no lost project keys, legacy settings = materialize(doc)
 #   5. concurrent, offline and mid-sync edits
-#   6. layout RPC regression and the documented replicas.status "disabled" reply
+#   6. layout RPC regression and the replicas.status stream
 #   7. files.read/files.list across the mesh
 #   8. an old client's whole-object settings write next to a concurrent mesh edit
 #
@@ -442,6 +442,8 @@ wait_health() { # wait_health <origin> <tries>
   return 1
 }
 
+if [ "${MESH_E2E_HELPERS_ONLY:-0}" = 1 ]; then return 0; fi
+
 # ---------------------------------------------------------------------------
 # Step 3 — settings and links
 # ---------------------------------------------------------------------------
@@ -688,16 +690,12 @@ for machine in gv gor vps; do
 done
 check "every meshLayout.get returns the real document and config" test "$layout_ok" = 1
 
-replicas_disabled=1
+replicas_available=1
 for machine in gv gor vps; do
-  out="$(ws_rpc "$machine" replicas.status '{}' --first 2>&1 || true)"
-  printf '%s\n' "$out" | grep -q 'disabled' || replicas_disabled=0
+  out="$(ws_rpc "$machine" replicas.status '{}' --first 2>&1)"
+  printf '%s' "$out" | jq -e '.[0].replicas | type == "array"' >/dev/null || replicas_available=0
 done
-if [ "$replicas_disabled" = 1 ]; then
-  record_pass "replicas.status returns the documented \"disabled\" until the replica service lands"
-else
-  record_fail "replicas.status disabled reply" "$(printf '%s' "$out" | head -c 300)"
-fi
+check "replicas.status returns the live replica stream on every server" test "$replicas_available" = 1
 
 # ---------------------------------------------------------------------------
 # Step 7 — files across the mesh
