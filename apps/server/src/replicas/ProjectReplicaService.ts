@@ -2,6 +2,7 @@ import { adoptionSides } from "./adoptionModel.ts";
 import { normalizeRepresentationPath } from "@t3tools/shared/meshLayout";
 import {
   opaqueProjectId,
+  logicalProjectKeyForRecord,
   meshMachineLabel,
   meshAuthorityOf,
   conflictWinner,
@@ -79,6 +80,18 @@ export class ProjectReplicaService extends Context.Service<
 
 const isReplicaError = Schema.is(ReplicaError);
 
+const samePlacement = (left: SidebarProjectMount | undefined, right: SidebarProjectMount) => {
+  if (!left) return false;
+  const { projectId: _a, pathAllocated: _b, pathValidated: _c, ...a } = left;
+  const { projectId: _d, pathAllocated: _e, pathValidated: _f, ...b } = right;
+  return NodeUtil.isDeepStrictEqual(a, b);
+};
+const placementMatches = (config: SidebarWorkspacesConfig, key: string, rep: SidebarProjectMount) =>
+  samePlacement(
+    config.projectMounts[key]?.find((entry) => entry.environmentId === rep.environmentId),
+    rep,
+  );
+
 const make = Effect.gen(function* () {
   const mesh = yield* MeshLayoutService;
   const paths = yield* ReplicaPaths.ReplicaPaths;
@@ -136,32 +149,41 @@ const make = Effect.gen(function* () {
     ]);
     yield* PubSub.publish(updates, { replicas: yield* Ref.get(statuses) });
   });
-  const publish = Effect.fn("ProjectReplicaService.publish")(function* (status: ReplicaLiveStatus) {
-    const current = (yield* mesh.read).config.projectMountStatus[status.logicalKey]?.[
-      status.environmentId
-    ];
+  const publish = Effect.fn("ProjectReplicaService.publish")(function* (
+    status: ReplicaLiveStatus,
+    expected?: SidebarProjectMount,
+  ) {
+    const snapshot = (yield* mesh.read).config;
+    if (expected && !placementMatches(snapshot, status.logicalKey, expected)) return;
+    const current = snapshot.projectMountStatus[status.logicalKey]?.[status.environmentId];
     const conflictCopies = status.conflictCopies ?? current?.conflictCopies;
     if (
       current?.state !== status.state ||
       current?.message !== status.message ||
       current?.conflictCopies?.path !== conflictCopies?.path
     )
-      yield* mesh.edit((config) => ({
-        ...config,
-        projectMountStatus: {
-          ...config.projectMountStatus,
-          [status.logicalKey]: {
-            ...config.projectMountStatus[status.logicalKey],
-            [status.environmentId]: {
-              state: status.state,
-              conflicts: status.conflicts.length,
-              ...(status.message ? { message: status.message } : {}),
-              ...(conflictCopies ? { conflictCopies } : {}),
-              updatedAt: status.updatedAt,
+      yield* mesh.edit((config) =>
+        expected && !placementMatches(config, status.logicalKey, expected)
+          ? config
+          : {
+              ...config,
+              projectMountStatus: {
+                ...config.projectMountStatus,
+                [status.logicalKey]: {
+                  ...config.projectMountStatus[status.logicalKey],
+                  [status.environmentId]: {
+                    state: status.state,
+                    conflicts: status.conflicts.length,
+                    ...(status.message ? { message: status.message } : {}),
+                    ...(conflictCopies ? { conflictCopies } : {}),
+                    updatedAt: status.updatedAt,
+                  },
+                },
+              },
             },
-          },
-        },
-      }));
+      );
+    if (expected && !placementMatches((yield* mesh.read).config, status.logicalKey, expected))
+      return;
     yield* updateLive({ ...status, ...(conflictCopies ? { conflictCopies } : {}) });
   });
   const register = Effect.fn("ProjectReplicaService.register")(function* (
@@ -192,10 +214,12 @@ const make = Effect.gen(function* () {
   });
   const reconcileOne = Effect.fn("ProjectReplicaService.reconcileOne")(function* (
     logicalKey: string,
-    rep: SidebarProjectMount,
+    attempt: { rep: SidebarProjectMount },
     sessions: ReadonlyArray<MutagenRunner.MutagenSession>,
   ) {
+    let rep = attempt.rep;
     let config = (yield* mesh.read).config;
+    if (!placementMatches(config, logicalKey, rep)) return;
     if (rep.environmentId === mesh.environmentId && !rep.pathAllocated && !rep.projectId) {
       const existing = sessions.find(
         (session) =>
@@ -211,17 +235,19 @@ const make = Effect.gen(function* () {
         projectMounts: {
           ...current.projectMounts,
           [logicalKey]: (current.projectMounts[logicalKey] ?? []).map((entry) =>
-            entry.environmentId === rep.environmentId
-              ? { ...entry, path: allocated, pathAllocated: true }
-              : entry,
+            samePlacement(entry, rep) ? { ...entry, path: allocated, pathAllocated: true } : entry,
           ),
         },
       }));
       config = snapshot.config;
-      rep = config.projectMounts[logicalKey]!.find(
+      const allocatedRep = config.projectMounts[logicalKey]?.find(
         (entry) => entry.environmentId === rep.environmentId,
-      )!;
+      );
+      if (!samePlacement(allocatedRep, { ...rep, path: allocated })) return;
+      rep = allocatedRep!;
+      attempt.rep = rep;
     }
+    const publishPlacement = (status: ReplicaLiveStatus) => publish(status, rep);
     if (rep.adoption && !rep.adoption.paused) return;
     const driver = replicaDriver(config, rep);
     const now = DateTime.formatIso(yield* DateTime.now);
@@ -240,7 +266,7 @@ const make = Effect.gen(function* () {
       rep.environmentId === mesh.environmentId
     ) {
       yield* register(logicalKey, rep);
-      yield* publish({
+      yield* publishPlacement({
         ...base,
         state: "watching",
         message: rep.transport === "sshfs" ? "External folder (SSHFS)" : "Manual copy",
@@ -249,7 +275,7 @@ const make = Effect.gen(function* () {
     }
     if (!driver) {
       if (rep.environmentId === mesh.environmentId)
-        yield* publish({
+        yield* publishPlacement({
           ...base,
           state: "error",
           message: `${meshMachineLabel(config, rep.environmentId)} cannot reach ${rep.source ? meshMachineLabel(config, rep.source) : "the source"}. Add an SSH route in Settings › Mesh.`,
@@ -274,7 +300,7 @@ const make = Effect.gen(function* () {
           ...(persisted?.message ? { message: persisted.message } : {}),
           ...(current?.projectId ? { projectId: current.projectId } : {}),
         };
-        yield* updateLive(status);
+        if (placementMatches(snapshot, logicalKey, rep)) yield* updateLive(status);
       }
       return;
     }
@@ -337,16 +363,15 @@ const make = Effect.gen(function* () {
         projectMounts: {
           ...current.projectMounts,
           [logicalKey]: (current.projectMounts[logicalKey] ?? []).map((entry) =>
-            entry.environmentId === rep.environmentId && entry.path === rep.path
-              ? { ...entry, pathValidated: true }
-              : entry,
+            samePlacement(entry, rep) ? { ...entry, pathValidated: true } : entry,
           ),
         },
       }));
     }
+    if (!placementMatches((yield* mesh.read).config, logicalKey, rep)) return;
     if (rep.transport !== "mutagen") {
       yield* register(logicalKey, rep);
-      yield* publish({
+      yield* publishPlacement({
         ...base,
         state: "watching",
         message: rep.transport === "sshfs" ? "External folder (SSHFS)" : "Manual copy",
@@ -367,9 +392,9 @@ const make = Effect.gen(function* () {
       session = undefined;
     }
     if (!session) {
-      yield* publish({ ...base, sessionName: identity.name, state: "pending" });
+      yield* publishPlacement({ ...base, sessionName: identity.name, state: "pending" });
       yield* runner.create(createInput);
-      yield* publish({ ...base, sessionName: identity.name, state: "mounting" });
+      yield* publishPlacement({ ...base, sessionName: identity.name, state: "mounting" });
     } else {
       if (session.paused) yield* runner.resume(identity.name);
       const previous = config.projectMountStatus[logicalKey]?.[rep.environmentId];
@@ -413,7 +438,7 @@ const make = Effect.gen(function* () {
         } else yield* runner.reset(identity.name);
         yield* runner.resume(identity.name);
         yield* runner.flush(identity.name);
-        yield* publish({
+        yield* publishPlacement({
           ...base,
           sessionName: identity.name,
           state: "mounting",
@@ -426,7 +451,7 @@ const make = Effect.gen(function* () {
         return;
       }
       if (status.state === "watching") yield* register(logicalKey, rep);
-      yield* publish(status);
+      yield* publishPlacement(status);
     }
   });
   const mapError = (cause: unknown) =>
@@ -527,18 +552,23 @@ const make = Effect.gen(function* () {
     for (const { logicalKey, rep } of entries.filter(
       ({ rep }) => rep.transport !== "mutagen" || replicaDriver(config, rep) !== mesh.environmentId,
     )) {
+      const attempt = { rep };
       yield* locks.withLock(
         refKey(logicalKey, rep.environmentId),
-        reconcileOne(logicalKey, rep, []).pipe(
+        reconcileOne(logicalKey, attempt, []).pipe(
           Effect.catch((cause) =>
-            updateLive({
-              logicalKey,
-              environmentId: rep.environmentId,
-              state: "error",
-              conflicts: [],
-              problems: [mapError(cause).message],
-              message: mapError(cause).message,
-              updatedAt: now,
+            Effect.gen(function* () {
+              if (!placementMatches((yield* mesh.read).config, logicalKey, attempt.rep)) return;
+              yield* updateLive({
+                logicalKey,
+                environmentId: rep.environmentId,
+                state: "error",
+                conflicts: [],
+                problems: [mapError(cause).message],
+                message: mapError(cause).message,
+                localPath: attempt.rep.path,
+                updatedAt: now,
+              });
             }),
           ),
         ),
@@ -546,19 +576,24 @@ const make = Effect.gen(function* () {
     }
     const sessions = yield* driven.length > 0 ? runner.list() : runner.listExisting;
     for (const { logicalKey, rep } of driven) {
+      const attempt = { rep };
       yield* locks.withLock(
         refKey(logicalKey, rep.environmentId),
-        Effect.flatMap(runner.list(), (latest) => reconcileOne(logicalKey, rep, latest)).pipe(
+        Effect.flatMap(runner.list(), (latest) => reconcileOne(logicalKey, attempt, latest)).pipe(
           Effect.catch((cause) =>
-            publish({
-              logicalKey,
-              environmentId: rep.environmentId,
-              state: "error",
-              conflicts: [],
-              problems: [mapError(cause).message],
-              message: mapError(cause).message,
-              updatedAt: now,
-            }),
+            publish(
+              {
+                logicalKey,
+                environmentId: rep.environmentId,
+                state: "error",
+                conflicts: [],
+                problems: [mapError(cause).message],
+                message: mapError(cause).message,
+                localPath: attempt.rep.path,
+                updatedAt: now,
+              },
+              attempt.rep,
+            ),
           ),
         ),
       );
@@ -795,7 +830,12 @@ const make = Effect.gen(function* () {
       ),
     );
     const logicalKey =
-      existingKey ?? opaqueProjectId(`${mesh.environmentId}:${project.workspaceRoot}`);
+      existingKey ??
+      logicalProjectKeyForRecord(
+        config,
+        { ...project, environmentId: mesh.environmentId },
+        opaqueProjectId(`${mesh.environmentId}:${project.workspaceRoot}`),
+      );
     return { logicalKey, config, project };
   });
   const waitForProject = Effect.fn("ProjectReplicaService.waitForProject")(function* (
@@ -1279,7 +1319,7 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const sessions = yield* runner.list();
           if (sessions.some((session) => session.name === name)) yield* runner.resume(name);
-          yield* reconcileOne(input.logicalKey, rep, yield* runner.list());
+          yield* reconcileOne(input.logicalKey, { rep }, yield* runner.list());
         }).pipe(Effect.mapError(mapError)),
       );
       const status = (yield* Ref.get(statuses)).find(

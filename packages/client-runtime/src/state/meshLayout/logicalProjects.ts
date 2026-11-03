@@ -1,5 +1,8 @@
 import type { SidebarWorkspacesConfig, SidebarProjectMount } from "@t3tools/contracts";
-import { normalizeRepresentationPath } from "@t3tools/shared/meshLayout";
+import {
+  logicalProjectKeyForRecord,
+  normalizeRepresentationPath,
+} from "@t3tools/shared/meshLayout";
 import { machineDisplayOf } from "../machineDisplay.ts";
 type Project = { readonly environmentId: string; readonly workspaceRoot: string };
 function follow(key: string, config: SidebarWorkspacesConfig): string {
@@ -18,21 +21,7 @@ export function resolveLogicalProjectKey<T extends Project>(
   config: SidebarWorkspacesConfig,
   deriveFallback: (project: T) => string,
 ): string {
-  const path = normalizeRepresentationPath(project.workspaceRoot);
-  const match = Object.keys(config.projectMounts)
-    .sort()
-    .find((key) =>
-      config.projectMounts[key]!.some(
-        (rep) =>
-          rep.environmentId === project.environmentId &&
-          normalizeRepresentationPath(rep.path) === path,
-      ),
-    );
-  const physical = `${project.environmentId}:${path}`;
-  return follow(
-    match ?? (config.projectAliases[physical] ? physical : deriveFallback(project)),
-    config,
-  );
+  return logicalProjectKeyForRecord(config, project, deriveFallback(project));
 }
 export function addRepresentation(
   config: SidebarWorkspacesConfig,

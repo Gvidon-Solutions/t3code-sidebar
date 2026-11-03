@@ -60,6 +60,11 @@ export const makeReplicaHarness = (
   const created: Runner.CreateSession[] = [];
   const preserved: Parameters<Runner.MutagenRunner["Service"]["preserveConflicts"]>[0][] = [];
   const terminated: string[] = [];
+  const validation = {
+    check: (
+      _input: Parameters<Runner.MutagenRunner["Service"]["assertReplicaPath"]>[0],
+    ): Effect.Effect<void, ReplicaError> => Effect.void,
+  };
   let project: Project | undefined;
   let registrations = 0;
   const runner = Layer.succeed(
@@ -76,7 +81,7 @@ export const makeReplicaHarness = (
                   session.identifier === identifier ? { ...session, paused: true } : session,
                 );
         }),
-      assertReplicaPath: () => Effect.void,
+      assertReplicaPath: (input) => validation.check(input),
       preserveConflicts: (input) =>
         Effect.sync(() => {
           preserved.push(input);
@@ -186,6 +191,7 @@ export const makeReplicaHarness = (
     foreignActions,
     preserved,
     terminated,
+    validation,
     registrations: () => registrations,
     setSession: (patch: Partial<Runner.MutagenSession>) => {
       sessions = sessions.map((s) => ({ ...s, ...patch }));

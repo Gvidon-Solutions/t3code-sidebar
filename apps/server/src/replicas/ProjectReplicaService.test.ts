@@ -799,3 +799,70 @@ it.effect(
     }).pipe(Effect.provide(h.layer));
   },
 );
+
+it.effect.each(["failure", "success"] as const)(
+  "discards an in-flight folder %s after the requested path changes",
+  (outcome) => {
+    const h = harness();
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "N-stale-placement-" });
+      const entered = yield* Deferred.make<void>();
+      const finish = yield* Deferred.make<void>();
+      h.validation.check = (input) =>
+        input.destination.path === `${root}/rejected`
+          ? Deferred.succeed(entered, undefined).pipe(
+              Effect.andThen(Deferred.await(finish)),
+              Effect.andThen(
+                outcome === "failure"
+                  ? Effect.fail(
+                      new ReplicaError({ reason: "storage", message: "Previous folder differs" }),
+                    )
+                  : Effect.void,
+              ),
+            )
+          : Effect.void;
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.edit((current) => ({
+        ...current,
+        projectMounts: {
+          ...current.projectMounts,
+          repo: current.projectMounts.repo!.map((rep) =>
+            rep.environmentId === "replica"
+              ? { ...rep, path: `${root}/rejected`, explicitPath: true, pathValidated: false }
+              : rep,
+          ),
+        },
+      }));
+      const old = yield* service.reconcile.pipe(Effect.forkChild);
+      yield* Deferred.await(entered);
+      yield* service.place({ project: "repo", machine: "replica", path: `${root}/corrected` });
+      yield* Deferred.succeed(finish, undefined);
+      yield* Fiber.join(old);
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica?.state).toBe("pending");
+      expect(h.created).toHaveLength(0);
+      expect(
+        (yield* service.status).some((status) => status.message === "Previous folder differs"),
+      ).toBe(false);
+    }).pipe(Effect.scoped, Effect.provide(h.layer));
+  },
+);
+
+it.effect("keeps an unmounted legacy project's id when its local record is first placed", () => {
+  const h = harness("source", true);
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    yield* mesh.edit((current) => ({
+      ...current,
+      projectMounts: {},
+      machines: { ...current.machines, replica: { label: "Replica" } },
+      projectAliases: { "title:example": "canonical" },
+      projectTitles: { canonical: "Shared renamed title" },
+    }));
+    const placed = yield* service.place({ project: "primary", machine: "replica" });
+    expect(placed.logicalKey).toBe("canonical");
+    expect((yield* mesh.read).config.projectTitles.canonical).toBe("Shared renamed title");
+  }).pipe(Effect.provide(h.layer));
+});

@@ -17,3 +17,5 @@ export { opaqueProjectId, migrateLogicalProjectIds } from "./logicalIds.ts";
 export { normalizeRepresentationPath } from "./representationPath.ts";
 
 export { recordLayoutAuthors } from "./authorship.ts";
+
+export { logicalProjectKeyForRecord } from "./projectRecord.ts";

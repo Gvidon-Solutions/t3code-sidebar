@@ -1,3 +1,4 @@
+import { logicalProjectKeyForRecord } from "./projectRecord.ts";
 import { expect, it } from "vite-plus/test";
 import { keys, merge, canonical, type MeshLayoutDocument } from "./document.ts";
 import { migrateLogicalProjectIds, opaqueProjectId } from "./logicalIds.ts";
@@ -41,4 +42,55 @@ it("migrates legacy projects, titles, placements, folds and aliases with stable 
   expect(materialize(left).projectMounts[id]).toBeUndefined();
   expect(opaqueProjectId(id)).toBe(id);
   expect(opaqueProjectId("title:project")).not.toContain("title:");
+});
+
+it("binds unmounted legacy records through aliases while explicit representations win", () => {
+  let config: ReturnType<typeof materialize> = {
+    ...materialize({}),
+    projectAliases: {
+      "title:example project": "intermediate",
+      intermediate: "title-project",
+      "github.com/acme/repo": "repository-project",
+      "machine:/project": "physical-project",
+    },
+  };
+  const record = { environmentId: "machine", workspaceRoot: "/other", title: " Example  Project " };
+  expect(logicalProjectKeyForRecord(config, record, "new-id")).toBe("title-project");
+  const repo = {
+    ...record,
+    repositoryIdentity: {
+      canonicalKey: "local-repo",
+      origin: { canonicalKey: "github.com/acme/repo" },
+    },
+  };
+  expect(logicalProjectKeyForRecord(config, repo, "new-id")).toBe("repository-project");
+  expect(
+    logicalProjectKeyForRecord(config, { ...repo, workspaceRoot: "/project/./" }, "new-id"),
+  ).toBe("physical-project");
+  config = {
+    ...config,
+    projectMounts: {
+      ...config.projectMounts,
+      explicit: [
+        {
+          environmentId: "machine",
+          path: "/project",
+          role: "primary",
+          transport: "git",
+          createdAt: "",
+        },
+      ],
+    },
+  };
+  expect(logicalProjectKeyForRecord(config, { ...repo, workspaceRoot: "/project" }, "new-id")).toBe(
+    "explicit",
+  );
+  config = {
+    ...config,
+    projectAliases: { ...config.projectAliases, intermediate: "title:example project" },
+  };
+  expect(logicalProjectKeyForRecord(config, record, "new-id")).toBe("intermediate");
+  expect(logicalProjectKeyForRecord(config, { ...record, title: "Unrelated" }, "new-id")).toBe(
+    "new-id",
+  );
 });

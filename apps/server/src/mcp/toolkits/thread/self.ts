@@ -1,3 +1,4 @@
+import { logicalProjectKeyForRecord } from "@t3tools/shared/meshLayout";
 import { ServerEnvironment } from "../../../environment/ServerEnvironment.ts";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -46,25 +47,17 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
         .slice(0, 2)
         .toUpperCase(),
   });
-  let logicalKey =
-    Object.keys(config.projectMounts).find((key) =>
-      config.projectMounts[key]!.some(
-        (rep) =>
-          rep.environmentId === scope.environmentId &&
-          (rep.projectId === thread.projectId || rep.path === project?.workspaceRoot),
-      ),
-    ) ?? (project ? `${scope.environmentId}:${project.workspaceRoot}` : null);
-  const seen = new Set<string>();
-  for (let hop = 0; logicalKey && hop < 8; hop++) {
-    if (seen.has(logicalKey)) {
-      logicalKey = [...seen, logicalKey].sort()[0]!;
-      break;
-    }
-    seen.add(logicalKey);
-    const alias = config.projectAliases[logicalKey];
-    if (!alias) break;
-    logicalKey = alias;
-  }
+  const logicalKey = project
+    ? logicalProjectKeyForRecord(
+        config,
+        { ...project, environmentId: scope.environmentId },
+        `${scope.environmentId}:${project.workspaceRoot}`,
+      )
+    : (Object.keys(config.projectMounts).find((key) =>
+        config.projectMounts[key]!.some(
+          (rep) => rep.environmentId === scope.environmentId && rep.projectId === thread.projectId,
+        ),
+      ) ?? null);
   const representations = logicalKey
     ? (config.projectMounts[logicalKey] ??
       (project
