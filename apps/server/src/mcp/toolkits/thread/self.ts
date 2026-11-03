@@ -36,7 +36,15 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
       config.machines[id]?.label ??
       (id === scope.environmentId ? descriptor?.label : undefined) ??
       id,
-    tag: config.machines[id]?.tag ?? (config.machines[id]?.label ?? id).slice(0, 2).toUpperCase(),
+    tag:
+      config.machines[id]?.tag ??
+      (
+        config.machines[id]?.label ??
+        (id === scope.environmentId ? descriptor?.label : undefined) ??
+        id
+      )
+        .slice(0, 2)
+        .toUpperCase(),
   });
   let logicalKey =
     Object.keys(config.projectMounts).find((key) =>

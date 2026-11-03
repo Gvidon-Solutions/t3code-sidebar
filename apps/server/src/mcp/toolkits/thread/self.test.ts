@@ -1,4 +1,6 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import { ServerEnvironment } from "../../../environment/ServerEnvironment.ts";
+import { descriptorOf } from "../../../peer/PeerLinks.testkit.ts";
 import { expect, it } from "@effect/vitest";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -30,6 +32,7 @@ it.effect.each([
   "alias",
   "remote parent",
   "allocated replica",
+  "descriptor",
 ] as const)("self describes %s", (role) => {
   const base = liveThreadShell(ThreadId.make("mcp:self"));
   const shell = {
@@ -88,7 +91,7 @@ it.effect.each([
       ],
     },
   };
-  const config =
+  const namedConfig =
     role === "alias"
       ? {
           ...initial,
@@ -96,6 +99,13 @@ it.effect.each([
           projectMounts: { ...initial.projectMounts, canonical: initial.projectMounts.repo! },
         }
       : initial;
+  const config =
+    role === "descriptor"
+      ? {
+          ...namedConfig,
+          machines: { ...namedConfig.machines, local: { reach: { source: { ssh: "gor" } } } },
+        }
+      : namedConfig;
   return Effect.gen(function* () {
     const tools = yield* ThreadToolkit.pipe(Effect.provide(HandlersLayer.layer(layer)));
     const results = yield* tools
@@ -113,7 +123,7 @@ it.effect.each([
       worktreePath: "/copy/worktree",
       branch: "topic",
       threadId: "mcp:self",
-      machine: { tag: "LO" },
+      machine: { tag: role === "descriptor" ? "GO" : "LO" },
       representation: {
         role: role === "replica" || role === "allocated replica" ? "replica" : "primary",
         sync: { sessionName: "t3-repo-local", state: "conflict", conflicts: ["file"] },
@@ -136,6 +146,9 @@ it.effect.each([
     Effect.provide(
       Layer.mergeAll(
         NodeCrypto.layer,
+        Layer.mock(ServerEnvironment)({
+          getDescriptor: Effect.succeed(descriptorOf("local", "Gor")),
+        }),
         Layer.succeed(McpInvocationContext, {
           environmentId: EnvironmentId.make("local"),
           requestNamespace: "self",
