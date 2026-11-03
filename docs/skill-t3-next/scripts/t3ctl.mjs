@@ -1113,34 +1113,38 @@ async function threadsAcrossMachines(machines, filter = {}, projectWords) {
 
 async function resolveThreadAcross(ref, { on } = {}) {
   if (!ref) die("thread is required (id, id prefix, or title words)");
-  const machines = on ? [await getMachine(on)] : await queryableMachines();
+  const machine = on ? await getMachine(on) : null;
   const r = String(ref);
-  const candidates = [];
-  for (const machine of machines) {
-    const m = await mcp();
-    if (r.length > 30 || r.includes(":")) {
-      try {
-        const t = (
-          await m.call("t3_thread_read", {
-            threadId: r,
-            limit: 1,
-            ...(machine.local ? {} : { environmentId: machine.environmentId }),
-          })
-        ).thread;
-        if (t)
-          return {
-            ...t,
-            project: t.projectId,
+  const m = await mcp();
+  if (r.length > 30 || r.includes(":")) {
+    const t = (
+      await m.call("t3_thread_read", {
+        threadId: r,
+        limit: 1,
+        ...(machine ? { environmentId: machine.environmentId } : {}),
+      })
+    ).thread;
+    return {
+      ...t,
+      project: t.projectId,
+      ...(machine
+        ? {
             environmentId: machine.environmentId,
             machineLabel: machine.label,
             machineTag: machine.tag,
-          };
-      } catch {
-        /* search titles below */
-      }
-    }
-    candidates.push(...(await threadsInEnvironment(machine)));
+          }
+        : {}),
+    };
   }
+  const page = await m.call("t3_thread_list", {
+    environmentId: machine?.environmentId ?? "all",
+    allProjects: true,
+    includeSubagents: true,
+    limit: 100,
+  });
+  for (const missing of page.unreachable ?? [])
+    console.error(`${missing.environmentId}: ${missing.message}`);
+  const candidates = page.threads.map((t) => ({ ...t, project: t.project ?? t.projectId }));
   const exact = candidates.filter(
     (t) => t.threadId === r || t.threadId.startsWith(r) || short(t.threadId).startsWith(r),
   );
@@ -1155,8 +1159,7 @@ async function resolveThreadAcross(ref, { on } = {}) {
   if (fuzzy.length === 1) return fuzzy[0];
   const top = fuzzy.filter((t) => !t.parentThreadId);
   if (top.length === 1) return top[0];
-  if (!fuzzy.length)
-    die(`no thread matches "${ref}" on ${machines.map((m) => m.label).join(", ")}`);
+  if (!fuzzy.length) die(`no thread matches "${ref}" on ${machine?.label ?? "the mesh"}`);
   die(
     `"${ref}" is ambiguous:\n${fuzzy
       .slice(0, 15)
@@ -1673,6 +1676,7 @@ function placeProject(cfg, key, root, ids, scratch = false) {
 const THREAD_ORGANIZE = ["pin", "unpin", "settle", "unsettle", "archive", "unarchive", "unsnooze"];
 
 const commands = {
+  agents: async (pos, opt) => (await import("./agents-sync.mjs")).runAgents(pos, opt),
   // Agent inbox (fork). Agents' side through MCP (t3ctl posts as an MCP client, not a thread);
   // the owner's side (reply, dismiss, reopen) through the UI's WS RPC.
   async inbox(pos, opt) {
@@ -2170,18 +2174,20 @@ const commands = {
       };
       if (opt.json) return json(result);
       const local = result.local;
+      const tagOf = (environmentId) =>
+        machines.find((m) => m.environmentId === environmentId)?.tag ?? short(environmentId);
       console.log(
         `mesh ${local ? `${local.tag} ${local.label} (${local.environmentId})` : "?"} · ${result.layout.legacy ? "legacy layout (no meshLayout RPC)" : `${result.layout.entries} layout entries, revision ${result.layout.revision || "-"}`} · ${result.layout.workspaces} workspace(s) · ${result.layout.representations} representation(s)`,
       );
       for (const link of links)
         console.log(
-          `  link ${link.status.padEnd(11)} ${link.label}  ${link.environmentId}  ${link.urls?.join(", ")}${link.lastReachedAt ? `  last ${ago(link.lastReachedAt)}` : ""}${link.lastError ? `  ${clip(link.lastError, 80)}` : ""}`,
+          `  link ${link.status.padEnd(11)} ${tagOf(link.environmentId).padEnd(3)} ${link.label}  ${link.environmentId}  ${link.urls?.join(", ")}${link.lastReachedAt ? `  last ${ago(link.lastReachedAt)}` : ""}${link.lastError ? `  ${clip(link.lastError, 80)}` : ""}`,
         );
       if (!links.length)
         console.log(`  no links${linksError ? ` (${clip(linksError, 120)})` : ""}`);
       for (const row of rows)
         console.log(
-          `  ${row.rep.role.padEnd(8)} ${row.rep.environmentId.slice(0, 8)} ${clip(row.logicalKey, 38).padEnd(38)} ${replicaStateText(row)}`,
+          `  ${row.rep.role.padEnd(8)} ${tagOf(row.rep.environmentId).padEnd(3)} ${clip(row.rep.path || row.logicalKey, 48).padEnd(48)} ${replicaStateText(row)}`,
         );
       if (live.error && !live.disabled) console.log(`  replicas: ${clip(live.error, 160)}`);
       return;
@@ -2610,6 +2616,20 @@ const commands = {
     if (!recent.length) console.log(`nothing active or updated in the last ${opt.hours || 24}h`);
   },
 
+  async self() {
+    if (!process.env.T3_MCP_URL || !process.env.T3_MCP_BEARER_TOKEN)
+      return console.log(
+        "t3ctl self needs a thread-scoped T3_MCP_URL and T3_MCP_BEARER_TOKEN. An agent can call t3_thread_self directly; outside clients have no calling thread.",
+      );
+    const scoped = new Mcp(new URL(process.env.T3_MCP_URL).origin);
+    scoped.token = {
+      resource: process.env.T3_MCP_URL,
+      accessToken: process.env.T3_MCP_BEARER_TOKEN,
+    };
+    await scoped.init();
+    return json(await scoped.call("t3_thread_self", {}));
+  },
+
   async show(pos, opt) {
     const t = await resolveThread(pos[0], {
       projectRef: opt.project,
@@ -2732,6 +2752,14 @@ const commands = {
     if (!pos[0]) die("usage: t3ctl open <thread> [--on <machine>]");
     const t = await resolveThreadAcross(pos[0], { on: opt.on });
     const { origin } = serverInfo();
+    if (!t.environmentId) {
+      const page = await (
+        await mcp()
+      ).call("t3_thread_list", { environmentId: "all", allProjects: true, limit: 100 });
+      const found = page.threads.find((row) => row.threadId === t.threadId);
+      t.environmentId =
+        found?.environmentId ?? (await collectMachines()).find((m) => m.local)?.environmentId;
+    }
     const machine = (await collectMachines()).find((m) => m.environmentId === t.environmentId);
     const webUrl = threadWebUrl(origin, t.environmentId, t.threadId);
     const deepLink = threadDeepLink(t.environmentId, t.threadId);
@@ -2816,8 +2844,12 @@ const commands = {
   },
 
   async wait(pos, opt) {
-    const t = await resolveThread(pos[0], { projectRef: opt.project });
-    const r = await waitThread(t.threadId, opt.timeout ? parseDuration(opt.timeout) : 30 * 6e4);
+    const t = await resolveThreadAcross(pos[0], { on: opt.on });
+    const r = await waitThread(
+      t.threadId,
+      opt.timeout ? parseDuration(opt.timeout) : 30 * 6e4,
+      t.environmentId,
+    );
     if (opt.json) return json(r);
     console.log(`${t.title}: ${r.status}${r.timedOut ? " (timed out, still running)" : ""}`);
   },
@@ -2910,7 +2942,7 @@ const commands = {
   },
 
   async send(pos, opt) {
-    const t = await resolveThread(pos[0], { projectRef: opt.project });
+    const t = await resolveThreadAcross(pos[0], { on: opt.on });
     const message = readMessage(pos.slice(1), opt);
     const m = await mcp();
     if (opt.attach) {
@@ -2936,7 +2968,7 @@ const commands = {
   },
 
   async stop(pos, opt) {
-    const t = await resolveThread(pos[0], { projectRef: opt.project });
+    const t = await resolveThreadAcross(pos[0], { on: opt.on });
     const r = await (
       await mcp()
     ).call("t3_thread_interrupt", {
@@ -2948,7 +2980,7 @@ const commands = {
   },
 
   async requests(pos, opt) {
-    const t = await resolveThread(pos[0], { projectRef: opt.project });
+    const t = await resolveThreadAcross(pos[0], { on: opt.on });
     const pending = await pendingRequests(t.threadId);
     if (opt.json) return json(pending);
     if (!pending.length) return console.log(`no pending requests in "${t.title}"`);
@@ -2992,7 +3024,7 @@ const commands = {
   },
 
   async answer(pos, opt) {
-    const t = await resolveThread(pos[0], { projectRef: opt.project });
+    const t = await resolveThreadAcross(pos[0], { on: opt.on });
     const questions = (await pendingRequests(t.threadId)).filter(
       (p) => p.kind === "question" && (!opt.request || p.requestId === opt.request),
     );
@@ -3844,6 +3876,10 @@ PROJECTS
   project-rename <P> "title"
   project-set <P> [--agent/--model/--effort] [--root PATH] [--auto-pull true] [--env-mode local|worktree] [--emoji 🚀] [--json '{…}']
   project-remove <P> --yes [--force]      remove from T3 (files stay); --force also deletes its threads
+
+AGENT INSTRUCTIONS
+  agents sync [--to all|machine,…] [--home /isolated/home] [--apply]   diff by default; backup and verify on apply
+  agents status [--to all|machine,…] [--home /isolated/home]           per-machine harness file drift
 
 MESH (M = environment id/prefix, label, tag, ssh alias, or a Russian name like «гора»)
   place <P> --on <M> [--primary] [--source <M2>] [--path PATH] [--wait [dur]]

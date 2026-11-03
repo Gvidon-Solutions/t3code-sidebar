@@ -56,7 +56,15 @@ function call(name, args) {
     case "t3_project_list":
       return { projects: [{ id: "p", title: "Demo", workspaceRoot: "/repo" }], nextCursor: null };
     case "t3_thread_list":
-      return { threads: [thread], nextCursor: null };
+      return {
+        threads: [
+          {
+            ...thread,
+            environmentId: args.environmentId === "all" ? peer : args.environmentId || self,
+          },
+        ],
+        nextCursor: null,
+      };
     case "t3_thread_read":
       return { thread, items: [{ type: "assistant_message", text: "done" }], hasMore: false };
     case "t3_thread_search":
@@ -83,10 +91,21 @@ function call(name, args) {
           args.action === "remove" ? null : { ...rep, environmentId: peer, projectId: "remote-p" },
         ready: true,
       };
+    case "t3_thread_send":
+    case "t3_thread_interrupt":
+      return { sequence: 1 };
+    case "t3_thread_self":
+      return { threadId: thread.threadId, representation: { role: "replica" } };
     case "t3_thread_wait":
       return { status: "completed", timedOut: false };
     case "t3_pending_request":
-      return { requestIds: [] };
+      if (args.action === "read")
+        return {
+          requestId: args.requestId,
+          questions: [{ id: "q", question: "Which?", options: [] }],
+        };
+      if (args.action === "respond") return { sequence: 1 };
+      return { requestIds: process.env.T3CTL_TEST_QUESTION ? ["request"] : [] };
     case "t3_thread_launch":
       return { ...thread, modelSelection: args.modelSelection };
     case "ui_open":
