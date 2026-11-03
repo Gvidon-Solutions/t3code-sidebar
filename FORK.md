@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-03 — T3 Mesh — Stage N authority and automatic conflict copies
+
+- **What:** a configurable mesh authority, automatic conflict resolution with preserved losing versions, and recovery of removed sessions after driver restart.
+- **How:** `mesh.authority` and persistent server-writer membership materialize through the existing CRDT. The driver keeps two-way-safe, pauses before preserving the loser locally or over SSH, resets/recreates and flushes, and retains a calm resolution note with the copies' location. Authority-authored legacy workspace/path claims win ambiguous adoption. A common title reader consumes L's exact `proj/<id>.title` key.
+- **Where:** shared `meshLayout`, contracts and server `mesh/` and `replicas/`; client grouping/status; web/mobile Mesh and Machines, web file picker; CLI review copy; guarded `scripts/mesh-e2e/round3.sh`. Acceptance gaps are recorded in `docs/mesh-conformance.md`; the shared bed was busy during N verification.
+
 ### 2026-11-03 — T3 Mesh — Stage K project machine strips
 
 - **What:** project folder rows show primary and replica machine tags, sync status and overflow; all scratch threads share one “No project” folder on web and mobile, including the drawer.
