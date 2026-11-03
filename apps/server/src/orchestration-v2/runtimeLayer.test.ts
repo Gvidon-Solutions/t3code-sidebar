@@ -7041,6 +7041,39 @@ it.layer(layerSharedApplicationDataPlaneTest)("snooze projection", (it) => {
         (yield* orchestrator.getThreadProjection(idleThreadId)).thread.projectId,
         folderProjectId,
       );
+      yield* orchestrator.dispatch({
+        type: "thread.snooze",
+        commandId: CommandId.make("move-snooze"),
+        threadId: idleThreadId,
+        snoozedUntil: "2099-01-01T00:00:00.000Z",
+      });
+      const snoozed = (yield* orchestrator.getThreadProjection(idleThreadId)).thread;
+      yield* move(idleThreadId, scratchProjectId, "scratch");
+      const inScratch = (yield* orchestrator.getThreadProjection(idleThreadId)).thread;
+      assert.deepEqual(inScratch, {
+        ...snoozed,
+        projectId: scratchProjectId,
+        updatedAt: inScratch.updatedAt,
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.unsnooze",
+        commandId: CommandId.make("move-unsnooze"),
+        threadId: idleThreadId,
+        reason: "user",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("move-settle"),
+        threadId: idleThreadId,
+      });
+      const settled = (yield* orchestrator.getThreadProjection(idleThreadId)).thread;
+      yield* move(idleThreadId, folderProjectId, "settled");
+      const movedSettled = (yield* orchestrator.getThreadProjection(idleThreadId)).thread;
+      assert.deepEqual(movedSettled, {
+        ...settled,
+        projectId: folderProjectId,
+        updatedAt: movedSettled.updatedAt,
+      });
       const worktreeThreadId = ThreadId.make("move-with-worktree");
       yield* createThread(worktreeThreadId);
       yield* move(worktreeThreadId, otherProjectId, "worktree");
