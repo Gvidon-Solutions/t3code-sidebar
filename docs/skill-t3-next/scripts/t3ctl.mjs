@@ -2471,7 +2471,17 @@ const commands = {
     if (pos[0] === "adopt") {
       if (pos[0] !== "adopt" || !pos[1] || !opt.project)
         die("usage: t3ctl replica adopt <session> --project P [--on MACHINE]");
-      const project = await resolveProject(opt.project);
+      const { config } = await layoutSnapshot();
+      const matches = Object.keys(config.projectMounts ?? {}).filter(
+        (key) =>
+          key === opt.project ||
+          config.projectTitles?.[key]?.toLowerCase() === String(opt.project).toLowerCase(),
+      );
+      if (matches.length > 1) die(`"${opt.project}" is ambiguous; use its project id`);
+      const key = matches[0];
+      const project = key
+        ? { id: key, title: meshProjectTitle(config, key) }
+        : await resolveProject(opt.project);
       const r = await withWs((c) =>
         c.rpc("replicas.adopt", {
           project: project.id,

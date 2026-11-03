@@ -29,7 +29,11 @@ const config = {
       },
     ],
   },
+  projectTitles: { "lp-remote": "Remote project" },
 };
+config.projectMounts["lp-remote"] = [
+  { ...rep, environmentId: peer, path: "/remote", projectId: "remote-p" },
+];
 if (process.env.T3CTL_TEST_REMOTE_DRIVER)
   config.machines[peer].reach = { [self]: { ssh: "gvidon" } };
 const snapshot = { environmentId: self, config, document: {} };
@@ -153,6 +157,22 @@ function call(name, args) {
   }
 }
 globalThis.fetch = async (url, init) => {
+  if (String(url).startsWith("https://api.github.com/")) {
+    log("publicRelease", { url: String(url), headers: init?.headers });
+    return process.env.T3CTL_TEST_SSH_INSTALL
+      ? new Response("unavailable", { status: 404 })
+      : Response.json({
+          tag_name: "0.0.9-N",
+          assets: [
+            {
+              name: "t3-0.0.9-N-linux-x64.tar.gz",
+              browser_download_url: "https://release.example/N-archive",
+            },
+          ],
+        });
+  }
+  if (String(url) === "https://release.example/N-archive")
+    return new Response(NodeFS.readFileSync(process.env.T3CTL_TEST_PUBLIC_ARCHIVE));
   if (String(url).includes("websocket-ticket")) return Response.json({ ticket: "test" });
   const body = JSON.parse(init.body);
   let result;
