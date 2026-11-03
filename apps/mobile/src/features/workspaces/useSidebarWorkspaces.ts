@@ -156,8 +156,13 @@ export function useSidebarWorkspaces() {
         updateConfig((current) => deleteWorkspace(current, workspaceId)),
       mergeProject: (from: string, into: string) =>
         updateConfig((current) => mergeLogicalProjects(current, from, into)),
-      splitProject: (from: string, environmentId: string, into: string) =>
-        updateConfig((current) => splitLogicalProject(current, from, environmentId, into)),
+      splitProject: (
+        from: string,
+        environmentId: string,
+        into: string,
+        project?: { readonly workspaceRoot: string; readonly id: string },
+      ) =>
+        updateConfig((current) => splitLogicalProject(current, from, environmentId, into, project)),
     }),
     [config, openWorkspace, updateConfig],
   );

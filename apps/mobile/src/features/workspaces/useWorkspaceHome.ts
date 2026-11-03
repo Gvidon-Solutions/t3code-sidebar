@@ -27,7 +27,7 @@ import { scopedProjectKey } from "../../lib/scopedEntities";
 import { useServerConfigs } from "../../state/entities";
 import { useReplicaStatuses } from "../../state/meshReplicas";
 import { connectedEnvironmentIdsAtom } from "../../state/presentation";
-import type { HomeProjectScope } from "../home/homeThreadList";
+import { homeProjectWorkspaceIds, type HomeProjectScope } from "../home/homeThreadList";
 import {
   resolveThreadListV2Status,
   type ThreadListV2Item,
@@ -115,14 +115,9 @@ export function useWorkspaceHome(input: {
 
   const workspaceIdsOf = useCallback(
     (scope: HomeProjectScope): ReadonlyArray<string> => {
-      const ref = scope.projectRefs[0];
-      if (ref === undefined) return [];
-      return (
-        scopeByProjectRef.get(scopedProjectKey(ref.environmentId, ref.projectId))?.workspaceIds ??
-        []
-      );
+      return config === null ? [] : homeProjectWorkspaceIds(scope, config, isScratchScope(scope));
     },
-    [scopeByProjectRef],
+    [config, isScratchScope],
   );
 
   /** Whether a project's folder shows in the open workspace. */
@@ -376,7 +371,12 @@ export function useWorkspaceHome(input: {
         },
         onMerge: (into: string) => workspaces.edit.mergeProject(projectKey, into),
         onSplit: (environmentId: string) =>
-          workspaces.edit.splitProject(projectKey, environmentId, `${projectKey}~${environmentId}`),
+          workspaces.edit.splitProject(
+            projectKey,
+            environmentId,
+            `${projectKey}~${environmentId}`,
+            scope.projects.find((project) => project.environmentId === environmentId),
+          ),
       };
     },
     [config, input.projectScopes, suggestionsByScope, workspaces, updateProject],

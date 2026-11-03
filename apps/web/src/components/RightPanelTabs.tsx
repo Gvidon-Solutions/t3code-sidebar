@@ -104,6 +104,7 @@ import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
 import { surfaceShortcutKey } from "~/lib/surfaceShortcutKey";
+import { FileMachineTag } from "./workspaces/FileMachineTag";
 
 export interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -975,10 +976,16 @@ function RightPanelTab(
                 onDoubleClick={() => {
                   if (surface.kind === "device" && props.canRename) onStartRename(surface.id);
                 }}
-                className="cursor-pointer flex min-w-0 items-center"
+                className="cursor-pointer flex min-w-0 items-center gap-1.5"
                 aria-label={sideChatState === null ? undefined : `${title}, ${sideChatState}`}
                 onClick={() => onActivate(surface)}
               >
+                {surface.kind === "file" ? (
+                  <FileMachineTag
+                    fileEnvironmentId={surface.environmentId}
+                    threadEnvironmentId={props.environmentId}
+                  />
+                ) : null}
                 <span className="truncate">{title}</span>
               </button>
             }

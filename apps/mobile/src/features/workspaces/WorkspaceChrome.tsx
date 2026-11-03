@@ -480,7 +480,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
           accessibilityRole="button"
           hitSlop={8}
           onPress={() => props.onNewThread(item.project)}
-          className="h-8 w-8 items-center justify-center rounded-full"
+          className="h-[45px] w-[45px] items-center justify-center rounded-full"
           style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
           testID={`workspace-folder-new-${item.projectKey}`}
         >
@@ -495,7 +495,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     </Pressable>
   );
   const pendingRows =
-    item.open && item.pending.length > 0 ? (
+    item.open && !offline && item.pending.length > 0 ? (
       <View>
         {item.pending.map((pending) => (
           <View
@@ -507,21 +507,22 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
               className="h-4 items-center justify-center rounded px-1"
               style={{ backgroundColor: machineTagBackground(pending.color) }}
             >
-              <Text
-                className="font-mono text-[10px] font-t3-bold uppercase"
-                style={{ color: pending.color }}
-              >
+              <Text className="font-mono text-[10px] font-t3-bold uppercase text-foreground">
                 {pending.tag}
               </Text>
             </View>
-            <Text className="min-w-0 flex-1 text-[13px] text-foreground-muted" numberOfLines={1}>
+            <Text
+              accessibilityLabel={pending.text}
+              className="min-w-0 flex-1 text-[13px] text-foreground-muted"
+              numberOfLines={1}
+            >
               {pending.text}
             </Text>
             {pending.state === "error" || pending.state === "conflict" ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Retry mounting on ${pending.label}`}
-                hitSlop={8}
+                className="min-h-[45px] min-w-[45px] items-center justify-center"
                 onPress={() => props.onRetryReplica(pending)}
               >
                 <Text className="text-[13px] font-t3-medium text-foreground">Retry</Text>
@@ -626,7 +627,7 @@ export const WorkspaceAgentsRow = memo(function WorkspaceAgentsRow(props: {
       accessibilityRole="button"
       accessibilityLabel={item.label}
       accessibilityState={{ expanded: item.open }}
-      className="min-h-[32px] flex-row items-center gap-2 py-1.5 pl-[48px] pr-5"
+      className="min-h-[45px] flex-row items-center gap-2 py-1.5 pl-[48px] pr-5"
       onPress={() => props.onToggle(item.toggleKey)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
@@ -660,7 +661,7 @@ export const WorkspaceMoreRow = memo(function WorkspaceMoreRow(props: {
   return (
     <Pressable
       accessibilityRole="button"
-      className="flex-row items-center gap-2 py-2 pl-[52px] pr-5"
+      className="min-h-[45px] flex-row items-center gap-2 py-2 pl-[52px] pr-5"
       onPress={() =>
         newThreadIn ? props.onNewThread(newThreadIn) : props.onToggle(item.toggleKey)
       }

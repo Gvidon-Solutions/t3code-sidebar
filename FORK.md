@@ -132,6 +132,29 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How:** Settings-model SSH routes, authenticated MCP launches, live status, file and session assertions, conflict/retry, restart, removal and orphan checks. Build-current mode avoids the shared build checkout; deploy copies only the staged skill.
 - **Where:** `scripts/mesh-e2e/round2.sh`, `round2-routes.sh` and the accompanying run report/log. Product code is unchanged.
 
+### 2026-11-03 — T3 Mesh — cross-device QA corrections
+
+- **What.** Mesh settings use machine-wide scope; linked machines omit unavailable versions.
+  Machine names and short default tags agree across menus and file pickers. Files from another
+  machine identify their source in web tabs and the native viewer.
+- **How.** Registered replicas retain visible conflict/error rows. Independent Git checkouts can
+  split out of repository groups, and stale replica failures do not follow a Git primary. Mobile
+  preserves offline workspace folders without duplicate rows or unavailable thread actions;
+  mesh controls have accessible names, readable tags and 44-point touch targets.
+- **Where.** Fork workspace components on both clients; small seams in settings scope, file
+  navigation and web panel tabs; shared display/replica helpers in `packages/client-runtime`.
+  CRDT core, RPC contracts and server service interfaces stay unchanged.
+
+### 2026-11-02 — T3 Mesh — web accessibility QA
+
+- **What:** machine tags remain readable with pale custom colors in either theme. Pending
+  replica errors and the mesh footer expose their full text in tooltips; Retry names its machine
+  for screen readers and keyboard actions show focus.
+- **How:** tags use the theme foreground over the existing machine tint; truncated rows reuse
+  the shared Tooltip primitive. A browser regression checks pale, dark and preset tag colors.
+- **Where:** web `components/workspaces/{MachineTag,PendingReplicaRow,MeshFooterStatus}.tsx`
+  and `MachineTag.browser.test.tsx`. No mesh contracts or server interfaces change.
+
 ### 2026-11-02 — T3 Mesh — round 1 E2E
 
 - **What:** repeatable three-machine layout, link, restart, file-routing and old-client checks.

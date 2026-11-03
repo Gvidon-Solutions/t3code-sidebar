@@ -863,9 +863,7 @@ export default function WorkspaceSidebar() {
     if (driver === null) {
       failureToast(
         "Can't retry this replica",
-        new Error(
-          `Add an ssh route between ${row.rep.environmentId} and ${row.rep.source ?? "its source"} in Settings › Machines.`,
-        ),
+        new Error(`Add an SSH route in Settings › Mesh so these machines can reach each other.`),
       );
       return;
     }
@@ -1180,7 +1178,7 @@ export default function WorkspaceSidebar() {
                   config,
                   member.environmentId,
                   environmentLabels.get(member.environmentId) ?? null,
-                )} · ${member.environmentLabel ?? member.environmentId}`,
+                )} · ${machineDisplayOf(config, member.environmentId, member.environmentLabel ?? member.environmentId).label}`,
               })),
             },
           ]
@@ -1215,7 +1213,13 @@ export default function WorkspaceSidebar() {
     } else if (clicked.startsWith("split:")) {
       const environmentId = clicked.slice("split:".length);
       writeConfig((config) =>
-        splitLogicalProject(config, projectKey, environmentId, `${projectKey}~${environmentId}`),
+        splitLogicalProject(
+          config,
+          projectKey,
+          environmentId,
+          `${projectKey}~${environmentId}`,
+          splitMembers.find((member) => member.environmentId === environmentId),
+        ),
       );
     } else if (clicked.startsWith("suggest:")) {
       const into = clicked.slice("suggest:".length);
@@ -1718,7 +1722,7 @@ export default function WorkspaceSidebar() {
             ))}
           </TooltipPopup>
         </Tooltip>
-        {open ? (
+        {open && offline === undefined ? (
           <div className="flex flex-col pl-3">
             {pendingReplicas.map((row) => (
               <PendingReplicaRow

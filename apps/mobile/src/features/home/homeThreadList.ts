@@ -1,5 +1,6 @@
 import { buildProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
 import { offlineLogicalProjects } from "@t3tools/client-runtime/state/mesh-layout";
+import { resolveProjectWorkspaceIds } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -23,6 +24,13 @@ import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 
 export type HomeProjectSortOrder = Exclude<SidebarProjectSortOrder, "manual">;
 
+export function shouldShowHomeEmptyState(
+  hasThreads: boolean,
+  items: ReadonlyArray<{ readonly type: string }>,
+): boolean {
+  return !hasThreads && !items.some((item) => item.type === "ws-folder");
+}
+
 export interface HomeProjectScope {
   /** T3 Mesh (fork): only reachable on a machine this client is not connected to. */
   readonly meshOffline?: {
@@ -37,6 +45,21 @@ export interface HomeProjectScope {
   readonly projectRefs: ReadonlyArray<ScopedProjectRef>;
   readonly pinned: boolean;
   readonly archived: boolean;
+}
+
+export function homeProjectWorkspaceIds(
+  scope: HomeProjectScope,
+  config: SidebarWorkspacesConfig,
+  isScratch: boolean,
+): ReadonlyArray<string> {
+  return resolveProjectWorkspaceIds(
+    {
+      projectKey: scope.key,
+      workspaceRoots: scope.projects.map((project) => project.workspaceRoot),
+      isScratch,
+    },
+    config,
+  );
 }
 
 function getProjectSortTimestamp(
@@ -82,7 +105,11 @@ export function buildHomeProjectScopes(input: {
   if (input.layout === undefined || input.connectedEnvironmentIds === undefined) return scopes;
   const existing = new Set(scopes.map((scope) => scope.key));
   const offline = offlineLogicalProjects(input.layout, input.connectedEnvironmentIds)
-    .filter((entry) => !existing.has(entry.logicalKey))
+    .filter((entry) => {
+      if (existing.has(entry.logicalKey)) return false;
+      existing.add(entry.logicalKey);
+      return true;
+    })
     .map((entry): HomeProjectScope => {
       const title =
         input.layout?.projectTitles[entry.logicalKey] ??

@@ -36,7 +36,7 @@ export function Button(props: ButtonProps) {
       disabled={disabled}
       onPress={props.onPress}
       className={cn(
-        "min-h-12 flex-row items-center justify-center gap-2 rounded-full px-6 active:opacity-70",
+        "min-h-[48px] flex-row items-center justify-center gap-2 rounded-full px-6 active:opacity-70",
         props.fullWidth ? "w-full" : "self-start",
         disabled ? "bg-subtle-strong" : containerClassName,
       )}

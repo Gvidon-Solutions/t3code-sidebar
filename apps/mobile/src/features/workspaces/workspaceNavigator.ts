@@ -532,7 +532,7 @@ export function buildWorkspaceHomeItems(input: {
       ),
       pending: model.input.pending ?? [],
     });
-    if (!open) {
+    if (!open || model.input.meshOffline !== undefined) {
       const selected = model.active.find(holdsSelected);
       if (selected) pushThread(selected, { variant: "card" }, null, folderMachineTags);
       return;

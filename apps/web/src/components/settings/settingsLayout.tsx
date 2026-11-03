@@ -202,6 +202,7 @@ export function SettingsSection({
   icon,
   titleAction,
   headerAction,
+  headerLayout = "row",
   variant = "grouped",
   children,
   className,
@@ -212,6 +213,7 @@ export function SettingsSection({
   icon?: ReactNode;
   titleAction?: ReactNode;
   headerAction?: ReactNode;
+  headerLayout?: "row" | "responsive";
   variant?: "grouped" | "plain";
   children: ReactNode;
 }) {
@@ -222,19 +224,34 @@ export function SettingsSection({
       {...sectionProps}
       ref={targetRef}
       tabIndex={sectionProps.id ? -1 : sectionProps.tabIndex}
-      className={cn(!hideTitle && "space-y-2.5", className)}
+      className={cn(
+        !hideTitle && "space-y-2.5",
+        headerLayout === "responsive" && "@container/settings-section",
+        className,
+      )}
     >
       {hideTitle ? (
         <h2 className="sr-only">{title}</h2>
       ) : (
         <div
           data-settings-scroll-target
-          className="flex min-h-7 items-start justify-between gap-4 px-3 sm:px-4"
+          className={cn(
+            "flex min-h-7 items-start justify-between gap-4 px-3 sm:px-4",
+            headerLayout === "responsive" &&
+              "flex-col gap-2 @min-[32rem]/settings-section:flex-row @min-[32rem]/settings-section:gap-4",
+          )}
         >
-          <div className="flex min-w-0 items-center gap-1">
-            <h2 className="flex min-h-7 items-center gap-2 text-base font-semibold text-foreground">
+          <div className="flex min-w-0 max-w-full items-center gap-1">
+            <h2 className="flex min-h-7 min-w-0 items-center gap-2 text-base font-semibold text-foreground">
               {icon}
-              {title}
+              {headerLayout === "responsive" ? (
+                <Tooltip>
+                  <TooltipTrigger render={<span className="truncate" />}>{title}</TooltipTrigger>
+                  <TooltipPopup>{title}</TooltipPopup>
+                </Tooltip>
+              ) : (
+                title
+              )}
             </h2>
             {titleAction}
           </div>

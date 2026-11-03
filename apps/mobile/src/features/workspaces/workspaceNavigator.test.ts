@@ -221,6 +221,14 @@ describe("buildWorkspaceHomeItems", () => {
       "more New thread",
       "folder Beta (closed)",
     ]);
+    const offline = {
+      ...folder("a", "Alpha"),
+      meshOffline: { environmentId: "remote", tag: "REM", state: null },
+    };
+    expect(outline(build([], ["quiet:w", "w:key-a"], { folders: [offline] }))).toEqual([
+      "section quiet 1",
+      "folder Alpha",
+    ]);
   });
 
   it("keeps the user's order whatever saw activity last", () => {

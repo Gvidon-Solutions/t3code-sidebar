@@ -159,6 +159,7 @@ export function UiRequestCoordinator(props: { readonly shownThread: ShownThread 
               ?.environmentLabel ?? String(targetEnvironmentId);
           navigation.navigate("ThreadFile", {
             environmentId: targetEnvironmentId,
+            sourceEnvironmentId: environmentId,
             ...(otherMachine ? { cwd: "/", projectName: label } : { threadId: request.threadId }),
             path: fileRoutePathSegments(target.path),
             ...(target.line === undefined ? {} : { line: String(target.line) }),

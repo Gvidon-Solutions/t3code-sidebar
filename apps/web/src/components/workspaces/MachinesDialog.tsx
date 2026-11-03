@@ -55,6 +55,7 @@ export function MachinesDialog(props: {
   const [removing, setRemoving] = useState<string | null>(null);
   const reps: ReadonlyArray<SidebarProjectMount> =
     props.config.projectMounts[props.logicalKey] ?? [];
+  const removingRole = reps.find((rep) => rep.environmentId === removing)?.role ?? "replica";
   const present = new Set(reps.map((rep) => rep.environmentId));
   const candidates = props.machines.filter(
     (machine) => !machine.disabled && !present.has(machine.environmentId),
@@ -77,7 +78,8 @@ export function MachinesDialog(props: {
                 const machine = machineDisplayOf(
                   props.config,
                   rep.environmentId,
-                  rep.environmentId,
+                  props.machines.find((machine) => machine.environmentId === rep.environmentId)
+                    ?.label ?? rep.environmentId,
                 );
                 const status = representationRow(
                   props.config,
@@ -182,10 +184,12 @@ export function MachinesDialog(props: {
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this replica?</AlertDialogTitle>
+            <AlertDialogTitle>Remove this {removingRole}?</AlertDialogTitle>
             <AlertDialogDescription>
-              The sync stops and its representation is removed. Files already on the machine stay
-              where they are.
+              {removingRole === "replica"
+                ? "Synchronization stops and the replica is removed from this mesh folder."
+                : "The primary is removed from this mesh folder."}{" "}
+              Files already on the machine stay where they are.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
