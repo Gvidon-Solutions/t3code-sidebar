@@ -2,6 +2,12 @@
 # Sourced by round3-features.sh; only this run's N folders and project are changed.
 set -euo pipefail
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
+catalog_root="$N_ROOT-catalog"
+catalog_title="N-unplaced catalog $RUN_TS"
+rexec gor mkdir -p "$catalog_root"
+ctl gor tool t3_project_create "$(jq -nc --arg title "$catalog_title" --arg root "$catalog_root" '{title:$title,workspaceRoot:$root}')" > "$WORK/N-catalog-project.json"
+ctl vps tool t3_project_machines "$(jq -nc --arg title "$catalog_title" '{project:$title}')" > "$WORK/N-catalog-lookup.json"
+catalog_key=$(jq -r '.logicalKey' "$WORK/N-catalog-lookup.json")
 warning_root="$N_ROOT-live"
 warning_title="N-scan warnings $RUN_TS"
 rexec gor mkdir -p "$warning_root"
@@ -33,6 +39,10 @@ jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .
 rexec gor ln -s "../$(basename "$warning_root")-outside" "$warning_root/fresh-outside"
 mut gv sync flush "$(jq -r '.[0].name' "$WORK/N-live-after-ignores.json")"
 assert_live_regression_recovery() {
+  ctl vps tool t3_project_machines "$(jq -nc --arg title "$catalog_title" '{project:$title}')" > "$WORK/N-catalog-current.json"
+  jq -e --arg key "$catalog_key" --arg root "$catalog_root" --arg source "$GOR_ENV" '.logicalKey==$key and any(.representations[]; .environmentId==$source and .path==$root)' "$WORK/N-catalog-current.json" >/dev/null
+  ws_get vps > "$WORK/N-catalog-layout.json"
+  jq -e --arg key "$catalog_key" '(.config.projectMounts[$key] // [])|length==0' "$WORK/N-catalog-layout.json" >/dev/null
   local end=$((SECONDS+TIMEOUT))
   while :; do
     ctl vps tool t3_project_machines "$(jq -nc --arg title "$warning_title" '{project:$title}')" > "$WORK/N-live-current.json"

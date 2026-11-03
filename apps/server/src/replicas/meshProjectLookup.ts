@@ -1,3 +1,4 @@
+import type { ProjectCatalog, ProjectHandle } from "../mesh/MeshProjectDirectory.ts";
 import {
   EnvironmentId,
   NonNegativeInt,
@@ -28,10 +29,24 @@ export const lookupMeshProject = Effect.fn("ProjectReplicaService.lookupMeshProj
   config: SidebarWorkspacesConfig,
   query: string,
   self: string,
-  local: readonly Project[],
+  local: readonly ProjectHandle[],
   transport?: { readonly links: PeerLinks["Service"]; readonly peers: PeerMcpClient["Service"] },
+  catalogs: readonly ProjectCatalog[] = [],
 ) {
-  const records = local.map((project) => ({ environmentId: self, project }));
+  const recordsByEnvironment = new Map<
+    string,
+    { environmentId: string; project: ProjectHandle }[]
+  >();
+  for (const catalog of catalogs)
+    if (catalog.environmentId !== self)
+      recordsByEnvironment.set(
+        catalog.environmentId,
+        catalog.projects.map((project) => ({ environmentId: catalog.environmentId, project })),
+      );
+  recordsByEnvironment.set(
+    self,
+    local.map((project) => ({ environmentId: self, project })),
+  );
   const failures: string[] = [];
   const enabled = transport ? yield* transport.links.enabled : false;
   if (transport && !enabled)
@@ -74,61 +89,75 @@ export const lookupMeshProject = Effect.fn("ProjectReplicaService.lookupMeshProj
     );
     for (const target of discoveredRoutes.flat()) targets.add(target);
     targets.delete(self);
-    yield* Effect.forEach(
-      [...targets].sort(),
-      (environmentId) =>
-        Effect.gen(function* () {
-          const fetched: Project[] = [];
-          let cursor: number | null = 0;
-          const seen = new Set<number>();
-          while (cursor !== null) {
-            if (seen.has(cursor))
-              return yield* new ReplicaError({
-                reason: "storage",
-                message: "The remote project list did not advance to its next page.",
-              });
-            seen.add(cursor);
-            const page: typeof Page.Type = yield* callRouted(
-              { ...transport, self },
-              {
-                environmentId: EnvironmentId.make(environmentId),
-                tool: "t3_project_list",
-                arguments: { cursor, limit: 100 },
-                limits,
-                success: Page,
-              },
-            ).pipe(
-              Effect.mapError(
-                (error) =>
-                  new ReplicaError({ reason: "unreachable", message: error.message, cause: error }),
-              ),
+    if (direct.length)
+      yield* Effect.forEach(
+        [...targets].sort(),
+        (environmentId) =>
+          Effect.gen(function* () {
+            const fetched: Project[] = [];
+            let cursor: number | null = 0;
+            const seen = new Set<number>();
+            while (cursor !== null) {
+              if (seen.has(cursor))
+                return yield* new ReplicaError({
+                  reason: "storage",
+                  message: "The remote project list did not advance to its next page.",
+                });
+              seen.add(cursor);
+              const page: typeof Page.Type = yield* callRouted(
+                { ...transport, self },
+                {
+                  environmentId: EnvironmentId.make(environmentId),
+                  tool: "t3_project_list",
+                  arguments: { cursor, limit: 100 },
+                  limits,
+                  success: Page,
+                },
+              ).pipe(
+                Effect.mapError(
+                  (error) =>
+                    new ReplicaError({
+                      reason: "unreachable",
+                      message: error.message,
+                      cause: error,
+                    }),
+                ),
+              );
+              fetched.push(...page.projects);
+              cursor = page.nextCursor;
+            }
+            recordsByEnvironment.set(
+              environmentId,
+              fetched.map((project) => ({ environmentId, project })),
             );
-            fetched.push(...page.projects);
-            cursor = page.nextCursor;
-          }
-          records.push(...fetched.map((project) => ({ environmentId, project })));
-        }).pipe(
-          Effect.timeout("20 seconds"),
-          Effect.catch((error) => {
-            const message = `${meshMachineLabel(config, environmentId, direct.find((link) => link.environmentId === environmentId)?.label ?? "Unknown machine")}: ${error.message}`;
-            failures.push(message);
-            return Effect.logWarning("Mesh project lookup incomplete", { message });
-          }),
-        ),
-      { concurrency: 4 },
-    );
+          }).pipe(
+            Effect.timeout("20 seconds"),
+            Effect.catch((error) => {
+              const message = `${meshMachineLabel(config, environmentId, direct.find((link) => link.environmentId === environmentId)?.label ?? "Unknown machine")}: ${error.message}`;
+              failures.push(message);
+              return Effect.logWarning("Mesh project lookup incomplete", { message });
+            }),
+          ),
+        { concurrency: 4 },
+      );
   }
-  const matching = records.filter(
-    ({ project }) => project.id === query || normalized(project.title) === normalized(query),
-  );
-  const groups = new Map<string, typeof records>();
-  for (const record of matching) {
-    const fallback = opaqueProjectId(`${record.environmentId}:${record.project.workspaceRoot}`);
-    const key = logicalProjectKeyForRecord(
+  const logicalKeyOf = (record: { environmentId: string; project: ProjectHandle }) =>
+    logicalProjectKeyForRecord(
       config,
       { ...record.project, environmentId: record.environmentId },
-      fallback,
+      opaqueProjectId(`${record.environmentId}:${record.project.workspaceRoot}`),
     );
+  const matching = [...recordsByEnvironment.values()]
+    .flat()
+    .filter(
+      (record) =>
+        record.project.id === query ||
+        normalized(record.project.title) === normalized(query) ||
+        logicalKeyOf(record) === query,
+    );
+  const groups = new Map<string, typeof matching>();
+  for (const record of matching) {
+    const key = logicalKeyOf(record);
     groups.set(key, [...(groups.get(key) ?? []), record]);
   }
   if (groups.size === 1) {

@@ -1,3 +1,4 @@
+import { MeshProjectDirectory } from "../mesh/MeshProjectDirectory.ts";
 import { lookupMeshProject } from "./meshProjectLookup.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
 import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
@@ -93,6 +94,7 @@ const make = Effect.gen(function* () {
   const mesh = yield* MeshLayoutService;
   const links = yield* Effect.serviceOption(PeerLinks);
   const peers = yield* Effect.serviceOption(PeerMcpClient);
+  const directory = yield* Effect.serviceOption(MeshProjectDirectory);
   const paths = yield* ReplicaPaths.ReplicaPaths;
   const runner = yield* MutagenRunner.MutagenRunner;
   const projects = yield* ProjectService.ProjectService;
@@ -791,7 +793,7 @@ const make = Effect.gen(function* () {
           }),
         );
   };
-  const resolveProject = Effect.fn("ProjectReplicaService.resolveProject")(function* (
+  const resolveProjectOnce = Effect.fn("ProjectReplicaService.resolveProjectOnce")(function* (
     name: string,
   ) {
     const config = (yield* mesh.read).config;
@@ -820,6 +822,7 @@ const make = Effect.gen(function* () {
       Option.isSome(links) && Option.isSome(peers)
         ? { links: links.value, peers: peers.value }
         : undefined,
+      Option.isSome(directory) ? yield* directory.value.read : [],
     );
     const logicalKey = found.logicalKey;
     const representations = [...(config.projectMounts[logicalKey] ?? [])];
@@ -850,6 +853,43 @@ const make = Effect.gen(function* () {
       },
       project: local?.project,
     };
+  });
+  const resolveProject = Effect.fn("ProjectReplicaService.resolveProject")(function* (
+    name: string,
+  ) {
+    if (Option.isNone(directory)) return yield* resolveProjectOnce(name);
+    const catalog = directory.value;
+    return yield* resolveProjectOnce(name).pipe(
+      Effect.catchIf(
+        (error) => error.reason === "not_found" || error.reason === "unreachable",
+        () =>
+          Effect.gen(function* () {
+            const result = yield* Stream.merge(
+              catalog.changes.pipe(Stream.map(() => undefined)),
+              mesh.changes.pipe(Stream.map(() => undefined)),
+            ).pipe(
+              Stream.mapEffect(() =>
+                resolveProjectOnce(name).pipe(
+                  Effect.asSome,
+                  Effect.catch((cause) =>
+                    Effect.logDebug("Waiting for the mesh project catalog", {
+                      message: cause.message,
+                    }).pipe(Effect.as(Option.none())),
+                  ),
+                ),
+              ),
+              Stream.filter(Option.isSome),
+              Stream.map((value) => value.value),
+              Stream.take(1),
+              Stream.runHead,
+              Effect.scoped,
+              Effect.timeoutOption("20 seconds"),
+            );
+            const found = Option.flatten(result);
+            return Option.isSome(found) ? found.value : yield* resolveProjectOnce(name);
+          }),
+      ),
+    );
   });
   const waitForProject = Effect.fn("ProjectReplicaService.waitForProject")(function* (
     logicalKey: string,
