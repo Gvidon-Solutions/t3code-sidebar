@@ -38,7 +38,7 @@ describe("mesh authority", () => {
 it("assigns a normalized machine/path to only one project, preferring an authority-authored claim", () => {
   const rep = {
     environmentId: "host",
-    path: "/repo/",
+    path: "/repo/child/.././",
     role: "primary",
     transport: "git",
     createdAt: "",

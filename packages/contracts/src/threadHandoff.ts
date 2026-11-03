@@ -11,6 +11,7 @@ export const ThreadMoveInput = Schema.Struct({
   projectId: Schema.optional(ProjectId),
   targetEnvironmentId: Schema.optional(EnvironmentId),
   logicalKey: Schema.optional(Schema.String),
+  createCopy: Schema.optional(Schema.Boolean),
   modelSelection: Schema.optional(ModelSelection),
   message: Schema.optional(Schema.String),
   undoHandoffId: Schema.optional(Schema.String),

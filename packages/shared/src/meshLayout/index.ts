@@ -9,3 +9,7 @@ export * from "./importLegacy.ts";
 export { adoptLegacy } from "./adoptLegacy.ts";
 
 export { meshAuthorityOf, conflictWinner } from "./authority.ts";
+
+export { meshMachineLabel } from "./machineNames.ts";
+export { threadProjectTarget } from "./threadTarget.ts";
+export { opaqueProjectId, migrateLogicalProjectIds } from "./logicalIds.ts";

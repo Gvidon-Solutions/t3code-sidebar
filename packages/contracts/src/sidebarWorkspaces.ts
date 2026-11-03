@@ -65,6 +65,16 @@ export const SidebarProjectMount = Schema.Struct({
   transport: SidebarProjectMountTransport,
   /** Reserved by the destination server before its driver starts copying. */
   pathAllocated: Schema.optionalKey(Schema.Boolean),
+  adoption: Schema.optionalKey(
+    Schema.Struct({
+      environmentId: Schema.String,
+      sessionIdentifier: Schema.String,
+      paused: Schema.Boolean,
+    }),
+  ),
+  syncKey: Schema.optionalKey(Schema.String),
+  explicitPath: Schema.optionalKey(Schema.Boolean),
+  pathValidated: Schema.optionalKey(Schema.Boolean),
   /** "primary" owns `.git` and computes; "replica" is a synced working copy of `source`. */
   role: Schema.Literals(["primary", "replica"]),
   /** For a replica: the environment whose representation it syncs with. */
