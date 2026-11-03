@@ -205,7 +205,10 @@ export function buildSidebarProjectSnapshots(input: {
             (entry) => !snapshots.some((snapshot) => snapshot.projectKey === entry.logicalKey),
           )
           .map((entry): SidebarProjectSnapshot => {
-            const title = entry.path.split(/[\\/]/).filter(Boolean).at(-1) ?? entry.logicalKey;
+            const title =
+              input.layout?.projectTitles[entry.logicalKey] ??
+              entry.path.split(/[\\/]/).filter(Boolean).at(-1) ??
+              entry.logicalKey;
             const project = {
               id: `mesh:${entry.logicalKey}:${entry.environmentId}` as Project["id"],
               environmentId: entry.environmentId as Project["environmentId"],

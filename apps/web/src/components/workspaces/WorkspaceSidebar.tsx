@@ -3,6 +3,11 @@
  * as folders of one-line threads. It reuses the default sidebar's data and mutations and owns only
  * layout and workspace bookkeeping. The workspace config is a shared server setting.
  */
+import { MoveProjectDialog } from "./MoveProjectDialog";
+import {
+  threadMoveValidity,
+  CROSS_MACHINE_MOVE_MESSAGE,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { useAtomValue } from "@effect/atom-react";
 import {
   scopedThreadKey,
@@ -99,6 +104,7 @@ import {
 } from "@t3tools/client-runtime/state/project-grouping";
 import {
   machineTag,
+  renameLogicalProject,
   mergeLogicalProjects,
   mergeSuggestionsFor,
   splitLogicalProject,
@@ -588,6 +594,46 @@ export default function WorkspaceSidebar() {
     null,
   );
   const [folderDrop, setFolderDrop] = useState<{ projectKey: string; after: boolean } | null>(null);
+  const [movingThread, setMovingThread] = useState<SidebarThreadSummary | null>(null);
+  const [dragThread, setDragThread] = useState<SidebarThreadSummary | null>(null);
+  const [threadDrop, setThreadDrop] = useState<string | null>(null);
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+  const moveThreadCommand = useAtomCommand(threadEnvironment.move, { reportFailure: false });
+  const moveToProject = async (thread: SidebarThreadSummary, target: (typeof projects)[number]) => {
+    setMovingThread(null);
+    const validity = threadMoveValidity(thread, target);
+    if (validity === "same-project") return;
+    if (validity === "cross-machine") {
+      toastManager.add({ type: "error", title: CROSS_MACHINE_MOVE_MESSAGE });
+      return;
+    }
+    const result = await moveThreadCommand({
+      environmentId: thread.environmentId,
+      input: { threadId: thread.id, projectId: target.id },
+    });
+    if (result._tag === "Failure") {
+      toastManager.add({
+        type: "error",
+        title: "Could not move thread",
+        description: String(squashAtomCommandFailure(result)),
+      });
+      return;
+    }
+    toastManager.add({
+      title: "Moved to " + (target.isScratch ? "No project" : target.title),
+      actionProps: {
+        children: "Undo",
+        onClick: () => {
+          void reportFailure("Could not undo move", () =>
+            moveThreadCommand({
+              environmentId: thread.environmentId,
+              input: { threadId: thread.id, projectId: thread.projectId },
+            }),
+          );
+        },
+      },
+    });
+  };
   const [machinesFolder, setMachinesFolder] = useState<FolderModel | null>(null);
   /** Folders waiting for a machine to register their project, keyed by `logicalKey:environmentId`. */
   const [pendingThreadOn, setPendingThreadOn] = useState<
@@ -681,6 +727,9 @@ export default function WorkspaceSidebar() {
     canShareWithGuest: canShareMenuThreadWithGuest,
     threadRef: menuRequest?.ref ?? null,
     projectCwd: menuThread,
+    onMoveToProject: () => {
+      if (menuRequest) setMovingThread(threadByKey.get(scopedThreadKey(menuRequest.ref)) ?? null);
+    },
     onStartRename: () => {
       if (menuRequest) setRenamingKey(scopedThreadKey(menuRequest.ref));
     },
@@ -1071,6 +1120,7 @@ export default function WorkspaceSidebar() {
           ]),
     ];
     const items: ContextMenuItem[] = [
+      { id: "rename-project", label: "Rename…", icon: "pencil", disabled: folder.isScratch },
       { id: "new-thread", label: "New thread", icon: "message-square-plus" },
       {
         id: "new-thread-on",
@@ -1122,7 +1172,8 @@ export default function WorkspaceSidebar() {
     ];
     const clicked = await api.contextMenu.show(items, position);
     if (!clicked) return;
-    if (clicked === "new-thread") startThreadInFolder(folder);
+    if (clicked === "rename-project") setRenamingFolder(folder.group.projectKey);
+    else if (clicked === "new-thread") startThreadInFolder(folder);
     else if (clicked.startsWith("machine:"))
       startThreadOnMachine(folder, clicked.slice("machine:".length));
     else if (clicked === "machines") openMachinesDialog(folder);
@@ -1284,6 +1335,11 @@ export default function WorkspaceSidebar() {
         isRenaming={renamingKey === key}
         canSettle={capabilities?.threadSettlement === true}
         canPin={capabilities?.threadPinning === true}
+        onDragStart={() => setDragThread(thread)}
+        onDragEnd={() => {
+          setDragThread(null);
+          setThreadDrop(null);
+        }}
         onOpen={navigateToThread}
         onContextMenu={handleThreadContextMenu}
         onTogglePin={handleTogglePin}
@@ -1440,6 +1496,7 @@ export default function WorkspaceSidebar() {
                 aria-expanded={open}
                 className={cn(
                   "group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-sm font-medium outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  threadDrop === folderKey && "bg-accent ring-2 ring-inset ring-primary",
                   offline === undefined
                     ? "text-sidebar-foreground"
                     : "text-sidebar-muted-foreground opacity-70",
@@ -1475,6 +1532,12 @@ export default function WorkspaceSidebar() {
                   setFolderDrop(null);
                 }}
                 onDragOver={(event) => {
+                  if (dragThread) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setThreadDrop(folderKey);
+                    return;
+                  }
                   if (!acceptsDrop) return;
                   event.preventDefault();
                   event.dataTransfer.dropEffect = "move";
@@ -1485,11 +1548,24 @@ export default function WorkspaceSidebar() {
                   }
                 }}
                 onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                    setThreadDrop(null);
                   if (dropAt && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
                     setFolderDrop(null);
                   }
                 }}
                 onDrop={(event) => {
+                  if (dragThread) {
+                    event.preventDefault();
+                    const target =
+                      folder.group.memberProjects.find(
+                        (project) => project.environmentId === dragThread.environmentId,
+                      ) ?? folder.group.memberProjects[0];
+                    if (target) void moveToProject(dragThread, target);
+                    setDragThread(null);
+                    setThreadDrop(null);
+                    return;
+                  }
                   if (!acceptsDrop) return;
                   event.preventDefault();
                   dropFolder(folder, dropAt?.after ?? false);
@@ -1519,7 +1595,41 @@ export default function WorkspaceSidebar() {
               <ProjectFavicon project={folder.group} className="size-4 shrink-0" />
             )}
             <span className="min-w-0 flex-1 truncate">
-              {folder.label}
+              {renamingFolder === folder.group.projectKey ? (
+                <input
+                  aria-label="Rename project"
+                  autoFocus
+                  defaultValue={folder.label}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === "Escape") setRenamingFolder(null);
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }}
+                  onBlur={(event) => {
+                    setRenamingFolder(null);
+                    const title = event.currentTarget.value.trim();
+                    if (!title || title === folder.label) return;
+                    writeConfig((config) =>
+                      renameLogicalProject(
+                        config,
+                        folder.group.projectKey,
+                        title,
+                        folder.group.memberProjects,
+                      ),
+                    );
+                    for (const member of folder.group.memberProjects)
+                      void reportFailure("Could not rename project", () =>
+                        updateProject({
+                          environmentId: member.environmentId,
+                          input: { projectId: member.id, title },
+                        }),
+                      );
+                  }}
+                />
+              ) : (
+                folder.label
+              )}
               {offline ? ` · on ${offline.tag}, not connected here` : ""}
             </span>
             {!open && (attention > 0 || working > 0) ? (
@@ -1905,6 +2015,18 @@ export default function WorkspaceSidebar() {
             onSelect={(icon) => void setFolderIcon(iconPickerFolder, icon)}
           />
         </Suspense>
+      ) : null}
+      {movingThread ? (
+        <MoveProjectDialog
+          projects={projects}
+          label={(project) =>
+            (project.isScratch ? "No project" : project.title) +
+            " · " +
+            machineTag(config, project.environmentId)
+          }
+          onSelect={(project) => void moveToProject(movingThread, project)}
+          onClose={() => setMovingThread(null)}
+        />
       ) : null}
       {machinesFolder ? (
         <MachinesDialog

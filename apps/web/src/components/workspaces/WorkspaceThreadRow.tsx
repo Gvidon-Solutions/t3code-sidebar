@@ -1,3 +1,4 @@
+import { THREAD_DRAG_TYPE } from "@t3tools/client-runtime/state/mesh-layout";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
 import { MachineTag } from "./MachineTag";
@@ -54,6 +55,8 @@ export interface WorkspaceThreadRowProps {
   isRenaming: boolean;
   canSettle: boolean;
   canPin: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
   onOpen: (threadRef: ScopedThreadRef) => void;
   onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
   onTogglePin: (thread: SidebarThreadSummary) => void;
@@ -218,6 +221,13 @@ export const WorkspaceThreadRow = memo(function WorkspaceThreadRow(props: Worksp
           <div
             role="button"
             tabIndex={0}
+            draggable={props.variant !== "agent" && !props.isRenaming}
+            onDragStart={(event) => {
+              event.dataTransfer.setData(THREAD_DRAG_TYPE, threadKey);
+              event.dataTransfer.effectAllowed = "move";
+              props.onDragStart?.();
+            }}
+            onDragEnd={props.onDragEnd}
             data-thread-key={threadKey}
             data-active={props.isActive ? "true" : undefined}
             className={cn(
