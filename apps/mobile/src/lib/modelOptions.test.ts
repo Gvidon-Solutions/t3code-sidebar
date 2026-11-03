@@ -74,6 +74,11 @@ describe("mobile model options", () => {
         (option) => option.isUnavailable,
       ),
     ).toEqual([true, true, true]);
+    expect(
+      buildModelOptions(unavailableConfig, selection, undefined, null, false, true).every(
+        (option) => option.unavailableReason === "Provider not authenticated",
+      ),
+    ).toBe(true);
     const options = buildModelOptions(config, selection, undefined, null);
 
     expect(options).toMatchObject(

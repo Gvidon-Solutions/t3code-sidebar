@@ -1,4 +1,8 @@
-import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import {
+  draftMachineDisplays,
+  draftMachineStatus,
+  logDraftMachineCollisions,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { AsyncResult } from "effect/reactivity";
 import {
@@ -83,7 +87,6 @@ import {
   useRemoteConnectionStatus,
   useSavedRemoteConnections,
 } from "../../state/use-remote-environment-registry";
-import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -174,6 +177,8 @@ type NewTaskFlowContextValue = {
   readonly environments: ReadonlyArray<{
     readonly environmentId: EnvironmentId;
     readonly environmentLabel: string;
+    readonly display?: import("@t3tools/client-runtime/state/machine-display").MachineDisplay;
+    readonly status?: string;
     readonly disabled?: boolean;
   }>;
   readonly selectedProject: EnvironmentProject | null;
@@ -198,6 +203,10 @@ type NewTaskFlowContextValue = {
   readonly switchEnvironment: (environmentId: EnvironmentId) => Promise<boolean>;
   readonly switchingToEnvironmentId: EnvironmentId | null;
   readonly mountingStatus: string | null;
+  readonly mountTarget: {
+    readonly environmentId: EnvironmentId;
+    readonly logicalKey: string;
+  } | null;
   readonly retryMount: (() => void) | null;
   readonly setSelectedModelKey: (
     key: string | null,
@@ -363,9 +372,12 @@ export function NewTaskFlowProvider(
   const storedStickyModelSelection = useStickyComposerModelSelection();
   const modelSelectionNow = useNowMinuteMs();
   const serverConfigs = useServerConfigs();
+  const [switchingToEnvironmentId, setSwitchingToEnvironmentId] = useState<EnvironmentId | null>(
+    null,
+  );
   const projectDefaults = useNewTaskProjectDefaults(selectedProject);
-  const selectedEnvironmentServerConfig = pendingMount
-    ? (serverConfigs.get(pendingMount.environmentId) ?? null)
+  const selectedEnvironmentServerConfig = switchingToEnvironmentId
+    ? (serverConfigs.get(switchingToEnvironmentId) ?? null)
     : projectDefaults.serverConfig;
   const isScratchDraft = projectDefaults.isScratch;
   const { connectedEnvironments } = useRemoteConnectionStatus();
@@ -631,9 +643,6 @@ export function NewTaskFlowProvider(
   };
 
   const openScratch = useAtomCommand(projectEnvironment.openScratch, { reportFailure: false });
-  const [switchingToEnvironmentId, setSwitchingToEnvironmentId] = useState<EnvironmentId | null>(
-    null,
-  );
   const latestSwitchRef = useRef<object | null>(null);
   const preferenceScope = projectScopes.find((scope) =>
     scope.projects.some(
@@ -880,37 +889,66 @@ export function NewTaskFlowProvider(
     };
   };
 
-  const scratchEnvironments = connectedEnvironments.filter(
-    (environment) =>
-      availableScratchWorkspaceRoot(
-        environment.connectionState,
-        serverConfigs.get(environment.environmentId),
-      ) !== null,
+  const machineIdentities = draftMachineDisplays(
+    meshLayout.config ?? { machines: {} },
+    [
+      ...new Set([
+        ...serverConfigs.keys(),
+        ...Object.keys(savedConnectionsById),
+        ...Object.keys(meshLayout.config?.machines ?? {}),
+      ]),
+    ].map((id) => {
+      const environmentId = EnvironmentId.make(id);
+      return {
+        environmentId,
+        descriptorLabel: serverConfigs.get(environmentId)?.environment.label,
+        label: savedConnectionsById[environmentId]?.environmentLabel,
+        url:
+          savedConnectionsById[environmentId]?.displayUrl ??
+          savedConnectionsById[environmentId]?.httpBaseUrl,
+      };
+    }),
   );
-
-  const environments = isScratchDraft
-    ? scratchEnvironments.map((environment) => ({
-        environmentId: environment.environmentId,
-        environmentLabel: environment.environmentLabel,
-      }))
-    : [
-        ...new Set([...serverConfigs.keys(), ...Object.keys(meshLayout.config?.machines ?? {})]),
-      ].map((id) => {
-        const environmentId = EnvironmentId.make(id);
-        return {
-          environmentId,
-          environmentLabel: machineDisplayOf(
-            meshLayout.config ?? { machines: {} },
-            id,
-            savedConnectionsById[environmentId]?.environmentLabel ?? "Machine",
-          ).label,
-          disabled:
-            !connectedEnvironments.some(
-              (environment) =>
-                environment.environmentId === id && environment.connectionState === "connected",
-            ) || !serverConfigs.get(environmentId)?.environment.capabilities.replicas,
-        };
-      });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reports ambiguous machine identities once per collision set to the diagnostics log
+  useEffect(() => {
+    logDraftMachineCollisions(machineIdentities.collisions);
+  }, [machineIdentities.collisions]);
+  const environments = machineIdentities.rows
+    .filter(
+      (display) =>
+        !isScratchDraft ||
+        !!serverConfigs.get(EnvironmentId.make(display.environmentId))?.scratchWorkspaceRoot,
+    )
+    .map((display) => {
+      const environmentId = EnvironmentId.make(display.environmentId);
+      const connection = connectedEnvironments.find(
+        (environment) => environment.environmentId === environmentId,
+      );
+      const connected = connection?.connectionState === "connected";
+      const hasProject = isScratchDraft
+        ? projects.some(
+            (project) =>
+              project.environmentId === environmentId &&
+              project.workspaceRoot === serverConfigs.get(environmentId)?.scratchWorkspaceRoot,
+          )
+        : preferenceScope?.projects.some((project) => project.environmentId === environmentId) ||
+          meshLayout.config?.projectMounts[preferenceKey ?? ""]?.some(
+            (rep) => rep.environmentId === environmentId && rep.projectId,
+          );
+      return {
+        environmentId,
+        environmentLabel: display.label,
+        display,
+        status: draftMachineStatus({
+          connected,
+          hasProject: !!hasProject,
+          error: connection?.connectionError,
+        }),
+        disabled:
+          !connected ||
+          (!isScratchDraft && !serverConfigs.get(environmentId)?.environment.capabilities.replicas),
+      };
+    });
   const mountRep =
     pendingMount &&
     meshLayout.config?.projectMounts[pendingMount.logicalKey]?.find(
@@ -1030,6 +1068,11 @@ export function NewTaskFlowProvider(
     switchEnvironment,
     switchingToEnvironmentId,
     mountingStatus: mountRow?.text ?? null,
+    mountTarget:
+      pendingMount ??
+      (isScratchDraft && switchingToEnvironmentId
+        ? { environmentId: switchingToEnvironmentId, logicalKey: "scratch" }
+        : null),
     retryMount:
       mountRow?.retry && meshLayout.config
         ? () => {

@@ -13,6 +13,9 @@ import { ConnectionStatusDot } from "../connection/ConnectionStatusDot";
 
 export function DraftEnvironmentControl(props: {
   readonly label: string;
+  readonly display?:
+    | import("@t3tools/client-runtime/state/machine-display").MachineDisplay
+    | undefined;
   readonly environmentId?: string;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly machineKind: EnvironmentMachineKind;
@@ -20,16 +23,14 @@ export function DraftEnvironmentControl(props: {
   readonly onChooseEnvironment: () => void;
 }) {
   const { config } = useMeshLayout();
-  const machine = machineDisplayOf(
-    config ?? { machines: {} },
-    props.environmentId ?? "",
-    props.label,
-  );
+  const machine =
+    props.display ??
+    machineDisplayOf(config ?? { machines: {} }, props.environmentId ?? "", props.label);
   const disconnected = props.connectionState !== "connected";
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Choose environment, ${props.label}, ${disconnected ? "Offline" : "Connected"}`}
+      accessibilityLabel={`Choose machine, ${props.label}, ${disconnected ? "Offline" : "Connected"}`}
       disabled={props.disabled}
       onPress={props.onChooseEnvironment}
       className="flex-row items-center gap-1.5 rounded-xl px-3 py-2 active:opacity-65"

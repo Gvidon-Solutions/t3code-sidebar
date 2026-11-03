@@ -1,5 +1,4 @@
-import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
-import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { SearchField } from "../../components/ui/SearchField";
 import { Button } from "../../components/ui/Button";
@@ -10,11 +9,7 @@ import { SelectionRow } from "../../components/ui/SelectionRow";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { shouldCheckoutNewTaskBranch } from "./new-task-context-presentation";
 import type { VcsRef } from "@t3tools/client-runtime/state/vcs";
-import {
-  AuthSourceControlWriteScope,
-  resolveEnvironmentMachineKind,
-  type EnvironmentId,
-} from "@t3tools/contracts";
+import { AuthSourceControlWriteScope, type EnvironmentId } from "@t3tools/contracts";
 import { LegendList } from "@legendapp/list/react-native";
 import {
   isAtomCommandInterrupted,
@@ -31,7 +26,6 @@ import { AndroidScreenHeader } from "../../components/ui/AndroidScreenHeader";
 import { ScreenContent } from "../../components/ui/ScreenContent";
 import { SymbolView } from "../../components/ui/AppSymbol";
 import { AppText as Text } from "../../components/ui/AppText";
-import { EnvironmentMachineSymbol } from "../../components/EnvironmentMachineSymbol";
 import { ThemedSwitch } from "../../components/ui/ThemedSwitch";
 import { cn } from "../../lib/cn";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
@@ -56,7 +50,6 @@ import {
   ConnectionDiagnosisDetails,
   useConnectionDiagnosis,
 } from "../connection/ConnectionDiagnosisDetails";
-import { environmentStatusText } from "../connection/environmentStatusText";
 
 const BRANCH_SEARCH_DEBOUNCE_MS = 150;
 
@@ -70,34 +63,13 @@ function EnvironmentPickerRow(props: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const flow = useNewTaskFlow();
-  const { config } = useMeshLayout();
-  const machine = machineDisplayOf(config ?? { machines: {} }, props.environmentId, props.title);
-  const hasLocalProject = flow.projectScopes.some(
-    (scope) =>
-      scope.projects.some(
-        (project) =>
-          project.id === flow.selectedProject?.id &&
-          project.environmentId === flow.selectedProject?.environmentId,
-      ) && scope.projects.some((project) => project.environmentId === props.environmentId),
-  );
-  const here =
-    hasLocalProject ||
-    config?.projectMounts[
-      flow.projectScopes.find((scope) =>
-        scope.projects.some(
-          (project) =>
-            project.id === flow.selectedProject?.id &&
-            project.environmentId === flow.selectedProject?.environmentId,
-        ),
-      )?.key ?? ""
-    ]?.some((rep) => rep.environmentId === props.environmentId);
+  const choice = flow.environments.find((machine) => machine.environmentId === props.environmentId);
+  const machine = choice?.display ?? { label: props.title, tag: "?", color: "#64748b" };
   const { presentation } = useEnvironmentPresentation(props.environmentId);
   const { diagnosis, state } = useConnectionDiagnosis(props.environmentId, presentation);
   const { onReconnectEnvironment } = useRemoteConnections();
   const connection = presentation?.connection;
-  const status =
-    diagnosis?.headline ??
-    (connection ? environmentStatusText({ ...connection, error: null }) : "Offline");
+  const status = choice?.status ?? "not connected";
   return (
     <View className={cn("bg-grouped-card", !props.isLast && "border-b border-border-subtle")}>
       <View className="flex-row items-center">
@@ -109,19 +81,20 @@ function EnvironmentPickerRow(props: {
           onPress={props.onPress}
           className="min-h-16 flex-1 flex-row items-center gap-3 px-4 py-3 active:bg-subtle"
         >
-          <EnvironmentMachineSymbol
-            kind={resolveEnvironmentMachineKind(presentation?.serverConfig ?? null)}
-            size={20}
-            tintColorClassName="accent-icon-muted"
-          />
+          <Text
+            className="rounded px-1 font-mono text-xs text-foreground"
+            style={{ backgroundColor: machineTagBackground(machine.color) }}
+          >
+            {machine.tag}
+          </Text>
           <View className="min-w-0 flex-1 gap-1">
             <Text className="text-base font-t3-medium text-foreground" numberOfLines={1}>
-              {machine.tag} · {machine.label}
+              {machine.label}
             </Text>
             <View className="flex-row items-center gap-1.5">
               <ConnectionStatusDot state={connection?.phase ?? "offline"} pulse={false} size={6} />
               <Text className="shrink text-xs text-foreground-muted" numberOfLines={2}>
-                {status} · {here || flow.isScratchDraft ? "here" : "copy will be created"}
+                {status}
               </Text>
             </View>
           </View>
@@ -215,15 +188,11 @@ export function NewTaskEnvironmentPickerRouteScreen() {
       <NativeStackScreenOptions
         options={{
           headerShown: Platform.OS !== "android",
-          title: "Environment",
+          title: "Machine",
         }}
       />
       {Platform.OS === "android" ? (
-        <AndroidScreenHeader
-          title="Environment"
-          hideBottomBorder
-          onBack={() => navigation.goBack()}
-        />
+        <AndroidScreenHeader title="Machine" hideBottomBorder onBack={() => navigation.goBack()} />
       ) : null}
       <ScreenContent>
         <ScrollView

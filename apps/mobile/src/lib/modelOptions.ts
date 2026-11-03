@@ -39,6 +39,7 @@ export type ModelOption = {
   readonly isDefault: boolean;
   readonly isLegacy: boolean;
   readonly isUnavailable?: boolean;
+  readonly unavailableReason?: string | undefined;
   readonly isHidden?: boolean;
   readonly canHide?: boolean;
   readonly capabilities: ModelCapabilities | null;
@@ -433,6 +434,8 @@ export function buildModelOptions(
       ? {
           ...option,
           isUnavailable: draftModelUnavailableReason(config, option.selection, projectId) !== null,
+          unavailableReason:
+            draftModelUnavailableReason(config, option.selection, projectId) ?? undefined,
         }
       : option,
   );

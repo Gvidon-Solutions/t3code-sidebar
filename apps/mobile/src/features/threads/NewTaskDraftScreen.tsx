@@ -1,10 +1,12 @@
+import { useSyncExternalStore } from "react";
+import { CommandId, MessageId } from "@t3tools/contracts";
+import { pendingMeshDrafts, serializePendingAttachments } from "../../state/pendingMeshDrafts";
 import { useServerConfigs } from "../../state/entities";
 import {
-  DraftMachineSendQueue,
   defaultUsableDraftModel,
   draftModelUnavailableReason,
+  machineForDraftModel,
 } from "@t3tools/client-runtime/state/mesh-layout";
-import { useEffectEvent } from "react";
 import { DraftEnvironmentControl } from "./DraftEnvironmentControl";
 import { NativeScrollEdgeEffectsContext } from "../../native/NativeScrollViewMarker";
 import { DraftThreadHeader } from "./DraftThreadHeader";
@@ -166,6 +168,14 @@ export function NewTaskDraftScreen(props: {
   const [creationMetadata] = useState(makeTurnCommandMetadata);
   const projects = useProjects();
   const flow = useNewTaskFlow();
+  const pendingSends = useSyncExternalStore(
+    pendingMeshDrafts.subscribe,
+    pendingMeshDrafts.getSnapshot,
+  );
+  const pendingSend = pendingSends.find((send) => send.draftId === flow.draftKey);
+  const chosenEnvironmentId =
+    pendingSend?.environmentId ?? flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId;
+
   const machineConfigs = useServerConfigs();
   const navigation = useNavigation();
   const isFocused = useIsFocused();
@@ -193,16 +203,16 @@ export function NewTaskDraftScreen(props: {
     return scope?.title ?? selectedProject.title;
   })();
   const { onReconnectEnvironment } = useRemoteConnections();
-  const environmentRuntime = useRemoteEnvironmentRuntime(selectedProject?.environmentId ?? null);
+  const environmentRuntime = useRemoteEnvironmentRuntime(chosenEnvironmentId);
   const connectionState = environmentRuntime?.connectionState ?? "offline";
   const selectedEnvironmentServerConfig = useEnvironmentServerConfig(
-    flow.switchingToEnvironmentId ?? selectedProject?.environmentId ?? null,
+    pendingSend?.environmentId ??
+      flow.switchingToEnvironmentId ??
+      selectedProject?.environmentId ??
+      null,
   );
   const environmentConnected = connectionState === "connected";
-  const canOperate = useEnvironmentScope(
-    selectedProject?.environmentId ?? null,
-    AuthOrchestrationOperateScope,
-  );
+  const canOperate = useEnvironmentScope(chosenEnvironmentId, AuthOrchestrationOperateScope);
   const projectCloneState = useProjectClone(
     selectedProject
       ? { environmentId: selectedProject.environmentId, projectId: selectedProject.id }
@@ -360,7 +370,10 @@ export function NewTaskDraftScreen(props: {
   const contextImports = useAtomValue(composerContextImportsAtom);
   const isImportingContext = flow.draftKey ? contextImports[flow.draftKey] === true : false;
   const isComposerInteractionLocked =
-    isIncomingShareTransferPending || flow.submitting || isImportingContext;
+    isIncomingShareTransferPending ||
+    flow.submitting ||
+    isImportingContext ||
+    (!!pendingSend && pendingSend.state !== "sent");
   const { environments, selectedEnvironmentId, switchEnvironment, switchingToEnvironmentId } = flow;
   const cycleEnvironment = () => {
     if (isComposerInteractionLocked) return true;
@@ -529,10 +542,8 @@ export function NewTaskDraftScreen(props: {
   }, [loadBranches, selectedProject]);
 
   const selectedEnvironmentLabel =
-    flow.environments.find(
-      (environment) =>
-        environment.environmentId === (flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId),
-    )?.environmentLabel ?? "Environment";
+    flow.environments.find((environment) => environment.environmentId === chosenEnvironmentId)
+      ?.environmentLabel ?? "Environment";
   const availableCurrentBranchName =
     flow.availableBranches.find((branch) => branch.current)?.name ??
     flow.availableBranches.find((branch) => branch.isDefault)?.name ??
@@ -576,11 +587,7 @@ export function NewTaskDraftScreen(props: {
         selectedProject?.id ?? null,
       )
     : null;
-  const queuedMachineSend = useRef(new DraftMachineSendQueue());
   async function handleStart(): Promise<import("@t3tools/contracts").MessageId | null> {
-    if (queuedMachineSend.current.defer(flow.switchingToEnvironmentId !== null)) {
-      return null;
-    }
     const selectedProject = flow.selectedProject;
     const draftKey = flow.draftKey;
     if (
@@ -658,7 +665,7 @@ export function NewTaskDraftScreen(props: {
     const strandedThread = threadContextsOutsideEnvironment({
       text: draft.text,
       records: draft.context?.records ?? [],
-      environmentId: selectedProject.environmentId,
+      environmentId: flow.mountTarget?.environmentId ?? selectedProject.environmentId,
       linkedEnvironments: flow.linkedEnvironments,
     })[0];
     if (strandedThread) {
@@ -670,6 +677,40 @@ export function NewTaskDraftScreen(props: {
         "Attached thread unavailable",
         `"${strandedThread.title}" is on another machine. Switch back to ${owner} or remove it from the draft.`,
       );
+      return null;
+    }
+
+    const mountTarget = flow.mountTarget;
+    if (mountTarget) {
+      flow.setSubmitting(true);
+      const saved = await settlePromise(async () => {
+        const attachments = await serializePendingAttachments(draft.attachments);
+        await pendingMeshDrafts.enqueue({
+          draftId: draftKey,
+          environmentId: mountTarget.environmentId,
+          logicalKey: mountTarget.logicalKey,
+          commandId: CommandId.make(creationMetadata.commandId),
+          threadId: ThreadId.make(creationMetadata.threadId),
+          messageId: MessageId.make(creationMetadata.messageId),
+          text: initialMessageText,
+          modelSelection,
+          runtimeMode: flow.runtimeMode,
+          interactionMode: flow.interactionMode,
+          ...(draft.context ? { context: draft.context } : {}),
+          attachments,
+          createdAt: creationMetadata.createdAt,
+          state: "queued",
+          error: null,
+        });
+      });
+      flow.setSubmitting(false);
+      if (AsyncResult.isFailure(saved)) {
+        const error = squashAtomCommandFailure(saved);
+        Dialog.alert(
+          "Could not save queued message",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
       return null;
     }
 
@@ -771,15 +812,15 @@ export function NewTaskDraftScreen(props: {
     void voiceMode.start(target);
   }
 
-  const resumeMachineSend = useEffectEvent(() => {
-    queuedMachineSend.current.resume(flow.switchingToEnvironmentId !== null, () => {
-      void handleStart();
-    });
-  });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- resumes a send retained while its destination project was mounting
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- navigates the focused draft only after the persisted background send is acknowledged
   useEffect(() => {
-    resumeMachineSend();
-  });
+    if (isFocused && pendingSend?.state === "sent")
+      navigation.dispatch(
+        CommonActions.setParams(
+          submittedThreadParams(pendingSend.environmentId, pendingSend.threadId),
+        ),
+      );
+  }, [pendingSend, isFocused, navigation]);
   // Keep the current surface until the local draft selection is ready. Publishing
   // an empty loading surface here flashes between two already-cached threads.
   if (!selectedProject) return null;
@@ -813,13 +854,14 @@ export function NewTaskDraftScreen(props: {
 
   const modelMachine =
     modelUnavailable && flow.selectedModel
-      ? flow.environments.find(
-          (machine) =>
-            draftModelUnavailableReason(
-              machineConfigs.get(machine.environmentId),
-              flow.selectedModel!,
-              null,
-            ) === null,
+      ? machineForDraftModel(
+          flow.environments.map((machine) => ({
+            ...machine,
+            connected: !machine.disabled,
+            config: machineConfigs.get(machine.environmentId),
+            projectId: null,
+          })),
+          flow.selectedModel,
         )
       : null;
   const defaultHere = defaultUsableDraftModel(
@@ -845,11 +887,28 @@ export function NewTaskDraftScreen(props: {
         >
           <Text textRole="footnote">
             {modelMachine
-              ? `${flow.selectedModel?.instanceId} works on ${modelMachine.environmentLabel}. Switch machine`
+              ? `${selectedEnvironmentServerConfig?.providers.find((provider) => provider.instanceId === flow.selectedModel?.instanceId)?.displayName ?? flow.selectedModel?.instanceId} works on ${modelMachine.environmentLabel}. Switch machine`
               : modelHere
                 ? `Use ${modelHere.label} here`
                 : modelUnavailable}
           </Text>
+        </Pressable>
+      )}
+      {pendingSend && pendingSend.state !== "sent" && (
+        <Text textRole="footnote">
+          {pendingSend.error ?? "Message queued. You can leave this screen."}
+        </Text>
+      )}
+      {pendingSend?.error && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            void pendingMeshDrafts
+              .retry(pendingSend.draftId)
+              .catch((error) => Dialog.alert("Retry failed", String(error)));
+          }}
+        >
+          <Text>Retry send</Text>
         </Pressable>
       )}
       {flow.mountingStatus && (
@@ -863,7 +922,11 @@ export function NewTaskDraftScreen(props: {
         </Pressable>
       )}
       <DraftEnvironmentControl
-        environmentId={flow.switchingToEnvironmentId ?? selectedProject.environmentId}
+        display={
+          flow.environments.find((machine) => machine.environmentId === chosenEnvironmentId)
+            ?.display
+        }
+        environmentId={chosenEnvironmentId ?? selectedProject.environmentId}
         connectionState={connectionState}
         label={selectedEnvironmentLabel}
         machineKind={resolveEnvironmentMachineKind(selectedEnvironmentServerConfig)}
@@ -892,7 +955,6 @@ export function NewTaskDraftScreen(props: {
           label="No project"
           onPress={chooseProject}
         />
-        {environmentControl}
       </View>
       {shareUnavailableNotice}
     </View>
@@ -923,7 +985,6 @@ export function NewTaskDraftScreen(props: {
         </View>
       </View>
 
-      {environmentControl}
       {shareUnavailableNotice}
     </View>
   );
@@ -1051,6 +1112,7 @@ export function NewTaskDraftScreen(props: {
         }
         draftMode={{
           content: heroViewport,
+          footer: environmentControl,
           controls: (
             <View className="pb-1">
               {projectClone && projectClone.phase !== "done" && selectedProject ? (
