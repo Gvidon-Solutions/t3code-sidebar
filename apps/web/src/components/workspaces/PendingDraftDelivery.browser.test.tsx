@@ -254,6 +254,9 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
   await screen.getByRole("button", { name: "Send", exact: true }).click();
   await expect.element(screen.getByRole("status")).toHaveTextContent("Mounting on Operalia");
   await vi.waitFor(() => expect(outbox.getSnapshot()[0]?.text).toBe("Run this after mounting"));
+  expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.prompt).toBe(
+    "Run this after mounting",
+  );
   expect(launches).not.toHaveBeenCalled();
   await screen.rerender(<div>Another page</div>);
   const restored = createPendingMeshDrafts(dbName);
@@ -294,7 +297,7 @@ it("persists send while mounting, leaves the composer, restarts, then launches e
     { environmentId: "op", projectId: "op-project", text: "Run this after mounting" },
   ]);
   expect(errors).not.toHaveBeenCalled();
-  expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.prompt).toBe("");
+  expect(useComposerDraftStore.getState().getComposerDraft(draftId)?.prompt ?? "").toBe("");
   expect(useComposerDraftStore.getState().getDraftSession(draftId)?.promotedTo?.environmentId).toBe(
     op,
   );
