@@ -170,13 +170,14 @@ const ThreadConfigureTool = Tool.make("t3_thread_configure", {
 const ThreadMoveTool = Tool.make("t3_thread_move", {
   ...commandTool,
   description:
-    "Move an idle conversation to a project here or hand it off to targetEnvironmentId. Its transcript and attachments continue there; the original is archived with a link. projectId is the target representation, or omit it to use the same logical project there. message optionally starts a follow-up there. Retry a handoff with the same clientRequestId. undoHandoffId reverses it within 10 seconds.",
+    "Move an idle conversation to a project here or hand it off to targetEnvironmentId. Its transcript and attachments continue there; the original is archived with a link. projectId is the target representation, or omit it to use the same logical project there. modelSelection chooses the target provider, model and options. message optionally starts a follow-up there. Retry a handoff with the same clientRequestId. undoHandoffId reverses it within 10 seconds.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
     projectId: Schema.optional(ProjectId),
     targetEnvironmentId: Schema.optional(Schema.String),
     logicalKey: Schema.optional(Schema.String),
+    modelSelection: Schema.optional(ModelSelection),
     message: Schema.optional(Schema.String),
     clientRequestId: Schema.optional(Schema.String),
     undoHandoffId: Schema.optional(Schema.String),

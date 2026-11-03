@@ -2879,6 +2879,7 @@ export type OrchestrationV2DomainEventJson = typeof OrchestrationV2DomainEventJs
 export const OrchestrationV2Command = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("thread.move"),
+    modelSelection: Schema.optional(ModelSelection),
     commandId: CommandId,
     threadId: ThreadId,
     projectId: ProjectId,

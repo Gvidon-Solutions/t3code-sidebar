@@ -8659,7 +8659,20 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
                   auth: { status: "authenticated" },
                   version: null,
                   checkedAt: "2026-11-03T00:00:00Z",
-                  models: [],
+                  models: [
+                    {
+                      slug: modelSelection.model,
+                      name: "Source model",
+                      isCustom: false,
+                      capabilities: null,
+                    },
+                    {
+                      slug: "target-model",
+                      name: "Target model",
+                      isCustom: false,
+                      capabilities: null,
+                    },
+                  ],
                   slashCommands: [],
                   skills: [],
                 },
@@ -8712,10 +8725,23 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
         const idle = yield* orchestrator.getThreadProjection(direct.threadId);
         assert.equal(idle.thread.modelSelection.instanceId, "only_on_source");
         assert.equal(idle.runs.length, 0);
+        yield* target.move(
+          { threadId: direct.threadId, projectId: targetProject, modelSelection },
+          limits,
+        );
+        assert.deepEqual(
+          (yield* orchestrator.getThreadProjection(direct.threadId)).thread.modelSelection,
+          modelSelection,
+        );
         const input = {
           commandId: CommandId.make("L-move"),
           threadId: sourceId,
           targetEnvironmentId: EnvironmentId.make("B"),
+          modelSelection: {
+            ...modelSelection,
+            model: "target-model",
+            options: [{ id: "effort", value: "high" }],
+          },
         };
         const historyStore = yield* EventSink.EventSinkV2;
         const history = yield* orchestrator.getThreadProjection(sourceId);
@@ -8741,6 +8767,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
         assert.isNotNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
         const received = yield* orchestrator.getThreadProjection(moved.threadId);
         assert.equal(received.runs.length, 0);
+        assert.deepEqual(received.thread.modelSelection, input.modelSelection);
         assert.include(received.messages.map((message) => message.text).join("\n"), "cedar");
         assert.include(received.messages[0]!.text, "Moved from AA");
         assert.include(

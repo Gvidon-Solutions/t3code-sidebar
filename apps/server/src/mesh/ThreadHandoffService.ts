@@ -273,6 +273,11 @@ export const layer = Layer.effect(
             (provider) =>
               provider.instanceId === bundle.modelSelection.instanceId && provider.enabled,
           );
+          if (
+            bundle.modelSelectionExplicit &&
+            (!exact || !exact.models.some((model) => model.slug === bundle.modelSelection.model))
+          )
+            return yield* invalid("The selected model is unavailable on the target machine.");
           const providerNote = exact
             ? ""
             : `\n\nProvider instance ${bundle.modelSelection.instanceId} is unavailable on this machine. Choose an enabled provider before sending a message.`;
@@ -388,11 +393,25 @@ export const layer = Layer.effect(
             return yield* invalid("Finish or stop the running turn before moving this thread.");
           if (!input.targetEnvironmentId || input.targetEnvironmentId === self) {
             if (!input.projectId) return yield* invalid("Choose a target project.");
+            if (input.modelSelection) {
+              const selection = input.modelSelection;
+              const available = yield* providers.getProviders;
+              if (
+                !available.some(
+                  (provider) =>
+                    provider.enabled &&
+                    provider.instanceId === selection.instanceId &&
+                    provider.models.some((model) => model.slug === selection.model),
+                )
+              )
+                return yield* invalid("The selected model is unavailable on the target machine.");
+            }
             yield* dispatch({
               type: "thread.move",
               commandId,
               threadId: input.threadId,
               projectId: input.projectId,
+              ...(input.modelSelection ? { modelSelection: input.modelSelection } : {}),
             });
             return {
               threadId: input.threadId,
@@ -548,7 +567,8 @@ export const layer = Layer.effect(
             logicalKey,
             projectTitle: config.config.projectTitles[logicalKey] ?? projectTitle,
             title: frozen.thread.title,
-            modelSelection: frozen.thread.modelSelection,
+            modelSelection: input.modelSelection ?? frozen.thread.modelSelection,
+            modelSelectionExplicit: input.modelSelection !== undefined,
             runtimeMode: frozen.thread.runtimeMode,
             interactionMode: frozen.thread.interactionMode,
             entries: entries.map((entry) => ({

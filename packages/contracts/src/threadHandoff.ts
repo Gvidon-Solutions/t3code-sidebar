@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 import { CommandId, EnvironmentId, ThreadId, ProjectId } from "./baseSchemas.ts";
+import { ModelSelection } from "./modelSelection.ts";
 import { OrchestratorMcpFailure } from "./orchestratorMcp.ts";
 import { EnvironmentAuthorizationError } from "./auth.ts";
 export * from "./threadHandoffData.ts";
@@ -10,6 +11,7 @@ export const ThreadMoveInput = Schema.Struct({
   projectId: Schema.optional(ProjectId),
   targetEnvironmentId: Schema.optional(EnvironmentId),
   logicalKey: Schema.optional(Schema.String),
+  modelSelection: Schema.optional(ModelSelection),
   message: Schema.optional(Schema.String),
   undoHandoffId: Schema.optional(Schema.String),
 });

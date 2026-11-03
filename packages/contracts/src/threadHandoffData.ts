@@ -31,6 +31,7 @@ export const HandoffBundle = Schema.Struct({
   projectTitle: Schema.String,
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
+  modelSelectionExplicit: Schema.optional(Schema.Boolean),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   entries: Schema.Array(HandoffEntry),

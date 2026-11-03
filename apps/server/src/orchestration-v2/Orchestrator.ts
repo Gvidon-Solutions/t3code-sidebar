@@ -4208,13 +4208,24 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       events,
       command,
     )({
-      type: "thread.metadata-updated",
+      type:
+        command.type === "thread.move" &&
+        command.modelSelection &&
+        command.modelSelection.instanceId !== thread.providerInstanceId
+          ? "thread.provider-switched"
+          : "thread.metadata-updated",
       threadId: command.threadId,
       providerInstanceId: thread.providerInstanceId,
       occurredAt: now,
       payload: {
         ...thread,
         projectId: command.projectId,
+        ...(command.type === "thread.move" && command.modelSelection
+          ? {
+              modelSelection: command.modelSelection,
+              providerInstanceId: command.modelSelection.instanceId,
+            }
+          : {}),
         worktreePath: command.type === "thread.move" ? thread.worktreePath : null,
         updatedAt: now,
       },

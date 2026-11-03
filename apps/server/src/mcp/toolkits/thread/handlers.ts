@@ -157,6 +157,7 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
           ...(input.targetEnvironmentId === undefined
             ? {}
             : { targetEnvironmentId: EnvironmentId.make(input.targetEnvironmentId) }),
+          ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
           ...(input.logicalKey === undefined ? {} : { logicalKey: input.logicalKey }),
           ...(input.message === undefined ? {} : { message: input.message }),
           ...(input.undoHandoffId === undefined ? {} : { undoHandoffId: input.undoHandoffId }),
