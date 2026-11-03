@@ -48,13 +48,14 @@ export function projectMachineStrip(
           const { status } = representationRow(config, liveStatuses, group.projectKey, rep);
           const state = status.state;
           const machine = displayOf(rep.environmentId);
-          const detail = status.message?.startsWith("Resolved ")
-            ? status.message
-            : state === "watching"
-              ? "synced"
-              : state === "conflict" && status.conflicts
-                ? `${status.conflicts} conflict${status.conflicts === 1 ? "" : "s"}`
-                : state;
+          const detail =
+            status.message && (status.message.startsWith("Resolved ") || Boolean(status.skipped))
+              ? status.message
+              : state === "watching"
+                ? "synced"
+                : state === "conflict" && status.conflicts
+                  ? `${status.conflicts} conflict${status.conflicts === 1 ? "" : "s"}`
+                  : state;
           return {
             environmentId: rep.environmentId,
             machine,

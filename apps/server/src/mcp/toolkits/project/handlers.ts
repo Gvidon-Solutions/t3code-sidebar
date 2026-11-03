@@ -129,7 +129,6 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
       if (Option.isNone(forwarding)) return result;
-      const now = DateTime.formatIso(yield* DateTime.now);
       const drivers = [
         ...new Set(
           result.representations.flatMap((rep) =>
@@ -148,8 +147,13 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
               live: false,
             })
             .pipe(
-              Effect.map((value) => ({ driver, value, error: undefined })),
-              Effect.catch((error) => Effect.succeed({ driver, value: undefined, error })),
+              Effect.map((value) => ({ driver, value })),
+              Effect.catch((error) =>
+                Effect.logWarning("Replica live query unavailable; retaining replicated status", {
+                  driver,
+                  message: error.message,
+                }).pipe(Effect.as({ driver, value: undefined })),
+              ),
             ),
         { concurrency: 4 },
       );
@@ -161,19 +165,6 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             (row) => row.environmentId === rep.environmentId,
           )?.live;
           if (live) return { ...rep, live };
-          if (response?.error)
-            return {
-              ...rep,
-              live: {
-                logicalKey: result.logicalKey,
-                environmentId: rep.environmentId,
-                state: "error" as const,
-                conflicts: [],
-                problems: [response.error.message],
-                message: "The driving server is unavailable.",
-                updatedAt: now,
-              },
-            };
           return rep;
         }),
       };

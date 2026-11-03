@@ -304,8 +304,8 @@ for order in 'gv gor vps' 'gv vps gor' 'gor gv vps' 'gor vps gv' 'vps gv gor' 'v
   for m in gv gor vps; do unit "$m" stop; done
   for m in $order; do unit "$m" start; wait_health "$(origin_of "$m")" "$TIMEOUT"; done
   assert_converged "N restart order $order"
+  assert_feature_recovery
 done
-assert_feature_recovery
 runtime_root="/tmp/N-runtime-$RUN_TS"
 gor_ssh "mkdir -p '$runtime_root-source/runtime/versions/0.0.4-N'; printf '#!/bin/sh\nexit 0\n' > '$runtime_root-source/runtime/versions/0.0.4-N/t3'; chmod 700 '$runtime_root-source/runtime/versions/0.0.4-N/t3'"
 vps_ssh "mkdir -p '$runtime_root'"

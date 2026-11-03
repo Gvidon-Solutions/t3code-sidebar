@@ -23,7 +23,9 @@ ctl vps place "$warning_title" --on "$GV_ENV" --path "$warning_root-copy" --wait
 jq -e --arg k "$warning_key" --arg source "$GOR_ENV" '.logicalKey==$k and .ready and .representation.source==$source and .representation.projectId!=null' "$WORK/N-live-place.json" >/dev/null
 wait_converged 'N remote project lookup and non-fatal scan warnings'
 ctl vps tool t3_project_machines "$(jq -nc --arg title "$warning_title" '{project:$title}')" > "$WORK/N-live-skipped.json"
-jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .projectId!=null and .status.state=="watching" and .status.skipped>=3 and (.status.message|contains("files skipped")) and (.live.skipped>=3) and any(.status.skippedPaths[]; .path=="private")' "$WORK/N-live-skipped.json" >/dev/null
+jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .projectId!=null and .status.state=="watching" and .status.skipped>=3 and (.status.message|contains("files skipped")) and any(.status.skippedPaths[]; .path=="private")' "$WORK/N-live-skipped.json" >/dev/null
+ctl gv tool t3_project_machines "$(jq -nc --arg key "$warning_key" '{project:$key}')" > "$WORK/N-live-driver.json"
+jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .live.state=="watching" and .live.skipped>=3' "$WORK/N-live-driver.json" >/dev/null
 test "$(rexec gv cat "$warning_root-copy/good")" = N-readable
 rexec gv test ! -e "$warning_root-copy/private"
 warning_hash=$(node --input-type=module -e 'import {createHash} from "node:crypto"; console.log(createHash("sha256").update(process.argv[1]).digest("hex").slice(0,8))' "$warning_key")
@@ -46,10 +48,12 @@ assert_live_regression_recovery() {
   local end=$((SECONDS+TIMEOUT))
   while :; do
     ctl vps tool t3_project_machines "$(jq -nc --arg title "$warning_title" '{project:$title}')" > "$WORK/N-live-current.json"
-    if jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .projectId!=null and .status.state=="watching" and .status.skipped==1 and .live.skipped==1 and any(.status.skippedPaths[]; .path=="fresh-outside")' "$WORK/N-live-current.json" >/dev/null; then break; fi
+    if jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .projectId!=null and .status.state=="watching" and .status.skipped==1 and any(.status.skippedPaths[]; .path=="fresh-outside")' "$WORK/N-live-current.json" >/dev/null; then break; fi
     [ "$SECONDS" -lt "$end" ] || die 'Scan warnings did not remain non-fatal after recovery'
     sleep 1
   done
+  ctl gv tool t3_project_machines "$(jq -nc --arg key "$warning_key" '{project:$key}')" > "$WORK/N-live-driver-current.json"
+  jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .live.state=="watching" and .live.skipped==1' "$WORK/N-live-driver-current.json" >/dev/null
   test "$(rexec gv cat "$warning_root-copy/good")" = N-readable
 }
 assert_live_regression_recovery
