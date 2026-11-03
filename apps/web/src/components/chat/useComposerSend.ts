@@ -1,4 +1,8 @@
 import {
+  DraftMachineSendQueue,
+  draftModelUnavailableReason,
+} from "@t3tools/client-runtime/state/mesh-layout";
+import {
   mergeDirectPreviewAnnotation,
   resolveBackgroundDraftWorkspaceOptions,
   shouldDockDraftHeroForSubmission,
@@ -42,7 +46,7 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { createModelSelection } from "@t3tools/shared/model";
-import { type SetStateAction, useLayoutEffect, useRef } from "react";
+import { type SetStateAction, useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -402,6 +406,7 @@ export function useComposerSend(input: ComposerSendInput) {
     respondingRequestIdsRef.current = respondingRequestIds;
   }, [pendingApprovals, respondingRequestIds]);
 
+  const queuedMachineSend = useRef(new DraftMachineSendQueue());
   const onSend = async (
     e?: { preventDefault: () => void },
     dispatchMode: ComposerDispatchMode = "auto",
@@ -414,6 +419,9 @@ export function useComposerSend(input: ComposerSendInput) {
     e?.preventDefault();
     // What the user pressed send on; uploads below can take a while, and a redirect must not
     // decline approvals for a draft that changed meanwhile.
+    if (queuedMachineSend.current.defer(readPendingEnvironmentChange() !== null)) {
+      return;
+    }
     const promptAtSend = promptRef.current;
     if (
       usageLimitsOffered &&
@@ -593,6 +601,23 @@ export function useComposerSend(input: ComposerSendInput) {
       interactionMode: sendInteractionMode,
       interactionModeEnabled: sendInteractionModeEnabled,
     } = sendCtx;
+    if (isLocalDraftThread) {
+      const config = appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId);
+      const reason = draftModelUnavailableReason(
+        config
+          ? {
+              settings: config.settings,
+              providers: providerInstanceEntries.map((entry) => entry.snapshot),
+            }
+          : null,
+        ctxSelectedModelSelection,
+        activeProject?.id ?? null,
+      );
+      if (reason) {
+        setThreadError(activeThread.id, reason);
+        return;
+      }
+    }
     const { images: composerImages, previewAnnotations: composerPreviewAnnotations } =
       mergeDirectPreviewAnnotation({
         images: sendContextImages,
@@ -1518,5 +1543,14 @@ export function useComposerSend(input: ComposerSendInput) {
     }
   };
 
+  const resumeMachineSend = useEffectEvent(() => {
+    queuedMachineSend.current.resume(readPendingEnvironmentChange() !== null, () => {
+      void onSend();
+    });
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- sends the retained composer draft after its selected machine has registered the project
+  useEffect(() => {
+    resumeMachineSend();
+  });
   return { onSend };
 }

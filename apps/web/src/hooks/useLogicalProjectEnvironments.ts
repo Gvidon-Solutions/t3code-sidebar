@@ -1,17 +1,16 @@
 import { availableScratchWorkspaceRoot } from "@t3tools/client-runtime/operations/projects";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import {
-  type EnvironmentId,
-  type ProjectId,
-  resolveEnvironmentMachineKind,
-} from "@t3tools/contracts";
+import { EnvironmentId, type ProjectId, resolveEnvironmentMachineKind } from "@t3tools/contracts";
 
 import type { EnvironmentOption } from "../components/BranchToolbar.logic";
 import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { resolveLogicalProjectKey } from "@t3tools/client-runtime/state/mesh-layout";
+import { useMeshLayout } from "./useMeshLayout";
 import { useProjects } from "../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useClientSettings } from "./useSettings";
@@ -21,6 +20,7 @@ export function useLogicalProjectEnvironments(
   scratchDraft: boolean,
 ): readonly EnvironmentOption[] {
   const { environments } = useEnvironments();
+  const mesh = useMeshLayout();
   const allProjects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
@@ -35,7 +35,11 @@ export function useLogicalProjectEnvironments(
     envs.push({
       environmentId,
       projectId,
-      label: environment?.label ?? environmentId,
+      label: mesh.config
+        ? machineDisplayOf(mesh.config, environmentId, environment?.label ?? "Machine").label
+        : (environment?.label ?? "Machine"),
+      connected: environment?.connection.phase === "connected",
+      supportsMesh: environment?.serverConfig?.environment.capabilities.replicas === true,
       isPrimary: environmentId === primaryEnvironmentId,
       machine: resolveEnvironmentMachineKind(environment?.serverConfig ?? null),
     });
@@ -58,14 +62,30 @@ export function useLogicalProjectEnvironments(
       pushEnvironment(environment.environmentId, scratchProject?.id ?? null);
     }
   } else {
-    const logicalKey = deriveLogicalProjectKeyFromSettings(activeProject, projectGroupingSettings);
+    const fallback = (project: EnvironmentProject) =>
+      deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings);
+    const keyOf = (project: EnvironmentProject) =>
+      mesh.config ? resolveLogicalProjectKey(project, mesh.config, fallback) : fallback(project);
+    const logicalKey = keyOf(activeProject);
     const seen = new Set<string>();
     for (const p of allProjects) {
       if (seen.has(p.environmentId)) continue;
-      if (deriveLogicalProjectKeyFromSettings(p, projectGroupingSettings) !== logicalKey) continue;
+      if (keyOf(p) !== logicalKey) continue;
       seen.add(p.environmentId);
       pushEnvironment(p.environmentId, p.id);
     }
+    for (const environment of environments) {
+      if (
+        !seen.has(environment.environmentId) &&
+        environment.serverConfig?.environment.capabilities.replicas
+      ) {
+        pushEnvironment(environment.environmentId, null);
+      }
+    }
+  }
+  for (const id of Object.keys(mesh.config?.machines ?? {})) {
+    if (!envs.some((environment) => environment.environmentId === id))
+      pushEnvironment(EnvironmentId.make(id), null);
   }
   envs.sort((a, b) => {
     if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;

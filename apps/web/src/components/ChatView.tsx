@@ -1,3 +1,4 @@
+import { DraftMachineHint } from "./workspaces/DraftMachineHint";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
@@ -1263,8 +1264,7 @@ export default function ChatView(props: ChatViewProps) {
   // onEnvironmentChange only retargets an unsent draft. envLocked alone does not
   // rule out a started thread: one whose machine is offline never loads its
   // messages, so it would otherwise be offered a machine picker that does nothing.
-  const canChangeEnvironment =
-    hasMultipleEnvironments && !envLocked && draftId !== null && !draftThread?.promotedTo;
+  const canChangeEnvironment = !envLocked && draftId !== null && !draftThread?.promotedTo;
 
   const loadBalancingSettings = useClientSettings((settings) => ({
     loadBalancingEnabled: settings.loadBalancingEnabled,
@@ -1794,10 +1794,13 @@ export default function ChatView(props: ChatViewProps) {
     loadBalancing,
     onAutoEnvironmentStable,
     autoEnvironmentLabel,
-    isEnvironmentChanging,
+    pendingDraftMachineId,
+    mountingStatus,
+    retryMount,
     readPendingEnvironmentChange,
     onEnvironmentChangeStable,
   } = useDraftEnvironmentRouting({
+    selection: composerSelectedModelSelection ?? activeThread?.modelSelection ?? null,
     draftId,
     draftThread,
     envLocked,
@@ -2851,8 +2854,21 @@ export default function ChatView(props: ChatViewProps) {
     activeThread,
     activeRuntime,
     activeProjectSettings,
-    settings,
-    providerStatuses,
+    settings: {
+      ...settings,
+      providerInstances:
+        (pendingDraftMachineId
+          ? environmentById.get(pendingDraftMachineId)?.serverConfig?.settings.providerInstances
+          : null) ?? settings.providerInstances,
+      projectSettingsOverrides:
+        (pendingDraftMachineId
+          ? environmentById.get(pendingDraftMachineId)?.serverConfig?.settings
+              .projectSettingsOverrides
+          : null) ?? settings.projectSettingsOverrides,
+    },
+    providerStatuses: pendingDraftMachineId
+      ? (providersByEnvironment.get(pendingDraftMachineId) ?? [])
+      : providerStatuses,
     lockedProvider,
     supportsProviderSwitchingViaHandoff,
     multipleModelSelections,
@@ -3621,17 +3637,15 @@ export default function ChatView(props: ChatViewProps) {
                               sendDisabledReason={
                                 !canOperateThread
                                   ? "This connection cannot change threads."
-                                  : isEnvironmentChanging
-                                    ? "Preparing machine"
-                                    : isRevertingCheckpoint
-                                      ? "Rewinding conversation"
-                                      : feedbackUploading
-                                        ? "Sending feedback"
-                                        : threadDetailLoading
-                                          ? "Messages loading"
-                                          : worktreeSetupBlocksSend
-                                            ? "Preparing worktree"
-                                            : projectCloneSendBlockReason
+                                  : isRevertingCheckpoint
+                                    ? "Rewinding conversation"
+                                    : feedbackUploading
+                                      ? "Sending feedback"
+                                      : threadDetailLoading
+                                        ? "Messages loading"
+                                        : worktreeSetupBlocksSend
+                                          ? "Preparing worktree"
+                                          : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
                               bannerItems={isDraftHeroState ? [] : composerBannerItems}
@@ -3667,19 +3681,37 @@ export default function ChatView(props: ChatViewProps) {
                               defaultRuntimeMode={defaultRuntimeMode}
                               interactionMode={interactionMode}
                               lockedProvider={modelPickerLockedProvider}
-                              providerStatuses={providerStatuses as ServerProvider[]}
+                              providerStatuses={
+                                (pendingDraftMachineId
+                                  ? (providersByEnvironment.get(pendingDraftMachineId) ?? [])
+                                  : providerStatuses) as ServerProvider[]
+                              }
                               providerCatalogKnown={serverConfig !== null}
                               activeProjectDefaultModelSelection={
                                 activeProjectDefaultModelSelection
                               }
                               activeThreadModelSelection={activeThread?.modelSelection}
-                              activeProjectId={activeProject?.id ?? null}
+                              activeProjectId={
+                                pendingDraftMachineId ? null : (activeProject?.id ?? null)
+                              }
                               activeContextWindow={activeContextWindow}
                               compactThreadUnavailable={compactThreadUnavailable}
                               compactDisabled={compactDisabled}
                               compactDisabledReason={compactDisabledReason}
                               resolvedTheme={resolvedTheme}
-                              settings={settings}
+                              settings={{
+                                ...settings,
+                                providerInstances:
+                                  (pendingDraftMachineId
+                                    ? environmentById.get(pendingDraftMachineId)?.serverConfig
+                                        ?.settings.providerInstances
+                                    : null) ?? settings.providerInstances,
+                                projectSettingsOverrides:
+                                  (pendingDraftMachineId
+                                    ? environmentById.get(pendingDraftMachineId)?.serverConfig
+                                        ?.settings.projectSettingsOverrides
+                                    : null) ?? settings.projectSettingsOverrides,
+                              }}
                               keybindings={keybindings}
                               terminalOpen={Boolean(terminalUiState.terminalOpen)}
                               gitCwd={gitCwd}
@@ -3743,7 +3775,29 @@ export default function ChatView(props: ChatViewProps) {
                         >
                           {showComposerContextStrip && (
                             <div className="pointer-events-auto">
+                              {draftId && activeThread && (
+                                <DraftMachineHint
+                                  selection={
+                                    composerSelectedModelSelection ?? activeThread.modelSelection
+                                  }
+                                  environmentId={pendingDraftMachineId ?? environmentId}
+                                  machines={logicalProjectEnvironments}
+                                  onMachine={onEnvironmentChangeStable}
+                                  onModel={onProviderModelSelectStable}
+                                />
+                              )}
+                              {mountingStatus && (
+                                <div role="status" className="text-xs text-muted-foreground">
+                                  {mountingStatus}
+                                  {retryMount && (
+                                    <button type="button" onClick={retryMount}>
+                                      Retry
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                               <BranchToolbar
+                                draftMachineId={pendingDraftMachineId ?? environmentId}
                                 forceNewWorktree={multipleModelSelections !== null}
                                 ref={branchToolbarRef}
                                 environmentId={activeThread.environmentId}

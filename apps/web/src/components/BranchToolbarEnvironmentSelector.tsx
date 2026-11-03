@@ -1,3 +1,6 @@
+import { useMeshLayout } from "../hooks/useMeshLayout";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { MachineTag } from "./workspaces/MachineTag";
 import { ComposerSelectControl } from "./chat/ComposerControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
@@ -44,6 +47,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onEnvironmentChange,
   onAddToMachine,
 }: BranchToolbarEnvironmentSelectorProps) {
+  const mesh = useMeshLayout();
+  const machineOf = (id: string, label: string) =>
+    machineDisplayOf(mesh.config ?? { machines: {} }, id, label);
   const composerFloatingLayerProps = useComposerMenuProps();
   const shortcutLabel = shortcutLabelForCommand(
     useAtomValue(primaryServerKeybindingsAtom),
@@ -116,10 +122,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           {autoEnvironmentLabel ? (
             <ScaleIcon className="size-3 shrink-0" aria-hidden="true" />
           ) : (
-            <EnvironmentMachineIcon
-              kind={activeEnvironment?.machine ?? "server"}
-              className="size-3 shrink-0"
-            />
+            <MachineTag machine={machineOf(environmentId, activeEnvironment?.label ?? "Machine")} />
           )}
           <ComposerContextLabel>
             <SelectValue />
@@ -150,11 +153,18 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             <SelectItem
               key={env.environmentId}
               value={environmentValue(env.environmentId)}
-              disabled={onEnvironmentChange === undefined && env.environmentId !== environmentId}
+              disabled={
+                env.connected === false ||
+                (onEnvironmentChange === undefined && env.environmentId !== environmentId)
+              }
             >
               <span className="inline-flex items-center gap-1.5">
-                <EnvironmentMachineIcon kind={env.machine} className="size-3" />
+                <MachineTag machine={machineOf(env.environmentId, env.label)} />
                 {env.label}
+                <span className="text-xs text-muted-foreground">
+                  {env.connected === false ? "Unreachable" : "Connected"} ·{" "}
+                  {env.projectId ? "here" : "copy will be created"}
+                </span>
               </span>
             </SelectItem>
           ))}

@@ -16,6 +16,8 @@ export interface EnvironmentOption {
   label: string;
   isPrimary: boolean;
   machine: EnvironmentMachineKind;
+  connected?: boolean;
+  supportsMesh?: boolean;
 }
 
 /** "Add to another machine" stays muted until hovered: easy to find, quieter than the machines. */
