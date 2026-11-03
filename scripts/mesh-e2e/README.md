@@ -83,7 +83,7 @@ For an isolated stage worktree, set `MESH_E2E_BUILD_CURRENT=1` and use your own
 `MESH_E2E_ARTIFACTS` directory to build that checkout. `round3.sh` refuses a
 different runtime/image or a running QA/L/M task and creates only `N-` fixtures.
 Bed units disable systemd's start limit so repeated intentional crashes do not
-require a manual reset.
+require a manual reset. Crash acceptance requires an increased systemd/Docker automatic restart counter, without a start command after SIGKILL. Daemon recovery uses a raw socket probe and verifies the captured PID owns the private POSIX lock; its PID/log files stay outside synchronized folders. Round3 owns an SSH control directory to avoid exhausting connection slots.
 
 `deploy.sh` copies the review CLI from this checkout's `docs/skill-t3-next` to
 gor's staged `t3-next` directory. The installed gvidon/Operalia skills and the

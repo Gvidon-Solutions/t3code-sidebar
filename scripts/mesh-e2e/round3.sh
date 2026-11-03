@@ -12,6 +12,9 @@ export MESH_E2E_HELPERS_ONLY=1
 export MESH_E2E_ROUND1_WORK="${MESH_E2E_ROUND3_WORK:-/tmp/t3-mesh-e2e-N-round3}"
 . "$(dirname "$0")/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
+export MESH_E2E_SSH_CONTROL_DIR="$WORK/N-ssh"
+mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
+chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
 ws_rpc() {
   local machine=$1 method=$2 payload=${3:-'{}'} first=${4:-} token
   token=$(token_of "$machine")
@@ -87,14 +90,25 @@ unit() {
     vps) vps_ssh "docker $verb t3-mesh-e2e";;
   esac
 }
+restart_count() {
+  case "$1" in
+    gv) systemctl --user show -p NRestarts --value "$GV_UNIT";;
+    gor) gor_ssh "systemctl --user show -p NRestarts --value $GOR_UNIT";;
+    vps) vps_ssh 'docker inspect -f "{{.RestartCount}}" t3-mesh-e2e';;
+  esac
+}
 crash() {
+  local before after
+  before=$(restart_count "$1")
   case "$1" in
     gv) systemctl --user kill --signal=SIGKILL --kill-whom=main "$GV_UNIT";;
     gor) gor_ssh "systemctl --user kill --signal=SIGKILL --kill-whom=main $GOR_UNIT";;
-    vps) vps_ssh 'docker kill --signal=KILL t3-mesh-e2e';;
+    vps) rexec vps node -e 'const fs = require("node:fs"); const {pid} = JSON.parse(fs.readFileSync("/home/t3/.t3/userdata/server-runtime.json", "utf8")); if (!Number.isSafeInteger(pid) || pid <= 1 || !fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("/opt/t3/dist/bin.mjs")) throw Error("Invalid captured test server PID"); process.kill(pid, "SIGKILL");';;
   esac
-  unit "$1" start
   wait_health "$(origin_of "$1")" "$TIMEOUT"
+  after=$(restart_count "$1")
+  test "$after" -gt "$before"
+  printf 'PASS N automatic restart %s: %s -> %s\n' "$1" "$before" "$after" | tee -a "$WORK/N-auto-restart-$1.log"
 }
 entry() {
   local key=$1 value=$2 now maximum
@@ -109,8 +123,15 @@ restore() {
   for m in gv gor vps; do unit "$m" start || rc=1; done
   gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
   wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
+  for m in gv vps; do
+    if [ -f "$WORK/N-replicas-enabled-before-$m.json" ]; then
+      ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-restore-engine-$m.json" || rc=1
+    fi
+  done
   local old; old=$(jq -c '.document["mesh.authority"].v // null' "$WORK/N-before.json")
   ws_rpc gv meshLayout.apply "$(entry mesh.authority "$old")" > "$WORK/N-restore.json" || rc=1
+  if [ -S "$MESH_E2E_SSH_CONTROL_DIR/gor" ]; then ssh -F "$GOR_SSH_CONFIG" -S "$MESH_E2E_SSH_CONTROL_DIR/gor" -O exit "$GOR_HOST" || rc=1; fi
+  if [ -S "$MESH_E2E_SSH_CONTROL_DIR/vps" ]; then ssh -F "$VPS_SSH_CONFIG" -S "$MESH_E2E_SSH_CONTROL_DIR/vps" -O exit "$VPS_HOST" || rc=1; fi
   exit "$rc"
 }
 trap restore EXIT
@@ -149,6 +170,21 @@ wait_staging() {
   done
   return 1
 }
+wait_daemon() {
+  local m=$1 base end=$((SECONDS+TIMEOUT))
+  base=$(base_of "$m")
+  while [ "$SECONDS" -lt "$end" ]; do
+    if rexec "$m" node -e 'const s=require("node:net").connect(process.argv[1]); s.once("connect",()=>{s.end();process.exit(0)}); s.once("error",e=>{console.error(e.code);process.exit(1)}); s.setTimeout(1000,()=>{console.error("Socket probe timed out");process.exit(1)});' "$base/mutagen/daemon/daemon.sock" > "$WORK/N-daemon-probe-$m.log" 2>&1; then return 0; fi
+    sleep 0.1
+  done
+  cat "$WORK/N-daemon-probe-$m.log" >&2
+  return 1
+}
+daemon_lock() {
+  local m=$1 expected=$2 base
+  base=$(base_of "$m")
+  rexec "$m" node -e 'const fs=require("node:fs"),[file,raw]=process.argv.slice(1),expected=Number(raw); if(!Number.isSafeInteger(expected)||expected<0||expected===1)throw Error("Invalid expected daemon PID"); let stat;try{stat=fs.statSync(file,{bigint:true})}catch(error){if(expected===0&&error.code==="ENOENT")process.exit(0);throw error} const major=((stat.dev>>8n)&0xfffn)|((stat.dev>>32n)&0xfffff000n),minor=(stat.dev&0xffn)|((stat.dev>>12n)&0xffffff00n); const holders=fs.readFileSync("/proc/locks","utf8").split("\n").flatMap(line=>{const f=line.trim().split(/\s+/),p=f[5]?.split(":");return p?.length===3&&["POSIX","FLOCK"].includes(f[1])&&BigInt("0x"+p[0])===major&&BigInt("0x"+p[1])===minor&&p[2]===stat.ino.toString()?[Number(f[4])]:[]});process.exit(expected===0?(holders.length===0?0:1):(holders.includes(expected)?0:1));' "$base/mutagen/daemon/daemon.lock" "$expected"
+}
 assert_converged() {
   local label=$1 m
   wait_state gv watching; wait_state vps watching
@@ -169,8 +205,11 @@ assert_converged() {
     done
     jq -e --arg p "$N_ROOT" '[.. | objects | select(.workspaceRoot?==$p and .deletedAt?==null)] | length==1' "$WORK/N-projects-$m.json" >/dev/null
   done
-  local expected; expected=$(rexec gor sha256sum "$N_FILE" | cut -d' ' -f1)
-  for m in gv vps; do test "$(rexec "$m" sha256sum "$N_FILE" | cut -d' ' -f1)" = "$expected"; done
+  local expected file
+  for file in "$N_FILE" "$N_ROOT/payload"; do
+    expected=$(rexec gor sha256sum "$file" | cut -d' ' -f1)
+    for m in gv vps; do test "$(rexec "$m" sha256sum "$file" | cut -d' ' -f1)" = "$expected"; done
+  done
 }
 . "$MESH_DIR/round3-features.sh"
 # Crash each server while its own representation is first mounting, then mid-sync.
@@ -204,11 +243,42 @@ for m in gv gor vps; do
 done
 # Kill only a private daemon PID captured when this script launched it.
 for m in gv vps; do
-  mut "$m" daemon stop
+  ws_rpc "$m" server.getConfig '{}' | jq '.settings.replicasEnabled' > "$WORK/N-replicas-enabled-before-$m.json"
+  # Restart disabled to drain in-flight commands before capturing our daemon.
+  ws_rpc "$m" server.updateSettings '{"patch":{"replicasEnabled":false}}' > "$WORK/N-quiesce-$m.json"
+  unit "$m" stop
+  unit "$m" start
+  wait_health "$(origin_of "$m")" "$TIMEOUT"
+  ws_rpc "$m" server.getConfig '{}' | jq -e '.settings.replicasEnabled==false' >/dev/null
   base=$(base_of "$m")
-  rexec "$m" sh -c "MUTAGEN_DATA_DIRECTORY='$base/mutagen' nohup '$(mut_bin "$m")' daemon run > '$N_ROOT/daemon.log' 2>&1 & echo \$! > '$N_ROOT/daemon.pid'"
-  rexec "$m" sh -c "kill -9 \$(cat '$N_ROOT/daemon.pid')"
+  daemon_dir="$base/N-faults/$N_KEY"
+  rexec "$m" mkdir -p "$daemon_dir"
+  if rexec "$m" node -e 'const s=require("node:net").connect(process.argv[1]); s.once("connect",()=>{s.end();process.exit(0)}); s.once("error",()=>process.exit(1)); s.setTimeout(1000,()=>process.exit(1));' "$base/mutagen/daemon/daemon.sock"; then mut "$m" daemon stop; fi
+  end=$((SECONDS+TIMEOUT))
+  until daemon_lock "$m" 0; do
+    [ "$SECONDS" -lt "$end" ] || exit 1
+    sleep 0.1
+  done
+  rexec "$m" sh -c 'MUTAGEN_DATA_DIRECTORY="$1" nohup "$2" daemon run > "$3/daemon.log" 2>&1 & echo $! > "$3/daemon.pid"' sh "$base/mutagen" "$(mut_bin "$m")" "$daemon_dir"
+  wait_daemon "$m"
+  captured_pid=$(rexec "$m" cat "$daemon_dir/daemon.pid")
+  daemon_lock "$m" "$captured_pid"
+  ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-enable-before-kill-$m.json"
+  mv "$WORK/N-replicas-enabled-before-$m.json" "$WORK/N-replicas-enabled-restored-$m.json"
+  before=$(restart_count "$m")
+  daemon_lock "$m" "$captured_pid"
+  printf 'PASS N captured daemon owns private lock %s\n' "$m"
+  rexec "$m" sh -c 'kill -9 "$1"' sh "$captured_pid"
+  end=$((SECONDS+TIMEOUT))
+  while rexec "$m" sh -c 'kill -0 "$1" 2>/dev/null' sh "$captured_pid"; do
+    [ "$SECONDS" -lt "$end" ] || exit 1
+    sleep 0.1
+  done
+  # A raw socket probe cannot start a daemon, unlike Mutagen's CLI.
+  wait_daemon "$m"
   assert_converged "N killed daemon $m"
+  test "$(restart_count "$m")" = "$before"
+  printf 'PASS N daemon recovered without server restart %s\n' "$m"
 done
 # Pause syncing while partitioned to make both divergent versions deterministic.
 for m in gv vps; do

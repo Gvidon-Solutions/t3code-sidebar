@@ -14,23 +14,20 @@ jq -e --arg win "$N_KEY-authority" --arg lose "$N_KEY-peer" '.config.projectMoun
 jq -e --arg lose "$N_KEY-peer" '(.config.projectMounts[$lose] // [])|length==0' "$WORK/N-authority-claims.json" >/dev/null
 feature_root="$N_ROOT-features"
 feature_title="N-project title $RUN_TS"
-feature_legacy="title:$feature_title"
+feature_legacy="title:${feature_title,,}"
 encoded_legacy=$(jq -rn --arg s "$feature_legacy" '$s|@uri')
 rexec gor mkdir -p "$feature_root-primary"
 rexec gor git init -q "$feature_root-primary"
 rexec gor sh -c "printf 'N-source' > '$feature_root-primary/both'; printf 'ignored' > '$feature_root-primary/local.cache'"
-feature_rep=$(jq -nc --arg env "$GOR_ENV" --arg path "$feature_root-primary" '{environmentId:$env,path:$path,role:"primary",transport:"git",createdAt:""}')
+ctl gor tool t3_project_create "$(jq -nc --arg title "$feature_title" --arg path "$feature_root-primary" '{title:$title,workspaceRoot:$path}')" > "$WORK/N-feature-local-project.json"
+feature_project=$(jq -r '.id' "$WORK/N-feature-local-project.json")
 ws_rpc gv meshLayout.apply "$(entry "proj/$encoded_legacy.title" "$(jq -nc --arg s "$feature_title" '$s')")" > "$WORK/N-feature-title.json"
-ws_rpc gv meshLayout.apply "$(entry "rep/$encoded_legacy/$GOR_ENV" "$feature_rep")" > "$WORK/N-feature-primary.json"
 wait_converged 'N migrated legacy project'
 feature_id=$(ws_get gor | jq -r --arg alias "$feature_legacy" '.config.projectAliases[$alias]')
 [[ "$feature_id" = lp-* ]] || die 'Legacy project id did not migrate'
-for _ in $(seq 1 120); do
-  feature_project=$(ws_get gor | jq -r --arg key "$feature_id" --arg env "$GOR_ENV" '.config.projectMounts[$key][] | select(.environmentId==$env) | .projectId // empty')
-  [ -z "$feature_project" ] || break
-  sleep 1
-done
-[ -n "$feature_project" ] || die 'Primary did not register'
+ctl gor place "$feature_project" --on "$GOR_ENV" --primary --path "$feature_root-primary" --json > "$WORK/N-feature-first-placement.json"
+jq -e --arg id "$feature_id" '.logicalKey==$id' "$WORK/N-feature-first-placement.json" >/dev/null
+wait_converged 'N first placement preserves migrated identity'
 ctl gor place "$feature_title" --on "$GV_ENV" --path "$feature_root-explicit" --ignore '*.cache' --transport mutagen --wait 120 --json > "$WORK/N-explicit-place.json"
 jq -e --arg path "$feature_root-explicit" '.ready and .representation.path==$path' "$WORK/N-explicit-place.json" >/dev/null
 rexec gv test -f "$feature_root-explicit/both"

@@ -62,8 +62,12 @@ die() {
 }
 
 gor_ssh() {
+  local control=()
+  if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
+    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/gor")
+  fi
   ssh -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes \
-    -o ConnectTimeout=10 "$GOR_HOST" "$@"
+    -o ConnectTimeout=10 "${control[@]}" "$GOR_HOST" "$@"
 }
 
 gor_scp() {
@@ -72,7 +76,11 @@ gor_scp() {
 }
 
 vps_ssh() {
-  ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o ConnectTimeout=10 "$VPS_HOST" "$@"
+  local control=()
+  if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
+    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/vps")
+  fi
+  ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o ConnectTimeout=10 "${control[@]}" "$VPS_HOST" "$@"
 }
 
 require_bins() {
