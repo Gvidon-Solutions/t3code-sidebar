@@ -36,6 +36,8 @@ const snapshot = { environmentId: self, config, document: {} };
 const thread = {
   threadId: "thread-1",
   title: "mount work",
+  providerInstanceId: "claude",
+  model: "claude-haiku-5-5",
   projectId: "p",
   status: "completed",
   updatedAt: new Date().toISOString(),

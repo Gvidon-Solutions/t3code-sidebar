@@ -2760,9 +2760,17 @@ const commands = {
       ...(target ? { targetEnvironmentId: target.environmentId } : {}),
       ...(opt.agent || opt.model || opt.effort || opt.opt || opt.fast
         ? {
-            modelSelection: await modelSelection(opt, {
-              environmentId: target?.environmentId ?? thread.environmentId,
-            }),
+            modelSelection: await modelSelection(
+              {
+                ...opt,
+                ...(!opt.agent && !opt.model
+                  ? { agent: thread.providerInstanceId, model: thread.model }
+                  : {}),
+              },
+              {
+                environmentId: target?.environmentId ?? thread.environmentId,
+              },
+            ),
           }
         : {}),
       ...(opt.message ? { message: opt.message } : {}),

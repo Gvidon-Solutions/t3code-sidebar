@@ -230,4 +230,19 @@ test("move preserves the source route and sends the chosen project, machine and 
   assert.equal(call.args.message, "Continue with cedar");
   assert.equal(call.args.clientRequestId, "L-move");
   assert.equal(JSON.parse(r.out).handoffId, "L-handoff");
+  const effortOnly = run([
+    "move",
+    "t3-thread://v2/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/thread-1",
+    "--project",
+    "Demo",
+    "--on",
+    "гор",
+    "--effort",
+    "high",
+    "--json",
+  ]);
+  assert.deepEqual(
+    effortOnly.calls.find((call) => call.name === "t3_thread_move").args.modelSelection,
+    call.args.modelSelection,
+  );
 });
