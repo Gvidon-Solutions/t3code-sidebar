@@ -12,7 +12,12 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildHomeProjectScopes, findHomeProjectScope } from "./homeThreadList";
+import {
+  buildHomeProjectScopes,
+  findHomeProjectScope,
+  homeProjectWorkspaceIds,
+  shouldShowHomeEmptyState,
+} from "./homeThreadList";
 import { makeThreadShellFixture } from "../../test-fixtures";
 import { buildThreadListV2Items } from "../threads/threadListV2";
 
@@ -283,6 +288,15 @@ describe("T3 Mesh home scopes", () => {
   });
 
   it("shows a project whose only machine is not connected", () => {
+    expect(
+      buildHomeProjectScopes({
+        projects: [],
+        environmentId: null,
+        projectGroupingMode: "repository",
+        layout,
+        connectedEnvironmentIds: new Set(),
+      }),
+    ).toHaveLength(1);
     const scopes = buildHomeProjectScopes({
       projects: [],
       environmentId: null,
@@ -295,5 +309,25 @@ describe("T3 Mesh home scopes", () => {
     });
     expect(scopes).toHaveLength(1);
     expect(scopes[0]?.meshOffline).toMatchObject({ environmentId: remoteEnvironmentId, tag: "OP" });
+    expect(scopes[0]?.projectRefs).toEqual([]);
+    expect(
+      homeProjectWorkspaceIds(
+        scopes[0]!,
+        {
+          ...layout,
+          workspaces: [{ id: "qa", name: "QA" }],
+          placements: { "logical-shared": ["qa"] },
+        },
+        false,
+      ),
+    ).toEqual(["qa"]);
+    expect(
+      shouldShowHomeEmptyState(
+        false,
+        scopes.map(() => ({ type: "ws-folder" })),
+      ),
+    ).toBe(false);
+    expect(shouldShowHomeEmptyState(false, [])).toBe(true);
+    expect(shouldShowHomeEmptyState(true, [])).toBe(false);
   });
 });

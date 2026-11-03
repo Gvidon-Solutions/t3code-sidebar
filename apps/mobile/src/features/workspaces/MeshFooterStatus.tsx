@@ -29,7 +29,8 @@ export function MeshFooterStatus() {
   return (
     <Pressable
       accessibilityLabel="Open mesh settings"
-      className="px-4 py-2"
+      accessibilityRole="button"
+      className="min-h-[45px] justify-center px-4 py-2"
       onPress={() => openSettings(navigation, "SettingsMesh")}
     >
       <Text className="text-xs text-foreground-muted">{text}</Text>

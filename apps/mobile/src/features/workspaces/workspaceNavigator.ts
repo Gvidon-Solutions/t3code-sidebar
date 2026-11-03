@@ -507,7 +507,7 @@ export function buildWorkspaceHomeItems(input: {
       machineLabel: input.resolveMachineDisplay(model.input.project.environmentId).label,
       pending: model.input.pending ?? [],
     });
-    if (!open) {
+    if (!open || model.input.meshOffline !== undefined) {
       const selected = model.active.find(holdsSelected);
       if (selected) pushThread(selected, { variant: "card" }, null, folderMachineTags);
       return;
