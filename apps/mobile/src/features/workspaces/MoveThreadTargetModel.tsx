@@ -76,7 +76,7 @@ export function MoveThreadTargetModel(props: {
             if (selection) props.onMove(selection);
           }}
         >
-          <AppText>{props.crossMachine ? "Continue on this machine" : "Move"}</AppText>
+          <AppText>{props.crossMachine ? `Move to ${props.machine}` : "Move"}</AppText>
         </Pressable>
       </View>
       <Modal visible={picker} onRequestClose={() => setPicker(false)}>

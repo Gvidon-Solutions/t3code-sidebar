@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import { EnvironmentId, type UnmanagedSyncSession } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
@@ -15,12 +16,13 @@ export function AdoptReplicaAction(props: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const environmentId = EnvironmentId.make(props.environmentId);
+  const canAdopt = useAtomValue(replicaStatusEnvironment.adopt.permissionAtom(environmentId));
   return (
     <div className="flex flex-col gap-2">
       <Button
         size="sm"
         variant="outline"
-        disabled={busy}
+        disabled={busy || !canAdopt}
         onClick={async () => {
           setBusy(true);
           const result = await list({ environmentId, input: {} });
@@ -39,7 +41,7 @@ export function AdoptReplicaAction(props: {
           key={session.identifier}
           size="sm"
           variant="outline"
-          disabled={busy}
+          disabled={busy || !canAdopt}
           onClick={async () => {
             setBusy(true);
             const result = await adopt({

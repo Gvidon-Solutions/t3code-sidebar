@@ -111,7 +111,7 @@ export function MoveThreadModelDialog(props: {
                 if (selection) props.onMove(selection);
               }}
             >
-              {props.crossMachine ? "Continue on this machine" : "Move"}
+              {props.crossMachine ? `Move to ${props.machine}` : "Move"}
             </Button>
           </div>
         </DialogPanel>

@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import { View } from "react-native";
 import { EnvironmentId, type UnmanagedSyncSession } from "@t3tools/contracts";
@@ -17,12 +18,13 @@ export function AdoptReplicaAction(props: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const environmentId = EnvironmentId.make(props.environmentId);
+  const canAdopt = useAtomValue(replicaStatusEnvironment.adopt.permissionAtom(environmentId));
   return (
     <View className="gap-2">
       <Button
         label="Adopt"
         tone="secondary"
-        disabled={busy}
+        disabled={busy || !canAdopt}
         onPress={async () => {
           setBusy(true);
           const result = await list({ environmentId, input: {} });
@@ -38,7 +40,7 @@ export function AdoptReplicaAction(props: {
         <Button
           key={session.identifier}
           tone="secondary"
-          disabled={busy}
+          disabled={busy || !canAdopt}
           label={`Adopt ${session.name ?? "existing sync"} · ${session.alpha.path} ↔ ${session.beta.path}`}
           onPress={async () => {
             setBusy(true);
