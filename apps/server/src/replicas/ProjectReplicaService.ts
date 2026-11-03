@@ -1,12 +1,9 @@
+import { lookupMeshProject } from "./meshProjectLookup.ts";
+import { PeerLinks } from "../peer/PeerLinks.ts";
+import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
 import { adoptionSides } from "./adoptionModel.ts";
 import { normalizeRepresentationPath } from "@t3tools/shared/meshLayout";
-import {
-  opaqueProjectId,
-  logicalProjectKeyForRecord,
-  meshMachineLabel,
-  meshAuthorityOf,
-  conflictWinner,
-} from "@t3tools/shared/meshLayout";
+import { meshMachineLabel, meshAuthorityOf, conflictWinner } from "@t3tools/shared/meshLayout";
 import { forkParked } from "../serverActivation.ts";
 import * as NodeUtil from "node:util";
 import type * as Scope from "effect/Scope";
@@ -94,6 +91,8 @@ const placementMatches = (config: SidebarWorkspacesConfig, key: string, rep: Sid
 
 const make = Effect.gen(function* () {
   const mesh = yield* MeshLayoutService;
+  const links = yield* Effect.serviceOption(PeerLinks);
+  const peers = yield* Effect.serviceOption(PeerMcpClient);
   const paths = yield* ReplicaPaths.ReplicaPaths;
   const runner = yield* MutagenRunner.MutagenRunner;
   const projects = yield* ProjectService.ProjectService;
@@ -801,43 +800,56 @@ const make = Effect.gen(function* () {
       visited.add(name);
       name = config.projectAliases[name]!;
     }
-    if (config.projectMounts[name]) return { logicalKey: name, config };
+    if (config.projectMounts[name]?.length) return { logicalKey: name, config, project: undefined };
     const titled = Object.entries(config.projectTitles ?? {}).filter(
-      ([id, title]) => config.projectMounts[id] && title.toLowerCase() === name.toLowerCase(),
+      ([id, title]) =>
+        config.projectMounts[id]?.length && title.toLowerCase() === name.toLowerCase(),
     );
-    if (titled.length === 1) return { logicalKey: titled[0]![0], config };
+    if (titled.length === 1) return { logicalKey: titled[0]![0], config, project: undefined };
     if (titled.length > 1)
       return yield* new ReplicaError({
         reason: "not_found",
         message: "Project name is ambiguous; use its id.",
       });
     const snapshot = yield* projects.snapshot.pipe(Effect.mapError(mapError));
-    const matches = snapshot.projects.filter(
-      (project) => project.id === name || project.title.toLowerCase() === name.toLowerCase(),
+    const found = yield* lookupMeshProject(
+      config,
+      config.projectTitles[name] || name,
+      mesh.environmentId,
+      snapshot.projects,
+      Option.isSome(links) && Option.isSome(peers)
+        ? { links: links.value, peers: peers.value }
+        : undefined,
     );
-    if (matches.length !== 1)
-      return yield* new ReplicaError({
-        reason: "not_found",
-        message: matches.length
-          ? "Project name is ambiguous; use its id or logical key."
-          : "Project was not found.",
-      });
-    const project = matches[0]!;
-    const existingKey = Object.keys(config.projectMounts).find((key) =>
-      config.projectMounts[key]!.some(
-        (rep) =>
-          rep.environmentId === mesh.environmentId &&
-          (rep.projectId === project.id || rep.path === project.workspaceRoot),
-      ),
-    );
-    const logicalKey =
-      existingKey ??
-      logicalProjectKeyForRecord(
-        config,
-        { ...project, environmentId: mesh.environmentId },
-        opaqueProjectId(`${mesh.environmentId}:${project.workspaceRoot}`),
-      );
-    return { logicalKey, config, project };
+    const logicalKey = found.logicalKey;
+    const representations = [...(config.projectMounts[logicalKey] ?? [])];
+    for (const record of found.records) {
+      if (!representations.some((rep) => rep.environmentId === record.environmentId))
+        representations.push({
+          environmentId: record.environmentId,
+          path: record.project.workspaceRoot,
+          projectId: record.project.id,
+          role: "primary",
+          transport: "git",
+          createdAt: record.project.createdAt,
+        });
+    }
+    const local = found.records.find((record) => record.environmentId === mesh.environmentId);
+    return {
+      logicalKey,
+      config: {
+        ...config,
+        projectTitles: {
+          ...config.projectTitles,
+          [logicalKey]:
+            config.projectTitles[logicalKey] ||
+            found.records[0]?.project.title ||
+            "Untitled project",
+        },
+        projectMounts: { ...config.projectMounts, [logicalKey]: representations },
+      },
+      project: local?.project,
+    };
   });
   const waitForProject = Effect.fn("ProjectReplicaService.waitForProject")(function* (
     logicalKey: string,
@@ -889,10 +901,11 @@ const make = Effect.gen(function* () {
       Effect.gen(function* () {
         let config = (yield* mesh.read).config;
         const logicalKey = resolved.logicalKey;
-        if (!config.projectTitles[logicalKey] && resolved.project) {
+        const resolvedTitle = resolved.config.projectTitles[logicalKey] || resolved.project?.title;
+        if (!config.projectTitles[logicalKey] && resolvedTitle) {
           config = (yield* mesh.edit((current) => ({
             ...current,
-            projectTitles: { ...current.projectTitles, [logicalKey]: resolved.project.title },
+            projectTitles: { ...current.projectTitles, [logicalKey]: resolvedTitle },
           }))).config;
         }
         if (input.action === "remove") {
@@ -912,25 +925,28 @@ const make = Effect.gen(function* () {
           });
           return { logicalKey, representation: null, ready: true };
         }
-        if (!config.projectMounts[logicalKey] && resolved.project) {
-          const project = resolved.project;
+        const discovered = (resolved.config.projectMounts[logicalKey] ?? []).filter(
+          (rep) =>
+            !(config.projectMounts[logicalKey] ?? []).some(
+              (current) => current.environmentId === rep.environmentId,
+            ),
+        );
+        if (discovered.length)
           config = (yield* mesh.edit((current) => ({
             ...current,
             projectMounts: {
               ...current.projectMounts,
               [logicalKey]: [
-                {
-                  environmentId: mesh.environmentId,
-                  path: project.workspaceRoot,
-                  projectId: project.id,
-                  role: "primary",
-                  transport: "git",
-                  createdAt: DateTime.formatIso(yieldDate),
-                },
+                ...(current.projectMounts[logicalKey] ?? []),
+                ...discovered.filter(
+                  (rep) =>
+                    !(current.projectMounts[logicalKey] ?? []).some(
+                      (known) => known.environmentId === rep.environmentId,
+                    ),
+                ),
               ],
             },
           }))).config;
-        }
         let rep = config.projectMounts[logicalKey]?.find(
           (entry) => entry.environmentId === environmentId,
         );
