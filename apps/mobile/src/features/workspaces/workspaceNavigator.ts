@@ -1,3 +1,12 @@
+import {
+  projectMachineStrip,
+  type ProjectMachineStripModel,
+} from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  type SidebarWorkspacesConfig,
+  type ReplicaLiveStatus,
+} from "@t3tools/contracts";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -105,6 +114,7 @@ export interface WorkspaceFolderListItem {
   readonly working: number;
   /** The machine "No project" belongs to, named the way the sidebar names it. */
   readonly machineLabel: string;
+  readonly machineStrip?: ProjectMachineStripModel;
   /** Machines mounting this project; shown at the top of the open folder. */
   readonly pending: ReadonlyArray<MobilePendingReplicaItem>;
 }
@@ -273,6 +283,8 @@ interface FolderModel {
  * the shared v2 row item, so menus and swipes behave as upstream's.
  */
 export function buildWorkspaceHomeItems(input: {
+  readonly config?: SidebarWorkspacesConfig;
+  readonly liveStatuses?: ReadonlyArray<ReplicaLiveStatus>;
   readonly workspaceId: string;
   readonly folders: ReadonlyArray<WorkspaceFolderInput>;
   /** Other workspaces' folders: their pinned threads show here too. */
@@ -505,6 +517,19 @@ export function buildWorkspaceHomeItems(input: {
       attention: model.all.filter(needsAttention).length,
       working: model.all.filter((thread) => resolveThreadListV2Status(thread) === "working").length,
       machineLabel: input.resolveMachineDisplay(model.input.project.environmentId).label,
+      machineStrip: projectMachineStrip(
+        input.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+        {
+          projectKey: model.input.projectKey,
+          environmentIds: model.input.isScratch
+            ? model.all.map((thread) => thread.environmentId)
+            : model.input.environmentIds,
+          knownEnvironmentIds: input.connectedEnvironmentIds,
+          isScratch: model.input.isScratch,
+        },
+        input.liveStatuses ?? [],
+        (id) => input.resolveMachineDisplay(id as EnvironmentId),
+      ),
       pending: model.input.pending ?? [],
     });
     if (!open) {
@@ -629,6 +654,7 @@ export function workspaceHomeItemsAreEqual(
         previous.attention === item.attention &&
         previous.working === item.working &&
         previous.machineLabel === item.machineLabel &&
+        JSON.stringify(previous.machineStrip) === JSON.stringify(item.machineStrip) &&
         previous.pending.length === item.pending.length &&
         previous.pending.every((row, index) => {
           const next = item.pending[index];

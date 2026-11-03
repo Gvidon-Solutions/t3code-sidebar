@@ -1,3 +1,6 @@
+import { useScratchProject } from "../../hooks/useScratchProject";
+import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
+import { ProjectMachineStrip } from "./ProjectMachineStrip";
 /**
  * Workspace sidebar (fork feature): workspace tiles at the bottom and the open workspace's projects
  * as folders of one-line threads. It reuses the default sidebar's data and mutations and owns only
@@ -288,6 +291,7 @@ export default function WorkspaceSidebar() {
     reportFailure: false,
   });
   const handleNewThread = useNewThreadHandler();
+  const scratch = useScratchProject();
   const liveReplicaStatuses = useReplicaStatuses();
   const retryReplica = useAtomCommand(replicaStatusEnvironment.retry, {
     label: "replica retry",
@@ -361,6 +365,7 @@ export default function WorkspaceSidebar() {
             ),
           }),
       projects,
+      groupScratchProjects: true,
       settings: projectGroupingSettings,
       primaryEnvironmentId,
       resolveEnvironmentLabel: (environmentId) => environmentLabels.get(environmentId) ?? null,
@@ -398,8 +403,8 @@ export default function WorkspaceSidebar() {
       ]),
     );
     for (const group of projectGroups) {
-      const isScratch = group.memberProjects.some((member) =>
-        scratchRoots.has(member.workspaceRoot),
+      const isScratch = group.memberProjects.some(
+        (member) => member.isScratch || scratchRoots.has(member.workspaceRoot),
       );
       if (isScratch) scratchProjectKeys.add(group.projectKey);
       const workspaceIds = resolveProjectWorkspaceIds(projectIdentity(group, isScratch), config);
@@ -721,6 +726,11 @@ export default function WorkspaceSidebar() {
     );
   };
   const startThreadInFolder = (folder: FolderModel) => {
+    if (folder.isScratch) {
+      const environmentId = scratch.scratchEnvironmentId(primaryEnvironmentId);
+      if (environmentId !== null) void scratch.startScratchThread(environmentId);
+      return;
+    }
     const member =
       folder.group.memberProjects.find(
         (project) => project.environmentId === primaryEnvironmentId,
@@ -752,6 +762,10 @@ export default function WorkspaceSidebar() {
     );
   };
   const startThreadOnMachine = (folder: FolderModel, environmentId: string) => {
+    if (folder.isScratch) {
+      void scratch.startScratchThread(EnvironmentId.make(environmentId));
+      return;
+    }
     const logicalKey = folder.group.projectKey;
     const plan = planThreadOnMachine({
       config,
@@ -773,7 +787,14 @@ export default function WorkspaceSidebar() {
   const openNewThreadOnMenu = async (folder: FolderModel, position: { x: number; y: number }) => {
     const api = readLocalApi();
     if (!api) return;
-    const clicked = await api.contextMenu.show(machineMenuItems(machineChoices), position);
+    const clicked = await api.contextMenu.show(
+      machineMenuItems(
+        folder.isScratch
+          ? machineChoices.map((choice) => ({ ...choice, disabled: false, reason: null }))
+          : machineChoices,
+      ),
+      position,
+    );
     if (clicked?.startsWith("machine:")) {
       startThreadOnMachine(folder, clicked.slice("machine:".length));
     }
@@ -1530,6 +1551,22 @@ export default function WorkspaceSidebar() {
                 {working > 0 ? <span className="text-info-foreground">●{working}</span> : null}
               </span>
             ) : null}
+            <ProjectMachineStrip
+              model={projectMachineStrip(
+                config,
+                {
+                  projectKey: folder.group.projectKey,
+                  environmentIds: folder.isScratch
+                    ? folder.all.map((thread) => thread.environmentId)
+                    : folder.group.memberProjects.map((member) => member.environmentId),
+                  knownEnvironmentIds: [...environmentLabels.keys()],
+                  isScratch: folder.isScratch,
+                },
+                liveReplicaStatuses,
+                machineDisplayFor,
+              )}
+              onOpen={() => setMachinesFolder(folder)}
+            />
             <span className="hidden shrink-0 items-center gap-0.5 group-hover/ws-folder:flex group-focus-within/ws-folder:flex">
               {offline === undefined ? (
                 <>

@@ -335,9 +335,10 @@ export function buildProjectGroups<TProject extends EnvironmentProject>(input: {
         groupingMode: resolveProjectGroupingMode(winner, input.settings),
         groupScratchProjects: input.groupScratchProjects ?? false,
       });
-    const logicalKey = input.layout
-      ? resolveLogicalProjectKey(winner, input.layout, fallback)
-      : fallback();
+    const logicalKey =
+      input.layout && !(input.groupScratchProjects && winner.isScratch)
+        ? resolveLogicalProjectKey(winner, input.layout, fallback)
+        : fallback();
     logicalKeyByPhysicalKey.set(physicalProjectKey, logicalKey);
     const member = { physicalProjectKey, project: winner };
     const existing = groupedMembers.get(logicalKey);

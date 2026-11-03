@@ -4,7 +4,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { makeThreadShellFixture } from "../../test-fixtures";
 import type { ThreadListV2Item } from "../threads/threadListV2";
-import { buildWorkspaceHomeItems, type WorkspaceHomeListItem } from "./workspaceNavigator";
+import {
+  buildWorkspaceHomeItems,
+  workspaceHomeItemsAreEqual,
+  type WorkspaceHomeListItem,
+} from "./workspaceNavigator";
 
 const environmentId = EnvironmentId.make("env");
 const NOW = Date.parse("2026-10-11T12:00:00.000Z");
@@ -280,4 +284,37 @@ describe("buildWorkspaceHomeItems", () => {
       tagOf(build(threads, [], { connectedEnvironmentIds: [environmentId, "other"] }))?.tag,
     ).toBe("EN");
   });
+});
+
+it("lists scratch thread machines once and invalidates recycled rows when their strip changes", () => {
+  const scratch = {
+    ...folder("scratch", "No project", true),
+    environmentIds: [environmentId, EnvironmentId.make("other")],
+    memberKeys: [`${environmentId}:scratch`, "other:scratch"],
+  };
+  const rows = build(
+    [
+      thread("local", "scratch"),
+      thread("remote", "scratch", { environmentId: EnvironmentId.make("other") }),
+    ],
+    [],
+    { folders: [scratch], connectedEnvironmentIds: [environmentId, "other"] },
+  );
+  const row = rows.find((item) => item.type === "ws-folder");
+  expect(row?.type).toBe("ws-folder");
+  if (row?.type !== "ws-folder") throw new Error("Missing scratch folder");
+  expect(rows.filter((item) => item.type === "ws-folder")).toHaveLength(1);
+  expect(row.machineStrip?.chips.map((chip) => chip.environmentId)).toEqual([
+    environmentId,
+    "other",
+  ]);
+  expect(
+    rows.filter((item) => item.type === "ws-thread").map((item) => item.machineTag?.label),
+  ).toEqual([environmentId, "other"]);
+  expect(
+    workspaceHomeItemsAreEqual(row, {
+      ...row,
+      machineStrip: { chips: [], overflow: 0, description: "changed" },
+    }),
+  ).toBe(false);
 });
