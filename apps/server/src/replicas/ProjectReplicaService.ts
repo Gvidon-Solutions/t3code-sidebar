@@ -349,8 +349,7 @@ const make = Effect.gen(function* () {
     }
     const ignoresChanged =
       session?.ignore?.paths !== undefined &&
-      JSON.stringify([...new Set(session.ignore.paths)].sort()) !==
-        JSON.stringify([...new Set(createInput.ignores)].sort());
+      !NodeUtil.isDeepStrictEqual([...new Set(session.ignore.paths)].sort(), [...new Set(createInput.ignores)].sort());
     known.set(key, identity.name);
     if (
       session &&
