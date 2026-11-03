@@ -10,6 +10,7 @@ import { serverEnvironment } from "../../state/server";
 import { MeshLinkForm } from "./MeshLinkForm";
 import { meshSwitchValue, meshTogglePatch } from "./mesh-settings.logic";
 import {
+  machineDisplayOf,
   machineTagBackground,
   setMachineDisplay,
   type MachineDisplay,
@@ -173,21 +174,26 @@ export function SettingsMachinesRouteScreen() {
         >
           {environments
             .filter((e) => e.connection.phase === "connected")
-            .map((e) => (
-              <View key={e.environmentId} className="flex-row items-center justify-between p-4">
-                <Text>{e.label}</Text>
-                <Switch
-                  accessibilityLabel={`Use the mesh on ${e.label}`}
-                  value={meshSwitchValue(e.serverConfig?.settings ?? {})}
-                  onValueChange={(enabled) =>
-                    void updateSettings({
-                      environmentId: e.environmentId,
-                      input: { patch: meshTogglePatch(enabled) },
-                    })
-                  }
-                />
-              </View>
-            ))}
+            .map((e) => {
+              const label = machineDisplayOf(base, e.environmentId, e.label).label;
+              return (
+                <View key={e.environmentId} className="flex-row items-center justify-between p-4">
+                  <Text numberOfLines={1} className="min-w-0 flex-1">
+                    {label}
+                  </Text>
+                  <Switch
+                    accessibilityLabel={`Use the mesh on ${label}`}
+                    value={meshSwitchValue(e.serverConfig?.settings ?? {})}
+                    onValueChange={(enabled) =>
+                      void updateSettings({
+                        environmentId: e.environmentId,
+                        input: { patch: meshTogglePatch(enabled) },
+                      })
+                    }
+                  />
+                </View>
+              );
+            })}
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ expanded: linkOpen }}

@@ -108,6 +108,19 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-03 — T3 Mesh — cross-device QA corrections
+
+- **What.** Mesh settings use machine-wide scope; linked machines omit unavailable versions.
+  Machine names and short default tags agree across menus and file pickers. Files from another
+  machine identify their source in web tabs and the native viewer.
+- **How.** Registered replicas retain visible conflict/error rows. Independent Git checkouts can
+  split out of repository groups, and stale replica failures do not follow a Git primary. Mobile
+  preserves offline workspace folders without duplicate rows or unavailable thread actions;
+  mesh controls have accessible names, readable tags and 44-point touch targets.
+- **Where.** Fork workspace components on both clients; small seams in settings scope, file
+  navigation and web panel tabs; shared display/replica helpers in `packages/client-runtime`.
+  CRDT core, RPC contracts and server service interfaces stay unchanged.
+
 ### 2026-11-02 — T3 Mesh — web accessibility QA
 
 - **What:** machine tags remain readable with pale custom colors in either theme. Pending
