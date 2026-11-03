@@ -1,144 +1,62 @@
 ---
 name: t3
-description: "Control the owner's T3 Code (T3 Code Sidebar fork; aka T3, т3, Т3) — invoked as /t3 or $t3, or whenever the user talks about T3 projects, threads, sessions, workspaces or the T3 server. Anything the owner can do by hand in T3: start threads on any harness and model (Codex, Claude, Grok, Pi, …) in any project, worktree or scratch; read output; send follow-ups, queue or steer; stop; approve permission requests; answer agent questions; fork; rename, pin, settle, snooze, archive, delete, bulk-clean; switch model or mode; create, clone, configure and remove projects; manage sidebar workspaces (the tiles); import Codex/Claude sessions from disk; read or change settings; check, update or restart the T3 server (restart only with the owner's yes). Also knows the infra around it: the gvidon server unit, phone access via happier/FRP, t3-ws on the VPS, the gor test machine, releases. Triggers: «создай тред/сессию в T3», «запусти агента/кодекс/клода в проекте X», «напиши в тот тред», «что сделано в треде», «что там по задачам», «покажи вывод», «одобри», «форкни», «заархивируй», «почисти треды», «создай/удали проект», «создай воркспейс», «перенеси проект в воркспейс», «импортируй сессии», «обнови/перезапусти T3», «какие у меня машины», «что в меше», «свяжи … с …», «создай тред в проекте X на Operalia», «создай тред на горе», «открой тред про …», «найди тред про X на всех машинах», «покажи файл … на гвидоне», «что работает на всех машинах», «сделай X репликой на горе», «поставь X на M», «убери реплику X с M»."
+description: "Control T3 Code projects, threads, sessions, workspaces, and linked machines. Use for starting threads with a requested harness or model, reading output, follow-ups, approvals, questions, forks, project placement, settings, and server operations. Resolve machine labels, tags, aliases and SSH destinations from the mesh."
 ---
 
-# T3 Code control (`t3ctl`)
+# T3 Code control
 
-Act immediately: map the owner's request, often voice-typed and messy, to `t3ctl` commands and run them. Ask only before destructive steps, before a server restart, or when the target is genuinely ambiguous. Answer in the owner's language (usually Russian), briefly, in plain words, not raw dumps.
+Use the command covering the user's request. Read this skill once, resolve the target from data, and act within the user's authorization. Answer briefly in the user's language. Do not assume a machine, path, harness, model, workspace, or server topology.
 
-`t3ctl` (`~/.local/bin/t3ctl` → `~/.agents/skills/t3/scripts/t3ctl.mjs`, Node 22+, no dependencies) drives the T3 server on this machine through its own official APIs, so whatever it does shows up live in the owner's T3 on desktop and phone:
+Run `node ~/.agents/skills/t3/scripts/t3ctl.mjs` (Node 22+), or the installed `t3ctl` launcher. It uses the server's MCP and WebSocket RPC APIs. `t3ctl help` lists commands; `tools`, `schema <tool>`, and `tool <name> '<json>'` cover other MCP operations. Inspect a schema before using a generic tool or RPC command.
 
-- **MCP** at `<origin>/mcp`, the toolkit T3 gives its own agents. `t3ctl` signs in as an outside MCP client with full access. It gets a 30-day token through the server's OAuth flow, approved with a one-time `t3 auth pairing create` code, and caches it in `~/.config/t3ctl/`. The token renews itself; `t3ctl login` forces a new one.
-- **WebSocket RPC** at `<origin>/ws`, what the T3 UI itself speaks. It covers what MCP lacks: delete, permission approvals, runtime/plan mode, sidebar workspaces, settings, session import, and any raw method.
+## Resolve the action and target
 
-`t3ctl help` prints the full usage. `<T>` is a thread id, an id prefix (`77676c65`) or words from its title; an exact title wins. `<P>` is a project name, id prefix or path. `<M>` is a machine: environment id/prefix, label, tag, ssh alias, or a Russian name (`гвидон`, `гора`, `опералия`). `--json` on any command prints raw data.
+- `machines --json` reads the authoritative environment ids, layout labels, tags, user-defined aliases, SSH destinations and links. `mesh status` shows connectivity. Match names generically; never translate a customer's machine name using a built-in table.
+- `machines alias <M> list|add <alias>…|remove <alias>…|clear` edits aliases in the shared layout. Settings › Mesh edits the same aliases. Aliases may use any language. Ask only when candidates are ambiguous.
+- `projects` resolves projects; `find "…" --all` searches thread titles and content across machines. Preserve full returned thread ids and environment ids. Read a thread before reporting about it.
+- A logical project has machine-local representations. Primaries own git; replicas are synchronized working copies. Before file operations, read `tool t3_project_machines '{"project":"<P>"}'` and choose the target representation's absolute path. In a replica, edit files there and run git, builds and tests at its primary using the configured SSH destination and primary path. Never initialize git in a replica.
+- `new --project <P> --on <M> "brief"` places a missing replica, waits for registration, and launches there. `place <P> --on <M> [--wait]` only places a representation. No machine is tied to a particular harness: query its capabilities.
+- With no explicit model or permissions override, `new` delegates defaults to the destination project's/server's settings. `models` lists provider instances and their catalog. Explicit CLI overrides: `T3CTL_AGENT`, `T3CTL_CODEX_MODEL`, `T3CTL_CLAUDE_MODEL`, `T3CTL_MODE`. A user-requested model must be available at the destination; report failure without substituting another provider.
 
-With several servers linked, the mesh is one sidebar: `--all` covers every linked machine, `--on <M>` targets one, and `machines` / `mesh status` show the whole picture. See [Mesh](#mesh-several-machines-one-sidebar).
+## Common actions
 
-## Mesh: choose the action first
-
-Read this skill once, then act; do not explore infrastructure files. Use the listed CLI command when it covers the request: it handles resolution, enumeration and defaults. For covered create/mutate operations use the documented CLI command so its configured defaults are applied; native MCP does not inherit CLI-only defaults. Use native MCP for display and gaps in the CLI; inspect its schema before invoking it. Resolve the operation’s execution location before inspecting state; the current shell directory does not determine the target. Names beginning with `t3_` are MCP tools, invoked through `t3ctl tool <name> '<json>'`, not CLI subcommands. On an API error, follow its recovery or use the documented CLI command; a missing API field does not establish that configured command defaults are unavailable. Preserve full returned identifiers and the target environment in follow-up commands. Machine names: `t3ctl machines` is authoritative (labels/tags; Russian names like «гвидон», «опералия», «гор(а)», «впс» resolve too). Never create or remove links unless the owner asks.
-
-- **Find or open a thread anywhere** → `t3ctl find "<topic>" --all --json` (try the Russian words and their English equivalents), take the best **title** match, then `ui_open` with its full `threadId` and `environmentId`. A printed link alone does not open the owner's screen.
-- **New thread in project X on machine M** → `t3ctl new --project X --on M "task"`; it places a replica when needed and launches there. Keep the configured default agent/model unless asked.
-- **Put X on M** → `t3ctl place X --on M --wait` (replica of the first primary; `--primary --path` for an existing checkout); check role and state in the output.
-- **A file from X on M** → `t3_project_machines` for X, then construct an **absolute** path under M's representation and read/open it with M's `environmentId`.
-- **What runs everywhere / which machines** → `t3ctl status --all`; `t3ctl machines` (or `mesh status`).
-- **Git, builds, tests in a replica** (even `git status`) → on its primary: `ssh <reach> 'cd <primaryPath> && …'`; the exact command is in the thread context and `t3_thread_self`. Never `git init` or commit in a replica; verify the result on the primary.
-
-## Commands
-
-| Goal | Command |
+| Request | Command |
 | --- | --- |
-| Overview: what needs the owner / is working / failed / done | `t3ctl status [--project P] [--hours 24]` |
-| Agent inbox: list / one issue | `t3ctl inbox [--all\|--closed\|--dismissed]`, `t3ctl inbox show <I>` (`<I>` = issue id or prefix; ● unread, ⏳ needs the owner) |
-| Raise or update an issue (as an agent) | `t3ctl inbox post <action\|attention\|info> "Title" --body MD [--key DEDUPE] [--project P] [--waiting]`; `inbox comment <I> "text" [--waiting\|--not-waiting]`; `inbox update <I> [--thread T] …`; `inbox done <I> "resolution"` |
-| Answer or close an issue as the owner | `t3ctl inbox reply <I> "text"` (goes to the responsible thread), `inbox dismiss <I> "reason"`, `inbox reopen <I>` |
-| List threads | `t3ctl threads [--project P] [--status running,failed] [--match words] [--settled] [--snoozed] [--archived] [--subagents] [--limit N]` |
-| What happened in a thread | `t3ctl show <T> [--messages N] [--full] [--activity]` |
-| Full text of the last answer | `t3ctl output <T>` |
-| Search titles and content | `t3ctl search "words" [--project P]` |
-| Wait for a run to finish | `t3ctl wait <T> [--timeout 30m]` |
-| Harnesses, models, their options | `t3ctl models [codex\|claude\|grok\|pi…]` |
-| New thread with a task | `t3ctl new --project P [--agent A] [--model M] [--effort E] [--title T] "task"` (no `--project` = scratch, "No project") |
-| …and wait for the answer | add `--wait [--timeout 20m]` |
-| …in a new git worktree | add `--worktree BRANCH\|auto [--base REF] [--from-origin]` |
-| …in an existing worktree | add `--cwd /path/to/worktree [--branch B]` |
-| …with files | add `--attach FILE` (repeatable); long briefs: `--file brief.md` or `-` for stdin |
-| Follow-up | `t3ctl send <T> "text" [--queue\|--steer\|--restart] [--attach F] [--wait]` |
-| Interrupt a running turn | `t3ctl stop <T>` |
-| Pending approvals and questions | `t3ctl requests <T>` |
-| Approve / decline | `t3ctl approve <T> [accept\|acceptForSession\|acceptAlways\|decline\|cancel]` |
-| Answer an agent's question | `t3ctl answer <T> "Blue" ["answer 2" …]` or `--answers '{"<questionId>":"…"}'` |
-| Fork (new thread, same full context) | `t3ctl fork <T> [--title T] [--message M] [--agent/--model …]` |
-| Rename / regenerate title | `t3ctl rename <T> "title"`, `t3ctl rename <T> --auto` |
-| Organize | `t3ctl pin\|unpin\|settle\|unsettle\|archive\|unarchive\|unread <T>`, `t3ctl snooze <T> --for 2h` (or `--until ISO`), `t3ctl unsnooze <T>` |
-| Change model / mode | `t3ctl set-model <T> --agent A --model M [--effort E]`, `t3ctl set-mode <T> full-access\|auto\|auto-accept-edits\|approval-required\|plan\|default` |
-| Delete (permanent) | `t3ctl delete <T> --yes` |
-| Many threads at once | `t3ctl bulk archive\|unarchive\|settle\|unsettle\|pin\|unpin\|delete [--project P] [--match w] [--status completed,failed] [--older-than 7d] [--archived]`: a dry run; apply with `--yes` |
-| Branches and worktrees of a thread's repo | `t3ctl worktrees <T>` |
-| Queued messages | `t3ctl queue <T>` (edit/cancel/reorder: `t3ctl tool t3_queue_*`) |
-| Projects | `t3ctl projects`, `t3ctl project <P>` (full settings) |
-| Add / create / clone a project | `t3ctl project-add ~/path [--title T] [--mkdir]`, `t3ctl project-new "title"` (T3 creates a fresh git repo), `t3ctl project-clone <url\|owner/name> [--dest PATH\|--dir PARENT]` |
-| Rename / configure / remove a project | `t3ctl project-rename <P> "title"`, `t3ctl project-set <P> [--agent/--model/--effort] [--root PATH] [--auto-pull true] [--env-mode local\|worktree] [--emoji 🚀] [--json '{…}']`, `t3ctl project-remove <P> --yes [--force]` |
-| Sidebar workspaces (tiles) | `t3ctl ws` (list with their projects), `ws add "Name" [--icon XY] [--color #hex]`, `ws rename <W> "Name"`, `ws set <W> [--icon XY\|none] [--color #hex]`, `ws assign <P> <W>` (only there), `ws show <P> <W>` / `ws hide <P> <W>` (a project can show in several workspaces, "No project" too; needs sidebar.21+), `ws unassign <P>`, `ws default <W>`, `ws move <W> <pos>`, `ws rm <W> --yes`, `ws rule add "<glob>" <W>` / `ws rule rm "<glob>"`, `ws quiet <days>`, `ws fold <P> quiet | active | auto [<W>]`(per workspace: move a project into "Quiet projects" by hand in workspace W — it stays there until moved back;`active`= never folds there;`auto`= folds by itself; W is required when P shows in several workspaces;`ws always-show <P> [<W>]`=`fold active`; needs sidebar.23+) |
-| Global harness instructions | `t3ctl agents sync [--to all\|machine,…] [--home /isolated/home] [--apply]` (diff first, backups + verification); `t3ctl agents status` |
-| Machines and mesh | `t3ctl machines [--json] [--probe]`, `t3ctl mesh status [--json]`, `t3ctl mesh link <M> [--url URL] [--ssh DEST]` (full access; pairing code minted over ssh), `t3ctl mesh unlink <M> --yes` |
-| A project on another machine | `t3ctl place <P> --on <M> [--primary] [--source <M2>] [--path PATH] [--wait [dur]]`, `t3ctl unplace <P> --on <M> --yes`, `t3ctl replicas [--json]`, `t3ctl replica retry <P> --on <M>` |
-| A new thread on another machine | `t3ctl new --project P --on M [other new options] "task"`: places a replica when needed, waits, then launches there |
-| Find / open / read anywhere | `t3ctl find "words" [--all\|--on M]`, `t3ctl threads --all`, `t3ctl status --all`, `t3ctl open <T> [--on M]`, `t3ctl open-file <path> [--on M]`, `t3ctl cat <path> --on M` |
-| Migrate legacy layouts | `t3ctl layout get [--json]`, `t3ctl layout merge --from <M[,M]> --dry-run\|--apply` (backups in `~/.local/state/t3-mesh-migrate/`) |
-| Copy the tile layout to an old server (legacy) | `node ~/.agents/skills/t3/scripts/sidebar-workspaces-sync.mjs [--from local\|HOST] [--to HOST] [--apply]`: only for servers without the mesh RPCs; dry run by default, target config backed up under `~/.local/state/t3-ws-sync/`. With the mesh, layouts replicate — use `t3ctl mesh status` instead. |
-| Import Codex/Claude sessions from disk | `t3ctl scan [filter]`, `t3ctl import <P\|path> [--add --title T]` |
-| Settings | `t3ctl settings [get [dot.path]]`, `t3ctl settings set '{"key": value}'` |
-| Server | `t3ctl server status\|logs [--n 80]\|versions`, `t3ctl server install <N\|latest>`, `t3ctl server use <version> --yes`, `t3ctl server restart --yes` (see the rule below) |
-| Health check | `t3ctl doctor` (`t3ctl env` for server identity) |
-| Anything else T3 can do | `t3ctl tools [filter]` / `t3ctl schema <tool>` / `t3ctl tool <name> '{json}'` (any MCP tool), `t3ctl rpc <method> '{json}' [--first]` (any UI RPC method; list in `packages/contracts/src/rpc.ts` of the fork), `t3ctl dispatch '{"type":"thread.…",…}'` (any orchestration command; types in `packages/contracts/src/orchestrationV2.ts`) |
+| List work | `status [--all]`, `threads [--project P] [--all]` |
+| Read a thread | `show <T> [--full]`, `output <T>`, `wait <T> [--timeout 5m]` |
+| Start a thread | `new --project <P> [--on M] [--agent INSTANCE --model MODEL] [--file BRIEF] "task"` |
+| Continue or fork | `send <T> "message" [--wait]`, `fork <T> [--title TITLE]` |
+| Handle a question | `requests <T>`, `answer <T> "answer"`, `approve <T> acceptForSession` |
+| Stop requested work | `stop <T>` |
+| Find/open | `find "words" --all`, `open <T>`, `open-file <path> [--on M]` |
+| Project representations | `tool t3_project_machines '{"project":"<P>"}'`, `place <P> --on M [--wait]`, `replicas` |
+| Read a file | `cat <absolute-path> --on M` |
+| Organize | `rename <T> TITLE`, `pin/unpin <T>`, `settle/unsettle <T>`, `archive/unarchive <T>` |
+| Projects | `project-add <path>`, `project-new <path>`, `project-clone <url> <path>`, `project-config <P>` |
+| Workspaces | `ws`, `ws add NAME`, `ws assign <P> <W>`, `ws unassign <P>` |
+| Machine aliases | `machines alias <M> list/add/remove/clear` |
+| Settings | `settings get [dot.path]`, `settings set '{"key":value}'` |
+| Health | `env`, `doctor`, `mesh status`, `server status` |
 
-### Agents and models
+`<T>` is a full thread id, id prefix, or words from its title. `<P>` is a project name/id/path. `<M>` is an environment id/prefix, label, tag, user-defined alias or SSH destination. `--json` returns structured data. `help` describes additional options and commands.
 
-- `--agent` is a T3 provider instance (`t3ctl models` lists them): `codex`, `claude` (= `claudeAgent`), `grok`, `pi`, `cursor`, `opencode`… Aliases also work as `--agent` or `--model`: `luna`, `astra`, `sol` (Codex), `opus`, `sonnet`, `fable`, `haiku` (Claude), `deepseek` / `1017` (OpenCode + DeepSeek V4.1 Flash 1017).
-- **Unless `T3CTL_AGENT` supplies an explicit runtime default, the default is Claude Opus 5.5 (`claude-opus-5-5`)** (owner rule of 2026-10-15): when the owner asks to spawn/start an agent without naming one, run Opus 5.5, so plain `t3ctl new` needs no `--agent`. Use Codex only when the owner asks for Codex or names a Codex model; Codex then runs on Luna (`gpt-6-luna`, the default Codex model), never Astra, unless the owner names another model.
-- **DeepSeek is always 1017.** When the owner asks for a DeepSeek agent/thread, use `--agent deepseek` (or `--agent 1017`; shorthand for `opencode` + `deepseek/deepseek-flash`, DeepSeek V4.1 Flash 1017), or spell out `--agent opencode --model deepseek/deepseek-flash`. Never use `deepseek/deepseek-v4-pro` unless the owner explicitly names V4 Pro.
-- `--effort` maps to the model's effort option (`low…max`, Claude also `ultrathink`/`ultracode`). `--fast` sets Codex's priority tier or Claude's fast mode. `--opt key=value` sets any other model option shown by `t3ctl models`.
-- `--mode` sets permissions: `full-access` (default) `| auto | auto-accept-edits | approval-required`. `--plan` starts in plan mode.
+## Working rules
 
-## How to work with it
+1. Start a new top-level thread only when asked. Give its first message a complete brief: goal, target paths, constraints, acceptance criteria. Use `--file` for longer briefs. Use native orchestration tools for delegation; CLI thread creation is not delegation.
+2. Opening a thread or file on the user's screen: use native `ui_open` with the full id and environment id. The CLI's `open` and `open-file` print links for outside clients.
+3. Read output with `show <T>` / `output <T>`; answer questions and approvals with `requests`, `answer`, and `approve` within the user's authorization. Fork a session with `fork <T>`, preserving context.
+4. Permanent deletion, bulk mutations, link removal and live server restarts require explicit authorization. Preview a bulk operation before applying it. For a restart or upgrade, explain the target, purpose and rollback first; one approval covers one restart. Never stop unrelated threads or services.
+5. Report issues and requested results through the native inbox tools from inside a T3 thread, so the calling thread receives replies. Check for an existing issue first, use a stable dedupe key, keep waitingForOwner accurate, and resolve only after verifying. The CLI inbox is a fallback for outside clients.
+6. `t3_thread_self` / `t3ctl self` identifies the current thread and representation. `show`, `send`, `wait`, `stop`, `requests`, and `answer` resolve full thread ids across the mesh. Keep returned `mcp:…` identifiers intact.
 
-1. **Resolve before acting.** For a loosely named project («диссер», «курс Антона»), run `t3ctl projects` and pick the match; for a thread, `t3ctl threads --match …` or `t3ctl search`; for a machine («на горе», «Operalia», a tag), `t3ctl machines`. Ask only when two candidates are genuinely ambiguous.
-2. **A new project must end up visible (owner requirement).** The sidebar lists threads, not projects. After `project-add`/`project-new`/`project-clone`, in the same turn start a first thread there with `t3ctl new --project <id>`, without asking. If the owner gave a task, use it as the brief. Otherwise use a safe read-only one: get to know the project and give a short summary of what it is, how it is built, run and deployed, with explicit constraints (no file changes, commits, SSH, deploys or releases). If the owner keeps workspaces, also `t3ctl ws assign` the project where it belongs (ask if unclear).
-3. **Write the first message as a full brief.** The new agent sees nothing of this conversation: give the goal, paths and files, constraints, what "done" looks like and how to report. Write in the owner's language. Use `--file` for anything longer than a couple of lines.
-4. **After `new`/`send`/`fork`, tell the owner** the thread title and short id so they can find it.
-5. **Checking work:** `t3ctl status` for the big picture, `t3ctl show <T>` or `t3ctl output <T>` for details. Say what is done, in progress, blocked, and what needs the owner (approvals, questions, plans). `status` lists threads waiting on an approval or question under "needs you"; `t3ctl requests <T>` shows them.
-6. **Review loop:** when the owner wants a check, start a reviewer thread in the same project, by default on the other harness (Codex for a Claude thread, Claude for a Codex one) unless the owner names one. Brief it with the original task and the changed files, or with `t3ctl output`/`show --full` of the thread under review.
-7. **Forking** («форкни», «продолжим в отдельной сессии»): `t3ctl fork <T> --title …`, never a hand-written brief. T3 forks the provider session, so the new agent has the whole conversation. To fork the thread you run in, find it with `t3ctl threads --status running`. A fork can switch model with `--agent/--model`; a different harness does not inherit the provider memory.
-8. **Importing sessions** (herdr, Codex Desktop, CLI): `t3ctl scan` lists folders with sessions on disk; `t3ctl import <path> --add --title name` registers the folder and imports its **recent** sessions (T3 skips old ones). Imported threads resume their provider session. Junk titles like `<environment_context>`: `t3ctl rename <T> --auto` or a real title.
-9. **Destructive steps need a yes.** `delete`, `bulk delete`, `project-remove --force` and `ws rm` are permanent; prefer `archive`. For any `bulk`, run the dry run first, show how many threads match plus a few examples, and add `--yes` only after the owner confirms. `bulk` skips threads that are running. Don't `stop` a thread the owner didn't ask to stop.
-10. **Inbox, not new threads, for news to the owner.** An agent inside a T3 thread raises issues with the MCP tool `inbox_post` itself, so its thread becomes responsible and receives the owner's comments; `t3ctl inbox post` posts as an outside client with no responsible thread (the owner's first reply then starts one). The agent owns the issue: it answers with `inbox comment`, keeps `--waiting` accurate (only it changes that flag) and closes with `inbox done` after verifying the fix. `reply`, `dismiss` and `reopen` act as the owner; use them only when the owner asks.
-11. **Anything not in the table:** look for an MCP tool (`t3ctl tools <word>`, `t3ctl schema <tool>`, `t3ctl tool …`), else the UI's RPC (`t3ctl rpc …`) or an orchestration command (`t3ctl dispatch …`). Read the schema first; these act on the live server.
+## Configuration, installation and verification
 
-## Mesh (several machines, one sidebar)
+Server connection overrides: `T3CODE_HOME`, `T3CTL_ORIGIN`, `T3CTL_UNIT`, `T3CTL_T3_BIN`; remote pairing uses `T3CTL_REMOTE_T3_BIN` and `T3CTL_REMOTE_HOME`. Discover the server identity with `env` and diagnose APIs/auth with `doctor`. Credentials are cached under the user's XDG configuration directory; never print them.
 
-A machine (`<M>`) is this server, a linked server, or one the layout knows. Resolve it by environment id/prefix, label, tag, ssh alias, or the owner's Russian name (`гвидон`, `гора`, `опералия`); `t3ctl machines` lists them with tags. A logical project has **primaries** (own `.git`, builds there) and **replicas** (Mutagen working copies synced from a primary). On a replica, run git, builds and tests on its primary: `ssh <reach> 'cd <primaryPath> && …'`, never `git init`/commit there. Which machine is primary is layout configuration, not code.
+Customer-specific agent instructions and SSH routes belong in `global/GLOBAL.md` and `global/machines.json`, or a directory selected by `T3CTL_AGENTS_CONFIG`. The registry supplies ids, labels, tags, roles, harness files, per-source SSH destinations/options, optional relay ids (`via`), and an optional remote `nodeCommand`. It is installation data, not the runtime machine-name resolver. `agents sync` previews changes by default; `--apply` backs up and verifies writes. `agent-kit/install.sh --dest DIR` stages a skill only; `--to ID[,ID] [--apply]` installs using registry routes. Never install on a live machine without authorization.
 
-- Canonical instructions: `global/GLOBAL.md` + `global/machines.json`; `agents sync` adds each machine’s header and updates only installed harness directories.
-- "What machines / what's in the mesh?" → `t3ctl machines`, `t3ctl mesh status`.
-- "New thread in X on Operalia / на горе" → `t3ctl new --project X --on <M> "…"`. It places a replica when X is not there, waits for registration and launches there; do not place by hand first.
-- "Make X a replica on M / поставь X на гору" → `t3ctl place X --on <M> [--source <primary>] [--wait]`. Adding a second primary needs `--primary --path <existing checkout>`.
-- "What runs everywhere?" → `t3ctl status --all`; "find a thread" → `t3ctl find "…"` (tags in the output); "open it" → `t3ctl open <T>`. That prints the web and `t3-thread://` links; `ui_open` itself runs as an agent inside a thread, so an outside client gets the link.
-- Files on another machine → `t3ctl cat <path> --on <M>`, `t3ctl open-file <path> --on <M>` (`t3-file://<envId>/<path>` links).
-- Links between machines: `t3ctl mesh link <M> --url <origin> --ssh <dest>` (full access; the pairing code is minted on M over ssh). `mesh unlink <M> --yes` forgets it here; the other machine keeps its data.
-- Legacy layouts: `t3ctl layout merge --from <M[,M]>` (dry run, backups in `~/.local/state/t3-mesh-migrate/`) then `--apply`. It sends zero-clock entries, so the server runs the shared `adoptLegacy`; workspace names unify without losing keys.
-- Never link, unlink, place, unplace or retry a replica unless the owner asked. Unlink/remove require an explicit yes. Server restarts follow the rule below.
+`server install` requires `T3CTL_RELEASE_REPO=organization/repository`. Version installation does not authorize activating or restarting it. Use the printed backup to roll back an authorized activation.
 
-## The live server: restart only with the owner's yes (rule of 2026-10-14)
+Run `T3CTL_OFFLINE_ONLY=1 bash scripts/selftest.sh` for offline checks. Live checks require `T3CTL_ISOLATED_TEST=1` and an explicit `T3CTL_ORIGIN`; use a disposable server base directory and runtime. Full selftests require `T3CTL_SELFTEST_AGENT`, `T3CTL_SELFTEST_MODEL` and `T3CTL_SELFTEST_ALT_MODEL` from the test server's catalog. They can spend real model turns: run them only when that behavior is needed and authorized. Do not use a customer's live state for tests.
 
-`t3code-sidebar.service` on gvidon runs every T3 thread of the owner, including the agent that is reading this. **Never restart, stop, kill or update it, and never run `t3ctl server restart` or `server use`, without first telling the owner what you will do, why, and how to roll back, and getting an explicit yes in the current conversation.** One yes covers one restart. Restarting is a normal, needed operation, but always a controlled one. Never use `t3 service install` (it rewrites the unit). Build and test on gor or on an isolated server, not on the live one.
-
-- `t3ctl server restart --yes` schedules the restart 2 s later via `systemd-run`, so a caller inside T3 gets its reply out, then waits up to 120 s for the new process. The server takes ~20–30 s to come back. Threads resume their provider sessions; a turn that was running is cut off.
-- **Updating the server:** `t3ctl server install <N>` downloads fork build `sidebar.N`'s server runtime from CI into `~/.t3-sidebar-server/runtime/versions/` without touching anything running. Then `t3ctl server use 0.0.45-sidebar.N --yes` (owner's yes first) backs up the unit, points `ExecStart` at the new runtime and restarts. Roll back with `server use <previous> --yes` or restore the unit backup it printed. Log the change in `~/Repos/vpn-research/ops/CHANGELOG.md`.
-
-## After a T3 update, or when a command fails strangely
-
-1. `t3ctl doctor`: server, version, token, MCP tool set, WS RPC, unit.
-2. On a version `t3ctl` was not tested on, run the selftest **on gor** (it creates and deletes a temp project and threads and spends a few cheap Codex turns): copy the `scripts/` directory there and run the isolated mesh selftest with `T3CTL_FULL_SELFTEST=1 T3CTL_MESH_E2E=1 T3CTL_AGENT=codex T3CTL_ORIGIN=http://127.0.0.1:13795 T3CODE_HOME=<test-base> T3CTL_T3_BIN=<test-runtime>/t3 bash scripts/selftest.sh`; `T3CTL_OFFLINE_ONLY=1` runs only offline tests. Use Node 22+ (`PATH=$HOME/.nvm/versions/node/v23.11.1/bin:$PATH`). To put gor on the same build: `t3ctl server install` on gvidon, ship the version dir to gor's `~/.t3-sidebar-server/runtime/versions/`, then run `t3ctl server use <ver> --yes` on gor (no permission needed there).
-3. Fix `scripts/t3ctl.mjs` against the new schemas (`t3ctl schema <tool>`; RPC and command types in the fork's `packages/contracts/src/`), rerun the selftest, then add the version to `TESTED_VERSIONS`.
-
-## Infrastructure
-
-Use `~/Repos/t3/CLAUDE.md` on gvidon for infrastructure details only when the task needs them. Resolve current mesh names and paths through T3, not old ports or installation notes.
-
-## Known limits
-
-- Servers before sidebar.17 deep-merge settings patches, so a sidebar-workspace assignment can't be deleted there; `t3ctl ws unassign` then re-points it at where rules/default would put the project (same look in the sidebar). sidebar.17+ replaces the config and the key is really removed.
-- MCP thread lists don't report pins.
-- `scan`/`import` only bring in recent sessions (the server's rule).
-- `t3ctl` must run on the machine of the server it drives: it mints its pairing code with the local `t3` CLI. Overrides: `T3CODE_HOME` (server base dir), `T3CTL_ORIGIN`, `T3CTL_UNIT`, `T3CTL_T3_BIN`, `T3CTL_AGENT`, `T3CTL_CODEX_MODEL`, `T3CTL_CLAUDE_MODEL`, `T3CTL_MODE`. For a remote target, `mesh link` uses `~/.local/bin/t3` over ssh; override with `T3CTL_REMOTE_T3_BIN` / `T3CTL_REMOTE_HOME`.
-- Mesh commands need a server build with `meshLayout`, `replicas.*`, `files.*` and `t3_project_place`/`t3_project_machines`. On older servers `machines`/`mesh status` fall back to the legacy `sidebarWorkspaces` setting and say so; `place`, `replica retry` and `cat` fail with "needs the mesh build". The linked-environments beta (`linkedEnvironmentsEnabled`) and `replicasEnabled` must be on for links and replicas.
-- `t3ctl open` / `open-file` are an outside MCP client: `ui_open` acts as the calling thread, so they print the web/`t3-thread://`/`t3-file://` links instead of driving the owner's screen. An agent inside a thread can `ui_open` it directly.
-- Archived threads are per machine; `threads --all` lists active ones, and `--archived` stays local.
-
-## Session identity and thread ids across the mesh
-
-Call `t3_thread_self` to identify the current thread, machine, project, primary/replica paths and sync state. `t3ctl self` uses thread-scoped `T3_MCP_URL` and `T3_MCP_BEARER_TOKEN`; outside a thread it explains the missing context. `show`, `send`, `wait`, `stop`, `requests` and `answer` resolve full thread ids across the mesh. Preserve the full `mcp:…` id. MCP thread-addressed tools find remote ids without `environmentId`; list/search accept `environmentId: "all"` and return machine tags plus `unreachable` results. Pending questions use `t3_pending_request` actions `list`, `read`, `respond`.
+The mesh requires meshLayout, replicas, files and project placement APIs. Older servers fall back to legacy layout reads; placement and alias edits explain that a mesh build is required. Legacy layout migration is dry-run first, preserves offline keys, and backs up configs before applying. Never create or remove links or representations unless requested.

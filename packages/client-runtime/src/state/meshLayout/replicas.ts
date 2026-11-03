@@ -358,7 +358,7 @@ export interface ReplicaStatusCopyInput {
   readonly sourceLabel: string;
 }
 
-/** One short line for a pending row: "Mounting on Operalia… 42%", "2 conflicts", … */
+/** One short line for a pending row: "Mounting on Remote… 42%", "2 conflicts", … */
 export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
   const unreachable = `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Add a route in Settings › Mesh`;
   switch (input.state) {

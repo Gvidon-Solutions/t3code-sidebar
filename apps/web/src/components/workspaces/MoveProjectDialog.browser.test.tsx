@@ -4,8 +4,8 @@ import { MoveProjectDialog } from "./MoveProjectDialog";
 
 it("searches by project or machine and chooses the target", async () => {
   const projects = [
-    { id: "one", environmentId: "gv", title: "Alpha" },
-    { id: "two", environmentId: "op", title: "Beta" },
+    { id: "one", environmentId: "at", title: "Alpha" },
+    { id: "two", environmentId: "bo", title: "Beta" },
   ];
   const onSelect = vi.fn();
   await using screen = await render(
@@ -16,8 +16,8 @@ it("searches by project or machine and chooses the target", async () => {
       onClose={() => undefined}
     />,
   );
-  await screen.getByRole("textbox", { name: "Search projects" }).fill("op");
-  await expect.element(screen.getByRole("button", { name: "Alpha · gv" })).not.toBeInTheDocument();
-  await screen.getByRole("button", { name: "Beta · op" }).click();
+  await screen.getByRole("textbox", { name: "Search projects" }).fill("bo");
+  await expect.element(screen.getByRole("button", { name: "Alpha · at" })).not.toBeInTheDocument();
+  await screen.getByRole("button", { name: "Beta · bo" }).click();
   expect(onSelect).toHaveBeenCalledWith(projects[1]);
 });

@@ -7,23 +7,23 @@ invariants, authority rule). Keep both current when you change behaviour.
 
 ## What it is
 
-The owner runs one T3 Code Sidebar server per machine (gvidon, Operalia, gor, …). Linked
+Each installation runs one T3 Code Sidebar server per machine. Linked
 together they form a **mesh**: one replicated sidebar layout, projects that live on several
 machines, threads that can be created, found, opened, moved and driven on any machine, files
 readable from anywhere, and agents that know where they are.
 
 ## Object model (short; full text in the spec §0)
 
-| Entity | What it is | Where it lives |
-|---|---|---|
-| Machine | one T3 server (`environmentId`), label/tag/color, SSH routes to other machines | layout `machine/<env>` |
-| Link | server-to-server MCP session (pairing code, full access for the mesh) | each server's PeerLinks table |
-| Mesh | machines + links; one **authority** machine (`mesh.authority`, the owner's is gvidon) | layout |
-| Project (logical) | opaque id (the logical key, never shown) + **title** + representations | layout `proj/<id>`, `rep/<id>/<env>`, `alias/*` |
-| Representation | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores) | layout `rep/*` |
-| Sync session | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
-| Thread | lives on one machine, working dir inside one representation (or "No project") | that machine's DB |
-| Workspace | presentation only: placement, order, fold | layout `ws/*`, `place/*`, `fold/*` |
+| Entity            | What it is                                                                                                      | Where it lives                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Machine           | one T3 server (`environmentId`), label/tag/color/aliases, SSH routes to other machines                          | layout `machine/<env>`                                        |
+| Link              | server-to-server MCP session (pairing code, full access for the mesh)                                           | each server's PeerLinks table                                 |
+| Mesh              | machines + links; one **authority** machine (`mesh.authority`)                                                  | layout                                                        |
+| Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>`, `rep/<id>/<env>`, `alias/*`               |
+| Representation    | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores)                            | layout `rep/*`                                                |
+| Sync session      | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
+| Thread            | lives on one machine, working dir inside one representation (or "No project")                                   | that machine's DB                                             |
+| Workspace         | presentation only: placement, order, fold                                                                       | layout `ws/*`, `place/*`, `fold/*`                            |
 
 Invariants I1–I6 (spec §0) are tested; keep them true: one project per (machine, path), one
 session per replica, one title everywhere, **no opaque id or legacy key ever shown to a person**,
@@ -49,13 +49,20 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   (`MeshThreadAccess.ts`), moves: same machine = project change (`threadMove`), other machine =
   **handoff** (`ThreadHandoffService.ts`, `handoffBundle.ts`: transcript + attachments as context,
   any harness/model on the target, original archived with a link).
+- **Draft machine selection.** Web `components/chat/useDraftEnvironmentRouting.ts` and mobile
+  `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen
+  machine with `planThreadOnMachine`. Replica status supplies progress and registration; the
+  destination's provider catalog drives model choices. Shared selection and availability logic is
+  in `packages/client-runtime/src/state/meshLayout/draftMachine.ts`. Pending sends live outside
+  route lifetimes: IndexedDB on web, an atomic document file on native, and the shared
+  `PendingDraftOutbox` reconciles registration with fixed server command/thread/message IDs.
 - **Files anywhere.** `apps/server/src/files/` (`files.read/list`, forwarded via `callRouted`;
   error reasons travel as `[files:<reason>]`).
 - **Context injection.** Every turn gets a short machine/project/representation note (budget in
   `apps/server/src/provider/agentContextBudget.json`; update it to the measured size when you add
   tools or text, and justify growth).
 - **UI.** Web `apps/web/src/components/workspaces/` (MachineTag, ProjectMachineStrip
-  `GV ⇄ OP GOR`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
+  `A ⇄ B C`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
   MoveThreadModelDialog, MeshFooterStatus, FileMachineTag); mobile
   `apps/mobile/src/features/workspaces/` (same names). Pure logic lives in
   `packages/client-runtime/src/state/{meshLayout/*,machineDisplay,meshMachines}.ts`.
@@ -63,13 +70,13 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 ## Interfaces
 
 - **CLI / skill:** `agent-kit/skills/t3` (`SKILL.md`, `scripts/t3ctl.mjs`). Mesh commands:
-  `machines`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,
+  `machines`, `machines alias <M> list|add|remove|clear`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,
   `threads/status --all`, `open`, `open-file`, `cat`, `move`, `layout get|merge`, `agents sync|status`, `self`.
 - **MCP tools** (in the server): `t3_project_place`, `t3_project_machines`, `t3_thread_self`,
   `t3_thread_*` with `environmentId` (or none — ids resolve across the mesh), `t3_files_read/list`,
   `ui_open` with `environmentId`, link-only `t3_mesh_*` and handoff tools.
 - **Agent instructions:** `agent-kit/skills/t3/global/GLOBAL.md` (the owner's canonical text, Russian)
-  + `machines.json`; rendered per machine with a one-line header into `~/.claude/CLAUDE.md`,
+  and `machines.json`; rendered per machine with a one-line header into `~/.claude/CLAUDE.md`,
   `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`.
 
 ## The agent kit (skills and instructions live in this repo)
@@ -78,9 +85,19 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 
 ```bash
 agent-kit/install.sh            # dry run: skill diff per machine + instruction diff
-agent-kit/install.sh --apply    # install on gvidon, Operalia, gor (backups under ~/.local/state/t3-agent-kit/)
+agent-kit/install.sh --apply    # install on registry machines (backups under ~/.local/state/t3-agent-kit/)
 agent-kit/install.sh --dest ~/.agents/skills/t3-next   # stage for the test bed only
 ```
+
+Machine names, tags and aliases are runtime layout data, not CLI constants. Settings › Mesh and
+`machines alias` edit the same optional `aliases` array on `machine/<env>`. Alias edits retain the
+other machine fields; standalone CLI writes must advance beyond every observed HLC. Unspecified
+thread model and permissions are resolved by the destination server, never by owner preferences
+compiled into the CLI.
+
+Installation routes and personal agent instructions stay in `global/`; `T3CTL_AGENTS_CONFIG` selects
+another registry directory. SSH options, relay ids (`via`) and remote `nodeCommand` are data.
+`server install` requires an explicit `T3CTL_RELEASE_REPO`.
 
 Never edit `~/.agents/skills/t3` on a machine directly (it is overwritten), and never run
 `vp fmt` on the skill or GLOBAL.md (formatting is excluded on purpose: padded tables waste every
@@ -96,10 +113,11 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
   `round1.sh` (layout, links, files, old clients), `round2.sh` (replicas on real Mutagen, t3ctl),
   `round3.sh` (crashes, partitions, authority). They must stay green.
-- Agent behaviour eval: `docs/mesh-agent-eval.md` (8 voice-style requests × harnesses on an
-  isolated HOME); rerun after changing SKILL.md or GLOBAL.md.
+- Agent behaviour eval: `docs/mesh-agent-eval.md` records the earlier bed methodology. After
+  changing SKILL.md or GLOBAL.md, run model-level routing cases using customer-defined machine
+  identities/aliases and configured models; do not make old owner-name translations part of the product contract.
 
-## Operating the live machines
+## Operating the owner's live machines (installation example)
 
 - Releases: push to `ws` builds desktop (Windows/Linux), APK and the server runtime
   (`sidebar-desktop.yml`). Live servers restart **only with the owner's yes** (AGENTS.md).
@@ -122,3 +140,24 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - Calendar-dependent tests break (UsageService); use `Clock`, relative dates.
 - Many parallel agents on one emulator/bed collide: coordinate devices; bed runs that restart
   servers must not overlap other agents' runs.
+- A draft's machine list must include machines without a representation of its project; deriving
+  choices only from existing physical projects hides the very destination that needs a replica.
+- Replica registration is asynchronous. Persist the complete send intent before acknowledging
+  Send; keep delivery at the app root. A restart or lost server response must reuse the receipt
+  IDs. Test navigation, storage reopening, registration and exactly one destination launch.
+  After acknowledgement, clear the submitted composer content only if its raw prompt still
+  matches the persisted submission; a newer edit must survive promotion to the thread.
+- Saved connection labels can be identical hostnames for different server instances. Draft
+  pickers prefer layout identities, deduplicate environment IDs, disambiguate equal labels by
+  distinct configured tag then endpoint host/port, and log collisions. Cached provider health
+  on an unreachable connection must never produce a model's switch-machine suggestion.
+- Provider authentication and model availability belong to the destination machine. Keep an
+  unavailable explicit selection visible, and test catalog caching when adding pending targets.
+- The standalone CLI layout encoder must stay in parity with shared core, including `proj/*`
+  title entries. Extend `agent-kit/skills/t3/shared-parity.test.mjs` when adding layout fields;
+  CLI-only fixtures can otherwise miss data silently.
+
+- Owner-specific host dictionaries and remote shell commands survive copied test fixtures unless
+  audited explicitly. Product code and skill instructions must resolve customer data; keep personal
+  topology only in agent-kit `global/` and clearly identified documentation examples. Test alias edits
+  with unrelated labels, multilingual aliases, relay routes and destination-provided model defaults.

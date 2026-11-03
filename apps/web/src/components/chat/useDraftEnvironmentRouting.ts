@@ -1,16 +1,30 @@
+import { useSyncExternalStore } from "react";
+import { pendingMeshDrafts } from "../../state/pendingMeshDrafts";
+import {
+  defaultDraftMachine,
+  draftModelUnavailableReason,
+  planThreadOnMachine,
+  resolveLogicalProjectKey,
+  representationRow,
+  replicaProjectId,
+  replicaDriverEnvironment,
+} from "@t3tools/client-runtime/state/mesh-layout";
+import { useMeshLayout } from "../../hooks/useMeshLayout";
+import { useReplicaStatuses, replicaStatusEnvironment } from "../../state/meshReplicas";
+import { useAtomCommand } from "../../state/use-atom-command";
+import { EnvironmentId } from "@t3tools/contracts";
 import { useLoadBalancedEnvironment } from "../../hooks/useLoadBalancedEnvironment";
 import { useLogicalProjectEnvironments } from "../../hooks/useLogicalProjectEnvironments";
 import { useScratchProject } from "../../hooks/useScratchProject";
 import { useStableCallback } from "../../hooks/useStableCallback";
 import {
-  type EnvironmentId,
   type ProviderDriverKind,
   ProviderInstanceId,
   resolveProjectProviderInstanceEnabled,
   type ThreadContextRecord,
 } from "@t3tools/contracts";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { toastManager } from "../ui/toast";
 import {
   deriveLogicalProjectKeyFromSettings,
@@ -22,6 +36,7 @@ import { useProjects } from "../../state/entities";
 import type { DraftSessionState } from "../../composerDraftStore";
 
 interface DraftEnvironmentRoutingInput {
+  readonly selection: import("@t3tools/contracts").ModelSelection | null;
   readonly draftId: DraftId | null;
   readonly draftThread: DraftSessionState | null;
   readonly envLocked: boolean;
@@ -66,12 +81,62 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     projectGroupingSettings,
     sendInFlightRef,
   } = input;
+  const environmentChangeScope = `${draftId ?? ""}:${draftThread?.environmentId ?? ""}:${draftThread?.projectId ?? ""}`;
+  const queuedSends = useSyncExternalStore(
+    pendingMeshDrafts.subscribe,
+    pendingMeshDrafts.getSnapshot,
+  );
+  const queuedSend = queuedSends.find((send) => send.draftId === draftId && send.state !== "sent");
+  const allProjects = useProjects();
+  const mesh = useMeshLayout();
+  const statuses = useReplicaStatuses();
+  const retryReplica = useAtomCommand(replicaStatusEnvironment.retry);
+  const [mountRequest, setMount] = useState<{
+    environmentId: EnvironmentId;
+    logicalKey: string;
+    scope: string;
+  } | null>(null);
+  const mount = mountRequest?.scope === environmentChangeScope ? mountRequest : null;
+  const mountReadyRef = useRef<((project: (typeof allProjects)[number]) => void) | null>(null);
+  const config = mesh.config;
+  const mountRep =
+    mount &&
+    config?.projectMounts[mount.logicalKey]?.find(
+      (rep) => rep.environmentId === mount.environmentId,
+    );
+  const mountRow =
+    mount && mountRep && config
+      ? representationRow(config, statuses, mount.logicalKey, mountRep)
+      : null;
+  const registeredId =
+    mount && config
+      ? replicaProjectId(config, statuses, mount.logicalKey, mount.environmentId)
+      : null;
+  const finishMount = useEffectEvent((project: (typeof allProjects)[number]) => {
+    mountReadyRef.current?.(project);
+    mountReadyRef.current = null;
+    setMount(null);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- resumes the draft switch when the replica service registers its destination project
+  useEffect(() => {
+    if (
+      !registeredId ||
+      !allProjects.some(
+        (project) => project.environmentId === mount?.environmentId && project.id === registeredId,
+      )
+    )
+      return;
+    const project = allProjects.find(
+      (project) => project.environmentId === mount?.environmentId && project.id === registeredId,
+    );
+    // oxlint-disable-next-line react/set-state-in-effect -- completes the external replica-service registration subscription
+    if (project && !queuedSend) finishMount(project);
+  }, [registeredId, mount, allProjects, queuedSend]);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const getDraftSession = useComposerDraftStore((store) => store.getDraftSession);
   const setLogicalProjectDraftThreadId = useComposerDraftStore(
     (store) => store.setLogicalProjectDraftThreadId,
   );
-  const allProjects = useProjects();
   const { openScratchProject } = useScratchProject();
   const needsLoadBalancing = automaticEnvironment && !draftThread?.loadBalancedEnvironmentId;
   const loadBalancingCandidates = needsLoadBalancing
@@ -166,7 +231,6 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     : undefined;
 
   // A change in flight belongs to the draft and project it started on.
-  const environmentChangeScope = `${draftId ?? ""}:${activeProjectKey ?? ""}`;
   const environmentChangeRef = useRef<{
     readonly environmentId: EnvironmentId;
     readonly scope: string;
@@ -187,8 +251,11 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     [environmentChangeScope],
   );
   const readPendingEnvironmentChange = () => {
+    if (mount) return mount;
     const pending = environmentChangeRef.current;
-    return pending !== null && pending.scope === environmentChangeScopeRef.current ? pending : null;
+    return pending !== null && pending.scope === environmentChangeScopeRef.current
+      ? { ...pending, logicalKey: preferenceKey }
+      : null;
   };
   // The busy state belongs to the request that set it, so an older request settling late
   // (abandoned, or superseded by a newer switch) can never clear a newer one's.
@@ -198,14 +265,39 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   } | null>(null);
   const isEnvironmentChanging = busyEnvironmentChange?.scope === environmentChangeScope;
 
-  const onEnvironmentChange = (nextEnvironmentId: EnvironmentId) => {
+  const preferenceProject = allProjects.find(
+    (project) =>
+      project.environmentId === draftThread?.environmentId && project.id === draftThread?.projectId,
+  );
+  const preferenceKey = activeProjectIsScratch
+    ? "scratch"
+    : preferenceProject && config
+      ? resolveLogicalProjectKey(preferenceProject, config, (project) =>
+          deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings),
+        )
+      : activeProjectKey;
+  const onEnvironmentChange = (nextEnvironmentId: EnvironmentId, allowOffline = false) => {
     if (envLocked || !draftId || sendInFlightRef.current) return;
     const originalDraft = getDraftSession(draftId);
     if (!originalDraft || originalDraft.promotedTo) return;
     const target = logicalProjectEnvironments.find(
       (env) => env.environmentId === nextEnvironmentId,
     );
-    if (!target) return;
+    if (!target || (target.connected === false && !allowOffline)) return;
+    setMount(null);
+    mountReadyRef.current = null;
+    try {
+      window.localStorage.setItem(
+        `t3.draftMachine.${preferenceKey ?? "scratch"}`,
+        nextEnvironmentId,
+      );
+    } catch (error) {
+      console.warn("Could not remember draft machine", error);
+    }
+    setDraftThreadContext(draftId, {
+      environmentSelection: "manual",
+      loadBalancedEnvironmentId: null,
+    });
     const request = { environmentId: target.environmentId, scope: environmentChangeScope };
     environmentChangeRef.current = request;
     setBusyEnvironmentChange(null);
@@ -251,6 +343,39 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       return;
     }
     setBusyEnvironmentChange(request);
+    if (!activeProjectIsScratch && config) {
+      const source = allProjects.find(
+        (project) =>
+          project.environmentId === originalDraft.environmentId &&
+          project.id === originalDraft.projectId,
+      );
+      if (!source) {
+        finish();
+        return;
+      }
+      const logicalKey = resolveLogicalProjectKey(source, config, (project) =>
+        deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings),
+      );
+      mesh.edit(
+        (current) =>
+          planThreadOnMachine({
+            config: current,
+            logicalKey,
+            targetEnvironmentId: target.environmentId,
+            seed: {
+              environmentId: source.environmentId,
+              projectId: source.id,
+              path: source.workspaceRoot,
+            },
+          }).config,
+      );
+      setMount({ environmentId: target.environmentId, logicalKey, scope: environmentChangeScope });
+      mountReadyRef.current = (project) => {
+        retarget(project);
+        finish();
+      };
+      return;
+    }
     void openScratchProject(target.environmentId, "Could not switch machine")
       .then((project) => {
         if (project) retarget(project);
@@ -258,8 +383,89 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       .finally(finish);
   };
   const onEnvironmentChangeStable = useStableCallback(onEnvironmentChange);
+  const defaultApplied = useRef<DraftId | null>(null);
+  const applyDefault = useEffectEvent(() => {
+    if (
+      !draftId ||
+      !config ||
+      defaultApplied.current === draftId ||
+      draftThread?.environmentSelection === "manual"
+    )
+      return;
+    defaultApplied.current = draftId;
+    let remembered: string | null = null;
+    try {
+      remembered = window.localStorage.getItem(`t3.draftMachine.${preferenceKey ?? "scratch"}`);
+    } catch (error) {
+      console.warn("Could not read draft machine", error);
+    }
+    const target = defaultDraftMachine(
+      logicalProjectEnvironments.map((machine) => ({
+        environmentId: machine.environmentId,
+        connected: machine.connected !== false,
+        primary:
+          config.projectMounts[preferenceKey ?? ""]?.some(
+            (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
+          ) ?? machine.isPrimary,
+        usable:
+          input.selection !== null &&
+          draftModelUnavailableReason(
+            environmentById.get(machine.environmentId)?.serverConfig
+              ? {
+                  settings: environmentById.get(machine.environmentId)!.serverConfig!.settings,
+                  providers: providersByEnvironment.get(machine.environmentId) ?? [],
+                }
+              : null,
+            input.selection,
+            machine.projectId,
+          ) === null,
+      })),
+      remembered,
+    );
+    if (target && target !== draftThread?.environmentId)
+      onEnvironmentChange(EnvironmentId.make(target), true);
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies the device's remembered machine after the mesh snapshot loads for a new persistent draft
+  useEffect(() => {
+    applyDefault();
+  });
 
   return {
+    hasQueuedDraftSend: queuedSend !== undefined,
+    pendingDraftMachineId: queuedSend?.environmentId ?? mount?.environmentId ?? null,
+    mountingStatus:
+      queuedSend?.error ??
+      (queuedSend
+        ? `${mountRow?.text ?? "Waiting for project registration"} · Message queued`
+        : (mountRow?.text ?? (mount ? "Preparing machine…" : null))),
+    retryMount: queuedSend?.error
+      ? () => {
+          void pendingMeshDrafts.retry(queuedSend.draftId).catch((error: unknown) => {
+            toastManager.add({
+              type: "error",
+              title: "Cannot retry send",
+              description: String(error),
+            });
+          });
+        }
+      : mountRow?.retry && config
+        ? () => {
+            const driver = replicaDriverEnvironment(config, mountRow.rep);
+            if (!driver) {
+              toastManager.add({
+                type: "error",
+                title: "Cannot retry replica",
+                description: "Add an SSH route in Settings › Mesh.",
+              });
+              return;
+            }
+            if (driver)
+              void retryReplica({
+                environmentId: EnvironmentId.make(driver),
+                input: { logicalKey: mount!.logicalKey, environmentId: mount!.environmentId },
+              });
+          }
+        : null,
     needsLoadBalancing,
     loadBalancing,
     onAutoEnvironmentStable,

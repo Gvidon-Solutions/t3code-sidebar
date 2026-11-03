@@ -38,10 +38,10 @@ const USERDATA = join(HOME, "userdata");
 const CONFIG_DIR = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "t3ctl");
 const UNIT = process.env.T3CTL_UNIT || "t3code-sidebar.service";
 const DEFAULTS = {
-  agent: process.env.T3CTL_AGENT || "claude",
-  codexModel: process.env.T3CTL_CODEX_MODEL || "gpt-6-luna",
-  claudeModel: process.env.T3CTL_CLAUDE_MODEL || "claude-opus-5-5",
-  mode: process.env.T3CTL_MODE || "full-access",
+  agent: process.env.T3CTL_AGENT || "",
+  codexModel: process.env.T3CTL_CODEX_MODEL || "",
+  claudeModel: process.env.T3CTL_CLAUDE_MODEL || "",
+  mode: process.env.T3CTL_MODE || "",
 };
 const RUNTIME_MODES = ["approval-required", "auto-accept-edits", "auto", "full-access"];
 const AGENT_ALIASES = {
@@ -187,25 +187,6 @@ function parseDuration(s) {
   return Number(m[1]) * { s: 1e3, m: 6e4, h: 36e5, d: 864e5, w: 6048e5 }[m[2]];
 }
 
-// Voice and chat name machines in Russian ("на горе", "опералия") as well as by id, label, tag
-// or ssh alias. The table is deliberately small; labels and tags cover everything else.
-const MACHINE_ALIASES = new Map([
-  ["гвидон", "gvidon"],
-  ["гвидона", "gvidon"],
-  ["гвидоне", "gvidon"],
-  ["гвидону", "gvidon"],
-  ["гор", "gor"],
-  ["гора", "gor"],
-  ["горе", "gor"],
-  ["гору", "gor"],
-  ["гором", "gor"],
-  ["опералия", "operalia"],
-  ["опералии", "operalia"],
-  ["опералию", "operalia"],
-  ["опералией", "operalia"],
-  ["оп", "operalia"],
-  ["opera", "operalia"],
-]);
 const TRANSLIT = {
   а: "a",
   б: "b",
@@ -248,7 +229,7 @@ export function normalizeMachineName(value) {
     .replace(/ё/g, "е")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9а-я]+/gi, "");
+    .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 function transliterateRu(value) {
   return [...value].map((c) => TRANSLIT[c] ?? c).join("");
@@ -258,18 +239,11 @@ export function machineNameVariants(value) {
   const normalized = normalizeMachineName(value);
   if (!normalized) return [];
   const variants = new Set([normalized, transliterateRu(normalized)]);
-  const alias = MACHINE_ALIASES.get(normalized);
-  if (alias) {
-    variants.add(alias);
-    variants.add(transliterateRu(alias));
-  }
-  // "на горе", "on gor", "machine gor" → the bare name.
+  // Strip a language prefix while keeping the exact user-supplied name as a candidate.
   const stripped = normalized.replace(/^(?:на|on|в|vo|machine|машина)/, "");
   if (stripped.length >= 2 && stripped !== normalized) {
     variants.add(stripped);
     variants.add(transliterateRu(stripped));
-    const strippedAlias = MACHINE_ALIASES.get(stripped);
-    if (strippedAlias) variants.add(strippedAlias);
   }
   return [...variants].filter(Boolean);
 }
@@ -291,7 +265,7 @@ const machineFieldValues = (machine) =>
   ].filter((v) => v !== undefined && v !== null && String(v).trim() !== "");
 /**
  * Resolves a machine by environment id or prefix, layout label, tag, server label, ssh alias, or
- * a Russian name. `machines` is the list `collectMachines` returns.
+ * a user-defined alias. `machines` is the list `collectMachines` returns.
  */
 export function resolveMachineRef(ref, machines) {
   if (ref === undefined || ref === null || String(ref).trim() === "") {
@@ -466,6 +440,7 @@ const MESH_KEYS = {
   order: (project) => `order/${encodeURIComponent(project)}`,
   fold: (workspace, project) =>
     `fold/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}`,
+  project: (key) => `proj/${encodeURIComponent(key)}`,
   alias: (key) => `alias/${encodeURIComponent(key)}`,
   representation: (logical, env) => `rep/${encodeURIComponent(logical)}/${encodeURIComponent(env)}`,
   representationStatus: (logical, env) =>
@@ -565,6 +540,8 @@ export function encodeLegacyEntries(config, doc = {}) {
     for (const [p, mode] of Object.entries(folds)) put(MESH_KEYS.fold(ws, p), mode);
   for (const [env, machine] of Object.entries(config.machines ?? {}))
     put(MESH_KEYS.machine(env), machine);
+  for (const [key, title] of Object.entries(config.projectTitles ?? {}))
+    put(MESH_KEYS.project(key), { title });
   for (const [alias, logical] of Object.entries(config.projectAliases ?? {}))
     put(MESH_KEYS.alias(alias), logical);
   for (const [logical, reps] of Object.entries(config.projectMounts ?? {}))
@@ -585,6 +562,75 @@ export function importLegacyEntries(config, environmentId) {
   return Object.fromEntries(
     Object.entries(encodeLegacyEntries(config)).map(([key, v]) => [key, { v, h }]),
   );
+}
+
+export function nextMachineClock(document, now, deviceId) {
+  const last = Object.values(document ?? {})
+    .map((entry) => entry.h)
+    .sort()
+    .at(-1);
+  const [lastMs, lastCounter] = last?.split(".") ?? ["0", "0"];
+  let ms = Math.max(Math.floor(now), Number(lastMs));
+  let counter = last && ms === Number(lastMs) ? Number(lastCounter) + 1 : 0;
+  if (counter > 99999) {
+    ms++;
+    counter = 0;
+  }
+  return `${String(ms).padStart(13, "0")}.${String(counter).padStart(5, "0")}.${deviceId}`;
+}
+
+async function editMachineAliases(pos, opt) {
+  const snapshot = await layoutSnapshot();
+  const machine = resolveMachineRef(pos[0], await collectMachines({ layout: snapshot }));
+  const operation = pos[1] ?? "list";
+  const current = snapshot.config.machines?.[machine.environmentId] ?? {};
+  if (operation === "list") {
+    const result = {
+      environmentId: machine.environmentId,
+      label: machine.label,
+      aliases: current.aliases ?? [],
+    };
+    if (opt.json) return json(result);
+    console.log(`${machine.label}: ${result.aliases.join(", ") || "no aliases"}`);
+    return;
+  }
+  if (!["add", "remove", "clear"].includes(operation) || (operation !== "clear" && pos.length < 3))
+    die("usage: t3ctl machines alias <machine> [list | add <alias>… | remove <alias>… | clear]");
+  if (snapshot.legacy) die("machine aliases need the mesh build; update the server");
+  const requested = pos
+    .slice(2)
+    .map((alias) => alias.trim())
+    .filter(Boolean);
+  if (operation !== "clear" && !requested.length) die("an alias must not be empty");
+  const normalized = (alias) => alias.normalize("NFKC").toLowerCase();
+  const aliases =
+    operation === "clear"
+      ? []
+      : operation === "remove"
+        ? (current.aliases ?? []).filter(
+            (alias) => !requested.some((value) => normalized(value) === normalized(alias)),
+          )
+        : [
+            ...new Map(
+              [...(current.aliases ?? []), ...requested].map((alias) => [normalized(alias), alias]),
+            ).values(),
+          ];
+  const next = { ...current };
+  if (aliases.length) next.aliases = aliases;
+  else delete next.aliases;
+  const key = `machine/${encodeURIComponent(machine.environmentId)}`;
+  await withWs((client) =>
+    client.rpc("meshLayout.apply", {
+      entries: {
+        [key]: {
+          v: Object.keys(next).length ? next : null,
+          h: nextMachineClock(snapshot.document, Date.now(), `cli-${randomUUID()}`),
+        },
+      },
+    }),
+  );
+  if (opt.json) return json({ environmentId: machine.environmentId, aliases });
+  console.log(`${machine.label}: ${aliases.join(", ") || "no aliases"}`);
 }
 
 function serverInfo() {
@@ -1007,6 +1053,7 @@ async function collectMachines({ probe = false, layout, links } = {}) {
           .trim()
           .toUpperCase() || defaultMachineTag(label, id),
       color: entry.color ?? null,
+      aliases: entry.aliases ?? [],
       local: isLocal,
       linked: Boolean(link),
       linkLabel: link?.label ?? null,
@@ -1157,7 +1204,13 @@ async function resolveThreadAcross(ref, { on } = {}) {
       });
     } catch (error) {
       // No mesh here (links off, or a server that predates "all"): look on this machine only.
-      if (machine || !(error instanceof Fail) || !/capability_denied|environmentId|Linked environments|not linked to all|invalid_request/.test(error.message))
+      if (
+        machine ||
+        !(error instanceof Fail) ||
+        !/capability_denied|environmentId|Linked environments|not linked to all|invalid_request/.test(
+          error.message,
+        )
+      )
         throw error;
       page = await m.call("t3_thread_list", args);
     }
@@ -1443,34 +1496,45 @@ async function resolveThread(ref, { projectRef, includeArchived } = {}) {
 const threadLine = (t) =>
   `${t.threadId.padEnd(8)}  ${String(t.pendingRequestCount ? "waiting" : t.status).padEnd(11)} ${ago(t.updatedAt).padStart(8)}  ${clip(`${t.providerInstanceId === "claudeAgent" ? "claude" : t.providerInstanceId}:${t.model}`, 26).padEnd(26)} ${t.machineTag ? `[${t.machineTag}] ` : ""}[${clip(t.project, 18)}] ${t.title}${t.parentThreadId ? `  (${t.relationshipToParent ?? "child"})` : ""}${t.settled ? "  (settled)" : ""}${t.snoozed ? "  (snoozed)" : ""}${t.archived ? "  (archived)" : ""}`;
 
-async function modelSelection(opt, { required = true } = {}) {
+async function modelSelection(opt, { required = true, environmentId } = {}) {
   if (!opt.agent && !opt.model && !opt.effort && !opt.fast && !opt.opt)
-    return required ? defaultSelection() : null;
+    return required && DEFAULTS.agent
+      ? modelSelection({ agent: DEFAULTS.agent }, { environmentId })
+      : null;
   let agent = String(opt.agent || "").trim();
   let model = opt.model ? String(opt.model) : "";
   model = MODEL_ALIASES[model.toLowerCase()] ?? model;
   const aliasModel = MODEL_ALIASES[agent.toLowerCase()];
   if (aliasModel && !model) model = aliasModel;
   if (agent) agent = AGENT_ALIASES[agent.toLowerCase()] ?? agent;
-  const caps = await (await mcp()).call("orchestrator_capabilities");
+  const caps = await (
+    await mcp()
+  ).call("orchestrator_capabilities", environmentId ? { environmentId } : {});
   const providers = caps.providers || [];
   if (!agent && model)
     agent = providers.find((p) => p.models.some((x) => x.id === model))?.providerInstanceId ?? "";
-  if (!agent) agent = AGENT_ALIASES[DEFAULTS.agent] ?? DEFAULTS.agent;
+  const configured =
+    (!agent || !model) && !environmentId ? (await serverSettings()).defaultModelSelection : null;
+  if (!agent)
+    agent = AGENT_ALIASES[DEFAULTS.agent] ?? (DEFAULTS.agent || configured?.instanceId || "");
   const prov =
     providers.find((p) => p.providerInstanceId === agent) ??
-    providers.find((p) => p.driverKind === agent);
+    providers.find((p) => p.driverKind === agent) ??
+    (!agent ? providers.find((p) => p.models.length > 0) : undefined);
   if (!prov)
     die(
       `unknown agent/harness "${agent}". Available: ${providers.map((p) => p.providerInstanceId).join(", ")} (t3ctl models)`,
     );
   if (!model)
     model =
-      prov.driverKind === "claudeAgent"
+      (prov.driverKind === "claudeAgent"
         ? DEFAULTS.claudeModel
         : prov.driverKind === "codex"
           ? DEFAULTS.codexModel
-          : prov.models[0]?.id;
+          : "") ||
+      (configured?.instanceId === prov.providerInstanceId ? configured.model : "") ||
+      prov.models.find((candidate) => candidate.isDefault)?.id ||
+      prov.models[0]?.id;
   const m = prov.models.find((x) => x.id === model);
   if (!m)
     die(
@@ -1507,16 +1571,9 @@ async function modelSelection(opt, { required = true } = {}) {
   };
 }
 
-function defaultSelection() {
-  const agent = AGENT_ALIASES[DEFAULTS.agent] ?? DEFAULTS.agent;
-  return {
-    instanceId: agent,
-    model: agent === "claudeAgent" ? DEFAULTS.claudeModel : DEFAULTS.codexModel,
-  };
-}
-
 function runtimeMode(opt) {
   const m = opt.mode || DEFAULTS.mode;
+  if (!m) return undefined;
   if (!RUNTIME_MODES.includes(m)) die(`--mode must be one of ${RUNTIME_MODES.join(", ")}`);
   return m;
 }
@@ -2121,6 +2178,7 @@ const commands = {
   },
 
   async machines(pos, opt) {
+    if (pos[0] === "alias") return editMachineAliases(pos.slice(1), opt);
     // Reachable links are probed for their label and version; `--probe` is kept for older habits.
     const machines = await collectMachines({ probe: true });
     if (opt.json) return json(machines);
@@ -2220,7 +2278,7 @@ const commands = {
         machine = resolveMachineRef(pos[1], known);
       } catch (error) {
         if (!/no machine/.test(error.message)) throw error;
-        const ssh = opt.ssh || MACHINE_ALIASES.get(normalizeMachineName(pos[1])) || pos[1];
+        const ssh = opt.ssh || pos[1];
         const remote = parseJsonOutput(sshRun(ssh, ["env", "--json"]));
         if (!remote.environmentId) die("remote environment has no environment id");
         machine = { ...remote, sshAlias: ssh, urls: [], local: false };
@@ -2879,9 +2937,10 @@ const commands = {
   async new(pos, opt) {
     const message = readMessage(pos, opt);
     const args = { runtimeMode: runtimeMode(opt), interactionMode: opt.plan ? "plan" : "default" };
-    args.modelSelection = await modelSelection(opt);
     const target = opt.on ? await getMachine(opt.on) : null;
     const remoteTarget = target && !target.local ? target : null;
+    const selection = await modelSelection(opt, { environmentId: remoteTarget?.environmentId });
+    if (selection) args.modelSelection = selection;
     if (remoteTarget) {
       args.environmentId = remoteTarget.environmentId;
       if (opt.cwd)
@@ -3523,7 +3582,8 @@ const commands = {
     if (sub === "install") {
       // Downloads a fork build's server runtime (CI artifact cli-linux-x64) next to the others.
       // Does not restart anything; switch with `server use <version> --yes`.
-      const repo = process.env.T3CTL_RELEASE_REPO || "Gvidon-Solutions/t3code-sidebar";
+      const repo = process.env.T3CTL_RELEASE_REPO;
+      if (!repo) die("Set T3CTL_RELEASE_REPO to the release repository (organization/repository)");
       const want = String(pos[1] || "latest");
       const runs = JSON.parse(
         execFileSync(
@@ -3854,6 +3914,7 @@ READ
   models [agent]                          harnesses (provider instances), models, options
   env | doctor                            server identity | health check after updates
   machines [--json] [--probe]             every known machine: tag, label, id, version, links, replicas
+  machines alias <M> [list|add <alias>…|remove <alias>…|clear]  shared machine aliases
   mesh status [--json]                    links, layout revision, replicas
   mesh link <M> [--url URL] [--ssh DEST]  link a machine (full access; pairing code minted over ssh)
   mesh unlink <M> --yes                   forget a link here (the other machine stays)
@@ -3861,9 +3922,9 @@ READ
 THREADS
   self                                  current thread identity (thread-scoped MCP environment)
   new [--project P | --scratch] [opts] "message"   start a thread (no project = scratch)
-      --agent claude|codex|deepseek|1017|<instance> (default claude, Opus 5.5)  --model M (aliases: opus sonnet fable haiku luna astra sol deepseek 1017)
+      --agent claude|codex|deepseek|1017|<instance> (default: destination server settings)  --model M (aliases: opus sonnet fable haiku luna astra sol deepseek 1017)
       --effort low|medium|high|xhigh|max  --fast  --opt key=value (any model option)
-      --mode ${RUNTIME_MODES.join("|")} (default ${DEFAULTS.mode})  --plan  --title T
+      --mode ${RUNTIME_MODES.join("|")} (default: destination server settings)  --plan  --title T
       --worktree BRANCH|auto [--base REF] [--from-origin]  new git worktree for the thread
       --cwd PATH [--branch B]             run in an existing worktree of the project
       --on <M>                            run on another machine (places a replica first, then launches)
@@ -3904,7 +3965,7 @@ AGENT INSTRUCTIONS
   agents sync [--to all|machine,…] [--home /isolated/home] [--apply]   diff by default; backup and verify on apply
   agents status [--to all|machine,…] [--home /isolated/home]           per-machine harness file drift
 
-MESH (M = environment id/prefix, label, tag, ssh alias, or a Russian name like «гора»)
+MESH (M = environment id/prefix, label, tag, ssh destination, or a user-defined alias)
   place <P> --on <M> [--primary] [--source <M2>] [--path PATH] [--wait [dur]]
                                           add a representation (replica by default); --wait for watching
   unplace <P> --on <M> --yes              remove a representation (files and the project stay)

@@ -26,12 +26,12 @@ describe("linkSourceOptions", () => {
   it("keeps connected machines that offer links and have the beta on", () => {
     expect(
       linkSourceOptions([
-        environment("gvidon", "Gvidon"),
-        environment("gor", "gor", { connected: false }),
+        environment("atlas", "Atlas"),
+        environment("lab", "lab", { connected: false }),
         environment("vps", "VPS", { peerLinks: false }),
         environment("old", "Old", { linkedEnvironmentsEnabled: false }),
       ]),
-    ).toEqual([{ environmentId: "gvidon", label: "Gvidon" }]);
+    ).toEqual([{ environmentId: "atlas", label: "Atlas" }]);
   });
 
   it("drops machines with no server config", () => {
@@ -53,11 +53,11 @@ describe("linkTargetOptions", () => {
     const machines = buildMeshMachines({
       config: {
         ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-        machines: { gvidon: {}, gor: {} },
+        machines: { atlas: {}, lab: {} },
       },
     });
-    expect(linkTargetOptions(machines, "gvidon").map((machine) => machine.environmentId)).toEqual([
-      "gor",
+    expect(linkTargetOptions(machines, "atlas").map((machine) => machine.environmentId)).toEqual([
+      "lab",
     ]);
     expect(linkTargetOptions(machines, null)).toHaveLength(2);
   });
@@ -67,15 +67,15 @@ describe("shouldOfferConnect", () => {
   const machines = buildMeshMachines({
     config: DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
     connections: [
-      { environmentId: "gvidon", label: "Gvidon", connected: true },
-      { environmentId: "gor", label: "gor", connected: false, urls: ["https://gor.local"] },
+      { environmentId: "atlas", label: "Atlas", connected: true },
+      { environmentId: "lab", label: "lab", connected: false, urls: ["https://lab.local"] },
       { environmentId: "vps", label: "VPS", connected: false },
     ],
   });
 
   it("offers a connection only when this app knows an address", () => {
-    expect(shouldOfferConnect(machines.find((m) => m.environmentId === "gor")!)).toBe(true);
+    expect(shouldOfferConnect(machines.find((m) => m.environmentId === "lab")!)).toBe(true);
     expect(shouldOfferConnect(machines.find((m) => m.environmentId === "vps")!)).toBe(false);
-    expect(shouldOfferConnect(machines.find((m) => m.environmentId === "gvidon")!)).toBe(false);
+    expect(shouldOfferConnect(machines.find((m) => m.environmentId === "atlas")!)).toBe(false);
   });
 });

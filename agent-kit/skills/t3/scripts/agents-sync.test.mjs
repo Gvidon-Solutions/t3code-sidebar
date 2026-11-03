@@ -8,17 +8,17 @@ import * as NodeOS from "node:os";
 const os = NodeOS;
 import * as NodePath from "node:path";
 const path = NodePath;
-import { render, unifiedDiff, targetOperation } from "./agents-sync.mjs";
+import { render, unifiedDiff, targetOperation, sshTransport } from "./agents-sync.mjs";
 
 test.test("render preserves the entire canonical body with only a machine header", () => {
   const machines = [
-    { id: "gor", label: "gor", tag: "GOR", role: "стенд" },
-    { id: "gv", label: "gvidon", tag: "GV" },
+    { id: "lab", label: "lab", tag: "LAB", role: "стенд" },
+    { id: "at", label: "atlas", tag: "AT" },
   ];
-  const body = "# Антон\n\nБез изменений.\n";
+  const body = "# Instructions\n\nБез изменений.\n";
   assert.equal(
     render(machines[0], machines, body),
-    "> Эта машина — **gor** (GOR): стенд; соседние: gvidon (GV).\n\n" + body,
+    "> Эта машина — **lab** (LAB): стенд; соседние: atlas (AT).\n\n" + body,
   );
 });
 test.test("unified diff handles missing, drift, equal files and absent final newline", () => {
@@ -108,6 +108,7 @@ test.test(
     const { spawnSync } = await import("node:child_process");
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "t3-agents-ssh-"));
     try {
+      writeRegistry(home);
       fs.mkdirSync(path.join(home, ".codex"));
       fs.writeFileSync(path.join(home, ".codex/AGENTS.md"), "original\n");
       fs.writeFileSync(
@@ -122,19 +123,24 @@ test.test(
           [
             "--input-type=module",
             "-e",
-            `import os from 'node:os'; import {syncBuiltinESMExports} from 'node:module'; os.hostname=()=> 'gvidon'; syncBuiltinESMExports(); const {runAgents}=await import(${JSON.stringify(moduleUrl)}); runAgents(['sync'],${JSON.stringify(opt)});`,
+            `import os from 'node:os'; import {syncBuiltinESMExports} from 'node:module'; os.hostname=()=> 'atlas'; syncBuiltinESMExports(); const {runAgents}=await import(${JSON.stringify(moduleUrl)}); runAgents(['sync'],${JSON.stringify(opt)});`,
           ],
           {
             encoding: "utf8",
-            env: { ...process.env, HOME: home, PATH: home + ":" + process.env.PATH },
+            env: {
+              ...process.env,
+              HOME: home,
+              T3CTL_AGENTS_CONFIG: home,
+              PATH: home + ":" + process.env.PATH,
+            },
           },
         );
-      const dry = call({ to: "gor" });
+      const dry = call({ to: "lab" });
       assert.equal(dry.status, 0, dry.stderr);
       assert.match(dry.stdout, /-original/);
-      assert.match(dry.stdout, /\+> Эта машина — \*\*gor\*\*/);
+      assert.match(dry.stdout, /\+> Эта машина — \*\*lab\*\*/);
       assert.equal(fs.readFileSync(path.join(home, ".codex/AGENTS.md"), "utf8"), "original\n");
-      const apply = call({ to: "gor", apply: true });
+      const apply = call({ to: "lab", apply: true });
       assert.equal(apply.status, 0, apply.stderr);
       assert.match(apply.stdout, /in sync \(verified\)/);
       const state = path.join(home, ".local/state/t3-agents-sync");
@@ -144,7 +150,7 @@ test.test(
       );
       assert.match(
         fs.readFileSync(path.join(home, ".codex/AGENTS.md"), "utf8"),
-        /Привет! Меня зовут Антон/,
+        /Customer instructions/,
       );
       const unknown = call({ to: "unknown" });
       assert.notEqual(unknown.status, 0);
@@ -162,6 +168,7 @@ test.test(
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "t3-agents-home-"));
     const isolated = path.join(home, "isolated");
     try {
+      writeRegistry(home);
       fs.mkdirSync(path.join(home, ".codex"));
       fs.mkdirSync(path.join(isolated, ".codex"), { recursive: true });
       fs.writeFileSync(path.join(home, ".codex/AGENTS.md"), "untouched");
@@ -172,9 +179,9 @@ test.test(
           [
             "--input-type=module",
             "-e",
-            `import os from 'node:os'; import {syncBuiltinESMExports} from 'node:module'; os.hostname=()=> 'gvidon'; syncBuiltinESMExports(); const {runAgents}=await import(${JSON.stringify(moduleUrl)}); runAgents([${JSON.stringify(operation)}],${JSON.stringify(opt)});`,
+            `import os from 'node:os'; import {syncBuiltinESMExports} from 'node:module'; os.hostname=()=> 'atlas'; syncBuiltinESMExports(); const {runAgents}=await import(${JSON.stringify(moduleUrl)}); runAgents([${JSON.stringify(operation)}],${JSON.stringify(opt)});`,
           ],
-          { encoding: "utf8", env: { ...process.env, HOME: home } },
+          { encoding: "utf8", env: { ...process.env, HOME: home, T3CTL_AGENTS_CONFIG: home } },
         );
       const dry = call({ home: isolated });
       assert.equal(dry.status, 0, dry.stderr);
@@ -185,12 +192,12 @@ test.test(
       assert.match(call({ home: isolated }, "status").stdout, /in sync/);
       assert.match(
         fs.readFileSync(path.join(isolated, ".codex/AGENTS.md"), "utf8"),
-        /Эта машина — \*\*gvidon\*\*/,
+        /Эта машина — \*\*atlas\*\*/,
       );
       assert.equal(fs.readFileSync(path.join(home, ".codex/AGENTS.md"), "utf8"), "untouched");
       for (const opt of [
         { home: "relative" },
-        { home: isolated, to: "gor" },
+        { home: isolated, to: "lab" },
         { home: isolated, to: "all" },
       ]) {
         const rejected = call(opt);
@@ -200,5 +207,62 @@ test.test(
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
+  },
+);
+
+function writeRegistry(dir) {
+  fs.writeFileSync(
+    path.join(dir, "machines.json"),
+    JSON.stringify([
+      {
+        id: "atlas",
+        label: "atlas",
+        tag: "AT",
+        role: "source",
+        harnessFiles: [".codex/AGENTS.md"],
+        ssh: {},
+      },
+      {
+        id: "lab",
+        label: "lab",
+        tag: "LB",
+        role: "target",
+        harnessFiles: [".codex/AGENTS.md"],
+        ssh: { atlas: "customer@node" },
+      },
+    ]),
+  );
+  fs.writeFileSync(path.join(dir, "GLOBAL.md"), "Customer instructions\n");
+}
+
+test.test(
+  "SSH routes use registry relays and their options, rejecting missing or cyclic paths",
+  () => {
+    const registry = [
+      { id: "relay", ssh: { source: "gateway" }, sshOptions: { source: ["-p", "2200"] } },
+      {
+        id: "target",
+        ssh: { relay: "worker" },
+        via: { source: "relay" },
+        sshOptions: { relay: ["-F", "~/custom config"] },
+      },
+    ];
+    const args = sshTransport(registry, "source", registry[1], "printf 'Unicode: 研究室'");
+    assert.equal(args.at(-2), "gateway");
+    assert.ok(args.includes("2200"));
+    assert.match(args.at(-1), /worker/);
+    assert.match(args.at(-1), /\$HOME/);
+    assert.match(args.at(-1), /custom config/);
+    assert.throws(() => sshTransport(registry, "absent", registry[1], "command"), /No SSH route/);
+    assert.throws(
+      () =>
+        sshTransport(registry, "source", { ...registry[1], via: { source: "missing" } }, "command"),
+      /Unknown relay/,
+    );
+    assert.throws(
+      () =>
+        sshTransport(registry, "source", { ...registry[1], via: { source: "target" } }, "command"),
+      /Cyclic SSH route/,
+    );
   },
 );

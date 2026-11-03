@@ -484,16 +484,16 @@ describe("grouping by name", () => {
   it("merges the same project name across machines, whatever its folder", () => {
     const remoteEnvironmentId = EnvironmentId.make("remote");
     const projects = [
-      makeProject("wrapper", "/home/user/Repos/publ2025-calfwrapper", {
+      makeProject("wrapper", "/home/tester/Repos/publ2025-calfwrapper", {
         title: "CALF Wrapper",
         repositoryIdentity: null,
       }),
-      makeProject("wrapper-remote", "/root/mnt/gvidon/submission-5", {
+      makeProject("wrapper-remote", "/root/mnt/atlas/submission-5", {
         title: "  CALF   wrapper ",
         environmentId: remoteEnvironmentId,
         repositoryIdentity: null,
       }),
-      makeProject("envelope", "/home/user/Repos/publ2024-calf", {
+      makeProject("envelope", "/home/tester/Repos/publ2024-calf", {
         title: "CALF Envelope",
         repositoryIdentity: null,
       }),

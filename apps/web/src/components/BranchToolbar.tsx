@@ -75,6 +75,7 @@ export interface BranchToolbarHandle {
 }
 
 interface BranchToolbarProps {
+  draftMachineId?: EnvironmentId;
   layout?: "composer" | "panel";
   panelSection?: "all" | "workspace" | "branch";
   forceNewWorktree?: boolean;
@@ -322,7 +323,7 @@ const RunContextSelector = memo(function RunContextSelector({
         ((showEnvironmentPicker && onEnvironmentChange) || addTargets.length > 0) ? (
           <>
             <MenuGroup>
-              <MenuGroupLabel>Run on</MenuGroupLabel>
+              <MenuGroupLabel>Machine</MenuGroupLabel>
               <MenuRadioGroup
                 value={autoEnvironmentLabel ? "auto" : environmentId}
                 onValueChange={(value) =>
@@ -593,6 +594,7 @@ function useLabelsOverflow(): readonly [
 }
 
 export const BranchToolbar = memo(function BranchToolbar({
+  draftMachineId,
   layout = "composer",
   panelSection = "all",
   forceNewWorktree = false,
@@ -675,15 +677,18 @@ export const BranchToolbar = memo(function BranchToolbar({
     openAddProjectToMachine({ projectRef: activeProjectRef, targetEnvironmentId });
   // A project on one machine still gets the picker when it can be added to another.
   const hasMultipleEnvironments = (availableEnvironments?.length ?? 0) > 1 || addTargets.length > 0;
-  const showEnvironmentPicker = hasMultipleEnvironments && onEnvironmentChange !== undefined;
+  const showEnvironmentPicker =
+    (hasMultipleEnvironments || !isServerThread) && onEnvironmentChange !== undefined;
   const activeEnvironmentOption =
     availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null;
   // Started threads get no handler but still show which machine they run on,
   // matching the strip visibility ChatView computes from the same inputs.
-  const showEnvironmentIndicator = shouldShowEnvironmentIndicator({
-    activeEnvironment: activeEnvironmentOption,
-    canPickEnvironment: hasMultipleEnvironments,
-  });
+  const showEnvironmentIndicator =
+    !isServerThread ||
+    shouldShowEnvironmentIndicator({
+      activeEnvironment: activeEnvironmentOption,
+      canPickEnvironment: hasMultipleEnvironments,
+    });
   const [attachStrip, labelsOverflow] = useLabelsOverflow();
 
   if (!activeProject) return null;
@@ -780,7 +785,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                 autoEnvironmentLabel={autoEnvironmentLabel}
                 onAutoEnvironment={onAutoEnvironment}
                 envLocked={envLocked}
-                environmentId={environmentId}
+                environmentId={draftMachineId ?? environmentId}
                 availableEnvironments={availableEnvironments}
                 {...(showEnvironmentPicker ? { onEnvironmentChange } : {})}
                 {...(addTargets.length > 0 ? { onAddToMachine: () => onAddToMachine(null) } : {})}

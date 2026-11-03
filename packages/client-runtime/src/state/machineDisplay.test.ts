@@ -17,23 +17,23 @@ import { WORKSPACE_COLORS, workspaceColor } from "./sidebarWorkspaces.ts";
 const config: SidebarWorkspacesConfig = {
   ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   machines: {
-    gvidon: { label: "Gvidon" },
+    atlas: { label: "Atlas" },
   },
 };
 
 describe("machineDisplayOf", () => {
   it("keeps short alphanumeric labels whole and abbreviates longer labels", () => {
-    expect(machineDisplayOf(config, "gor", "gor")).toEqual({
-      label: "gor",
-      tag: "GOR",
-      color: workspaceColor({ id: "gor" }),
+    expect(machineDisplayOf(config, "lab", "lab")).toEqual({
+      label: "lab",
+      tag: "LAB",
+      color: workspaceColor({ id: "lab" }),
     });
     for (const [label, tag] of [
       ["a", "A"],
       ["p2", "P2"],
       ["v-p-s", "VPS"],
-      ["Гор", "ГОР"],
-      ["gvidon", "GV"],
+      ["Лаб", "ЛАБ"],
+      ["atlas", "AT"],
     ] as const) {
       expect(machineDisplayOf(config, "test", label).tag).toBe(tag);
     }
@@ -42,15 +42,15 @@ describe("machineDisplayOf", () => {
   it("takes digits as tag characters and skips other characters", () => {
     expect(machineDisplayOf(config, "a", "DESKTOP-ABC").tag).toBe("DE");
     expect(machineDisplayOf(config, "b", "3rd machine").tag).toBe("3R");
-    expect(machineDisplayOf(config, "c", "— Operalia").tag).toBe("OP");
+    expect(machineDisplayOf(config, "c", "— Boreal").tag).toBe("BO");
   });
 
   it("prefers the saved label, tag and colour", () => {
     const machine = machineDisplayOf(
       {
-        machines: { gvidon: { label: "Home", tag: "hm1", color: "#123456" } },
+        machines: { atlas: { label: "Home", tag: "hm1", color: "#123456" } },
       },
-      "gvidon",
+      "atlas",
       "server label",
     );
     expect(machine).toEqual({ label: "Home", tag: "HM1", color: "#123456" });
@@ -62,10 +62,8 @@ describe("machineDisplayOf", () => {
   });
 
   it("derives the colour from the environment id like workspaces do", () => {
-    expect(machineDisplayOf(config, "operatia", "x").color).toBe(
-      workspaceColor({ id: "operatia" }),
-    );
-    expect(WORKSPACE_COLORS).toContain(machineDisplayOf(config, "operatia", "x").color);
+    expect(machineDisplayOf(config, "boreal", "x").color).toBe(workspaceColor({ id: "boreal" }));
+    expect(WORKSPACE_COLORS).toContain(machineDisplayOf(config, "boreal", "x").color);
   });
 });
 
@@ -84,21 +82,32 @@ describe("normalizeMachineTag", () => {
 
 describe("setMachineDisplay", () => {
   it("sets fields without touching the rest of the config", () => {
-    const next = setMachineDisplay(config, "gor", { label: " Gor ", tag: "gor1" });
-    expect(next.machines.gor).toEqual({ label: "Gor", tag: "GOR" });
-    expect(next.machines.gvidon).toEqual({ label: "Gvidon" });
-    expect(config.machines.gor).toBeUndefined();
+    const next = setMachineDisplay(config, "lab", { label: " Lab ", tag: "lab1" });
+    expect(next.machines.lab).toEqual({ label: "Lab", tag: "LAB" });
+    expect(next.machines.atlas).toEqual({ label: "Atlas" });
+    expect(config.machines.lab).toBeUndefined();
   });
 
   it("clears fields and removes an emptied machine", () => {
-    const cleared = setMachineDisplay(config, "gvidon", { label: null });
-    expect(cleared.machines.gvidon).toBeUndefined();
-    expect(config.machines.gvidon).toEqual({ label: "Gvidon" });
+    const cleared = setMachineDisplay(config, "atlas", { label: null });
+    expect(cleared.machines.atlas).toBeUndefined();
+    expect(config.machines.atlas).toEqual({ label: "Atlas" });
   });
 
   it("keeps the fields a patch does not name", () => {
-    const next = setMachineDisplay(config, "gvidon", { color: WORKSPACE_COLORS[3] });
-    expect(next.machines.gvidon).toEqual({ label: "Gvidon", color: WORKSPACE_COLORS[3] });
+    const next = setMachineDisplay(config, "atlas", { color: WORKSPACE_COLORS[3] });
+    expect(next.machines.atlas).toEqual({ label: "Atlas", color: WORKSPACE_COLORS[3] });
+    const aliased = setMachineDisplay(next, "atlas", {
+      aliases: [" Office ", "office", "", "офис"],
+    });
+    expect(aliased.machines.atlas?.aliases).toEqual(["office", "офис"]);
+    expect(setMachineDisplay(aliased, "atlas", { tag: "HQ" }).machines.atlas?.aliases).toEqual([
+      "office",
+      "офис",
+    ]);
+    expect(
+      setMachineDisplay(aliased, "atlas", { aliases: [] }).machines.atlas?.aliases,
+    ).toBeUndefined();
   });
 });
 

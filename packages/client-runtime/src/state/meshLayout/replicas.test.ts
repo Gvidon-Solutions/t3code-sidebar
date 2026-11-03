@@ -308,14 +308,14 @@ describe("replicaStatusCopy", () => {
     progress: null,
     conflicts: 0,
     message: null,
-    targetLabel: "Operalia",
-    sourceLabel: "gvidon",
+    targetLabel: "Boreal",
+    sourceLabel: "atlas",
   };
   it("names the machine and the percentage while mounting", () => {
     expect(replicaStatusCopy({ ...base, state: "mounting", progress: 0.42 })).toBe(
-      "Mounting on Operalia… 42%",
+      "Mounting on Boreal… 42%",
     );
-    expect(replicaStatusCopy({ ...base, state: "mounting" })).toBe("Mounting on Operalia…");
+    expect(replicaStatusCopy({ ...base, state: "mounting" })).toBe("Mounting on Boreal…");
   });
   it("says Synced, counts conflicts and pluralizes", () => {
     expect(replicaStatusCopy({ ...base, state: "watching" })).toBe("Synced");
@@ -327,9 +327,9 @@ describe("replicaStatusCopy", () => {
       replicaStatusCopy({
         ...base,
         state: "error",
-        message: "Operalia cannot reach gvidon and back. Add an ssh route.",
+        message: "Boreal cannot reach atlas and back. Add an ssh route.",
       }),
-    ).toBe("Can't reach gvidon from Operalia. Add a route in Settings › Mesh");
+    ).toBe("Can't reach atlas from Boreal. Add a route in Settings › Mesh");
     expect(replicaStatusCopy({ ...base, state: "error", message: "Disk is full" })).toBe(
       "Disk is full",
     );
