@@ -43,7 +43,7 @@ it("names connected machines in a truncated error and lets the keyboard retry th
   );
   const text = "Can't reach Primary machine from QA machine. Add a route in Settings › Mesh";
   await userEvent.hover(screen.getByText(text));
-  await expect.element(page.getByText(text, { exact: true }).last()).toBeVisible();
+  await expect.element(page.getByText(text, { exact: true }).nth(1)).toBeVisible();
   await userEvent.tab();
   await expect
     .element(screen.getByRole("button", { name: "Retry replica on QA machine" }))

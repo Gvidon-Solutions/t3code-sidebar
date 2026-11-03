@@ -2,6 +2,7 @@ import { DEFAULT_UNIFIED_SETTINGS, DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3
 import { buildMeshMachines } from "@t3tools/client-runtime/state/mesh-machines";
 import * as Option from "effect/Option";
 import { expect, it, vi } from "vite-plus/test";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import { render } from "../../../test/render";
 import { MeshSettingsPanel } from "./MeshSettingsPanel";
@@ -71,4 +72,6 @@ it("shows the known server version and omits a version row for a link without on
   await expect.element(screen.getByText("Unknown", { exact: true })).not.toBeInTheDocument();
   await expect.element(screen.getByText("Version", { exact: true })).toBeVisible();
   await expect.element(screen.getByText("0.1.5", { exact: true })).toBeVisible();
+  await userEvent.hover(screen.getByText("Remote", { exact: true }));
+  await expect.element(page.getByText("Remote", { exact: true }).nth(1)).toBeVisible();
 });
