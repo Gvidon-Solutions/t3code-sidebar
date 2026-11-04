@@ -135,7 +135,21 @@ export const clearForkUploads = Effect.fn("ForkUploads.clear")(function* (forkId
       .digest("SHA-256", new TextEncoder().encode(forkId))
       .pipe(Effect.mapError(failure)),
   );
-  yield* fs
-    .remove(path.join(config.stateDir, "fork-uploads", forkDir), { recursive: true, force: true })
-    .pipe(Effect.mapError(failure));
+  const directory = path.join(config.stateDir, "fork-uploads", forkDir);
+  if (yield* fs.exists(directory).pipe(Effect.mapError(failure))) {
+    const entries = yield* fs.readDirectory(directory).pipe(Effect.mapError(failure));
+    for (const entry of entries) {
+      const receipt = path.join(directory, entry, "attachment.json");
+      if (!(yield* fs.exists(receipt).pipe(Effect.mapError(failure)))) continue;
+      const attachment = yield* fs
+        .readFileString(receipt)
+        .pipe(Effect.flatMap(decodeAttachment), Effect.mapError(failure));
+      const stored = resolveAttachmentPath({ attachmentsDir: config.attachmentsDir, attachment });
+      if (stored) {
+        yield* fs.remove(stored, { force: true }).pipe(Effect.mapError(failure));
+        yield* fs.remove(`${stored}.txt`, { force: true }).pipe(Effect.mapError(failure));
+      }
+    }
+  }
+  yield* fs.remove(directory, { recursive: true, force: true }).pipe(Effect.mapError(failure));
 });

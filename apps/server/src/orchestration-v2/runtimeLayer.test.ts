@@ -8534,6 +8534,18 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
             { role: "assistant", text: "I will remember cedar", attachments: [] },
           ],
         });
+        yield* orchestrator.dispatch({
+          type: "message.dispatch",
+          commandId: CommandId.make("F1-source-running"),
+          threadId: sourceId,
+          messageId: MessageId.make("F1-incomplete-message"),
+          text: "This turn is unfinished",
+          attachments: [],
+          modelSelection,
+          dispatchMode: { type: "start_immediately" },
+          createdBy: "user",
+          creationSource: "web",
+        });
         const config = yield* Ref.make<SidebarWorkspacesConfig>({
           ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
           machines: {
@@ -8559,6 +8571,8 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         let rejectRecord = false;
         let flushReady = true;
         let flushes = 0;
+        let pauseFlush = false;
+        const flushEntered = yield* Deferred.make<void>();
         const limits = { runtimeMode: "full-access" as const, interactionMode: "default" as const };
         let target: ThreadForks.ThreadForkService["Service"] | undefined;
         const make = Effect.fn("test.makeFork")(function* (self: string) {
@@ -8583,10 +8597,12 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                 })),
               ),
             flush: () =>
-              Effect.sync(() => {
-                flushes++;
-                return flushReady;
-              }),
+              pauseFlush
+                ? Deferred.succeed(flushEntered, undefined).pipe(Effect.andThen(Effect.never))
+                : Effect.sync(() => {
+                    flushes++;
+                    return flushReady;
+                  }),
             place: (input) =>
               Effect.gen(function* () {
                 placed++;
@@ -8604,7 +8620,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                 yield* Ref.update(config, (current) => ({
                   ...current,
                   projectMountStatus: {
-                    logical: { [input.machine]: { state: "watching", updatedAt: "" } },
+                    logical: { [input.machine]: { state: "watching" as const, updatedAt: "" } },
                   },
                   projectMounts: {
                     logical: [
@@ -8730,9 +8746,36 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         assert.equal(received.thread.meshFork?.threadId, sourceId);
         const sourceThread = yield* orchestrator.getThreadProjection(sourceId);
         assert.isNull(sourceThread.thread.archivedAt);
+        assert.equal(sourceThread.runs.at(-1)?.status, "starting");
+        assert.notInclude(
+          received.messages.map((message) => message.text).join("\n"),
+          "This turn is unfinished",
+        );
         assert.equal(sourceThread.thread.meshForks?.[0]?.threadId, forked.threadId);
+        const shells = yield* orchestrator.getShellSnapshot();
+        assert.equal(
+          shells.threads.find((thread) => thread.id === sourceId)?.meshForks?.[0]?.threadId,
+          forked.threadId,
+        );
+        assert.equal(
+          shells.threads.find((thread) => thread.id === forked.threadId)?.meshFork?.threadId,
+          sourceId,
+        );
         assert.deepEqual(yield* source.fork(input, limits), forked);
         assert.equal(placed, 1);
+        const localFork = yield* source.fork(
+          {
+            ...input,
+            commandId: CommandId.make("F1-local-fork"),
+            targetEnvironmentId: EnvironmentId.make("A"),
+          },
+          limits,
+        );
+        assert.equal(localFork.environmentId, "A");
+        assert.equal(
+          (yield* orchestrator.getThreadProjection(localFork.threadId)).thread.meshFork?.threadId,
+          sourceId,
+        );
         const firstThreadCount = (yield* orchestrator.getShellSnapshot()).threads.length;
         yield* Ref.update(config, (current) => ({
           ...current,
@@ -8775,6 +8818,15 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         assert.include(flushFailure.message, "did not flush");
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         flushReady = true;
+        pauseFlush = true;
+        const timedFork = yield* source
+          .fork({ ...input, commandId: CommandId.make("F1-flush-timeout") }, limits)
+          .pipe(Effect.flip, Effect.forkChild);
+        yield* Deferred.await(flushEntered);
+        yield* TestClock.adjust("60 seconds");
+        assert.include((yield* Fiber.join(timedFork)).message, "did not flush in time");
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        pauseFlush = false;
         rejectRecord = true;
         const recordFailure = yield* source
           .fork({ ...input, commandId: CommandId.make("F1-record-failure") }, limits)

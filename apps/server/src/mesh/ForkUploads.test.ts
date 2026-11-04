@@ -66,7 +66,7 @@ it.effect("deletes staged chunks after success and after failure", () =>
       mimeType: "text/plain",
       sizeBytes: 3,
     };
-    yield* receiveForkUpload({
+    const successfulUpload = yield* receiveForkUpload({
       action: "upload",
       forkId: "L-success",
       attachment,
@@ -76,6 +76,14 @@ it.effect("deletes staged chunks after success and after failure", () =>
     });
     expect((yield* fs.readDirectory(staging)).length).toBe(1);
     yield* clearForkUploads("L-success");
+    expect(
+      yield* fs.exists(
+        resolveAttachmentPath({
+          attachmentsDir: config.attachmentsDir,
+          attachment: successfulUpload.attachment!,
+        })!,
+      ),
+    ).toBe(false);
     expect((yield* fs.readDirectory(staging)).length).toBe(0);
     yield* receiveForkUpload({
       action: "upload",

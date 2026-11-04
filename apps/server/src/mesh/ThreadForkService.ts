@@ -188,7 +188,17 @@ export const layer = Layer.effect(
           const replicas = yield* replicaRuntime.get.pipe(Effect.mapError(failure));
           const result = yield* replicas
             .place({ project: logicalKey, machine: self, wait: 90 })
-            .pipe(Effect.mapError(failure));
+            .pipe(
+              Effect.mapError(failure),
+              Effect.timeoutOption("100 seconds"),
+              Effect.flatMap(
+                Option.match({
+                  onNone: () =>
+                    Effect.fail(invalid("The project placement did not finish in time.")),
+                  onSome: Effect.succeed,
+                }),
+              ),
+            );
           if (!result.ready || !result.representation?.projectId)
             return yield* invalid("The destination project representation did not become ready.");
           rep = result.representation;
@@ -234,7 +244,15 @@ export const layer = Layer.effect(
       selection: ForkBundle["modelSelection"] | undefined,
     ) {
       if (selection === undefined) return;
-      const available = yield* providers.getProviders;
+      const available = yield* providers.getProviders.pipe(
+        Effect.timeoutOption("30 seconds"),
+        Effect.flatMap(
+          Option.match({
+            onNone: () => Effect.fail(invalid("The target model catalog did not answer in time.")),
+            onSome: Effect.succeed,
+          }),
+        ),
+      );
       const exact = available.find(
         (provider) => provider.instanceId === selection.instanceId && provider.enabled,
       );
@@ -384,7 +402,12 @@ export const layer = Layer.effect(
           if (input.action === "upload")
             return yield* receiveForkUpload(input).pipe(Effect.provide(uploadContext));
           if (input.action === "rollback") {
-            if (input.threadId) {
+            if (
+              input.threadId &&
+              (yield* orchestrator
+                .getThreadShell(ThreadId.make(input.threadId))
+                .pipe(Effect.mapError(failure)))
+            ) {
               yield* dispatch({
                 type: "thread.delete",
                 commandId: CommandId.make(`${input.forkId}:rollback`),
@@ -487,13 +510,31 @@ export const layer = Layer.effect(
               entries: copiedEntries,
               ...(input.message === undefined ? {} : { message: input.message }),
             };
-            const copied = copiedEntries;
+            const copied = yield* copyAttachments(bundle.id, copiedEntries, self, limits).pipe(
+              Effect.onError(() =>
+                clearForkUploads(bundle.id).pipe(
+                  Effect.provide(uploadContext),
+                  Effect.catch((error) =>
+                    Effect.logError("Fork staging cleanup failed", { error }),
+                  ),
+                ),
+              ),
+            );
             const received = yield* receiveFork(
               {
                 ...bundle,
                 entries: copied,
               },
               limits,
+            ).pipe(
+              Effect.ensuring(
+                clearForkUploads(bundle.id).pipe(
+                  Effect.provide(uploadContext),
+                  Effect.catch((error) =>
+                    Effect.logError("Fork staging cleanup failed", { error }),
+                  ),
+                ),
+              ),
             );
             yield* linkBack(input.threadId, received, frozen.thread.title).pipe(
               Effect.onError(() =>
@@ -517,13 +558,18 @@ export const layer = Layer.effect(
           if (!(yield* links.enabled))
             return yield* invalid("Enable mesh links before forking to another machine.");
           let received: ThreadForkResult | undefined;
+          const targetThreadId = yield* threadIdFor({
+            id: String(commandId),
+            sourceEnvironmentId: self,
+            sourceThreadId: input.threadId,
+          });
           const failCleanup = Effect.suspend(() =>
             remote(
               targetEnvironmentId,
               {
                 action: "rollback",
                 forkId: String(commandId),
-                ...(received === undefined ? {} : { threadId: String(received.threadId) }),
+                threadId: String(received?.threadId ?? targetThreadId),
               },
               limits,
             ),
@@ -632,18 +678,17 @@ export const layer = Layer.effect(
           ),
         );
         for (let offset = 0; offset < Math.max(1, bytes.length); offset += CHUNK) {
-          const uploaded = yield* remote(
-            targetEnvironmentId,
-            {
-              action: "upload",
-              forkId,
-              attachment,
-              offset,
-              data: Buffer.from(bytes.subarray(offset, offset + CHUNK)).toString("base64"),
-              final: offset + CHUNK >= bytes.length,
-            },
-            limits,
-          );
+          const uploadInput = {
+            action: "upload" as const,
+            forkId,
+            attachment,
+            offset,
+            data: Buffer.from(bytes.subarray(offset, offset + CHUNK)).toString("base64"),
+            final: offset + CHUNK >= bytes.length,
+          };
+          const uploaded = yield* targetEnvironmentId === self
+            ? receiveForkUpload(uploadInput).pipe(Effect.provide(uploadContext))
+            : remote(targetEnvironmentId, uploadInput, limits);
           if ("attachment" in uploaded && uploaded.attachment)
             copied.set(attachment.id, uploaded.attachment);
         }
