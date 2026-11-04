@@ -706,7 +706,15 @@ const make = Effect.gen(function* () {
     );
 
   return PeerLinks.of({
-    changes: Stream.fromPubSub(changes),
+    changes: Option.isSome(transport)
+      ? Stream.merge(
+          Stream.fromPubSub(changes),
+          transport.value.activity.pipe(
+            Stream.filter((activity) => activity.kind === "connected"),
+            Stream.map(() => undefined),
+          ),
+        )
+      : Stream.fromPubSub(changes),
     enabled,
     link,
     describe: describeUrl,

@@ -47,6 +47,9 @@ import * as PipeIpc from "./PeerPipeIpc.ts";
 import * as Receipts from "./PeerReceipts.ts";
 import * as Sessions from "./PeerSessions.ts";
 import * as Relay from "../../mesh/MeshRelay.ts";
+import * as MeshLive from "../../mesh/MeshLayoutServiceLive.ts";
+import { MeshLayoutService } from "../../mesh/MeshLayoutService.ts";
+import * as Replication from "../../mesh/MeshReplicator.ts";
 import * as NodeNet from "node:net";
 import * as NodeCrypto from "node:crypto";
 import * as Transport from "./PeerTransport.ts";
@@ -56,6 +59,7 @@ class Api extends HttpApi.make("environment")
   .add(EnvironmentHttpApi.groups.metadata)
   .add(EnvironmentHttpApi.groups.mcpOAuth) {}
 const Answer = Schema.Struct({ count: Schema.Number });
+const isExchange = Schema.is(Replication.ExchangeInput);
 const toolkit = Toolkit.make(
   Tool.make("t3_create_fixture", { description: "Creates one fixture.", success: Answer }),
   Tool.make("t3_wait_fixture", { description: "Waits until cancelled.", success: Answer }),
@@ -68,11 +72,12 @@ const toolkit = Toolkit.make(
 
 const serve = Effect.fn("test.servePeerNetwork")(function* (
   name: string,
-  options: { readonly sshdPort?: number; readonly id?: string } = {},
+  options: { readonly sshdPort?: number; readonly id?: string; readonly layout?: boolean } = {},
 ) {
   let count = 0;
   let blocked = false;
   let externalMcp = 0;
+  let blockLayoutCalls = false;
   let scheduledCount = 0;
   const schedules = new Map<string, number>();
   const waitingStarted = yield* Deferred.make<void>();
@@ -96,8 +101,33 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
     ),
   );
   const peerLinks = Links.layer.pipe(Layer.provide(Transport.layer));
-  const dispatcher = Dispatcher.layer.pipe(Layer.provideMerge(Credentials.layer));
+  const dispatcher = Layer.effect(
+    Sessions.PeerCallDispatcher,
+    Effect.map(Sessions.PeerCallDispatcher, (raw) =>
+      Sessions.PeerCallDispatcher.of({
+        make: Effect.fn("test.PeerCallDispatcher.make")((input) =>
+          raw.make(input).pipe(
+            Effect.map((made) => ({
+              ...made,
+              call: (body, signal) =>
+                blockLayoutCalls && body.tool === "t3_mesh_exchange"
+                  ? Promise.reject(
+                      new Sessions.PeerConnectionError({
+                        reason: "protocol",
+                        message: "Fixture rejects layout MCP calls",
+                      }),
+                    )
+                  : made.call(body, signal),
+            })),
+          ),
+        ),
+      }),
+    ),
+  ).pipe(Layer.provide(Dispatcher.layer), Layer.provideMerge(Credentials.layer));
+  const mesh = MeshLive.layer;
+  const replication = options.layout ? Replication.layer : Layer.empty;
   const sessions = Sessions.layer.pipe(
+    Layer.provideMerge(mesh),
     Layer.provide(Wire.dialerLayer),
     Layer.provide(
       Facts.layerOf({
@@ -172,6 +202,7 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
       ),
     ),
     Layer.provideMerge(Relay.layer),
+    Layer.provideMerge(replication),
     Layer.provideMerge(sessions),
     Layer.provideMerge(Client.layer),
     Layer.provideMerge(Receipts.layer),
@@ -197,12 +228,17 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
     blockHttp: () => {
       blocked = true;
     },
+    blockLayoutCalls: () => {
+      blockLayoutCalls = true;
+    },
     externalMcp: () => externalMcp,
     url: `http://127.0.0.1:${address.port}`,
     links: Context.get(context, Links.PeerLinks),
     sessions: Context.get(context, Sessions.PeerSessions),
     client: Context.get(context, Client.PeerMcpClient),
     http: Context.get(context, HttpClient.HttpClient),
+    transport: Context.get(context, Transport.PeerTransport),
+    mesh: options.layout ? Context.get(context, MeshLayoutService) : undefined,
     auth: Context.get(common, Auth.EnvironmentAuth),
     count: () => count,
     waitingStarted,
@@ -322,6 +358,56 @@ const waitEvent = Effect.fn("test.waitPeerEvent")(
     ),
 );
 
+it.live("pushes layout as authenticated events when layout MCP calls are disabled", () =>
+  Effect.gen(function* () {
+    const studio = yield* serve("studio", { layout: true });
+    const cloudbox = yield* serve("cloudbox", { layout: true });
+    studio.blockHttp();
+    cloudbox.blockHttp();
+    studio.blockLayoutCalls();
+    cloudbox.blockLayoutCalls();
+    yield* pairNetwork(studio, cloudbox);
+    const linked = yield* waitEvent(cloudbox, "peer.linked", studio.id);
+    yield* studio.sessions.start;
+    yield* Fiber.join(linked);
+    const source = studio.mesh!;
+    const destination = cloudbox.mesh!;
+    const key = "custom/N1-event";
+    const forgedKey = "custom/N1-forged";
+    const forgedPublished = yield* cloudbox.transport.activity.pipe(
+      Stream.filter(
+        (activity) =>
+          activity.kind === "event" &&
+          activity.name === "mesh.layout.push" &&
+          isExchange(activity.body) &&
+          forgedKey in activity.body.entries,
+      ),
+      Stream.runHead,
+      Effect.forkScoped({ startImmediately: true }),
+    );
+    expect(
+      yield* studio.sessions.event(cloudbox.id, "mesh.layout.push", {
+        fromEnvironmentId: "laptop",
+        entries: { [forgedKey]: { h: yield* source.nextHlc, v: true } },
+        seq: 1,
+        ackReceivedSeq: 0,
+      }),
+    ).toBe(true);
+    yield* Fiber.join(forgedPublished);
+    const applied = yield* destination.changes.pipe(
+      Stream.filter((snapshot) => snapshot.document[key] !== undefined),
+      Stream.runHead,
+      Effect.forkScoped({ startImmediately: true }),
+    );
+    yield* source.apply({ [key]: { h: yield* source.nextHlc, v: { proof: 42 } } });
+    yield* Fiber.join(applied);
+    expect((yield* destination.read).document[key]?.v).toEqual({ proof: 42 });
+    expect((yield* destination.read).document[forgedKey]).toBeUndefined();
+    yield* studio.sessions.stop;
+    yield* cloudbox.sessions.stop;
+  }).pipe(Effect.scoped),
+);
+
 it.live(
   "resumes a committed creation after receipt loss and accepts a maximum-length client request ID",
   () =>
@@ -365,6 +451,10 @@ it.live("converges simultaneous real WebSocket dials to the same authenticated c
     yield* pairNetwork(cloudbox, studio);
     studio.blockHttp();
     cloudbox.blockHttp();
+    const connectionChange = yield* cloudbox.links.changes!.pipe(
+      Stream.runHead,
+      Effect.forkScoped({ startImmediately: true }),
+    );
     const inbound = Schema.is(Schema.Struct({ direction: Schema.Literal("inbound") }));
     const outbound = Schema.is(Schema.Struct({ direction: Schema.Literal("outbound") }));
     const studioReady = yield* studio.sessions.events.pipe(
@@ -382,6 +472,7 @@ it.live("converges simultaneous real WebSocket dials to the same authenticated c
     });
     yield* Fiber.join(studioReady);
     yield* Fiber.join(cloudboxReady);
+    yield* Fiber.join(connectionChange);
     expect(yield* studio.sessions.status).toMatchObject([
       { environmentId: cloudbox.id, state: "direct", direction: "inbound" },
     ]);

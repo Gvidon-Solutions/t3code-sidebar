@@ -288,8 +288,12 @@ time. The shared client machine builder chooses current observations before stal
 facts; web/desktop Settings, mobile Settings and t3ctl mesh status consume these states.
 t3_mesh_routes keeps its N-1 array result by default; details:true adds connections alongside
 routes. C1 must apply its receiving-side permissions before receipt replay in McpHttpServer.
-L1 uses PeerMcpClient.call for layout delivery and may subscribe to PeerSessions.events for
-peer.connected; F1's creating calls must retain the same idempotency key across a retry.
+L1 pushes authenticated `mesh.layout.push` events through PeerTransport; incoming events use
+the same generation, identity and catalog validation as exchanges. PeerLinks.changes includes
+connection-up activity, resetting replication backoff. Confirmed MCP watermark exchanges on
+reconnect and every 60 seconds retain acknowledgement/GC safety; disconnected peers use the
+HTTP fallback without blocking event pushes to connected peers. F1's creating calls must retain
+the same idempotency key across a retry.
 
 PeerChannel, PeerSessions, PeerWire, PeerFacts, PeerReceipts and PeerNetwork tests cover framing,
 credit bounds, half-close/interruption, real stopped-reading sockets, both tie arrival orders,

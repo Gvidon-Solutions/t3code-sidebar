@@ -319,6 +319,7 @@ const make = Effect.gen(function* () {
   const dispatcher = yield* PeerCallDispatcher;
   const mesh = yield* Effect.serviceOption(MeshLayoutService.MeshLayoutService);
   const events = yield* PubSub.unbounded<PeerEvent>();
+  const slot = yield* Effect.serviceOption(PeerTransport.PeerTransport);
 
   const live = new Map<string, Live>();
   let stopped = false;
@@ -614,6 +615,8 @@ const make = Effect.gen(function* () {
       return;
     }
     yield* PubSub.publish(events, { environmentId: from, name, body });
+    if (Option.isSome(slot))
+      yield* slot.value.publish({ kind: "event", environmentId: from, name, body });
   });
 
   const attach = Effect.fn("PeerSessions.attach")(function* (
@@ -716,6 +719,7 @@ const make = Effect.gen(function* () {
       name: "peer.connected",
       body: { direction },
     });
+    if (Option.isSome(slot)) yield* slot.value.publish({ kind: "connected", environmentId: env });
     for (const other of live.values())
       if (other !== entry) yield* notify(other, "peer.routes", { routes: routesOf() });
   });
@@ -1015,7 +1019,6 @@ const make = Effect.gen(function* () {
     start,
     stop,
   });
-  const slot = yield* Effect.serviceOption(PeerTransport.PeerTransport);
   if (Option.isSome(slot)) {
     slot.value.set(service);
     yield* Effect.addFinalizer(() => Effect.sync(() => slot.value.set(undefined)));

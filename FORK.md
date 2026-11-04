@@ -110,6 +110,10 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ### 2026-11-04 — N1 persistent peer connections and SSH byte pipes
 
+- **L1 integration.** Layout pushes use authenticated connection events, and connection-up
+  activity resets the replicator backoff through PeerLinks.changes. Reconnect/periodic watermark
+  exchanges preserve acknowledgement and tombstone safety.
+
 - **What.** Linked servers keep one bidirectional connection, upgrade one-way links to mutual
   trust, relay through one reachable neighbor and expose the SSH byte pipe used by managed SSH.
   Settings and the CLI report direct, relayed and offline states with failure reasons.
