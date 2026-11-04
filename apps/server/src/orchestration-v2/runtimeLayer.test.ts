@@ -8595,6 +8595,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         let dropStageReply = false;
         let dropCommitReply = false;
         let commitCalls = 0;
+        let stagedThreadId: ThreadId | undefined;
         let commitDropped = yield* Deferred.make<void>();
         const make = Effect.fn("test.makeFork")(function* (self: string, scope?: Scope.Closeable) {
           if (!configs.has(self)) {
@@ -8732,6 +8733,8 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                         )
                         .pipe(
                           Effect.flatMap((result) => {
+                            if (input.action === "receive" && "token" in result)
+                              stagedThreadId = result.result.threadId;
                             if (dropStageReply && input.action === "receive") {
                               dropStageReply = false;
                               return Effect.fail(
@@ -8972,6 +8975,23 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           .fork({ ...input, commandId: CommandId.make(abandonedId) }, limits)
           .pipe(Effect.flip);
         assert.include(abandoned.message, "Stage response dropped");
+        assert.isDefined(stagedThreadId);
+        assert.isNotOk(yield* orchestrator.getThreadShell(stagedThreadId!));
+        const premature = yield* orchestrator
+          .dispatch({
+            type: "message.dispatch",
+            commandId: CommandId.make("F1-pending-cannot-run"),
+            threadId: stagedThreadId!,
+            messageId: MessageId.make("F1-pending-message"),
+            text: "must not run",
+            attachments: [],
+            modelSelection,
+            dispatchMode: { type: "start_immediately" },
+            createdBy: "user",
+            creationSource: "web",
+          })
+          .pipe(Effect.exit);
+        assert.equal(premature._tag, "Failure");
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         assert.equal((yield* journals.get("B")!.read(`target:${abandonedId}`))?.phase, "pending");
         yield* TestClock.adjust("10 minutes");
