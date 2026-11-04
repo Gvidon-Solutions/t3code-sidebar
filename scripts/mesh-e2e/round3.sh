@@ -206,10 +206,25 @@ assert_converged() {
     done
     jq -e --arg p "$N_ROOT" '[.. | objects | select(.workspaceRoot?==$p and .deletedAt?==null)] | length==1' "$WORK/N-projects-$m.json" >/dev/null
   done
-  local expected file
+  local expected actual file end=$((SECONDS+TIMEOUT)) matched
   for file in "$N_FILE" "$N_ROOT/payload"; do
-    expected=$(rexec gor sha256sum "$file" | cut -d' ' -f1)
-    for m in gv vps; do test "$(rexec "$m" sha256sum "$file" | cut -d' ' -f1)" = "$expected"; done
+    while :; do
+      expected=$(rexec gor sha256sum "$file" | cut -d' ' -f1)
+      matched=true
+      for m in gv vps; do
+        actual=$(rexec "$m" sha256sum "$file" | cut -d' ' -f1)
+        if [ "$actual" != "$expected" ]; then
+          matched=false
+          printf '%s %s expected=%s actual=%s\n' "$m" "$file" "$expected" "$actual" > "$WORK/N-file-convergence.txt"
+        fi
+      done
+      if "$matched"; then break; fi
+      if [ "$SECONDS" -ge "$end" ]; then
+        cat "$WORK/N-file-convergence.txt" >&2
+        return 1
+      fi
+      sleep 1
+    done
   done
 }
 . "$MESH_DIR/round3-features.sh"

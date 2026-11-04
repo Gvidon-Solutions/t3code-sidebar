@@ -214,3 +214,6 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   changes, and received catalog changes trigger relay delivery even when the layout did not
   change. Listening only to layout entries leaves a newly created, unplaced project invisible
   until the minute exchange and makes the remote lookup deadline expire.
+- A replica's `watching` status is not a file-delivery barrier after a crash: it can describe
+  the last completed cycle while a new scan or transfer is pending. Crash acceptance waits for
+  the actual file hashes to match within its deadline as well as the replicated layout hash.
