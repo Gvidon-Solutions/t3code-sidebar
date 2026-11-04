@@ -1,6 +1,6 @@
 import { recordLayoutAuthors } from "./authorship.ts";
 import { keys } from "./document.ts";
-import { adoptLegacy } from "./adoptLegacy.ts";
+import { adoptLegacy } from "./migration/adoptLegacy.ts";
 import { describe, expect, it } from "vite-plus/test";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG as empty } from "@t3tools/contracts";
 import { conflictWinner, meshAuthorityOf } from "./authority.ts";

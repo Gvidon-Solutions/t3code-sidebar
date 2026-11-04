@@ -1,10 +1,10 @@
-import { authoredBy } from "./authorship.ts";
-import { meshAuthorityOf } from "./authority.ts";
+import { authoredBy } from "../authorship.ts";
+import { meshAuthorityOf } from "../authority.ts";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
-import { diff } from "./diff.ts";
-import { keys, merge, type MeshLayoutDocument } from "./document.ts";
+import { diff } from "../diff.ts";
+import { keys, merge, type MeshLayoutDocument } from "../document.ts";
 import { mergeLegacyConfigs } from "./importLegacy.ts";
-import { materialize } from "./materialize.ts";
+import { materialize } from "../materialize.ts";
 
 /** Reconcile legacy names only at adoption; later user edits retain their workspace identity. */
 export function adoptLegacy(

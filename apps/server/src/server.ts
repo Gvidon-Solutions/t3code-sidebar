@@ -1,6 +1,7 @@
+import * as MeshApplicationEvents from "./persistence/OrchestrationEventStore.ts";
 import * as MeshProjects from "./mesh/MeshProjectDirectory.ts";
 import * as ThreadHandoffs from "./mesh/ThreadHandoffService.ts";
-import * as MeshSettings from "./mesh/MeshSettings.ts";
+import * as MeshSettings from "./mesh/migration/MeshSettings.ts";
 import * as MeshRelayLive from "./mesh/MeshRelay.ts";
 import * as MeshReplication from "./mesh/MeshReplicator.ts";
 import * as MeshLayoutLive from "./mesh/MeshLayoutServiceLive.ts";
@@ -840,6 +841,7 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.provide(
     Layer.merge(MeshRelayLive.layer, MeshReplication.layer).pipe(
       Layer.provide(MeshProjects.layer),
+      Layer.provide(MeshApplicationEvents.layer),
       Layer.provide(RuntimeLayer.layerProjectService),
       Layer.provideMerge(layerPeerMcp),
       Layer.provideMerge(layerPeerLinks),

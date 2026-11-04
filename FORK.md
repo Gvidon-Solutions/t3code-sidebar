@@ -1540,3 +1540,17 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **What.** Machine aliases are editable in Settings › Mesh on web/desktop and mobile, and with `t3ctl machines alias`. Machine names and provider defaults come from customer configuration.
 - **How.** Optional aliases share the existing `machine/*` CRDT entry. The CLI matches ids, labels, tags, aliases and SSH destinations without a built-in machine dictionary, preserves other machine fields, and advances beyond observed layout clocks. Unspecified thread model/permissions stay with the destination's defaults; explicit model discovery targets that machine. Agent-kit installation and instruction sync use registry-defined SSH routes, relays, home-relative paths and remote Node commands.
 - **Where.** `SidebarMachine`, client-runtime machine display/overview helpers, web `MeshSettingsPanel`, mobile `SettingsMachinesRouteScreen`, and `agent-kit/`. Regression fixtures use synthetic customer names and paths; personal installation data stays in `agent-kit/skills/t3/global/`.
+
+### 2026-11-04 — Stage L1 layout replication hardening
+
+- **What.** Layout entries validate against known family schemas while newer families remain
+  opaque. Corrupt stored entries are quarantined; clock rejection counts and examples are visible
+  in mesh status. Offline workspace edits use one application store and survive persistence reload.
+- **How.** Bound HLC generation and reception to five minutes ahead, exchange store generations
+  alongside sequence watermarks, debounce layout pushes by 200 ms, retry failed peer exchanges
+  on a 1–15 s backoff, exchange safety watermarks every minute, and collect thirty-day
+  tombstones only after linked-peer acknowledgement.
+  Canonical key migration removes obsolete persisted rows atomically.
+- **Where.** Shared `meshLayout/registry.ts`, `configSchema.ts`, `hlc.ts` and `migration/`; server
+  `MeshLayoutServiceLive.ts`, `MeshReplicator.ts` and `mesh/migration/`; client-runtime
+  `MeshLayoutStore`, web/mobile `useMeshLayout` providers and application roots.
