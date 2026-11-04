@@ -61,6 +61,8 @@ test("alias writes match bounded shared clocks, including counter overflow", asy
     null,
     "0000000000042.99999.peer",
     "0000000300042.99999.peer",
+    "0000000000000.99999.peer",
+    "0000000300000.99999.peer",
     "9999999999998.00042.peer",
     "9999999999998.99999.peer",
   ]) {

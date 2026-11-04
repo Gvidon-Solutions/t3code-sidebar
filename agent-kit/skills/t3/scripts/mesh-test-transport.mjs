@@ -185,12 +185,26 @@ function call(name, args) {
           {
             providerInstanceId: "custom",
             driverKind: "codex",
-            models: [{ id: "model-from-destination", isDefault: true, options: [] }],
+            models:
+              args.search === "cedar-extra"
+                ? [
+                    {
+                      id: "cedar-extra",
+                      options: [{ id: "reasoningEffort", options: [{ id: "low" }] }],
+                    },
+                  ]
+                : [{ id: "model-from-destination", isDefault: true, options: [] }],
           },
         ],
       };
     case "t3_thread_launch":
       return { ...thread, modelSelection: args.modelSelection };
+    case "t3_thread_fork":
+      return {
+        threadId: "fork-1",
+        environmentId: args.targetEnvironmentId,
+        title: "mount work (fork)",
+      };
     case "ui_open":
       return { clients: 1 };
     case "meshLayout.get":

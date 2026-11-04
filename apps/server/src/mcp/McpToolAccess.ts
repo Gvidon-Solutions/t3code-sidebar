@@ -494,6 +494,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
             "t3_queue",
             "t3_pending_request",
             "t3_thread_organize",
+            "t3_thread_fork",
           ].includes(name) &&
           (environmentId === undefined || environmentId === scope.environmentId) &&
           Predicate.hasProperty(params, "threadId") &&

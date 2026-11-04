@@ -239,3 +239,23 @@ when absent, copies the existing local Codex auth fixture into the isolated
 container HOME (override its source with `MESH_E2E_CODEX_AUTH`). Credentials never
 enter evidence logs. The installer test temporarily moves only the test server's
 `bin` directory aside and proves T3 restores pinned Mutagen on first use.
+
+## F1 web journey
+
+`f1-web.mjs` drives a real Chromium HTML drag, confirms the model-free project move,
+checks the persisted destination and unchanged history/model, then opens Fork to machine.
+It saves before/confirmation/after/dialog PNGs and a WebM under `--shots`.
+Use an isolated server, a completed fixture thread with history, and a private Playwright
+storage-state file paired to that server. The CLI inherits `T3CODE_HOME`, `T3CTL_ORIGIN`,
+`T3CTL_T3_BIN` and `XDG_CONFIG_HOME`; keep auth files outside the evidence directory.
+
+```bash
+node scripts/mesh-e2e/f1-web.mjs \
+  --origin http://127.0.0.1:6664 --storage-state /tmp/F1-auth/browser.json \
+  --thread-title 'F1 Drag with history' --thread-id '<fixture-thread-id>' \
+  --target-title 'F1 Studio' --target-project-id '<local-target-project-id>' \
+  --shots /tmp/t3-f1-shots
+```
+
+The thread must initially belong to another project. The runner uses `dragTo` and the
+real confirmation button; it does not dispatch synthetic drag events or mutate app stores.

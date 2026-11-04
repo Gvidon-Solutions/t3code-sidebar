@@ -38,6 +38,7 @@ export type SidebarMachineReach = typeof SidebarMachineReach.Type;
 export const SidebarMachine = Schema.Struct({
   reach: Schema.optionalKey(Schema.Record(Schema.String, SidebarMachineReach)),
   label: Schema.optionalKey(Schema.String),
+  title: Schema.optionalKey(Schema.String),
   aliases: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
   /** Up to three characters shown on thread rows. */
   tag: Schema.optionalKey(Schema.String),

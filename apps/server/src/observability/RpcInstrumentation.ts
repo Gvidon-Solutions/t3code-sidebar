@@ -245,6 +245,8 @@ const RPC_AGGREGATES = {
   [MESH_WS_METHODS.layoutApply]: "mesh",
   [MESH_WS_METHODS.layoutSubscribe]: "mesh",
   "threads.move": "mesh",
+  "threads.fork": "mesh",
+  "threads.forkCatalog": "mesh",
   [MESH_WS_METHODS.status]: "mesh",
   [MESH_WS_METHODS.configGet]: "mesh",
   [MESH_WS_METHODS.configPlan]: "mesh",

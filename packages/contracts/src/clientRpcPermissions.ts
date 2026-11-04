@@ -19,6 +19,8 @@ import { WS_METHODS } from "./rpc.ts";
 export const CLIENT_GUARDED_RPC_SCOPES = {
   [MESH_WS_METHODS.replicasStatus]: AuthOrchestrationOperateScope,
   "threads.move": AuthOrchestrationOperateScope,
+  "threads.fork": AuthOrchestrationOperateScope,
+  "threads.forkCatalog": AuthOrchestrationReadScope,
   [MESH_WS_METHODS.replicasRetry]: AuthOrchestrationOperateScope,
   [MESH_WS_METHODS.replicasAdopt]: AuthOrchestrationOperateScope,
   [MESH_WS_METHODS.replicasUnmanaged]: AuthOrchestrationOperateScope,

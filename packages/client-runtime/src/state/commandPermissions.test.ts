@@ -166,6 +166,30 @@ describe("command permissions", () => {
       }),
     ),
   );
+  it.effect("loads a fork destination catalog with the source orchestration read grant", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const read = createCommandPermissions(runtime, "threads.forkCatalog");
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthOrchestrationReadScope],
+            permissions: [AuthOrchestrationReadScope],
+          }),
+        );
+        expect(registry.get(read.permissionAtom(env))).toBe(true);
+        yield* read.authorize(registry, env);
+        registry.set(sessions(other), AsyncResult.success(grant(false)));
+        expect(registry.get(read.permissionAtom(other))).toBe(false);
+        expect((yield* read.authorize(registry, other).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentAuthorizationError",
+        );
+      }),
+    ),
+  );
+
   it.effect("waits for an initial grant", () =>
     Effect.scoped(
       Effect.gen(function* () {

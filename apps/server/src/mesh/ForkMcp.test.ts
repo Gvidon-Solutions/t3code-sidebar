@@ -1,6 +1,10 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  OrchestratorMcpFailure,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -9,16 +13,20 @@ import * as Mcp from "../mcp/McpHttpServer.ts";
 import { McpSessionRegistry } from "../mcp/McpSessionRegistry.ts";
 import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
-import { ThreadHandoffService } from "./ThreadHandoffService.ts";
+import { ThreadForkService } from "./ThreadForkService.ts";
+import { MeshLayoutService } from "./MeshLayoutService.ts";
+import { layerTest } from "../replicas/MeshLayoutTestLayer.ts";
 
 const encode = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 it.effect(
-  "accepts handoffs only for full-access link sessions and hides the receiver from agents",
+  "accepts forks only for full-access link sessions and hides the receiver from agents",
   () =>
     Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
       const transport = Mcp.layerMcpTransport.pipe(
         Layer.provide(
           Layer.mergeAll(
+            Layer.succeed(MeshLayoutService, mesh),
             Settings.layerTest({ linkedEnvironmentsEnabled: true }),
             Layer.mock(McpSessionRegistry)({
               // @effect-diagnostics-next-line effectSucceedWithVoid:off - Registry absence requires undefined.
@@ -43,7 +51,17 @@ it.effect(
                 return Effect.succeed(scope);
               },
             }),
-            Layer.mock(ThreadHandoffService)({ receive: () => Effect.succeed({ ok: true }) }),
+            Layer.mock(ThreadForkService)({
+              receive: (input) =>
+                input.action === "rollback" && input.forkId === "storage-failure"
+                  ? Effect.fail(
+                      new OrchestratorMcpFailure({
+                        code: "orchestration_error",
+                        message: "Fork transaction storage failed.",
+                      }),
+                    )
+                  : Effect.succeed({ ok: true }),
+            }),
           ),
         ),
       );
@@ -66,8 +84,8 @@ it.effect(
         id: 2,
         method: "tools/call",
         params: {
-          name: "t3_thread_receive_handoff",
-          arguments: { action: "undo", handoffId: "L-id", threadId: "L-target" },
+          name: "t3_thread_receive_fork",
+          arguments: { action: "rollback", forkId: "L-fork" },
         },
       };
       expect((yield* post("agent", body)).status).toBe(403);
@@ -75,6 +93,26 @@ it.effect(
       const accepted = yield* post("link", body);
       expect(accepted.status).toBe(200);
       expect(yield* accepted.text).toContain('"ok":true');
+      const failed = yield* post("link", {
+        ...body,
+        params: { ...body.params, arguments: { action: "rollback", forkId: "storage-failure" } },
+      });
+      expect(yield* failed.text).toContain("orchestration_error");
+      const h = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.config": {
+          h,
+          v: {
+            revision: h,
+            doc: { schema: 1, machines: {}, links: { default: { threads: false } } },
+            author: "studio",
+            writtenAt: "2026-01-01T00:00:00Z",
+          },
+        },
+      });
+      const denied = yield* post("link", body);
+      expect(denied.status).toBe(403);
+      expect(yield* denied.text).toContain("link_threads_denied");
       const init = yield* post("agent", {
         jsonrpc: "2.0",
         id: 1,
@@ -91,6 +129,14 @@ it.effect(
         init.headers["mcp-session-id"]!,
       );
       expect(listed.status).toBe(200);
-      expect(yield* listed.text).not.toContain("t3_thread_receive_handoff");
-    }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
+      expect(yield* listed.text).not.toContain("t3_thread_receive_fork");
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.merge(
+          NodeHttpServer.layerTest,
+          layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG),
+        ),
+      ),
+    ),
 );

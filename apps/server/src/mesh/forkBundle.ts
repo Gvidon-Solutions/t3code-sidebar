@@ -1,16 +1,20 @@
 import type {
   HandoffEntry,
   OrchestrationV2ConversationMessage,
+  OrchestrationV2Run,
   OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 
-export const HANDOFF_ITEM_CHAR_LIMIT = 32_000;
-export function handoffText(text: string): string {
-  return text.length <= HANDOFF_ITEM_CHAR_LIMIT
-    ? text
-    : `${text.slice(0, HANDOFF_ITEM_CHAR_LIMIT)}\n[Truncated: ${text.length - HANDOFF_ITEM_CHAR_LIMIT} characters omitted from this item. Original remains on the source machine.]`;
+/** A fork copies the last turn that finished; an in-progress turn stays on the source. */
+export function lastForkableRun(
+  runs: ReadonlyArray<Pick<OrchestrationV2Run, "status" | "ordinal">>,
+): Pick<OrchestrationV2Run, "status" | "ordinal"> | undefined {
+  return runs
+    .filter((run) => run.status === "completed")
+    .toSorted((left, right) => left.ordinal - right.ordinal)
+    .at(-1);
 }
-export function handoffEntries(input: {
+export function forkEntries(input: {
   readonly messages: readonly OrchestrationV2ConversationMessage[];
   readonly turnItems: readonly OrchestrationV2TurnItem[];
 }): HandoffEntry[] {
@@ -23,7 +27,7 @@ export function handoffEntries(input: {
       const message = messages.get(item.messageId);
       entries.push({
         role: item.type === "user_message" ? "user" : "assistant",
-        text: handoffText(message?.text ?? item.text),
+        text: message?.text ?? item.text,
         attachments: message?.attachments ?? item.attachments ?? [],
       });
     } else if (
@@ -44,7 +48,7 @@ export function handoffEntries(input: {
       } = item;
       entries.push({
         role: "assistant",
-        text: handoffText(`Conversation activity: ${JSON.stringify(content)}`),
+        text: `Conversation activity: ${JSON.stringify(content)}`,
         attachments: [],
       });
     }
@@ -53,7 +57,7 @@ export function handoffEntries(input: {
     if (!represented.has(message.id) && message.role !== "system") {
       entries.push({
         role: message.role,
-        text: handoffText(message.text),
+        text: message.text,
         attachments: message.attachments,
       });
     }
