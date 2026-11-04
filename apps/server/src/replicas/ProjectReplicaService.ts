@@ -1137,7 +1137,7 @@ const make = Effect.gen(function* () {
                 reason: "mutagen",
                 message: `Cannot remove replica with unsynced changes: ${pending.join(", ")}`,
               });
-            const session = (yield* runner.list(name)).find(
+            const session = (yield* runner.list()).find(
               (entry) => entry.name === name || entry.identifier === name,
             );
             const state = session ? sessionStatus(session) : undefined;

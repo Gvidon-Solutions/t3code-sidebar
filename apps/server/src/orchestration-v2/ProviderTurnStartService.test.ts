@@ -1754,7 +1754,7 @@ for (const previousMessages of [[], ["/compact", " /COMPACT "]]) {
 
 const decodeReplicaLayout = Schema.decodeSync(SidebarWorkspacesConfig);
 
-effectIt.effect("injects the primary SSH command into a replica's actual provider prompt", () =>
+effectIt.effect("injects representation, mode, sync state and t3 run into a replica prompt", () =>
   Effect.gen(function* () {
     const harness = makeLocalCommandHarness({
       text: "Build this project",
@@ -1781,11 +1781,11 @@ effectIt.effect("injects the primary SSH command into a replica's actual provide
           },
         ],
       },
-      machines: { replica: {  } },
+      machines: { replica: {}, primary: { label: "primary-host" } },
     });
     yield* harness.start.pipe(Effect.provide(ReplicaMeshTest.layerTest("replica", config)));
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain(
-      "Run git and builds on the primary",
+      "build/test/git: t3 run <cmd>",
     );
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("primary-host");
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("/srv/project with spaces");

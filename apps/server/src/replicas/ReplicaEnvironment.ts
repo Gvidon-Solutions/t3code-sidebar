@@ -119,7 +119,8 @@ export const layer = Layer.effect(
               args,
               cwd: root,
               timeout: "10 minutes",
-              maxOutputBytes: 64 * 1024,
+              maxOutputBytes: 1024 * 1024,
+              outputMode: "truncate",
             });
             if (result.code !== 0)
               return yield* new ReplicaError({

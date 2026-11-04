@@ -577,7 +577,7 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   ),
 );
 
-const layerMeshSsh = MeshSsh.layer.pipe(Layer.provide(layerMesh), Layer.provide(PeerLinks.layer));
+const layerMeshSsh = MeshSsh.layer.pipe(Layer.provide(layerMesh));
 const layerMeshConfig = MeshConfig.layer.pipe(
   Layer.provide(
     MeshConfigPlanners.layer.pipe(

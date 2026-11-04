@@ -7,7 +7,7 @@ it("updates only its block, is idempotent and rejects damaged markers", () => {
   expect(updated.endsWith(original)).toBe(true);
   expect(managedBlock(updated, ["Host t3-studio"])).toBe(updated);
   expect(managedBlock(updated, ["Host t3-laptop"])).not.toContain("Host t3-studio");
-  expect(managedBlock(updated, [])).toBe(`\n${original}`);
+  expect(managedBlock(updated, [])).toBe(original);
   for (const damaged of [
     "# t3-mesh begin",
     "# t3-mesh end",

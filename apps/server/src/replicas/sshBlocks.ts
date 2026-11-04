@@ -13,12 +13,14 @@ export function managedBlock(original: string, lines: readonly string[]): string
   )
     throw new Error("Malformed t3-mesh managed block");
   const block = lines.length ? `${begin}\n${lines.join("\n")}\n${end}` : "";
-  if (starts.length)
+  if (starts.length) {
+    const stop = stops[0]!.index! + stops[0]![0].length;
     return (
       original.slice(0, starts[0]!.index) +
       block +
-      original.slice(stops[0]!.index! + stops[0]![0].length)
+      original.slice(stop + (!block && original[stop] === "\n" ? 1 : 0))
     );
+  }
   return block ? `${block}\n${original}` : original;
 }
 const safe = (value: string) => {

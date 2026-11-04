@@ -93,6 +93,27 @@ it.live(
         const doc = { schema: 1, machines: { studio: {}, laptop: {} } };
         yield* ssh.reconcile(doc);
         const config = path.join(home, ".ssh", "config");
+        const peerFacts = (yield* layout.read).config.machines["laptop-env"]!.reported!;
+        yield* layout.edit((state) => ({
+          ...state,
+          machines: {
+            ...state.machines,
+            "cloudbox-env": { reported: { ...peerFacts, meshPublicKey: "ssh-ed25519 DDDD" } },
+          },
+        }));
+        yield* layout.apply({
+          "mesh.machineBinding/cloudbox": { v: "cloudbox-env", h: yield* layout.nextHlc },
+        });
+        yield* ssh.reconcile({ ...doc, machines: { ...doc.machines, cloudbox: {} } });
+        expect(yield* fs.readFileString(path.join(home, ".ssh", "authorized_keys"))).toContain(
+          "DDDD",
+        );
+        yield* ssh.reconcile({ ...doc, links: { default: { replicas: false } } });
+        expect(yield* fs.readFileString(path.join(home, ".ssh", "authorized_keys"))).not.toContain(
+          "BBBB",
+        );
+        yield* ssh.reconcile(doc);
+
         const authorized = path.join(home, ".ssh", "authorized_keys");
         expect((yield* fs.stat(path.join(home, ".ssh"))).mode & 0o777).toBe(0o700);
         for (const file of [config, authorized, path.join(root, "mesh", "ssh", "known_hosts")])
@@ -125,7 +146,7 @@ it.live(
         );
         timedOut = false;
         yield* ssh.reconcile({ ...doc, ssh: { mode: "off" } });
-        expect(yield* fs.readFileString(authorized)).toBe("\n# personal\n\n");
+        expect(yield* fs.readFileString(authorized)).toBe("# personal\n");
         const count = calls.filter((call) => call.command === "ssh-keygen").length;
         yield* Effect.gen(function* () {
           expect((yield* Ssh.MeshSsh).publicKey).toBe(ssh.publicKey);

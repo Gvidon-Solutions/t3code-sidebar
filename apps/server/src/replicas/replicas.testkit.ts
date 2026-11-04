@@ -91,7 +91,10 @@ export const makeReplicaHarness = (
           preserved.push(input);
         }),
       conflictMtime: (input) => Effect.sync(() => onConflictMtime(input.root, input.paths)),
-      list: () => Effect.sync(() => sessions).pipe(Effect.tap(() => onList)),
+      list: (selector = "t3-logical") =>
+        Effect.sync(() =>
+          sessions.filter((session) => session.labels?.[selector] !== undefined),
+        ).pipe(Effect.tap(() => onList)),
       listExisting: Effect.sync(() => sessions).pipe(Effect.tap(() => onListExisting)),
       create: (input) =>
         onCreate.pipe(

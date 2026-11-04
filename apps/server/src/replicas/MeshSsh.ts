@@ -11,7 +11,6 @@ import * as Schema from "effect/Schema";
 import * as Path from "effect/Path";
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
-import { PeerLinks } from "../peer/PeerLinks.ts";
 import * as Semaphore from "effect/Semaphore";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import { managedBlock, routeFailure, sshFiles } from "./sshBlocks.ts";
@@ -39,7 +38,6 @@ export const layer = Layer.effect(
     const env = yield* HostProcess.Environment;
     const runner = yield* ProcessRunner.ProcessRunner;
     const mesh = yield* MeshLayoutService;
-    const links = yield* PeerLinks;
     const blockLock = yield* Semaphore.make(1);
     const { baseDir } = yield* ServerConfig.ServerConfig;
     const directory = path.join(baseDir, "mesh", "ssh");
@@ -108,12 +106,11 @@ export const layer = Layer.effect(
               reason: "validation",
               message: "Local machine is not bound",
             });
-          const linked = new Set<string>(yield* links.ids);
+          // Relayed peers authenticate with their own SSH keys after the pipe crosses a linked neighbor.
           const peers = Object.entries(bindings).flatMap(([name, environmentId]) => {
             const facts = state.config.machines[environmentId];
             const settings = doc.machines[name];
             return name !== self &&
-              linked.has(environmentId) &&
               facts &&
               settings &&
               effectiveLinkPermissions(doc, self, name).replicas
