@@ -602,12 +602,18 @@ it.effect("retries a failed push promptly instead of waiting for the next period
     yield* TestClock.adjust("2 seconds");
     expect(Option.isSome(yield* Deferred.poll(delivered))).toBe(true);
     expect((yield* nodes.get("chatbox")!.mesh.read).config.machines.studio?.label).toBe("Studio");
+    chatboxUp = false;
     yield* studio.mesh.edit((config) => ({
       ...config,
       machines: { studio: { label: "After reconnect" } },
     }));
+    yield* TestClock.adjust("250 millis");
+    const failedBeforeReconnect = refused;
+    expect(failedBeforeReconnect).toBeGreaterThan(1);
+    chatboxUp = true;
     yield* PubSub.publish(connectionChanges, undefined);
-    yield* Deferred.await(reconnected);
+    yield* TestClock.adjust("250 millis");
+    expect(Option.isSome(yield* Deferred.poll(reconnected))).toBe(true);
     expect((yield* nodes.get("chatbox")!.mesh.read).config.machines.studio?.label).toBe(
       "After reconnect",
     );

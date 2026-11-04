@@ -41,7 +41,8 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   `MeshReplicator.ts` exchanges local sequence watermarks and store generations over
   `PeerMcpClient`, pushes changes after 200 ms, retries a failed peer exchange on a
   1–15 s backoff and exchanges watermarks every 60 seconds. A changed generation resets
-  both peer cursors. Clock rejections and quarantine reasons are
+  both peer cursors. Connection-up notifications clear retry backoff before exchanging
+  watermarks. Clock rejections and quarantine reasons are
   exposed by `meshLayout.status`. Tombstones require thirty days and acknowledgement from
   every currently linked full-access peer before collection.
   Web and mobile mount one `MeshLayoutProvider` each; their hooks adapt RPC and persistence

@@ -307,11 +307,15 @@ export const layer = Layer.effect(
       }).pipe(Effect.forkDetach);
       retryTimers.set(id, { token, fiber });
     });
-    const runSync = Effect.fn("MeshReplicator.runSync")(() =>
+    const runSync = Effect.fn("MeshReplicator.runSync")((reconnected = false) =>
       lock
         .withPermit(
           Effect.gen(function* () {
             if (!(yield* enabled)) return;
+            if (reconnected) {
+              retries.clear();
+              for (const id of retryTimers.keys()) yield* cancelRetry(id);
+            }
             const linked = (yield* links.list).filter(
               (peer) => peer.access === "full-access" && peer.status !== "expired",
             );
@@ -401,7 +405,9 @@ export const layer = Layer.effect(
     const sync: Effect.Effect<void, MeshLayoutError> = runSync();
     if (links.changes)
       yield* Stream.runForEach(links.changes, () =>
-        sync.pipe(Effect.catch((cause) => Effect.logError("Mesh link replication failed", cause))),
+        runSync(true).pipe(
+          Effect.catch((cause) => Effect.logError("Mesh link replication failed", cause)),
+        ),
       ).pipe(Effect.forkScoped);
     if (Option.isSome(applicationEvents) && Option.isSome(projects)) {
       const afterSequence = yield* applicationEvents.value.latestApplicationSequence.pipe(
