@@ -54,7 +54,7 @@ services:
     command:
       - sh
       - -c
-      - node /tmp/N1-network-proxy.mjs 3791 3792 /tmp/N1-network-state.json 0.0.0.0 & echo $$ > /tmp/N1-server-spawn.pid; exec node /opt/t3/dist/bin.mjs serve --base-dir /home/t3/.t3 --host 127.0.0.1 --port 3792 --no-browser
+      - node /tmp/N1-network-proxy.mjs 3791 3792 /tmp/N1-network-state.json 0.0.0.0 & echo $$$$ > /tmp/N1-server-spawn.pid; exec node /opt/t3/dist/bin.mjs serve --base-dir /home/t3/.t3 --host 127.0.0.1 --port 3792 --no-browser
 EOF
   vps_ssh "cd '$VPS_DIR'; docker compose -f compose.yaml -f N1-compose.yaml up -d --force-recreate"
 elif [ "$action" = down ]; then
