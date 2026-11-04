@@ -8693,7 +8693,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           });
           const decodeFork = Schema.decodeUnknownEffect(ForkTransportInput);
           const peer = Layer.mock(PeerMcpClient.PeerMcpClient)({
-            call: (input) =>
+            call: (request) =>
               (targetOffline
                 ? Effect.fail(
                     new OrchestratorMcpFailure({
@@ -8704,7 +8704,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                 : Effect.void
               ).pipe(
                 Effect.andThen(
-                  decodeFork(input.arguments).pipe(
+                  decodeFork(request.arguments).pipe(
                     Effect.orDie,
                     Effect.flatMap((input) => {
                       if (!target) return Effect.die("Target was not constructed.");
@@ -8740,7 +8740,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                                 },
                               }
                             : input,
-                          limits,
+                          request.limits,
                         )
                         .pipe(
                           Effect.tapError((error) =>
@@ -8780,7 +8780,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                         );
                     }),
                     Effect.flatMap((result) =>
-                      decodePeerResponse(input.success, result).pipe(Effect.orDie),
+                      decodePeerResponse(request.success, result).pipe(Effect.orDie),
                     ),
                   ),
                 ),
@@ -8893,8 +8893,22 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           threadId: sourceId,
           targetEnvironmentId: EnvironmentId.make("B"),
         };
+        const refusedReplica = yield* source
+          .fork(
+            { ...input, commandId: CommandId.make("C1-replica-denied") },
+            { ...limits, replicas: false },
+          )
+          .pipe(Effect.flip);
+        assert.equal(refusedReplica.code, "capability_denied");
+        assert.equal(placed, 0);
         const forked = yield* source.fork({ ...input, message: "Optional first message" }, limits);
         assert.equal(forked.title, "Studio notes (fork)");
+        assert.equal(placed, 1);
+        const existingRepresentation = yield* target.receive(
+          { action: "prepare", forkId: "C1-existing-representation", logicalKey: "logical" },
+          { ...limits, replicas: false },
+        );
+        assert.isTrue("placed" in existingRepresentation && !existingRepresentation.placed);
         assert.equal(placed, 1);
         assert.isAbove(flushes, 0);
         const received = yield* orchestrator.getThreadProjection(forked.threadId);

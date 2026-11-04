@@ -36,12 +36,20 @@ export const interceptForkRequest = Effect.fn("ForkMcp.interceptRequest")(functi
       { error: "fork_requires_full_access_link" },
       { status: 403 },
     );
-  if (!(yield* linkPermissions().pipe(Effect.provideService(McpInvocationContext, scope))).threads)
+  const permissions = yield* linkPermissions().pipe(
+    Effect.provideService(McpInvocationContext, scope),
+  );
+  if (!permissions.threads)
     return HttpServerResponse.jsonUnsafe({ error: "link_threads_denied" }, { status: 403 });
   if (Option.isNone(service))
     return HttpServerResponse.jsonUnsafe({ error: "fork_unavailable" }, { status: 503 });
   const result = yield* decodeInput(call.value.params.arguments).pipe(
-    Effect.flatMap((input) => service.value.receive(input, clientModeCeiling(scope.client))),
+    Effect.flatMap((input) =>
+      service.value.receive(input, {
+        ...clientModeCeiling(scope.client),
+        ...(!permissions.replicas ? { replicas: false } : {}),
+      }),
+    ),
     Effect.match({
       onSuccess: (value) => ({
         content: [{ type: "text", text: encode(value) }],

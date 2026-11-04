@@ -97,6 +97,15 @@ it.effect(
         .handle("t3_thread_read", {})
         .pipe(Stream.unwrap, Stream.runCollect);
       expect(result.at(-1)?.result).toBe("thread accepted");
+      const invocation = yield* McpInvocationContext;
+      expect(
+        (yield* linkPermissions().pipe(
+          Effect.provideService(McpInvocationContext, {
+            ...invocation,
+            client: { ...invocation.client!, replicasLimit: false },
+          }),
+        )).replicas,
+      ).toBe(false);
       const legacy = {
         ...(yield* McpInvocationContext),
         client: {

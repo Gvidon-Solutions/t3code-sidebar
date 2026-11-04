@@ -325,8 +325,11 @@ retries failed actions every thirty seconds. Reported status is replicated; an u
 server is shown as waiting rather than done. Conditional and manual replica rules do not eagerly
 materialize copies: thread placement uses the existing replica service when that lifecycle is triggered.
 
-N1 transports must preserve the optional `PeerCallLimits.files` ceiling (`T3-Files-Limit` on HTTP)
-and the authenticated `peerEnvironmentId` in the receiving invocation context. Relay checks the
+N1 transports must preserve the optional `PeerCallLimits.files` and `replicas` ceilings
+(`T3-Files-Limit` / `T3-Replicas-Limit` on HTTP) and the authenticated `peerEnvironmentId` in the
+receiving invocation context. The fork receiver passes the replica ceiling through placement and
+persisted transactions: a thread may use an existing representation while a denied link cannot
+create one implicitly. Relay checks the
 origin/destination policy before forwarding and can only narrow the receiving server's own policy.
 Raw client `meshLayout.apply` writes cannot change config, history, bindings or reconciliation facts;
 use `meshConfig.apply` with a base revision. Migration preserves aliases, routes under machine

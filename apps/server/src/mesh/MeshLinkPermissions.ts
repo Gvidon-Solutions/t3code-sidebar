@@ -55,6 +55,7 @@ export const linkPermissions = Effect.fn("MeshLinkPermissions.read")(function* (
   const ceiling = client.access === "read-only" && requested === "all" ? "projects" : requested;
   return {
     ...permissions,
+    replicas: permissions.replicas && client.replicasLimit !== false,
     files: fileRank[ceiling] < fileRank[permissions.files] ? ceiling : permissions.files,
     linked: true,
   };

@@ -178,7 +178,8 @@ const parseModeLimit = (value: string) => {
 const invalidModeLimit = HttpServerResponse.jsonUnsafe(
   {
     error: "invalid_mode_limit",
-    message: "T3-Mode-Limit must be <runtimeMode>/<interactionMode>, e.g. auto/default.",
+    message:
+      "T3-Mode-Limit must be <runtimeMode>/<interactionMode>; T3-Files-Limit must be all, projects or none; T3-Replicas-Limit must be true or false.",
   },
   { status: 400, headers: { "cache-control": "no-store" } },
 );
@@ -193,6 +194,13 @@ const withModeLimit = (
   if (files !== undefined && files !== "all" && files !== "projects" && files !== "none")
     return undefined;
   if (files) invocation = { ...invocation, client: { ...invocation.client!, filesLimit: files } };
+  const replicas = request.headers[McpInvocationContext.REPLICAS_LIMIT_HEADER];
+  if (replicas !== undefined && replicas !== "true" && replicas !== "false") return undefined;
+  if (replicas !== undefined)
+    invocation = {
+      ...invocation,
+      client: { ...invocation.client!, replicasLimit: replicas === "true" },
+    };
   const header = request.headers[McpInvocationContext.MODE_LIMIT_HEADER];
   if (header === undefined) return invocation;
   const limit = parseModeLimit(header);

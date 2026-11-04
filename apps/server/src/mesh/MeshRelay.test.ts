@@ -137,7 +137,36 @@ it.effect(
         ["A"],
         limits,
       );
-      expect(value).toEqual({ files: "projects" });
+      expect(value).toEqual({ files: "projects", replicas: false });
+      const allowedThreads = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.config": {
+          h: allowedThreads,
+          v: {
+            revision: allowedThreads,
+            author: "B",
+            writtenAt: "",
+            doc: {
+              schema: 1,
+              machines: { studio: {}, cloudbox: {}, laptop: {} },
+              links: {
+                overrides: [{ between: ["studio", "laptop"], threads: true, replicas: false }],
+              },
+            },
+          },
+        },
+      });
+      expect(
+        yield* relay.relay(
+          {
+            environmentId: EnvironmentId.make("C"),
+            tool: "t3_thread_receive_fork",
+            arguments: { action: "prepare" },
+          },
+          ["A"],
+          limits,
+        ),
+      ).toEqual({ replicas: false });
     }).pipe(
       Effect.provide(
         layer.pipe(
@@ -177,7 +206,10 @@ it.effect(
               }),
               Layer.succeed(PeerMcpClient, {
                 call: (input) =>
-                  Effect.succeed({ files: input.limits.files } as typeof input.success.Type),
+                  Effect.succeed({
+                    ...(input.limits.files ? { files: input.limits.files } : {}),
+                    ...(input.limits.replicas === false ? { replicas: false } : {}),
+                  } as typeof input.success.Type),
               }),
             ),
           ),

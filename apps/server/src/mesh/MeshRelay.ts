@@ -87,7 +87,11 @@ export const layer = Layer.effect(
       if (Option.isNone(target)) return yield* refused;
       return yield* peers.call({
         ...input,
-        limits: files && narrowedFiles !== "all" ? { ...limits, files: narrowedFiles } : limits,
+        limits: {
+          ...limits,
+          ...(files && narrowedFiles !== "all" ? { files: narrowedFiles } : {}),
+          ...(!permissions.replicas || limits.replicas === false ? { replicas: false } : {}),
+        },
         hops: [...hops, self],
         success: Schema.Unknown,
       });

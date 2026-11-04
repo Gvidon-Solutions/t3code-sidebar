@@ -1244,12 +1244,17 @@ it.effect(
           ),
         );
         /** Starts a thread as the client, with `limit` as T3-Mode-Limit; the HTTP status or the outcome. */
-        const start = (limit: string | undefined, args: Record<string, string> = {}) =>
+        const start = (
+          limit: string | undefined,
+          args: Record<string, string> = {},
+          linkLimits: Record<string, string> = {},
+        ) =>
           Effect.gen(function* () {
             const headers = {
               accept: "application/json, text/event-stream",
               authorization: `Bearer ${clientToken}`,
               ...(limit === undefined ? {} : { "t3-mode-limit": limit }),
+              ...linkLimits,
             };
             const initialize = yield* httpClient.post("/mcp", {
               headers,
@@ -1301,6 +1306,9 @@ it.effect(
         expect(yield* start("auto")).toBe(400);
         expect(yield* start("auto/default/extra")).toBe(400);
         expect(yield* start("root/default")).toBe(400);
+        expect(yield* start(undefined, {}, { "t3-replicas-limit": "sometimes" })).toBe(400);
+        expect(yield* start(undefined, {}, { "t3-files-limit": "outside" })).toBe(400);
+        expect(yield* start(undefined, {}, { "t3-replicas-limit": "false" })).toBe("auto/default");
       }),
     ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

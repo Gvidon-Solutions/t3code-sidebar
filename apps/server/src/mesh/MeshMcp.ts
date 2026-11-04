@@ -46,6 +46,7 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
                     .relay(input, request.headers[HOP_HEADER]?.split(",") ?? [], {
                       ...McpInvocationContext.clientModeCeiling(limited.client),
                       ...(limited.client?.filesLimit ? { files: limited.client.filesLimit } : {}),
+                      ...(limited.client?.replicasLimit === false ? { replicas: false } : {}),
                     })
                     .pipe(
                       Effect.provideService(McpInvocationContext.McpInvocationContext, limited),
