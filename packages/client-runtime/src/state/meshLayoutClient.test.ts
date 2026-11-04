@@ -410,3 +410,21 @@ it("persists an offline edit across a browser storage reload and replays it on r
   expect(reloaded.current.outbox).toEqual({});
   reloaded.dispose();
 });
+
+it("merges a native cache that opens after the live subscription without losing its outbox", async () => {
+  const rpc = new FakeRpc({
+    studio: { "ws/main": { v: { name: "Main", sort: "a0" }, h: "0000000000001.00000.studio" } },
+  });
+  const { mesh } = client(rpc, [source("studio")]);
+  await mesh.start();
+  const cached = editMeshLayout(mesh.current, (config) => ({ ...config, quietAfterDays: 23 }), {
+    deviceId: "native",
+    now: 1000,
+  }).state;
+  mesh.hydrate(cached);
+  expect(mesh.current.snapshot?.config.quietAfterDays).toBe(23);
+  expect(mesh.current.outbox).toEqual(cached.outbox);
+  await mesh.replayOutbox();
+  expect(materialize(rpc.documents.get("studio")!).quietAfterDays).toBe(23);
+  mesh.dispose();
+});

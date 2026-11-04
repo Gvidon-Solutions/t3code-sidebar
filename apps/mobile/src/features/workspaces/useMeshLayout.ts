@@ -19,6 +19,7 @@ import {
   use,
   type ReactNode,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   useSyncExternalStore,
@@ -57,9 +58,13 @@ function useMeshLayoutOwner() {
   const listener = useRef<((snapshot: MeshLayoutSnapshot) => void) | null>(null);
   const current = useRef({ sources, primaryEnvironmentId, remote, applyEntries });
   const persistence = useRef({ preferences, savePreferences });
+  const preferencesReady = preferences !== null;
+  const loadedPreferences = useEffectEvent(() => preferences);
   const [store, setStore] = useState<MeshLayoutStore | null>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Creates the external store and owns its persistence and RPC lifetime.
   useEffect(() => {
+    if (!preferencesReady) return;
+    persistence.current.preferences = loadedPreferences();
     const deviceId = persistence.current.preferences?.meshLayoutDeviceId ?? uuidv4();
     const created = new MeshLayoutStore({
       deviceId,
@@ -101,13 +106,16 @@ function useMeshLayoutOwner() {
     setStore(created);
     void created.start().catch((error) => console.error("Mesh layout startup failed", error));
     return () => created.dispose();
-  }, [current, listener, persistence]);
+  }, [current, listener, persistence, preferencesReady]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Preferences hydrate asynchronously after the native persistence service opens.
   useEffect(() => {
     persistence.current.preferences = preferences;
     persistence.current.savePreferences = savePreferences;
     const cached = parseMeshLayoutCache(preferences?.meshLayoutCache ?? null);
-    if (cached) store?.hydrate(cached);
+    if (cached) {
+      store?.hydrate(cached);
+      void store?.replayOutbox().catch((error) => console.error("Mesh cache replay failed", error));
+    }
   }, [store, persistence, preferences, savePreferences]);
   const state = useSyncExternalStore(
     store?.subscribe ?? noSubscription,

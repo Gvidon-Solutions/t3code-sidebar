@@ -267,11 +267,18 @@ export class MeshLayoutStore {
     };
   };
   readonly getSnapshot = () => this.state;
+  private cacheHydrated = false;
   hydrate(state: MeshLayoutClientState) {
-    if (this.state.snapshot === null) {
-      this.state = state;
-      this.emit();
-    }
+    if (this.cacheHydrated) return;
+    this.cacheHydrated = true;
+    const restored =
+      this.state.snapshot === null ? state : mergeMeshLayoutSnapshot(state, this.state.snapshot);
+    this.state = {
+      ...restored,
+      outbox: merge(restored.outbox, this.state.outbox),
+      clock: highestHlc([restored.clock, this.state.clock], null),
+    };
+    this.emit();
   }
   private source: EnvironmentId | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -309,8 +316,7 @@ export class MeshLayoutStore {
     this.disposed = false;
     const cached = await this.options.persistence.load();
     if (cached !== null) {
-      this.state = cached;
-      this.emit();
+      this.hydrate(cached);
     }
     await this.refreshEnvironments();
   }
