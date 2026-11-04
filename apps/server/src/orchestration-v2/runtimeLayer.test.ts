@@ -8703,8 +8703,8 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                     driver: ProviderDriverKind.make("codex"),
                     enabled: true,
                     installed: true,
-                    status: "ready",
-                    auth: { status: "authenticated" },
+                    status: "ready" as const,
+                    auth: { status: "authenticated" as const },
                     version: null,
                     checkedAt: "2026-11-03T00:00:00Z",
                     models: [

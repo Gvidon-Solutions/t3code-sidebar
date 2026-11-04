@@ -5,8 +5,6 @@ import type {
   OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
 
-export const FORK_ITEM_CHAR_LIMIT = 32_000;
-
 /** A fork copies the last turn that finished; an in-progress turn stays on the source. */
 export function lastForkableRun(
   runs: ReadonlyArray<Pick<OrchestrationV2Run, "status" | "ordinal">>,
@@ -15,11 +13,6 @@ export function lastForkableRun(
     .filter((run) => run.status === "completed")
     .toSorted((left, right) => left.ordinal - right.ordinal)
     .at(-1);
-}
-export function forkText(text: string): string {
-  return text.length <= FORK_ITEM_CHAR_LIMIT
-    ? text
-    : `${text.slice(0, FORK_ITEM_CHAR_LIMIT)}\n[Truncated: ${text.length - FORK_ITEM_CHAR_LIMIT} characters omitted from this item. Original remains on the source machine.]`;
 }
 export function forkEntries(input: {
   readonly messages: readonly OrchestrationV2ConversationMessage[];
@@ -34,7 +27,7 @@ export function forkEntries(input: {
       const message = messages.get(item.messageId);
       entries.push({
         role: item.type === "user_message" ? "user" : "assistant",
-        text: forkText(message?.text ?? item.text),
+        text: message?.text ?? item.text,
         attachments: message?.attachments ?? item.attachments ?? [],
       });
     } else if (
@@ -55,7 +48,7 @@ export function forkEntries(input: {
       } = item;
       entries.push({
         role: "assistant",
-        text: forkText(`Conversation activity: ${JSON.stringify(content)}`),
+        text: `Conversation activity: ${JSON.stringify(content)}`,
         attachments: [],
       });
     }
@@ -64,7 +57,7 @@ export function forkEntries(input: {
     if (!represented.has(message.id) && message.role !== "system") {
       entries.push({
         role: message.role,
-        text: forkText(message.text),
+        text: message.text,
         attachments: message.attachments,
       });
     }
