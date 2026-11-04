@@ -27,7 +27,7 @@ const client = (access: AuthMcpClientAccess, linked = false) =>
   });
 
 it.effect(
-  "MCP places and lists representations by machine tag, retains projects on removal, and refuses read-only writes",
+  "MCP places and lists representations by machine tag and refuses unverifiable removal or read-only writes",
   () =>
     Effect.gen(function* () {
       const h = makeReplicaHarness("source", true);
@@ -148,7 +148,15 @@ it.effect(
         const removed = yield* tools
           .handle("t3_project_place", { project: "repo", machine: "NP", action: "remove" })
           .pipe(Stream.unwrap, Stream.runCollect);
-        expect(removed.at(-1)?.result).toMatchObject({ ready: true, representation: null });
+        expect(removed.at(-1)?.result).toMatchObject({
+          code: "invalid_request",
+          message: "Cannot reach the replica driver to verify unsynced changes.",
+        });
+        expect(
+          (yield* mesh.read).config.projectMounts.repo!.some(
+            (rep) => rep.environmentId === "newPeer",
+          ),
+        ).toBe(true);
         expect(h.terminated).toEqual([]);
       }).pipe(Effect.provide(dependencies));
     }),
