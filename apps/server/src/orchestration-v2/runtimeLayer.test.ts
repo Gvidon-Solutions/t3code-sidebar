@@ -8574,6 +8574,9 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         });
         let placed = 0;
         let placementReady = true;
+        let providerReady = true;
+        let providerInstalled = true;
+        let providerAvailable = true;
         let targetOffline = false;
         let rejectCopy = false;
         let flushReady = true;
@@ -8777,14 +8780,17 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
             peerLinks,
             peer,
             Layer.mock(ProviderRegistry.ProviderRegistry)({
-              getProviders: Effect.succeed(
+              getProviders: Effect.sync(() =>
                 [
                   {
                     instanceId: modelSelection.instanceId,
                     driver: ProviderDriverKind.make("codex"),
                     enabled: true,
-                    installed: true,
-                    status: "ready" as const,
+                    installed: providerInstalled,
+                    availability: providerAvailable
+                      ? ("available" as const)
+                      : ("unavailable" as const),
+                    status: providerReady ? ("ready" as const) : ("error" as const),
                     auth: { status: "authenticated" as const },
                     version: null,
                     checkedAt: "2026-11-03T00:00:00Z",
@@ -8929,6 +8935,19 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           .pipe(Effect.flip);
         assert.include(missing.message, "unavailable");
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        for (const unavailable of ["not installed", "not ready", "unavailable"]) {
+          providerInstalled = unavailable !== "not installed";
+          providerReady = unavailable !== "not ready";
+          providerAvailable = unavailable !== "unavailable";
+          const unavailableProvider = yield* source
+            .fork({ ...input, commandId: CommandId.make(`F1-provider-${unavailable}`) }, limits)
+            .pipe(Effect.result);
+          assert.equal(unavailableProvider._tag, "Failure", unavailable);
+          assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        }
+        providerInstalled = true;
+        providerReady = true;
+        providerAvailable = true;
         flushReady = false;
         const flushFailure = yield* source
           .fork({ ...input, commandId: CommandId.make("F1-flush-failure") }, limits)

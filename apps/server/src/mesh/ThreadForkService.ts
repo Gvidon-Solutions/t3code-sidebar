@@ -272,7 +272,12 @@ export const layer = Layer.effect(
         ),
       );
       const exact = available.find(
-        (provider) => provider.instanceId === selection.instanceId && provider.enabled,
+        (provider) =>
+          provider.instanceId === selection.instanceId &&
+          provider.enabled &&
+          provider.installed &&
+          provider.status === "ready" &&
+          provider.availability !== "unavailable",
       );
       if (!exact || !exact.models.some((model) => model.slug === selection.model))
         return yield* invalid("The selected model is unavailable on the target machine.");
