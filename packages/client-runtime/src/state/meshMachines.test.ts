@@ -438,3 +438,27 @@ it("excludes unlinked seven-day-old machines and forgets only their layout facts
   expect(forgetMachineFacts(config, "cloudbox").machines).toEqual({ studio: { label: "Studio" } });
   expect(config.machines.cloudbox).toBeDefined();
 });
+
+it("does not resurrect a forgotten machine through replica source facts", () => {
+  const config: SidebarWorkspacesConfig = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { studio: { label: "Studio" }, cloudbox: { label: "Cloudbox" } },
+    projectMounts: {
+      demo: [
+        {
+          environmentId: "cloudbox",
+          source: "studio",
+          role: "replica",
+          transport: "mutagen",
+          path: "/copy",
+          createdAt: "2026-10-01T00:00:00Z",
+        },
+      ],
+    },
+  };
+  const next = forgetMachineFacts(config, "studio");
+  expect(buildMeshMachines({ config: next }).map((machine) => machine.environmentId)).toEqual([
+    "cloudbox",
+  ]);
+  expect(next.projectMounts.demo?.[0]?.path).toBe("/copy");
+});

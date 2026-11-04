@@ -1,3 +1,4 @@
+import { useResolveClassNames } from "uniwind";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Modal, ScrollView, View, Pressable } from "react-native";
 import { MeshConfigRevision, type EnvironmentId } from "@t3tools/contracts";
@@ -19,6 +20,7 @@ export function MeshConfigSheet({
   onClose: () => void;
 }) {
   const mesh = useMeshLayout();
+  const surfaceStyle = useResolveClassNames("flex-1 bg-sheet px-5 py-8");
   const get = useAtomCommand(meshLayoutAtoms.configGet, { reportFailure: false });
   const plan = useAtomCommand(meshLayoutAtoms.configPlan, { reportFailure: false });
   const apply = useAtomCommand(meshLayoutAtoms.configApply, { reportFailure: false });
@@ -55,7 +57,7 @@ export function MeshConfigSheet({
     .sort((a, b) => b.writtenAt.localeCompare(a.writtenAt));
   return (
     <Modal visible presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View className="flex-1 bg-sheet px-5 py-8">
+      <View style={surfaceStyle}>
         <ScrollView keyboardShouldPersistTaps="handled">
           <View className="gap-4">
             <AppText className="text-xl font-t3-bold">Mesh config</AppText>

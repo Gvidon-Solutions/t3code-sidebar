@@ -468,7 +468,13 @@ export function forgetMachineFacts(
     projectMounts: Object.fromEntries(
       Object.entries(config.projectMounts).map(([key, reps]) => [
         key,
-        reps.filter((rep) => rep.environmentId !== environmentId),
+        reps
+          .filter((rep) => rep.environmentId !== environmentId)
+          .map((rep) => {
+            if (rep.source !== environmentId) return rep;
+            const { source: _source, ...remaining } = rep;
+            return remaining;
+          }),
       ]),
     ),
     projectMountStatus: Object.fromEntries(

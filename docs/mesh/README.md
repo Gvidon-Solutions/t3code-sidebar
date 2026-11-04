@@ -179,6 +179,11 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 
 ## Lessons already paid for (do not repeat)
 
+- Forget must remove the machine binding and detach replica source references as well as
+  reported facts, or materialization reconstructs the forgotten machine. Keep replica folders.
+- Shell readiness is a store milestone. Project visibility is not a receipt: quiet folders,
+  workspace filtering and responsive composer labels can hide or duplicate the project title.
+
 - A temporary RPC handler spread after the real ones silently disabled the feature: never leave
   fallback handlers that can shadow real ones; test that each RPC reaches its real handler.
 - Replication must use local sequence watermarks, not HLC ranges (late old-clock entries).
