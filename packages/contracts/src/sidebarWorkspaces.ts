@@ -34,6 +34,45 @@ export const SidebarMachineReach = Schema.Struct({
 });
 export type SidebarMachineReach = typeof SidebarMachineReach.Type;
 
+export const PeerConnectionStatus = Schema.Struct({
+  sourceEnvironmentId: Schema.optionalKey(Schema.String),
+  observedAt: Schema.optionalKey(Schema.String),
+  environmentId: Schema.String,
+  state: Schema.Literals(["direct", "relayed", "offline"]),
+  via: Schema.NullOr(Schema.String),
+  direction: Schema.NullOr(Schema.Literals(["inbound", "outbound"])),
+  connectedAt: Schema.NullOr(Schema.String),
+  offlineSince: Schema.NullOr(Schema.String),
+  lastError: Schema.NullOr(Schema.String),
+});
+export type PeerConnectionStatus = typeof PeerConnectionStatus.Type;
+
+/** The sshd a machine reports over its link: its port and public host keys. */
+export const SidebarMachineReportedSshd = Schema.Struct({
+  port: Schema.Int,
+  hostKeys: Schema.Array(Schema.String),
+});
+export type SidebarMachineReportedSshd = typeof SidebarMachineReportedSshd.Type;
+
+/**
+ * What a machine reports about itself over the persistent peer connection. Only
+ * reported facts live here; names, tags and reach belong to the mesh config.
+ */
+export const SidebarMachineReported = Schema.Struct({
+  version: Schema.String,
+  platform: Schema.Struct({
+    os: Schema.String,
+    arch: Schema.String,
+    release: Schema.String,
+  }),
+  user: Schema.NullOr(Schema.String),
+  /** Absent when the machine has no readable sshd host keys. */
+  sshd: Schema.NullOr(SidebarMachineReportedSshd),
+  reportedAt: Schema.String,
+  connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
+});
+export type SidebarMachineReported = typeof SidebarMachineReported.Type;
+
 /** A machine as the user names it in the sidebar; absent fields fall back to the server's label. */
 export const SidebarMachine = Schema.Struct({
   reach: Schema.optionalKey(Schema.Record(Schema.String, SidebarMachineReach)),
@@ -43,6 +82,8 @@ export const SidebarMachine = Schema.Struct({
   /** Up to three characters shown on thread rows. */
   tag: Schema.optionalKey(Schema.String),
   color: Schema.optionalKey(Schema.String),
+  /** Facts the machine itself reported over its link (never user-edited). */
+  reported: Schema.optionalKey(SidebarMachineReported),
 });
 export type SidebarMachine = typeof SidebarMachine.Type;
 

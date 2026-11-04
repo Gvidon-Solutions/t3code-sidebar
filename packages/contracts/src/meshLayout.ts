@@ -3,6 +3,7 @@ import * as Rpc from "effect/rpc/Rpc";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
 import {
+  PeerConnectionStatus,
   SidebarProjectMount,
   SidebarProjectMountStatus,
   SidebarProjectMountState,
@@ -93,6 +94,7 @@ export const MeshLayoutStatus = Schema.Struct({
     ),
   ),
   peers: Schema.Array(MeshPeerState),
+  connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
 });
 export type MeshLayoutStatus = typeof MeshLayoutStatus.Type;
 

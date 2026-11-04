@@ -240,6 +240,52 @@ container HOME (override its source with `MESH_E2E_CODEX_AUTH`). Credentials nev
 enter evidence logs. The installer test temporarily moves only the test server's
 `bin` directory aside and proves T3 restores pinned Mutagen on first use.
 
+## N1 transport acceptance
+
+Hold the shared bed lock before deploying or running these scenarios. Build in the current
+worktree with `MESH_E2E_BUILD_CURRENT=1`, an owned `MESH_E2E_ARTIFACTS` directory and
+`MESH_E2E_IMAGE=t3-mesh-e2e:n1`; the build uses Node 26 and includes system OpenSSH for the
+pipe check. `MESH_E2E_REUSE_NETWORK=1 deploy.sh` retains existing keys, tunnels and Mutagen
+installation instead of editing the owner's SSH files. The isolated gvidon unit has its own
+HOME under its base directory, so replica reconciliation cannot write the owner's SSH config.
+
+`network-proxies.sh up` places a transparent test proxy in front of each server; `block`
+rejects peer HTTP POST /mcp (identified by PeerMcpClient's `t3-peer-environment-id` header)
+while preserving local agent/CLI MCP, WebSocket upgrades and other HTTP routes. Without
+`peerOnlyMcp:true`, the proxy's `denyMcp` mode rejects every MCP client, as the local check does.
+`GET /__N1_network` reports accepted/refused MCP requests and upgrade counts. The proxy state
+files live under /tmp with an N1 prefix. `network-rounds.sh 1` and `2` run the existing rounds
+with N1 project/thread/file names and reuse the already-provisioned SSH routes. They preserve
+other stages' fixtures. `network-proxies.sh down` restores the original server ports and
+removes only the N1 proxy units/drop-ins.
+The VPS also gets a loopback outbound forwarder to gor's existing SSH tunnel. Pair the VPS
+to `http://127.0.0.1:13797`; Docker bridge addresses themselves do not qualify for plain HTTP
+under `peerOrigin`. Set `denyPeer:true` in the VPS front proxy state to reject inbound `/peer`
+connections while preserving its outbound connection and local control RPCs.
+
+After `network-rounds.sh 1`, run `network-bed.sh nat`, then `network-rounds.sh 2` to cover
+incoming-only reachability during replica operations. `network-bed.sh ssh` uses the packaged
+native binary for pinned-key SSH uploads/downloads and interruption, asserting that peer
+connections survive. `network-bed.sh faults` cuts the dedicated test tunnel for three minutes,
+then kills the server PID captured by the container wrapper and requires automatic recovery.
+Run `network-bed.sh restore` before `network-proxies.sh down` so the healthy mesh no longer
+depends on the temporary outbound forwarder. Every command requires the N1 bed lock.
+
+`network-ssh.mjs <binary> <base-dir> <machine> <user> <host-keys-json>` runs OpenSSH through
+the actual `t3 mesh pipe` ProxyCommand, pins reported host keys, checks a 200 MiB upload and
+download by SHA-256, interrupts an upload and verifies a new SSH session. Use
+`N1_SSH_PREPARE_ONLY=1` to generate an isolated client public key first, authorize that key
+only in the test sshd, and pass its private path with `N1_SSH_IDENTITY` for the test run.
+No key, token or generated known_hosts file belongs in the repository.
+
+For an independent local check while the shared bed is occupied, run
+`N1_IMAGE=t3-mesh-e2e:n1 node scripts/mesh-e2e/network-local.mjs` after building that image.
+It starts two isolated source servers and one disposable container, exercises incoming-only
+reachability, a relayed file read and the full SSH transfer/interruption checks. It uses owned
+temporary homes and keys, stops its captured child processes and removes only its own container.
+Set `N1_FAULTS=1` to cut its outbound network for three minutes and kill the captured server
+PID afterward; the check requires automatic restart, restored relay calls and no HTTP MCP use.
+
 ## F1 web journey
 
 `f1-web.mjs` drives a real Chromium HTML drag, confirms the model-free project move,

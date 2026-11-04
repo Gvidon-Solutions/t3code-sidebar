@@ -82,6 +82,15 @@ import * as RemoteDelegation from "./peer/RemoteDelegation.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
 import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as PeerMcpClient from "./peer/PeerMcpClient.ts";
+import * as PeerCallDispatcherLive from "./peer/connection/PeerCallDispatcherLive.ts";
+import * as PeerFacts from "./peer/connection/PeerFacts.ts";
+import * as PeerHttp from "./peer/connection/PeerHttp.ts";
+import * as PeerSessions from "./peer/connection/PeerSessions.ts";
+import * as PeerWire from "./peer/connection/PeerWire.ts";
+import * as PeerTransport from "./peer/connection/PeerTransport.ts";
+import * as PeerCredentials from "./peer/connection/PeerCredentials.ts";
+import * as PeerReceipts from "./peer/connection/PeerReceipts.ts";
+import * as PeerPipeIpc from "./peer/connection/PeerPipeIpc.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as DeviceService from "./device/DeviceService.ts";
@@ -498,14 +507,17 @@ const layerProjectFaviconResolver = ProjectFaviconResolver.layer.pipe(
 
 const layerServerEnvironment = ServerEnvironment.layer.pipe(Layer.provide(ServerSecretStore.layer));
 
+const layerPeerLinks = PeerLinks.layer.pipe(Layer.provide(PeerTransport.layer));
+const layerPeerMcp = PeerMcpClient.layer.pipe(
+  Layer.provideMerge(layerPeerLinks),
+  Layer.provideMerge(PeerTransport.layer),
+);
+
 // Fork: files anywhere. Reads on another machine go over this server's links (direct or relayed);
 // the links layer is memoized, so this is the same PeerLinks/PeerMcpClient the runtime uses.
 const layerFiles = Layer.mergeAll(
   FilesService.layer,
-  FilesRpc.layer.pipe(
-    Layer.provide(FilesService.layer),
-    Layer.provide(PeerMcpClient.layer.pipe(Layer.provideMerge(PeerLinks.layer))),
-  ),
+  FilesRpc.layer.pipe(Layer.provide(FilesService.layer), Layer.provide(layerPeerMcp)),
 );
 
 const layerAuth = EnvironmentAuth.layer.pipe(
@@ -547,7 +559,7 @@ const layerScheduledTaskWebhookOrigin = Layer.effect(
 
 const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   Layer.provide(MeshProjects.layer),
-  Layer.provide(PeerMcpClient.layer.pipe(Layer.provideMerge(PeerLinks.layer))),
+  Layer.provide(layerPeerMcp),
   Layer.provide(layerScheduledTaskWebhookOrigin),
   Layer.provide(ProviderEventIngestor.layerAnalytics),
   Layer.provide(layerCheckpointStore),
@@ -749,6 +761,34 @@ const layerCommandReadiness = HttpRouter.middleware(
   { global: true },
 );
 
+// One instance of the peer network, shared by MCP forwarding, the HTTP peer
+// endpoint and the status RPCs. Layer memoization keys on these references.
+const layerPeerDispatcher = PeerCallDispatcherLive.layer.pipe(
+  Layer.provideMerge(layerPeerMcp),
+  Layer.provideMerge(layerPeerLinks),
+  Layer.provideMerge(PeerCredentials.layer),
+);
+const layerPeerSessions = PeerSessions.layer.pipe(
+  Layer.provideMerge(layerMesh),
+  Layer.provide(PeerWire.dialerLayer),
+  Layer.provide(PeerFacts.layer()),
+  Layer.provideMerge(layerPeerDispatcher),
+  Layer.provideMerge(PeerTransport.layer),
+  Layer.provideMerge(layerPeerMcp),
+  Layer.provideMerge(layerPeerLinks),
+);
+const layerPeerStarted = Layer.effectDiscard(
+  Effect.flatMap(PeerSessions.PeerSessions, (sessions) => sessions.start),
+).pipe(Layer.provideMerge(layerPeerSessions));
+const layerPeerNetwork = Layer.mergeAll(
+  PeerReceipts.layer,
+  layerPeerLinks,
+  layerPeerMcp,
+  layerPeerDispatcher,
+  layerPeerSessions,
+  layerPeerStarted,
+);
+
 const layerMakeRoutes = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(EnvironmentHttpApi).pipe(
@@ -770,6 +810,8 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerBrowserStream.routeLayer,
     ServerHttp.layerStaticAndDevRoute,
     Ws.layer,
+    PeerHttp.layer,
+    PeerPipeIpc.layer,
   ),
   McpHttpServer.layer.pipe(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
@@ -803,22 +845,20 @@ const layerMakeRoutes = Layer.mergeAll(
       Layer.provide(MeshProjects.layer),
       Layer.provide(MeshApplicationEvents.layer),
       Layer.provide(RuntimeLayer.layerProjectService),
-      Layer.provideMerge(PeerMcpClient.layer),
-      Layer.provideMerge(PeerLinks.layer),
+      Layer.provideMerge(layerPeerMcp),
+      Layer.provideMerge(layerPeerLinks),
       Layer.provideMerge(layerMesh),
       Layer.provide(layerServerSettings),
     ),
   ),
   // Links to other environments, shared by Settings (WebSocket) and agents (/mcp).
   Layer.provide(
-    PeerForwarding.layer.pipe(
-      Layer.provideMerge(PeerMcpClient.layer),
-      Layer.provideMerge(PeerLinks.layer),
-    ),
+    PeerForwarding.layer.pipe(Layer.provideMerge(layerPeerMcp), Layer.provideMerge(layerPeerLinks)),
   ),
 
   Layer.provide(PreviewAutomationBroker.layer),
   Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
+  Layer.provideMerge(layerPeerNetwork),
   Layer.provide(layerCommandReadiness),
   Layer.provide(ServerHttp.layerBrowserApiCors),
   Layer.provide(ServerHttp.layerHttpCompression),

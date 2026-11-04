@@ -33,6 +33,7 @@ export interface McpThreadCaller {
 
 export interface McpClientCaller {
   readonly sessionId: string;
+  readonly peerEnvironmentId?: string;
   readonly label: string;
   readonly access: AuthMcpClientAccess;
   /**
@@ -98,6 +99,7 @@ export const clientModeCeiling = (client: McpClientCaller | undefined): ClientMo
 
 /** Thread callers default to their own thread; client callers need thread for tools that act as the caller. */
 export interface McpInvocationScope {
+  readonly peerCommandIdentity?: { readonly namespace: string; readonly next: () => number };
   readonly environmentId: EnvironmentId;
   readonly capabilities: ReadonlySet<McpCapability>;
   readonly issuedAt: number;

@@ -374,3 +374,45 @@ it("mints on the target before linking from the source, and supports manual code
     }),
   ).rejects.toThrow("pairing code");
 });
+
+it("uses current peer network state ahead of persisted facts after a clock correction", () => {
+  const offline = {
+    sourceEnvironmentId: "atlas",
+    observedAt: "2026-01-01T00:01:00.000Z",
+    environmentId: "boreal",
+    state: "offline" as const,
+    via: null,
+    direction: null,
+    connectedAt: null,
+    offlineSince: "2026-01-01T00:00:00.000Z",
+    lastError: "heartbeat timed out",
+  };
+  const machines = buildMeshMachines({
+    config: {
+      ...base,
+      machines: {
+        ...base.machines,
+        atlas: {
+          reported: {
+            version: "1",
+            platform: { os: "linux", arch: "x64", release: "test" },
+            user: "tester",
+            sshd: null,
+            reportedAt: "2026-01-01T00:00:00.000Z",
+            connections: [
+              {
+                ...offline,
+                observedAt: "2026-01-01T00:02:00.000Z",
+                state: "direct",
+                lastError: null,
+              },
+            ],
+          },
+        },
+      },
+    },
+    connections: [{ environmentId: "atlas", label: "Atlas", connected: true }],
+    peerConnections: [offline],
+  });
+  expect(machines.find((machine) => machine.environmentId === "boreal")?.network).toEqual(offline);
+});

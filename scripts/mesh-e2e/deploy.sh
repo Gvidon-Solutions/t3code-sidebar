@@ -24,6 +24,7 @@ vps_ssh 'set -e
   df -h /opt | tail -1
   echo "t3-ws container: $(docker ps --filter name=^t3-ws$ --format "{{.Status}}")"' || true
 
+if [ "${MESH_E2E_REUSE_NETWORK:-0}" != 1 ]; then
 # ---------------------------------------------------------------------------
 # 1. Container keys (private half only on the VPS).
 # ---------------------------------------------------------------------------
@@ -121,9 +122,11 @@ Host gvidon
 EOF
 vps_ssh "chmod 600 '$VPS_DATA/.ssh/config'; chown 10001:10001 '$VPS_DATA/.ssh/config'; touch '$VPS_DATA/.ssh/known_hosts'; chmod 600 '$VPS_DATA/.ssh/known_hosts'; chown 10001:10001 '$VPS_DATA/.ssh/known_hosts'"
 
+fi
+
 log "transferring image $IMAGE to the VPS"
 docker save "$IMAGE" | gzip -1 | vps_ssh 'gunzip | docker load'
-scp -q -F "$VPS_SSH_CONFIG" "$MESH_DIR/compose.yaml" "$VPS_HOST:$VPS_DIR/compose.yaml"
+sed "s|image: t3-mesh-e2e:dev|image: $IMAGE|" "$MESH_DIR/compose.yaml" | vps_ssh "cat > '$VPS_DIR/compose.yaml'"
 
 log "preserving VPS temporary project folders across container recreation"
 vps_ssh 'bash -s' <<EOF
@@ -153,6 +156,7 @@ vps_ssh "docker exec t3-mesh-e2e grep -Fx '$COMMIT' '/tmp/N-deploy-$COMMIT_SHORT
 # 4. gor: retire the separate test server, back up userdata, then switch the
 #    main t3code-sidebar.service to this build.
 # ---------------------------------------------------------------------------
+if [ "${MESH_E2E_REUSE_NETWORK:-0}" != 1 ]; then
 log "retiring gor separate mesh test server (if present)"
 gor_ssh 'bash -s' <<'EOF'
 set -euo pipefail
@@ -161,6 +165,8 @@ systemctl --user reset-failed t3-mesh-e2e.service >/dev/null 2>&1 || true
 rm -f "$HOME/.config/systemd/user/t3-mesh-e2e.service"
 systemctl --user daemon-reload
 EOF
+
+fi
 
 # The owner's real gor data: one pre-change tar, taken with the service
 # stopped so SQLite and its WAL are consistent.
@@ -200,6 +206,7 @@ rm -rf "\$tmp" '/tmp/$ARCHIVE_NAME'
 chmod +x "\$dest/t3"
 EOF
 
+if [ "${MESH_E2E_REUSE_NETWORK:-0}" != 1 ]; then
 log "installing mutagen on gor"
 gor_ssh 'mkdir -p ~/.local/bin'
 gor_scp "$HOME/.local/bin/mutagen" "$GOR_HOST:.local/bin/mutagen.install-$COMMIT_SHORT"
@@ -250,6 +257,8 @@ if [ "$seed_repo" = 1 ]; then
 fi
 EOF
 
+fi
+
 log "allowing repeated fault-test starts on the gor bed unit"
 gor_ssh "mkdir -p ~/.config/systemd/user/$GOR_UNIT.d; printf '[Unit]\nStartLimitIntervalSec=0\n' > ~/.config/systemd/user/$GOR_UNIT.d/90-mesh-e2e-faults.conf"
 log "switching gor main unit $GOR_UNIT to $BUILD_VERSION"
@@ -276,6 +285,11 @@ mkdir -p "$GV_RUNTIME_ROOT"
 cp -a "$RUNTIME_DIR" "$GV_RUNTIME_ROOT/$BUILD_VERSION"
 chmod +x "$GV_RUNTIME_ROOT/$BUILD_VERSION/t3"
 mkdir -p "$GV_BASE_DIR"
+install -d -m 700 "$GV_BASE_DIR/home" "$GV_BASE_DIR/home/.ssh"
+if [ -f "$HOME/.ssh/known_hosts" ]; then
+  cp "$HOME/.ssh/known_hosts" "$GV_BASE_DIR/home/.ssh/known_hosts"
+  chmod 600 "$GV_BASE_DIR/home/.ssh/known_hosts"
+fi
 
 mkdir -p "$HOME/.config/systemd/user"
 cat >"$HOME/.config/systemd/user/$GV_UNIT" <<EOF
@@ -287,6 +301,7 @@ StartLimitIntervalSec=0
 Type=simple
 WorkingDirectory=%h
 UnsetEnvironment=T3CODE_HOME T3_BOOT_SERVICE_UNIT T3_SERVICE_LAUNCHER_CONTEXT
+Environment=HOME=$GV_BASE_DIR/home
 ExecStart=%h/.t3-mesh-e2e-gv-runtime/$BUILD_VERSION/t3 serve --base-dir $GV_BASE_DIR --host 127.0.0.1 --port $GV_PORT --no-browser
 KillMode=mixed
 Restart=on-failure
@@ -308,8 +323,10 @@ fi
 # ---------------------------------------------------------------------------
 # 6. Tunnels.
 # ---------------------------------------------------------------------------
-log "bringing tunnels up"
-"$MESH_DIR/tunnels.sh" up
+if [ "${MESH_E2E_REUSE_NETWORK:-0}" != 1 ]; then
+  log "bringing tunnels up"
+  "$MESH_DIR/tunnels.sh" up
+fi
 
 log "deployed $BUILD_VERSION"
 log "  gor   http://127.0.0.1:$GOR_PORT (gvidon view: 127.0.0.1:$GOR_LOCAL)"

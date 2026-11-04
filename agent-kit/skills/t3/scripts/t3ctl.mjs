@@ -2321,6 +2321,10 @@ const commands = {
       const displayConfig = await meshDisplayConfig(layout, machines);
       const live = await replicaLiveStatus();
       const settings = await serverSettings();
+      const network = await withWs((client) => client.rpc("meshLayout.status", {})).catch(
+        (error) => ({ connections: [], error: String(error) }),
+      );
+      const connections = network.connections ?? [];
       const rows = replicaRows(layout.config, live.replicas);
       const result = {
         local: machines.find((m) => m.local) ?? null,
@@ -2337,6 +2341,8 @@ const commands = {
         },
         links,
         linksError,
+        connections,
+        connectionsError: network.error ?? null,
         machines,
         replicas: rows.map((row) => ({
           logicalKey: row.logicalKey,
@@ -2366,6 +2372,18 @@ const commands = {
       console.log(
         `mesh ${local ? `${local.tag} ${local.label} (${local.environmentId})` : "?"} · ${result.layout.legacy ? "legacy layout (no meshLayout RPC)" : `${result.layout.entries} layout entries, revision ${result.layout.revision || "-"}`} · ${result.layout.workspaces} workspace(s) · ${result.layout.representations} representation(s)`,
       );
+      for (const connection of connections) {
+        const state =
+          connection.state === "direct"
+            ? "connected directly"
+            : connection.state === "relayed"
+              ? `via ${machines.find((machine) => machine.environmentId === connection.via)?.label ?? "linked machine"}`
+              : `offline${connection.offlineSince ? ` since ${connection.offlineSince}` : ""}`;
+        console.log(
+          `  network ${tagOf(connection.environmentId)} ${state}${connection.lastError ? ` · ${clip(connection.lastError, 160)}` : ""}`,
+        );
+      }
+      if (network.error) console.log(`  network status: ${clip(network.error, 160)}`);
       for (const link of links)
         console.log(
           `  link ${link.status.padEnd(11)} ${tagOf(link.environmentId).padEnd(3)} ${link.label}  ${link.environmentId}  ${link.urls?.join(", ")}${link.lastReachedAt ? `  last ${ago(link.lastReachedAt)}` : ""}${link.lastError ? `  ${clip(link.lastError, 80)}` : ""}`,

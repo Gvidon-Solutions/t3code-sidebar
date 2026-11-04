@@ -79,6 +79,18 @@ const peerStatesAtom = Atom.family((key: string) =>
   }).pipe(Atom.withLabel(`mobile:mesh:peer-states:${key}`)),
 );
 
+const peerConnectionsAtom = Atom.family((key: string) =>
+  Atom.make((get) => {
+    const ids = JSON.parse(key) as readonly string[];
+    return ids.flatMap((environmentId) => {
+      const value = get(
+        meshLayoutAtoms.status({ environmentId: EnvironmentId.make(environmentId), input: {} }),
+      );
+      return AsyncResult.getOrElse(value, () => null)?.connections ?? [];
+    });
+  }),
+);
+
 /** The phone's copy of the Settings › Mesh model, from the layout and its connected servers. */
 export function useMeshOverview(input: { readonly config: SidebarWorkspacesConfig | null }): {
   readonly machines: ReadonlyArray<MeshMachine>;
@@ -117,6 +129,9 @@ export function useMeshOverview(input: { readonly config: SidebarWorkspacesConfi
   const peerStates = useAtomValue(
     peerStatesAtom(statusSourceIds.length === 0 ? NO_IDS : JSON.stringify(statusSourceIds)),
   );
+  const peerConnections = useAtomValue(
+    peerConnectionsAtom(statusSourceIds.length === 0 ? NO_IDS : JSON.stringify(statusSourceIds)),
+  );
   const config = input.config;
   const machines = useMemo(
     () =>
@@ -125,8 +140,9 @@ export function useMeshOverview(input: { readonly config: SidebarWorkspacesConfi
         connections,
         links,
         peerStates,
+        peerConnections,
       }),
-    [config, connections, links, peerStates],
+    [config, connections, links, peerStates, peerConnections],
   );
   return { machines, connections, links };
 }

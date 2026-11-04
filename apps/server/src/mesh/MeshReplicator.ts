@@ -26,6 +26,7 @@ import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import { PeerLinks } from "../peer/PeerLinks.ts";
 import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
+import * as PeerTransport from "../peer/connection/PeerTransport.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 
@@ -39,6 +40,8 @@ export const ExchangeInput = Schema.Struct({
   seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   ackReceivedSeq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
+const decodePush = Schema.decodeUnknownEffect(ExchangeInput);
+const LAYOUT_PUSH_EVENT = "mesh.layout.push";
 const ExchangeOutput = Schema.Struct({
   generation: Schema.optionalKey(Schema.String),
   entries: MeshLayoutEntries,
@@ -75,6 +78,7 @@ export const layer = Layer.effect(
     const peers = yield* PeerMcpClient;
     const links = yield* PeerLinks;
     const settings = yield* ServerSettingsService;
+    const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
     const directory = yield* Effect.serviceOption(MeshProjectDirectory);
     const projects = yield* Effect.serviceOption(ProjectService);
     const applicationEvents = yield* Effect.serviceOption(
@@ -307,6 +311,26 @@ export const layer = Layer.effect(
       }).pipe(Effect.forkDetach);
       retryTimers.set(id, { token, fiber });
     });
+    const payloadFor = Effect.fn("MeshReplicator.payloadFor")(function* (id: string) {
+      const watermark = yield* state(id);
+      const outgoing = yield* changesSince(watermark.sent_seq);
+      const catalogs = yield* captureCatalogs();
+      return {
+        ...(Option.isSome(directory)
+          ? {
+              projectCatalogs: newerCatalogs(catalogs, peerCatalogClocks.get(id)),
+              knownProjects: clocks(catalogs),
+            }
+          : {}),
+        generation,
+        acknowledgedGeneration: (yield* sql<{
+          generation: string;
+        }>`SELECT generation FROM mesh_layout_generation WHERE id = ${id}`)[0]?.generation,
+        fromEnvironmentId: mesh.environmentId,
+        ...outgoing,
+        ackReceivedSeq: watermark.received_seq,
+      };
+    });
     const runSync = Effect.fn("MeshReplicator.runSync")((reconnected = false) =>
       lock
         .withPermit(
@@ -324,31 +348,11 @@ export const layer = Layer.effect(
               const now = yield* Clock.currentTimeMillis;
               if ((retries.get(peer.environmentId)?.after ?? 0) > now) continue;
               yield* Effect.gen(function* () {
-                const watermark = yield* state(peer.environmentId);
-                const outgoing = yield* changesSince(watermark.sent_seq);
-                const catalogs = yield* captureCatalogs();
+                const outgoing = yield* payloadFor(peer.environmentId);
                 const incoming = yield* peers.call({
                   environmentId: EnvironmentId.make(peer.environmentId),
                   tool: "t3_mesh_exchange",
-                  arguments: {
-                    ...(Option.isSome(directory)
-                      ? {
-                          projectCatalogs: newerCatalogs(
-                            catalogs,
-                            peerCatalogClocks.get(peer.environmentId),
-                          ),
-                          knownProjects: clocks(catalogs),
-                        }
-                      : {}),
-                    generation,
-                    acknowledgedGeneration: (yield* sql<{
-                      generation: string;
-                    }>`SELECT generation FROM mesh_layout_generation WHERE id = ${peer.environmentId}`)[0]
-                      ?.generation,
-                    fromEnvironmentId: mesh.environmentId,
-                    ...outgoing,
-                    ackReceivedSeq: watermark.received_seq,
-                  },
+                  arguments: outgoing,
                   limits: { runtimeMode: "full-access", interactionMode: "default" },
                   success: ExchangeOutput,
                 });
@@ -403,6 +407,78 @@ export const layer = Layer.effect(
         ),
     );
     const sync: Effect.Effect<void, MeshLayoutError> = runSync();
+    let fallbackToken: object | undefined;
+    const push = Effect.gen(function* () {
+      if (Option.isNone(transport)) return yield* sync;
+      if (!(yield* enabled)) return;
+      const network = transport.value.get();
+      const now = yield* DateTime.now;
+      let fallback = false;
+      for (const id of yield* links.ids) {
+        const peer = yield* links.get(id);
+        if (
+          Option.isNone(peer) ||
+          peer.value.access !== "full-access" ||
+          DateTime.isLessThanOrEqualTo(peer.value.expiresAt, now)
+        )
+          continue;
+        if (
+          network &&
+          (yield* network.connected(id)) &&
+          (yield* network.event(id, LAYOUT_PUSH_EVENT, yield* payloadFor(id)))
+        ) {
+          retries.delete(id);
+          yield* cancelRetry(id);
+        } else fallback = true;
+      }
+      if (fallback && fallbackToken === undefined) {
+        const token = {};
+        fallbackToken = token;
+        yield* sync.pipe(
+          Effect.catch((error) => Effect.logWarning("Mesh HTTP fallback failed", error)),
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (fallbackToken === token) fallbackToken = undefined;
+            }),
+          ),
+          Effect.forkScoped,
+        );
+      }
+    }).pipe(Effect.withSpan("MeshReplicator.push"));
+    const receivePush = Effect.fn("MeshReplicator.receivePush")(function* (
+      activity: Extract<PeerTransport.PeerActivity, { kind: "event" }>,
+    ) {
+      const input = yield* decodePush(activity.body);
+      const peer = yield* links.get(EnvironmentId.make(activity.environmentId));
+      if (
+        input.fromEnvironmentId !== activity.environmentId ||
+        Option.isNone(peer) ||
+        peer.value.access !== "full-access" ||
+        DateTime.isLessThanOrEqualTo(peer.value.expiresAt, yield* DateTime.now)
+      )
+        return yield* new MeshLayoutError({
+          reason: "invalid_entries",
+          message: "Layout push requires its authenticated full-access peer identity",
+        });
+      yield* exchange(input);
+    });
+    if (Option.isSome(transport))
+      yield* Stream.runForEach(
+        transport.value.activity.pipe(
+          Stream.filter((activity) => activity.kind === "event"),
+          Stream.filter((activity) => activity.name === LAYOUT_PUSH_EVENT),
+        ),
+        (activity) =>
+          receivePush(activity).pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("Peer layout push rejected", {
+                from: activity.environmentId,
+                error,
+              }),
+            ),
+          ),
+      ).pipe(Effect.forkScoped);
+
     if (links.changes)
       yield* Stream.runForEach(links.changes, () =>
         runSync(true).pipe(
@@ -430,7 +506,7 @@ export const layer = Layer.effect(
           1000,
           "200 millis",
         ),
-        () => sync,
+        () => push,
       ).pipe(
         Effect.catch((cause) => Effect.logError("Mesh project catalog replication failed", cause)),
         Effect.forkScoped,
@@ -440,7 +516,7 @@ export const layer = Layer.effect(
       ? Stream.merge(mesh.changes, directory.value.changes)
       : mesh.changes;
     yield* Stream.runForEach(Stream.groupedWithin(changes, 1000, "200 millis"), () =>
-      sync.pipe(Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause))),
+      push.pipe(Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause))),
     ).pipe(Effect.forkScoped);
     yield* runSync().pipe(
       Effect.catch((cause) => Effect.logError("Mesh periodic replication failed", cause)),

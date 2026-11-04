@@ -1,10 +1,15 @@
-import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  OrchestratorMcpFailure,
+  type PeerConnectionStatus,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
+import * as PeerTransport from "../peer/connection/PeerTransport.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
 import { PeerMcpClient, type PeerCallLimits } from "../peer/PeerMcpClient.ts";
 
@@ -19,6 +24,7 @@ export class MeshRelay extends Context.Service<
   MeshRelay,
   {
     readonly routes: Effect.Effect<readonly string[], OrchestratorMcpFailure>;
+    readonly status: Effect.Effect<readonly PeerConnectionStatus[]>;
     readonly relay: (
       input: typeof RelayInput.Type,
       hops: readonly string[],
@@ -34,6 +40,12 @@ export const layer = Layer.effect(
   MeshRelay,
   Effect.gen(function* () {
     const links = yield* PeerLinks;
+    const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
+    const status = Effect.suspend(
+      () =>
+        (Option.isSome(transport) ? transport.value.get()?.status : undefined) ??
+        Effect.succeed([]),
+    );
     const peers = yield* PeerMcpClient;
     const self = yield* (yield* ServerEnvironment).getEnvironmentId;
     const routes = links.list.pipe(
@@ -67,6 +79,6 @@ export const layer = Layer.effect(
         success: Schema.Unknown,
       });
     });
-    return MeshRelay.of({ routes, relay });
+    return MeshRelay.of({ routes, relay, status });
   }),
 );
