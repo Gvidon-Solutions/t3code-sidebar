@@ -103,7 +103,11 @@ export class MeshConfigError extends Schema.TaggedError<MeshConfigError>()("Mesh
   current: Schema.optionalKey(MeshConfigRevision),
   diff: Schema.optionalKey(
     Schema.Array(
-      Schema.Struct({ path: Schema.String, before: Schema.Unknown, after: Schema.Unknown }),
+      Schema.Struct({
+        path: Schema.String,
+        before: Schema.optionalKey(Schema.Unknown),
+        after: Schema.optionalKey(Schema.Unknown),
+      }),
     ),
   ),
 }) {}
