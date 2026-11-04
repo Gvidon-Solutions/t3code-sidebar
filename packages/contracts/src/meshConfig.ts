@@ -23,6 +23,7 @@ export const MeshConfigDocument = open({
       label: Schema.optionalKey(Schema.String),
       title: Schema.optionalKey(Schema.String),
       color: Schema.optionalKey(Schema.String),
+      aliases: Schema.optionalKey(Schema.Array(Schema.String)),
       reach: Schema.optionalKey(
         Schema.Union([
           Schema.Literal("auto"),
@@ -106,3 +107,39 @@ export class MeshConfigError extends Schema.TaggedError<MeshConfigError>()("Mesh
     ),
   ),
 }) {}
+
+export const MeshConfigAction = Schema.Struct({
+  id: Schema.String,
+  server: Schema.String,
+  description: Schema.String,
+  project: Schema.optionalKey(Schema.String),
+  machine: Schema.optionalKey(Schema.String),
+});
+export type MeshConfigAction = typeof MeshConfigAction.Type;
+export const MeshConfigActionStatus = Schema.Struct({
+  ...MeshConfigAction.fields,
+  state: Schema.Literals(["done", "in_progress", "failed"]),
+  reason: Schema.optionalKey(Schema.String),
+});
+export const MeshConfigServerStatus = Schema.Struct({
+  environmentId: Schema.String,
+  revision: Schema.NullOr(Schema.String),
+  actions: Schema.Array(MeshConfigActionStatus),
+});
+export const MeshConfigStatus = Schema.Struct({ servers: Schema.Array(MeshConfigServerStatus) });
+export type MeshConfigStatus = typeof MeshConfigStatus.Type;
+export const MeshConfigSnapshot = Schema.Struct({
+  current: Schema.NullOr(MeshConfigRevision),
+  bindings: Schema.Record(Schema.String, Schema.String),
+});
+export const MeshConfigPlan = Schema.Struct({
+  doc: MeshConfigDocument,
+  actions: Schema.Array(MeshConfigAction),
+});
+export const MeshConfigPlanInput = Schema.Struct({ doc: Schema.Unknown });
+export const MeshConfigApplyInput = Schema.Struct({
+  doc: Schema.Unknown,
+  baseRevision: Schema.NullOr(Schema.String),
+});
+export const MeshConfigRollbackInput = Schema.Struct({ revision: Schema.String });
+export const MeshConfigHistory = Schema.Struct({ revisions: Schema.Array(MeshConfigRevision) });

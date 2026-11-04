@@ -59,6 +59,7 @@ export type SidebarProjectMountTransport = typeof SidebarProjectMountTransport.T
  * synced from one `source` representation. Nothing here is tied to a particular machine.
  */
 export const SidebarProjectMount = Schema.Struct({
+  mode: Schema.optionalKey(Schema.Literals(["lite", "full"])),
   environmentId: TrimmedNonEmptyString,
   path: TrimmedNonEmptyString,
   /** The project registered at `path` there, once it is. */
@@ -114,7 +115,6 @@ export const SidebarProjectMountStatus = Schema.Struct({
 export type SidebarProjectMountStatus = typeof SidebarProjectMountStatus.Type;
 
 export const SidebarWorkspacesConfig = Schema.Struct({
-  meshAuthority: Schema.optionalKey(Schema.String),
   meshWriters: Schema.optionalKey(Schema.Array(Schema.String)),
   workspaces: Schema.Array(SidebarWorkspace).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   /**

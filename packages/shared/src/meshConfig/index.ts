@@ -1,4 +1,4 @@
-import { MeshConfigDocument } from "@t3tools/contracts";
+import { MeshConfigDocument, MeshConfigRevision } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { parse } from "yaml";
 
@@ -72,6 +72,85 @@ export const modelAlias = (config: MeshConfigDocument, name: string) =>
     ? config.agents.aliases[name]
     : undefined;
 
+const peerLabels = (config: MeshConfigDocument, name: string) => {
+  const machine = machineByName(config, name);
+  if (!machine) return [];
+  const extra = Array.isArray(machine.legacyPeerLabels)
+    ? machine.legacyPeerLabels.filter((label): label is string => typeof label === "string")
+    : [];
+  return [
+    name,
+    machine.title,
+    machine.label,
+    ...(Array.isArray(machine.aliases)
+      ? machine.aliases.filter((alias): alias is string => typeof alias === "string")
+      : []),
+    ...extra,
+  ].filter((label): label is string => typeof label === "string" && label.length > 0);
+};
+
+/**
+ * The configured machine an incoming peer link belongs to. Peer links carry
+ * the label the linking environment signed in with; bindings carry the id.
+ * An unknown label falls back to the defaults, never to broader permissions.
+ */
+export const machineByPeerLabel = (
+  config: MeshConfigDocument,
+  bindings: Readonly<Record<string, string>>,
+  peerLabel: string | undefined,
+) => {
+  if (peerLabel === undefined) return undefined;
+  const compact = peerLabel.replace(/^T3 Code\s*·\s*/u, "").trim();
+  const matches = Object.entries(bindings).filter(
+    ([name]) =>
+      peerLabels(config, name).includes(peerLabel) || peerLabels(config, name).includes(compact),
+  );
+  return matches.length === 1
+    ? {
+        name: matches[0]![0],
+        environmentId: matches[0]![1],
+        machine: machineByName(config, matches[0]![0]),
+      }
+    : undefined;
+};
+
+/** Compare two config documents by path, for a stale apply's rebase hint. */
+export const configDiff = (
+  before: unknown,
+  after: unknown,
+  path = "$",
+): { path: string; before: unknown; after: unknown }[] => {
+  if (JSON.stringify(before) === JSON.stringify(after)) return [];
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+  if (!isRecord(before) || !isRecord(after))
+    return [{ path, before: before ?? null, after: after ?? null }];
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])].flatMap((key) =>
+    configDiff(before[key], after[key], `${path}.${key}`),
+  );
+};
+
+const globsOverlap = (a: string, b: string) => {
+  const pending: [number, number][] = [[0, 0]];
+  const seen = new Set<string>();
+  while (pending.length) {
+    const [i, j] = pending.pop()!;
+    const key = i + ":" + j;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (i === a.length && j === b.length) return true;
+    if (a[i] === "*") pending.push([i + 1, j]);
+    if (b[j] === "*") pending.push([i, j + 1]);
+    if (
+      i < a.length &&
+      j < b.length &&
+      (a[i] === b[j] || a[i] === "*" || a[i] === "?" || b[j] === "*" || b[j] === "?")
+    )
+      pending.push([a[i] === "*" ? i : i + 1, b[j] === "*" ? j : j + 1]);
+  }
+  return false;
+};
+
 export const referenceErrors = (config: MeshConfigDocument) => {
   const errors: { path: string; message: string }[] = [];
   const known = (name: string, path: string) => {
@@ -110,5 +189,40 @@ export const referenceErrors = (config: MeshConfigDocument) => {
     pairs.add(pair);
   });
   config.replicas?.rules?.forEach((rule, i) => known(rule.on, `replicas.rules.${i}.on`));
+  const overrides = config.projects?.overrides ?? [];
+  overrides.forEach((override, i) =>
+    overrides.slice(0, i).forEach((before, j) => {
+      if (!globsOverlap(before.project, override.project)) return;
+      for (const field of ["conflicts", "replica"] as const)
+        if (
+          before[field] !== undefined &&
+          override[field] !== undefined &&
+          before[field] !== override[field]
+        )
+          errors.push({
+            path: `projects.overrides.${i}.${field}`,
+            message: `Overlapping project override with projects.overrides.${j}`,
+          });
+    }),
+  );
   return errors;
 };
+
+const decodeRevision = Schema.decodeUnknownOption(MeshConfigRevision);
+export const configFromLayout = (document: Readonly<Record<string, { readonly v: unknown }>>) => {
+  const revision = decodeRevision(document["mesh.config"]?.v);
+  return revision._tag === "Some" ? revision.value.doc : undefined;
+};
+export const bindingsFromLayout = (document: Readonly<Record<string, { readonly v: unknown }>>) =>
+  Object.fromEntries(
+    Object.entries(document).flatMap(([key, entry]) =>
+      key.startsWith("mesh.machineBinding/") && typeof entry.v === "string"
+        ? [[decodeURIComponent(key.slice(20)), entry.v]]
+        : [],
+    ),
+  );
+export const conflictWinner = (
+  policy: "primary-wins" | "newest-wins",
+  primaryMtime: number,
+  replicaMtime: number,
+): "alpha" | "beta" => (policy === "newest-wins" && replicaMtime > primaryMtime ? "beta" : "alpha");

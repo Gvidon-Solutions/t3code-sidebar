@@ -1,4 +1,4 @@
-import { keys, type MeshLayoutDocument, type MeshLayoutEntry } from "./document.ts";
+import { keys, type MeshLayoutDocument } from "./document.ts";
 
 export function recordLayoutAuthors(
   entries: MeshLayoutDocument,
@@ -10,16 +10,4 @@ export function recordLayoutAuthors(
       result[keys.author(entry.h, environmentId)] = { v: true, h: entry.h };
   }
   return result;
-}
-
-export function authoredBy(
-  doc: MeshLayoutDocument,
-  entry: MeshLayoutEntry | undefined,
-  environmentId: string | undefined,
-): boolean {
-  return Boolean(
-    entry &&
-    environmentId &&
-    (entry.h.slice(20) === environmentId || doc[keys.author(entry.h, environmentId)]?.v === true),
-  );
 }

@@ -522,6 +522,10 @@
     "./meshConfig": {
       "types": "./src/meshConfig/index.ts",
       "import": "./src/meshConfig/index.ts"
+    },
+    "./meshConfig/migration": {
+      "types": "./src/meshConfig/migration.ts",
+      "import": "./src/meshConfig/migration.ts"
     }
   },
   "scripts": {

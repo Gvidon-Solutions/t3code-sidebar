@@ -113,3 +113,46 @@ describe("mesh config", () => {
     ]);
   });
 });
+
+it("rejects conflicting overlapping project globs but merges compatible ignore overrides", () => {
+  const input = {
+    schema: 1,
+    machines: {},
+    projects: {
+      overrides: [
+        { project: "app*", replica: "lite", conflicts: "primary-wins", ignore: ["a"] },
+        { project: "*api", replica: "full", conflicts: "newest-wins", ignore: ["b"] },
+      ],
+    },
+  };
+  expect(referenceErrors(parseConfig(input)).map((e) => e.path)).toEqual([
+    "projects.overrides.1.conflicts",
+    "projects.overrides.1.replica",
+  ]);
+  expect(
+    referenceErrors(
+      parseConfig({
+        ...input,
+        projects: {
+          overrides: [
+            { project: "web*", replica: "lite" },
+            { project: "api*", replica: "full" },
+          ],
+        },
+      }),
+    ),
+  ).toEqual([]);
+  expect(
+    referenceErrors(
+      parseConfig({
+        ...input,
+        projects: {
+          overrides: [
+            { project: "*", ignore: ["a"] },
+            { project: "app?", ignore: ["b"] },
+          ],
+        },
+      }),
+    ),
+  ).toEqual([]);
+});
