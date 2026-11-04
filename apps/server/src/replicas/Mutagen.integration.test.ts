@@ -120,7 +120,12 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
             losing,
           );
           expect(
-            yield* fs.exists(path.join(loser === alpha ? beta : alpha, `.t3-conflicts/${iso.replace(/[:.]/g, "-")}`)),
+            yield* fs.exists(
+              path.join(
+                loser === alpha ? beta : alpha,
+                `.t3-conflicts/${iso.replace(/[:.]/g, "-")}`,
+              ),
+            ),
           ).toBe(false);
         }
         yield* runner.terminate("t3-integration");

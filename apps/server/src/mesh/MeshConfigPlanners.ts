@@ -220,11 +220,12 @@ export const layer = Layer.effect(
               continue;
             actions.push({
               id: `replicas/remove/${key}/${name}`,
-              server:
-                replicaDriver(
-                  state.config,
-                  state.config.projectMounts[key]!.find((rep) => rep.environmentId === server)!,
-                ) ?? server,
+              server: state.config.projectMounts[key]?.some((rep) => rep.environmentId === server)
+                ? (replicaDriver(
+                    state.config,
+                    state.config.projectMounts[key]!.find((rep) => rep.environmentId === server)!,
+                  ) ?? server)
+                : server,
               machine: name,
               project: key,
               description: `Remove managed replica ${title} from ${name}`,
@@ -248,6 +249,15 @@ export const layer = Layer.effect(
             message: "Project title is unavailable",
           });
         const remove = action.id.startsWith("replicas/remove/");
+        if (
+          remove &&
+          !(yield* snapshot).config.projectMounts[key]?.some(
+            (rep) => rep.environmentId === environmentId,
+          )
+        ) {
+          yield* write(marker(key, environmentId), false);
+          return;
+        }
         const service = yield* replicaService;
         const policy = projectPolicy(doc, title);
         yield* service
