@@ -269,3 +269,5 @@ For an independent local check while the shared bed is occupied, run
 It starts two isolated source servers and one disposable container, exercises incoming-only
 reachability, a relayed file read and the full SSH transfer/interruption checks. It uses owned
 temporary homes and keys, stops its captured child processes and removes only its own container.
+Set `N1_FAULTS=1` to cut its outbound network for three minutes and kill the captured server
+PID afterward; the check requires automatic restart, restored relay calls and no HTTP MCP use.
