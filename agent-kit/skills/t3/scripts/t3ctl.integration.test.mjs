@@ -387,20 +387,17 @@ test("new uses destination defaults and resolves explicit models against destina
     .modelSelection;
   assert.equal(selection.instanceId, "custom");
   assert.equal(selection.model, "model-from-destination");
-  const aliased = run([
-    "new",
-    "--project",
-    "Demo",
-    "--on",
-    "lab",
-    "--agent",
-    "studio-agent",
-    "task",
-  ]);
-  assert.equal(
-    aliased.calls.find((call) => call.name === "t3_thread_launch").args.modelSelection.model,
-    "model-from-destination",
-  );
+  for (const options of [
+    ["--agent", "studio-agent"],
+    ["--model", "studio-agent"],
+    ["--agent", "custom", "--model", "studio-agent"],
+  ]) {
+    const aliased = run(["new", "--project", "Demo", "--on", "lab", ...options, "task"]);
+    assert.deepEqual(
+      aliased.calls.find((call) => call.name === "t3_thread_launch").args.modelSelection,
+      { instanceId: "custom", model: "model-from-destination" },
+    );
+  }
 });
 
 test("full selftest requires an explicit provider and models before any server operation", () => {

@@ -1593,12 +1593,19 @@ async function modelSelection(opt, { required = true, environmentId } = {}) {
   let agent = String(opt.agent || "").trim();
   let model = opt.model ? String(opt.model) : "";
   const desired = (await layoutSnapshot()).document?.["mesh.config"]?.v?.doc;
-  const configuredAlias = desired?.agents?.aliases?.[agent || model];
-  if (configuredAlias) {
-    if (typeof configuredAlias.harness !== "string" || typeof configuredAlias.model !== "string")
+  const configuredAgent = desired?.agents?.aliases?.[agent];
+  const configuredModel = desired?.agents?.aliases?.[model];
+  for (const alias of [configuredAgent, configuredModel]) {
+    if (alias && (typeof alias.harness !== "string" || typeof alias.model !== "string"))
       die("Invalid configured model alias");
-    agent = configuredAlias.harness;
-    if (!opt.model || opt.model === (opt.agent || opt.model)) model = configuredAlias.model;
+  }
+  if (configuredAgent) {
+    agent = configuredAgent.harness;
+    if (!model) model = configuredAgent.model;
+  }
+  if (configuredModel) {
+    if (!agent) agent = configuredModel.harness;
+    model = configuredModel.model;
   }
   model = MODEL_ALIASES[model.toLowerCase()] ?? model;
   const aliasModel = MODEL_ALIASES[agent.toLowerCase()];
