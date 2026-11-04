@@ -72,6 +72,7 @@ export function MoveThreadSheet() {
       />
       <ScrollView>
         {projects
+          .filter((project) => project.environmentId === thread.environmentId)
           .filter((project) =>
             mobileMoveProjectLabel(project, config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG)
               .toLowerCase()

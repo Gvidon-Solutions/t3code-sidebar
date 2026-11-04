@@ -2094,11 +2094,14 @@ export default function WorkspaceSidebar() {
       ) : null}
       {movingThread ? (
         <MoveProjectDialog
-          projects={projects}
+          projects={projects.filter(
+            (project) => project.environmentId === movingThread.environmentId,
+          )}
           label={(project) =>
             (project.isScratch ? "No project" : project.title) +
             " · " +
-            machineTag(config, project.environmentId)
+            (config.machines[project.environmentId]?.title ??
+              machineDisplayFor(project.environmentId).label)
           }
           onSelect={(project) => void moveToProject(movingThread, project)}
           onClose={() => setMovingThread(null)}
