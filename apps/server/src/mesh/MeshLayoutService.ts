@@ -24,6 +24,7 @@ export class MeshLayoutService extends Context.Service<
     /** Merges entries (local edits or replicated ones) and notifies subscribers when anything changed. */
     readonly apply: (
       entries: MeshLayoutDocument,
+      peerId?: string,
     ) => Effect.Effect<MeshLayoutSnapshot, MeshLayoutError>;
     /** Stamps a local edit: `diff` the configs and apply the resulting entries with fresh clocks. */
     readonly edit: (
@@ -35,6 +36,7 @@ export class MeshLayoutService extends Context.Service<
       after: SidebarWorkspacesConfig,
     ) => Effect.Effect<MeshLayoutSnapshot, MeshLayoutError>;
     /** A fresh clock for entries this server writes itself. */
+    readonly collectTombstones?: (acknowledgedSeq: number) => Effect.Effect<void, MeshLayoutError>;
     readonly nextHlc: Effect.Effect<Hlc, MeshLayoutError>;
     /** Every merged change, current snapshot first. */
     readonly changes: Stream.Stream<MeshLayoutSnapshot>;

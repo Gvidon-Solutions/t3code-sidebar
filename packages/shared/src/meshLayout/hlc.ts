@@ -1,4 +1,8 @@
 export type Hlc = string;
+export const MAX_CLOCK_AHEAD_MS = 300_000;
+export function isFutureHlc(h: Hlc, now: number): boolean {
+  return parse(h).ms > Math.floor(now) + MAX_CLOCK_AHEAD_MS;
+}
 
 function parse(h: Hlc) {
   const match = /^(\d{13})\.(\d{5})\.(.+)$/.exec(h);
@@ -18,13 +22,16 @@ export function compare(a: Hlc, b: Hlc): number {
 }
 export function tick(now: number, last: Hlc | null, envId: string): Hlc {
   const previous = last === null ? null : parse(last);
-  const ms = Math.max(Math.floor(now), previous?.ms ?? 0);
-  return format(ms, previous?.ms === ms ? previous.counter + 1 : 0, envId);
+  const ceiling = Math.floor(now) + MAX_CLOCK_AHEAD_MS;
+  const ms = Math.min(ceiling, Math.max(Math.floor(now), previous?.ms ?? 0));
+  const counter = previous?.ms === ms ? previous.counter + 1 : 0;
+  return format(ms, ms === ceiling ? Math.min(counter, 99999) : counter, envId);
 }
 export function receive(local: Hlc, remote: Hlc, now: number): Hlc {
   const a = parse(local),
     b = parse(remote);
-  const ms = Math.max(Math.floor(now), a.ms, b.ms);
+  const ceiling = Math.floor(now) + MAX_CLOCK_AHEAD_MS;
+  const ms = Math.min(ceiling, Math.max(Math.floor(now), a.ms, b.ms));
   const counter = Math.max(a.ms === ms ? a.counter : -1, b.ms === ms ? b.counter : -1) + 1;
-  return format(ms, counter, a.envId);
+  return format(ms, ms === ceiling ? Math.min(counter, 99999) : counter, a.envId);
 }

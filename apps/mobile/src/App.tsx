@@ -1,3 +1,4 @@
+import { MeshLayoutProvider } from "./features/workspaces/useMeshLayout";
 import { PendingMeshDraftCoordinator } from "./features/workspaces/PendingMeshDraftCoordinator";
 import { MoveThreadSheet } from "./features/workspaces/MoveThreadSheet";
 import { ForkThreadSheet } from "./features/workspaces/ForkThreadSheet";
@@ -220,7 +221,9 @@ export default function App() {
     <RegistryContext.Provider value={appAtomRegistry}>
       <CloudAuthProvider>
         <AppearancePreferencesProvider>
-          <AppContent />
+          <MeshLayoutProvider>
+            <AppContent />
+          </MeshLayoutProvider>
         </AppearancePreferencesProvider>
       </CloudAuthProvider>
     </RegistryContext.Provider>

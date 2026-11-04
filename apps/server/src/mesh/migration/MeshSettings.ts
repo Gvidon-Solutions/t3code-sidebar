@@ -1,8 +1,8 @@
 import { ServerSettingsError } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { ServerSettingsService } from "../serverSettings.ts";
-import { MeshLayoutService } from "./MeshLayoutService.ts";
+import { ServerSettingsService } from "../../serverSettings.ts";
+import { MeshLayoutService } from "../MeshLayoutService.ts";
 
 export const layer = Layer.effect(
   ServerSettingsService,

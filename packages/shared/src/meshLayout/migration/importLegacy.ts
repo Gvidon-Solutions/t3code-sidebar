@@ -1,8 +1,8 @@
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
-import { encode } from "./diff.ts";
-import { merge, type MeshLayoutDocument } from "./document.ts";
-import { materialize } from "./materialize.ts";
-import type { Hlc } from "./hlc.ts";
+import { encode } from "../diff.ts";
+import { merge, type MeshLayoutDocument } from "../document.ts";
+import { materialize } from "../materialize.ts";
+import type { Hlc } from "../hlc.ts";
 
 export function importLegacy(
   config: SidebarWorkspacesConfig,
