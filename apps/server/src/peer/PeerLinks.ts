@@ -11,7 +11,6 @@ import {
   type PeerLink,
   type PeerLinkCreateInput,
   PeerLinkError,
-  type PeerLinkStatus,
   type PeerLinkSummary,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -513,20 +512,13 @@ const make = Effect.gen(function* () {
       Effect.orElseSucceed(() => Option.none()),
     );
 
-  const statusOf = (link: PeerLink, now: DateTime.Utc) =>
-    DateTime.isLessThanOrEqualTo(link.expiresAt, now)
-      ? Effect.succeed<PeerLinkStatus>("expired")
-      : Effect.findFirst(link.urls, (url) =>
-          describe(url).pipe(
-            Effect.map(
-              (found) => Option.isSome(found) && found.value.environmentId === link.environmentId,
-            ),
-          ),
-        ).pipe(
-          Effect.map((answered): PeerLinkStatus =>
-            Option.isSome(answered) ? "reachable" : "unreachable",
-          ),
-        );
+  const statusOf = Effect.fn("PeerLinks.statusOf")(function* (link: PeerLink, now: DateTime.Utc) {
+    if (DateTime.isLessThanOrEqualTo(link.expiresAt, now)) return "expired" as const;
+    const network = Option.isSome(transport) ? transport.value.get() : undefined;
+    if (network && (yield* network.status).some((state) => state.environmentId === link.environmentId && state.state !== "offline")) return "reachable" as const;
+    const answered = yield* Effect.findFirst(link.urls, (url) => describe(url).pipe(Effect.map((found) => Option.isSome(found) && found.value.environmentId === link.environmentId)));
+    return Option.isSome(answered) ? "reachable" as const : "unreachable" as const;
+  });
 
   const ids: PeerLinks["Service"]["ids"] = readRows.pipe(
     Effect.map((rows) => rows.map((row) => EnvironmentId.make(row.environment_id))),
@@ -534,8 +526,7 @@ const make = Effect.gen(function* () {
 
   const acceptGrant: PeerLinks["Service"]["acceptGrant"] = Effect.fn("PeerLinks.acceptGrant")(
     function* (input) {
-      // A grant is a live credential from a peer that already authenticated to us.
-      // It replaces whatever we held for it, the same way a new pairing code would.
+      // Reverse trust must not discard an existing outbound address or access choice.
       const now = yield* DateTime.now;
       const previous = yield* readRow(input.environmentId);
       if (
@@ -573,7 +564,13 @@ const make = Effect.gen(function* () {
           last_error = NULL
       `.pipe(Effect.catch(failStorage));
       if (Option.isSome(previous) && previous.value.secret_name !== secretName) {
-        yield* secrets.remove(previous.value.secret_name).pipe(Effect.ignore);
+        yield* secrets
+          .remove(previous.value.secret_name)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("Replaced reverse-link secret could not be removed", { error }),
+            ),
+          );
       }
       yield* PubSub.publish(changes, undefined);
     },

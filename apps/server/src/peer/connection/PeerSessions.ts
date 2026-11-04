@@ -331,10 +331,42 @@ const make = Effect.gen(function* () {
   let stopped = false;
   const attempt = new Map<string, { attempt: number; nextAt: number; lastError: string | null }>();
   const offlineSince = new Map<string, string>();
+  const knownRelays = new Set<string>();
+  const reachableRelays = new Set<string>();
+  const relayErrors = new Map<string, string>();
   const credentials = yield* Effect.serviceOption(PeerCredentials.PeerCredentials);
 
   const selfFacts = yield* factsReporter.collect;
   const selfId = String(self);
+  const updateRelayState = (reason = "No connected relay advertises this machine") => {
+    for (const target of knownRelays) {
+      if (live.has(target) || [...live.values()].some((entry) => entry.routes.has(target))) {
+        reachableRelays.add(target);
+        offlineSince.delete(target);
+        relayErrors.delete(target);
+      } else if (reachableRelays.delete(target)) {
+        offlineSince.set(target, DateTime.formatIso(DateTime.nowUnsafe()));
+        relayErrors.set(target, reason);
+      }
+    }
+  };
+  if (Option.isSome(mesh)) {
+    const previous = (yield* mesh.value.read).config;
+    const states = previous.machines[selfId]?.reported?.connections ?? [];
+    for (const environmentId of Object.keys(previous.machines)) {
+      if (environmentId === selfId) continue;
+      knownRelays.add(environmentId);
+      const state = states.find((item) => item.environmentId === environmentId);
+      offlineSince.set(
+        environmentId,
+        state?.offlineSince ?? DateTime.formatIso(DateTime.nowUnsafe()),
+      );
+      relayErrors.set(
+        environmentId,
+        state?.lastError ?? "Waiting for an authenticated peer connection",
+      );
+    }
+  }
 
   /** Facts are reported, never edited: only `reported` changes in the machine entry. */
   const rememberFacts = (environmentId: string, facts: PeerFacts.PeerFacts) =>
@@ -563,6 +595,8 @@ const make = Effect.gen(function* () {
       const entry = live.get(from);
       if (Option.isNone(decoded) || entry === undefined) return;
       entry.routes = new Set(decoded.value.routes.filter((id) => id !== selfId && id !== from));
+      for (const target of entry.routes) knownRelays.add(target);
+      updateRelayState();
       yield* reportOwnState();
       yield* PubSub.publish(events, { environmentId: from, name, body });
       return;
@@ -659,6 +693,7 @@ const make = Effect.gen(function* () {
       onClose: (reason) => {
         if (live.get(env)?.channel === channel) {
           live.delete(env);
+          updateRelayState(reason.message);
           for (const other of live.values()) {
             void run(notify(other, "peer.routes", { routes: routesOf() }));
           }
@@ -674,6 +709,7 @@ const make = Effect.gen(function* () {
     });
     entry.channel = channel;
     live.set(env, entry);
+    updateRelayState();
     attempt.delete(env);
     offlineSince.delete(env);
     yield* Effect.whileLoop({
@@ -700,13 +736,13 @@ const make = Effect.gen(function* () {
       ),
     );
     const relayed = new Map<string, string>();
-    for (const [via, entry] of live) {
+    for (const [via, entry] of [...live].sort(([left], [right]) => left.localeCompare(right))) {
       for (const target of entry.routes) {
         if (target !== selfId && !live.has(target) && !relayed.has(target))
           relayed.set(target, via);
       }
     }
-    return [...new Set([...ids.map(String), ...live.keys(), ...relayed.keys()])]
+    return [...new Set([...ids.map(String), ...live.keys(), ...knownRelays])]
       .sort()
       .map((environmentId): PeerConnectionStatus => {
         const entry = live.get(environmentId);
@@ -721,8 +757,14 @@ const make = Effect.gen(function* () {
           direction: entry?.direction ?? null,
           connectedAt:
             entry === undefined ? null : DateTime.formatIso(DateTime.makeUnsafe(entry.connectedAt)),
-          offlineSince: entry === undefined ? (offlineSince.get(environmentId) ?? null) : null,
-          lastError: failed?.lastError ?? null,
+          offlineSince:
+            entry === undefined && via === undefined
+              ? (offlineSince.get(environmentId) ?? null)
+              : null,
+          lastError:
+            entry !== undefined || via !== undefined
+              ? null
+              : (failed?.lastError ?? relayErrors.get(environmentId) ?? null),
         };
       });
   });
@@ -789,7 +831,10 @@ const make = Effect.gen(function* () {
         });
       const direct = live.get(input.environmentId);
       const relay =
-        direct ?? [...live.values()].find((entry) => entry.routes.has(input.environmentId));
+        direct ??
+        [...live.values()]
+          .sort((left, right) => left.environmentId.localeCompare(right.environmentId))
+          .find((entry) => entry.routes.has(input.environmentId));
       if (relay === undefined) {
         return yield* new PeerConnectionError({
           reason: "offline",

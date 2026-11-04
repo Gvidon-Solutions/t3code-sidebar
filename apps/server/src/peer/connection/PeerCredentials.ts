@@ -31,11 +31,13 @@ export const layer = Layer.effect(
     const auth = yield* EnvironmentAuth.EnvironmentAuth;
     const secrets = yield* ServerSecretStore.ServerSecretStore;
     const failure = (cause: unknown) =>
-      new PeerConnectionError({
-        reason: "protocol",
-        message: "Peer credential storage failed",
-        cause,
-      });
+      cause instanceof PeerConnectionError
+        ? cause
+        : new PeerConnectionError({
+            reason: "protocol",
+            message: "Peer credential storage failed",
+            cause,
+          });
     const bind = Effect.fn("PeerCredentials.bind")(function* (
       environmentId: string,
       sessionId: string,

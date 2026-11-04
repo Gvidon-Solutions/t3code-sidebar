@@ -228,6 +228,25 @@ it.live(
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(cloudbox.count()).toBe(1);
       expect(cloudbox.externalMcp()).toBe(previousPosts);
+      const ordinary = yield* cloudbox.auth.issueMcpClientSession({
+        label: "ordinary client",
+        access: "full-access",
+        peerLink: false,
+        client: { deviceType: "bot" },
+      });
+      expect(
+        (yield* Effect.promise(() =>
+          fetch(`${cloudbox.url}/peer`, { headers: { authorization: `Bearer ${ordinary.token}` } }),
+        )).status,
+      ).toBe(403);
+      expect((yield* Effect.promise(() => fetch(`${cloudbox.url}/peer`))).status).toBe(401);
+      const rebound = yield* Effect.promise(() =>
+        fetch(`${cloudbox.url}/peer`, {
+          headers: { authorization: `Bearer ${legacy.token}`, "t3-peer-environment-id": "laptop" },
+        }),
+      );
+      expect(rebound.status).toBe(403);
+      expect(yield* Effect.promise(() => rebound.text())).toContain("bound to another environment");
       expect(
         yield* cloudbox.client.call({
           ...request,
@@ -386,6 +405,7 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
     yield* Fiber.join(laptopLinked);
     yield* Fiber.join(laptopRoute);
     expect((yield* cloudbox.links.get(studio.id)).pipe(Option.getOrThrow).urls).toEqual([]);
+    expect((yield* cloudbox.links.list).find((link) => link.environmentId === studio.id)?.status).toBe("reachable");
     studio.blockHttp();
     cloudbox.blockHttp();
     laptop.blockHttp();

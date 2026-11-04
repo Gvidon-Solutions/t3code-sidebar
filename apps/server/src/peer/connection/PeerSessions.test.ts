@@ -185,10 +185,14 @@ describe("PeerSessions", () => {
     "stores reported peer facts and honest connection failures in machine layout entries",
     () =>
       Effect.gen(function* () {
-        let config = DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
+        let config: typeof DEFAULT_SIDEBAR_WORKSPACES_CONFIG = {
+          ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+          machines: { ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG.machines, [C]: {} },
+        };
         const updates = yield* Queue.unbounded<typeof config>();
         const mesh = Layer.mock(MeshLayoutService)({
           environmentId: SELF,
+          read: Effect.sync(() => ({ config, document: {} })),
           edit: (update) =>
             Effect.gen(function* () {
               config = update(config);
@@ -200,7 +204,12 @@ describe("PeerSessions", () => {
           PeerSessionsModule.layer.pipe(Layer.provide(Layer.merge(dependencies([B]), mesh))),
         );
         const sessions = Context.get(context, PeerSessions);
-        expect((yield* Queue.take(updates)).machines[SELF]?.reported?.user).toBe("tester");
+        const initial = (yield* Queue.take(updates)).machines[SELF]?.reported;
+        expect(initial?.user).toBe("tester");
+        expect(initial?.connections?.find((state) => state.environmentId === C)).toMatchObject({
+          state: "offline",
+          lastError: "Waiting for an authenticated peer connection",
+        });
         const peer = wire();
         yield* sessions.accept({
           environmentId: B,
@@ -366,7 +375,11 @@ describe("PeerSessions", () => {
         via: String(C),
       });
       expect(status.find((s) => s.environmentId === String(E))?.state).toBe("offline");
-    }).pipe(Effect.provide(testLayer([B, C, D, E])), Effect.scoped),
+      yield* sessions.close(C, "Fixture relay unavailable");
+      const lost = (yield* sessions.status).find((state) => state.environmentId === D);
+      expect(lost).toMatchObject({ state: "offline", lastError: "Fixture relay unavailable" });
+      expect(lost?.offlineSince).toBeTypeOf("string");
+    }).pipe(Effect.provide(testLayer([B, C, E])), Effect.scoped),
   );
 });
 
