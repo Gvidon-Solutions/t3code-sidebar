@@ -325,22 +325,37 @@ it.effect("backs off each link independently and caps reconnect delay at fifteen
     const attempts = yield* Queue.unbounded<number>();
     const blocked = yield* Deferred.make<PeerWire>();
     const peer = wire();
+    let nextWire = peer;
+    let address = "https://cloudbox.test";
+    const attemptedAddresses: string[] = [];
     let count = 0;
     const dialer = Layer.succeed(PeerWireDialer, {
-      dial: ({ environmentId }) =>
+      dial: ({ environmentId, url }) =>
         Effect.gen(function* () {
           if (environmentId === B) return yield* Deferred.await(blocked);
+          attemptedAddresses.push(url);
           yield* Queue.offer(attempts, ++count);
           if (count < 7)
             return yield* new PeerSessionsModule.PeerConnectionError({
               reason: "offline",
               message: "fixture peer unavailable",
             });
-          return peer.wire;
+          return nextWire.wire;
         }),
     });
+    const existingLinks = Context.get(
+      yield* Layer.build(dependencies([B, C])),
+      PeerLinks.PeerLinks,
+    );
+    const links = Layer.succeed(PeerLinks.PeerLinks, {
+      ...existingLinks,
+      resolve: (id) =>
+        existingLinks.resolve(id).pipe(Effect.map((resolved) => ({ ...resolved, url: address }))),
+    });
     const context = yield* Layer.build(
-      PeerSessionsModule.layer.pipe(Layer.provide(Layer.merge(dependencies([B, C]), dialer))),
+      PeerSessionsModule.layer.pipe(
+        Layer.provide(Layer.mergeAll(dependencies([B, C]), dialer, links)),
+      ),
     );
     const sessions = Context.get(context, PeerSessions);
     const connected = yield* sessions.events.pipe(
@@ -359,6 +374,19 @@ it.effect("backs off each link independently and caps reconnect delay at fifteen
     yield* Fiber.join(connected);
     expect(yield* sessions.connected(C)).toBe(true);
     expect(yield* sessions.connected(B)).toBe(false);
+    address = "https://cloudbox-new.test";
+    nextWire = wire();
+    const recovered = yield* sessions.events.pipe(
+      Stream.filter((event) => event.name === "peer.connected" && event.environmentId === C),
+      Stream.runHead,
+      Effect.forkScoped({ startImmediately: true }),
+    );
+    yield* sessions.close(C, "Network address changed after wake");
+    yield* TestClock.adjust(1000);
+    expect(yield* Queue.take(attempts)).toBe(8);
+    yield* Fiber.join(recovered);
+    expect(attemptedAddresses.at(-1)).toBe("wss://cloudbox-new.test/peer");
+    expect(yield* sessions.connected(C)).toBe(true);
     yield* sessions.stop;
   }).pipe(
     Effect.scoped,

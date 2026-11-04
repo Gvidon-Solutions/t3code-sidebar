@@ -226,7 +226,7 @@ export class PeerSessions extends Context.Service<
   }
 >()("t3/peer/connection/PeerSessions") {}
 
-export const wsOrigin = (url: string) => {
+const wsOrigin = (url: string) => {
   const parsed = URL.parse(url);
   if (parsed === null || !["https:", "http:"].includes(parsed.protocol))
     throw new Error("Peer origin must use HTTPS");
@@ -362,14 +362,18 @@ const make = Effect.gen(function* () {
           );
 
   const notify = (entry: Live, name: string, body: unknown) =>
-    Effect.sync(() => {
-      try {
-        entry.channel.event(name, body);
-        return true;
-      } catch {
-        return false;
-      }
-    });
+    Effect.try(() => {
+      entry.channel.event(name, body);
+      return true;
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.logDebug("Peer notification could not be sent", {
+          environmentId: entry.environmentId,
+          name,
+          error,
+        }).pipe(Effect.as(false)),
+      ),
+    );
 
   const grants = new Map<
     string,
@@ -383,7 +387,11 @@ const make = Effect.gen(function* () {
 
   const announce = Effect.fn("PeerSessions.announce")(function* (entry: Live) {
     const known = yield* links.ids.pipe(
-      Effect.orElseSucceed(() => [] as ReadonlyArray<EnvironmentId>),
+      Effect.catch((error) =>
+        Effect.logWarning("Peer link IDs could not be read", { error }).pipe(
+          Effect.as([] as ReadonlyArray<EnvironmentId>),
+        ),
+      ),
     );
     const connections = yield* status;
     const facts = { ...selfFacts, connections };
@@ -567,7 +575,13 @@ const make = Effect.gen(function* () {
     if (name === "peer.unlink") {
       yield* links
         .unlink(EnvironmentId.make(from), { notifyPeer: false })
-        .pipe(Effect.orElseSucceed(() => false));
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Remote unlink could not be stored", { from, error }).pipe(
+              Effect.as(false),
+            ),
+          ),
+        );
       yield* Effect.sync(() => closeLive(from, new Error("The peer unlinked this machine")));
       yield* PubSub.publish(events, { environmentId: from, name: "peer.unlinked", body: {} });
       return;
@@ -679,7 +693,11 @@ const make = Effect.gen(function* () {
 
   const status: PeerSessions["Service"]["status"] = Effect.gen(function* () {
     const ids = yield* links.ids.pipe(
-      Effect.orElseSucceed(() => [] as ReadonlyArray<EnvironmentId>),
+      Effect.catch((error) =>
+        Effect.logWarning("Peer status links could not be read", { error }).pipe(
+          Effect.as([] as ReadonlyArray<EnvironmentId>),
+        ),
+      ),
     );
     const relayed = new Map<string, string>();
     for (const [via, entry] of live) {
@@ -847,10 +865,16 @@ const make = Effect.gen(function* () {
         token: link.token,
         callerEnvironmentId: selfId,
       });
-      const made = yield* dispatcher.make({
-        environmentId: env,
-        access: link.link.access,
-      });
+      const made = yield* dispatcher
+        .make({
+          environmentId: env,
+          access: link.link.access,
+        })
+        .pipe(
+          Effect.onError(() =>
+            Effect.sync(() => wire.close(new Error("Peer credential preparation failed"))),
+          ),
+        );
       grants.set(env, {
         token: made.token,
         access: link.link.access,
@@ -865,12 +889,14 @@ const make = Effect.gen(function* () {
       const nextAttempt = state.attempt + 1;
       const message = messageOf(failure);
       const jitter = yield* Random.next;
+      const changed = state.lastError !== message || !offlineSince.has(env);
       attempt.set(env, {
         attempt: nextAttempt,
         nextAt: nowMs() + reconnectDelay(nextAttempt - 1, jitter),
         lastError: message,
       });
       if (!offlineSince.has(env)) offlineSince.set(env, DateTime.formatIso(DateTime.nowUnsafe()));
+      if (changed) yield* reportOwnState();
     }
   });
   const reconcile = Effect.gen(function* () {
@@ -888,6 +914,10 @@ const make = Effect.gen(function* () {
     }
     for (const id of ids) {
       if (dialWorkers.has(id)) continue;
+      if (!live.has(id) && !offlineSince.has(id)) {
+        offlineSince.set(id, DateTime.formatIso(DateTime.nowUnsafe()));
+        yield* reportOwnState();
+      }
       const fiber = yield* reconcilePeer(id).pipe(
         Effect.catchCause((cause) => Effect.logWarning("Peer dial worker failed", { id, cause })),
         Effect.repeat(Schedule.spaced("1 second")),
@@ -957,4 +987,3 @@ const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(PeerSessions, make).pipe(Layer.provide(defaultPipeConnector));
-export { defaultPipeConnector };

@@ -133,8 +133,20 @@ it("keeps healthy idle connections alive and rejects malformed or oversized fram
   expect(p.closed).toEqual([]);
   p.left.receive('{"type":"credit","id":"unknown","bytes":-1}');
   expect(p.closed).toHaveLength(1);
-  p.right.receive("x".repeat(1024 * 1024 + 1));
+  p.right.receive("x".repeat(32 * 1024 * 1024 + 1));
   expect(p.closed).toHaveLength(2);
+});
+
+it("carries large MCP file and transcript responses without truncation", async () => {
+  const body = { text: "transcript".repeat(256 * 1024) };
+  const p = pair();
+  const answer = p.left.call(body);
+  p.pump();
+  await vi.waitFor(() => expect(p.rightWire).toHaveLength(1));
+  p.pump();
+  expect(await answer).toEqual(body);
+  p.left.close(new Error("test complete"));
+  p.right.close(new Error("test complete"));
 });
 
 it("bounds a stalled reader, resumes on consumption and preserves half-close", async () => {

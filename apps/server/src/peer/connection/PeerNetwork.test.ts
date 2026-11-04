@@ -260,6 +260,56 @@ const waitEvent = Effect.fn("test.waitPeerEvent")(
     ),
 );
 
+it.live("converges simultaneous real WebSocket dials to the same authenticated connection", () =>
+  Effect.gen(function* () {
+    const studio = yield* serve("studio");
+    const cloudbox = yield* serve("cloudbox");
+    yield* pairNetwork(studio, cloudbox);
+    yield* pairNetwork(cloudbox, studio);
+    studio.blockHttp();
+    cloudbox.blockHttp();
+    const inbound = Schema.is(Schema.Struct({ direction: Schema.Literal("inbound") }));
+    const outbound = Schema.is(Schema.Struct({ direction: Schema.Literal("outbound") }));
+    const studioReady = yield* studio.sessions.events.pipe(
+      Stream.filter((event) => event.name === "peer.connected" && inbound(event.body)),
+      Stream.runHead,
+      Effect.forkScoped({ startImmediately: true }),
+    );
+    const cloudboxReady = yield* cloudbox.sessions.events.pipe(
+      Stream.filter((event) => event.name === "peer.connected" && outbound(event.body)),
+      Stream.runHead,
+      Effect.forkScoped({ startImmediately: true }),
+    );
+    yield* Effect.all([studio.sessions.start, cloudbox.sessions.start], {
+      concurrency: "unbounded",
+    });
+    yield* Fiber.join(studioReady);
+    yield* Fiber.join(cloudboxReady);
+    expect(yield* studio.sessions.status).toMatchObject([
+      { environmentId: cloudbox.id, state: "direct", direction: "inbound" },
+    ]);
+    expect(yield* cloudbox.sessions.status).toMatchObject([
+      { environmentId: studio.id, state: "direct", direction: "outbound" },
+    ]);
+    for (const [from, to] of [
+      [studio, cloudbox],
+      [cloudbox, studio],
+    ] as const)
+      expect(
+        yield* from.client.call({
+          environmentId: to.id,
+          tool: "t3_create_fixture",
+          arguments: {},
+          limits: { runtimeMode: "full-access", interactionMode: "default" },
+          success: Answer,
+        }),
+      ).toEqual({ count: 1 });
+    expect(studio.externalMcp() + cloudbox.externalMcp()).toBe(0);
+    yield* studio.sessions.stop;
+    yield* cloudbox.sessions.stop;
+  }).pipe(Effect.scoped),
+);
+
 it.live("reaches an incoming-only machine through one relay for calls and a local IPC pipe", () =>
   Effect.gen(function* () {
     const sockets = new Set<NodeNet.Socket>();
@@ -287,7 +337,7 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
     );
     const address = echo.address();
     if (!address || typeof address === "string") return yield* Effect.die("Expected loopback port");
-    const studio = yield* serve("studio", { sshdPort: address.port, id: "studio-environment" });
+    const studio = yield* serve("studio", { sshdPort: address.port, id: "studio:environment" });
     const cloudbox = yield* serve("cloudbox");
     const laptop = yield* serve("laptop");
     yield* pairNetwork(studio, cloudbox);

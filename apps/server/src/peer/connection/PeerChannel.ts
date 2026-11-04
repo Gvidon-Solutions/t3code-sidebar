@@ -21,7 +21,7 @@ type Frame = typeof Frame.Type;
 const decode = Schema.decodeUnknownSync(Schema.fromJsonString(Frame));
 const WINDOW = 256 * 1024;
 const CHUNK = 32 * 1024;
-const MAX_FRAME = 1024 * 1024;
+const MAX_FRAME = 32 * 1024 * 1024;
 
 /** Lower environment id's dial wins; the other side can still dial when it alone has a route. */
 export const preferConnection = (self: string, peer: string, outbound: boolean) =>
@@ -298,7 +298,8 @@ export class PeerChannel {
       return;
     }
     const body = JSON.stringify(frame.body);
-    const existing = this.receipts.get(frame.key);
+    const cacheable = frame.key !== frame.id;
+    const existing = cacheable ? this.receipts.get(frame.key) : undefined;
     if (existing && existing.body !== body) {
       this.send({
         type: "error",
@@ -307,11 +308,11 @@ export class PeerChannel {
       });
       return;
     }
-    if (!existing && this.receipts.size >= 4096) {
+    if (cacheable && !existing && this.receipts.size >= 4096) {
       const oldest = [...this.receipts].find(([, receipt]) => receipt.settled);
       if (oldest) this.receipts.delete(oldest[0]);
     }
-    if (!existing && this.receipts.size >= 4096) {
+    if (cacheable && !existing && this.receipts.size >= 4096) {
       this.send({ type: "error", id: frame.id, message: "Peer receipt limit exceeded; reconnect" });
       return;
     }
@@ -320,7 +321,7 @@ export class PeerChannel {
     const result =
       existing?.result ??
       Promise.resolve().then(() => this.options.call(frame.body, controller.signal));
-    this.receipts.set(frame.key, existing ?? { body, result, settled: false });
+    if (cacheable) this.receipts.set(frame.key, existing ?? { body, result, settled: false });
     void result
       .then(
         (value) => {

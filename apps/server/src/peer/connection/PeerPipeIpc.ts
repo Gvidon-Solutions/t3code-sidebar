@@ -166,14 +166,22 @@ export const layer = Layer.effectDiscard(
               socket.pause();
               socket.removeListener("data", receive);
               socket.setTimeout(0);
+              const controller = new AbortController();
+              socket.once("close", () => controller.abort());
               void (async () => {
                 try {
                   if (newline < 0 || newline > 8192)
                     throw new Error("Invalid local mesh pipe request");
                   const request = decodeRequest(buffer.subarray(0, newline).toString("utf8"));
-                  const id = await run(resolveMachine(request.machine));
+                  const id = await run(resolveMachine(request.machine), {
+                    signal: controller.signal,
+                  });
                   const stream = await run(
-                    sessions.openPipe({ environmentId: id, target: request.target }),
+                    sessions.openPipe({
+                      environmentId: id,
+                      target: request.target,
+                      signal: controller.signal,
+                    }),
                   );
                   socket.write(`${encode({ ok: true })}\n`);
                   if (buffer.length > newline + 1) socket.unshift(buffer.subarray(newline + 1));

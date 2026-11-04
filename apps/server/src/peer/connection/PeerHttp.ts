@@ -2,7 +2,6 @@ import * as EnvironmentAuth from "../../auth/EnvironmentAuth.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
@@ -36,12 +35,20 @@ export const layer = Layer.unwrap(
         const request = yield* HttpServerRequest.HttpServerRequest;
         const enabled = yield* settings.getSettings.pipe(
           Effect.map((value) => value.linkedEnvironmentsEnabled),
-          Effect.orElseSucceed(() => false),
+          Effect.catch((error) =>
+            Effect.logWarning("Peer settings could not be read", error).pipe(Effect.as(false)),
+          ),
         );
         if (!enabled) return refused(403, "Linked environments is off on this machine.");
-        const authenticated = yield* auth.authenticateMcpClient(request).pipe(Effect.option);
-        if (Option.isNone(authenticated)) return refused(401, "A link credential is required.");
-        const session = authenticated.value;
+        const authenticated = yield* auth.authenticateMcpClient(request).pipe(Effect.result);
+        if (authenticated._tag === "Failure") {
+          if (authenticated.failure._tag === "ServerAuthInternalError") {
+            yield* Effect.logWarning("Peer authentication failed", authenticated.failure);
+            return refused(503, "Peer authentication is temporarily unavailable.");
+          }
+          return refused(401, "A link credential is required.");
+        }
+        const session = authenticated.success;
         if (
           session.peerLink !== true ||
           (session.peerEnvironmentId === undefined && !request.headers["t3-peer-environment-id"])
@@ -49,7 +56,8 @@ export const layer = Layer.unwrap(
           return refused(403, "This credential is not a T3 Code peer link.");
         const callerId = session.peerEnvironmentId ?? request.headers["t3-peer-environment-id"]!;
         const environmentId = EnvironmentId.make(callerId);
-        yield* credentials.bind(callerId, session.sessionId);
+        const bound = yield* credentials.bind(callerId, session.sessionId).pipe(Effect.result);
+        if (bound._tag === "Failure") return refused(403, bound.failure.message);
         const made = yield* dispatcher.make({
           environmentId: callerId,
           token: request.headers.authorization!.slice(7),

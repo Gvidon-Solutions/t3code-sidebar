@@ -666,9 +666,7 @@ const make = Effect.gen(function* () {
         ...(input?.proofKeyThumbprint ? { jkt: input.proofKeyThumbprint } : {}),
         ...(input?.runtimeModeCeiling ? { rtc: input.runtimeModeCeiling } : {}),
         ...(input?.peerLink === true ? { plk: 1 as const } : {}),
-        ...(input?.peerEnvironmentId
-          ? { pei: input.peerEnvironmentId }
-          : {}),
+        ...(input?.peerEnvironmentId ? { pei: input.peerEnvironmentId } : {}),
         iat: issuedAt.epochMilliseconds,
         exp: expiresAt.epochMilliseconds,
       };

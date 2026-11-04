@@ -548,9 +548,7 @@ const make = Effect.gen(function* () {
           label: pending.clientName,
           access: pending.access,
           peerLink: pending.peerLink,
-          ...(pending.peerEnvironmentId
-            ? { peerEnvironmentId: pending.peerEnvironmentId }
-            : {}),
+          ...(pending.peerEnvironmentId ? { peerEnvironmentId: pending.peerEnvironmentId } : {}),
           client: deriveAuthClientMetadata({ request }),
         })
         .pipe(
@@ -604,7 +602,9 @@ export const layerMcpClientAuthenticator = Layer.effect(
                     label: client.label,
                     access: client.access,
                     linked: client.peerLink,
-                    ...(client.peerEnvironmentId === undefined ? {} : { peerEnvironmentId: client.peerEnvironmentId }),
+                    ...(client.peerEnvironmentId === undefined
+                      ? {}
+                      : { peerEnvironmentId: client.peerEnvironmentId }),
                     ...(client.peerLink ? {} : { webOrigin: requestUrls(request).issuer }),
                   },
                   capabilities: new Set<McpInvocationContext.McpCapability>([

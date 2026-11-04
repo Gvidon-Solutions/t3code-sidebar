@@ -9,7 +9,7 @@ import * as HttpServerRequest from "effect/http/HttpServerRequest";
 
 import { PeerWireDialer, type PeerWire } from "./PeerSessions.ts";
 
-const MAX_QUEUE_BYTES = 8 * 1024 * 1024;
+const MAX_QUEUE_BYTES = 64 * 1024 * 1024;
 
 class FrameQueue implements AsyncIterable<string>, AsyncIterator<string> {
   private readonly items: string[] = [];

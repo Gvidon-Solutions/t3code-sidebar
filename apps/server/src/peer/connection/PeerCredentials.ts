@@ -72,10 +72,11 @@ export const layer = Layer.effect(
       access: AuthMcpClientAccess,
     ) {
       const rows = yield* sql<{
+        session_id: string;
         secret_name: string;
         expires_at: number;
         access: string;
-      }>`SELECT secret_name, expires_at, access FROM peer_reverse_grants WHERE environment_id = ${environmentId}`;
+      }>`SELECT session_id, secret_name, expires_at, access FROM peer_reverse_grants WHERE environment_id = ${environmentId}`;
       const now = yield* DateTime.now;
       const previous = rows[0];
       if (
@@ -84,7 +85,10 @@ export const layer = Layer.effect(
         previous.expires_at > now.epochMilliseconds + 60_000
       ) {
         const stored = yield* secrets.get(previous.secret_name);
-        if (Option.isSome(stored))
+        const active = (yield* auth.listSessions()).some(
+          (session) => session.sessionId === previous.session_id,
+        );
+        if (Option.isSome(stored) && active)
           return { token: new TextDecoder().decode(stored.value), expiresAt: previous.expires_at };
       }
       const issued = yield* auth.issueMcpClientSession({
@@ -97,8 +101,10 @@ export const layer = Layer.effect(
       const secretName = `peer-reverse-${issued.sessionId}`;
       yield* secrets.set(secretName, new TextEncoder().encode(issued.token));
       yield* sql`INSERT INTO peer_reverse_grants (environment_id, session_id, secret_name, access, expires_at) VALUES (${environmentId}, ${issued.sessionId}, ${secretName}, ${access}, ${issued.expiresAt.epochMilliseconds}) ON CONFLICT(environment_id) DO UPDATE SET session_id=excluded.session_id, secret_name=excluded.secret_name, access=excluded.access, expires_at=excluded.expires_at`;
-      if (previous && previous.secret_name !== secretName)
+      if (previous && previous.secret_name !== secretName) {
+        yield* auth.revokeSession(AuthSessionId.make(previous.session_id));
         yield* secrets.remove(previous.secret_name);
+      }
       return { token: issued.token, expiresAt: issued.expiresAt.epochMilliseconds };
     }, Effect.mapError(failure));
     return { bind, revoke, grant };
