@@ -24,6 +24,7 @@ vi.mock("../../state/environments", async (importOriginal) => ({
     environments: [
       { environmentId: "A", label: "Studio", connection: { phase: "connected" } },
       { environmentId: "C", label: "Laptop", connection: { phase: "connected" } },
+      { environmentId: "D", label: "Travel laptop", connection: { phase: "connected" } },
     ],
   }),
   useEnvironmentProviders: () =>
@@ -79,6 +80,7 @@ it("offers machines by title and label and explains an offline target", async ()
     true,
   );
   expect(options.some((text) => text?.includes("Studio") && text?.includes("ST"))).toBe(true);
+  expect(options).toContain("Travel laptop ");
   await userEvent.selectOptions(select, "B");
   await expect.element(screen.getByText("Cloudbox is offline.")).toBeInTheDocument();
   await expect.element(screen.getByRole("button", { name: "Fork to Cloudbox" })).toBeDisabled();

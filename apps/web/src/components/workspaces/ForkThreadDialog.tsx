@@ -47,6 +47,13 @@ export function ForkThreadDialog(props: {
   const providersByEnvironment = useEnvironmentProviders();
   const forkCommand = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
 
+  const displayMachine = (environmentId: string) =>
+    machineLabel(
+      mesh.config,
+      environmentId,
+      environments.find((environment) => environment.environmentId === environmentId)?.label ??
+        "Unknown machine",
+    );
   const source = {
     shell: readThreadShell(scopeThreadRef(request.environmentId, request.threadId)),
     environmentId: request.environmentId,
@@ -103,17 +110,17 @@ export function ForkThreadDialog(props: {
         progress: null,
         conflicts: syncStatus.conflicts ?? 0,
         message: syncStatus.message ?? null,
-        targetLabel: target ? machineLabel(config, target, target).title : "the target",
-        sourceLabel: machineLabel(config, source.environmentId, source.environmentId).title,
+        targetLabel: target ? displayMachine(target).title : "the target",
+        sourceLabel: displayMachine(source.environmentId).title,
       })
     : null;
   const forkTitle = title.trim() || `${source.shell?.title ?? "Thread"} (fork)`;
   const noModelsReason = !target
     ? null
     : !online
-      ? `${machineLabel(config, target, target).title} is offline.`
+      ? `${displayMachine(target).title} is offline.`
       : choices.length === 0
-        ? `No models are available on ${machineLabel(config, target, target).title}.`
+        ? `No models are available on ${displayMachine(target).title}.`
         : null;
 
   if (!source.shell) return null;
@@ -128,6 +135,7 @@ export function ForkThreadDialog(props: {
   };
   const machineIds = new Set<string>([
     ...Object.keys(config?.machines ?? {}),
+    ...environments.map((environment) => environment.environmentId),
     ...(target ? [target] : []),
     source.environmentId,
   ]);
@@ -135,7 +143,7 @@ export function ForkThreadDialog(props: {
     const environment = environments.find((entry) => entry.environmentId === environmentId);
     return {
       environmentId: environmentId as EnvironmentId,
-      ...machineLabel(config, environmentId, environment?.label ?? environmentId),
+      ...displayMachine(environmentId),
       online: environment?.connection.phase === "connected",
     };
   });
@@ -161,7 +169,7 @@ export function ForkThreadDialog(props: {
     }
     toastManager.add({
       title: "Forked",
-      description: `${forkTitle} on ${machineLabel(config, target, target).title}`,
+      description: `${forkTitle} on ${displayMachine(target).title}`,
     });
     close();
   };
@@ -170,9 +178,7 @@ export function ForkThreadDialog(props: {
     <Dialog open onOpenChange={(open) => (!open ? close() : undefined)}>
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>
-            Fork to {target ? machineLabel(config, target, target).title : "a machine"}
-          </DialogTitle>
+          <DialogTitle>Fork to {target ? displayMachine(target).title : "a machine"}</DialogTitle>
         </DialogHeader>
         <DialogPanel>
           <div className="flex flex-col gap-3">
@@ -252,8 +258,8 @@ export function ForkThreadDialog(props: {
             {busy ? (
               <p role="status" className="text-sm text-muted-foreground">
                 Preparing {mesh.config?.projectTitles[logicalKey ?? ""] ?? "the project"} on{" "}
-                {target ? machineLabel(config, target, target).title : "the machine"} and copying
-                the conversation…
+                {target ? displayMachine(target).title : "the machine"} and copying the
+                conversation…
               </p>
             ) : null}
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -265,9 +271,7 @@ export function ForkThreadDialog(props: {
                 disabled={busy || !target || !initial || noModelsReason !== null}
                 onClick={() => void submit()}
               >
-                {busy
-                  ? "Forking…"
-                  : `Fork to ${target ? machineLabel(config, target, target).title : ""}`}
+                {busy ? "Forking…" : `Fork to ${target ? displayMachine(target).title : ""}`}
               </Button>
             </div>
           </div>
