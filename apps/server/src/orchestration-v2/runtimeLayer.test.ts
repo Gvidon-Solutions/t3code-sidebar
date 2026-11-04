@@ -8577,6 +8577,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         let providerReady = true;
         let providerInstalled = true;
         let providerAvailable = true;
+        let rejectPublication = false;
         let targetOffline = false;
         let rejectCopy = false;
         let flushReady = true;
@@ -8736,6 +8737,11 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                           limits,
                         )
                         .pipe(
+                          Effect.tapError((error) =>
+                            input.action === "commit" && !rejectPublication
+                              ? Effect.die(error)
+                              : Effect.void,
+                          ),
                           Effect.flatMap((result) => {
                             if (input.action === "receive" && "token" in result)
                               stagedThreadId = result.result.threadId;
@@ -8779,6 +8785,19 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
             runtime,
             peerLinks,
             peer,
+            Layer.succeed(Orchestrator.OrchestratorV2, {
+              ...orchestrator,
+              dispatch: (command) =>
+                rejectPublication && command.type === "thread.fork.record"
+                  ? Effect.fail(
+                      new Orchestrator.OrchestratorCommandPreviouslyRejectedError({
+                        commandId: command.commandId,
+                        commandType: command.type,
+                        detail: "Publication rejected.",
+                      }),
+                    )
+                  : orchestrator.dispatch(command),
+            }),
             Layer.mock(ProviderRegistry.ProviderRegistry)({
               getProviders: Effect.sync(() =>
                 [
@@ -8852,11 +8871,15 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           threadId: sourceId,
           targetEnvironmentId: EnvironmentId.make("B"),
         };
-        const forked = yield* source.fork(input, limits);
+        const forked = yield* source.fork({ ...input, message: "Optional first message" }, limits);
         assert.equal(forked.title, "Studio notes (fork)");
         assert.equal(placed, 1);
         assert.isAbove(flushes, 0);
         const received = yield* orchestrator.getThreadProjection(forked.threadId);
+        assert.lengthOf(received.runs, 1);
+        assert.isTrue(
+          received.messages.some((message) => message.text === "Optional first message"),
+        );
         assert.include(received.messages.map((message) => message.text).join("\n"), "cedar");
         assert.include(received.messages[0]!.text, "Forked from Studio notes on Studio");
         assert.equal(received.thread.meshFork?.threadId, sourceId);
@@ -8948,6 +8971,16 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         providerInstalled = true;
         providerReady = true;
         providerAvailable = true;
+        rejectPublication = true;
+        const rejected = yield* source
+          .fork({ ...input, commandId: CommandId.make("F1-rejected-publication") }, limits)
+          .pipe(Effect.flip);
+        assert.equal(rejected.code, "invalid_request");
+        assert.include(rejected.message, "Publication rejected");
+        assert.isUndefined(yield* journals.get("B")!.read("target:F1-rejected-publication"));
+        assert.isUndefined(yield* journals.get("A")!.read("source:F1-rejected-publication"));
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        rejectPublication = false;
         flushReady = false;
         const flushFailure = yield* source
           .fork({ ...input, commandId: CommandId.make("F1-flush-failure") }, limits)

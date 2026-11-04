@@ -6174,9 +6174,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     const runId = idAllocator.derive.run({ threadId: command.threadId, ordinal });
     const latestCompletedRun = projection.runs.findLast((run) => run.status === "completed");
     const latestHandoffRun = projection.runs.findLast(isHandoffSourceRun);
+    const createdInCommand = (yield* Ref.get(events)).some(
+      (event) => event.threadId === command.threadId && event.type === "thread.created",
+    );
     const legacyImportItems =
       projection.thread.historyOrigin === "v1_import"
-        ? yield* readHandoffItems(command.threadId, [null])
+        ? createdInCommand
+          ? projection.turnItems.filter((item) => item.runId === null)
+          : yield* readHandoffItems(command.threadId, [null])
         : [];
     const isProviderSwitch =
       activeProviderThread !== undefined &&

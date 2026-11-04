@@ -124,7 +124,12 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failure));
     const dispatch = (command: Parameters<typeof orchestrator.dispatch>[0]) =>
       orchestrator.dispatch(command).pipe(
-        Effect.mapError(failure),
+        Effect.tapError((error) => Effect.logWarning("Fork command failed", error)),
+        Effect.mapError((error) =>
+          error._tag === "OrchestratorCommandPreviouslyRejectedError"
+            ? invalid(error.detail)
+            : failure(error),
+        ),
         Effect.timeoutOption(STEP_TIMEOUT),
         Effect.flatMap(
           Option.match({
@@ -466,7 +471,11 @@ export const layer = Layer.effect(
         return yield* invalid("The pending fork expired before commit.");
       }
       yield* transactions.write(key, { ...value, phase: "committing" });
-      const result = yield* receiveFork(value.bundle, value.projectId);
+      const result = yield* receiveFork(value.bundle, value.projectId).pipe(
+        Effect.tapError((error) =>
+          error.code === "invalid_request" ? clearTransaction(key, value) : Effect.void,
+        ),
+      );
       yield* clearForkUploads(forkId).pipe(Effect.provide(uploadContext));
       yield* transactions.write(key, { phase: "committed", token, result });
       return result;
