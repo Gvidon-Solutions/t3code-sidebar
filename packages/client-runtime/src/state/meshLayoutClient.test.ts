@@ -10,7 +10,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { machineTag, mergeSuggestionsFor, offlineLogicalProjects } from "./meshLayout/index.ts";
 import { addWorkspace } from "./sidebarWorkspaces.ts";
 import {
-  MeshLayoutClient,
+  MeshLayoutStore,
   acknowledgeMeshLayoutEntries,
   editMeshLayout,
   emptyMeshLayoutState,
@@ -117,7 +117,7 @@ function client(rpc: FakeRpc, environments: ReadonlyArray<MeshLayoutSourceEnviro
   const persistence = memoryPersistence();
   const changes: MeshLayoutClientState[] = [];
   const failures: unknown[] = [];
-  const mesh = new MeshLayoutClient({
+  const mesh = new MeshLayoutStore({
     rpc,
     persistence,
     environments: () => environments,
@@ -237,7 +237,7 @@ describe("MeshLayoutClient sources", () => {
       });
     const persistence = memoryPersistence(cached);
     const changes: MeshLayoutClientState[] = [];
-    const mesh = new MeshLayoutClient({
+    const mesh = new MeshLayoutStore({
       rpc,
       persistence,
       environments: () => [source("primary")],
@@ -369,4 +369,44 @@ describe("logical project helpers", () => {
     expect(suggestions[0]).toMatchObject({ tag: "BO" });
     expect(suggestions[0]?.project.environmentId).toBe("env-b");
   });
+});
+
+it("persists an offline edit across a browser storage reload and replays it on reconnect", async () => {
+  let stored: string | null = null;
+  const persistence: MeshLayoutPersistencePort = {
+    load: async () => parseMeshLayoutCache(stored),
+    save: async (state) => {
+      stored = serializeMeshLayoutCache(state);
+    },
+  };
+  const rpc = new FakeRpc({
+    studio: { "ws/main": { v: { name: "Main", sort: "a0" }, h: "0000000000001.00000.studio" } },
+  });
+  let connected = true;
+  const create = () =>
+    new MeshLayoutStore({
+      rpc,
+      persistence,
+      environments: () => [source("studio", { connected })],
+      primaryEnvironmentId: () => env("studio"),
+      deviceId: "browser",
+      now: () => 1000,
+    });
+  const first = create();
+  await first.start();
+  connected = false;
+  rpc.applyError = new Error("offline");
+  await first.refreshEnvironments();
+  await first.edit((config) => ({ ...config, quietAfterDays: 19 }));
+  first.dispose();
+  const reloaded = create();
+  await reloaded.start();
+  expect(reloaded.current.snapshot?.config.quietAfterDays).toBe(19);
+  expect(Object.keys(reloaded.current.outbox)).not.toHaveLength(0);
+  connected = true;
+  rpc.applyError = null;
+  await reloaded.refreshEnvironments();
+  expect(materialize(rpc.documents.get("studio")!).quietAfterDays).toBe(19);
+  expect(reloaded.current.outbox).toEqual({});
+  reloaded.dispose();
 });

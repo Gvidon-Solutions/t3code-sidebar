@@ -257,8 +257,22 @@ function rpcSnapshot(snapshot: RpcMeshLayoutSnapshot): MeshLayoutSnapshot {
  * layer feeds it the connected environments and renders `state.snapshot.config`; `null` source
  * means the caller must use the legacy settings path.
  */
-export class MeshLayoutClient {
+export class MeshLayoutStore {
   private state: MeshLayoutClientState = emptyMeshLayoutState();
+  private listeners = new Set<() => void>();
+  readonly subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+  readonly getSnapshot = () => this.state;
+  hydrate(state: MeshLayoutClientState) {
+    if (this.state.snapshot === null) {
+      this.state = state;
+      this.emit();
+    }
+  }
   private source: EnvironmentId | null = null;
   private unsubscribe: (() => void) | null = null;
   private failedSources = new Set<EnvironmentId>();
@@ -284,6 +298,7 @@ export class MeshLayoutClient {
 
   private emit() {
     this.options.onChange?.(this.state);
+    for (const listener of this.listeners) listener();
   }
 
   private async persist() {
@@ -291,6 +306,7 @@ export class MeshLayoutClient {
   }
 
   async start(): Promise<void> {
+    this.disposed = false;
     const cached = await this.options.persistence.load();
     if (cached !== null) {
       this.state = cached;
@@ -331,7 +347,9 @@ export class MeshLayoutClient {
         if (this.disposed || this.source !== next) return;
         this.state = mergeMeshLayoutSnapshot(this.state, rpcSnapshot(snapshot), this.now());
         this.emit();
-        void this.persist().then(() => this.replayOutbox());
+        void this.persist()
+          .then(() => this.replayOutbox())
+          .catch((error) => this.options.onPermanentFailure?.(error));
       },
       (error) => {
         if (this.disposed || this.source !== next) return;
@@ -340,7 +358,7 @@ export class MeshLayoutClient {
         this.unsubscribe = null;
         this.source = null;
         this.options.onPermanentFailure?.(error);
-        void this.refreshEnvironments();
+        void this.refreshEnvironments().catch((error) => this.options.onPermanentFailure?.(error));
       },
     );
     try {

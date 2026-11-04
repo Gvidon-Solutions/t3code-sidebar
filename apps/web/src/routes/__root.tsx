@@ -1,3 +1,4 @@
+import { MeshLayoutProvider } from "../hooks/useMeshLayout";
 import { PendingMeshDraftCoordinator } from "../components/workspaces/PendingMeshDraftCoordinator";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -197,39 +198,41 @@ function RootRouteBranch() {
 
   return (
     <>
-      <ChatGptWelcomeCoordinator />
-      <FirstRunGate
-        enabled={primaryEnvironmentAuthenticated}
-        hostedStatic={authGateState.status === "hosted-static"}
-      >
-        {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
-        {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
-          <DesktopWebLinkCoordinator />
-        ) : null}
-        {isElectron ? <RunningThreadKeepAlive /> : null}
-        <RelayClientInstallDialog />
-        <ConnectOnboardingDialog />
-        <SshPasswordPromptDialog />
-        <SnapShotCoordinator />
-        <InboxNotificationCoordinator />
-        <UiRequestCoordinator />
-        <OpenFileDialog />
-        <VoiceBubble />
-        <ReopenClosedViewShortcut />
-        <ConfirmDialogHost />
-        <CustomSnoozeDialogHost />
-        <GuestShareDialogHost />
-        <ProjectCloneToastCoordinator />
-        <AddProjectToMachineDialogHost />
-        <PendingMeshDraftCoordinator />
-        {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
-        {primaryEnvironmentAuthenticated ? (
-          <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
-        ) : null}
-        {appShell}
-        {/* Keep the theme editor above the router so drafts survive navigation. */}
-        <ThemeEditorHost />
-      </FirstRunGate>
+      <MeshLayoutProvider>
+        <ChatGptWelcomeCoordinator />
+        <FirstRunGate
+          enabled={primaryEnvironmentAuthenticated}
+          hostedStatic={authGateState.status === "hosted-static"}
+        >
+          {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
+          {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
+            <DesktopWebLinkCoordinator />
+          ) : null}
+          {isElectron ? <RunningThreadKeepAlive /> : null}
+          <RelayClientInstallDialog />
+          <ConnectOnboardingDialog />
+          <SshPasswordPromptDialog />
+          <SnapShotCoordinator />
+          <InboxNotificationCoordinator />
+          <UiRequestCoordinator />
+          <OpenFileDialog />
+          <VoiceBubble />
+          <ReopenClosedViewShortcut />
+          <ConfirmDialogHost />
+          <CustomSnoozeDialogHost />
+          <GuestShareDialogHost />
+          <ProjectCloneToastCoordinator />
+          <AddProjectToMachineDialogHost />
+          <PendingMeshDraftCoordinator />
+          {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
+          {primaryEnvironmentAuthenticated ? (
+            <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
+          ) : null}
+          {appShell}
+          {/* Keep the theme editor above the router so drafts survive navigation. */}
+          <ThemeEditorHost />
+        </FirstRunGate>
+      </MeshLayoutProvider>
     </>
   );
 }

@@ -1,167 +1,147 @@
 import {
-  acknowledgeMeshLayoutEntries,
-  editMeshLayout,
+  MeshLayoutStore,
   emptyMeshLayoutState,
-  isPermanentMeshLayoutFailure,
-  mergeMeshLayoutSnapshot,
   parseMeshLayoutCache,
-  pickMeshSource,
   serializeMeshLayoutCache,
-  type MeshLayoutClientState,
+  pickMeshSource,
 } from "@t3tools/client-runtime/state/mesh-layout-client";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import type {
-  EnvironmentId,
-  MeshLayoutSnapshot as MeshLayoutRpcSnapshot,
-  SidebarWorkspacesConfig,
-} from "@t3tools/contracts";
-import type { MeshLayoutDocument } from "@t3tools/shared/meshLayout";
+import type { MeshLayoutSnapshot } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult, Atom } from "effect/reactivity";
 import * as Option from "effect/Option";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
-
-import { stackedThreadToast, toastManager } from "../components/ui/toast";
+import {
+  createContext,
+  createElement,
+  use,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { meshLayoutAtoms } from "../state/meshLayout";
 import { useAtomCommand } from "../state/use-atom-command";
-
+const emptyState = emptyMeshLayoutState();
+const emptySnapshot = () => emptyState;
+const noSubscription = () => () => {};
+const NO_SUBSCRIPTION = Atom.make<null>(null);
 const CACHE_KEY = "t3code.meshLayout.cache";
 const DEVICE_KEY = "t3code.meshLayout.deviceId";
-const NO_SUBSCRIPTION = Atom.make<null>(null);
-
-function readStorage(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch (error) {
-    console.warn("[MESH] Could not read local storage.", error);
-    return null;
-  }
-}
-
-function writeStorage(key: string, value: string): void {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch (error) {
-    console.warn("[MESH] Could not write local storage.", error);
-  }
-}
-
-function readDeviceId(): string {
-  const stored = readStorage(DEVICE_KEY);
-  if (stored) return stored;
-  const generated = `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  writeStorage(DEVICE_KEY, generated);
-  return generated;
-}
-
-function readCache(): MeshLayoutClientState {
-  return parseMeshLayoutCache(readStorage(CACHE_KEY)) ?? emptyMeshLayoutState();
-}
-
-function persist(state: MeshLayoutClientState): void {
-  writeStorage(CACHE_KEY, serializeMeshLayoutCache(state));
-}
-
-function reportFailure(error: unknown): void {
-  toastManager.add(
-    stackedThreadToast({
-      type: "error",
-      title: "Workspace layout not saved",
-      description: error instanceof Error ? error.message : "The mesh rejected the change.",
-    }),
-  );
-}
-
-/**
- * T3 Mesh (fork): reads the shared layout from a connected mesh-capable server and writes every
- * workspace edit as CRDT entries, keeping an offline outbox. `source === null` means no such
- * server is connected, and the caller keeps the legacy `sidebarWorkspaces` path.
- */
-export function useMeshLayout() {
+function useMeshLayoutOwner() {
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const applyEntries = useAtomCommand(meshLayoutAtoms.apply, { reportFailure: false });
-  const [state, setState] = useState<MeshLayoutClientState>(readCache);
-  const stateRef = useRef(state);
-  const deviceIdRef = useRef<string | null>(null);
-  if (deviceIdRef.current === null) deviceIdRef.current = readDeviceId();
-
   const sources = environments.map((environment) => ({
     environmentId: environment.environmentId,
     connected: environment.connection.phase === "connected",
     capabilities: environment.serverConfig?.environment.capabilities,
   }));
   const source = pickMeshSource(sources, primaryEnvironmentId);
-
-  const subscriptionAtom =
+  const subscription = useAtomValue(
     source === null
       ? NO_SUBSCRIPTION
-      : meshLayoutAtoms.subscribe({ environmentId: source, input: {} });
-  const subscription = useAtomValue(subscriptionAtom);
-  const remote: MeshLayoutRpcSnapshot | null =
-    source === null || subscription === null
+      : meshLayoutAtoms.subscribe({ environmentId: source, input: {} }),
+  );
+  const remote =
+    subscription === null
       ? null
-      : ((Option.getOrNull(AsyncResult.value(subscription)) as MeshLayoutRpcSnapshot | undefined) ??
-        null);
-
-  const send = useEffectEvent(async (environmentId: EnvironmentId, entries: MeshLayoutDocument) => {
-    const result = await applyEntries({ environmentId, input: { entries } });
-    if (result._tag === "Failure") {
-      if (isAtomCommandInterrupted(result)) return;
-      const error = squashAtomCommandFailure(result);
-      if (!isPermanentMeshLayoutFailure(error)) return;
-      const next = acknowledgeMeshLayoutEntries(stateRef.current, entries);
-      stateRef.current = next;
-      setState(next);
-      persist(next);
-      reportFailure(error);
-      return;
-    }
-    const next = acknowledgeMeshLayoutEntries(
-      mergeMeshLayoutSnapshot(stateRef.current, {
-        environmentId: result.value.environmentId,
-        document: result.value.document as MeshLayoutDocument,
-        config: result.value.config,
-      }),
-      entries,
-    );
-    stateRef.current = next;
-    setState(next);
-    persist(next);
-  });
-
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mirrors the live mesh snapshot and offline cache into the sidebar state
+      : (Option.getOrNull(AsyncResult.value(subscription)) as MeshLayoutSnapshot | null);
+  const listener = useRef<((snapshot: MeshLayoutSnapshot) => void) | null>(null);
+  const current = useRef({ sources, primaryEnvironmentId, remote, applyEntries });
+  const [store, setStore] = useState<MeshLayoutStore | null>(null);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Creates the external store and owns its persistence and RPC lifetime.
   useEffect(() => {
-    if (source === null || remote === null) return;
-    const next = mergeMeshLayoutSnapshot(stateRef.current, {
-      environmentId: remote.environmentId,
-      document: remote.document as MeshLayoutDocument,
-      config: remote.config,
+    const deviceId =
+      window.localStorage.getItem(DEVICE_KEY) ??
+      `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(DEVICE_KEY, deviceId);
+    const created = new MeshLayoutStore({
+      deviceId,
+      now: Date.now,
+      environments: () => current.current.sources,
+      primaryEnvironmentId: () => current.current.primaryEnvironmentId,
+      persistence: {
+        load: async () => parseMeshLayoutCache(window.localStorage.getItem(CACHE_KEY)),
+        save: async (state) => {
+          window.localStorage.setItem(CACHE_KEY, serializeMeshLayoutCache(state));
+        },
+      },
+      onPermanentFailure: (error) => console.error("Mesh layout failed", error),
+      rpc: {
+        get: async () => {
+          if (!current.current.remote) throw new Error("Waiting for mesh snapshot");
+          return current.current.remote;
+        },
+        subscribe: (_id, callback) => {
+          listener.current = callback;
+          return () => {
+            if (listener.current === callback) listener.current = null;
+          };
+        },
+        apply: async (environmentId, entries) => {
+          const result = await current.current.applyEntries({ environmentId, input: { entries } });
+          if (result._tag === "Failure") {
+            if (isAtomCommandInterrupted(result)) throw new Error("Mesh call interrupted");
+            throw squashAtomCommandFailure(result);
+          }
+          return result.value;
+        },
+      },
     });
-    stateRef.current = next;
-    setState(next);
-    persist(next);
-    if (Object.keys(next.outbox).length > 0) void send(source, next.outbox);
-  }, [remote, source]);
-
-  const edit = (update: (config: SidebarWorkspacesConfig) => SidebarWorkspacesConfig): void => {
-    if (source === null) return;
-    const deviceId = deviceIdRef.current ?? readDeviceId();
-    const result = editMeshLayout(stateRef.current, update, { deviceId, now: Date.now() });
-    stateRef.current = result.state;
-    setState(result.state);
-    persist(result.state);
-    if (Object.keys(result.entries).length > 0) void send(source, result.entries);
-  };
-
+    setStore(created);
+    void created.start().catch((error) => console.error("Mesh layout startup failed", error));
+    return () => created.dispose();
+  }, [current, listener]);
+  const state = useSyncExternalStore(
+    store?.subscribe ?? noSubscription,
+    store?.getSnapshot ?? emptySnapshot,
+  );
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Connection changes trigger source selection and offline outbox replay.
+  useEffect(() => {
+    current.current.sources = environments.map((environment) => ({
+      environmentId: environment.environmentId,
+      connected: environment.connection.phase === "connected",
+      capabilities: environment.serverConfig?.environment.capabilities,
+    }));
+    current.current.primaryEnvironmentId = primaryEnvironmentId;
+    current.current.applyEntries = applyEntries;
+    void store
+      ?.refreshEnvironments()
+      .catch((error) => console.error("Mesh reconnect failed", error));
+  }, [store, current, environments, primaryEnvironmentId, applyEntries]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Bridges the RPC atom stream into the shared layout store.
+  useEffect(() => {
+    current.current.remote = remote;
+    if (remote) listener.current?.(remote);
+  }, [remote, current]);
   return {
-    source,
+    source:
+      source ??
+      (state.snapshot
+        ? (state.snapshot.environmentId as import("@t3tools/contracts").EnvironmentId)
+        : null),
     state,
     config: state.snapshot?.config ?? null,
-    edit,
+    edit: (update: Parameters<MeshLayoutStore["edit"]>[0]) => {
+      void store
+        ?.edit(update)
+        .catch((error) => console.error("Mesh edit persistence failed", error));
+    },
   } as const;
+}
+
+const MeshLayoutContext = createContext<ReturnType<typeof useMeshLayoutOwner> | null>(null);
+export function MeshLayoutProvider({ children }: { readonly children: ReactNode }) {
+  const value = useMeshLayoutOwner();
+  return createElement(MeshLayoutContext.Provider, { value }, children);
+}
+export function useMeshLayout() {
+  const value = use(MeshLayoutContext);
+  if (value === null) throw new Error("MeshLayoutProvider is missing");
+  return value;
 }
