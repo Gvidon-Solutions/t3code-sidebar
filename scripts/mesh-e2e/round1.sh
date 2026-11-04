@@ -561,7 +561,8 @@ if [ -f "$LEGACY_DIR/gvidon.json" ] && [ -f "$LEGACY_DIR/operalia.json" ]; then
   project_keys "$LEGACY_DIR/gvidon.json" "$LEGACY_DIR/operalia.json" | sort -u >"$WORK/source-keys.txt"
   jq -r '.config' "$WORK/snap-gv.json" >"$WORK/config-gv.json"
   project_keys "$WORK/config-gv.json" | sort -u >"$WORK/materialized-keys.txt"
-  missing="$(comm -23 "$WORK/source-keys.txt" "$WORK/materialized-keys.txt")"
+  jq -r --rawfile keys "$WORK/source-keys.txt" '($keys | split("\n") | map(select(length > 0)))[] as $key | .config.projectAliases[$key] // $key' "$WORK/snap-gv.json" | sort -u > "$WORK/canonical-source-keys.txt"
+  missing="$(comm -23 "$WORK/canonical-source-keys.txt" "$WORK/materialized-keys.txt")"
   if [ -z "$missing" ]; then
     record_pass "no project key from either legacy config was lost" "$(wc -l <"$WORK/source-keys.txt") keys"
   else
