@@ -127,6 +127,9 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
   `round1.sh` (layout, links, files, old clients), `round2.sh` (replicas on real Mutagen, t3ctl),
   `round3.sh` (crashes, partitions, duplicate claims). They must stay green.
+  `config.sh` verifies C1 config planning/apply, stale-base refusal, label/title convergence on
+  three servers and a real registered replica. It requires the C1 bed lock and an existing
+  deployment; `MESH_E2E_ARTIFACTS` selects its build metadata. Fixtures are C1-prefixed.
 - Agent behaviour eval: `docs/mesh-agent-eval.md` records the earlier bed methodology. After
   changing SKILL.md or GLOBAL.md, run model-level routing cases using customer-defined machine
   identities/aliases and configured models; do not make old owner-name translations part of the product contract.
@@ -196,7 +199,8 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 
 The desired state is `docs/mesh/CONCEPT.md` §9. `packages/contracts/src/meshConfig.ts` is the open
 Effect schema and revision/status envelope; unknown fields survive every round trip. Both JSON and
-YAML are accepted (`parseConfig` uses the repo's `yaml` dependency). `packages/shared/src/meshConfig/`
+YAML are accepted (`parseConfig` uses the repo's `yaml` dependency); cyclic and non-finite YAML
+values are refused before JSON storage. `packages/shared/src/meshConfig/`
 holds the pure policy: `defaults`, `effectiveLinkPermissions`, `projectPolicy` (conflicts, replica
 mode, merged ignores), `replicaRules`, `machineByName`/`ByEnvironment`/`ByPeerLabel`, `modelAlias`
 and `configDiff` for stale-apply hints.
@@ -215,6 +219,8 @@ stable name, a read-only `plan(doc, previous)` effect returning actions and an i
 `reconcile(action, doc)` effect. Planners capture their dependencies in their registration layer;
 the executor supplies the layout service. An action names its executing environment (or a bound
 machine name); each server executes only its own actions.
+Diff sides are optional on the wire: an absent `before` means an added field, an absent `after`
+means a removed field, and `null` remains an actual config value.
 
 Registered planners (`mesh/MeshConfigPlanners.ts`):
 
@@ -232,8 +238,9 @@ not cancel other actions, and status keeps `done` / `in_progress` / `failed` plu
 every server.
 
 Link permissions are enforced on the receiving server by `mesh/MeshLinkPermissions.ts`: the peer
-machine is resolved from its environment id in the signed OAuth session; N-1 sessions use an
-unambiguous legacy label. Then `effectiveLinkPermissions` decides
+machine is resolved from its environment id in the signed OAuth session; N-1 sessions use legacy
+labels excluding the receiver itself. Ambiguous labels use the intersection of candidate policies;
+re-linking supplies an exact signed identity. Then `effectiveLinkPermissions` decides
 `files`, `replicas` and `threads`. Files resolve real paths first; `projects` allows only this
 machine's representation roots, `none` refuses, and an unknown peer falls back to the configured
 defaults. A read-only link never reads outside project folders even when the config says `all`.

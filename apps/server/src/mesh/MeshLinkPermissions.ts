@@ -11,6 +11,7 @@ import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 
 const defaults = { files: "projects" as const, replicas: true, threads: true };
+const fileRank = { none: 0, projects: 1, all: 2 };
 export const linkPermissions = Effect.fn("MeshLinkPermissions.read")(function* (
   targetEnvironmentId?: string,
 ) {
@@ -29,17 +30,32 @@ export const linkPermissions = Effect.fn("MeshLinkPermissions.read")(function* (
   const peer = config
     ? client.peerEnvironmentId
       ? machineByEnvironment(config, bindings, client.peerEnvironmentId)
-      : machineByPeerLabel(config, bindings, client.label)
+      : undefined
     : undefined;
-  const permissions = config
-    ? effectiveLinkPermissions(config, self?.name ?? "", peer?.name ?? "")
-    : defaults;
-  const rank = { none: 0, projects: 1, all: 2 };
+  const legacyPeers =
+    config && !client.peerEnvironmentId
+      ? Object.entries(bindings).flatMap(([name, environmentId]) =>
+          environmentId !== scope.environmentId &&
+          machineByPeerLabel(config, { [name]: environmentId }, client.label)
+            ? [name]
+            : [],
+        )
+      : [];
+  const peers = peer ? [peer.name] : legacyPeers.length ? legacyPeers : [""];
+  const permissions = (
+    config
+      ? peers.map((name) => effectiveLinkPermissions(config, self?.name ?? "", name))
+      : [defaults]
+  ).reduce((a, b) => ({
+    files: fileRank[a.files] < fileRank[b.files] ? a.files : b.files,
+    replicas: a.replicas && b.replicas,
+    threads: a.threads && b.threads,
+  }));
   const requested = client.filesLimit ?? "all";
   const ceiling = client.access === "read-only" && requested === "all" ? "projects" : requested;
   return {
     ...permissions,
-    files: rank[ceiling] < rank[permissions.files] ? ceiling : permissions.files,
+    files: fileRank[ceiling] < fileRank[permissions.files] ? ceiling : permissions.files,
     linked: true,
   };
 });

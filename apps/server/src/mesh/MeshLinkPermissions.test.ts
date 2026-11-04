@@ -97,6 +97,69 @@ it.effect(
         .handle("t3_thread_read", {})
         .pipe(Stream.unwrap, Stream.runCollect);
       expect(result.at(-1)?.result).toBe("thread accepted");
+      const legacy = {
+        ...(yield* McpInvocationContext),
+        client: {
+          sessionId: "legacy",
+          label: "Shared",
+          linked: true,
+          access: "full-access" as const,
+        },
+      };
+      const sharedNames = {
+        schema: 1,
+        machines: { studio: { title: "Shared" }, laptop: { title: "Shared" } },
+        links: { overrides: [{ between: ["studio", "laptop"], files: "all" }] },
+      };
+      const sharedClock = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.config": {
+          h: sharedClock,
+          v: { revision: sharedClock, doc: sharedNames, author: "studio-env", writtenAt: "" },
+        },
+      });
+      expect(
+        (yield* linkPermissions().pipe(Effect.provideService(McpInvocationContext, legacy))).files,
+      ).toBe("all");
+      const ambiguousClock = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.machineBinding/cloudbox": { v: "cloudbox-env", h: ambiguousClock },
+        "mesh.config": {
+          h: ambiguousClock,
+          v: {
+            revision: ambiguousClock,
+            author: "studio-env",
+            writtenAt: "",
+            doc: {
+              ...sharedNames,
+              machines: { ...sharedNames.machines, cloudbox: { title: "Shared" } },
+              links: {
+                overrides: [
+                  ...sharedNames.links.overrides,
+                  {
+                    between: ["studio", "cloudbox"],
+                    files: "none",
+                    replicas: false,
+                    threads: false,
+                  },
+                ],
+              },
+            },
+          },
+        },
+      });
+      expect(
+        yield* linkPermissions().pipe(Effect.provideService(McpInvocationContext, legacy)),
+      ).toEqual({ files: "none", replicas: false, threads: false, linked: true });
+      expect((yield* linkPermissions()).files).toBe("all");
+      expect(
+        (yield* linkPermissions().pipe(
+          Effect.provideService(McpInvocationContext, {
+            ...legacy,
+            client: { ...legacy.client, label: "New peer" },
+          }),
+        )).files,
+      ).toBe("projects");
     }).pipe(
       Effect.provide(
         Layer.merge(scope, layerTest("studio-env", DEFAULT_SIDEBAR_WORKSPACES_CONFIG)),
