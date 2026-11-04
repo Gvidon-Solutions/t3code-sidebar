@@ -1510,6 +1510,8 @@ export function threadShellFromProjection(
       : { activeOrderKey: projection.thread.activeOrderKey }),
     lineage: projection.thread.lineage,
     forkedFrom: projection.thread.forkedFrom,
+    ...(projection.thread.meshFork ? { meshFork: projection.thread.meshFork } : {}),
+    ...(projection.thread.meshForks ? { meshForks: projection.thread.meshForks } : {}),
     activeProviderThreadId: projection.thread.activeProviderThreadId,
     ...(projection.thread.historyOrigin === undefined
       ? {}
@@ -1827,6 +1829,8 @@ function shellFromState(input: {
       : { activeOrderKey: input.state.thread.activeOrderKey }),
     lineage: input.state.thread.lineage,
     forkedFrom: input.state.thread.forkedFrom,
+    ...(input.state.thread.meshFork ? { meshFork: input.state.thread.meshFork } : {}),
+    ...(input.state.thread.meshForks ? { meshForks: input.state.thread.meshForks } : {}),
     activeProviderThreadId: input.state.thread.activeProviderThreadId,
     ...(input.state.thread.historyOrigin === undefined
       ? {}

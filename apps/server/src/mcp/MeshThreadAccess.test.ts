@@ -40,6 +40,7 @@ const toolkit = Toolkit.make(
   Tool.make("t3_thread_list", declaration),
   Tool.make("t3_thread_read", declaration),
   Tool.make("t3_thread_send", declaration),
+  Tool.make("t3_thread_fork", declaration),
 );
 const handlers = Access.toLayer(toolkit, {
   t3_thread_list: Access.reads(() =>
@@ -49,6 +50,10 @@ const handlers = Access.toLayer(toolkit, {
   t3_thread_send: Access.writesThreads(
     (input) => [input.threadId],
     () => Effect.succeed({ sent: true }),
+  ),
+  t3_thread_fork: Access.writesThreads(
+    (input) => [input.threadId],
+    () => Effect.succeed({ forked: "local" }),
   ),
 });
 
@@ -109,6 +114,8 @@ it.effect(
               message: "This link has read-only access.",
             }),
           );
+        if (tool === "t3_thread_fork")
+          return Effect.succeed({ forked: "remote" } as typeof input.success.Type);
         return Effect.succeed(
           (tool === "t3_thread_read"
             ? { thread: { threadId: "mcp:remote-thread" } }
@@ -167,6 +174,10 @@ it.effect(
         code: "capability_denied",
         message: expect.stringContaining("read-only"),
       });
+      const fork = yield* tools
+        .handle("t3_thread_fork", { threadId: ThreadId.make("remote-thread") })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(fork.at(-1)?.result).toEqual({ forked: "remote" });
       const opened: unknown[] = [];
       const uiServices = Layer.mergeAll(
         Layer.mock(VoiceSessionServiceV2)({}),

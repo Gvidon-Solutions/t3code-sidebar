@@ -28,6 +28,7 @@
         // These fixture scripts are injected into a browser page by path.
         "fixtures/*/*.js",
         "knip-schemas.ts",
+        "mesh-e2e/f1-web.mjs",
         "mobile-behavior/run.ts",
         "mobile-native-client.ts",
         "mesh-e2e/network-proxy.mjs",

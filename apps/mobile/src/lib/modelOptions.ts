@@ -1,4 +1,7 @@
-import { draftModelUnavailableReason } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  draftModelUnavailableReason,
+  type ProviderCatalog,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import {
   normalizeProviderAccentColor,
   resolveProviderInstanceDisplayName,
@@ -72,7 +75,7 @@ function providerDisplayLabel(provider: {
 }
 
 function isProviderEnabledForProject(
-  config: T3ServerConfig | null | undefined,
+  config: ProviderCatalog | null | undefined,
   provider:
     | { readonly instanceId: ModelSelection["instanceId"]; readonly enabled: boolean }
     | undefined,
@@ -87,7 +90,7 @@ function isProviderEnabledForProject(
 }
 
 function isProjectDisabledOverride(
-  config: T3ServerConfig | null | undefined,
+  config: ProviderCatalog | null | undefined,
   instanceId: ModelSelection["instanceId"],
   projectId: ProjectId | null,
 ): boolean {
@@ -101,7 +104,7 @@ function isProjectDisabledOverride(
 }
 
 function isDisabledForProject(
-  config: T3ServerConfig | null | undefined,
+  config: ProviderCatalog | null | undefined,
   provider:
     | { readonly instanceId: ModelSelection["instanceId"]; readonly enabled: boolean }
     | undefined,
@@ -141,7 +144,7 @@ function normalizeSelectionOptions(
 
 /** Require explicit projectId or null so omissions cannot bypass project provider disablement. */
 export function isModelSelectionUnavailable(
-  config: T3ServerConfig | null | undefined,
+  config: ProviderCatalog | null | undefined,
   selection: ModelSelection | null | undefined,
   projectId: ProjectId | null,
 ): boolean {
@@ -167,7 +170,7 @@ export function isModelSelectionUnavailable(
 }
 
 export function describeUnavailableModelSelection(
-  config: T3ServerConfig | null | undefined,
+  config: ProviderCatalog | null | undefined,
   selection: ModelSelection,
   projectId: ProjectId | null,
 ): { readonly title: string; readonly detail: string } {
@@ -186,7 +189,7 @@ export function describeUnavailableModelSelection(
 }
 
 export function resolveSelectableModelSelection(
-  config: T3ServerConfig | null | undefined,
+  config: ProviderCatalog | null | undefined,
   selection: ModelSelection | null,
   projectId: ProjectId | null,
 ): ModelSelection | null {
@@ -210,7 +213,7 @@ export function resolveSelectableModelSelection(
 }
 
 export function resolveDefaultableModelSelection(
-  config: T3ServerConfig | null | undefined,
+  config: ProviderCatalog | null | undefined,
   selection: ModelSelection | null,
   projectId: ProjectId | null,
 ): ModelSelection | null {
@@ -240,7 +243,7 @@ export function resolveNewTaskModelSelection(input: {
 }
 
 export function buildModelOptions(
-  config: T3ServerConfig | null | undefined,
+  config: ProviderCatalog | null | undefined,
   fallbackModelSelection: ModelSelection | null,
   providerInstanceId: ModelSelection["instanceId"] | undefined,
   projectId: ProjectId | null,

@@ -646,8 +646,10 @@ export function nextMachineClock(document, now, deviceId) {
     .sort()
     .at(-1);
   const [lastMs, lastCounter] = last?.split(".") ?? ["0", "0"];
-  let ms = Math.max(Math.floor(now), Number(lastMs));
+  const ceiling = Math.floor(now) + 300_000;
+  let ms = Math.min(ceiling, Math.max(Math.floor(now), Number(lastMs)));
   let counter = last && ms === Number(lastMs) ? Number(lastCounter) + 1 : 0;
+  if (ms === ceiling) counter = Math.min(counter, 99999);
   if (counter > 99999) {
     ms++;
     counter = 0;
@@ -1592,7 +1594,10 @@ async function modelSelection(opt, { required = true, environmentId } = {}) {
   if (agent) agent = AGENT_ALIASES[agent.toLowerCase()] ?? agent;
   const caps = await (
     await mcp()
-  ).call("orchestrator_capabilities", environmentId ? { environmentId } : {});
+  ).call("orchestrator_capabilities", {
+    ...(environmentId ? { environmentId } : {}),
+    ...(model ? { search: model } : {}),
+  });
   const providers = caps.providers || [];
   if (!agent && model)
     agent = providers.find((p) => p.models.some((x) => x.id === model))?.providerInstanceId ?? "";
@@ -3290,8 +3295,33 @@ const commands = {
   },
 
   async fork(pos, opt) {
-    const t = await resolveThread(pos[0], { projectRef: opt.project });
+    const t = await resolveThreadAcross(pos[0]);
     const m = await mcp();
+    const message = opt.message
+      ? String(opt.message)
+      : opt.file
+        ? readFileSync(expandHome(opt.file), "utf8")
+        : "";
+    if (opt.on) {
+      const target = await getMachine(opt.on);
+      const selection =
+        opt.agent || opt.model || opt.effort
+          ? await modelSelection(opt, { environmentId: target.environmentId })
+          : null;
+      const r = await m.call("t3_thread_fork", {
+        environmentId: t.environmentId,
+        targetEnvironmentId: target.environmentId,
+        threadId: t.threadId,
+        ...(selection ? { modelSelection: selection } : {}),
+        ...(opt.title ? { title: String(opt.title) } : {}),
+        ...(message ? { message } : {}),
+      });
+      if (opt.json) return json(r);
+      console.log(
+        `forked "${t.title}" → ${r.threadId} on ${target.label}${opt.title ? ` "${opt.title}"` : ""}${message ? " (message sent)" : ""}`,
+      );
+      return;
+    }
     const args = {
       action: "fork",
       threadId: t.threadId,
@@ -3309,16 +3339,27 @@ const commands = {
         threadId: id,
         modelSelection: await modelSelection(opt),
       });
-    const message = opt.message
-      ? String(opt.message)
-      : opt.file
-        ? readFileSync(expandHome(opt.file), "utf8")
-        : "";
     if (message) await m.call("t3_thread_send", { threadId: id, message });
     if (opt.json) return json(r);
     console.log(
       `forked "${t.title}" → ${id}${opt.title ? ` "${opt.title}"` : ""}${message ? " (message sent)" : ""}`,
     );
+  },
+
+  async move(pos, opt) {
+    const t = await resolveThreadAcross(pos[0], { on: opt.on });
+    if (!opt.project) die("usage: t3ctl move <T> --project P");
+    const projects = await listProjects();
+    const p = await resolveProject(opt.project, projects);
+    const r = await (
+      await mcp()
+    ).call("t3_thread_move", {
+      environmentId: t.environmentId,
+      threadId: t.threadId,
+      projectId: p.id,
+    });
+    if (opt.json) return json(r);
+    console.log(`moved "${t.title}" to "${p.title}" on ${t.machineLabel ?? t.environmentId}`);
   },
 
   async rename(pos, opt) {
@@ -4163,7 +4204,9 @@ THREADS
   stop <T> [--reason R]                   interrupt the running turn
   approve <T> [accept|acceptForSession|acceptAlways|decline|cancel] [--request ID]
   answer <T> ["text" | --answers '{json}'] [--request ID]   answer an agent's question
-  fork <T> [--title T] [--message M] [--agent/--model …] [--run ID | --checkpoint ID]
+  fork <T> [--on <M>] [--title T] [--message M] [--agent/--model/--effort …] [--run ID | --checkpoint ID]
+                                          same machine: context fork; --on: fork to that machine
+  move <T> --project P [--on <M>]         move a thread to another project on its own machine
   rename <T> "title" | rename <T> --auto  (regenerate)
   pin | unpin | settle | unsettle | archive | unarchive | unread <T>
   snooze <T> [--for 2h | --until ISO] | unsnooze <T>

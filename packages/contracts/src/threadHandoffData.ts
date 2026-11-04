@@ -1,5 +1,27 @@
 import * as Schema from "effect/Schema";
-import { EnvironmentId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { EnvironmentId, IsoDateTime, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+
+export const MeshForkOrigin = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  title: TrimmedNonEmptyString,
+  machine: Schema.String,
+  link: Schema.String,
+  createdAt: IsoDateTime,
+});
+export type MeshForkOrigin = typeof MeshForkOrigin.Type;
+
+export const MeshForkRef = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  title: TrimmedNonEmptyString,
+  machine: Schema.String,
+  link: Schema.String,
+  createdAt: IsoDateTime,
+});
+export type MeshForkRef = typeof MeshForkRef.Type;
 import { ChatAttachment } from "./chatAttachment.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import { RuntimeMode, ProviderInteractionMode } from "./providerPolicy.ts";

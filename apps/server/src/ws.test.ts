@@ -1,5 +1,6 @@
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
-import { ThreadHandoffService } from "./mesh/ThreadHandoffService.ts";
+import { ThreadForkService } from "./mesh/ThreadForkService.ts";
+import { ThreadMoveService } from "./mesh/ThreadMoveService.ts";
 import { ThreadMoveRpc } from "@t3tools/contracts";
 import { MeshReplicator } from "./mesh/MeshReplicator.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
@@ -490,7 +491,8 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
 
 // Build the production RPC layer; unrelated capabilities fail if this test calls them.
 const layerUnusedConfigRpcServices = Layer.mergeAll(
-  Layer.mock(ThreadHandoffService)({}),
+  Layer.mock(ThreadForkService)({}),
+  Layer.mock(ThreadMoveService)({}),
   Layer.mock(DocumentText.DocumentText)({}),
   Layer.mock(ServerSecretStore.ServerSecretStore)({}),
   Layer.mock(WorkspacePaths.WorkspacePaths)({}),
@@ -755,12 +757,10 @@ it.effect(
 it.effect("on-demand clients get provider config without workspace snapshots", () =>
   Effect.gen(function* () {
     const moved = {
-      threadId: ThreadId.make("L-destination"),
-      environmentId: EnvironmentId.make("peer"),
-      handoffId: "L-id",
-      undoUntil: 10000,
-      link: "t3-thread://v2/peer/L-destination",
-      machine: "VP",
+      threadId: ThreadId.make("L-source"),
+      environmentId: EnvironmentId.make("config-test"),
+      link: "t3-thread://v2/config-test/L-source",
+      machine: "Config test",
     };
     const instanceId = ProviderInstanceId.make("claudeAgent");
     const snapshotFor = (cwd: string, checkedAt: string) => ({
@@ -802,7 +802,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
     };
     const configRpcServices = Layer.mergeAll(
       layerUnusedConfigRpcServices,
-      Layer.mock(ThreadHandoffService)({ move: () => Effect.succeed(moved) }),
+      Layer.mock(ThreadMoveService)({ move: () => Effect.succeed(moved) }),
       Layer.mock(ExternalLauncher.ExternalLauncher)({
         resolveAvailableEditors: () => Effect.succeed([]),
         // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
@@ -896,7 +896,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       tag: "threads.move",
       payload: {
         threadId: ThreadId.make("L-source"),
-        targetEnvironmentId: EnvironmentId.make("peer"),
+        projectId: ProjectId.make("project-target"),
       },
       headers: Headers.empty,
     });

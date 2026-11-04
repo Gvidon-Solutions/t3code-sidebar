@@ -5,12 +5,12 @@ import { mobileMoveProjectLabel } from "./threadMove.logic";
 it("labels destinations with their machine and keeps No project recognizable", () => {
   const config = {
     ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-    machines: { at: { tag: "AT" }, bo: { tag: "BO" } },
+    machines: { at: { tag: "ST", title: "Studio" }, bo: { tag: "CB", title: "Cloudbox" } },
   };
   expect(
     mobileMoveProjectLabel({ title: "Scratch", isScratch: true, environmentId: "at" }, config),
-  ).toBe("No project · AT");
+  ).toBe("No project · Studio");
   expect(mobileMoveProjectLabel({ title: "Shared name", environmentId: "bo" }, config)).toBe(
-    "Shared name · BO",
+    "Shared name · Cloudbox",
   );
 });

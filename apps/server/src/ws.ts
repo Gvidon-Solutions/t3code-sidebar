@@ -1,5 +1,6 @@
 import { recordLayoutAuthors } from "@t3tools/shared/meshLayout";
-import { ThreadHandoffService } from "./mesh/ThreadHandoffService.ts";
+import { ThreadForkService } from "./mesh/ThreadForkService.ts";
+import { ThreadMoveService } from "./mesh/ThreadMoveService.ts";
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
 import { MESH_WS_METHODS, ServerSettingsError } from "@t3tools/contracts";
 import * as ReplicaRpc from "./replicas/ReplicaRpc.ts";
@@ -1345,7 +1346,8 @@ export const layerWsRpc = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
-      const threadHandoffs = yield* ThreadHandoffService;
+      const threadForks = yield* ThreadForkService;
+      const threadMoves = yield* ThreadMoveService;
       const modelManifest = yield* ModelManifest.ModelManifest;
       const providerLatestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
       const providerInstances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
@@ -1894,11 +1896,13 @@ export const layerWsRpc = (
 
       const handlers = ServerWsRpcGroup.of({
         ...ReplicaRpc.handlers,
-        "threads.move": (input) =>
-          threadHandoffs.move(input, {
+        "threads.move": (input) => threadMoves.move(input),
+        "threads.fork": (input) =>
+          threadForks.fork(input, {
             runtimeMode: "full-access",
             interactionMode: "default",
           }),
+        "threads.forkCatalog": (input) => threadForks.catalog(input.targetEnvironmentId),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
@@ -3360,7 +3364,8 @@ export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const mesh = yield* MeshLayoutService;
     const meshReplicator = yield* MeshReplicator;
-    const threadHandoffs = yield* ThreadHandoffService;
+    const threadForks = yield* ThreadForkService;
+    const threadMoves = yield* ThreadMoveService;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const npmRelease = yield* NpmRelease.NpmRelease;
@@ -3452,7 +3457,8 @@ export const layer = Layer.unwrap(
               ),
               Layer.provide(Layer.succeed(MeshLayoutService, mesh)),
               Layer.provide(Layer.succeed(MeshReplicator, meshReplicator)),
-              Layer.provide(Layer.succeed(ThreadHandoffService, threadHandoffs)),
+              Layer.provide(Layer.succeed(ThreadForkService, threadForks)),
+              Layer.provide(Layer.succeed(ThreadMoveService, threadMoves)),
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
               Layer.provide(Layer.succeed(PeerSessions.PeerSessions, peerSessions)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),

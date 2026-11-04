@@ -1,4 +1,5 @@
-import { ThreadHandoffService } from "../../../mesh/ThreadHandoffService.ts";
+import { ThreadForkService } from "../../../mesh/ThreadForkService.ts";
+import { ThreadMoveService } from "../../../mesh/ThreadMoveService.ts";
 import { assertNotLinked } from "../../linkOrigin.ts";
 import * as Option from "effect/Option";
 import { CommandId as HandoffCommandId, EnvironmentId } from "@t3tools/contracts";
@@ -145,24 +146,39 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       const caller = yield* readCaller();
       yield* assertNotLinked(caller, "move conversations through other links.");
       const { projection } = yield* readThread(input.threadId);
-      const service = yield* Effect.serviceOption(ThreadHandoffService);
+      const service = yield* Effect.serviceOption(ThreadMoveService);
       if (Option.isNone(service)) return yield* unavailable();
-      return yield* service.value.move(
+      return yield* service.value.move({
+        commandId: yield* newCommandId(),
+        threadId: projection.thread.id,
+        projectId: input.projectId,
+        ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+      });
+    }),
+  ),
+  t3_thread_fork: writesThread((input) =>
+    Effect.gen(function* () {
+      const caller = yield* readCaller();
+      yield* assertNotLinked(caller, "fork conversations through other links.");
+      const { projection } = yield* readThread(input.threadId);
+      const service = yield* Effect.serviceOption(ThreadForkService);
+      if (Option.isNone(service)) return yield* unavailable();
+      return yield* service.value.fork(
         {
-          commandId: input.clientRequestId
-            ? HandoffCommandId.make(
-                `${caller.scope.requestNamespace}:move:${input.clientRequestId}`,
-              )
-            : yield* newCommandId(),
+          ...(input.clientRequestId
+            ? {
+                commandId: HandoffCommandId.make(
+                  `${caller.scope.requestNamespace}:fork:${input.clientRequestId}`,
+                ),
+              }
+            : {}),
           threadId: projection.thread.id,
+          targetEnvironmentId: EnvironmentId.make(input.targetEnvironmentId),
           ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
-          ...(input.targetEnvironmentId === undefined
-            ? {}
-            : { targetEnvironmentId: EnvironmentId.make(input.targetEnvironmentId) }),
-          ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
           ...(input.logicalKey === undefined ? {} : { logicalKey: input.logicalKey }),
+          ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+          ...(input.title === undefined ? {} : { title: input.title }),
           ...(input.message === undefined ? {} : { message: input.message }),
-          ...(input.undoHandoffId === undefined ? {} : { undoHandoffId: input.undoHandoffId }),
         },
         caller.limits,
       );
@@ -365,20 +381,6 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     Effect.gen(function* () {
       const { threads, projection, caller } = yield* readThread(input.threadId);
       const common = { commandId: yield* newCommandId(), threadId: projection.thread.id };
-      if (input.action === "move" && input.targetEnvironmentId !== undefined) {
-        const scope = yield* readCaller();
-        yield* assertNotLinked(scope, "move conversations through other links.");
-        const service = yield* Effect.serviceOption(ThreadHandoffService);
-        if (Option.isNone(service)) return yield* unavailable();
-        return yield* service.value.move(
-          {
-            ...common,
-            ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
-            targetEnvironmentId: EnvironmentId.make(input.targetEnvironmentId),
-          },
-          scope.limits,
-        );
-      }
       if (input.action === "settle") {
         return yield* threads
           .settleThread({ ...common, byOwnAgent: caller?.id === projection.thread.id })
@@ -391,9 +393,6 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
             ...common,
             type: "thread.move",
             projectId: yield* required(input.projectId, "projectId"),
-            ...(input.targetEnvironmentId === undefined
-              ? {}
-              : { targetEnvironmentId: input.targetEnvironmentId }),
           };
           break;
         case "snooze":

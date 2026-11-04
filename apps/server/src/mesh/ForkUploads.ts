@@ -2,7 +2,6 @@ import {
   AttachmentCreateUploadUrlInput,
   ChatAttachment,
   OrchestratorMcpFailure,
-  type HandoffBundle,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -17,7 +16,7 @@ import {
   storeAttachmentUpload,
 } from "../assets/AttachmentUpload.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
-import type { ReceiveHandoffInput } from "./handoffTransport.ts";
+import type { ForkTransportInput } from "./forkTransport.ts";
 
 const decodeUpload = Schema.decodeUnknownEffect(AttachmentCreateUploadUrlInput);
 const decodeAttachment = Schema.decodeUnknownEffect(Schema.fromJsonString(ChatAttachment));
@@ -25,21 +24,35 @@ const encodeAttachment = Schema.encodeSync(Schema.fromJsonString(ChatAttachment)
 const failure = (_cause: unknown) =>
   new OrchestratorMcpFailure({
     code: "orchestration_error",
-    message: "Handoff attachment transfer failed.",
+    message: "Fork attachment transfer failed.",
   });
-export const receiveHandoffUpload = Effect.fn("HandoffUploads.receive")(function* (
-  input: Extract<ReceiveHandoffInput, { action: "upload" }>,
+
+const uploadDirectory = Effect.fn("ForkUploads.directory")(function* (
+  forkId: string,
+  attachmentId: string,
+) {
+  const config = yield* ServerConfig.ServerConfig;
+  const path = yield* Path.Path;
+  const crypto = yield* Crypto.Crypto;
+  const forkDir = Hex.encode(
+    yield* crypto
+      .digest("SHA-256", new TextEncoder().encode(forkId))
+      .pipe(Effect.mapError(failure)),
+  );
+  const attachmentKey = Hex.encode(
+    yield* crypto
+      .digest("SHA-256", new TextEncoder().encode(attachmentId))
+      .pipe(Effect.mapError(failure)),
+  );
+  return path.join(config.stateDir, "fork-uploads", forkDir, attachmentKey);
+});
+
+export const receiveForkUpload = Effect.fn("ForkUploads.receive")(function* (
+  input: Extract<ForkTransportInput, { action: "upload" }>,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const config = yield* ServerConfig.ServerConfig;
-  const crypto = yield* Crypto.Crypto;
-  const key = Hex.encode(
-    yield* crypto
-      .digest("SHA-256", new TextEncoder().encode(`${input.handoffId}\n${input.attachment.id}`))
-      .pipe(Effect.mapError(failure)),
-  );
-  const directory = path.join(config.stateDir, "handoff-uploads", key);
+  const directory = yield* uploadDirectory(input.forkId, input.attachment.id);
   yield* fs.makeDirectory(directory, { recursive: true }).pipe(Effect.mapError(failure));
   const receipt = path.join(directory, "attachment.json");
   if (yield* fs.exists(receipt).pipe(Effect.mapError(failure)))
@@ -96,8 +109,9 @@ export const receiveHandoffUpload = Effect.fn("HandoffUploads.receive")(function
   yield* fs.writeFileString(receipt, encodeAttachment(attachment)).pipe(Effect.mapError(failure));
   return { attachment };
 });
-export const readHandoffAttachment = Effect.fn("HandoffUploads.read")(function* (
-  attachment: HandoffBundle["entries"][number]["attachments"][number],
+
+export const readForkAttachment = Effect.fn("ForkUploads.read")(function* (
+  attachment: ChatAttachment,
 ) {
   const config = yield* ServerConfig.ServerConfig;
   const fs = yield* FileSystem.FileSystem;
@@ -108,4 +122,34 @@ export const readHandoffAttachment = Effect.fn("HandoffUploads.read")(function* 
       message: "Attachment is not stored on the source machine.",
     });
   return yield* fs.readFile(file).pipe(Effect.mapError(failure));
+});
+
+/** Staging survives only while a fork is being received; delete it either way. */
+export const clearForkUploads = Effect.fn("ForkUploads.clear")(function* (forkId: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const config = yield* ServerConfig.ServerConfig;
+  const crypto = yield* Crypto.Crypto;
+  const forkDir = Hex.encode(
+    yield* crypto
+      .digest("SHA-256", new TextEncoder().encode(forkId))
+      .pipe(Effect.mapError(failure)),
+  );
+  const directory = path.join(config.stateDir, "fork-uploads", forkDir);
+  if (yield* fs.exists(directory).pipe(Effect.mapError(failure))) {
+    const entries = yield* fs.readDirectory(directory).pipe(Effect.mapError(failure));
+    for (const entry of entries) {
+      const receipt = path.join(directory, entry, "attachment.json");
+      if (!(yield* fs.exists(receipt).pipe(Effect.mapError(failure)))) continue;
+      const attachment = yield* fs
+        .readFileString(receipt)
+        .pipe(Effect.flatMap(decodeAttachment), Effect.mapError(failure));
+      const stored = resolveAttachmentPath({ attachmentsDir: config.attachmentsDir, attachment });
+      if (stored) {
+        yield* fs.remove(stored, { force: true }).pipe(Effect.mapError(failure));
+        yield* fs.remove(`${stored}.txt`, { force: true }).pipe(Effect.mapError(failure));
+      }
+    }
+  }
+  yield* fs.remove(directory, { recursive: true, force: true }).pipe(Effect.mapError(failure));
 });
