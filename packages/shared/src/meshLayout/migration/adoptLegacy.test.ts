@@ -1,9 +1,9 @@
 import { expect, it } from "@effect/vitest";
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import atlas from "../../../client-runtime/src/state/meshLayout/fixtures/atlas.json" with { type: "json" };
-import boreal from "../../../client-runtime/src/state/meshLayout/fixtures/boreal.json" with { type: "json" };
-import { adoptLegacy, importLegacy, materialize } from "./index.ts";
+import atlas from "../../../../client-runtime/src/state/meshLayout/fixtures/atlas.json" with { type: "json" };
+import boreal from "../../../../client-runtime/src/state/meshLayout/fixtures/boreal.json" with { type: "json" };
+import { adoptLegacy, importLegacy, materialize } from "../index.ts";
 
 it.each([
   [atlas, boreal],

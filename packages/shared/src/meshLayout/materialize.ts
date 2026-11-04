@@ -1,3 +1,4 @@
+import { validateLayoutEntry } from "./registry.ts";
 import { authoredBy } from "./authorship.ts";
 import { normalizeRepresentationPath } from "./representationPath.ts";
 import { meshAuthorityOf } from "./authority.ts";
@@ -34,7 +35,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   }[] = [];
   const legacy: Record<string, Json> = {};
   for (const [key, { v }] of Object.entries(doc).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    if (v === null) continue;
+    if (v === null || validateLayoutEntry(key, doc[key]!) !== null) continue;
     if (key.startsWith("proj/") && key.endsWith(".title") && typeof v === "string") {
       const id = decodeURIComponent(key.slice(5, -6));
       if ((doc[keys.project(id)]?.h ?? "") <= doc[key]!.h) projectTitles[id] = v;
