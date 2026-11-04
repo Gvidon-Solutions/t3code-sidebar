@@ -2,16 +2,18 @@ import { validateLayoutEntry } from "./registry.ts";
 import { normalizeRepresentationPath } from "./representationPath.ts";
 import { configFromLayout, bindingsFromLayout } from "../meshConfig/index.ts";
 import { keys } from "./document.ts";
+import { SidebarMachine } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import type {
   SidebarWorkspacesConfig,
   SidebarWorkspace,
   SidebarWorkspaceRule,
-  SidebarMachine,
   SidebarProjectMount,
   SidebarProjectMountStatus,
 } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "./document.ts";
 const dictionary = <T>(): Record<string, T> => Object.create(null) as Record<string, T>;
+const decodeMachine = Schema.decodeUnknownSync(SidebarMachine);
 
 export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const workspaces: (SidebarWorkspace & { sort: string })[] = [];
@@ -70,7 +72,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         (workspaceFold[a] ??= dictionary())[b] = v as "quiet" | "active";
         break;
       case "machine":
-        machines[a] = v as SidebarMachine;
+        machines[a] = decodeMachine(v);
         break;
       case "proj":
         if (

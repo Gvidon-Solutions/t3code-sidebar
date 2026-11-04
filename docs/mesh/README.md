@@ -38,6 +38,8 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   SQLite and the canonical document consistent; corrupt rows move to `mesh_layout_quarantine`.
   The registry validates config/history documents with the canonical contracts schema,
   preserving unknown fields for newer versions.
+  Machine projections use the wire schema too: newer reported facts remain in the document,
+  while older clients derive exactly the same snapshot as the server sends.
   `MeshReplicator.ts` exchanges local sequence watermarks and store generations over
   `PeerMcpClient`, pushes changes after 200 ms, retries a failed peer exchange on a
   1–15 s backoff and exchanges watermarks every 60 seconds. A changed generation resets

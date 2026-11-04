@@ -1,11 +1,24 @@
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 const isConfig = Schema.is(SidebarWorkspacesConfig);
+const decodeConfig = Schema.decodeSync(SidebarWorkspacesConfig);
 import { expect, it } from "vite-plus/test";
 import { validateLayoutEntry, layoutKeyFamilies } from "./registry.ts";
 import { merge, type MeshLayoutDocument } from "./document.ts";
 import { materialize } from "./materialize.ts";
 it("validates every registered family and forwards unknown values without materializing them", () => {
+  const futureMachine = {
+    "machine/studio": {
+      v: { label: "Studio", reported: { version: "future" } },
+      h: "0000000000000.00000.studio",
+    },
+  };
+  const forwardedMachine = merge({}, futureMachine);
+  expect(forwardedMachine).toEqual(futureMachine);
+  expect(materialize(forwardedMachine).machines.studio).toEqual({ label: "Studio" });
+  expect(decodeConfig(materialize(forwardedMachine))).toEqual(
+    materialize(forwardedMachine),
+  );
   for (const key of Object.keys(layoutKeyFamilies)) {
     const name = [
       key,
