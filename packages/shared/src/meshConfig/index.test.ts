@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+import { stringify } from "yaml";
 import { MeshConfigDocument } from "@t3tools/contracts";
 import {
   defaults,
@@ -19,10 +20,43 @@ describe("mesh config", () => {
     const input = {
       schema: 1,
       future: { x: true },
-      machines: { studio: { future: 4, ssh: { user: "dev", future: 7 } } },
-      agents: { aliases: { sol: { harness: "codex", model: "model", future: false } } },
+      t3: { version: "0.1.7-test.1", future: true },
+      machines: {
+        studio: {
+          label: "ST",
+          title: "Studio",
+          color: "blue",
+          future: 4,
+          reach: { address: "https://studio.example", future: true },
+          ssh: { user: "dev", port: 22, future: 7 },
+          bootstrap: { ssh: "dev@studio", os: "linux", future: true },
+        },
+        laptop: { reach: { via: "studio", future: true } },
+      },
+      links: {
+        future: true,
+        default: { files: "projects", replicas: true, threads: true, future: true },
+        overrides: [{ between: ["studio", "laptop"], files: "all", future: true }],
+      },
+      ssh: { mode: "existing", future: true },
+      projects: {
+        future: true,
+        defaults: { conflicts: "primary-wins", replica: "lite", ignore: [], future: true },
+        overrides: [{ project: "app*", ignore: ["/data"], future: true }],
+      },
+      replicas: {
+        ignore: ["*.log"],
+        future: true,
+        rules: [{ project: "*", on: "laptop", when: "always", future: true }],
+      },
+      agents: {
+        aliases: { sol: { harness: "codex", model: "model", future: false } },
+        instructions: "Shared instructions",
+        future: true,
+      },
     };
     expect(encodeConfig(parseConfig(JSON.stringify(input)))).toEqual(input);
+    expect(encodeConfig(parseConfig(stringify(input)))).toEqual(input);
     expect(parseConfig("schema: 1\nmachines:\n  studio:\n    label: ST\nfuture: yes\n")).toEqual({
       schema: 1,
       machines: { studio: { label: "ST" } },
@@ -30,15 +64,35 @@ describe("mesh config", () => {
     });
   });
   it("rejects malformed fields with their paths", () => {
-    for (const input of [
-      { schema: "1", machines: {} },
-      { schema: 1, machines: { "Bad Name": {} } },
-      { schema: 1, machines: { studio: { ssh: { port: 0 } } } },
-    ])
-      expect(() => parseConfig(input)).toThrow();
-    expect(() =>
-      parseConfig({ schema: 1, machines: {}, links: { default: { files: "root" } } }),
-    ).toThrow(/files/);
+    const cases: readonly [Record<string, unknown>, RegExp][] = [
+      [{ schema: "1" }, /schema/],
+      [{ machines: { "Bad Name": {} } }, /machines.*|Machine names must be slugs/s],
+      [{ t3: { version: 3 } }, /version/],
+      [{ machines: { studio: { label: 1 } } }, /label/],
+      [{ machines: { studio: { title: false } } }, /title/],
+      [{ machines: { studio: { color: [] } } }, /color/],
+      [{ machines: { studio: { aliases: [1] } } }, /aliases/],
+      [{ machines: { studio: { reach: { via: "Bad Name" } } } }, /reach/],
+      [{ machines: { studio: { ssh: { port: 0 } } } }, /port/],
+      [{ machines: { studio: { ssh: { user: 1 } } } }, /user/],
+      [{ machines: { studio: { bootstrap: { ssh: true, os: 1 } } } }, /bootstrap/],
+      [{ links: { default: { files: "root" } } }, /files/],
+      [{ links: { default: { replicas: "yes" } } }, /replicas/],
+      [{ links: { default: { threads: 1 } } }, /threads/],
+      [{ links: { overrides: [{ between: ["studio"] }] } }, /between/],
+      [{ ssh: { mode: "other" } }, /mode/],
+      [{ projects: { defaults: { conflicts: "authority" } } }, /conflicts/],
+      [{ projects: { defaults: { replica: "other" } } }, /replica/],
+      [{ projects: { defaults: { ignore: [1] } } }, /ignore/],
+      [{ projects: { overrides: [{ project: 1 }] } }, /project/],
+      [{ replicas: { ignore: [false] } }, /ignore/],
+      [{ replicas: { rules: [{ project: "*", on: "studio", when: "other" }] } }, /when/],
+      [{ agents: { aliases: { sol: { harness: 1, model: "model" } } } }, /harness/],
+      [{ agents: { aliases: { sol: { harness: "codex", model: 1 } } } }, /model/],
+      [{ agents: { instructions: false } }, /instructions/],
+    ];
+    for (const [patch, path] of cases)
+      expect(() => parseConfig({ schema: 1, machines: {}, ...patch })).toThrow(path);
   });
   it("merges permissions symmetrically and project ignores without duplicates", () => {
     const config = parseConfig({
@@ -111,6 +165,24 @@ describe("mesh config", () => {
       "links.overrides.1.between",
       "replicas.rules.0.on",
     ]);
+    expect(errors.map((e) => e.message)).toEqual([
+      "Unsupported schema: 2",
+      "Reach route contains a cycle",
+      "Reach route contains a cycle",
+      "Unknown machine: absent",
+      "Unknown machine: absent",
+      "Overlapping link override",
+      "Unknown machine: missing",
+    ]);
+    expect(
+      referenceErrors(
+        parseConfig({
+          schema: 1,
+          machines: { studio: {} },
+          links: { overrides: [{ between: ["studio", "studio"] }] },
+        }),
+      ),
+    ).toEqual([{ path: "links.overrides.0.between", message: "Overlapping link override" }]);
   });
 });
 
