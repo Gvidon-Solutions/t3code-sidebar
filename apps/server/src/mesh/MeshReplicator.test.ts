@@ -1,3 +1,5 @@
+import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
+import { CommandId, EventId } from "@t3tools/contracts";
 import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 import * as Deferred from "effect/Deferred";
@@ -37,6 +39,7 @@ it.effect(
           replicator: MeshReplicator["Service"];
           settings: Settings.ServerSettingsService["Service"];
           directory: Directory.MeshProjectDirectory["Service"];
+          events: ApplicationEvents.OrchestrationEventStore["Service"];
         }
       >();
       let ready = false;
@@ -147,6 +150,7 @@ it.effect(
                 env,
                 Settings.layerTest({ linkedEnvironmentsEnabled: true }),
                 Sqlite.layerMemory,
+                ApplicationEvents.layer.pipe(Layer.provide(Sqlite.layerMemory)),
               ),
             ),
             Layer.fresh,
@@ -157,6 +161,7 @@ it.effect(
         nodes.set(id, {
           mesh,
           replicator,
+          events: yield* ApplicationEvents.OrchestrationEventStore.pipe(Effect.provide(context)),
           directory: yield* Directory.MeshProjectDirectory.pipe(Effect.provide(context)),
           settings: yield* Settings.ServerSettingsService.pipe(Effect.provide(context)),
         });
@@ -198,8 +203,22 @@ it.effect(
       catalogsSent.length = 0;
       yield* settle;
       expect(catalogsSent.every((count) => count === 0)).toBe(true);
+      yield* TestClock.adjust("1 second");
       localProjects = [];
-      yield* settle;
+      const deletion = yield* a.events.appendProjectEvent({
+        type: "project.deleted",
+        eventId: EventId.make("catalog-deleted"),
+        aggregateKind: "project",
+        aggregateId: ProjectId.make("A-project"),
+        occurredAt: "1970-01-01T00:00:01.000Z",
+        commandId: CommandId.make("catalog-delete"),
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: { projectId: ProjectId.make("A-project"), deletedAt: "1970-01-01T00:00:01.000Z" },
+      });
+      yield* a.events.publishCommitted([deletion]);
+      yield* TestClock.adjust("500 millis");
       expect(
         (yield* c.directory.read).find((catalog) => catalog.environmentId === "A")?.projects,
       ).toEqual([]);

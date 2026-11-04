@@ -10,7 +10,7 @@ import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
 import { descriptorOf } from "../peer/PeerLinks.testkit.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import * as Mesh from "./MeshLayoutServiceLive.ts";
-import * as MeshSettings from "./MeshSettings.ts";
+import * as MeshSettings from "./migration/MeshSettings.ts";
 
 const environment = Layer.succeed(ServerEnvironment, {
   getEnvironmentId: Effect.succeed(EnvironmentId.make("A")),

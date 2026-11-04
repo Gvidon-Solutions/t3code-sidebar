@@ -1,3 +1,4 @@
+import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as Crypto from "effect/Crypto";
 import * as NodeUtil from "node:util";
@@ -76,6 +77,9 @@ export const layer = Layer.effect(
     const settings = yield* ServerSettingsService;
     const directory = yield* Effect.serviceOption(MeshProjectDirectory);
     const projects = yield* Effect.serviceOption(ProjectService);
+    const applicationEvents = yield* Effect.serviceOption(
+      ApplicationEvents.OrchestrationEventStore,
+    );
     yield* sql`CREATE TABLE IF NOT EXISTS mesh_layout_generation (id TEXT PRIMARY KEY, generation TEXT NOT NULL)`;
     yield* sql`INSERT OR IGNORE INTO mesh_layout_generation(id,generation) VALUES ('local',${yield* crypto.randomUUIDv4().pipe(Effect.orDie)})`;
     const generation = (yield* sql<{
@@ -399,7 +403,37 @@ export const layer = Layer.effect(
       yield* Stream.runForEach(links.changes, () =>
         sync.pipe(Effect.catch((cause) => Effect.logError("Mesh link replication failed", cause))),
       ).pipe(Effect.forkScoped);
-    yield* Stream.runForEach(Stream.groupedWithin(mesh.changes, 1000, "200 millis"), () =>
+    if (Option.isSome(applicationEvents) && Option.isSome(projects)) {
+      const afterSequence = yield* applicationEvents.value.latestApplicationSequence.pipe(
+        Effect.mapError(
+          (cause) =>
+            new MeshLayoutError({
+              reason: "storage",
+              message: "Project catalog cursor could not be read",
+              cause,
+            }),
+        ),
+      );
+      yield* Stream.runForEach(
+        Stream.groupedWithin(
+          applicationEvents.value.streamProjectedApplicationEvents({
+            afterSequence,
+            project: (event) => ({ sequence: event.sequence }),
+            filter: (event) => "aggregateKind" in event && event.aggregateKind === "project",
+          }),
+          1000,
+          "200 millis",
+        ),
+        () => sync,
+      ).pipe(
+        Effect.catch((cause) => Effect.logError("Mesh project catalog replication failed", cause)),
+        Effect.forkScoped,
+      );
+    }
+    const changes = Option.isSome(directory)
+      ? Stream.merge(mesh.changes, directory.value.changes)
+      : mesh.changes;
+    yield* Stream.runForEach(Stream.groupedWithin(changes, 1000, "200 millis"), () =>
       sync.pipe(Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause))),
     ).pipe(Effect.forkScoped);
     yield* runSync().pipe(

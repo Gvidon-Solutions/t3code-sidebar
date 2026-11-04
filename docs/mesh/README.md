@@ -209,3 +209,8 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   safety exchange, and that exchange could skip a peer whose stored pull time was a few
   milliseconds ahead. A machine killed mid-sync therefore stayed divergent for another minute.
   Retry each failed peer exchange on a short backoff, and let the periodic exchange always run.
+
+- Removing polling must preserve project discovery: local project commits publish catalog
+  changes, and received catalog changes trigger relay delivery even when the layout did not
+  change. Listening only to layout entries leaves a newly created, unplaced project invisible
+  until the minute exchange and makes the remote lookup deadline expire.
