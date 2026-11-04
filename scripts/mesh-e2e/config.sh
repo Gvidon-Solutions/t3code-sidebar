@@ -111,7 +111,7 @@ for machine in gor vps; do
   jq --arg target "$TARGET" '{revision:.current.revision,title:.current.doc.machines[$target].title,label:.current.doc.machines[$target].label}' "$WORK/config-$machine.json"
   ws_get "$machine" > "$WORK/layout-$machine.json"
   EXPECTED_TITLE=$(jq -er --arg target "$TARGET" '.machines[$target].title' "$WORK/desired.json")
-  jq -e --arg env "$VPS_ENV" --arg title "$EXPECTED_TITLE" --arg label "$NEW_LABEL" '.config.machines[$env].label==$title and .config.machines[$env].tag==$label' "$WORK/layout-$machine.json" >/dev/null
+  jq -e --arg env "$VPS_ENV" --arg title "$EXPECTED_TITLE" --arg label "$NEW_LABEL" '.config.machines[$env].label==$title and .config.machines[$env].title==$title and .config.machines[$env].tag==$label' "$WORK/layout-$machine.json" >/dev/null
 done
 echo 'replica:'
 jq '.[0]|{role,transport,path,state,registered:(.projectId!=null)}' "$WORK/replicas.json"
