@@ -1,3 +1,4 @@
+import "../index.css";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { ThreadId } from "@t3tools/contracts";
@@ -36,6 +37,13 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
 
 it("a new draft does not load its reserved thread before the server lists it", async () => {
   using _environment = installFakeEnvironment([]);
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  await page.viewport(240, 640);
+  await using _viewport = {
+    [Symbol.asyncDispose]: async () => {
+      await page.viewport(viewport.width, viewport.height);
+    },
+  };
   using fetchSpy = vi.spyOn(globalThis, "fetch");
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
