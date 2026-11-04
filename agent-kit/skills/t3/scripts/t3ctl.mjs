@@ -918,7 +918,8 @@ class Mcp {
       .filter((c) => c.type === "text")
       .map((c) => c.text)
       .join("\n");
-    if (res.isError) die(`${name}: ${clip(text, 1500)}`);
+    if (res.isError)
+      die(`${name}: ${name.startsWith("t3_mesh_config_") ? text : clip(text, 1500)}`);
     if (res.structuredContent !== undefined) return res.structuredContent;
     try {
       return JSON.parse(text);

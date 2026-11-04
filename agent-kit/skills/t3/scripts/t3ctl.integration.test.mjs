@@ -76,6 +76,7 @@ if(process.env.T3CTL_TEST_SSH_INSTALL) {
     assert.equal(r.status, Number(extra.expectedCode || 0), r.stderr);
     return {
       out: r.stdout,
+      err: r.stderr,
       calls: readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse),
       installed: NodeFS.existsSync(join(dir, "home/runtime/versions/0.0.9-N/t3")),
     };
@@ -464,6 +465,13 @@ test("mesh config CLI reaches get, plan, apply, rollback, history and status tra
     stale.calls.find((call) => call.name === "t3_mesh_config_apply").args.baseRevision,
     "old",
   );
+  const rejected = run(["mesh", "config", "apply", "schema: 1", "--base", "old", "--json"], {
+    T3CTL_TEST_STALE_CONFIG: "1", expectedCode: 1,
+  });
+  const failure = JSON.parse(rejected.err.slice(rejected.err.indexOf("{")));
+  assert.equal(failure.reason, "stale_revision");
+  assert.equal(failure.current.doc.future.length, 2000);
+  assert.deepEqual(failure.diff, [{ path: "$.machines.studio.title", before: "Studio", after: "Studio updated" }]);
   assert.equal(JSON.parse(run(["mesh", "config", "rollback", "1", "--json"]).out).revision, "3");
   assert.equal(JSON.parse(run(["mesh", "config", "history", "--json"]).out).revisions.length, 1);
   assert.equal(

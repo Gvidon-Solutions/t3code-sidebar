@@ -95,6 +95,13 @@ function call(name, args) {
         actions: [{ id: "machines/studio", server: self, description: "Apply display" }],
       };
     case "t3_mesh_config_apply":
+      if (process.env.T3CTL_TEST_STALE_CONFIG)
+        throw Error(JSON.stringify({
+          _tag: "MeshConfigError",
+          reason: "stale_revision",
+          current: { ...meshRevision, doc: { ...meshDoc, future: "x".repeat(2000) } },
+          diff: [{ path: "$.machines.studio.title", before: "Studio", after: "Studio updated" }],
+        }));
       return { ...meshRevision, revision: "2", doc: args.doc };
     case "t3_mesh_config_rollback":
       return { ...meshRevision, revision: "3" };
