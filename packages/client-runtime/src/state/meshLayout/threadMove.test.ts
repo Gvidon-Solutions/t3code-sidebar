@@ -6,81 +6,55 @@ import {
   ProviderInstanceId,
   type ThreadMoveInput,
 } from "@t3tools/contracts";
-import { moveThreadWithConfirmation, threadMoveValidity } from "./threadMove.ts";
+import { moveThread, threadMoveValidity } from "./threadMove.ts";
 
 it.each([
-  ["a", "one", "same-project"],
-  ["a", "two", "local"],
-  ["b", "one", "cross-machine"],
-  ["b", "two", "cross-machine"],
-])("validates a target representation on %s in %s", (environmentId, id, expected) => {
-  expect(threadMoveValidity({ environmentId: "a", projectId: "one" }, { environmentId, id })).toBe(
-    expected,
-  );
+  ["one", "same-project"],
+  ["two", "local"],
+])("validates a target project %s on the same machine", (id, expected) => {
+  expect(
+    threadMoveValidity({ environmentId: "a", projectId: "one" }, { environmentId: "a", id }),
+  ).toBe(expected);
 });
 
-it("waits for confirmation, cancels without moving, and routes an accepted handoff from its source", async () => {
+it("refuses a target on another machine", () => {
+  expect(() =>
+    threadMoveValidity({ environmentId: "a", projectId: "one" }, { environmentId: "b", id: "two" }),
+  ).toThrow(/fork/i);
+});
+
+it("moves without a model and sends only the local project change", async () => {
   const source = {
     id: ThreadId.make("thread"),
     projectId: ProjectId.make("one"),
     environmentId: EnvironmentId.make("source"),
   };
-  const target = { id: ProjectId.make("one"), environmentId: EnvironmentId.make("target") };
-  const decision = Promise.withResolvers<boolean>();
-  const confirm = vi.fn(() => decision.promise);
   const move = vi.fn(
     async (request: { environmentId: EnvironmentId; input: ThreadMoveInput }) => request,
   );
-  const pending = moveThreadWithConfirmation({ source, target, machine: "VPS", confirm, move });
-  expect(move).not.toHaveBeenCalled();
-  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("this thread is archived"));
-  decision.resolve(false);
-  expect(await pending).toBeNull();
-  expect(move).not.toHaveBeenCalled();
-  const accepted = await moveThreadWithConfirmation({
-    source,
-    target,
-    machine: "VPS",
-    confirm: async () => true,
-    move,
-  });
-  expect(accepted).toEqual({
-    environmentId: source.environmentId,
-    input: { threadId: source.id, projectId: target.id, targetEnvironmentId: target.environmentId },
-  });
-  move.mockClear();
-  confirm.mockClear();
   expect(
-    await moveThreadWithConfirmation({
+    await moveThread({
       source,
-      target: { ...target, environmentId: source.environmentId },
-      machine: "Here",
-      confirm,
+      target: { id: ProjectId.make("one"), environmentId: source.environmentId },
       move,
     }),
   ).toBeNull();
   expect(move).not.toHaveBeenCalled();
-  expect(confirm).not.toHaveBeenCalled();
-  const local = await moveThreadWithConfirmation({
+  const local = await moveThread({
     source,
     target: { id: ProjectId.make("two"), environmentId: source.environmentId },
-    machine: "Here",
-    confirm,
     move,
   });
   expect(local?.input).toEqual({ threadId: source.id, projectId: ProjectId.make("two") });
-  expect(confirm).not.toHaveBeenCalled();
   const modelSelection = {
     instanceId: ProviderInstanceId.make("claude"),
     model: "haiku",
     options: [{ id: "effort", value: "high" }],
   };
-  const changed = await moveThreadWithConfirmation({
+  const changed = await moveThread({
     source,
-    target: { ...target, environmentId: source.environmentId },
+    target: { id: ProjectId.make("two"), environmentId: source.environmentId },
     modelSelection,
-    machine: "Here",
-    confirm,
     move,
   });
   expect(changed?.input.modelSelection).toEqual(modelSelection);

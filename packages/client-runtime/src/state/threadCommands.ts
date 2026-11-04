@@ -227,6 +227,12 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
+    fork: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:fork",
+      tag: "threads.fork",
+      scheduler,
+      concurrency,
+    }),
     updateMetadata: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:update-metadata",
       execute: updateThreadMetadata,

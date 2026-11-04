@@ -46,6 +46,7 @@ import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import { canForkThreadFromMenu } from "@t3tools/client-runtime/state/thread-forks";
 import { useForkThread } from "../components/workspaces/useForkThread";
+import { openForkThread } from "../components/workspaces/forkThreadState";
 import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
@@ -257,6 +258,9 @@ export function useThreadActionMenu(input: {
           if (error !== null) failureToast("Failed to fork thread", new Error(error));
           return;
         }
+        case "fork-machine":
+          openForkThread(threadRef);
+          return;
         case "settle":
           await reportFailure("Failed to settle thread", () => settleThread(threadRef));
           return;

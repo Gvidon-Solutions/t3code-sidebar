@@ -1,4 +1,5 @@
 import { openMoveThreadSheet } from "../workspaces/moveThreadState";
+import { openForkThreadSheet } from "../workspaces/forkThreadState";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
@@ -33,6 +34,8 @@ import type { SnoozePresetSetting } from "@t3tools/contracts/settings";
 import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
 import type { MenuAction } from "@react-native-menu/menu";
+import { StackActions, useNavigation } from "@react-navigation/native";
+import { forkLinkMenuActions, FORK_MACHINE_MENU_ACTION } from "./threadMenuActions";
 import { memo, useCallback, useMemo, useState, type ComponentProps } from "react";
 import { Pressable, useWindowDimensions, View } from "react-native";
 import type { SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -859,6 +862,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const titleMenuItems = useMemo<MenuAction[]>(
     () => [
       { id: "move-project", title: "Move to project…", image: "folder" },
+      FORK_MACHINE_MENU_ACTION,
       { id: "rename", title: "Rename", image: "square.and.pencil" },
       ...buildThreadTitleRegenerationMenuItems({
         supported: props.titleRegenerationSupported,
@@ -937,6 +941,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     ],
     [arrangementMenuItems, titleMenuItems],
   );
+  const navigation = useNavigation();
   const handleMenuAction = useCallback(
     ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
       if (nativeEvent.event === "new-thread-on-branch") onNewThreadOnBranch(thread);
@@ -953,6 +958,17 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "move-down") handleMoveDown();
       if (nativeEvent.event === "archive") handleArchive();
       if (nativeEvent.event === "move-project") openMoveThreadSheet(thread);
+      if (nativeEvent.event === "fork-machine") openForkThreadSheet(thread);
+      const forkLink = forkLinkMenuActions(thread).find(
+        (action) => action.id === nativeEvent.event,
+      );
+      if (forkLink)
+        navigation.dispatch(
+          StackActions.push("Thread", {
+            environmentId: forkLink.target.environmentId,
+            threadId: forkLink.target.threadId,
+          }),
+        );
       if (nativeEvent.event === "rename") handleRename();
       if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
       if (nativeEvent.event === "turn-into-project") void turnThreadIntoProject(thread);
@@ -990,6 +1006,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     },
     [
       onNewThreadOnBranch,
+      navigation,
       onForkThread,
       thread,
       handleArchive,
@@ -1491,6 +1508,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               ...(onForkThread && canForkThreadFromMenu(thread, props.providers)
                 ? [{ id: "fork", title: "Fork", image: "arrow.triangle.branch" }]
                 : []),
+              ...forkLinkMenuActions(thread).map(({ id, title }) => ({
+                id,
+                title,
+                image: "arrow.triangle.branch",
+              })),
               { id: "copy-thread", title: "Copy thread", image: "text.bubble" },
               { id: "copy-thread-id", title: "Copy thread ID", image: "doc.on.doc" },
               ...(snoozedRow

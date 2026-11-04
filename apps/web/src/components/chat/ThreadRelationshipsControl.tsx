@@ -888,6 +888,40 @@ export function ThreadRelationshipsPanel(props: {
               {(visibleRows) => visibleRows.map(renderRelationshipRow)}
             </ThreadLineageGroup>
           ))}
+          {(currentThread?.meshForks ?? []).length > 0 ? (
+            <ThreadLineageRowList hiddenCount={0} onShowMore={() => {}}>
+              {(currentThread?.meshForks ?? []).map((fork) => (
+                <li
+                  key={`${fork.environmentId}:${fork.threadId}`}
+                  className="group relative flex h-8 items-center rounded-lg"
+                >
+                  <ThreadDetailsControl
+                    size="sm"
+                    variant="ghost"
+                    part="row"
+                    onClick={() =>
+                      void navigate({
+                        to: "/$environmentId/$threadId",
+                        params: buildThreadRouteParams(
+                          scopeThreadRef(fork.environmentId, fork.threadId),
+                        ),
+                      })
+                    }
+                  >
+                    <GitForkIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-left text-sm font-medium leading-4 text-foreground/85">
+                        {fork.title}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-2xs text-muted-foreground">
+                      fork on {fork.machine}
+                    </span>
+                  </ThreadDetailsControl>
+                </li>
+              ))}
+            </ThreadLineageRowList>
+          ) : null}
           {remoteSubagents.length > 0 ? (
             <ThreadLineageRowList hiddenCount={0} onShowMore={() => {}}>
               {remoteSubagents.map((agent) => (
