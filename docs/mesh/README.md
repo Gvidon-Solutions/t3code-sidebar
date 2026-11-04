@@ -265,7 +265,7 @@ Registered planners (`mesh/MeshConfigPlanners.ts`):
 | `links`     | effective permission changes for every pair | publishes installed policy; receivers read the config                               |
 | `conflicts` | per-project conflict-policy changes         | reconciles sessions using project policy                                            |
 | `ignores`   | per-project ignore changes                  | writes merged ignores and recreates affected sessions                               |
-| `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place` / `unplace`                                     |
+| `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place`, including `action: remove`                     |
 
 S1 (SSH) and B1 (bootstrap, updates, agent instructions) add planners through the same port; nothing
 else should grow a second reconciliation path. Every action has a sixty-second deadline, failures do

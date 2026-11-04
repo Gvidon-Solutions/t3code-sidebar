@@ -57,7 +57,13 @@ test("zero-clock legacy entries use server shared adoption without losing offlin
 test("alias writes match bounded shared clocks, including counter overflow", async () => {
   const { nextMachineClock } = await import("./scripts/t3ctl.mjs");
   const { tick } = await import("../../../packages/shared/src/meshLayout/index.ts");
-  for (const last of [null, "0000000000042.99999.peer", "0000000300042.99999.peer", "9999999999998.00042.peer", "9999999999998.99999.peer"]) {
+  for (const last of [
+    null,
+    "0000000000042.99999.peer",
+    "0000000300042.99999.peer",
+    "9999999999998.00042.peer",
+    "9999999999998.99999.peer",
+  ]) {
     const document = last
       ? { "machine/remote": { v: { aliases: ["office", "研究室"] }, h: last } }
       : {};
@@ -74,5 +80,8 @@ test("alias writes match bounded shared clocks, including counter overflow", asy
       },
     },
   };
-  assert.deepEqual({ ...materialize(importLegacyEntries(config, "local")).machines }, config.machines);
+  assert.deepEqual(
+    { ...materialize(importLegacyEntries(config, "local")).machines },
+    config.machines,
+  );
 });
