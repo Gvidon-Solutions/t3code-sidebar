@@ -31,7 +31,9 @@ for (const name of ["round1.sh", "round2.sh"]) {
     .replaceAll('title: "demo"', 'title: "N1-network-demo"')
     .replaceAll("--project demo", "--project N1-network-demo");
   text = text.replace('CTL="$HOME/.agents/skills/t3-next/scripts/t3ctl.mjs"', 'CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"');
-  if (name === "round2.sh") text = text.replace('"$MESH_DIR/round2-routes.sh" || exit 1', '[ -f "$STATE_DIR/round2-container" ] || die "The existing bed SSH route key is required; N1 does not edit the owner SSH configuration"');
+  if (name === "round2.sh") text = text
+    .replace('"$MESH_DIR/round2-routes.sh" || exit 1', '[ -f "$STATE_DIR/round2-container" ] || die "The existing bed SSH route key is required; N1 does not edit the owner SSH configuration"')
+    .replace('probe route-gv-gor ssh -o', 'probe route-gv-gor ssh -F "$GV_BASE_DIR/home/.ssh/config" -o');
   fs.writeFileSync(path.join(target, name), text, { mode: 0o700 });
 }
 const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -41,7 +43,9 @@ gor_ssh 'bash -s' <<EOF
 set -euo pipefail
 export PATH=\$HOME/.nvm/versions/node/v26.12.1/bin:\$PATH
 root="\$HOME/$N1_BED_PROJECT"
-mkdir -p "\$root"
+mkdir -p "\$root/node_modules" "\$root/.venv"
+printf 'module.exports = 1;\n' > "\$root/node_modules/x.js"
+printf 'N1 excluded fixture\n' > "\$root/.venv/a"
 if [ ! -d "\$root/.git" ]; then
   git init -q "\$root"
   printf '# mesh e2e demo N1\n' > "\$root/README.md"
