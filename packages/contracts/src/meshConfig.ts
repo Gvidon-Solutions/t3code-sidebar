@@ -68,6 +68,9 @@ export const MeshConfigDocument = open({
   ),
   replicas: Schema.optionalKey(
     open({
+      remoteCommands: Schema.optionalKey(
+        Schema.Array(Schema.String.check(Schema.isPattern(/^[A-Za-z0-9][A-Za-z0-9._+-]*$/))),
+      ),
       ignore: Schema.optionalKey(Schema.Array(Schema.String)),
       rules: Schema.optionalKey(
         Schema.Array(
