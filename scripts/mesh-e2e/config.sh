@@ -10,6 +10,7 @@ unset MESH_E2E_HELPERS_ONLY
 [ "$(gor_ssh 'cat /tmp/mesh-bed.lock/owner')" = C1 ] || die 'acquire the C1 bed lock first'
 chmod 700 "$WORK"
 CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
+GOR_DATA_DIR=$(gor_ssh 'printf "%s" "$HOME/.t3-sidebar-server"')
 for machine in gor vps; do
   cat > "$WORK/t3-$machine" <<EOF
 #!/usr/bin/env bash
@@ -26,9 +27,16 @@ EOF
 done
 ctl() {
   local machine=$1
+  local base
   shift
-  XDG_CONFIG_HOME="$WORK/auth-$machine" T3CTL_ORIGIN="$(origin_of "$machine")" \
+  case "$machine" in gor) base=$GOR_DATA_DIR ;; vps) base=/home/t3/.t3 ;; esac
+  XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" \
     T3CTL_T3_BIN="$WORK/t3-$machine" node "$CTL" "$@"
+}
+vexec() {
+  local command
+  printf -v command '%q ' "$@"
+  vps_ssh "docker exec t3-mesh-e2e $command"
 }
 T_GV=$(mint_token gv)
 T_GOR=$(mint_token gor)
@@ -85,12 +93,15 @@ while :; do
       select(.environmentId==$env and .role=="replica" and .projectId!=null) |
       . + {state:$c.projectMountStatus[$key][$env].state} | select(.state=="watching")]
   ' "$WORK/layout-vps.json" > "$WORK/replicas.json"
-  if [ "$converged" = 1 ] && jq -e 'length==1' "$WORK/replicas.json" >/dev/null; then break; fi
+  if [ "$converged" = 1 ] && jq -e 'length==1' "$WORK/replicas.json" >/dev/null; then
+    PATH_ON_TARGET=$(jq -er '.[0].path' "$WORK/replicas.json")
+    if vexec sh -c 'test -f "$1/README.md" && test ! -e "$1/node_modules" && test ! -e "$1/.git" && grep -Fx -- "$2" "$1/README.md"' sh "$PATH_ON_TARGET" "$TITLE" > "$WORK/file-check.txt" 2> "$WORK/file-check.err"; then break; fi
+  fi
   [ "$SECONDS" -lt "$deadline" ] || die 'config/replica convergence deadline exceeded'
   sleep 2
 done
 PATH_ON_TARGET=$(jq -er '.[0].path' "$WORK/replicas.json")
-vps_ssh "docker exec t3-mesh-e2e sh -c 'test -f \"\$1/README.md\" && test ! -e \"\$1/node_modules\" && test ! -e \"\$1/.git\" && cat \"\$1/README.md\"' sh '$PATH_ON_TARGET'"
+cat "$WORK/file-check.txt"
 for machine in gor vps; do
   echo "\$ meshConfig.get ($machine)"
   jq --arg target "$TARGET" '{revision:.current.revision,title:.current.doc.machines[$target].title,label:.current.doc.machines[$target].label}' "$WORK/config-$machine.json"
