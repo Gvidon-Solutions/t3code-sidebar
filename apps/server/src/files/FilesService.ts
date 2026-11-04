@@ -17,6 +17,9 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Option from "effect/Option";
+import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
+import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 
 import { makeIsServerInternalPath } from "../auth/serverInternalPaths.ts";
 
@@ -76,6 +79,32 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  const authorizeLinkPath = Effect.fn("FilesService.authorizeLinkPath")(function* (target: string) {
+    const scope = yield* Effect.serviceOption(McpInvocationContext);
+    if (
+      Option.isNone(scope) ||
+      scope.value.client?.linked !== true ||
+      scope.value.client.access !== "read-only"
+    )
+      return;
+    const mesh = yield* Effect.serviceOption(MeshLayoutService);
+    if (Option.isNone(mesh)) return yield* filesError("permission_denied", target);
+    const snapshot = yield* mesh.value.read;
+    const roots = Object.values(snapshot.config.projectMounts)
+      .flat()
+      .filter((rep) => rep.environmentId === scope.value.environmentId);
+    for (const root of roots) {
+      const realRoot = yield* realPath(expand(root.path));
+      const relative = path.relative(realRoot, target);
+      if (
+        relative === "" ||
+        (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`))
+      )
+        return;
+    }
+    return yield* filesError("permission_denied", target);
+  });
+
   const read: FilesService["Service"]["read"] = Effect.fn("FilesService.read")(function* (input) {
     const requested = expand(input.absolutePath);
     if (!path.isAbsolute(requested)) {
@@ -86,6 +115,7 @@ export const make = Effect.gen(function* () {
       return yield* filesError("permission_denied", requested);
     }
 
+    yield* authorizeLinkPath(realTarget);
     const handle = yield* Effect.tryPromise({
       // A FIFO would otherwise block the read; Windows has no such flag.
       try: () =>
@@ -140,6 +170,7 @@ export const make = Effect.gen(function* () {
     if (yield* isServerInternalPath(realParent)) {
       return yield* filesError("permission_denied", parentPath);
     }
+    yield* authorizeLinkPath(realParent);
     const parentStat = yield* Effect.tryPromise({
       try: () => NodeFSP.stat(realParent),
       catch: (cause) => filesError(failureOf(cause), parentPath, cause),

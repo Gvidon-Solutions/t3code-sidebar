@@ -1,3 +1,7 @@
+import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG, EnvironmentId } from "@t3tools/contracts";
+import * as Stream from "effect/Stream";
+import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
+import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 // @effect-diagnostics nodeBuiltinImport:off - sparse files make the hard size limit cheap to test.
 import * as NodeFSP from "node:fs/promises";
 
@@ -162,6 +166,75 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService", (it) => {
 
       const error = yield* files.read({ absolutePath: stateFile }).pipe(Effect.flip);
       expect(reasonOf(error)).toBe("permission_denied");
+    }),
+  );
+});
+
+it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link", (it) => {
+  it.effect("refuses outside reads and symlink escapes for read-only links", () =>
+    Effect.gen(function* () {
+      const files = yield* FilesService.FilesService;
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const project = yield* makeTempDir;
+      const outside = yield* makeTempDir;
+      yield* writeTextFile(project, "inside.txt", "inside");
+      yield* writeTextFile(outside, "secret.txt", "secret");
+      yield* fs.symlink(outside, path.join(project, "escape")).pipe(Effect.orDie);
+      const snapshot = {
+        document: {},
+        config: {
+          ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+          projectMounts: {
+            app: [
+              {
+                environmentId: "studio",
+                role: "primary" as const,
+                transport: "git" as const,
+                createdAt: "2026-01-01T00:00:00Z",
+                path: project,
+              },
+            ],
+          },
+        },
+      };
+      const invoke = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        effect.pipe(
+          Effect.provideService(McpInvocationContext, {
+            environmentId: EnvironmentId.make("studio"),
+            capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
+            issuedAt: 0,
+            requestNamespace: "test",
+            thread: undefined,
+            client: { sessionId: "link", label: "laptop", linked: true, access: "read-only" },
+          }),
+          Effect.provideService(
+            MeshLayoutService,
+            MeshLayoutService.of({
+              environmentId: "studio",
+              read: Effect.succeed(snapshot),
+              changes: Stream.empty,
+              apply: () => Effect.succeed(snapshot),
+              edit: () => Effect.succeed(snapshot),
+              editLegacy: () => Effect.succeed(snapshot),
+              nextHlc: Effect.succeed("0000000000000.00000.studio"),
+            }),
+          ),
+        );
+      expect(
+        yield* invoke(files.read({ absolutePath: path.join(project, "inside.txt") })),
+      ).toMatchObject({ contents: "inside" });
+      for (const target of [
+        path.join(outside, "secret.txt"),
+        path.join(project, "escape", "secret.txt"),
+      ]) {
+        expect(
+          reasonOf(yield* invoke(files.read({ absolutePath: target })).pipe(Effect.flip)),
+        ).toBe("permission_denied");
+      }
+      expect(
+        reasonOf(yield* invoke(files.list({ partialPath: `${outside}/` })).pipe(Effect.flip)),
+      ).toBe("permission_denied");
     }),
   );
 });
