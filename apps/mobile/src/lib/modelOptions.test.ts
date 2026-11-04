@@ -51,6 +51,13 @@ describe("mobile model options", () => {
       instanceId: ProviderInstanceId.make("opencode_work"),
       model: "github-copilot/claude-fable-5",
     };
+    const meshCatalog = { providers: config.providers };
+    expect(
+      buildModelOptions(meshCatalog, selection, undefined, null).map(
+        (model) => model.selection.model,
+      ),
+    ).toEqual(sources.map((source) => `${source.id}/claude-fable-5`));
+    expect(isModelSelectionUnavailable(meshCatalog, selection, null)).toBe(false);
 
     const unavailableConfig: ServerConfig = {
       ...config,

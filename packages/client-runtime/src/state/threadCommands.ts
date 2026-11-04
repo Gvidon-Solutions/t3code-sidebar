@@ -233,6 +233,11 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
+    forkCatalog: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:fork-catalog",
+      tag: "threads.forkCatalog",
+      scheduler,
+    }),
     updateMetadata: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:update-metadata",
       execute: updateThreadMetadata,

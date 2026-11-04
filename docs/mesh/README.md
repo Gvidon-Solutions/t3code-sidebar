@@ -67,7 +67,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   Ignore changes recreate the session. Conflict copies remain protected from sync. A failed remote
   live-query retains the replicated status; missing RPC reachability is not a sync failure.
 - **Threads anywhere.** `t3_thread_self` (who am I), mesh-wide list/search/read/send/wait by id
-  (`MeshThreadAccess.ts`). **Move** changes the project on the same machine only
+  (`mcp/McpToolAccess.ts`). **Move** changes the project on the same machine only
   (`ThreadMoveService.ts`; drag, menu, CLI and MCP; no model). **Fork to machine** creates a new
   thread elsewhere (`ThreadForkService.ts`, `forkBundle.ts`, `ForkUploads.ts`, `forkTransport.ts`):
   ensure/place the destination representation and wait for sync, flush it, copy the transcript
@@ -80,6 +80,9 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   with 1–15 s backoff, including after restart. The target retains a small token receipt for
   idempotency; startup resumes accepted commits and expires pending forks locally. Abort is
   only a fast cleanup path. Staging and pending attachment blobs are removed after commit or expiry.
+  Fork model pickers use `threads.forkCatalog` on the source to read the target catalog over
+  the mesh, so clients need no separate connection to each destination. Catalog reads never
+  place replicas or stage threads and time out after thirty seconds.
   Fork works on the same machine too. Old handoff "move" data still renders as ordinary links.
 - **Draft machine selection.** Web `components/chat/useDraftEnvironmentRouting.ts` and mobile
   `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen

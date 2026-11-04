@@ -17,6 +17,7 @@ import {
   type ChatAttachment,
   type MeshForkOrigin,
   type MeshForkRef,
+  type ThreadForkCatalog,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -66,6 +67,9 @@ const STEP_TIMEOUT = "120 seconds";
 export class ThreadForkService extends Context.Service<
   ThreadForkService,
   {
+    readonly catalog: (
+      targetEnvironmentId: EnvironmentId,
+    ) => Effect.Effect<ThreadForkCatalog, OrchestratorMcpFailure>;
     readonly fork: (
       input: ThreadForkInput,
       limits: PeerCallLimits,
@@ -486,6 +490,14 @@ export const layer = Layer.effect(
     ) => Effect.Effect<typeof ForkTransportResult.Type, OrchestratorMcpFailure> = Effect.fn(
       "ThreadForkService.receive",
     )(function* (input: ForkTransportInput, limits: PeerCallLimits) {
+      if (input.action === "catalog") {
+        return {
+          providers: (yield* providers.getProviders).map((provider) => ({
+            ...provider,
+            auth: { status: provider.auth.status },
+          })),
+        };
+      }
       const key = `target:${input.action === "receive" ? input.bundle.id : input.forkId}`;
       return yield* locks.withLock(
         key,
@@ -773,6 +785,34 @@ export const layer = Layer.effect(
       }));
     });
     yield* forkParked(retry(recover));
-    return ThreadForkService.of({ fork, receive });
+    const catalog = Effect.fn("ThreadForkService.catalog")(function* (
+      targetEnvironmentId: EnvironmentId,
+    ) {
+      const result = yield* (
+        targetEnvironmentId === self
+          ? receive(
+              { action: "catalog" },
+              { runtimeMode: "full-access", interactionMode: "default" },
+            )
+          : remote(
+              targetEnvironmentId,
+              { action: "catalog" },
+              { runtimeMode: "full-access", interactionMode: "default" },
+            )
+      ).pipe(
+        Effect.timeoutOption("30 seconds"),
+        Effect.flatMap(
+          Option.match({
+            onNone: () =>
+              Effect.fail(failure({ message: "The target model catalog did not answer in time." })),
+            onSome: Effect.succeed,
+          }),
+        ),
+      );
+      if (!("providers" in result))
+        return yield* invalid("The target did not supply its model catalog.");
+      return result;
+    });
+    return ThreadForkService.of({ fork, receive, catalog });
   }),
 ).pipe(Layer.provideMerge(ForkTransactions.layer));

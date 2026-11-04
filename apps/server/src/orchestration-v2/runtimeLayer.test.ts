@@ -8583,7 +8583,9 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         let flushReady = true;
         let flushes = 0;
         let pauseFlush = false;
+        let pauseCatalog = false;
         const flushEntered = yield* Deferred.make<void>();
+        const catalogEntered = yield* Deferred.make<void>();
         const limits = { runtimeMode: "full-access" as const, interactionMode: "default" as const };
         let target: ThreadForks.ThreadForkService["Service"] | undefined;
         const configs = new Map<string, ServerConfig.ServerConfig["Service"]>();
@@ -8706,6 +8708,10 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                     Effect.orDie,
                     Effect.flatMap((input) => {
                       if (!target) return Effect.die("Target was not constructed.");
+                      if (input.action === "catalog" && pauseCatalog)
+                        return Deferred.succeed(catalogEntered, undefined).pipe(
+                          Effect.andThen(Effect.never),
+                        );
                       if (input.action === "commit") commitCalls++;
                       return target
                         .receive(
@@ -8810,7 +8816,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                       ? ("available" as const)
                       : ("unavailable" as const),
                     status: providerReady ? ("ready" as const) : ("error" as const),
-                    auth: { status: "authenticated" as const },
+                    auth: { status: "authenticated" as const, email: "member@example.invalid" },
                     version: null,
                     checkedAt: "2026-11-03T00:00:00Z",
                     models: [
@@ -8866,6 +8872,22 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         });
         target = yield* make("B", targetScope);
         let source = yield* make("A", sourceScope);
+        const catalogCount = (yield* orchestrator.getShellSnapshot()).threads.length;
+        const destinationCatalog = yield* source.catalog(EnvironmentId.make("B"));
+        assert.equal(destinationCatalog.providers[1]?.instanceId, "opencode");
+        assert.equal(destinationCatalog.providers[1]?.models[0]?.slug, "cedar-model");
+        assert.deepEqual(destinationCatalog.providers[0]?.auth, { status: "authenticated" });
+        assert.equal(placed, 0);
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, catalogCount);
+        pauseCatalog = true;
+        const waitingCatalog = yield* source
+          .catalog(EnvironmentId.make("B"))
+          .pipe(Effect.result, Effect.forkChild);
+        yield* Deferred.await(catalogEntered);
+        yield* TestClock.adjust("30 seconds");
+        const catalogTimeout = yield* Fiber.join(waitingCatalog);
+        assert.equal(catalogTimeout._tag, "Failure");
+        pauseCatalog = false;
         const input = {
           commandId: CommandId.make("L-fork"),
           threadId: sourceId,
@@ -9005,6 +9027,8 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         pauseFlush = false;
         targetOffline = true;
+        const offlineCatalog = yield* source.catalog(EnvironmentId.make("B")).pipe(Effect.result);
+        assert.equal(offlineCatalog._tag, "Failure");
         const offline = yield* source
           .fork({ ...input, commandId: CommandId.make("L-fork-offline") }, limits)
           .pipe(Effect.flip);

@@ -1,14 +1,23 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { EnvironmentId, ModelSelection, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ModelSelection,
+  ThreadId,
+  ThreadForkCatalog,
+} from "@t3tools/contracts";
 import { replicaStatusCopy } from "@t3tools/client-runtime/state/mesh-layout";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
-import { providerInstanceEntriesFor, isProviderInstancePickerReady } from "../../providerInstances";
+import {
+  deriveProviderInstanceEntries,
+  providerInstanceEntriesFor,
+  isProviderInstancePickerReady,
+} from "../../providerInstances";
 import { readThreadShell } from "../../state/entities";
 import { useEnvironments, useEnvironmentProviders } from "../../state/environments";
 import { threadEnvironment } from "../../state/threads";
@@ -46,6 +55,18 @@ export function ForkThreadDialog(props: {
   const { environments } = useEnvironments();
   const providersByEnvironment = useEnvironmentProviders();
   const forkCommand = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
+  const loadCatalog = useAtomCommand(threadEnvironment.forkCatalog, { reportFailure: false });
+  const catalogRequest = useRef(0);
+  const [catalogs, setCatalogs] = useState<
+    Record<
+      string,
+      {
+        request: number;
+        value?: ThreadForkCatalog;
+        error?: string;
+      }
+    >
+  >({});
 
   const displayMachine = (environmentId: string) =>
     machineLabel(
@@ -67,16 +88,25 @@ export function ForkThreadDialog(props: {
   const [error, setError] = useState<string | null>(null);
 
   const target = targetEnvironmentId ?? source.environmentId;
-  const settings = useEnvironmentSettings(target);
-  const providers = providersByEnvironment.get(target) ?? [];
+  const connected = environments.some(
+    (entry) => entry.environmentId === target && entry.connection.phase === "connected",
+  );
+  const catalog = catalogs[target];
+  const targetSettings = useEnvironmentSettings(target);
+  const providers = connected
+    ? (providersByEnvironment.get(target) ?? [])
+    : (catalog?.value?.providers ?? []);
   const projectId = source.shell?.projectId ?? null;
   const entries =
     target && projectId
-      ? providerInstanceEntriesFor(providers, settings, projectId).filter(
-          isProviderInstancePickerReady,
-        )
+      ? (connected
+          ? providerInstanceEntriesFor(providers, targetSettings, projectId)
+          : deriveProviderInstanceEntries(providers)
+        ).filter(isProviderInstancePickerReady)
       : [];
-  const options = getCustomModelOptionsByInstance(settings, providers);
+  const options = connected
+    ? getCustomModelOptionsByInstance(targetSettings, providers)
+    : new Map(providers.map((provider) => [provider.instanceId, provider.models]));
   const choices = entries.flatMap((entry) =>
     entry.models.map((model) => ({
       selection: { instanceId: entry.instanceId, model: model.slug } as ModelSelection,
@@ -94,8 +124,8 @@ export function ForkThreadDialog(props: {
     choices[0]?.selection ??
     null;
   const selectedEntry = entries.find((entry) => entry.instanceId === initial?.instanceId);
-  const environment = environments.find((entry) => entry.environmentId === target);
-  const online = environment?.connection.phase === "connected";
+  const online = connected || catalog?.value !== undefined;
+  const loadingModels = !connected && catalog !== undefined && !catalog.value && !catalog.error;
   const config = mesh.config;
   const logicalKey = Object.keys(config?.projectMounts ?? {}).find((key) =>
     config?.projectMounts[key]?.some(
@@ -117,11 +147,21 @@ export function ForkThreadDialog(props: {
   const forkTitle = title.trim() || `${source.shell?.title ?? "Thread"} (fork)`;
   const noModelsReason = !target
     ? null
-    : !online
-      ? `${displayMachine(target).title} is offline.`
-      : choices.length === 0
-        ? `No models are available on ${displayMachine(target).title}.`
-        : null;
+    : loadingModels
+      ? null
+      : !connected && catalog?.error
+        ? `Could not load models on ${displayMachine(target).title}: ${catalog.error}`
+        : !online
+          ? `Choose a machine to load its models.`
+          : choices.length === 0
+            ? [
+                `No models are available on ${displayMachine(target).title}.`,
+                ...providers
+                  .filter((provider) => provider.enabled && provider.message)
+                  .slice(0, 2)
+                  .map((provider) => provider.message),
+              ].join(" ")
+            : null;
 
   if (!source.shell) return null;
 
@@ -132,6 +172,38 @@ export function ForkThreadDialog(props: {
     setTitle("");
     setMessage("");
     setError(null);
+    setCatalogs({});
+  };
+  const selectTarget = (environmentId: EnvironmentId) => {
+    setTargetEnvironmentId(environmentId);
+    setChosen(null);
+    if (
+      environments.some(
+        (entry) => entry.environmentId === environmentId && entry.connection.phase === "connected",
+      )
+    )
+      return;
+    const request = ++catalogRequest.current;
+    setCatalogs((current) => ({ ...current, [environmentId]: { request } }));
+    const complete = (value: { value: ThreadForkCatalog } | { error: string }) => {
+      setCatalogs((current) =>
+        current[environmentId]?.request === request
+          ? { ...current, [environmentId]: { request, ...value } }
+          : current,
+      );
+    };
+    void loadCatalog({
+      environmentId: source.environmentId,
+      input: { targetEnvironmentId: environmentId },
+    })
+      .then((result) =>
+        result._tag === "Success"
+          ? complete({ value: result.value })
+          : complete({ error: String(squashAtomCommandFailure(result)) }),
+      )
+      .catch((error: unknown) =>
+        complete({ error: error instanceof Error ? error.message : String(error) }),
+      );
   };
   const machineIds = new Set<string>([
     ...Object.keys(config?.machines ?? {}),
@@ -144,7 +216,10 @@ export function ForkThreadDialog(props: {
     return {
       environmentId: environmentId as EnvironmentId,
       ...displayMachine(environmentId),
-      online: environment?.connection.phase === "connected",
+      online:
+        environment?.connection.phase === "connected" ||
+        catalogs[environmentId]?.value !== undefined,
+      unavailable: catalogs[environmentId]?.error !== undefined,
     };
   });
 
@@ -189,14 +264,13 @@ export function ForkThreadDialog(props: {
                 className="mt-1 w-full rounded border border-border bg-background p-2"
                 value={target ?? ""}
                 onChange={(event) => {
-                  setTargetEnvironmentId(event.currentTarget.value as EnvironmentId);
-                  setChosen(null);
+                  selectTarget(event.currentTarget.value as EnvironmentId);
                 }}
               >
                 {machines.map((machine) => (
                   <option key={machine.environmentId} value={machine.environmentId}>
                     {machine.title} {machine.title !== machine.label ? `(${machine.label})` : ""}
-                    {machine.online ? "" : " (offline)"}
+                    {machine.unavailable ? " (unavailable)" : ""}
                   </option>
                 ))}
               </select>
@@ -206,6 +280,9 @@ export function ForkThreadDialog(props: {
               is and keeps running.
             </p>
             {syncCopy ? <p className="text-sm text-muted-foreground">{syncCopy}</p> : null}
+            {loadingModels ? (
+              <p role="status">Loading models on {displayMachine(target).title}…</p>
+            ) : null}
             {noModelsReason ? (
               <p className="text-sm text-destructive">{noModelsReason}</p>
             ) : initial && selectedEntry ? (

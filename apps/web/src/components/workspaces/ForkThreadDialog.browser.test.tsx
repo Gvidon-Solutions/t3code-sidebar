@@ -12,11 +12,42 @@ vi.mock("../../hooks/useMeshLayout", async (importOriginal) => ({
         A: { title: "Studio", label: "ST" },
         B: { title: "Cloudbox", label: "CB" },
         C: { title: "Laptop", label: "LT" },
+        E: { title: "Workshop", label: "WS" },
       },
       projectMounts: { logical: [{ environmentId: "A", projectId: "p1" }] },
       projectMountStatus: {},
     },
   }),
+}));
+vi.mock("../../state/use-atom-command", () => ({
+  useAtomCommand:
+    () =>
+    async ({ input }: { input: { targetEnvironmentId?: string } }) => {
+      if (input.targetEnvironmentId === "B") throw new Error("Cloudbox is offline.");
+      return {
+        _tag: "Success",
+        value: {
+          providers: [
+            {
+              instanceId: "opencode",
+              driver: "opencode",
+              enabled: true,
+              installed: true,
+              status: "ready",
+              auth: { status: "authenticated" },
+              models: [
+                {
+                  slug: "cedar-model",
+                  name: "Workshop model",
+                  isCustom: false,
+                  capabilities: null,
+                },
+              ],
+            },
+          ],
+        },
+      };
+    },
 }));
 vi.mock("../../state/environments", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../state/environments")>()),
@@ -60,7 +91,7 @@ vi.mock("../../state/entities", async (importOriginal) => ({
   }),
 }));
 
-it("offers machines by title and label and explains an offline target", async () => {
+it("offers machine titles, explains unavailable models and loads an unconnected mesh destination", async () => {
   await using screen = await render(
     <ForkThreadDialog
       request={{ environmentId: EnvironmentId.make("A"), threadId: ThreadId.make("thread") }}
@@ -76,15 +107,20 @@ it("offers machines by title and label and explains an offline target", async ()
     })
     .element() as HTMLSelectElement;
   const options = Array.from(select.options).map((option) => option.textContent);
-  expect(options.some((text) => text?.includes("Cloudbox") && text?.includes("offline"))).toBe(
-    true,
-  );
+  expect(options.some((text) => text?.includes("Cloudbox") && text?.includes("CB"))).toBe(true);
   expect(options.some((text) => text?.includes("Studio") && text?.includes("ST"))).toBe(true);
   expect(options).toContain("Travel laptop ");
   await userEvent.selectOptions(select, "B");
-  await expect.element(screen.getByText("Cloudbox is offline.")).toBeInTheDocument();
+  await expect
+    .element(screen.getByText("Could not load models on Cloudbox: Cloudbox is offline."))
+    .toBeInTheDocument();
   await expect.element(screen.getByRole("button", { name: "Fork to Cloudbox" })).toBeDisabled();
   await userEvent.selectOptions(select, "C");
   await expect.element(screen.getByText("No models are available on Laptop.")).toBeInTheDocument();
   await expect.element(screen.getByRole("button", { name: "Fork to Laptop" })).toBeDisabled();
+  await userEvent.selectOptions(select, "E");
+  await expect
+    .element(screen.getByRole("button", { name: "Fork model" }))
+    .toHaveTextContent("Workshop model");
+  await expect.element(screen.getByRole("button", { name: "Fork to Workshop" })).toBeEnabled();
 });

@@ -1900,6 +1900,7 @@ export const layerWsRpc = (
             runtimeMode: "full-access",
             interactionMode: "default",
           }),
+        "threads.forkCatalog": (input) => threadForks.catalog(input.targetEnvironmentId),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,

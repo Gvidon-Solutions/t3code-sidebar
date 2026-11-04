@@ -5,8 +5,11 @@ import {
   type ServerConfig,
 } from "@t3tools/contracts";
 
+export type ProviderCatalog = Pick<ServerConfig, "providers"> &
+  Partial<Pick<ServerConfig, "settings">>;
+
 export function draftModelUnavailableReason(
-  config: Pick<ServerConfig, "providers" | "settings"> | null | undefined,
+  config: ProviderCatalog | null | undefined,
   selection: ModelSelection,
   projectId: ProjectId | null,
 ): string | null {
@@ -15,7 +18,11 @@ export function draftModelUnavailableReason(
     (provider) => provider.instanceId === selection.instanceId,
   );
   if (!provider) return "Provider not configured on this machine";
-  if (!resolveProjectProviderInstanceEnabled(config.settings, projectId, provider.instanceId))
+  if (
+    !(config.settings
+      ? resolveProjectProviderInstanceEnabled(config.settings, projectId, provider.instanceId)
+      : provider.enabled)
+  )
     return "Provider disabled for this project";
   if (!provider.installed) return "Provider not installed";
   if (provider.auth.status === "unauthenticated") return "Provider not authenticated";

@@ -13,6 +13,18 @@ import { EnvironmentAuthorizationError } from "./auth.ts";
 import { HandoffEntry, MeshForkOrigin, MeshForkRef } from "./threadHandoffData.ts";
 export { MeshForkOrigin, MeshForkRef };
 import { ProviderInteractionMode, RuntimeMode } from "./providerPolicy.ts";
+import { ServerProvider } from "./server.ts";
+
+export const ThreadForkCatalog = Schema.Struct({
+  providers: Schema.Array(ServerProvider),
+});
+export type ThreadForkCatalog = typeof ThreadForkCatalog.Type;
+
+export const ThreadForkCatalogRpc = Rpc.make("threads.forkCatalog", {
+  payload: Schema.Struct({ targetEnvironmentId: EnvironmentId }),
+  success: ThreadForkCatalog,
+  error: Schema.Union([OrchestratorMcpFailure, EnvironmentAuthorizationError]),
+});
 
 export const ThreadForkInput = Schema.Struct({
   commandId: Schema.optional(CommandId),

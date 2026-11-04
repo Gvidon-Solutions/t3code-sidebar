@@ -4,10 +4,12 @@ import {
   ProjectId,
   ThreadForkResult,
   ModelSelection,
+  ThreadForkCatalog,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
 export const ForkTransportInput = Schema.Union([
+  Schema.Struct({ action: Schema.Literal("catalog") }),
   Schema.Struct({
     action: Schema.Literal("flush"),
     forkId: Schema.String,
@@ -48,6 +50,7 @@ export const ForkPrepareResult = Schema.Struct({
 export type ForkPrepareResult = typeof ForkPrepareResult.Type;
 
 export const ForkTransportResult = Schema.Union([
+  ThreadForkCatalog,
   ForkPrepareResult,
   Schema.Struct({ token: Schema.String, result: ThreadForkResult }),
   ThreadForkResult,

@@ -5,10 +5,11 @@ import {
   type EnvironmentId,
   type ModelSelection,
   type ProjectId,
+  type ThreadForkCatalog,
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 
 import { Sheet } from "../../components/ui/Sheet";
@@ -29,6 +30,18 @@ export function ForkThreadSheet() {
   const { config } = useSidebarWorkspaces();
   const serverConfigs = useServerConfigs();
   const fork = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
+  const loadCatalog = useAtomCommand(threadEnvironment.forkCatalog, { reportFailure: false });
+  const catalogRequest = useRef(0);
+  const [catalogs, setCatalogs] = useState<
+    Record<
+      string,
+      {
+        request: number;
+        value?: ThreadForkCatalog;
+        error?: string;
+      }
+    >
+  >({});
   const [target, setTarget] = useState<EnvironmentId | null>(null);
   const [chosen, setChosen] = useState<ModelSelection | null>(null);
   const [title, setTitle] = useState("");
@@ -38,9 +51,10 @@ export function ForkThreadSheet() {
   const [error, setError] = useState<string | null>(null);
 
   const targetConfig = useEnvironmentServerConfig(target);
+  const catalog = target === null ? undefined : catalogs[target];
   const sourceConfig = config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
   const models = buildModelOptions(
-    targetConfig,
+    targetConfig ?? catalog?.value,
     thread?.modelSelection ?? null,
     undefined,
     (thread?.projectId as ProjectId | undefined) ?? null,
@@ -61,8 +75,35 @@ export function ForkThreadSheet() {
     setTitle("");
     setMessage("");
     setError(null);
+    setCatalogs({});
   };
   if (!thread) return null;
+  const selectTarget = (environmentId: EnvironmentId) => {
+    setTarget(environmentId);
+    setChosen(null);
+    if (serverConfigs.has(environmentId)) return;
+    const request = ++catalogRequest.current;
+    setCatalogs((current) => ({ ...current, [environmentId]: { request } }));
+    const complete = (value: { value: ThreadForkCatalog } | { error: string }) => {
+      setCatalogs((current) =>
+        current[environmentId]?.request === request
+          ? { ...current, [environmentId]: { request, ...value } }
+          : current,
+      );
+    };
+    void loadCatalog({
+      environmentId: thread.environmentId,
+      input: { targetEnvironmentId: environmentId },
+    })
+      .then((result) =>
+        result._tag === "Success"
+          ? complete({ value: result.value })
+          : complete({ error: String(Cause.squash(result.cause)) }),
+      )
+      .catch((error: unknown) =>
+        complete({ error: error instanceof Error ? error.message : String(error) }),
+      );
+  };
   const label = (environmentId: string) =>
     machineDisplayOf(sourceConfig, environmentId, environmentId).label;
   const machineIds = new Set<string>([
@@ -79,14 +120,14 @@ export function ForkThreadSheet() {
               key={environmentId}
               accessibilityRole="button"
               className="p-4"
-              onPress={() => setTarget(environmentId as EnvironmentId)}
+              onPress={() => selectTarget(environmentId as EnvironmentId)}
             >
               <AppText>
                 {sourceConfig.machines[environmentId]?.title ?? label(environmentId)} (
                 {label(environmentId)})
               </AppText>
-              {!serverConfigs.has(environmentId as EnvironmentId) ? (
-                <AppText className="text-xs text-muted-foreground">Offline</AppText>
+              {catalogs[environmentId]?.error ? (
+                <AppText className="text-xs text-muted-foreground">Unavailable</AppText>
               ) : null}
             </Pressable>
           ))}
@@ -94,7 +135,14 @@ export function ForkThreadSheet() {
       </Sheet>
     );
   const targetTitle = sourceConfig.machines[target]?.title ?? label(target);
-  const online = serverConfigs.has(target);
+  const unavailableDetails =
+    (targetConfig ?? catalog?.value)?.providers
+      .filter((provider) => provider.enabled && provider.message)
+      .slice(0, 2)
+      .map((provider) => provider.message) ?? [];
+  const online = serverConfigs.has(target) || catalog?.value !== undefined;
+  const loadingModels =
+    !serverConfigs.has(target) && catalog !== undefined && !catalog.value && !catalog.error;
   const logicalKey = Object.keys(sourceConfig.projectMounts).find((key) =>
     sourceConfig.projectMounts[key]?.some(
       (rep) => rep.environmentId === thread.environmentId && rep.projectId === thread.projectId,
@@ -118,16 +166,23 @@ export function ForkThreadSheet() {
         <AppText className="text-muted-foreground">
           Copies the conversation through its last completed turn. The original stays here.
         </AppText>
-        {!online ? <AppText className="text-destructive">{targetTitle} is offline.</AppText> : null}
+        {loadingModels ? <AppText role="status">Loading models on {targetTitle}…</AppText> : null}
+        {!serverConfigs.has(target) && catalog?.error ? (
+          <AppText className="text-destructive">
+            Could not load models on {targetTitle}: {catalog.error}
+          </AppText>
+        ) : null}
         {online && models.length === 0 ? (
-          <AppText className="text-destructive">No models are available on {targetTitle}.</AppText>
-        ) : (
+          <AppText className="text-destructive">
+            {[`No models are available on ${targetTitle}.`, ...unavailableDetails].join(" ")}
+          </AppText>
+        ) : online && selection ? (
           <Pressable accessibilityRole="button" onPress={() => setPicker(true)}>
             <AppText>
               Model: {models.find((m) => m.selection.model === selection?.model)?.label ?? "None"}
             </AppText>
           </Pressable>
-        )}
+        ) : null}
         <TextInput
           accessibilityLabel="Fork title"
           className="rounded border border-border p-3 text-foreground"
