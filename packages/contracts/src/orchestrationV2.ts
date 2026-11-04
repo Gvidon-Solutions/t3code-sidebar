@@ -1,4 +1,9 @@
-import { ThreadHandoffState, HandoffEntry } from "./threadHandoffData.ts";
+import {
+  ThreadHandoffState,
+  HandoffEntry,
+  MeshForkOrigin,
+  MeshForkRef,
+} from "./threadHandoffData.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import { withRecordIdTable } from "./orchestrationV2IdTable.ts";
 import * as DateTime from "effect/DateTime";
@@ -455,6 +460,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   meshHandoff: Schema.optional(ThreadHandoffState),
+  meshFork: Schema.optional(MeshForkOrigin),
+  meshForks: Schema.optional(Schema.Array(MeshForkRef)),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
@@ -2073,6 +2080,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   lineage: OrchestrationV2AppThreadLineage,
   forkedFrom: Schema.NullOr(OrchestrationV2AppThread.fields.forkedFrom),
+  meshFork: Schema.optional(MeshForkOrigin),
+  meshForks: Schema.optional(Schema.Array(MeshForkRef)),
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
@@ -2883,7 +2892,6 @@ export const OrchestrationV2Command = Schema.Union([
     commandId: CommandId,
     threadId: ThreadId,
     projectId: ProjectId,
-    targetEnvironmentId: Schema.optional(Schema.String),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.stop"),
@@ -3360,12 +3368,18 @@ export type OrchestrationV2Command = typeof OrchestrationV2Command.Type;
 // Excluded from dispatchCommand so only the server can send these.
 const OrchestrationV2InternalCommand = Schema.Union([
   Schema.Struct({
-    type: Schema.Literal("thread.handoff.record"),
+    type: Schema.Literal("thread.fork.record"),
     commandId: CommandId,
     threadId: ThreadId,
-    state: ThreadHandoffState,
+    origin: MeshForkOrigin,
     marker: Schema.optional(Schema.String),
-    entries: Schema.optional(Schema.Array(HandoffEntry)),
+    entries: Schema.Array(HandoffEntry),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.fork.linked"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    fork: MeshForkRef,
   }),
   // Guest share commands the server issues after checking T3 Connect and the guest token.
   Schema.Struct({

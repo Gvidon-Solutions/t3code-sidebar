@@ -9,11 +9,11 @@ import * as Mcp from "../mcp/McpHttpServer.ts";
 import { McpSessionRegistry } from "../mcp/McpSessionRegistry.ts";
 import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
-import { ThreadHandoffService } from "./ThreadHandoffService.ts";
+import { ThreadForkService } from "./ThreadForkService.ts";
 
 const encode = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 it.effect(
-  "accepts handoffs only for full-access link sessions and hides the receiver from agents",
+  "accepts forks only for full-access link sessions and hides the receiver from agents",
   () =>
     Effect.gen(function* () {
       const transport = Mcp.layerMcpTransport.pipe(
@@ -43,7 +43,7 @@ it.effect(
                 return Effect.succeed(scope);
               },
             }),
-            Layer.mock(ThreadHandoffService)({ receive: () => Effect.succeed({ ok: true }) }),
+            Layer.mock(ThreadForkService)({ receive: () => Effect.succeed({ ok: true }) }),
           ),
         ),
       );
@@ -66,8 +66,8 @@ it.effect(
         id: 2,
         method: "tools/call",
         params: {
-          name: "t3_thread_receive_handoff",
-          arguments: { action: "undo", handoffId: "L-id", threadId: "L-target" },
+          name: "t3_thread_receive_fork",
+          arguments: { action: "rollback", forkId: "L-fork", threadId: "L-target" },
         },
       };
       expect((yield* post("agent", body)).status).toBe(403);
@@ -91,6 +91,6 @@ it.effect(
         init.headers["mcp-session-id"]!,
       );
       expect(listed.status).toBe(200);
-      expect(yield* listed.text).not.toContain("t3_thread_receive_handoff");
+      expect(yield* listed.text).not.toContain("t3_thread_receive_fork");
     }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
 );

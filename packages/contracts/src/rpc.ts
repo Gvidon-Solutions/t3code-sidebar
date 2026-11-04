@@ -1,4 +1,5 @@
 import { ThreadMoveRpc } from "./threadHandoff.ts";
+import { ThreadForkRpc } from "./threadFork.ts";
 import {
   OrchestrationV2SearchThreadError,
   OrchestrationV2SearchThreadInput,
@@ -2229,5 +2230,6 @@ export const WsRpcGroup = RpcGroup.make(
   ...UI_REQUESTS_RPCS,
   // Fork: the shared T3 Mesh layout document.
   ThreadMoveRpc,
+  ThreadForkRpc,
   ...MeshRpcs,
 ).middleware(RpcScopeAuthorization);

@@ -3,11 +3,12 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import { ChatAttachmentId } from "@t3tools/contracts";
 import * as Config from "../config.ts";
 import * as Secrets from "../auth/ServerSecretStore.ts";
 import * as Documents from "../provider/DocumentText.ts";
-import { receiveHandoffUpload } from "./HandoffUploads.ts";
+import { receiveForkUpload, clearForkUploads } from "./ForkUploads.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 const dependencies = Secrets.layer.pipe(
   Layer.provideMerge(Config.layerTest(process.cwd(), { prefix: "L-uploads-" })),
@@ -25,9 +26,9 @@ it.effect(
         sizeBytes: 6,
       };
       const upload = (offset: number, text: string, final: boolean) =>
-        receiveHandoffUpload({
+        receiveForkUpload({
           action: "upload",
-          handoffId: "L-handoff",
+          forkId: "L-handoff",
           attachment,
           offset,
           data: Buffer.from(text).toString("base64"),
@@ -50,4 +51,42 @@ it.effect(
         ),
       ).toBe("abcdef");
     }).pipe(Effect.provide(dependencies)),
+);
+
+it.effect("deletes staged chunks after success and after failure", () =>
+  Effect.gen(function* () {
+    const config = yield* Config.ServerConfig;
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const staging = path.join(config.stateDir, "fork-uploads");
+    const attachment = {
+      type: "file" as const,
+      id: ChatAttachmentId.make("L-original"),
+      name: "L-note.txt",
+      mimeType: "text/plain",
+      sizeBytes: 3,
+    };
+    yield* receiveForkUpload({
+      action: "upload",
+      forkId: "L-success",
+      attachment,
+      offset: 0,
+      data: Buffer.from("abc").toString("base64"),
+      final: true,
+    });
+    expect((yield* fs.readDirectory(staging)).length).toBe(1);
+    yield* clearForkUploads("L-success");
+    expect((yield* fs.readDirectory(staging)).length).toBe(0);
+    yield* receiveForkUpload({
+      action: "upload",
+      forkId: "L-failure",
+      attachment,
+      offset: 0,
+      data: Buffer.from("abc").toString("base64"),
+      final: true,
+    });
+    expect((yield* fs.readDirectory(staging)).length).toBe(1);
+    yield* clearForkUploads("L-failure");
+    expect((yield* fs.readDirectory(staging)).length).toBe(0);
+  }).pipe(Effect.provide(dependencies)),
 );

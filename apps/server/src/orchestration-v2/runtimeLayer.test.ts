@@ -1,26 +1,26 @@
-import * as Handoffs from "../mesh/ThreadHandoffService.ts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  OrchestratorMcpFailure,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
 import * as MeshLayout from "../mesh/MeshLayoutService.ts";
 import * as Replicas from "../replicas/ProjectReplicaService.ts";
 import * as ReplicaRuntime from "../replicas/ReplicaRuntime.ts";
 import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
-import * as HandoffSecrets from "../auth/ServerSecretStore.ts";
-import * as HandoffDocuments from "../provider/DocumentText.ts";
-import { ReceiveHandoffInput } from "../mesh/handoffTransport.ts";
-import {
-  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-  EnvironmentId,
-  type SidebarWorkspacesConfig,
-} from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
+import * as ThreadForks from "../mesh/ThreadForkService.ts";
+import * as ForkSecrets from "../auth/ServerSecretStore.ts";
+import * as ForkDocuments from "../provider/DocumentText.ts";
+import { ForkTransportInput } from "../mesh/forkTransport.ts";
 import * as Ref from "effect/Ref";
 import * as Context from "effect/Context";
-import * as Schema from "effect/Schema";
-const decodeReceiveHandoff = Schema.decodeUnknownEffect(ReceiveHandoffInput);
-const decodePeerResponse = <S extends Schema.Decoder<unknown>>(schema: S, value: unknown) =>
-  Schema.decodeUnknownEffect(schema)(value);
 import { SourceControlProviderKind } from "@t3tools/contracts";
 import { limitRecoveryCommand } from "./UsageLimitRecoveryWorker.ts";
+const decodePeerResponse = <S extends Schema.Decoder<unknown>>(schema: S, value: unknown) =>
+  Schema.decodeUnknownEffect(schema)(value);
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -7021,25 +7021,15 @@ it.layer(layerSharedApplicationDataPlaneTest)("snooze projection", (it) => {
       const moved = shell.threads.find((thread) => thread.id === idleThreadId);
       assert.equal(moved?.projectId, folderProjectId);
       assert.isNull(moved?.worktreePath);
-      const move = (
-        threadId: ThreadId,
-        projectId: ProjectId,
-        suffix: string,
-        targetEnvironmentId?: string,
-      ) =>
+      const move = (threadId: ThreadId, projectId: ProjectId, suffix: string) =>
         orchestrator.dispatch({
           type: "thread.move",
           commandId: CommandId.make(threadId + "-move-" + suffix),
           threadId,
           projectId,
-          ...(targetEnvironmentId === undefined ? {} : { targetEnvironmentId }),
         });
       const busyMove = yield* move(busyThreadId, otherProjectId, "busy").pipe(Effect.flip);
       assert.include(String(busyMove.cause), "still has work in progress");
-      const remoteMove = yield* move(idleThreadId, otherProjectId, "remote", "other-machine").pipe(
-        Effect.flip,
-      );
-      assert.include(String(remoteMove.cause), "threads.move service for a cross-machine handoff");
       yield* orchestrator.dispatch({
         type: "thread.pin",
         commandId: CommandId.make("move-pin"),
@@ -8495,29 +8485,29 @@ it.layer(layerQueueResumeDisabledInstanceTest)(
   },
 );
 
-it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
+it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
   it.effect(
-    "receives once, ensures the representation, archives with links and undoes the handoff",
+    "places a replica, copies history, links both ways and leaves the original running",
     () =>
       Effect.gen(function* () {
         const orchestrator = yield* Orchestrator.OrchestratorV2;
         const projects = yield* ProjectService.ProjectService;
-        const sourceId = ThreadId.make("L-handoff-source");
-        const sourceProject = ProjectId.make("L-handoff-source-project");
-        const targetProject = ProjectId.make("L-handoff-target-project");
+        const sourceId = ThreadId.make("L-fork-source");
+        const sourceProject = ProjectId.make("L-fork-source-project");
+        const targetProject = ProjectId.make("L-fork-target-project");
         for (const id of [sourceProject, targetProject])
           yield* projects.create({
             commandId: CommandId.make(`${id}-create`),
             projectId: id,
-            title: "L-project",
+            title: "Studio",
             workspaceRoot: `/tmp/${id}`,
           });
         yield* orchestrator.dispatch({
           type: "thread.create",
-          commandId: CommandId.make("L-source-create"),
+          commandId: CommandId.make("L-fork-source-create"),
           threadId: sourceId,
           projectId: sourceProject,
-          title: "L-real transcript",
+          title: "Studio notes",
           modelSelection,
           runtimeMode: "full-access",
           interactionMode: "default",
@@ -8527,17 +8517,17 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
           creationSource: "web",
         });
         yield* orchestrator.dispatch({
-          type: "thread.handoff.record",
-          commandId: CommandId.make("L-source-history"),
+          type: "thread.fork.record",
+          commandId: CommandId.make("L-fork-imported-history"),
           threadId: sourceId,
-          state: {
-            id: "L-history",
-            phase: "received",
-            environmentId: EnvironmentId.make("before"),
-            threadId: ThreadId.make("before-thread"),
-            tag: "BE",
-            link: "t3-thread://v2/before/before-thread",
-            undoUntil: 0,
+          origin: {
+            id: "imported",
+            environmentId: EnvironmentId.make("A"),
+            threadId: sourceId,
+            title: "Earlier work",
+            machine: "Studio",
+            link: `t3-thread://v2/A/${sourceId}`,
+            createdAt: DateTime.formatIso(yield* DateTime.now),
           },
           entries: [
             { role: "user", text: "Remember the secret word cedar", attachments: [] },
@@ -8546,7 +8536,10 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
         });
         const config = yield* Ref.make<SidebarWorkspacesConfig>({
           ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-          machines: { A: { tag: "AA" }, B: { tag: "BB" } },
+          machines: {
+            A: { tag: "AA", title: "Studio" },
+            B: { tag: "BB", title: "Cloudbox", reach: { A: { ssh: "studio" } } },
+          },
           projectMounts: {
             logical: [
               {
@@ -8561,10 +8554,14 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
           },
         });
         let placed = 0;
-        let placementReady = false;
-        let target: Handoffs.ThreadHandoffService["Service"] | undefined;
+        let placementReady = true;
+        let targetOffline = false;
+        let rejectRecord = false;
+        let flushReady = true;
+        let flushes = 0;
         const limits = { runtimeMode: "full-access" as const, interactionMode: "default" as const };
-        const make = Effect.fn("test.makeHandoff")(function* (self: string) {
+        let target: ThreadForks.ThreadForkService["Service"] | undefined;
+        const make = Effect.fn("test.makeFork")(function* (self: string) {
           const mesh = Layer.mock(MeshLayout.MeshLayoutService)({
             environmentId: self,
             read: Ref.get(config).pipe(Effect.map((config) => ({ document: {}, config }))),
@@ -8585,6 +8582,11 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
                   })),
                 })),
               ),
+            flush: () =>
+              Effect.sync(() => {
+                flushes++;
+                return flushReady;
+              }),
             place: (input) =>
               Effect.gen(function* () {
                 placed++;
@@ -8594,12 +8596,16 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
                   environmentId: input.machine,
                   projectId: input.machine === "A" ? sourceProject : targetProject,
                   path: `/tmp/${input.machine === "A" ? sourceProject : targetProject}`,
-                  role: "primary" as const,
-                  transport: "git" as const,
+                  role: input.machine === "A" ? ("primary" as const) : ("replica" as const),
+                  transport: input.machine === "A" ? ("git" as const) : ("mutagen" as const),
+                  source: "A",
                   createdAt: "",
                 };
                 yield* Ref.update(config, (current) => ({
                   ...current,
+                  projectMountStatus: {
+                    logical: { [input.machine]: { state: "watching", updatedAt: "" } },
+                  },
                   projectMounts: {
                     logical: [
                       ...current.projectMounts.logical!.filter(
@@ -8632,20 +8638,43 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
                 lastError: null,
               }),
           });
+          const decodeFork = Schema.decodeUnknownEffect(ForkTransportInput);
           const peer = Layer.mock(PeerMcpClient.PeerMcpClient)({
             call: (input) =>
-              decodeReceiveHandoff(input.arguments).pipe(
-                Effect.orDie,
-                Effect.flatMap((input) => {
-                  if (!target) return Effect.die("Target was not constructed.");
-                  return target.receive(input, limits);
-                }),
-                Effect.flatMap((result) =>
-                  decodePeerResponse(input.success, result).pipe(Effect.orDie),
+              (targetOffline
+                ? Effect.fail(
+                    new OrchestratorMcpFailure({
+                      code: "orchestration_error",
+                      message: "The target machine is offline.",
+                    }),
+                  )
+                : Effect.void
+              ).pipe(
+                Effect.andThen(
+                  decodeFork(input.arguments).pipe(
+                    Effect.orDie,
+                    Effect.flatMap((input) => {
+                      if (!target) return Effect.die("Target was not constructed.");
+                      return target.receive(input, limits);
+                    }),
+                    Effect.flatMap((result) =>
+                      decodePeerResponse(input.success, result).pipe(Effect.orDie),
+                    ),
+                  ),
                 ),
               ),
           });
           const extras = Layer.mergeAll(
+            Layer.succeed(Orchestrator.OrchestratorV2, {
+              ...orchestrator,
+              dispatch: (command) =>
+                rejectRecord && command.type === "thread.fork.record"
+                  ? orchestrator.dispatch({
+                      ...command,
+                      threadId: ThreadId.make("missing-record-target"),
+                    })
+                  : orchestrator.dispatch(command),
+            }),
             mesh,
             runtime,
             peerLinks,
@@ -8668,212 +8697,97 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
                       isCustom: false,
                       capabilities: null,
                     },
-                    {
-                      slug: "target-model",
-                      name: "Target model",
-                      isCustom: false,
-                      capabilities: null,
-                    },
                   ],
                   slashCommands: [],
                   skills: [],
                 },
               ]),
             }),
-            HandoffSecrets.layer.pipe(
-              Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "L-handoff-" })),
+            ForkSecrets.layer.pipe(
+              Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "L-fork-" })),
             ),
-            HandoffDocuments.layer,
+            ForkDocuments.layer,
           ).pipe(Layer.provideMerge(NodeServices.layer));
           const context = yield* Layer.build(
-            Handoffs.layer.pipe(Layer.provide(extras), Layer.provide(ProjectionStore.layer)),
+            ThreadForks.layer.pipe(Layer.provide(extras), Layer.provide(ProjectionStore.layer)),
           );
-          return Context.get(context, Handoffs.ThreadHandoffService);
+          return Context.get(context, ThreadForks.ThreadForkService);
         });
         target = yield* make("B");
         const source = yield* make("A");
-        const bundle = {
-          id: "L-direct",
-          sourceEnvironmentId: EnvironmentId.make("A"),
-          sourceThreadId: sourceId,
-          sourceTag: "AA",
-          sourceLink: "t3-thread://v2/A/L-handoff-source",
-          date: "2026-11-03",
-          logicalKey: "logical",
-          projectTitle: "L-project",
-          title: "L-direct target",
-          modelSelection: {
-            ...modelSelection,
-            instanceId: ProviderInstanceId.make("only_on_source"),
-          },
-          runtimeMode: "full-access" as const,
-          interactionMode: "default" as const,
-          entries: [{ role: "user" as const, text: "cedar", attachments: [] }],
+        const input = {
+          commandId: CommandId.make("L-fork"),
+          threadId: sourceId,
+          targetEnvironmentId: EnvironmentId.make("B"),
         };
-        assert.include(
-          (yield* target.receive({ action: "receive", bundle }, limits).pipe(Effect.flip)).message,
-          "did not become ready",
-        );
-        assert.isUndefined(
-          (yield* orchestrator.getShellSnapshot()).threads.find(
-            (thread) => thread.title === bundle.title,
-          ),
-        );
-        placementReady = true;
-        const direct = yield* target.receive({ action: "receive", bundle }, limits);
-        assert.deepEqual(yield* target.receive({ action: "receive", bundle }, limits), direct);
-        assert.equal(placed, 2);
-        if (!("threadId" in direct)) return yield* Effect.die("Missing received thread");
-        const idle = yield* orchestrator.getThreadProjection(direct.threadId);
-        assert.equal(idle.thread.modelSelection.instanceId, "only_on_source");
-        assert.equal(idle.runs.length, 0);
-        yield* target.move(
-          { threadId: direct.threadId, projectId: targetProject, modelSelection },
-          limits,
-        );
-        assert.deepEqual(
-          (yield* orchestrator.getThreadProjection(direct.threadId)).thread.modelSelection,
-          modelSelection,
-        );
-        const localChoice = yield* source.move(
-          {
-            threadId: sourceId,
-            projectId: targetProject,
-            targetEnvironmentId: EnvironmentId.make("B"),
-          },
-          limits,
-        );
-        assert.equal(localChoice.environmentId, "A");
-        assert.isNull(localChoice.handoffId);
-        assert.equal(
-          (yield* orchestrator.getThreadProjection(sourceId)).thread.projectId,
-          sourceProject,
-        );
+        const forked = yield* source.fork(input, limits);
+        assert.equal(forked.title, "Studio notes (fork)");
+        assert.equal(placed, 1);
+        assert.isAbove(flushes, 0);
+        const received = yield* orchestrator.getThreadProjection(forked.threadId);
+        assert.include(received.messages.map((message) => message.text).join("\n"), "cedar");
+        assert.include(received.messages[0]!.text, "Forked from Studio notes on Studio");
+        assert.equal(received.thread.meshFork?.threadId, sourceId);
+        const sourceThread = yield* orchestrator.getThreadProjection(sourceId);
+        assert.isNull(sourceThread.thread.archivedAt);
+        assert.equal(sourceThread.thread.meshForks?.[0]?.threadId, forked.threadId);
+        assert.deepEqual(yield* source.fork(input, limits), forked);
+        assert.equal(placed, 1);
+        const firstThreadCount = (yield* orchestrator.getShellSnapshot()).threads.length;
         yield* Ref.update(config, (current) => ({
           ...current,
           projectMounts: {
-            logical: current.projectMounts.logical!.filter((rep) => rep.environmentId !== "A"),
+            logical: current.projectMounts.logical!.filter((rep) => rep.environmentId !== "B"),
           },
         }));
         placementReady = false;
-        const copyInput = {
-          threadId: sourceId,
-          projectId: targetProject,
-          targetEnvironmentId: EnvironmentId.make("B"),
-          createCopy: true,
-        };
-        assert.include(
-          (yield* source.move(copyInput, limits).pipe(Effect.flip)).message,
-          "copy is still being prepared",
-        );
-        assert.isNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
+        const failed = yield* source
+          .fork({ ...input, commandId: CommandId.make("L-fork-failed") }, limits)
+          .pipe(Effect.flip);
+        assert.include(failed.message, "did not become ready");
         placementReady = true;
-        const copied = yield* source.move(copyInput, limits);
-        assert.equal(copied.environmentId, "A");
-        assert.isNull(copied.handoffId);
-        assert.equal(
-          (yield* orchestrator.getThreadProjection(sourceId)).thread.projectId,
-          sourceProject,
-        );
-        const input = {
-          commandId: CommandId.make("L-move"),
-          threadId: sourceId,
-          targetEnvironmentId: EnvironmentId.make("B"),
-          modelSelection: {
-            ...modelSelection,
-            model: "target-model",
-            options: [{ id: "effort", value: "high" }],
-          },
-        };
-        const historyStore = yield* EventSink.EventSinkV2;
-        const history = yield* orchestrator.getThreadProjection(sourceId);
-        const finalItem = history.turnItems.at(-1)!;
-        yield* historyStore.write({
-          events: [
-            {
-              id: EventId.make("L-finished-history-tail"),
-              type: "turn-item.updated",
-              threadId: sourceId,
-              occurredAt: yield* DateTime.now,
-              payload: { ...finalItem, id: TurnItemId.make("L-history-tail"), ordinal: 2_000_003 },
-            },
-          ],
-        });
-        const originalLastOrdinal = Math.max(
-          ...(yield* orchestrator.getThreadProjection(sourceId)).turnItems.map(
-            (item) => item.ordinal,
-          ),
-        );
-        const moved = yield* source.move(input, limits);
-        assert.deepEqual(yield* source.move(input, limits), moved);
-        assert.isNotNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
-        const received = yield* orchestrator.getThreadProjection(moved.threadId);
-        assert.equal(received.runs.length, 0);
-        assert.deepEqual(received.thread.modelSelection, input.modelSelection);
-        assert.include(received.messages.map((message) => message.text).join("\n"), "cedar");
-        assert.include(received.messages[0]!.text, "Moved from AA");
-        assert.include(
-          (yield* orchestrator.getThreadProjection(sourceId)).messages.at(-1)!.text,
-          "Moved to BB",
-        );
-        const sourceMarker = (yield* orchestrator.getThreadProjection(sourceId)).turnItems.find(
-          (item) => item.type === "assistant_message" && item.text.includes("Moved to BB"),
-        );
-        assert.isAbove(sourceMarker!.ordinal, originalLastOrdinal);
-        yield* source.move({ threadId: sourceId, undoHandoffId: moved.handoffId! }, limits);
-        assert.isNull((yield* orchestrator.getThreadProjection(sourceId)).thread.archivedAt);
-        assert.isNotNull(
-          (yield* orchestrator.getThreadProjection(moved.threadId)).thread.archivedAt,
-        );
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         yield* Ref.update(config, (current) => ({
           ...current,
           projectMounts: {
-            logical: current.projectMounts.logical!.filter((rep) => rep.environmentId !== "A"),
+            logical: current.projectMounts.logical!.filter((rep) => rep.environmentId !== "B"),
           },
         }));
-        const explicit = yield* source.move(
-          { ...input, commandId: CommandId.make("L-explicit-target"), projectId: targetProject },
-          limits,
-        );
-        assert.equal(
-          (yield* orchestrator.getThreadProjection(explicit.threadId)).thread.projectId,
-          targetProject,
-        );
-        yield* TestClock.adjust("11 seconds");
-        assert.include(
-          (yield* source
-            .move({ threadId: sourceId, undoHandoffId: explicit.handoffId! }, limits)
-            .pipe(Effect.flip)).message,
-          "expired",
-        );
-        assert.isNull(
-          (yield* orchestrator.getThreadProjection(explicit.threadId)).thread.archivedAt,
-        );
-        yield* orchestrator.dispatch({
-          type: "thread.unarchive",
-          commandId: CommandId.make("L-reopen-original"),
-          threadId: sourceId,
-        });
-        yield* orchestrator.dispatch({
-          type: "message.dispatch",
-          commandId: CommandId.make("L-busy-message"),
-          threadId: sourceId,
-          messageId: MessageId.make("L-busy-message"),
-          text: "Continue",
-          attachments: [],
-          createdBy: "user",
-          creationSource: "web",
-          dispatchMode: { type: "queue_after_active" },
-        });
-        const refused = yield* source
-          .move({ ...input, commandId: CommandId.make("L-busy-move") }, limits)
+        const missing = yield* source
+          .fork(
+            {
+              ...input,
+              commandId: CommandId.make("L-fork-missing-model"),
+              modelSelection: {
+                ...modelSelection,
+                instanceId: ProviderInstanceId.make("missing"),
+              },
+            },
+            limits,
+          )
           .pipe(Effect.flip);
-        assert.include(refused.message, "running turn");
-        const starting = yield* orchestrator.getThreadProjection(sourceId);
-        assert.include(
-          starting.contextHandoffs.map((handoff) => handoff.summaryText).join("\n"),
-          "cedar",
-        );
+        assert.include(missing.message, "unavailable");
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        flushReady = false;
+        const flushFailure = yield* source
+          .fork({ ...input, commandId: CommandId.make("F1-flush-failure") }, limits)
+          .pipe(Effect.flip);
+        assert.include(flushFailure.message, "did not flush");
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        flushReady = true;
+        rejectRecord = true;
+        const recordFailure = yield* source
+          .fork({ ...input, commandId: CommandId.make("F1-record-failure") }, limits)
+          .pipe(Effect.flip);
+        assert.include(recordFailure.message, "missing-record-target");
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        rejectRecord = false;
+        targetOffline = true;
+        const offline = yield* source
+          .fork({ ...input, commandId: CommandId.make("L-fork-offline") }, limits)
+          .pipe(Effect.flip);
+        assert.include(offline.message, "offline");
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
       }).pipe(Effect.scoped),
   );
 });

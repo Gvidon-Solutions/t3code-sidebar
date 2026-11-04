@@ -63,6 +63,10 @@ export class ProjectReplicaService extends Context.Service<
     readonly adopt: (input: ReplicaAdoptInput) => Effect.Effect<ProjectPlaceResult, ReplicaError>;
     readonly place: (input: ProjectPlaceInput) => Effect.Effect<ProjectPlaceResult, ReplicaError>;
     readonly machines: (project: string) => Effect.Effect<ProjectMachinesResult, ReplicaError>;
+    readonly flush: (input: {
+      readonly logicalKey: string;
+      readonly environmentId: string;
+    }) => Effect.Effect<boolean, ReplicaError>;
     readonly waitForProject: (
       logicalKey: string,
       environmentId: string,
@@ -1326,6 +1330,22 @@ const make = Effect.gen(function* () {
           };
         }),
       };
+    }),
+    flush: Effect.fn("ProjectReplicaService.flush")(function* (input) {
+      const config = (yield* mesh.read).config;
+      const rep = config.projectMounts[input.logicalKey]?.find(
+        (entry) => entry.environmentId === input.environmentId,
+      );
+      if (!rep)
+        return yield* new ReplicaError({
+          reason: "not_found",
+          message: "The representation was not found.",
+        });
+      // Only the driving server owns the Mutagen session; the other side waits for it.
+      if (replicaDriver(config, rep) !== mesh.environmentId) return false;
+      const name = sessionIdentity(rep.syncKey ?? input.logicalKey, input.environmentId).name;
+      yield* runner.flush(name).pipe(Effect.mapError(mapError));
+      return true;
     }),
     reconcile: reconcileSafely,
     start: Effect.gen(function* () {

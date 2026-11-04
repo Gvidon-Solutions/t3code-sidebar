@@ -22,6 +22,7 @@ import {
   NonNegativeInt,
   ProjectId,
   ThreadMoveResult,
+  ThreadForkResult,
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Schema from "effect/Schema";
@@ -34,7 +35,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
-    "Move, pin, snooze, settle, archive, or mark a thread unread. Move requires projectId on the source machine; targetEnvironmentId hands the conversation off to that machine. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
+    "Move, pin, snooze, settle, archive, or mark a thread unread. Move changes the project on this machine; use t3_thread_fork to continue on another machine. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
@@ -51,7 +52,6 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
       "mark_unread",
     ]),
     projectId: Schema.optional(ProjectId),
-    targetEnvironmentId: Schema.optional(Schema.String),
     snoozedUntil: Schema.optional(IsoDateTime),
   }),
   success: Schema.Union([
@@ -172,19 +172,32 @@ const ThreadConfigureTool = Tool.make("t3_thread_configure", {
 const ThreadMoveTool = Tool.make("t3_thread_move", {
   ...commandTool,
   description:
-    "Move an idle conversation to a project here or hand it off to targetEnvironmentId. Its transcript and attachments continue there; the original is archived with a link. projectId is the target representation, or omit it to use the same logical project there. modelSelection chooses the target provider, model and options. message optionally starts a follow-up there. Retry a handoff with the same clientRequestId. undoHandoffId reverses it within 10 seconds.",
+    "Move an idle conversation to another project on this machine. No model is needed. projectId is the destination project. modelSelection optionally changes the thread's provider and model.",
   parameters: Schema.Struct({
     environmentId: OrchestratorMcpEnvironmentTarget,
     threadId: Schema.optional(ThreadId),
-    projectId: Schema.optional(ProjectId),
-    targetEnvironmentId: Schema.optional(Schema.String),
-    logicalKey: Schema.optional(Schema.String),
+    projectId: ProjectId,
     modelSelection: Schema.optional(ModelSelection),
-    message: Schema.optional(Schema.String),
-    clientRequestId: Schema.optional(Schema.String),
-    undoHandoffId: Schema.optional(Schema.String),
   }),
   success: ThreadMoveResult,
+}).annotate(Tool.Destructive, true);
+
+const ThreadForkTool = Tool.make("t3_thread_fork", {
+  ...commandTool,
+  description:
+    "Fork an idle or running conversation to another machine as a new thread. Copies the transcript through the last completed turn and its attachments; the original keeps running and is not archived. environmentId selects the machine holding the thread; targetEnvironmentId is the destination machine. projectId or logicalKey picks the destination project representation; omit to use the same logical project. modelSelection chooses the destination harness, model and effort. title and message are optional.",
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    targetEnvironmentId: Schema.String,
+    threadId: Schema.optional(ThreadId),
+    projectId: Schema.optional(ProjectId),
+    logicalKey: Schema.optional(Schema.String),
+    modelSelection: Schema.optional(ModelSelection),
+    title: Schema.optional(TrimmedNonEmptyString),
+    message: Schema.optional(Schema.String),
+    clientRequestId: Schema.optional(Schema.String),
+  }),
+  success: ThreadForkResult,
 }).annotate(Tool.Destructive, true);
 
 const ThreadTransferTool = Tool.make("t3_thread_transfer", {
@@ -344,6 +357,7 @@ export const ThreadToolkit = Toolkit.make(
   ThreadConfigureTool,
   ThreadTransferTool,
   ThreadMoveTool,
+  ThreadForkTool,
   ThreadOrganizeTool,
   PendingRequestTool,
   QueueTool,
