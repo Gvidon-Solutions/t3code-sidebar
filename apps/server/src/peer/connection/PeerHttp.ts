@@ -42,7 +42,7 @@ export const layer = Layer.unwrap(
         if (!enabled) return refused(403, "Linked environments is off on this machine.");
         const authenticated = yield* auth.authenticateMcpClient(request).pipe(Effect.result);
         if (authenticated._tag === "Failure") {
-          if (authenticated.failure._tag === "ServerAuthInternalError") {
+          if (EnvironmentAuth.isServerAuthInternalError(authenticated.failure)) {
             yield* Effect.logWarning("Peer authentication failed", authenticated.failure);
             return refused(503, "Peer authentication is temporarily unavailable.");
           }

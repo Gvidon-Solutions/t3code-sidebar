@@ -519,7 +519,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(OtlpEndpointCheck.OtlpEndpointCheck)({}),
   Layer.mock(PairingGrantStore.PairingGrantStore)({}),
   Layer.mock(PeerLinks.PeerLinks)({}),
-  Layer.mock(PeerSessions.PeerSessions)({}),
+  Layer.mock(PeerSessions.PeerSessions)({ status: Effect.succeed([]) }),
   Layer.mock(PeerLinkRequests.PeerLinkRequests)({}),
   Layer.mock(PortScanner.PortDiscovery)({ trackAgent: () => () => undefined }),
   Layer.mock(PreviewManager.PreviewManager)({}),
@@ -908,7 +908,7 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
       payload: {},
       headers: Headers.empty,
     });
-    assert.deepEqual(yield* Queue.take(responses), meshStatus);
+    assert.deepEqual(yield* Queue.take(responses), { ...meshStatus, connections: [] });
     const configRequest = RpcMessage.RequestId("config");
     yield* server.write(0, {
       _tag: "Request",

@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off -- ProxyCommand connects Node stdin/stdout to the local server's private IPC byte pipe.
 import * as NodeStream from "node:stream";
 import * as Effect from "effect/Effect";
+import * as Cause from "effect/Cause";
 import * as GlobalFlag from "effect/cli/GlobalFlag";
 import { Argument, Command } from "effect/cli";
 import { connectLocalPipe } from "../peer/connection/PeerPipeIpc.ts";
@@ -52,7 +53,10 @@ const pipeCommand = Command.make("pipe", {
         catch: (cause) =>
           new PeerConnectionError({ reason: "pipe", message: "Mesh pipe failed", cause }),
       });
-    }),
+    }).pipe(Effect.catchCause((cause) => Effect.sync(() => {
+      process.stderr.write(`${Cause.pretty(cause)}\n`);
+      process.exitCode = 1;
+    }))),
   ),
 );
 

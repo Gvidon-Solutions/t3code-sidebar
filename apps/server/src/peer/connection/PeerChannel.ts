@@ -47,10 +47,6 @@ export class PeerChannel {
     { resolve: (body: unknown) => void; reject: (error: Error) => void }
   >();
   private readonly running = new Map<string, AbortController>();
-  private readonly receipts = new Map<
-    string,
-    { body: string; result: Promise<unknown>; settled: boolean }
-  >();
   private readonly pipes = new Map<string, PipeState>();
   private closed = false;
   private lastReceived: number;
@@ -297,31 +293,9 @@ export class PeerChannel {
       this.send({ type: "error", id: frame.id, message: "Peer call limit exceeded" });
       return;
     }
-    const body = JSON.stringify(frame.body);
-    const cacheable = frame.key !== frame.id;
-    const existing = cacheable ? this.receipts.get(frame.key) : undefined;
-    if (existing && existing.body !== body) {
-      this.send({
-        type: "error",
-        id: frame.id,
-        message: "Idempotency key reused for another call",
-      });
-      return;
-    }
-    if (cacheable && !existing && this.receipts.size >= 4096) {
-      const oldest = [...this.receipts].find(([, receipt]) => receipt.settled);
-      if (oldest) this.receipts.delete(oldest[0]);
-    }
-    if (cacheable && !existing && this.receipts.size >= 4096) {
-      this.send({ type: "error", id: frame.id, message: "Peer receipt limit exceeded; reconnect" });
-      return;
-    }
     const controller = new AbortController();
     this.running.set(frame.id, controller);
-    const result =
-      existing?.result ??
-      Promise.resolve().then(() => this.options.call(frame.body, controller.signal));
-    if (cacheable) this.receipts.set(frame.key, existing ?? { body, result, settled: false });
+    const result = Promise.resolve().then(() => this.options.call(frame.body, controller.signal));
     void result
       .then(
         (value) => {
@@ -341,8 +315,6 @@ export class PeerChannel {
       })
       .finally(() => {
         this.running.delete(frame.id);
-        const receipt = this.receipts.get(frame.key);
-        if (receipt) receipt.settled = true;
       });
   }
 

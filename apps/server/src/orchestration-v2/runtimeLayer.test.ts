@@ -8633,6 +8633,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("mesh handoffs", (it) => {
               }),
           });
           const peer = Layer.mock(PeerMcpClient.PeerMcpClient)({
+            connectionAvailable: () => Effect.succeed(false),
             call: (input) =>
               decodeReceiveHandoff(input.arguments).pipe(
                 Effect.orDie,

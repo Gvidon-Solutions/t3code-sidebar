@@ -62,7 +62,7 @@ it("chooses the same physical socket at both ends, regardless of arrival order",
   expect(reconnectDelay(10, 1)).toBe(15_000);
 });
 
-it("multiplexes calls and notifications, dedupes concurrent keys and rejects key reuse", async () => {
+it("multiplexes concurrent calls and notifications without bypassing the receiving handler", async () => {
   const handler = vi.fn(async (body: unknown) => body);
   const p = pair(handler);
   const first = p.left.call({ action: "create" }, { key: "receipt" });
@@ -73,12 +73,8 @@ it("multiplexes calls and notifications, dedupes concurrent keys and rejects key
   p.pump();
   expect(await first).toEqual({ action: "create" });
   expect(await second).toEqual({ action: "create" });
-  expect(handler).toHaveBeenCalledTimes(1);
+  expect(handler).toHaveBeenCalledTimes(2);
   expect(p.events).toEqual([{ name: "layout", body: { seq: 1 } }]);
-  const third = p.left.call({ action: "delete" }, { key: "receipt" });
-  const refused = expect(third).rejects.toThrow("Idempotency key reused");
-  p.pump();
-  await refused;
   p.left.close(new Error("test complete"));
   p.right.close(new Error("test complete"));
 });

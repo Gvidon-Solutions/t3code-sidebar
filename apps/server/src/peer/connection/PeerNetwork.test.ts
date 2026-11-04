@@ -4,6 +4,7 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import { expect, it } from "@effect/vitest";
 import { EnvironmentHttpApi, EnvironmentId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -50,6 +51,7 @@ class Api extends HttpApi.make("environment")
 const Answer = Schema.Struct({ count: Schema.Number });
 const toolkit = Toolkit.make(
   Tool.make("t3_create_fixture", { description: "Creates one fixture.", success: Answer }),
+  Tool.make("t3_wait_fixture", { description: "Waits until cancelled.", success: Answer }),
 );
 
 const serve = Effect.fn("test.servePeerNetwork")(function* (
@@ -59,6 +61,8 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
   let count = 0;
   let blocked = false;
   let externalMcp = 0;
+  const waitingStarted = yield* Deferred.make<void>();
+  const waitingCancelled = yield* Deferred.make<void>();
   const descriptor = descriptorOf(options.id ?? name, name);
   const environment = Layer.succeed(Environment.ServerEnvironment, {
     getEnvironmentId: Effect.succeed(descriptor.environmentId),
@@ -103,6 +107,12 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
       toolkit,
       McpAccess.toLayer(toolkit, {
         t3_create_fixture: McpAccess.reads(() => Effect.sync(() => ({ count: ++count }))),
+        t3_wait_fixture: McpAccess.reads(() =>
+          Deferred.succeed(waitingStarted, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.onInterrupt(() => Deferred.succeed(waitingCancelled, undefined)),
+          ),
+        ),
       }),
     ).pipe(
       Layer.provideMerge(Mcp.layerMcpTransport),
@@ -168,6 +178,8 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
     client: Context.get(context, Client.PeerMcpClient),
     auth: Context.get(common, Auth.EnvironmentAuth),
     count: () => count,
+    waitingStarted,
+    waitingCancelled,
   };
 });
 
@@ -228,6 +240,8 @@ it.live(
       yield* Fiber.join(reconnected);
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(cloudbox.count()).toBe(1);
+      yield* cloudbox.auth.revokeSession(legacy.sessionId);
+      expect((yield* studio.client.call(request).pipe(Effect.result))._tag).toBe("Failure");
       const unlinked = yield* waitEvent(studio, "peer.unlinked", cloudbox.id);
       yield* cloudbox.links.unlink(studio.id);
       yield* Fiber.join(unlinked);
@@ -305,6 +319,27 @@ it.live("converges simultaneous real WebSocket dials to the same authenticated c
         }),
       ).toEqual({ count: 1 });
     expect(studio.externalMcp() + cloudbox.externalMcp()).toBe(0);
+    const waiting = yield* studio.client
+      .call({
+        environmentId: cloudbox.id,
+        tool: "t3_wait_fixture",
+        arguments: {},
+        limits: { runtimeMode: "full-access", interactionMode: "default" },
+        success: Answer,
+      })
+      .pipe(Effect.forkScoped);
+    yield* Deferred.await(cloudbox.waitingStarted);
+    yield* Fiber.interrupt(waiting);
+    yield* Deferred.await(cloudbox.waitingCancelled);
+    expect(
+      yield* studio.client.call({
+        environmentId: cloudbox.id,
+        tool: "t3_create_fixture",
+        arguments: {},
+        limits: { runtimeMode: "full-access", interactionMode: "default" },
+        success: Answer,
+      }),
+    ).toEqual({ count: 2 });
     yield* studio.sessions.stop;
     yield* cloudbox.sessions.stop;
   }).pipe(Effect.scoped),

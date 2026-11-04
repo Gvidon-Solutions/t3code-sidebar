@@ -1,5 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off -- The test fabricates the wire boundary directly.
-import { EnvironmentId, type PeerLink } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  type PeerLink,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as Context from "effect/Context";
@@ -17,6 +21,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as ServerEnvironment from "../../environment/ServerEnvironment.ts";
 import * as PeerLinks from "../PeerLinks.ts";
 import * as PeerFacts from "./PeerFacts.ts";
+import { MeshLayoutService } from "../../mesh/MeshLayoutService.ts";
 import * as PeerSessionsModule from "./PeerSessions.ts";
 import {
   type PeerCallBody,
@@ -176,6 +181,51 @@ const testLayer = (ids: ReadonlyArray<EnvironmentId>) =>
 const event = (name: string, body: unknown) => JSON.stringify({ type: "event", name, body });
 
 describe("PeerSessions", () => {
+  it.effect(
+    "stores reported peer facts and honest connection failures in machine layout entries",
+    () =>
+      Effect.gen(function* () {
+        let config = DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
+        const updates = yield* Queue.unbounded<typeof config>();
+        const mesh = Layer.mock(MeshLayoutService)({
+          environmentId: SELF,
+          edit: (update) =>
+            Effect.gen(function* () {
+              config = update(config);
+              yield* Queue.offer(updates, config);
+              return { config, document: {} };
+            }),
+        });
+        const context = yield* Layer.build(
+          PeerSessionsModule.layer.pipe(Layer.provide(Layer.merge(dependencies([B]), mesh))),
+        );
+        const sessions = Context.get(context, PeerSessions);
+        expect((yield* Queue.take(updates)).machines[SELF]?.reported?.user).toBe("tester");
+        const peer = wire();
+        yield* sessions.accept({
+          environmentId: B,
+          direction: "inbound",
+          wire: peer.wire,
+          call: async () => ({ text: "{}", isError: false }),
+        });
+        expect((yield* Queue.take(updates)).machines[SELF]?.reported?.connections?.[0]?.state).toBe(
+          "direct",
+        );
+        peer.incoming.push(event("peer.hello", { facts, links: [SELF] }));
+        const reported = (yield* Queue.take(updates)).machines[B]?.reported;
+        expect(reported).toMatchObject({
+          version: "1",
+          platform: facts.platform,
+          user: "tester",
+          sshd: facts.sshd,
+        });
+        yield* sessions.close(B, "Fixture tunnel disappeared");
+        const state = (yield* Queue.take(updates)).machines[SELF]?.reported?.connections?.[0];
+        expect(state).toMatchObject({ state: "offline", lastError: "Fixture tunnel disappeared" });
+        expect(state?.offlineSince).toBeTypeOf("string");
+      }).pipe(Effect.scoped),
+  );
+
   it.effect("keeps the deterministic side of two simultaneous connections", () =>
     Effect.gen(function* () {
       const sessions = yield* PeerSessions;
