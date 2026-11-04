@@ -7,15 +7,17 @@ import {
   MeshConfigRollbackInput,
   MeshConfigSnapshot,
   MeshConfigStatus,
+  MeshConfigError,
   OrchestratorMcpFailure,
 } from "@t3tools/contracts";
 import { Tool, Toolkit } from "effect/ai";
+import * as Schema from "effect/Schema";
 
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const shared = {
-  failure: OrchestratorMcpFailure,
+  failure: Schema.Union([OrchestratorMcpFailure, MeshConfigError]),
   failureMode: "return" as const,
   dependencies: [
     McpInvocationContext.McpInvocationContext,

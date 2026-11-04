@@ -95,5 +95,21 @@ it.effect(
       const body = yield* apply.text;
       expect(body).toContain("revision");
       expect(body).not.toContain('"isError":true');
+      const stale = yield* post(
+        {
+          jsonrpc: "2.0",
+          id: 5,
+          method: "tools/call",
+          params: {
+            name: "t3_mesh_config_apply",
+            arguments: { doc: { schema: 1, machines: {}, future: true }, baseRevision: null },
+          },
+        },
+        session,
+      );
+      const failure = yield* stale.text;
+      expect(failure).toContain("stale_revision");
+      expect(failure).toContain("$.future");
+      expect(failure).toContain("current");
     }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
 );

@@ -39,9 +39,18 @@ it.effect(
         .pipe(Stream.unwrap, Stream.runCollect);
       const revision = (yield* decodeRevision(applied.at(-1)?.result)).revision;
       const stale = yield* tools
-        .handle("t3_mesh_config_apply", { doc: { schema: 1, machines: {} }, baseRevision: null })
+        .handle("t3_mesh_config_apply", {
+          doc: { schema: 1, machines: {}, future: true },
+          baseRevision: null,
+        })
         .pipe(Stream.unwrap, Stream.runCollect);
       expect(stale.at(-1)?.isFailure).toBe(true);
+      expect(stale.at(-1)?.result).toMatchObject({
+        _tag: "MeshConfigError",
+        reason: "stale_revision",
+        current: { revision },
+        diff: [{ path: "$.future", before: null, after: true }],
+      });
       const rollback = yield* tools
         .handle("t3_mesh_config_rollback", { revision })
         .pipe(Stream.unwrap, Stream.runCollect);
