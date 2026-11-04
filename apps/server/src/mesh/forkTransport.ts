@@ -22,10 +22,10 @@ export const ForkTransportInput = Schema.Union([
     modelSelection: Schema.optional(ModelSelection),
   }),
   Schema.Struct({ action: Schema.Literal("receive"), bundle: ForkBundle }),
+  Schema.Struct({ action: Schema.Literal("commit"), forkId: Schema.String, token: Schema.String }),
   Schema.Struct({
     action: Schema.Literal("rollback"),
     forkId: Schema.String,
-    threadId: Schema.optional(Schema.String),
   }),
   Schema.Struct({
     action: Schema.Literal("upload"),
@@ -49,6 +49,7 @@ export type ForkPrepareResult = typeof ForkPrepareResult.Type;
 
 export const ForkTransportResult = Schema.Union([
   ForkPrepareResult,
+  Schema.Struct({ token: Schema.String, result: ThreadForkResult }),
   ThreadForkResult,
   Schema.Struct({ attachment: Schema.NullOr(ChatAttachment) }),
   Schema.Struct({ ok: Schema.Boolean }),

@@ -12,6 +12,12 @@ import * as PeerLinks from "../peer/PeerLinks.ts";
 import * as PeerMcpClient from "../peer/PeerMcpClient.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as Schema from "effect/Schema";
+import * as ForkTransactions from "../mesh/ForkTransactions.ts";
+import * as FileSystem from "effect/FileSystem";
+import * as Scope from "effect/Scope";
+import * as Exit from "effect/Exit";
+import * as Crypto from "effect/Crypto";
+import * as Hex from "effect/encoding/Hex";
 import * as ThreadForks from "../mesh/ThreadForkService.ts";
 import * as ForkSecrets from "../auth/ServerSecretStore.ts";
 import * as ForkDocuments from "../provider/DocumentText.ts";
@@ -8569,7 +8575,6 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         let placed = 0;
         let placementReady = true;
         let targetOffline = false;
-        let rejectRecord = false;
         let rejectCopy = false;
         let flushReady = true;
         let flushes = 0;
@@ -8577,7 +8582,29 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         const flushEntered = yield* Deferred.make<void>();
         const limits = { runtimeMode: "full-access" as const, interactionMode: "default" as const };
         let target: ThreadForks.ThreadForkService["Service"] | undefined;
-        const make = Effect.fn("test.makeFork")(function* (self: string) {
+        const configs = new Map<string, ServerConfig.ServerConfig["Service"]>();
+        const journals = new Map<string, ForkTransactions.ForkTransactions["Service"]>();
+        let targetScope = yield* Scope.make();
+        let sourceScope = yield* Scope.make();
+        yield* Effect.addFinalizer(() => Scope.close(sourceScope, Exit.void));
+        yield* Effect.addFinalizer(() => Scope.close(targetScope, Exit.void));
+        const nodeContext = yield* Layer.build(NodeServices.layer);
+        const realFs = Context.get(nodeContext, FileSystem.FileSystem);
+        let expiredFile: string | undefined;
+        let expiredSignal = yield* Deferred.make<void>();
+        let dropStageReply = false;
+        let dropCommitReply = false;
+        let commitCalls = 0;
+        let commitDropped = yield* Deferred.make<void>();
+        const make = Effect.fn("test.makeFork")(function* (self: string, scope?: Scope.Closeable) {
+          if (!configs.has(self)) {
+            const context = yield* Layer.build(
+              ServerConfig.layerTest(process.cwd(), { prefix: "F1-fork-" }).pipe(
+                Layer.provide(NodeServices.layer),
+              ),
+            );
+            configs.set(self, Context.get(context, ServerConfig.ServerConfig));
+          }
           const mesh = Layer.mock(MeshLayout.MeshLayoutService)({
             environmentId: self,
             read: Ref.get(config).pipe(Effect.map((config) => ({ document: {}, config }))),
@@ -8673,34 +8700,63 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                     Effect.orDie,
                     Effect.flatMap((input) => {
                       if (!target) return Effect.die("Target was not constructed.");
-                      return target.receive(
-                        rejectCopy && input.action === "receive"
-                          ? {
-                              ...input,
-                              bundle: {
-                                ...input.bundle,
-                                entries: [
-                                  {
-                                    role: "user",
-                                    text: "missing upload",
-                                    attachments: [
-                                      {
-                                        type: "file",
-                                        id: ChatAttachmentId.make(
-                                          "pending-00000000-0000-4000-8000-000000000001",
-                                        ),
-                                        name: "note.txt",
-                                        mimeType: "text/plain",
-                                        sizeBytes: 1,
-                                      },
-                                    ],
-                                  },
-                                ],
-                              },
+                      if (input.action === "commit") commitCalls++;
+                      return target
+                        .receive(
+                          rejectCopy && input.action === "receive"
+                            ? {
+                                ...input,
+                                bundle: {
+                                  ...input.bundle,
+                                  entries: [
+                                    {
+                                      role: "user",
+                                      text: "missing upload",
+                                      attachments: [
+                                        {
+                                          type: "file",
+                                          id: ChatAttachmentId.make(
+                                            "pending-00000000-0000-4000-8000-000000000001",
+                                          ),
+                                          name: "note.txt",
+                                          mimeType: "text/plain",
+                                          sizeBytes: 1,
+                                        },
+                                      ],
+                                    },
+                                  ],
+                                },
+                              }
+                            : input,
+                          limits,
+                        )
+                        .pipe(
+                          Effect.flatMap((result) => {
+                            if (dropStageReply && input.action === "receive") {
+                              dropStageReply = false;
+                              return Effect.fail(
+                                new OrchestratorMcpFailure({
+                                  code: "orchestration_error",
+                                  message: "Stage response dropped.",
+                                }),
+                              );
                             }
-                          : input,
-                        limits,
-                      );
+                            if (dropCommitReply && input.action === "commit") {
+                              dropCommitReply = false;
+                              return Deferred.succeed(commitDropped, undefined).pipe(
+                                Effect.andThen(
+                                  Effect.fail(
+                                    new OrchestratorMcpFailure({
+                                      code: "orchestration_error",
+                                      message: "Commit response dropped.",
+                                    }),
+                                  ),
+                                ),
+                              );
+                            }
+                            return Effect.succeed(result);
+                          }),
+                        );
                     }),
                     Effect.flatMap((result) =>
                       decodePeerResponse(input.success, result).pipe(Effect.orDie),
@@ -8710,16 +8766,6 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
               ),
           });
           const extras = Layer.mergeAll(
-            Layer.succeed(Orchestrator.OrchestratorV2, {
-              ...orchestrator,
-              dispatch: (command) =>
-                rejectRecord && command.type === "thread.fork.record"
-                  ? orchestrator.dispatch({
-                      ...command,
-                      threadId: ThreadId.make("missing-record-target"),
-                    })
-                  : orchestrator.dispatch(command),
-            }),
             mesh,
             runtime,
             peerLinks,
@@ -8759,17 +8805,36 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
               ),
             }),
             ForkSecrets.layer.pipe(
-              Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "L-fork-" })),
+              Layer.provideMerge(Layer.succeed(ServerConfig.ServerConfig, configs.get(self)!)),
             ),
             ForkDocuments.layer,
-          ).pipe(Layer.provideMerge(NodeServices.layer));
-          const context = yield* Layer.build(
-            ThreadForks.layer.pipe(Layer.provide(extras), Layer.provide(ProjectionStore.layer)),
+          ).pipe(
+            Layer.provideMerge(
+              Layer.succeed(FileSystem.FileSystem, {
+                ...realFs,
+                remove: (path, options) =>
+                  realFs
+                    .remove(path, options)
+                    .pipe(
+                      Effect.tap(() =>
+                        path === expiredFile
+                          ? Deferred.succeed(expiredSignal, undefined).pipe(Effect.asVoid)
+                          : Effect.void,
+                      ),
+                    ),
+              }),
+            ),
+            Layer.provideMerge(NodeServices.layer),
           );
+          const context = yield* Layer.buildWithScope(
+            ThreadForks.layer.pipe(Layer.provide(extras), Layer.provide(ProjectionStore.layer)),
+            scope ?? (yield* Scope.Scope),
+          );
+          journals.set(self, Context.get(context, ForkTransactions.ForkTransactions));
           return Context.get(context, ThreadForks.ThreadForkService);
         });
-        target = yield* make("B");
-        const source = yield* make("A");
+        target = yield* make("B", targetScope);
+        let source = yield* make("A", sourceScope);
         const input = {
           commandId: CommandId.make("L-fork"),
           threadId: sourceId,
@@ -8881,19 +8946,93 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         assert.include((yield* Fiber.join(timedFork)).message, "did not flush in time");
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         pauseFlush = false;
-        rejectRecord = true;
-        const recordFailure = yield* source
-          .fork({ ...input, commandId: CommandId.make("F1-record-failure") }, limits)
-          .pipe(Effect.flip);
-        assert.include(recordFailure.message, "missing-record-target");
-        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
-        rejectRecord = false;
         targetOffline = true;
         const offline = yield* source
           .fork({ ...input, commandId: CommandId.make("L-fork-offline") }, limits)
           .pipe(Effect.flip);
         assert.include(offline.message, "offline");
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        targetOffline = false;
+        const expiryPath = Effect.fn("test.expiryPath")(function* (
+          id: string,
+          kind = "target",
+          self = "B",
+        ) {
+          const crypto = Context.get(nodeContext, Crypto.Crypto);
+          const hash = Hex.encode(
+            yield* crypto.digest("SHA-256", new TextEncoder().encode(`${kind}:${id}`)),
+          );
+          const path = Context.get(nodeContext, Path.Path);
+          return path.join(configs.get(self)!.stateDir, "fork-transactions", `${hash}.json`);
+        });
+        const abandonedId = "F1-abandoned-stage";
+        expiredFile = yield* expiryPath(abandonedId);
+        dropStageReply = true;
+        const abandoned = yield* source
+          .fork({ ...input, commandId: CommandId.make(abandonedId) }, limits)
+          .pipe(Effect.flip);
+        assert.include(abandoned.message, "Stage response dropped");
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        assert.equal((yield* journals.get("B")!.read(`target:${abandonedId}`))?.phase, "pending");
+        yield* TestClock.adjust("10 minutes");
+        yield* Deferred.await(expiredSignal);
+        assert.isUndefined(yield* journals.get("B")!.read(`target:${abandonedId}`));
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+
+        dropCommitReply = true;
+        const callsBefore = commitCalls;
+        const retrying = yield* source
+          .fork({ ...input, commandId: CommandId.make("F1-dropped-commit") }, limits)
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(commitDropped);
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount + 1);
+        yield* TestClock.adjust("1 second");
+        const committed = yield* Fiber.join(retrying);
+        assert.equal(commitCalls - callsBefore, 2);
+        assert.equal(
+          (yield* orchestrator.getShellSnapshot()).threads.filter(
+            (thread) => thread.id === committed.threadId,
+          ).length,
+          1,
+        );
+        assert.isUndefined(yield* journals.get("A")!.read("source:F1-dropped-commit"));
+
+        const sourceRestartId = "F1-outbox-restart";
+        expiredSignal = yield* Deferred.make<void>();
+        expiredFile = yield* expiryPath(sourceRestartId, "source", "A");
+        commitDropped = yield* Deferred.make<void>();
+        dropCommitReply = true;
+        const interrupted = yield* source
+          .fork({ ...input, commandId: CommandId.make(sourceRestartId) }, limits)
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(commitDropped);
+        yield* Scope.close(sourceScope, Exit.void);
+        assert.equal((yield* Fiber.await(interrupted))._tag, "Failure");
+        assert.equal(
+          (yield* journals.get("A")!.read(`source:${sourceRestartId}`))?.phase,
+          "outgoing",
+        );
+        sourceScope = yield* Scope.make();
+        source = yield* make("A", sourceScope);
+        yield* Deferred.await(expiredSignal);
+        assert.isUndefined(yield* journals.get("A")!.read(`source:${sourceRestartId}`));
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount + 2);
+
+        const restartId = "F1-pending-restart";
+        expiredSignal = yield* Deferred.make<void>();
+        expiredFile = yield* expiryPath(restartId);
+        dropStageReply = true;
+        yield* source
+          .fork({ ...input, commandId: CommandId.make(restartId) }, limits)
+          .pipe(Effect.flip);
+        yield* Scope.close(targetScope, Exit.void);
+        yield* TestClock.adjust("10 minutes");
+        assert.equal((yield* journals.get("B")!.read(`target:${restartId}`))?.phase, "pending");
+        targetScope = yield* Scope.make();
+        target = yield* make("B", targetScope);
+        yield* Deferred.await(expiredSignal);
+        assert.isUndefined(yield* journals.get("B")!.read(`target:${restartId}`));
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount + 2);
       }).pipe(Effect.scoped),
   );
 });

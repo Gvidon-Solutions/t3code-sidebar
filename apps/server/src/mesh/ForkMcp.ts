@@ -1,3 +1,4 @@
+import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -17,6 +18,7 @@ const decodeCall = Schema.decodeUnknownOption(
     }),
   }),
 );
+const isMcpFailure = Schema.is(OrchestratorMcpFailure);
 const decodeInput = Schema.decodeUnknownEffect(ForkTransportInput);
 const encode = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 export const interceptForkRequest = Effect.fn("ForkMcp.interceptRequest")(function* (
@@ -45,7 +47,13 @@ export const interceptForkRequest = Effect.fn("ForkMcp.interceptRequest")(functi
       onFailure: (error) => ({
         isError: true,
         content: [
-          { type: "text", text: encode({ code: "invalid_request", message: String(error) }) },
+          {
+            type: "text",
+            text: encode({
+              code: isMcpFailure(error) ? error.code : "invalid_request",
+              message: error.message,
+            }),
+          },
         ],
       }),
     }),

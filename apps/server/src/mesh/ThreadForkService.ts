@@ -10,7 +10,6 @@ import {
   EnvironmentId,
   ThreadId,
   ProjectId,
-  MessageId,
   OrchestratorMcpFailure,
   type ThreadForkInput,
   type ThreadForkResult,
@@ -24,6 +23,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Crypto from "effect/Crypto";
+import * as Scope from "effect/Scope";
+import * as Clock from "effect/Clock";
+import * as Schedule from "effect/Schedule";
+import * as Fiber from "effect/Fiber";
+import * as Duration from "effect/Duration";
+import { forkParked } from "../serverActivation.ts";
+import * as ForkTransactions from "./ForkTransactions.ts";
 import * as Hex from "effect/encoding/Hex";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import { threadLinkHref } from "@t3tools/shared/threadLinks";
@@ -90,9 +96,19 @@ export const layer = Layer.effect(
     const providers = yield* ProviderRegistry;
     const projectionStore = yield* ProjectionStoreV2;
     const serverConfig = yield* ServerConfig;
+    const fileSystem = yield* FileSystem.FileSystem;
     const crypto = yield* Crypto.Crypto;
     const replicaRuntime = yield* ReplicaRuntime.ReplicaRuntime;
     const locks = yield* KeyedLock.make<string>();
+    const journal = yield* ForkTransactions.ForkTransactions;
+    const transactions = {
+      read: (key: string) => journal.read(key).pipe(Effect.mapError(failure)),
+      write: (key: string, value: ForkTransactions.ForkTransaction) =>
+        journal.write(key, value).pipe(Effect.mapError(failure)),
+      remove: (key: string) => journal.remove(key).pipe(Effect.mapError(failure)),
+      list: journal.list.pipe(Effect.mapError(failure)),
+    };
+    const serviceScope = yield* Scope.Scope;
     const self = EnvironmentId.make(mesh.environmentId);
     const machineTitle = (
       env: string,
@@ -261,115 +277,192 @@ export const layer = Layer.effect(
     });
     const receiveFork = Effect.fn("ThreadForkService.receiveFork")(function* (
       bundle: ForkBundle,
-      limits: PeerCallLimits,
+      projectId: ProjectId,
     ) {
       const threadId = yield* threadIdFor(bundle);
-      const existing = yield* orchestrator.getThreadShell(threadId).pipe(Effect.mapError(failure));
-      if (existing) {
-        const received = yield* get(threadId);
-        if (received.thread.meshFork?.id === bundle.id)
-          return {
-            threadId,
-            environmentId: self,
-            link: link(self, threadId),
-            machine: machineTitle(self, yield* mesh.read),
-            title: received.thread.title,
-          } satisfies ThreadForkResult;
-        if (received.runs.length > 0 || received.turnItems.length > 0)
-          return yield* invalid("The fork target is not empty.");
-      }
+      const now = yield* DateTime.now;
+      const origin: MeshForkOrigin = {
+        id: bundle.id,
+        environmentId: bundle.sourceEnvironmentId,
+        threadId: bundle.sourceThreadId,
+        title: bundle.sourceTitle,
+        machine: bundle.sourceMachine,
+        link: bundle.sourceLink,
+        createdAt: DateTime.formatIso(now),
+      };
+      const entries = bundle.entries.map((entry) => ({
+        ...entry,
+        text: [
+          entry.text,
+          ...entry.attachments.map((attachment) => {
+            const path = resolveAttachmentPath({
+              attachmentsDir: serverConfig.attachmentsDir,
+              attachment,
+            });
+            return path
+              ? `Attached file "${attachment.name}" is available at: ${path}`
+              : `Attachment: ${attachment.name}`;
+          }),
+        ].join("\n"),
+      }));
+      yield* dispatch({
+        type: "thread.fork.record",
+        commandId: CommandId.make(`${bundle.id}:publish`),
+        threadId,
+        create: {
+          projectId,
+          title: bundle.title,
+          modelSelection: bundle.modelSelection,
+          runtimeMode: bundle.runtimeMode,
+          interactionMode: bundle.interactionMode,
+        },
+        origin,
+        marker: `Forked from ${bundle.sourceTitle} on ${bundle.sourceMachine} ← [Original conversation](${bundle.sourceLink})`,
+        entries,
+        ...(bundle.message === undefined ? {} : { message: bundle.message }),
+      });
+      return {
+        threadId,
+        environmentId: self,
+        link: link(self, threadId),
+        machine: machineTitle(self, yield* mesh.read),
+        title: bundle.title,
+      } satisfies ThreadForkResult;
+    });
+    const clearTransaction = Effect.fn("ThreadForkService.clearTransaction")(function* (
+      key: string,
+      value: Extract<
+        ForkTransactions.ForkTransaction,
+        { phase: "pending" | "committing" | "uploading" }
+      >,
+    ) {
+      const fs = fileSystem;
+      for (const path of value.phase === "uploading" ? [] : value.claimedPaths)
+        yield* fs.remove(path, { force: true }).pipe(Effect.mapError(failure));
+      yield* clearForkUploads(value.phase === "uploading" ? value.forkId : value.bundle.id).pipe(
+        Effect.provide(uploadContext),
+      );
+      yield* transactions.remove(key);
+    });
+    const expire = Effect.fn("ThreadForkService.expire")(function* (key: string) {
+      return yield* locks.withLock(
+        key,
+        Effect.gen(function* () {
+          const value = yield* transactions.read(key);
+          if (
+            (value?.phase === "pending" || value?.phase === "uploading") &&
+            value.expiresAt <= (yield* Clock.currentTimeMillis)
+          )
+            yield* clearTransaction(key, value);
+        }),
+      );
+    });
+    const retry = <A>(operation: Effect.Effect<A, OrchestratorMcpFailure>) =>
+      operation.pipe(
+        Effect.retry({
+          while: (error) => error.code === "orchestration_error",
+          schedule: Schedule.exponential("1 second").pipe(
+            Schedule.modifyDelay(({ duration }) =>
+              Effect.succeed(Duration.min(duration, Duration.seconds(15))),
+            ),
+          ),
+        }),
+      );
+    const armExpiry = Effect.fn("ThreadForkService.armExpiry")(function* (
+      key: string,
+      expiresAt: number,
+    ) {
+      const delay = Math.max(0, expiresAt - (yield* Clock.currentTimeMillis));
+      yield* Effect.sleep(delay).pipe(
+        Effect.andThen(retry(expire(key))),
+        Effect.forkIn(serviceScope),
+      );
+    });
+    const stageFork = Effect.fn("ThreadForkService.stageFork")(function* (
+      bundle: ForkBundle,
+      limits: PeerCallLimits,
+    ) {
+      const key = `target:${bundle.id}`;
+      const previous = yield* transactions.read(key);
+      const threadId = yield* threadIdFor(bundle);
+      const result = {
+        threadId,
+        environmentId: self,
+        link: link(self, threadId),
+        machine: machineTitle(self, yield* mesh.read),
+        title: bundle.title,
+      };
+      if (previous && previous.phase !== "outgoing" && previous.phase !== "uploading")
+        return {
+          token: previous.token,
+          result: previous.phase === "committed" ? previous.result : result,
+        };
       const rep = yield* resolveRepresentation({ logicalKey: bundle.logicalKey });
       yield* validateModel(bundle.modelSelection);
       if (exceededDispatchModeLimit(limits, bundle))
         return yield* invalid("The target link does not permit this thread's modes.");
-      yield* dispatch({
-        type: "thread.create",
-        commandId: CommandId.make(`${bundle.id}:create`),
-        threadId,
-        projectId: rep.projectId,
-        title: bundle.title,
-        modelSelection: bundle.modelSelection,
-        runtimeMode: bundle.runtimeMode,
-        interactionMode: bundle.interactionMode,
-        branch: null,
-        worktreePath: null,
-        createdBy: "user",
-        creationSource: "server",
-      });
-      return yield* Effect.gen(function* () {
+      const claimedPaths: string[] = [];
+      const staged = yield* Effect.gen(function* () {
         const entries = yield* Effect.forEach(bundle.entries, (entry) =>
-          Effect.gen(function* () {
-            const claimed = yield* claimPendingAttachments({
-              threadId,
-              attachments: entry.attachments,
-            }).pipe(Effect.provide(uploadContext), Effect.mapError(failure));
-            const locations = claimed.attachments.map((attachment) => {
-              const path = resolveAttachmentPath({
-                attachmentsDir: serverConfig.attachmentsDir,
-                attachment,
-              });
-              return path
-                ? `Attached file "${attachment.name}" is available at: ${path}`
-                : `Attachment: ${attachment.name}`;
-            });
-            return {
-              ...entry,
-              text: [entry.text, ...locations].join("\n"),
-              attachments: claimed.attachments,
-            };
-          }),
-        );
-        const now = yield* DateTime.now;
-        const origin: MeshForkOrigin = {
-          id: bundle.id,
-          environmentId: bundle.sourceEnvironmentId,
-          threadId: bundle.sourceThreadId,
-          title: bundle.sourceTitle,
-          machine: bundle.sourceMachine,
-          link: bundle.sourceLink,
-          createdAt: DateTime.formatIso(now),
-        };
-        yield* dispatch({
-          type: "thread.fork.record",
-          commandId: CommandId.make(`${bundle.id}:record`),
-          threadId,
-          origin,
-          marker: `Forked from ${bundle.sourceTitle} on ${bundle.sourceMachine} ← [Original conversation](${bundle.sourceLink})`,
-          entries,
-        });
-        if (bundle.message && bundle.message.trim().length > 0) {
-          const started = yield* Effect.exit(
-            dispatch({
-              type: "message.dispatch",
-              commandId: CommandId.make(`${bundle.id}:message`),
-              threadId,
-              messageId: MessageId.make(`${bundle.id}:message`),
-              text: bundle.message,
-              attachments: [],
-              modelSelection: bundle.modelSelection,
-              dispatchMode: { type: "start_immediately" },
-              createdBy: "user",
-              creationSource: "server",
+          claimPendingAttachments({ threadId, attachments: entry.attachments }).pipe(
+            Effect.provide(uploadContext),
+            Effect.mapError(failure),
+            Effect.map((claimed) => {
+              claimedPaths.push(...claimed.claimedPaths);
+              return { ...entry, attachments: claimed.attachments };
             }),
-          );
-          if (started._tag === "Failure") return yield* Effect.failCause(started.cause);
-        }
-        return {
-          threadId,
-          environmentId: self,
-          link: link(self, threadId),
-          machine: machineTitle(self, yield* mesh.read),
-          title: bundle.title,
-        } satisfies ThreadForkResult;
+          ),
+        );
+        const token = yield* crypto
+          .randomUUIDv4()
+          .pipe(Effect.mapError(() => invalid("Cannot allocate a fork commit token.")));
+        const expiresAt = (yield* Clock.currentTimeMillis) + 10 * 60 * 1000;
+        yield* transactions.write(key, {
+          phase: "pending",
+          token,
+          expiresAt,
+          bundle: { ...bundle, entries },
+          projectId: rep.projectId,
+          claimedPaths,
+          limits,
+        });
+        yield* armExpiry(key, expiresAt);
+        return { token, result };
       }).pipe(
         Effect.onError(() =>
-          dispatch({
-            type: "thread.delete",
-            commandId: CommandId.make(`${bundle.id}:rollback`),
-            threadId,
-          }).pipe(Effect.catch((error) => Effect.logError("Fork rollback failed", { error }))),
+          Effect.gen(function* () {
+            const fs = fileSystem;
+            for (const path of claimedPaths)
+              yield* fs.remove(path, { force: true }).pipe(Effect.orDie);
+            yield* clearForkUploads(bundle.id).pipe(Effect.provide(uploadContext), Effect.orDie);
+          }),
         ),
       );
+      return staged;
+    });
+    const commitFork = Effect.fn("ThreadForkService.commitFork")(function* (
+      forkId: string,
+      token: string,
+    ) {
+      const key = `target:${forkId}`;
+      const value = yield* transactions.read(key);
+      if (
+        !value ||
+        value.phase === "outgoing" ||
+        value.phase === "uploading" ||
+        value.token !== token
+      )
+        return yield* invalid("The pending fork expired or its commit token is invalid.");
+      if (value.phase === "committed") return value.result;
+      if (value.phase === "pending" && value.expiresAt <= (yield* Clock.currentTimeMillis)) {
+        yield* clearTransaction(key, value);
+        return yield* invalid("The pending fork expired before commit.");
+      }
+      yield* transactions.write(key, { ...value, phase: "committing" });
+      const result = yield* receiveFork(value.bundle, value.projectId);
+      yield* clearForkUploads(forkId).pipe(Effect.provide(uploadContext));
+      yield* transactions.write(key, { phase: "committed", token, result });
+      return result;
     });
     const receive: (
       input: ForkTransportInput,
@@ -377,11 +470,16 @@ export const layer = Layer.effect(
     ) => Effect.Effect<typeof ForkTransportResult.Type, OrchestratorMcpFailure> = Effect.fn(
       "ThreadForkService.receive",
     )(function* (input: ForkTransportInput, limits: PeerCallLimits) {
-      const key = input.action === "receive" ? input.bundle.id : input.forkId;
+      const key = `target:${input.action === "receive" ? input.bundle.id : input.forkId}`;
       return yield* locks.withLock(
         key,
         Effect.gen(function* () {
           if (input.action === "prepare") {
+            const previous = yield* transactions.read(key);
+            if (previous?.phase === "committed")
+              return { token: previous.token, result: previous.result };
+            if (previous?.phase === "pending" || previous?.phase === "committing")
+              return yield* stageFork(previous.bundle, previous.limits);
             const rep = yield* resolveRepresentation({
               projectId: input.projectId,
               logicalKey: input.logicalKey,
@@ -399,32 +497,31 @@ export const layer = Layer.effect(
             const replicas = yield* replicaRuntime.get.pipe(Effect.mapError(failure));
             return { ok: yield* replicas.flush(input).pipe(Effect.mapError(failure)) };
           }
-          if (input.action === "upload")
-            return yield* receiveForkUpload(input).pipe(Effect.provide(uploadContext));
-          if (input.action === "rollback") {
-            if (
-              input.threadId &&
-              (yield* orchestrator
-                .getThreadShell(ThreadId.make(input.threadId))
-                .pipe(Effect.mapError(failure)))
-            ) {
-              yield* dispatch({
-                type: "thread.delete",
-                commandId: CommandId.make(`${input.forkId}:rollback`),
-                threadId: ThreadId.make(input.threadId),
+          if (input.action === "upload") {
+            const previous = yield* transactions.read(key);
+            if (previous && previous.phase !== "uploading")
+              return yield* invalid("The fork attachments have already been staged.");
+            if (!previous) {
+              const expiresAt = (yield* Clock.currentTimeMillis) + 10 * 60 * 1000;
+              yield* transactions.write(key, {
+                phase: "uploading",
+                forkId: input.forkId,
+                expiresAt,
               });
+              yield* armExpiry(key, expiresAt);
             }
-            yield* clearForkUploads(input.forkId).pipe(Effect.provide(uploadContext));
+            return yield* receiveForkUpload(input).pipe(Effect.provide(uploadContext));
+          }
+          if (input.action === "commit") return yield* commitFork(input.forkId, input.token);
+          if (input.action === "rollback") {
+            const value = yield* transactions.read(key);
+            if (value?.phase === "pending" || value?.phase === "uploading")
+              yield* clearTransaction(key, value);
+            else if (value === undefined)
+              yield* clearForkUploads(input.forkId).pipe(Effect.provide(uploadContext));
             return { ok: true };
           }
-          return yield* receiveFork(input.bundle, limits).pipe(
-            Effect.ensuring(
-              clearForkUploads(input.bundle.id).pipe(
-                Effect.provide(uploadContext),
-                Effect.catch((error) => Effect.logError("Fork staging cleanup failed", { error })),
-              ),
-            ),
-          );
+          return yield* stageFork(input.bundle, limits);
         }),
       );
     });
@@ -450,10 +547,6 @@ export const layer = Layer.effect(
             .pipe(Effect.mapError(failure));
           const logicalKey = input.logicalKey ?? sourceMachines.logicalKey;
           const targetEnvironmentId = input.targetEnvironmentId;
-          const targetMachine =
-            targetEnvironmentId === self
-              ? machineTitle(self, snapshot)
-              : machineTitle(targetEnvironmentId, snapshot);
           const modelSelection = input.modelSelection ?? frozen.thread.modelSelection;
           const requestedTitle =
             input.title ?? `${frozen.thread.title} (fork)`.trim().slice(0, 200);
@@ -487,109 +580,21 @@ export const layer = Layer.effect(
             messages: frozen.messages.filter((message) => visibleIds.has(message.id)),
             turnItems: historyItems,
           });
-          if (targetEnvironmentId === self) {
-            const prepared = yield* locks.withLock(
-              `receive:${commandId}`,
-              resolveRepresentation({
-                projectId: input.projectId,
-                logicalKey,
-              }),
-            );
-            const bundle: ForkBundle = {
-              id: String(commandId),
-              sourceEnvironmentId: self,
-              sourceThreadId: input.threadId,
-              sourceTitle: frozen.thread.title,
-              sourceMachine: machineTitle(self, snapshot),
-              sourceLink: link(self, input.threadId),
-              logicalKey: prepared.logicalKey,
-              title: requestedTitle,
-              modelSelection,
-              runtimeMode: frozen.thread.runtimeMode,
-              interactionMode: frozen.thread.interactionMode,
-              entries: copiedEntries,
-              ...(input.message === undefined ? {} : { message: input.message }),
-            };
-            const copied = yield* copyAttachments(bundle.id, copiedEntries, self, limits).pipe(
-              Effect.onError(() =>
-                clearForkUploads(bundle.id).pipe(
-                  Effect.provide(uploadContext),
-                  Effect.catch((error) =>
-                    Effect.logError("Fork staging cleanup failed", { error }),
-                  ),
-                ),
-              ),
-            );
-            const received = yield* receiveFork(
-              {
-                ...bundle,
-                entries: copied,
-              },
-              limits,
-            ).pipe(
-              Effect.ensuring(
-                clearForkUploads(bundle.id).pipe(
-                  Effect.provide(uploadContext),
-                  Effect.catch((error) =>
-                    Effect.logError("Fork staging cleanup failed", { error }),
-                  ),
-                ),
-              ),
-            );
-            yield* linkBack(input.threadId, received, frozen.thread.title).pipe(
-              Effect.onError(() =>
-                dispatch({
-                  type: "thread.delete",
-                  commandId: CommandId.make(`${bundle.id}:rollback`),
-                  threadId: received.threadId,
-                }).pipe(
-                  Effect.catch((error) => Effect.logError("Fork rollback failed", { error })),
-                ),
-              ),
-            );
-            return {
-              threadId: received.threadId,
-              environmentId: self,
-              link: received.link,
-              machine: targetMachine,
-              title: received.title,
-            };
-          }
-          if (!(yield* links.enabled))
+          if (targetEnvironmentId !== self && !(yield* links.enabled))
             return yield* invalid("Enable mesh links before forking to another machine.");
-          let received: ThreadForkResult | undefined;
-          const targetThreadId = yield* threadIdFor({
-            id: String(commandId),
-            sourceEnvironmentId: self,
-            sourceThreadId: input.threadId,
+          const callTarget = (args: ForkTransportInput) =>
+            targetEnvironmentId === self
+              ? receive(args, limits)
+              : remote(targetEnvironmentId, args, limits);
+          const prepared = yield* callTarget({
+            action: "prepare",
+            forkId: String(commandId),
+            ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
+            logicalKey,
+            modelSelection,
           });
-          const failCleanup = Effect.suspend(() =>
-            remote(
-              targetEnvironmentId,
-              {
-                action: "rollback",
-                forkId: String(commandId),
-                threadId: String(received?.threadId ?? targetThreadId),
-              },
-              limits,
-            ),
-          ).pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("Fork rollback on the target machine failed", { error }),
-            ),
-          );
-          return yield* Effect.gen(function* () {
-            const prepared = yield* remote(
-              targetEnvironmentId,
-              {
-                action: "prepare",
-                forkId: String(commandId),
-                ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
-                ...(logicalKey === undefined ? {} : { logicalKey }),
-                modelSelection,
-              },
-              limits,
-            );
+          let staged = "token" in prepared ? prepared : undefined;
+          if (!staged) {
             if (!("projectId" in prepared)) return yield* invalid("The target was not prepared.");
             const bundle: ForkBundle = {
               id: String(commandId),
@@ -612,25 +617,30 @@ export const layer = Layer.effect(
               targetEnvironmentId,
               limits,
             );
-            const result = yield* remote(
-              targetEnvironmentId,
-              { action: "receive", bundle: { ...bundle, entries: copied } },
-              limits,
-            );
-            if (!("threadId" in result) || !("link" in result))
-              return yield* invalid("The target did not acknowledge the fork.");
-            if (!("title" in result))
-              return yield* invalid("The target did not acknowledge the fork.");
-            received = {
-              threadId: result.threadId,
-              environmentId: targetEnvironmentId,
-              link: result.link,
-              machine: targetMachine,
-              title: result.title,
-            };
-            yield* linkBack(input.threadId, received, frozen.thread.title);
-            return received;
-          }).pipe(Effect.tapError(() => failCleanup));
+            const result = yield* callTarget({
+              action: "receive",
+              bundle: { ...bundle, entries: copied },
+            });
+            if (!("token" in result))
+              return yield* invalid("The target did not acknowledge the pending fork.");
+            staged = result;
+          }
+          const intent: Extract<ForkTransactions.ForkTransaction, { phase: "outgoing" }> = {
+            phase: "outgoing",
+            forkId: String(commandId),
+            token: staged.token,
+            targetEnvironmentId,
+            sourceThreadId: input.threadId,
+            sourceTitle: frozen.thread.title,
+            limits,
+          };
+          return yield* Effect.uninterruptibleMask((restore) =>
+            Effect.gen(function* () {
+              yield* transactions.write(`source:${intent.forkId}`, intent);
+              const worker = yield* finishOutgoing(intent).pipe(Effect.forkIn(serviceScope));
+              return yield* restore(Fiber.join(worker));
+            }),
+          );
         }),
       );
     });
@@ -655,6 +665,52 @@ export const layer = Layer.effect(
         threadId: sourceThreadId,
         fork: ref,
       });
+    });
+    const finishOutgoing = Effect.fn("ThreadForkService.finishOutgoing")(function* (
+      intent: Extract<ForkTransactions.ForkTransaction, { phase: "outgoing" }>,
+    ) {
+      return yield* locks
+        .withLock(
+          `source:${intent.forkId}`,
+          Effect.gen(function* () {
+            const request = {
+              action: "commit" as const,
+              forkId: intent.forkId,
+              token: intent.token,
+            };
+            const result = yield* retry(
+              intent.targetEnvironmentId === self
+                ? receive(request, intent.limits)
+                : remote(intent.targetEnvironmentId, request, intent.limits),
+            );
+            if (!("threadId" in result) || !("title" in result))
+              return yield* invalid("The target did not confirm the fork commit.");
+            yield* retry(linkBack(intent.sourceThreadId, result, intent.sourceTitle));
+            yield* transactions.remove(`source:${intent.forkId}`);
+            return result;
+          }),
+        )
+        .pipe(
+          Effect.tapError((error) =>
+            error.code !== "orchestration_error"
+              ? transactions.remove(`source:${intent.forkId}`)
+              : Effect.void,
+          ),
+        );
+    });
+    const recover = Effect.gen(function* () {
+      for (const { key, value } of yield* transactions.list) {
+        if (value.phase === "pending" || value.phase === "uploading") {
+          yield* expire(key);
+          yield* armExpiry(key, value.expiresAt);
+        } else if (value.phase === "committing") {
+          yield* retry(locks.withLock(key, commitFork(value.bundle.id, value.token))).pipe(
+            Effect.forkIn(serviceScope),
+          );
+        } else if (value.phase === "outgoing") {
+          yield* finishOutgoing(value).pipe(Effect.forkIn(serviceScope));
+        }
+      }
     });
     const copyAttachments = Effect.fn("ThreadForkService.copyAttachments")(function* (
       forkId: string,
@@ -687,7 +743,7 @@ export const layer = Layer.effect(
             final: offset + CHUNK >= bytes.length,
           };
           const uploaded = yield* targetEnvironmentId === self
-            ? receiveForkUpload(uploadInput).pipe(Effect.provide(uploadContext))
+            ? receive(uploadInput, limits)
             : remote(targetEnvironmentId, uploadInput, limits);
           if ("attachment" in uploaded && uploaded.attachment)
             copied.set(attachment.id, uploaded.attachment);
@@ -700,6 +756,7 @@ export const layer = Layer.effect(
         attachments: entry.attachments.map((attachment) => copied.get(attachment.id) ?? attachment),
       }));
     });
+    yield* forkParked(retry(recover));
     return ThreadForkService.of({ fork, receive });
   }),
-);
+).pipe(Layer.provideMerge(ForkTransactions.layer));

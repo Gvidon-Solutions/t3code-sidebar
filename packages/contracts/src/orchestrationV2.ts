@@ -3371,6 +3371,16 @@ const OrchestrationV2InternalCommand = Schema.Union([
     type: Schema.Literal("thread.fork.record"),
     commandId: CommandId,
     threadId: ThreadId,
+    create: Schema.optional(
+      Schema.Struct({
+        projectId: ProjectId,
+        title: TrimmedNonEmptyString,
+        modelSelection: ModelSelection,
+        runtimeMode: RuntimeMode,
+        interactionMode: ProviderInteractionMode,
+      }),
+    ),
+    message: Schema.optional(Schema.String),
     origin: MeshForkOrigin,
     marker: Schema.optional(Schema.String),
     entries: Schema.Array(HandoffEntry),

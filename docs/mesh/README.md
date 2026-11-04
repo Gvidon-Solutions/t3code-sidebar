@@ -64,9 +64,12 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   through the last completed turn plus attachments, create the thread with the chosen
   harness/model/effort, optionally send a first message. The original is never archived and keeps
   running; target and source store links both ways (`meshFork`, `meshForks`). Every step has a
-  timeout, receiver failures roll back the target, and staging files are deleted on success and failure.
-  Source-side failure requests a remote rollback; if that peer is unreachable, cleanup is logged
-  but has no durable retry. The strict failure-atomic guarantee of CONCEPT §8 is not complete.
+  timeout. The target stages an invisible, non-runnable fork in `ForkTransactions.ts`, with a
+  token and ten-minute persisted lease. Commit publishes creation, transcript and optional first
+  message in one orchestration transaction. The source persists its commit intent and retries
+  with 1–15 s backoff, including after restart. The target retains a small token receipt for
+  idempotency; startup resumes accepted commits and expires pending forks locally. Abort is
+  only a fast cleanup path. Staging and pending attachment blobs are removed after commit or expiry.
   Fork works on the same machine too. Old handoff "move" data still renders as ordinary links.
 - **Draft machine selection.** Web `components/chat/useDraftEnvironmentRouting.ts` and mobile
   `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen
@@ -201,7 +204,7 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   bed restarts. Use the same owned control socket for deployment SSH and SCP. Deployment retries
   happen before fault injection; they are not proof of automatic replica recovery.
 - Fork staging is keyed by fork id and lives under `<stateDir>/fork-uploads`. It is deleted after a
-  successful receive and after a rollback; do not treat leftover staging as a thread. A fork's
+  successful commit and after pending expiry or abort; do not treat leftover staging as a thread. A fork's
   target id is deterministic (`fork:<sha256>`), so retrying the same operation is idempotent.
 
 - Fork links must survive both server shell projections and the client shell conversion; testing

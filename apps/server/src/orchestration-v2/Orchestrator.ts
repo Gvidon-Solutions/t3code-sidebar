@@ -13065,14 +13065,30 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         yield* dispatchProviderSessionDetach(command, events, effects);
         break;
       case "thread.fork.record": {
-        const projection = yield* getProjectionWithPendingEvents(command.threadId, events);
-        const history = yield* projectionStore
-          .getThreadRecords(command.threadId, ["turnItems"])
-          .pipe(
-            Effect.mapError(
-              (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
-            ),
+        if (command.create)
+          yield* dispatchThreadCreate(
+            {
+              type: "thread.create",
+              commandId: command.commandId,
+              threadId: command.threadId,
+              ...command.create,
+              branch: null,
+              worktreePath: null,
+              createdBy: "user",
+              creationSource: "server",
+            },
+            events,
           );
+        const projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+        const history = command.create
+          ? { turnItems: [] }
+          : yield* projectionStore
+              .getThreadRecords(command.threadId, ["turnItems"])
+              .pipe(
+                Effect.mapError(
+                  (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+                ),
+              );
         if (projection.runs.length > 0 || history.turnItems.length > 0)
           return yield* new OrchestratorDispatchError({
             commandId: command.commandId,
@@ -13109,6 +13125,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             occurredAt: now,
             payload: item,
           });
+        if (command.message?.trim())
+          yield* dispatchMessage(
+            {
+              type: "message.dispatch",
+              commandId: command.commandId,
+              threadId: command.threadId,
+              messageId: MessageId.make(`${command.origin.id}:message`),
+              text: command.message,
+              attachments: [],
+              modelSelection: command.create?.modelSelection ?? projection.thread.modelSelection,
+              dispatchMode: { type: "start_immediately" },
+              createdBy: "user",
+              creationSource: "server",
+            },
+            events,
+            effects,
+          );
         break;
       }
       case "thread.fork.linked": {

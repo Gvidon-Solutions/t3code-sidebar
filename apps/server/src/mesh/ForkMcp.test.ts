@@ -1,6 +1,6 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -43,7 +43,17 @@ it.effect(
                 return Effect.succeed(scope);
               },
             }),
-            Layer.mock(ThreadForkService)({ receive: () => Effect.succeed({ ok: true }) }),
+            Layer.mock(ThreadForkService)({
+              receive: (input) =>
+                input.action === "rollback" && input.forkId === "storage-failure"
+                  ? Effect.fail(
+                      new OrchestratorMcpFailure({
+                        code: "orchestration_error",
+                        message: "Fork transaction storage failed.",
+                      }),
+                    )
+                  : Effect.succeed({ ok: true }),
+            }),
           ),
         ),
       );
@@ -67,7 +77,7 @@ it.effect(
         method: "tools/call",
         params: {
           name: "t3_thread_receive_fork",
-          arguments: { action: "rollback", forkId: "L-fork", threadId: "L-target" },
+          arguments: { action: "rollback", forkId: "L-fork" },
         },
       };
       expect((yield* post("agent", body)).status).toBe(403);
@@ -75,6 +85,11 @@ it.effect(
       const accepted = yield* post("link", body);
       expect(accepted.status).toBe(200);
       expect(yield* accepted.text).toContain('"ok":true');
+      const failed = yield* post("link", {
+        ...body,
+        params: { ...body.params, arguments: { action: "rollback", forkId: "storage-failure" } },
+      });
+      expect(yield* failed.text).toContain("orchestration_error");
       const init = yield* post("agent", {
         jsonrpc: "2.0",
         id: 1,
