@@ -46,7 +46,7 @@ export const layer = Layer.effect(
       const bound = bindings[name];
       if (bound) return bound;
       const candidates = Object.entries(state.config.machines).filter(([, facts]) =>
-        [facts.label, facts.tag, ...(facts.aliases ?? [])].some(
+        [facts.title, facts.label, facts.tag, ...(facts.aliases ?? [])].some(
           (alias) => alias === name || alias === doc.machines[name]?.title,
         ),
       );
@@ -89,7 +89,7 @@ export const layer = Layer.effect(
         if (value && typeof value === "object" && !Array.isArray(value)) {
           const facts = Object.fromEntries(
             Object.entries(value).filter(
-              ([field]) => !["label", "tag", "color", "aliases"].includes(field),
+              ([field]) => !["label", "title", "tag", "color", "aliases"].includes(field),
             ),
           );
           yield* write(key, facts);

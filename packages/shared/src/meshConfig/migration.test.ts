@@ -1,13 +1,19 @@
 import { expect, it } from "@effect/vitest";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { migrateConfig } from "./migration.ts";
-import { effectiveLinkPermissions, parseConfig, referenceErrors } from "./index.ts";
+import {
+  effectiveLinkPermissions,
+  machineByPeerLabel,
+  parseConfig,
+  referenceErrors,
+} from "./index.ts";
 it("migrates a three-machine layout and existing routes, aliases, ignores and permissions once", () => {
   const layout = {
     ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
     machines: {
       a: {
-        label: "Studio",
+        title: "Studio",
+        label: "Legacy Studio",
         tag: "ST",
         color: "blue",
         aliases: ["desk"],
@@ -33,8 +39,8 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
   const result = migrateConfig(
     {},
     layout,
-    { environmentId: "a", label: "Studio" },
-    [{ environmentId: "b", label: "Cloudbox" }],
+    { environmentId: "a", label: "studio-host" },
+    [{ environmentId: "b", label: "cloudbox-host" }],
     ["*.log"],
   );
   expect(result?.bindings).toEqual({ studio: "a", cloudbox: "b", laptop: "c" });
@@ -52,6 +58,11 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
   });
   const config = parseConfig(result?.doc);
   expect(referenceErrors(config)).toEqual([]);
+  for (const label of ["Studio", "Legacy Studio", "T3 Code · studio-host"])
+    expect(machineByPeerLabel(config, result!.bindings, label)?.name).toBe("studio");
+  expect(machineByPeerLabel(config, result!.bindings, "T3 Code · cloudbox-host")?.name).toBe(
+    "cloudbox",
+  );
   expect(effectiveLinkPermissions(config, "studio", "cloudbox").files).toBe("all");
   expect(effectiveLinkPermissions(config, "studio", "new-machine").files).toBe("projects");
   expect(config.replicas?.ignore).toEqual(["*.log"]);

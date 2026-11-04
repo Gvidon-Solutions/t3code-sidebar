@@ -36,7 +36,7 @@ const seed = Effect.gen(function* () {
     machines: {
       ...config.machines,
       source: { ...config.machines.source, label: "Studio", tag: "ST", color: "red" },
-      replica: { ...config.machines.replica, label: "Laptop" },
+      replica: { ...config.machines.replica, label: "Laptop", title: "Old laptop" },
     },
   }));
   yield* mesh.apply({
@@ -72,6 +72,7 @@ it.effect(
         color: "blue",
       });
       expect((yield* mesh.read).document["machine/replica"]?.v).not.toHaveProperty("label");
+      expect((yield* mesh.read).document["machine/replica"]?.v).not.toHaveProperty("title");
       const permission = (yield* plan("links").plan(doc, undefined)).find(
         (a) => a.server === "replica",
       )!;
@@ -195,6 +196,22 @@ it.effect(
         .pipe(Effect.flip);
       expect(error).toBeInstanceOf(MeshConfigError);
       expect(error.message).toContain("has not joined");
+      const mesh = yield* MeshLayoutService;
+      const joined = { ...doc, machines: { ...doc.machines, cloudbox: { title: "Cloudbox" } } };
+      const clock = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "machine/cloudbox-env": { v: { title: "Cloudbox" }, h: clock },
+        "mesh.config": {
+          h: clock,
+          v: { revision: clock, doc: joined as Json, author: "replica", writtenAt: "" },
+        },
+      });
+      yield* machines.reconcile(
+        { id: "machines/cloudbox", machine: "cloudbox", server: "replica", description: "" },
+        joined,
+      );
+      expect((yield* mesh.read).document["mesh.machineBinding/cloudbox"]?.v).toBe("cloudbox-env");
+      expect((yield* mesh.read).config.machines["cloudbox-env"]?.title).toBe("Cloudbox");
     }).pipe(
       Effect.provide(
         Planners.layer.pipe(Layer.provideMerge(runtime.pipe(Layer.provideMerge(h.layer)))),

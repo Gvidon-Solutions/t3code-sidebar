@@ -159,7 +159,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         : undefined;
       machines[environmentId] = {
         ...machines[environmentId],
-        ...(machine.title !== undefined ? { label: machine.title } : {}),
+        ...(machine.title !== undefined ? { label: machine.title, title: machine.title } : {}),
         ...(machine.label !== undefined ? { tag: machine.label } : {}),
         ...(machine.color !== undefined ? { color: machine.color } : {}),
         ...(aliases ? { aliases } : {}),

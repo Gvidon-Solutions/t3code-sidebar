@@ -21,6 +21,7 @@ export function migrateConfig(
   for (const environmentId of environments) {
     const machine = layout.machines[environmentId];
     const title =
+      machine?.title ??
       machine?.label ??
       (environmentId === self.environmentId
         ? self.label
@@ -35,12 +36,22 @@ export function migrateConfig(
     let name = stem;
     for (let n = 2; Object.hasOwn(bindings, name); n++) name = `${stem}-${n}`;
     bindings[name] = environmentId;
+    const legacyLabels = [
+      ...new Set(
+        [
+          title,
+          machine?.label,
+          environmentId === self.environmentId ? self.label : undefined,
+          peers.find((peer) => peer.environmentId === environmentId)?.label,
+        ].filter((label): label is string => typeof label === "string"),
+      ),
+    ];
     machines[name] = {
       title,
       ...(machine?.tag ? { label: machine.tag } : {}),
       ...(machine?.color ? { color: machine.color } : {}),
       ...(machine?.aliases ? { aliases: machine.aliases } : {}),
-      legacyPeerLabels: [`T3 Code · ${title}`, title],
+      legacyPeerLabels: legacyLabels.flatMap((label) => [`T3 Code · ${label}`, label]),
     };
   }
   const names = Object.keys(bindings);

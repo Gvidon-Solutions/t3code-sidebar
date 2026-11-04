@@ -2,6 +2,8 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { stringify } from "yaml";
 import { MeshConfigDocument } from "@t3tools/contracts";
+import { materialize } from "../meshLayout/materialize.ts";
+import type { Json } from "../meshLayout/document.ts";
 import {
   defaults,
   machineByName,
@@ -141,6 +143,17 @@ describe("mesh config", () => {
     });
     expect(machineByName(config, "studio")?.title).toBe("Studio");
     expect(machineByName(config, "studio")?.name).toBe("future-display-name");
+    const h = "0000000000000.00000.studio";
+    expect(
+      materialize({
+        "mesh.config": {
+          v: { revision: h, doc: config as Json, author: "studio", writtenAt: "" },
+          h,
+        },
+        "mesh.machineBinding/studio": { v: "environment-1", h },
+        "machine/environment-1": { v: { title: "Old title", label: "Old label" }, h },
+      }).machines["environment-1"],
+    ).toMatchObject({ title: "Studio", label: "Studio" });
     expect(machineByName(config, "missing")).toBeUndefined();
     expect(machineByEnvironment(config, { studio: "environment-1" }, "environment-1")).toEqual({
       name: "studio",
