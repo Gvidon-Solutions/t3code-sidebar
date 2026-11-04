@@ -3,6 +3,7 @@ import { it, expect } from "@effect/vitest";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG, EnvironmentId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Sqlite from "../persistence/Sqlite.ts";
 import * as Settings from "../serverSettings.ts";
@@ -155,8 +156,20 @@ it.effect("rejects future clocks, persists counts and quarantines corrupt rows o
     const bad = {
       "machine/cloudbox": { v: { label: "bad clock" }, h: "9999999999999.00000.cloudbox" },
     };
-    yield* mesh.apply(bad, "cloudbox").pipe(Effect.flip);
-    yield* mesh.apply(bad, "cloudbox").pipe(Effect.flip);
+    const warnings: unknown[] = [];
+    const logger = Logger.layer([
+      Logger.make(({ message }) => {
+        warnings.push(message);
+      }),
+    ]);
+    yield* Effect.all(
+      [
+        mesh.apply(bad, "cloudbox").pipe(Effect.flip),
+        mesh.apply(bad, "cloudbox").pipe(Effect.flip),
+      ],
+      { concurrency: "unbounded" },
+    ).pipe(Effect.provide(logger));
+    expect(warnings).toHaveLength(1);
     expect((yield* sql<{ count: number }>`SELECT count FROM mesh_clock_rejections`)[0]!.count).toBe(
       2,
     );
@@ -165,7 +178,8 @@ it.effect("rejects future clocks, persists counts and quarantines corrupt rows o
         .last_logged,
     ).toBe(0);
     yield* TestClock.adjust("1 minute");
-    yield* mesh.apply(bad, "cloudbox").pipe(Effect.flip);
+    yield* mesh.apply(bad, "cloudbox").pipe(Effect.flip, Effect.provide(logger));
+    expect(warnings).toHaveLength(2);
     expect(
       (yield* sql<{ last_logged: number }>`SELECT last_logged FROM mesh_clock_rejections`)[0]!
         .last_logged,
