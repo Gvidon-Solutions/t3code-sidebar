@@ -1,3 +1,4 @@
+import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import {
   MeshLayoutStore,
   emptyMeshLayoutState,
@@ -71,7 +72,14 @@ function useMeshLayoutOwner() {
           window.localStorage.setItem(CACHE_KEY, serializeMeshLayoutCache(state));
         },
       },
-      onPermanentFailure: (error) => console.error("Mesh layout failed", error),
+      onPermanentFailure: (error) =>
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Workspace layout not saved",
+            description: error instanceof Error ? error.message : "The mesh rejected the change.",
+          }),
+        ),
       rpc: {
         get: async () => {
           if (!current.current.remote) throw new Error("Waiting for mesh snapshot");
