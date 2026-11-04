@@ -36,6 +36,8 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   retain their opaque values. Import/adoption lives under `meshLayout/migration/`, with the
   old-settings adapter in `apps/server/src/mesh/migration/`. `MeshLayoutServiceLive.ts` keeps
   SQLite and the canonical document consistent; corrupt rows move to `mesh_layout_quarantine`.
+  `configSchema.ts` validates config/history documents, including nested C1 fields, while
+  preserving unknown fields for newer versions.
   `MeshReplicator.ts` exchanges local sequence watermarks and store generations over
   `PeerMcpClient`, pushes changes after 200 ms, retries a failed peer exchange on a
   1–15 s backoff and exchanges watermarks every 60 seconds. A changed generation resets

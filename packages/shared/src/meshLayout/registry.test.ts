@@ -67,6 +67,33 @@ it("validates every registered family and forwards unknown values without materi
       }),
     ),
   ).toBe(true);
+  const revision = {
+    revision: "revision",
+    author: "studio",
+    writtenAt: "",
+    doc: {
+      schema: 1,
+      machines: { studio: { label: "Studio", future: true } },
+      future: { retained: true },
+    },
+  };
+  for (const key of ["mesh.config", "mesh.configHistory/revision"]) {
+    expect(validateLayoutEntry(key, { v: revision, h: "0000000000000.00000.studio" })).toBeNull();
+    for (const doc of [
+      false,
+      { schema: 1, machines: { studio: { label: 12 } } },
+      { schema: 1, machines: { "not a slug": {} } },
+      {
+        schema: 1,
+        machines: {},
+        replicas: { rules: [{ project: "example", on: "studio", when: "unknown" }] },
+      },
+    ]) {
+      expect(
+        validateLayoutEntry(key, { v: { ...revision, doc }, h: "0000000000000.00000.studio" }),
+      ).not.toBeNull();
+    }
+  }
   const opaque = { "future/data": { v: { shape: [1, true] }, h: "0000000000000.00000.studio" } };
   expect(validateLayoutEntry("future/data", opaque["future/data"])).toBeNull();
   expect(merge({}, opaque)).toEqual(opaque);

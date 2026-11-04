@@ -7,15 +7,11 @@ import {
   SidebarProjectMountStatus,
 } from "@t3tools/contracts";
 import type { MeshLayoutEntry } from "./document.ts";
+import { meshConfigRevisionSchema } from "./configSchema.ts";
 
 const sort = { sort: Schema.String };
 const sorted = Schema.Struct(sort);
-const configRevision = Schema.Struct({
-  revision: Schema.String,
-  doc: Schema.Unknown,
-  author: Schema.String,
-  writtenAt: Schema.String,
-});
+
 const family = <S extends Schema.Decoder<unknown>>(schema: S, segments: number) => ({
   segments,
   validate: (value: unknown): string | null => {
@@ -58,8 +54,8 @@ export const layoutKeyFamilies = {
   legacy: family(Schema.Array(Schema.String), 2),
   "ws.default": family(Schema.String, 1),
   "ws.quietAfterDays": family(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })), 1),
-  "mesh.config": family(configRevision, 1),
-  "mesh.configHistory": family(configRevision, 2),
+  "mesh.config": family(meshConfigRevisionSchema, 1),
+  "mesh.configHistory": family(meshConfigRevisionSchema, 2),
   "mesh.machineBinding": family(Schema.String, 2),
 };
 
