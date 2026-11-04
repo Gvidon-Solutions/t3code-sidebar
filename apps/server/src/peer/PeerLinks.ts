@@ -33,6 +33,7 @@ import * as HttpApiClient from "effect/http-api/HttpApiClient";
 import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassification";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import * as PeerTransport from "./connection/PeerTransport.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ServerSettings from "../serverSettings.ts";
 
@@ -79,12 +80,26 @@ export class PeerLinks extends Context.Service<
       Option.Option<{ readonly environmentId: EnvironmentId; readonly label: string }>
     >;
     readonly list: Effect.Effect<ReadonlyArray<PeerLinkSummary>, PeerLinkError>;
+    /** The linked environment ids, without asking any peer whether it answers. */
+    readonly ids: Effect.Effect<ReadonlyArray<EnvironmentId>, PeerLinkError>;
+    /** Stores a link a peer granted over an authenticated connection (no pairing code). */
+    readonly acceptGrant: (input: {
+      readonly environmentId: EnvironmentId;
+      readonly label: string;
+      readonly urls: ReadonlyArray<string>;
+      readonly access: PeerLink["access"];
+      readonly token: string;
+      readonly expiresAt?: number;
+    }) => Effect.Effect<void, PeerLinkError>;
     /** The stored link, without asking the peer whether it answers. */
     readonly get: (
       environmentId: EnvironmentId,
     ) => Effect.Effect<Option.Option<PeerLink>, PeerLinkError>;
     /** Forgets the link here. The peer still lists the session until it is revoked there. */
-    readonly unlink: (environmentId: EnvironmentId) => Effect.Effect<boolean, PeerLinkError>;
+    readonly unlink: (
+      environmentId: EnvironmentId,
+      options?: { readonly notifyPeer?: boolean },
+    ) => Effect.Effect<boolean, PeerLinkError>;
     /** An address that answers as the linked peer, with its token, ready to call. */
     readonly resolve: (
       environmentId: EnvironmentId,
@@ -166,6 +181,7 @@ const linkLimitsHold = (peer: { readonly capabilities: ExecutionEnvironmentCapab
 const make = Effect.gen(function* () {
   const changes = yield* PubSub.unbounded<void>();
   const sql = yield* SqlClient.SqlClient;
+  const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const crypto = yield* Crypto.Crypto;
   const httpClient = yield* HttpClient.HttpClient;
@@ -230,7 +246,12 @@ const make = Effect.gen(function* () {
 
   /** Signs in to the peer's `/mcp` with a pairing code: register, decide, exchange. */
   const signIn = Effect.fn("PeerLinks.signIn")(
-    function* (origin: string, input: PeerLinkCreateInput, clientName: string) {
+    function* (
+      origin: string,
+      input: PeerLinkCreateInput,
+      clientName: string,
+      environmentId: EnvironmentId,
+    ) {
       const client = yield* clientFor(origin);
       // Only the peer's own refusals are rejections. A dropped connection or
       // an answer this version cannot read is classified below.
@@ -240,6 +261,7 @@ const make = Effect.gen(function* () {
             client_name: clientName,
             redirect_uris: [LINK_REDIRECT_URI],
             software_id: MCP_PEER_LINK_SOFTWARE_ID,
+            environment_id: environmentId,
           },
         })
         .pipe(
@@ -431,7 +453,7 @@ const make = Effect.gen(function* () {
         message: `${peer.label} runs a T3 Code version that cannot keep a linked agent's limits. Update it, then link again.`,
       });
     }
-    const issued = yield* signIn(primary, input, `T3 Code · ${self.label}`);
+    const issued = yield* signIn(primary, input, `T3 Code · ${self.label}`, self.environmentId);
     const now = yield* DateTime.now;
     const linked: PeerLink = {
       environmentId: peer.environmentId,
@@ -506,6 +528,57 @@ const make = Effect.gen(function* () {
           ),
         );
 
+  const ids: PeerLinks["Service"]["ids"] = readRows.pipe(
+    Effect.map((rows) => rows.map((row) => EnvironmentId.make(row.environment_id))),
+  );
+
+  const acceptGrant: PeerLinks["Service"]["acceptGrant"] = Effect.fn("PeerLinks.acceptGrant")(
+    function* (input) {
+      // A grant is a live credential from a peer that already authenticated to us.
+      // It replaces whatever we held for it, the same way a new pairing code would.
+      const now = yield* DateTime.now;
+      const previous = yield* readRow(input.environmentId);
+      if (
+        Option.isSome(previous) &&
+        DateTime.isGreaterThan(DateTime.makeUnsafe(previous.value.expires_at), now)
+      )
+        return;
+      const expiresAt =
+        input.expiresAt === undefined
+          ? DateTime.add(now, { days: 30 })
+          : DateTime.makeUnsafe(input.expiresAt);
+      const secretName = yield* newSecretName;
+      yield* secrets
+        .set(secretName, new TextEncoder().encode(input.token))
+        .pipe(Effect.catch(failStorage));
+      const urlsJson = yield* encodeUrls([...input.urls]).pipe(Effect.catch(failStorage));
+      yield* sql`
+        INSERT INTO peer_environment_links (
+          environment_id, secret_name, label, urls_json, access, linked_at, expires_at,
+          last_reached_at, last_error, fenced
+        ) VALUES (
+          ${input.environmentId}, ${secretName}, ${input.label}, ${urlsJson}, ${input.access},
+          ${DateTime.formatIso(now)}, ${DateTime.formatIso(expiresAt)},
+          ${DateTime.formatIso(now)}, NULL, 1
+        )
+        ON CONFLICT (environment_id) DO UPDATE SET
+          secret_name = excluded.secret_name,
+          fenced = excluded.fenced,
+          label = excluded.label,
+          urls_json = excluded.urls_json,
+          access = excluded.access,
+          linked_at = excluded.linked_at,
+          expires_at = excluded.expires_at,
+          last_reached_at = excluded.last_reached_at,
+          last_error = NULL
+      `.pipe(Effect.catch(failStorage));
+      if (Option.isSome(previous) && previous.value.secret_name !== secretName) {
+        yield* secrets.remove(previous.value.secret_name).pipe(Effect.ignore);
+      }
+      yield* PubSub.publish(changes, undefined);
+    },
+  );
+
   const list: PeerLinks["Service"]["list"] = Effect.gen(function* () {
     const links = yield* Effect.forEach(yield* readRows, toLink);
     const now = yield* DateTime.now;
@@ -527,7 +600,19 @@ const make = Effect.gen(function* () {
     );
 
   const unlink: PeerLinks["Service"]["unlink"] = Effect.fn("PeerLinks.unlink")(
-    function* (environmentId) {
+    function* (environmentId, options) {
+      const network = Option.isSome(transport) ? transport.value.get() : undefined;
+      if (network)
+        yield* network.revoke(environmentId, options?.notifyPeer ?? true).pipe(
+          Effect.mapError(
+            (cause) =>
+              new PeerLinkError({
+                reason: "storage",
+                message: "Peer credential revocation failed",
+                cause,
+              }),
+          ),
+        );
       const deleted = yield* sql<{ secret_name: string }>`
         DELETE FROM peer_environment_links WHERE environment_id = ${environmentId}
         RETURNING secret_name
@@ -535,6 +620,7 @@ const make = Effect.gen(function* () {
       for (const row of deleted) {
         yield* secrets.remove(row.secret_name).pipe(Effect.catch(failStorage));
       }
+      yield* PubSub.publish(changes, undefined);
       return deleted.length > 0;
     },
   );
@@ -616,6 +702,8 @@ const make = Effect.gen(function* () {
     link,
     describe: describeUrl,
     list,
+    ids,
+    acceptGrant,
     get,
     unlink,
     resolve,

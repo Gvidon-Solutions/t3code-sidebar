@@ -1,3 +1,5 @@
+import * as PeerReceipts from "../peer/connection/PeerReceipts.ts";
+import { PeerConnectionError } from "../peer/connection/PeerSessions.ts";
 import { interceptHandoffRequest } from "../mesh/HandoffMcp.ts";
 import { ThreadHandoffService } from "../mesh/ThreadHandoffService.ts";
 import { interceptMeshRequest } from "../mesh/MeshMcp.ts";
@@ -204,6 +206,7 @@ const linkedEnvironmentsOff = HttpServerResponse.jsonUnsafe(
 );
 
 const makeMcpAuthMiddleware = Effect.gen(function* () {
+  const receipts = yield* Effect.serviceOption(PeerReceipts.PeerReceipts);
   const handoffs = yield* Effect.serviceOption(ThreadHandoffService);
   const meshReplicator = yield* Effect.serviceOption(MeshReplicator);
   const meshRelay = yield* Effect.serviceOption(MeshRelay);
@@ -238,30 +241,115 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     }
     const limited = withModeLimit(invocation, request);
     if (limited === undefined) return invalidModeLimit;
-    const linkedEnvironments = yield* linksEnabled;
-    const handoffResponse = yield* interceptHandoffRequest(
-      request,
-      limited,
-      handoffs,
-      linkedEnvironments,
-    );
-    if (handoffResponse !== undefined) return handoffResponse;
-    const meshResponse = yield* interceptMeshRequest(
-      request,
-      limited,
-      meshReplicator,
-      meshRelay,
-      linkedEnvironments,
-    );
-    if (meshResponse !== undefined) return meshResponse;
-    if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
-    return yield* httpEffect.pipe(
-      Effect.provideService(McpInvocationContext.McpInvocationContext, {
-        ...limited,
+    const key = request.headers["t3-idempotency-key"];
+    const peer = invocation.client?.linked === true;
+    const from =
+      request.headers["t3-mesh-hops"]?.split(",")[0] ??
+      invocation.client?.peerEnvironmentId ??
+      request.headers["t3-peer-environment-id"] ??
+      invocation.client?.sessionId;
+    let sequence = 0;
+    const callInvocation =
+      peer && key && from
+        ? {
+            ...limited,
+            requestNamespace: `peer:${encodeJsonText([from, key])}`,
+            peerCommandIdentity: { namespace: `peer:${from}:${key}`, next: () => sequence++ },
+          }
+        : limited;
+    const dispatch = Effect.gen(function* () {
+      const linkedEnvironments = yield* linksEnabled;
+      const handoffResponse = yield* interceptHandoffRequest(
+        request,
+        callInvocation,
+        handoffs,
         linkedEnvironments,
-      }),
-      Effect.map(normalizeMcpHttpResponse),
-    );
+      );
+      if (handoffResponse !== undefined) return handoffResponse;
+      const meshResponse = yield* interceptMeshRequest(
+        request,
+        callInvocation,
+        meshReplicator,
+        meshRelay,
+        linkedEnvironments,
+      );
+      if (meshResponse !== undefined) return meshResponse;
+      if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
+      return yield* httpEffect.pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+          ...callInvocation,
+          linkedEnvironments,
+        }),
+        Effect.map(normalizeMcpHttpResponse),
+      );
+    });
+    if (!peer || !key || request.method !== "POST" || Option.isNone(receipts))
+      return yield* dispatch;
+    const body = yield* request.json.pipe(Effect.orDie);
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("method" in body) ||
+      body.method !== "tools/call"
+    )
+      return yield* dispatch;
+    return yield* receipts.value
+      .run(
+        from!,
+        key,
+        encodeJsonText({
+          body,
+          modes: request.headers[McpInvocationContext.MODE_LIMIT_HEADER],
+          access: limited.client?.access,
+        }),
+        dispatch.pipe(
+          Effect.catchCause((cause) =>
+            Effect.fail(
+              new PeerConnectionError({
+                reason: "protocol",
+                message: "Peer call dispatch failed",
+                cause,
+              }),
+            ),
+          ),
+        ),
+        typeof body === "object" &&
+          body !== null &&
+          "params" in body &&
+          typeof body.params === "object" &&
+          body.params !== null &&
+          "name" in body.params &&
+          typeof body.params.name === "string" &&
+          [
+            "t3_project_create",
+            "t3_thread_launch",
+            "t3_thread_fork",
+            "t3_thread_move",
+            "delegate_task",
+            "schedule_task",
+            "t3_project_place",
+            "t3_handoff_import",
+          ].includes(body.params.name),
+      )
+      .pipe(
+        Effect.catch((error) =>
+          Effect.succeed(
+            HttpServerResponse.jsonUnsafe({
+              jsonrpc: "2.0",
+              id: "id" in body ? body.id : null,
+              result: {
+                content: [
+                  {
+                    type: "text",
+                    text: encodeJsonText({ code: "invalid_request", message: error.message }),
+                  },
+                ],
+                isError: true,
+              },
+            }),
+          ),
+        ),
+      );
   }) satisfies McpAuthMiddleware;
 }).pipe(Effect.withSpan("McpHttpServer.makeAuthMiddleware"));
 

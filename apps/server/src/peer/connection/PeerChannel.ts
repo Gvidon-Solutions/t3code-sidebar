@@ -14,7 +14,8 @@ const Frame = Schema.Union([
   Schema.Struct({ type: Schema.Literal("open"), id, target: id }),
   Schema.Struct({ type: Schema.Literal("data"), id, data: Schema.String }),
   Schema.Struct({ type: Schema.Literal("credit"), id, bytes: Schema.Int }),
-  Schema.Struct({ type: Schema.Literals(["end", "reset"]), id }),
+  Schema.Struct({ type: Schema.Literal("end"), id }),
+  Schema.Struct({ type: Schema.Literal("reset"), id, message: Schema.optionalKey(Schema.String) }),
 ]);
 type Frame = typeof Frame.Type;
 const decode = Schema.decodeUnknownSync(Schema.fromJsonString(Frame));
@@ -46,7 +47,10 @@ export class PeerChannel {
     { resolve: (body: unknown) => void; reject: (error: Error) => void }
   >();
   private readonly running = new Map<string, AbortController>();
-  private readonly receipts = new Map<string, { body: string; result: Promise<unknown> }>();
+  private readonly receipts = new Map<
+    string,
+    { body: string; result: Promise<unknown>; settled: boolean }
+  >();
   private readonly pipes = new Map<string, PipeState>();
   private closed = false;
   private lastReceived: number;
@@ -195,7 +199,11 @@ export class PeerChannel {
         destroy(error, done) {
           channel.pipes.delete(pipeId);
           if (!channel.closed && !(state.localEnded && state.remoteEnded))
-            channel.trySend({ type: "reset", id: pipeId });
+            channel.trySend({
+              type: "reset",
+              id: pipeId,
+              ...(error ? { message: error.message.slice(0, 512) } : {}),
+            });
           state.pending?.done(error ?? new Error("Peer pipe closed"));
           state.pending = undefined;
           done(error);
@@ -241,7 +249,7 @@ export class PeerChannel {
           this.options.pipe(frame.target, this.makePipe(frame.id));
           break;
         case "reset":
-          this.pipes.get(frame.id)?.stream.destroy(new Error("Peer reset pipe"));
+          this.pipes.get(frame.id)?.stream.destroy(new Error(frame.message ?? "Peer reset pipe"));
           break;
         case "end": {
           const pipe = this.pipes.get(frame.id);
@@ -300,6 +308,10 @@ export class PeerChannel {
       return;
     }
     if (!existing && this.receipts.size >= 4096) {
+      const oldest = [...this.receipts].find(([, receipt]) => receipt.settled);
+      if (oldest) this.receipts.delete(oldest[0]);
+    }
+    if (!existing && this.receipts.size >= 4096) {
       this.send({ type: "error", id: frame.id, message: "Peer receipt limit exceeded; reconnect" });
       return;
     }
@@ -308,7 +320,7 @@ export class PeerChannel {
     const result =
       existing?.result ??
       Promise.resolve().then(() => this.options.call(frame.body, controller.signal));
-    this.receipts.set(frame.key, { body, result });
+    this.receipts.set(frame.key, existing ?? { body, result, settled: false });
     void result
       .then(
         (value) => {
@@ -326,7 +338,11 @@ export class PeerChannel {
       .catch((error: unknown) => {
         this.close(error instanceof Error ? error : new Error("Peer response delivery failed"));
       })
-      .finally(() => this.running.delete(frame.id));
+      .finally(() => {
+        this.running.delete(frame.id);
+        const receipt = this.receipts.get(frame.key);
+        if (receipt) receipt.settled = true;
+      });
   }
 
   tick() {

@@ -32,6 +32,8 @@ export const callRouted = Effect.fn("MeshRouting.callRouted")(function* <
   },
 ) {
   const { links, peers } = services;
+  if (yield* peers.connectionAvailable?.(input.environmentId) ?? Effect.succeed(false))
+    return yield* peers.call(input);
   const direct = yield* links.get(input.environmentId).pipe(Effect.mapError(unavailable));
   if (Option.isSome(direct)) return yield* peers.call(input);
   for (const peer of yield* links.list.pipe(Effect.mapError(unavailable))) {

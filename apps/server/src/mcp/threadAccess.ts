@@ -11,6 +11,8 @@ import {
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Hex from "effect/encoding/Hex";
 
 import type { OrchestratorV2Error } from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
@@ -206,5 +208,12 @@ export const readThread = Effect.fn("mcp.readThread")(function* <
 
 export const newCommandId = Effect.fn("mcp.newCommandId")(function* () {
   const crypto = yield* Crypto.Crypto;
+  const invocation = yield* Effect.serviceOption(McpInvocationContext.McpInvocationContext);
+  const identity = Option.isSome(invocation) ? invocation.value.peerCommandIdentity : undefined;
+  if (identity) {
+    const bytes = new TextEncoder().encode(`${identity.namespace}\0${identity.next()}`);
+    const digest = yield* crypto.digest("SHA-256", bytes).pipe(Effect.orDie);
+    return CommandId.make(`mcp:${Hex.encode(digest)}`);
+  }
   return CommandId.make(`mcp:${yield* crypto.randomUUIDv4().pipe(Effect.orDie)}`);
 });

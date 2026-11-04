@@ -9,6 +9,7 @@ import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
 import * as PeerLinks from "./peer/PeerLinks.ts";
+import * as PeerSessions from "./peer/connection/PeerSessions.ts";
 
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -1364,6 +1365,7 @@ export const layerWsRpc = (
       let legacyLayout = (yield* serverSettings.getSettings).sidebarWorkspaces;
       const secretResolver = yield* SecretResolver.SecretResolver;
       const peerLinks = yield* PeerLinks.PeerLinks;
+      const peerSessions = yield* PeerSessions.PeerSessions;
       const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
@@ -2178,7 +2180,16 @@ export const layerWsRpc = (
             )
             .pipe(Effect.map(meshSnapshot)),
         [MESH_WS_METHODS.layoutSubscribe]: () => mesh.changes.pipe(Stream.map(meshSnapshot)),
-        [MESH_WS_METHODS.status]: () => meshReplicator.status,
+        [MESH_WS_METHODS.status]: () =>
+          Effect.all({
+            replication: meshReplicator.status,
+            connections: peerSessions.status,
+          }).pipe(
+            Effect.map(({ replication, connections }) => ({
+              ...replication,
+              connections,
+            })),
+          ),
         // Fork: agent inbox. The owner's side; agents use the MCP tools.
         [INBOX_WS_METHODS.subscribe]: (input) => inbox.subscribe(input),
         [INBOX_WS_METHODS.subscribeIssue]: ({ issueId }) => inbox.subscribeIssue(issueId),
@@ -3356,6 +3367,7 @@ export const layer = Layer.unwrap(
     const pullRequests = yield* PullRequestService.PullRequestService;
     const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
     const peerLinks = yield* PeerLinks.PeerLinks;
+    const peerSessions = yield* PeerSessions.PeerSessions;
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
@@ -3442,6 +3454,7 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(MeshReplicator, meshReplicator)),
               Layer.provide(Layer.succeed(ThreadHandoffService, threadHandoffs)),
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
+              Layer.provide(Layer.succeed(PeerSessions.PeerSessions, peerSessions)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(

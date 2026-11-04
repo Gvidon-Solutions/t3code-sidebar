@@ -39,7 +39,10 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
           return HttpServerResponse.jsonUnsafe({ error: "mesh_unavailable" }, { status: 503 });
         const result = yield* (
           call.value.params.name === "t3_mesh_routes"
-            ? relay.value.routes
+            ? decodeRouteOptions(call.value.params.arguments).pipe(Option.getOrUndefined)
+                ?.details === true
+              ? Effect.all({ routes: relay.value.routes, connections: relay.value.status })
+              : relay.value.routes
             : decodeRelay(call.value.params.arguments).pipe(
                 Effect.flatMap((input) =>
                   relay.value.relay(
@@ -126,3 +129,7 @@ const decodeMeshCall = Schema.decodeUnknownOption(
 const decodeRelay = Schema.decodeUnknownEffect(RelayInput);
 const decodeExchange = Schema.decodeUnknownEffect(ExchangeInput);
 const encodeMeshJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
+const decodeRouteOptions = Schema.decodeUnknownOption(
+  Schema.Struct({ details: Schema.optionalKey(Schema.Boolean) }),
+);
