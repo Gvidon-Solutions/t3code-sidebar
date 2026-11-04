@@ -125,8 +125,14 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
       : [],
   );
   const networkBySource = new Map<string, import("@t3tools/contracts").PeerConnectionStatus>();
-  for (const connection of [...(input.peerConnections ?? []), ...reports]) {
-    const key = JSON.stringify([connection.sourceEnvironmentId ?? "", connection.environmentId]);
+  const keyOf = (connection: import("@t3tools/contracts").PeerConnectionStatus) =>
+    JSON.stringify([connection.sourceEnvironmentId ?? "", connection.environmentId]);
+  const currentSources = new Set((input.peerConnections ?? []).map(keyOf));
+  for (const connection of [
+    ...(input.peerConnections ?? []),
+    ...reports.filter((report) => !currentSources.has(keyOf(report))),
+  ]) {
+    const key = keyOf(connection);
     const previous = networkBySource.get(key);
     if (!previous || (connection.observedAt ?? "") > (previous.observedAt ?? ""))
       networkBySource.set(key, connection);

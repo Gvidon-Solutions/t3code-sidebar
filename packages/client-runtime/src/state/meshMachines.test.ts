@@ -375,7 +375,7 @@ it("mints on the target before linking from the source, and supports manual code
   ).rejects.toThrow("pairing code");
 });
 
-it("uses current peer network state ahead of stale reported connections", () => {
+it("uses current peer network state ahead of persisted facts after a clock correction", () => {
   const offline = {
     sourceEnvironmentId: "atlas",
     observedAt: "2026-01-01T00:01:00.000Z",
@@ -402,7 +402,7 @@ it("uses current peer network state ahead of stale reported connections", () => 
             connections: [
               {
                 ...offline,
-                observedAt: "2026-01-01T00:00:00.000Z",
+                observedAt: "2026-01-01T00:02:00.000Z",
                 state: "direct",
                 lastError: null,
               },
