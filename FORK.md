@@ -108,17 +108,20 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
-### 2026-11-05 — S1 managed SSH foundation and replica inspection
+### 2026-11-05 — Managed SSH and replicas v2 (Stage S1)
 
-- **What.** Servers own a mesh SSH key and publish it with peer facts. Config reconciliation
-  maintains restricted peer authorization, pinned host keys and `t3-<name>` pipe routes;
-  route failures distinguish authentication, host keys, missing sshd and pipe failure.
-- **How.** SSH mode selects managed blocks, existing host checks or disabled routes.
-  Test servers override the SSH home with `T3_MESH_SSH_HOME`. Replica ignore defaults
-  anchor build outputs at the root, and replica inspection exposes conflicts and problems.
-- **Where.** `replicas/{MeshSsh,sshBlocks,replicaModel,ProjectReplicaService}.ts`,
-  `mesh/MeshConfigPlanners.ts`, peer facts and machine/config contracts.
-
+- **What.** Mesh-managed keys, pinned `t3-<name>` SSH hosts over persistent pipes,
+  per-peer route status and managed/existing/off modes replace the route matrix.
+  Replicas run star sessions on their own servers. Full replicas install and refresh
+  environments from lock files; lite replicas receive explicit `t3 run` guidance.
+- **How.** Marked SSH blocks preserve foreign content and support isolated test homes.
+  Ordered ignore changes recreate stable session names. Conflict policies preserve either
+  losing endpoint under Windows-safe names. Per-replica locks and bounded steps isolate
+  failures; explicit removal checks unsynced paths and keeps files. A verified archive
+  fixture removes live downloads from the Mutagen sync integration test.
+- **Where.** Server `replicas/`, SSH facts and mesh planners; machine/settings contracts,
+  client driver selection and removal of SSH route editors; standalone `t3ctl` managed-host
+  resolution and retry routing; `scripts/mesh-e2e/` isolated bed.
 
 ### 2026-11-04 — Mesh config core (Stage C1)
 

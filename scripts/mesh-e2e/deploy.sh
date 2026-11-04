@@ -24,105 +24,9 @@ vps_ssh 'set -e
   df -h /opt | tail -1
   echo "t3-ws container: $(docker ps --filter name=^t3-ws$ --format "{{.Status}}")"' || true
 
-if [ "${MESH_E2E_REUSE_NETWORK:-0}" != 1 ]; then
-# ---------------------------------------------------------------------------
-# 1. Container keys (private half only on the VPS).
-# ---------------------------------------------------------------------------
-log "preparing VPS data dir and container SSH keys"
-vps_ssh "set -e
-  install -d -m 700 '$VPS_DIR'
-  install -d -m 700 '$VPS_DATA'
-  install -d -m 700 '$VPS_DATA/.ssh'
-  [ -f '$CONTAINER_KEY_GOR' ] || ssh-keygen -q -t ed25519 -N '' -C t3-mesh-e2e-container-gor -f '$CONTAINER_KEY_GOR'
-  [ -f '$CONTAINER_KEY_GV' ] || ssh-keygen -q -t ed25519 -N '' -C t3-mesh-e2e-container-gvidon -f '$CONTAINER_KEY_GV'
-  chmod 600 '$CONTAINER_KEY_GOR' '$CONTAINER_KEY_GV'
-  chmod 644 '$CONTAINER_KEY_GOR.pub' '$CONTAINER_KEY_GV.pub'
-  chown 10001:10001 '$VPS_DATA'
-  chown -R 10001:10001 '$VPS_DATA/.ssh'"
-
-PUB_GOR="$(key_body "$(vps_ssh "cat '$CONTAINER_KEY_GOR.pub'")")"
-PUB_GV="$(key_body "$(vps_ssh "cat '$CONTAINER_KEY_GV.pub'")")"
-
-log "authorizing the container key on gor"
-gor_ssh 'bash -s' <<EOF
-set -euo pipefail
-file="\$HOME/.ssh/authorized_keys"
-mkdir -p "\$(dirname "\$file")"
-touch "\$file"; chmod 600 "\$file"
-cp -p "\$file" "\$file.bak-t3-mesh-e2e-\$(date -u +%Y%m%dT%H%M%SZ)" 2>/dev/null || true
-tmp=\$(mktemp)
-grep -vF ' t3-mesh-e2e-container-gor' "\$file" >"\$tmp" || true
-printf '%s %s %s\n' 'from="127.0.0.1,::1",restrict' '$PUB_GOR' 't3-mesh-e2e-container-gor' >>"\$tmp"
-cat "\$tmp" >"\$file"; rm -f "\$tmp"; chmod 600 "\$file"
-EOF
-
-log "authorizing the container key on gvidon"
-authorize_line "$HOME/.ssh/authorized_keys" 'from="127.0.0.1,::1",restrict' \
-  "$PUB_GV" t3-mesh-e2e-container-gvidon
-
-# ---------------------------------------------------------------------------
-# 2. Keys for the reverse tunnels and gvidon's loopback tunnel.
-# ---------------------------------------------------------------------------
-log "preparing reverse-tunnel keys"
-ensure_local_key "$REVERSE_KEY_GV" t3-mesh-e2e-reverse-gvidon
-gor_ssh 'bash -s' <<'EOF'
-set -euo pipefail
-key="$HOME/.ssh/id_t3_mesh_e2e_vps"
-[ -f "$key" ] || ssh-keygen -q -t ed25519 -N '' -C t3-mesh-e2e-reverse-gor -f "$key"
-chmod 600 "$key"; chmod 644 "$key.pub"
-EOF
-PUB_REV_GOR="$(key_body "$(gor_ssh 'cat ~/.ssh/id_t3_mesh_e2e_vps.pub')")"
-PUB_REV_GV="$(key_body "$(cat "$REVERSE_KEY_GV.pub")")"
-
-log "authorizing the reverse-tunnel keys on the VPS"
-vps_ssh 'bash -s' <<EOF
-set -euo pipefail
-file=/root/.ssh/authorized_keys
-mkdir -p /root/.ssh
-touch "\$file"; chmod 600 "\$file"
-cp -p "\$file" "\$file.bak-t3-mesh-e2e-\$(date -u +%Y%m%dT%H%M%SZ)" 2>/dev/null || true
-tmp=\$(mktemp)
-grep -vF ' t3-mesh-e2e-reverse-' "\$file" >"\$tmp" || true
-printf '%s %s %s\n' \
-  'from="$GVIDON_PUBLIC_IP",restrict,port-forwarding,permitlisten="$VPS_BIND:$VPS_SSH_GV",permitlisten="$VPS_BIND:$GV_LOCAL"' \
-  '$PUB_REV_GV' 't3-mesh-e2e-reverse-gvidon' >>"\$tmp"
-printf '%s %s %s\n' \
-  'from="$GOR_PUBLIC_IP",restrict,port-forwarding,permitlisten="$VPS_BIND:$VPS_SSH_GOR",permitlisten="$VPS_BIND:$GOR_LOCAL"' \
-  '$PUB_REV_GOR' 't3-mesh-e2e-reverse-gor' >>"\$tmp"
-cat "\$tmp" >"\$file"; rm -f "\$tmp"; chmod 600 "\$file"
-EOF
-
-log "preparing gvidon loopback tunnel key"
-ensure_local_key "$SELF_KEY" t3-mesh-e2e-self
-authorize_line "$HOME/.ssh/authorized_keys" 'from="127.0.0.1,::1",restrict,port-forwarding' \
-  "$(key_body "$(cat "$SELF_KEY.pub")")" t3-mesh-e2e-self
-
-# ---------------------------------------------------------------------------
-# 3. VPS: container SSH config, image, compose.
-# ---------------------------------------------------------------------------
-log "writing container SSH config"
-vps_ssh "cat > '$VPS_DATA/.ssh/config'" <<'EOF'
-Host gor
-  HostName 172.17.0.1
-  Port 22022
-  User user
-  IdentityFile /home/t3/.ssh/id_mesh_gor
-  IdentitiesOnly yes
-  StrictHostKeyChecking yes
-  UserKnownHostsFile /home/t3/.ssh/known_hosts
-
-Host gvidon
-  HostName 172.17.0.1
-  Port 22023
-  User user
-  IdentityFile /home/t3/.ssh/id_mesh_gvidon
-  IdentitiesOnly yes
-  StrictHostKeyChecking yes
-  UserKnownHostsFile /home/t3/.ssh/known_hosts
-EOF
-vps_ssh "chmod 600 '$VPS_DATA/.ssh/config'; chown 10001:10001 '$VPS_DATA/.ssh/config'; touch '$VPS_DATA/.ssh/known_hosts'; chmod 600 '$VPS_DATA/.ssh/known_hosts'; chown 10001:10001 '$VPS_DATA/.ssh/known_hosts'"
-
-fi
+# Replica SSH keys and routes are reconciled by T3. Infrastructure tunnels use
+# pre-existing administrator access; deploy never edits a user's authorized_keys.
+vps_ssh "install -d -m 700 '$VPS_DIR' '$VPS_DATA'"
 
 log "transferring image $IMAGE to the VPS"
 docker save "$IMAGE" | gzip -1 | vps_ssh 'gunzip | docker load'
@@ -286,10 +190,16 @@ cp -a "$RUNTIME_DIR" "$GV_RUNTIME_ROOT/$BUILD_VERSION"
 chmod +x "$GV_RUNTIME_ROOT/$BUILD_VERSION/t3"
 mkdir -p "$GV_BASE_DIR"
 install -d -m 700 "$GV_BASE_DIR/home" "$GV_BASE_DIR/home/.ssh"
-if [ -f "$HOME/.ssh/known_hosts" ]; then
-  cp "$HOME/.ssh/known_hosts" "$GV_BASE_DIR/home/.ssh/known_hosts"
-  chmod 600 "$GV_BASE_DIR/home/.ssh/known_hosts"
-fi
+node "$MESH_DIR/managed-sshd.mjs" "$GV_BASE_DIR/home" 22295
+cat >"$HOME/.config/systemd/user/t3-mesh-e2e-gv-sshd.service" <<EOF
+[Unit]
+Description=Isolated mesh bed SSH daemon
+[Service]
+ExecStart=/usr/sbin/sshd -D -e -f $GV_BASE_DIR/home/sshd/sshd_config
+Restart=on-failure
+EOF
+systemctl --user daemon-reload
+systemctl --user restart t3-mesh-e2e-gv-sshd.service
 
 mkdir -p "$HOME/.config/systemd/user"
 cat >"$HOME/.config/systemd/user/$GV_UNIT" <<EOF
@@ -302,6 +212,8 @@ Type=simple
 WorkingDirectory=%h
 UnsetEnvironment=T3CODE_HOME T3_BOOT_SERVICE_UNIT T3_SERVICE_LAUNCHER_CONTEXT
 Environment=HOME=$GV_BASE_DIR/home
+Environment=T3_MESH_SSH_HOME=$GV_BASE_DIR/home
+Environment=T3_MESH_SSHD_DIR=$GV_BASE_DIR/home/sshd
 ExecStart=%h/.t3-mesh-e2e-gv-runtime/$BUILD_VERSION/t3 serve --base-dir $GV_BASE_DIR --host 127.0.0.1 --port $GV_PORT --no-browser
 KillMode=mixed
 Restart=on-failure
