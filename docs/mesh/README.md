@@ -429,3 +429,23 @@ The shared-bed runners live in scripts/mesh-e2e: network-rounds.sh runs both acc
 network-bed.sh exercises blocked inbound peers, native SSH transfers/interruption, a three-minute
 tunnel cut and automatic server restart. The fault proxy rejects peer HTTP MCP separately from
 local agent/CLI MCP. See that directory's README for isolation and cleanup.
+
+### S1 managed SSH boundary
+
+`replicas/MeshSsh.ts` owns the server key under `<baseDir>/mesh/ssh` and the SSH
+planner registered by `MeshConfigPlanners.ts`. `peer/connection/PeerFacts.ts` publishes
+its public key in `machine/<env>.reported.meshPublicKey`. `replicas/sshBlocks.ts`
+contains block replacement and route failure classification. Managed authorization
+uses only linked peers with effective replica permission. Existing mode checks the
+machine's configured `ssh.host`; off mode clears the managed blocks.
+
+Set `T3_MESH_SSH_HOME` to an isolated home for test servers. Route checks pass its
+`.ssh/config` explicitly. This setting does not redirect the system sshd's
+AuthorizedKeysFile: a bed must configure an isolated sshd to read that file too.
+Do not authorize bed keys in the real user's home.
+
+`ProjectReplicaService.flush({ logicalKey, environmentId })` flushes an owned
+session; `false` means another server owns it. `conflicts(ref)` returns conflict
+roots; `problems(ref)` returns transport/transition errors and scan-problem paths.
+Both inspection methods reject missing sessions and requests sent to a non-driver.
+R1 must inspect after flush, since scan warnings do not prevent a session watching.

@@ -108,6 +108,18 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-05 — S1 managed SSH foundation and replica inspection
+
+- **What.** Servers own a mesh SSH key and publish it with peer facts. Config reconciliation
+  maintains restricted peer authorization, pinned host keys and `t3-<name>` pipe routes;
+  route failures distinguish authentication, host keys, missing sshd and pipe failure.
+- **How.** SSH mode selects managed blocks, existing host checks or disabled routes.
+  Test servers override the SSH home with `T3_MESH_SSH_HOME`. Replica ignore defaults
+  anchor build outputs at the root, and replica inspection exposes conflicts and problems.
+- **Where.** `replicas/{MeshSsh,sshBlocks,replicaModel,ProjectReplicaService}.ts`,
+  `mesh/MeshConfigPlanners.ts`, peer facts and machine/config contracts.
+
+
 ### 2026-11-04 — Mesh config core (Stage C1)
 
 - **What.** The mesh is now configured by one desired-state document. Machines, link permissions, replica rules, ignores and conflict policy come from it; a one-time migration writes the first revision from existing settings. Authority is gone from layout, clients, CLI and MCP. Link permissions are enforced on the receiving server, and read-only links cannot read files outside project folders.

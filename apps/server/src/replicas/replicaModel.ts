@@ -1,3 +1,4 @@
+import { projectPolicy } from "@t3tools/shared/meshConfig";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Session names require a synchronous deterministic hash, without a runtime.
 import * as NodeCrypto from "node:crypto";
 import type {
@@ -131,9 +132,14 @@ export function remoteRepresentation(
   return config.projectMounts[key]?.find((rep) => rep.environmentId === target);
 }
 
-const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", ".t3-conflicts"];
+const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", "/.t3-conflicts"];
 export function replicaIgnorePatterns(configured: readonly string[]): string[] {
+  const defaults = projectPolicy({ schema: 1, machines: {} }, "").ignore.filter(
+    (pattern) => !protectedIgnores.includes(pattern),
+  );
+  const alreadyPrefixed = defaults.every((pattern, index) => configured[index] === pattern);
   return [
+    ...(alreadyPrefixed ? [] : defaults),
     ...configured.filter((pattern) => !protectedIgnores.includes(pattern)),
     ...protectedIgnores,
   ];

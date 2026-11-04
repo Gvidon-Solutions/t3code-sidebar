@@ -143,9 +143,13 @@ it("keeps user ignore order and duplicate overrides while protecting VCS and con
     "!.git",
     "!.t3-conflicts",
   ]);
-  expect(patterns.slice(0, 3)).toEqual(["cache", "!cache", "cache"]);
+  expect(patterns.filter((pattern) => pattern.includes("cache"))).toEqual([
+    "cache",
+    "!cache",
+    "cache",
+  ]);
   expect(patterns.indexOf(".git")).toBeGreaterThan(patterns.indexOf("!.git"));
-  expect(patterns.at(-1)).toBe(".t3-conflicts");
+  expect(patterns.at(-1)).toBe("/.t3-conflicts");
   expect(replicaIgnorePatterns(patterns)).toEqual(patterns);
 });
 

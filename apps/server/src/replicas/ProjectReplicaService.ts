@@ -69,6 +69,8 @@ export class ProjectReplicaService extends Context.Service<
       readonly logicalKey: string;
       readonly environmentId: string;
     }) => Effect.Effect<boolean, ReplicaError>;
+    readonly conflicts: (input: ReplicaRefInput) => Effect.Effect<readonly string[], ReplicaError>;
+    readonly problems: (input: ReplicaRefInput) => Effect.Effect<readonly string[], ReplicaError>;
     readonly waitForProject: (
       logicalKey: string,
       environmentId: string,
@@ -494,7 +496,7 @@ const make = Effect.gen(function* () {
           });
         }
         const loser = losing[0]!.loser;
-        if (ignoresChanged || !session.ignore?.paths?.includes(".t3-conflicts")) {
+        if (ignoresChanged || !session.ignore?.paths?.includes("/.t3-conflicts")) {
           yield* runner.terminate(identity.name);
           yield* runner.create(createInput);
         } else yield* runner.reset(identity.name);
@@ -1289,7 +1291,45 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const inspectSession = Effect.fn("ProjectReplicaService.inspectSession")(function* (
+    input: ReplicaRefInput,
+  ) {
+    const config = (yield* mesh.read).config;
+    const rep = config.projectMounts[input.logicalKey]?.find(
+      (entry) => entry.environmentId === input.environmentId,
+    );
+    if (!rep)
+      return yield* new ReplicaError({ reason: "not_found", message: "Replica not found." });
+    if (replicaDriver(config, rep) !== mesh.environmentId)
+      return yield* new ReplicaError({
+        reason: "unreachable",
+        message: "Inspect on the server driving this replica.",
+      });
+    const name = sessionIdentity(rep.syncKey ?? input.logicalKey, input.environmentId).name;
+    const session = (yield* runner.list()).find((session) => session.name === name);
+    if (!session)
+      return yield* new ReplicaError({
+        reason: "not_found",
+        message: "Replica session not found.",
+      });
+    return session;
+  });
   return ProjectReplicaService.of({
+    conflicts: Effect.fn("ProjectReplicaService.conflicts")((input) =>
+      inspectSession(input).pipe(
+        Effect.map((session) => session.conflicts?.map((conflict) => conflict.root) ?? []),
+      ),
+    ),
+    problems: Effect.fn("ProjectReplicaService.problems")((input) =>
+      inspectSession(input).pipe(
+        Effect.map((session) => [
+          ...sessionStatus(session).problems,
+          ...[session.alpha, session.beta].flatMap((endpoint) =>
+            (endpoint.scanProblems ?? []).map((problem) => `${problem.path}: ${problem.error}`),
+          ),
+        ]),
+      ),
+    ),
     unmanaged: runner.foreignList.pipe(
       Effect.map((sessions) =>
         sessions

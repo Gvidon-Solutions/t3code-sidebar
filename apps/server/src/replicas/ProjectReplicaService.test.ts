@@ -41,6 +41,22 @@ it.effect(
         yield* service.reconcile;
         expect((yield* mesh.read).document).toEqual(clockBefore);
         h.setSession({ conflicts: [{ root: "hello" }] });
+        expect(yield* service.conflicts({ logicalKey: "repo", environmentId: "replica" })).toEqual([
+          "hello",
+        ]);
+        expect(yield* service.problems({ logicalKey: "repo", environmentId: "replica" })).toEqual(
+          [],
+        );
+        h.setSession({
+          conflicts: [{ root: "hello" }],
+          alpha: {
+            path: "/source",
+            scanProblems: [{ path: "unreadable", error: "permission denied" }],
+          },
+        });
+        expect(yield* service.problems({ logicalKey: "repo", environmentId: "replica" })).toEqual([
+          "unreadable: permission denied",
+        ]);
         yield* service.reconcile;
         expect((yield* service.status)[0]).toMatchObject({
           state: "mounting",
@@ -445,7 +461,7 @@ it.effect("preserves the losing version under the project conflict policy on eit
         const service = yield* ReplicaService.ProjectReplicaService;
         const mesh = yield* MeshLayoutService;
         yield* service.reconcile;
-        expect(h.created[0]?.ignores).toContain(".t3-conflicts");
+        expect(h.created[0]?.ignores).toContain("/.t3-conflicts");
         h.setSession({ status: "watching", conflicts: [{ root: "file" }] });
         yield* service.reconcile;
         expect(h.preserved).toHaveLength(1);
