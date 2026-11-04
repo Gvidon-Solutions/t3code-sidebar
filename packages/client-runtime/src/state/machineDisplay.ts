@@ -58,7 +58,7 @@ export function machineDisplayOf(
   const label =
     machine?.label?.trim() ||
     (!/^[a-f\d]{8}(?:-[a-f\d-]+)?$/i.test(fallbackLabel.trim()) ? fallbackLabel.trim() : "") ||
-    "Unknown machine";
+    "Unidentified machine";
   return {
     label,
     tag: normalizeMachineTag(machine?.tag ?? "") ?? defaultMachineTag(label, environmentId),

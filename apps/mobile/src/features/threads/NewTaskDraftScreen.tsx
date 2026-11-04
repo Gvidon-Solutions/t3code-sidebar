@@ -1,3 +1,5 @@
+import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { replicaExecutionLabel } from "@t3tools/client-runtime/state/mesh-layout";
 import { useSyncExternalStore } from "react";
 import { CommandId, MessageId } from "@t3tools/contracts";
 import { pendingMeshDrafts, serializePendingAttachments } from "../../state/pendingMeshDrafts";
@@ -176,6 +178,7 @@ export function NewTaskDraftScreen(props: {
   const chosenEnvironmentId =
     pendingSend?.environmentId ?? flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId;
 
+  const mesh = useMeshLayout();
   const machineConfigs = useServerConfigs();
   const navigation = useNavigation();
   const isFocused = useIsFocused();
@@ -877,23 +880,25 @@ export function NewTaskDraftScreen(props: {
     : null;
   const environmentControl = (
     <View>
-      {modelUnavailable && (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            if (modelMachine) void flow.switchEnvironment(modelMachine.environmentId);
-            else if (modelHere) flow.setSelectedModelKey(modelHere.key);
-          }}
-        >
-          <Text textRole="footnote">
-            {modelMachine
-              ? `${selectedEnvironmentServerConfig?.providers.find((provider) => provider.instanceId === flow.selectedModel?.instanceId)?.displayName ?? flow.selectedModel?.instanceId} works on ${modelMachine.environmentLabel}. Switch machine`
-              : modelHere
-                ? `Use ${modelHere.label} here`
-                : modelUnavailable}
-          </Text>
-        </Pressable>
-      )}
+      {modelUnavailable &&
+        !flow.mountingStatus &&
+        !(pendingSend && pendingSend.state !== "sent") && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              if (modelMachine) void flow.switchEnvironment(modelMachine.environmentId);
+              else if (modelHere) flow.setSelectedModelKey(modelHere.key);
+            }}
+          >
+            <Text textRole="footnote">
+              {modelMachine
+                ? `${modelUnavailable} · Switch to ${modelMachine.environmentLabel} where it works`
+                : modelHere
+                  ? `${modelUnavailable} · Use ${modelHere.label} here`
+                  : modelUnavailable}
+            </Text>
+          </Pressable>
+        )}
       {pendingSend && pendingSend.state !== "sent" && (
         <Text textRole="footnote">
           {pendingSend.error ?? "Message queued. You can leave this screen."}
@@ -911,7 +916,7 @@ export function NewTaskDraftScreen(props: {
           <Text>Retry send</Text>
         </Pressable>
       )}
-      {flow.mountingStatus && (
+      {flow.mountingStatus && !(pendingSend && pendingSend.state !== "sent") && (
         <Text accessibilityRole="text" textRole="footnote">
           {flow.mountingStatus}
         </Text>
@@ -1025,7 +1030,14 @@ export function NewTaskDraftScreen(props: {
       </NativeScrollEdgeEffectsContext>
     );
 
-  const workspaceControls = (
+  const executionLabel = replicaExecutionLabel(
+    mesh.config,
+    chosenEnvironmentId ?? selectedProject.environmentId,
+    selectedProject.id,
+  );
+  const workspaceControls = executionLabel ? (
+    <Text textRole="footnote">{executionLabel}</Text>
+  ) : (
     <View className="flex-row items-center gap-1 px-2">
       <ComposerInlineControl
         accessibilityHint={`Switches to ${flow.workspaceMode === "local" ? "a new worktree" : "the current checkout"}`}

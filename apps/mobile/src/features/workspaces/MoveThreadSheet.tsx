@@ -35,9 +35,11 @@ export function MoveThreadSheet() {
         onClose={() => setTarget(null)}
       >
         <AppText className="p-4 text-muted-foreground">
+          Stays on{" "}
           {config?.machines[target.environmentId]?.title ??
             config?.machines[target.environmentId]?.label ??
-            "This machine"}
+            "this machine"}
+          ; only its project changes.
         </AppText>
         <Pressable
           accessibilityRole="button"

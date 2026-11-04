@@ -470,6 +470,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       ) : null}
       {item.machineStrip ? (
         <ProjectMachineStrip
+          compact={folderTitle.length > 20}
           model={item.machineStrip}
           onOpen={() => props.onOpenMachines(item.projectKey)}
         />

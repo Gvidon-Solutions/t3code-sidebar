@@ -181,6 +181,10 @@ function PickerSurface(props: { readonly children: ReactNode }) {
 
 export function NewTaskEnvironmentPickerRouteScreen() {
   const flow = useNewTaskFlow();
+  const [showUnavailable, setShowUnavailable] = useState(false);
+  const available = flow.environments.filter((environment) => !environment.disabled);
+  const unavailable = flow.environments.filter((environment) => environment.disabled);
+  const visible = showUnavailable ? [...available, ...unavailable] : available;
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   return (
@@ -205,11 +209,11 @@ export function NewTaskEnvironmentPickerRouteScreen() {
           showsVerticalScrollIndicator={false}
         >
           <PickerSurface>
-            {flow.environments.map((environment, index) => (
+            {visible.map((environment, index) => (
               <EnvironmentPickerRow
                 key={String(environment.environmentId)}
                 environmentId={environment.environmentId}
-                isLast={index === flow.environments.length - 1}
+                isLast={index === visible.length - 1}
                 disabled={environment.disabled === true}
                 onPress={() => {
                   void Haptics.selectionAsync();
@@ -225,6 +229,16 @@ export function NewTaskEnvironmentPickerRouteScreen() {
               />
             ))}
           </PickerSurface>
+          {unavailable.length ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showUnavailable }}
+              onPress={() => setShowUnavailable(!showUnavailable)}
+              className="min-h-[45px] justify-center p-4"
+            >
+              <Text>Unavailable ({unavailable.length})</Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
       </ScreenContent>
     </View>

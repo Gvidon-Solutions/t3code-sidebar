@@ -1,3 +1,5 @@
+import { useMeshLayout } from "../hooks/useMeshLayout";
+import { replicaExecutionLabel } from "@t3tools/client-runtime/state/mesh-layout";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { readLocalApi } from "../localApi";
@@ -604,7 +606,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   projectId,
   worktreePath,
   isServerThread,
-  showGitControls,
+  showGitControls: requestedGitControls,
   draftId,
   onEnvModeChange,
   envMode,
@@ -621,6 +623,13 @@ export const BranchToolbar = memo(function BranchToolbar({
   onEnvironmentChange,
   trailing,
 }: BranchToolbarProps) {
+  const mesh = useMeshLayout();
+  const executionLabel = replicaExecutionLabel(
+    mesh.config,
+    draftMachineId ?? environmentId,
+    projectId,
+  );
+  const showGitControls = requestedGitControls && executionLabel === null;
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = scopeThreadRef(environmentId, threadId);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
@@ -696,7 +705,10 @@ export const BranchToolbar = memo(function BranchToolbar({
   if (layout === "panel") {
     return (
       <div className="flex w-full flex-col" data-thread-panel-run-context>
-        {panelSection !== "branch" ? (
+        {executionLabel ? (
+          <span className="text-xs text-muted-foreground">{executionLabel}</span>
+        ) : null}
+        {panelSection !== "branch" && !executionLabel ? (
           <RunContextSelector
             displayMode="panel"
             workspaceRoot={activeProject.workspaceRoot}
@@ -720,7 +732,7 @@ export const BranchToolbar = memo(function BranchToolbar({
             onAddToMachine={onAddToMachine}
           />
         ) : null}
-        {panelSection !== "workspace" ? (
+        {panelSection !== "workspace" && showGitControls ? (
           <BranchToolbarBranchSelector
             displayMode="panel"
             className="w-full"
@@ -832,6 +844,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
         />
       ) : null}
+      {executionLabel ? <span>{executionLabel}</span> : null}
       {trailing}
     </ComposerSurface.ContextStrip>
   );

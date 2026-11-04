@@ -85,3 +85,47 @@ it("opens Machines without toggling its folder, including after a live status ch
     screen.getByRole("button", { name: primaries.description }).element().textContent,
   ).not.toContain("⇄");
 });
+
+it("collapses tags for a long project title and retains the complete machine description", async () => {
+  const title = "Research workspace with a deliberately long title";
+  const model = projectMachineStrip(
+    {
+      ...empty,
+      machines: {
+        studio: { label: "Studio" },
+        cloudbox: { label: "Cloudbox" },
+        laptop: { label: "Laptop" },
+      },
+    },
+    {
+      projectKey: "demo",
+      environmentIds: ["studio", "cloudbox", "laptop"],
+      knownEnvironmentIds: ["studio", "cloudbox", "laptop"],
+    },
+    [],
+  );
+  await using screen = await render(
+    <div style={{ display: "flex", width: 280, gap: 8 }}>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {title}
+      </span>
+      <ProjectMachineStrip model={model} compact onOpen={() => undefined} />
+    </div>,
+  );
+  expect(screen.getByText(title).element().getBoundingClientRect().width).toBeGreaterThan(140);
+  await expect.element(screen.getByText("+2")).toBeVisible();
+  expect(
+    screen
+      .getByRole("button", { name: model.description })
+      .element()
+      .querySelectorAll('[role="img"]'),
+  ).toHaveLength(1);
+});

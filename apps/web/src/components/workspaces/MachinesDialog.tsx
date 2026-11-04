@@ -152,7 +152,7 @@ export function MachinesDialog(props: {
                           Open copies
                         </Button>
                       ) : null}
-                      {rep.role === "primary" ? (
+                      {rep.role === "primary" && status.text !== "Synced" ? (
                         <AdoptReplicaAction
                           environmentId={rep.environmentId}
                           logicalKey={props.logicalKey}
@@ -230,7 +230,7 @@ export function MachinesDialog(props: {
             <AlertDialogDescription>
               {removingRole === "replica"
                 ? "Synchronization stops and the replica is removed from this mesh folder."
-                : "The primary is removed from this mesh folder."}{" "}
+                : "Removing the primary leaves replicas without their git and build machine. Choose another primary before continuing."}{" "}
               Files already on the machine stay where they are.
             </AlertDialogDescription>
           </AlertDialogHeader>

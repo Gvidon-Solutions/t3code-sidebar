@@ -98,6 +98,12 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 - **Context injection.** Every turn gets a short machine/project/representation note (budget in
   `apps/server/src/provider/agentContextBudget.json`; update it to the measured size when you add
   tools or text, and justify growth).
+- **Config editing.** Web `MeshConfigDialog` and mobile `MeshConfigSheet` share
+  `client-runtime/state/meshConfigEditor.ts`: load a base revision, validate YAML, request a
+  server plan, and apply against that revision. Stale applies retain the draft and show the
+  server diff; reload rebases local changes over the latest document and requires a new plan.
+  Restoring a layout history revision follows the same plan/apply path. Settings displays
+  machine and per-action apply state; config owns names and SSH settings.
 - **UI.** Web `apps/web/src/components/workspaces/` (MachineTag, ProjectMachineStrip
   `A ⇄ B C`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
   ForkThreadDialog, MeshFooterStatus, FileMachineTag); mobile

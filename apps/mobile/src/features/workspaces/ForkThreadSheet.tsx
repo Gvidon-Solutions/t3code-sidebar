@@ -1,3 +1,4 @@
+import { rootNavigationRef } from "../../lib/rootNavigation";
 import { useAtomValue } from "@effect/atom-react";
 import { replicaStatusCopy } from "@t3tools/client-runtime/state/mesh-layout";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
@@ -27,6 +28,7 @@ import { forkingThread } from "./forkThreadState";
 
 export function ForkThreadSheet() {
   const thread = useAtomValue(forkingThread);
+  const [showDetails, setShowDetails] = useState(false);
   const { config } = useSidebarWorkspaces();
   const serverConfigs = useServerConfigs();
   const fork = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
@@ -173,13 +175,43 @@ export function ForkThreadSheet() {
           </AppText>
         ) : null}
         {online && models.length === 0 ? (
-          <AppText className="text-destructive">
-            {[`No models are available on ${targetTitle}.`, ...unavailableDetails].join(" ")}
-          </AppText>
+          <View className="gap-2">
+            <AppText className="text-danger-foreground">
+              No models are available on {targetTitle}.
+            </AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showDetails }}
+              onPress={() => setShowDetails(!showDetails)}
+            >
+              <AppText>Details</AppText>
+            </Pressable>
+            {showDetails ? (
+              <AppText>
+                {unavailableDetails.join("\n") ||
+                  "Enable and authenticate a provider on this machine."}
+              </AppText>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                close();
+                rootNavigationRef.navigate("Settings");
+              }}
+            >
+              <AppText>Open provider settings</AppText>
+            </Pressable>
+          </View>
         ) : online && selection ? (
-          <Pressable accessibilityRole="button" onPress={() => setPicker(true)}>
-            <AppText>
-              Model: {models.find((m) => m.selection.model === selection?.model)?.label ?? "None"}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Fork model"
+            onPress={() => setPicker(true)}
+            className="min-h-[45px] flex-row items-center justify-between gap-3"
+          >
+            <AppText>Model</AppText>
+            <AppText numberOfLines={1} className="min-w-0 shrink">
+              {models.find((m) => m.selection.model === selection?.model)?.label ?? "None"}
             </AppText>
           </Pressable>
         ) : null}
@@ -199,7 +231,9 @@ export function ForkThreadSheet() {
         />
         {busy ? (
           <AppText role="status">
-            {progress ?? "Preparing the project and copying the conversation…"}
+            {progress === "Synced"
+              ? `Project synced on ${targetTitle}`
+              : (progress ?? "Preparing the project and copying the conversation…")}
           </AppText>
         ) : null}
         {error ? <AppText className="text-destructive">{error}</AppText> : null}

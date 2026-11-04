@@ -57,7 +57,7 @@ describe("machineDisplayOf", () => {
   });
 
   it("keeps unnamed machine ids out of display labels", () => {
-    expect(machineDisplayOf(config, "e2e6225c", "  ").label).toBe("Unknown machine");
+    expect(machineDisplayOf(config, "e2e6225c", "  ").label).toBe("Unidentified machine");
     expect(machineDisplayOf(config, "e2e6225c", "").tag).toBe("UN");
   });
 

@@ -374,8 +374,12 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
     input.state !== "error" &&
     (input.message.startsWith("Resolved ") || /^\d+ files? skipped/u.test(input.message))
   )
-    return input.message;
-  const unreachable = `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Add a route in Settings › Mesh`;
+    return input.message.replace(
+      /^Resolved (\d+) conflicts? automatically/u,
+      (_, count: string) =>
+        `${count} ${count === "1" ? "conflict" : "conflicts"} resolved automatically`,
+    );
+  const unreachable = `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Check the SSH route in Mesh config`;
   switch (input.state) {
     case "pending":
       return `Preparing ${input.targetLabel}…`;
@@ -418,4 +422,24 @@ export function createReplicaStatusAtoms<R, E>(
       tag: MESH_WS_METHODS.replicasRetry,
     }),
   };
+}
+
+export function replicaExecutionLabel(
+  config: SidebarWorkspacesConfig | null,
+  environmentId: string,
+  projectId: string,
+): string | null {
+  if (!config) return null;
+  for (const mounts of Object.values(config.projectMounts)) {
+    const rep = mounts.find(
+      (mount) => mount.environmentId === environmentId && mount.projectId === projectId,
+    );
+    if (rep?.role !== "replica") continue;
+    const primaryId = rep.source ?? mounts.find((mount) => mount.role === "primary")?.environmentId;
+    const primary = primaryId
+      ? machineDisplayOf(config, primaryId, "primary machine").label
+      : "primary machine";
+    return `git on ${primary} · t3 run`;
+  }
+  return null;
 }

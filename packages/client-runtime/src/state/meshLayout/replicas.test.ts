@@ -17,6 +17,7 @@ import {
   replicaProjectId,
   replicaStatusCopy,
   representationRow,
+  replicaExecutionLabel,
 } from "./replicas.ts";
 
 const primary = (environmentId: string, path = "/work/demo"): SidebarProjectMount => ({
@@ -329,7 +330,7 @@ describe("replicaStatusCopy", () => {
         state: "error",
         message: "Boreal cannot reach atlas and back. Add an ssh route.",
       }),
-    ).toBe("Can't reach atlas from Boreal. Add a route in Settings › Mesh");
+    ).toBe("Can't reach atlas from Boreal. Check the SSH route in Mesh config");
     expect(replicaStatusCopy({ ...base, state: "error", message: "Disk is full" })).toBe(
       "Disk is full",
     );
@@ -347,7 +348,7 @@ it("shows automatic resolutions as a calm note during mounting and after sync", 
         targetLabel: "Replica",
         sourceLabel: "Primary",
       }),
-    ).toBe("Resolved 2 conflicts automatically · copies in .t3-conflicts");
+    ).toBe("2 conflicts resolved automatically · copies in .t3-conflicts");
   }
 });
 
@@ -387,4 +388,34 @@ it("keeps skipped paths calm through mounting, persisted status and live recover
   expect(
     representationRow(config, [status("beta", "watching")], "demo", rep).status.skipped,
   ).toBeUndefined();
+});
+
+it("identifies replica git ownership without offering local git controls", () => {
+  const config = {
+    ...empty,
+    machines: { studio: { label: "Studio" } },
+    projectMounts: {
+      demo: [
+        {
+          environmentId: "studio",
+          projectId: "source",
+          role: "primary" as const,
+          transport: "git" as const,
+          path: "/project",
+          createdAt: "",
+        },
+        {
+          environmentId: "cloudbox",
+          projectId: "copy",
+          source: "studio",
+          role: "replica" as const,
+          transport: "mutagen" as const,
+          path: "/copy",
+          createdAt: "",
+        },
+      ],
+    },
+  };
+  expect(replicaExecutionLabel(config, "cloudbox", "copy")).toBe("git on Studio · t3 run");
+  expect(replicaExecutionLabel(config, "studio", "source")).toBeNull();
 });
