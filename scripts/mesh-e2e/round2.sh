@@ -124,7 +124,8 @@ else
  probe c-register jq -e --arg id "$REV" '.. | objects | select(.id?==$id)' "$WORK/vps-projects.json"
 fi
 probe c-place tool vps t3_project_place "$(jq -nc --arg p "$REV" --arg m "$GV_ENV" '{project:$p,machine:$m,wait:90}')"
-probe c-watching wait_replica gv "$VPS_ENV:/home/t3/round2-primary" "$GV_ENV" watching
+REV_KEY=$(node --input-type=module -e 'import {createHash} from "node:crypto"; console.log("lp-"+createHash("sha256").update(process.argv[1]).digest("hex"))' "$VPS_ENV:/home/t3/round2-primary")
+probe c-watching wait_replica gv "$REV_KEY" "$GV_ENV" watching
 CPATH=$(jq -r '.representation.path' "$WORK/c-place.out")
 reverse_files() { test -f "$CPATH/README.md" && test ! -e "$CPATH/.git" && test ! -e "$CPATH/node_modules" && grep -F 'reverse primary' "$CPATH/README.md"; }
 probe c-files reverse_files

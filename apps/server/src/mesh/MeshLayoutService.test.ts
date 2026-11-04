@@ -160,6 +160,16 @@ it.effect("rejects future clocks, persists counts and quarantines corrupt rows o
     expect((yield* sql<{ count: number }>`SELECT count FROM mesh_clock_rejections`)[0]!.count).toBe(
       2,
     );
+    expect(
+      (yield* sql<{ last_logged: number }>`SELECT last_logged FROM mesh_clock_rejections`)[0]!
+        .last_logged,
+    ).toBe(0);
+    yield* TestClock.adjust("1 minute");
+    yield* mesh.apply(bad, "cloudbox").pipe(Effect.flip);
+    expect(
+      (yield* sql<{ last_logged: number }>`SELECT last_logged FROM mesh_clock_rejections`)[0]!
+        .last_logged,
+    ).toBe(60000);
     expect((yield* mesh.read).document["machine/cloudbox"]).toBeUndefined();
     yield* sql`INSERT INTO mesh_layout_entries(key,value,hlc,seq) VALUES ('ws/corrupt','{','broken',999)`;
     yield* sql`INSERT INTO mesh_layout_entries(key,value,hlc,seq) VALUES ('fold/main/project','123','0000000000000.00000.studio',1000)`;
