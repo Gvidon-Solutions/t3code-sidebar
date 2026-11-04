@@ -2,7 +2,11 @@ import { meshAuthorityOf } from "@t3tools/shared/meshLayout";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { minuteTick } from "@t3tools/client-runtime/clock";
 import { useNavigation } from "@react-navigation/native";
-import { meshMachineLastSync, setMachineReach } from "@t3tools/client-runtime/state/mesh-machines";
+import {
+  meshMachineLastSync,
+  meshConnectionText,
+  setMachineReach,
+} from "@t3tools/client-runtime/state/mesh-machines";
 import { Switch } from "react-native";
 import { useMeshOverview } from "../workspaces/useMeshOverview";
 import { useEnvironments } from "../../state/environments";
@@ -278,6 +282,7 @@ export function SettingsMachinesRouteScreen() {
                     Linked with: {machine.linkedWith.map((e) => e.tag).join(", ") || "None"}
                   </Text>
                   {machine.version === null ? null : <Text>Version: {machine.version}</Text>}
+                  {machine.network ? <Text>{meshConnectionText(machine, machines)}</Text> : null}
                   <Text>{meshMachineLastSync(machine, now)}</Text>
                   {machine.lastError ? <Text>{machine.lastError}</Text> : null}
                   <Text>

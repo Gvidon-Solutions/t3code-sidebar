@@ -140,6 +140,12 @@ function call(name, args) {
       return { clients: 1 };
     case "meshLayout.get":
       return snapshot;
+    case "meshLayout.status":
+      return { peers: [], connections: [
+        { environmentId: peer, state: "direct", via: null, offlineSince: null, lastError: null },
+        { environmentId: "cloudbox", state: "relayed", via: peer, offlineSince: null, lastError: null },
+        { environmentId: "laptop", state: "offline", via: null, offlineSince: "2026-11-04T00:00:00.000Z", lastError: "Peer heartbeat timed out" },
+      ] };
     case "meshLayout.apply":
       if (
         Object.values(args.entries).some((entry) => entry.h.startsWith("0000000000000.")) &&
