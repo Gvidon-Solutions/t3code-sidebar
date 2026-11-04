@@ -254,7 +254,10 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         ? {
             ...limited,
             requestNamespace: `peer:${encodeJsonText([from, key])}`,
-            peerCommandIdentity: { namespace: `peer:${from}:${key}`, next: () => sequence++ },
+            peerCommandIdentity: {
+              namespace: `peer:${encodeJsonText([from, key])}`,
+              next: () => sequence++,
+            },
           }
         : limited;
     const dispatch = Effect.gen(function* () {
@@ -323,12 +326,15 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
           [
             "t3_project_create",
             "t3_thread_launch",
+            "t3_thread_send",
             "t3_thread_fork",
             "t3_thread_move",
             "delegate_task",
+            "create_threads",
             "schedule_task",
             "t3_project_place",
             "t3_handoff_import",
+            "t3_thread_receive_handoff",
           ].includes(body.params.name),
       )
       .pipe(

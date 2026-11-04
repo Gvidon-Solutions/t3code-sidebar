@@ -10,9 +10,16 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Stream from "effect/Stream";
 import { Tool, Toolkit } from "effect/ai";
-import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/http";
+import {
+  HttpClient,
+  HttpRouter,
+  HttpServer,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/http";
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -52,6 +59,11 @@ const Answer = Schema.Struct({ count: Schema.Number });
 const toolkit = Toolkit.make(
   Tool.make("t3_create_fixture", { description: "Creates one fixture.", success: Answer }),
   Tool.make("t3_wait_fixture", { description: "Waits until cancelled.", success: Answer }),
+  Tool.make("schedule_task", {
+    description: "Schedules an idempotent fixture action.",
+    parameters: Schema.Struct({ clientRequestId: Schema.optional(Schema.String) }),
+    success: Answer,
+  }),
 );
 
 const serve = Effect.fn("test.servePeerNetwork")(function* (
@@ -61,6 +73,8 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
   let count = 0;
   let blocked = false;
   let externalMcp = 0;
+  let scheduledCount = 0;
+  const schedules = new Map<string, number>();
   const waitingStarted = yield* Deferred.make<void>();
   const waitingCancelled = yield* Deferred.make<void>();
   const descriptor = descriptorOf(options.id ?? name, name);
@@ -112,6 +126,18 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
             Effect.andThen(Effect.never),
             Effect.onInterrupt(() => Deferred.succeed(waitingCancelled, undefined)),
           ),
+        ),
+        schedule_task: McpAccess.reads((input) =>
+          Effect.sync(() => {
+            const previous =
+              input.clientRequestId === undefined
+                ? undefined
+                : schedules.get(input.clientRequestId);
+            if (previous !== undefined) return { count: previous };
+            const value = ++scheduledCount;
+            if (input.clientRequestId !== undefined) schedules.set(input.clientRequestId, value);
+            return { count: value };
+          }),
         ),
       }),
     ).pipe(
@@ -176,10 +202,15 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
     links: Context.get(context, Links.PeerLinks),
     sessions: Context.get(context, Sessions.PeerSessions),
     client: Context.get(context, Client.PeerMcpClient),
+    http: Context.get(context, HttpClient.HttpClient),
     auth: Context.get(common, Auth.EnvironmentAuth),
     count: () => count,
     waitingStarted,
     waitingCancelled,
+    loseReceiptResults: Context.get(
+      common,
+      SqlClient.SqlClient,
+    )`UPDATE peer_call_receipts SET result=NULL`,
   };
 });
 
@@ -235,18 +266,16 @@ it.live(
         client: { deviceType: "bot" },
       });
       expect(
-        (yield* Effect.promise(() =>
-          fetch(`${cloudbox.url}/peer`, { headers: { authorization: `Bearer ${ordinary.token}` } }),
-        )).status,
+        (yield* cloudbox.http.get("/peer", {
+          headers: { authorization: `Bearer ${ordinary.token}` },
+        })).status,
       ).toBe(403);
-      expect((yield* Effect.promise(() => fetch(`${cloudbox.url}/peer`))).status).toBe(401);
-      const rebound = yield* Effect.promise(() =>
-        fetch(`${cloudbox.url}/peer`, {
-          headers: { authorization: `Bearer ${legacy.token}`, "t3-peer-environment-id": "laptop" },
-        }),
-      );
+      expect((yield* cloudbox.http.get("/peer")).status).toBe(401);
+      const rebound = yield* cloudbox.http.get("/peer", {
+        headers: { authorization: `Bearer ${legacy.token}`, "t3-peer-environment-id": "laptop" },
+      });
       expect(rebound.status).toBe(403);
-      expect(yield* Effect.promise(() => rebound.text())).toContain("bound to another environment");
+      expect(yield* rebound.text).toContain("bound to another environment");
       expect(
         yield* cloudbox.client.call({
           ...request,
@@ -291,6 +320,41 @@ const waitEvent = Effect.fn("test.waitPeerEvent")(
       Stream.runHead,
       Effect.forkScoped({ startImmediately: true }),
     ),
+);
+
+it.live(
+  "resumes a committed creation after receipt loss and accepts a maximum-length client request ID",
+  () =>
+    Effect.gen(function* () {
+      const studio = yield* serve("studio");
+      const cloudbox = yield* serve("cloudbox");
+      yield* pairNetwork(studio, cloudbox);
+      const linked = yield* waitEvent(cloudbox, "peer.linked", studio.id);
+      yield* studio.sessions.start;
+      yield* Fiber.join(linked);
+      const request = {
+        environmentId: cloudbox.id,
+        tool: "schedule_task",
+        arguments: {},
+        limits: { runtimeMode: "full-access" as const, interactionMode: "default" as const },
+        success: Answer,
+        idempotencyKey: "schedule-once",
+      };
+      expect(yield* studio.client.call(request)).toEqual({ count: 1 });
+      yield* cloudbox.loseReceiptResults;
+      expect(yield* studio.client.call(request)).toEqual({ count: 1 });
+      const maximumKey = {
+        environmentId: cloudbox.id,
+        tool: request.tool,
+        limits: request.limits,
+        success: Answer,
+        arguments: { clientRequestId: "r".repeat(256) },
+      };
+      expect(yield* studio.client.call(maximumKey)).toEqual({ count: 2 });
+      expect(yield* studio.client.call(maximumKey)).toEqual({ count: 2 });
+      yield* studio.sessions.stop;
+      yield* cloudbox.sessions.stop;
+    }).pipe(Effect.scoped),
 );
 
 it.live("converges simultaneous real WebSocket dials to the same authenticated connection", () =>
@@ -405,7 +469,9 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
     yield* Fiber.join(laptopLinked);
     yield* Fiber.join(laptopRoute);
     expect((yield* cloudbox.links.get(studio.id)).pipe(Option.getOrThrow).urls).toEqual([]);
-    expect((yield* cloudbox.links.list).find((link) => link.environmentId === studio.id)?.status).toBe("reachable");
+    expect(
+      (yield* cloudbox.links.list).find((link) => link.environmentId === studio.id)?.status,
+    ).toBe("reachable");
     studio.blockHttp();
     cloudbox.blockHttp();
     laptop.blockHttp();

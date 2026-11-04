@@ -13,6 +13,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Hex from "effect/encoding/Hex";
 import * as HttpBody from "effect/http/HttpBody";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -25,6 +26,7 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 
 /** The only MCP protocol version a T3 Code `/mcp` registers. */
 const PROTOCOL_VERSION = "2025-06-18";
+const encodeSeed = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
 
 /** The raw tool answer: MCP text the caller decodes, and whether the tool refused. */
 interface PeerCallAnswer {
@@ -298,14 +300,37 @@ const make = Effect.gen(function* () {
   const call: PeerMcpClient["Service"]["call"] = Effect.fn("PeerMcpClient.call")(
     function* (input) {
       const creates =
-        /(?:create|launch|fork|handoff_import|project_place|delegate_task|schedule_task|thread_send)/.test(
+        /(?:create|launch|fork|handoff_import|receive_handoff|project_place|delegate_task|schedule_task|thread_send)/.test(
           input.tool,
         );
+      const seed =
+        input.idempotencyKey === undefined
+          ? creates
+            ? [
+                input.tool,
+                typeof input.arguments.clientRequestId === "string"
+                  ? input.arguments.clientRequestId
+                  : yield* crypto.randomUUIDv4().pipe(Effect.orDie),
+              ]
+            : undefined
+          : ["explicit", input.idempotencyKey];
       const key =
-        input.idempotencyKey ??
-        (creates
-          ? `${input.tool}:${typeof input.arguments.clientRequestId === "string" ? input.arguments.clientRequestId : yield* crypto.randomUUIDv4().pipe(Effect.orDie)}`
-          : undefined);
+        seed === undefined
+          ? undefined
+          : `peer:${Hex.encode(yield* crypto.digest("SHA-256", new TextEncoder().encode(encodeSeed(seed))).pipe(Effect.orDie))}`;
+      const argumentsWithIdentity =
+        key !== undefined &&
+        input.arguments.clientRequestId === undefined &&
+        [
+          "delegate_task",
+          "create_threads",
+          "schedule_task",
+          "t3_thread_launch",
+          "t3_thread_send",
+          "t3_thread_move",
+        ].includes(input.tool)
+          ? { ...input.arguments, clientRequestId: key }
+          : input.arguments;
       const optionalSessions: Effect.Effect<Option.Option<PeerSessions.PeerSessions["Service"]>> =
         Effect.serviceOption(PeerSessions.PeerSessions);
       const captured = Option.isSome(transport) ? transport.value.get() : undefined;
@@ -324,7 +349,7 @@ const make = Effect.gen(function* () {
             body: {
               kind: "tool",
               tool: input.tool,
-              arguments: input.arguments,
+              arguments: argumentsWithIdentity,
               limits: input.limits,
               ...(input.hops === undefined ? {} : { hops: [...input.hops] }),
             },
@@ -351,7 +376,7 @@ const make = Effect.gen(function* () {
             ? { callerEnvironmentId: String(yield* environment.value.getEnvironmentId) }
             : {}),
           tool: input.tool,
-          arguments: input.arguments,
+          arguments: argumentsWithIdentity,
           limits: input.limits,
           ...(input.hops === undefined ? {} : { hops: input.hops }),
         });

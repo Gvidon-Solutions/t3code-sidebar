@@ -32,6 +32,8 @@ import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassifi
 import * as PeerFacts from "./PeerFacts.ts";
 import * as PeerTransport from "./PeerTransport.ts";
 import { PeerChannel, preferConnection, reconnectDelay } from "./PeerChannel.ts";
+import { PeerConnectionError } from "./PeerConnectionError.ts";
+export { PeerConnectionError };
 
 /** The JSON body a peer call carries over the connection. */
 export const PeerCallBody = Schema.Union([
@@ -67,15 +69,6 @@ export const PeerCallResult = Schema.Struct({
   isError: Schema.Boolean,
 });
 export type PeerCallResult = typeof PeerCallResult.Type;
-
-export class PeerConnectionError extends Schema.TaggedError<PeerConnectionError>()(
-  "PeerConnectionError",
-  {
-    reason: Schema.Literals(["offline", "relay", "pipe", "protocol"]),
-    message: Schema.String,
-    cause: Schema.optionalKey(Schema.Defect()),
-  },
-) {}
 
 /** One wire socket. The transport decides whether it is a dial or an accepted upgrade. */
 export interface PeerWire {

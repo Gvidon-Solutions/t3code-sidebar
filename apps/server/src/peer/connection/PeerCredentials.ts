@@ -4,10 +4,13 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as EnvironmentAuth from "../../auth/EnvironmentAuth.ts";
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
-import { PeerConnectionError } from "./PeerSessions.ts";
+import { PeerConnectionError } from "./PeerConnectionError.ts";
+
+const isConnectionError = Schema.is(PeerConnectionError);
 
 export class PeerCredentials extends Context.Service<
   PeerCredentials,
@@ -31,7 +34,7 @@ export const layer = Layer.effect(
     const auth = yield* EnvironmentAuth.EnvironmentAuth;
     const secrets = yield* ServerSecretStore.ServerSecretStore;
     const failure = (cause: unknown) =>
-      cause instanceof PeerConnectionError
+      isConnectionError(cause)
         ? cause
         : new PeerConnectionError({
             reason: "protocol",

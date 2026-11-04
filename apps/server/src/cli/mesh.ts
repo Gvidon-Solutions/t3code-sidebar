@@ -53,10 +53,14 @@ const pipeCommand = Command.make("pipe", {
         catch: (cause) =>
           new PeerConnectionError({ reason: "pipe", message: "Mesh pipe failed", cause }),
       });
-    }).pipe(Effect.catchCause((cause) => Effect.sync(() => {
-      process.stderr.write(`${Cause.pretty(cause)}\n`);
-      process.exitCode = 1;
-    }))),
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          process.stderr.write(`${Cause.pretty(cause)}\n`);
+          process.exitCode = 1;
+        }),
+      ),
+    ),
   ),
 );
 

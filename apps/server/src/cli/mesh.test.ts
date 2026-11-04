@@ -14,13 +14,11 @@ it.live(
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-    const platform = yield* HostProcess.Platform;
-    const userId = yield* HostProcess.UserId;
+      const platform = yield* HostProcess.Platform;
+      const userId = yield* HostProcess.UserId;
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "N1-cli-pipe-" });
-    const address = pipeAddress(baseDir, platform, userId);
-      yield* Effect.promise(() =>
-      preparePipeAddress(address, platform, userId),
-      );
+      const address = pipeAddress(baseDir, platform, userId);
+      yield* Effect.promise(() => preparePipeAddress(address, platform, userId));
       const sockets = new Set<NodeNet.Socket>();
       yield* Effect.acquireRelease(
         Effect.promise(

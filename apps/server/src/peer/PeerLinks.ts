@@ -515,9 +515,21 @@ const make = Effect.gen(function* () {
   const statusOf = Effect.fn("PeerLinks.statusOf")(function* (link: PeerLink, now: DateTime.Utc) {
     if (DateTime.isLessThanOrEqualTo(link.expiresAt, now)) return "expired" as const;
     const network = Option.isSome(transport) ? transport.value.get() : undefined;
-    if (network && (yield* network.status).some((state) => state.environmentId === link.environmentId && state.state !== "offline")) return "reachable" as const;
-    const answered = yield* Effect.findFirst(link.urls, (url) => describe(url).pipe(Effect.map((found) => Option.isSome(found) && found.value.environmentId === link.environmentId)));
-    return Option.isSome(answered) ? "reachable" as const : "unreachable" as const;
+    if (
+      network &&
+      (yield* network.status).some(
+        (state) => state.environmentId === link.environmentId && state.state !== "offline",
+      )
+    )
+      return "reachable" as const;
+    const answered = yield* Effect.findFirst(link.urls, (url) =>
+      describe(url).pipe(
+        Effect.map(
+          (found) => Option.isSome(found) && found.value.environmentId === link.environmentId,
+        ),
+      ),
+    );
+    return Option.isSome(answered) ? ("reachable" as const) : ("unreachable" as const);
   });
 
   const ids: PeerLinks["Service"]["ids"] = readRows.pipe(
