@@ -1,8 +1,11 @@
+import * as PeerReceipts from "../peer/connection/PeerReceipts.ts";
+import { PeerConnectionError } from "../peer/connection/PeerSessions.ts";
 import { interceptForkRequest } from "../mesh/ForkMcp.ts";
 import { ThreadForkService } from "../mesh/ThreadForkService.ts";
 import { interceptMeshRequest } from "../mesh/MeshMcp.ts";
 import { MeshRelay } from "../mesh/MeshRelay.ts";
 import { MeshReplicator } from "../mesh/MeshReplicator.ts";
+import { forwardedCallLimits, linkPermissions } from "../mesh/MeshLinkPermissions.ts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -219,6 +222,8 @@ const linkedEnvironmentsOff = HttpServerResponse.jsonUnsafe(
 );
 
 const makeMcpAuthMiddleware = Effect.gen(function* () {
+  const permissionContext = yield* Effect.context<never>();
+  const receipts = yield* Effect.serviceOption(PeerReceipts.PeerReceipts);
   const forks = yield* Effect.serviceOption(ThreadForkService);
   const meshReplicator = yield* Effect.serviceOption(MeshReplicator);
   const meshRelay = yield* Effect.serviceOption(MeshRelay);
@@ -254,24 +259,162 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const limited = withModeLimit(invocation, request);
     if (limited === undefined) return invalidModeLimit;
     const linkedEnvironments = yield* linksEnabled;
-    const forkResponse = yield* interceptForkRequest(request, limited, forks, linkedEnvironments);
-    if (forkResponse !== undefined) return forkResponse;
-    const meshResponse = yield* interceptMeshRequest(
-      request,
-      limited,
-      meshReplicator,
-      meshRelay,
-      linkedEnvironments,
-    );
-    if (meshResponse !== undefined) return meshResponse;
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
-    return yield* httpEffect.pipe(
-      Effect.provideService(McpInvocationContext.McpInvocationContext, {
-        ...limited,
+    const key = request.headers["t3-idempotency-key"];
+    const peer = invocation.client?.linked === true;
+    const from =
+      request.headers["t3-mesh-hops"]?.split(",")[0] ??
+      invocation.client?.peerEnvironmentId ??
+      request.headers["t3-peer-environment-id"] ??
+      invocation.client?.sessionId;
+    let sequence = 0;
+    const callInvocation =
+      peer && key && from
+        ? {
+            ...limited,
+            requestNamespace: `peer:${encodeJsonText([from, key])}`,
+            peerCommandIdentity: {
+              namespace: `peer:${encodeJsonText([from, key])}`,
+              next: () => sequence++,
+            },
+          }
+        : limited;
+    const dispatch = Effect.gen(function* () {
+      const forkResponse = yield* interceptForkRequest(
+        request,
+        callInvocation,
+        forks,
         linkedEnvironments,
-      }),
-      Effect.map(normalizeMcpHttpResponse),
+      );
+      if (forkResponse !== undefined) return forkResponse;
+      const meshResponse = yield* interceptMeshRequest(
+        request,
+        callInvocation,
+        meshReplicator,
+        meshRelay,
+        linkedEnvironments,
+      );
+      if (meshResponse !== undefined) return meshResponse;
+      return yield* httpEffect.pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+          ...callInvocation,
+          linkedEnvironments,
+        }),
+        Effect.map(normalizeMcpHttpResponse),
+      );
+    });
+    if (!peer || !key || request.method !== "POST" || Option.isNone(receipts))
+      return yield* dispatch;
+    const body = yield* request.json.pipe(Effect.orDie);
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("method" in body) ||
+      body.method !== "tools/call"
+    )
+      return yield* dispatch;
+    const permissions = yield* linkPermissions().pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, callInvocation),
+      Effect.provideContext(permissionContext),
     );
+    if (
+      "params" in body &&
+      typeof body.params === "object" &&
+      body.params !== null &&
+      "name" in body.params &&
+      typeof body.params.name === "string"
+    ) {
+      const allowed = yield* forwardedCallLimits(body.params.name, {
+        runtimeMode: limited.client?.narrowedTo?.runtimeMode ?? "full-access",
+        interactionMode: limited.client?.narrowedTo?.interactionMode ?? "default",
+        ...(limited.client?.filesLimit ? { files: limited.client.filesLimit } : {}),
+        ...(limited.client?.replicasLimit === false ? { replicas: false } : {}),
+      }).pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, callInvocation),
+        Effect.provideContext(permissionContext),
+        Effect.result,
+      );
+      if (allowed._tag === "Failure")
+        return HttpServerResponse.jsonUnsafe({
+          jsonrpc: "2.0",
+          id: "id" in body ? body.id : null,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: encodeJsonText({
+                  code: "capability_denied",
+                  message: allowed.failure.message,
+                }),
+              },
+            ],
+            isError: true,
+          },
+        });
+    }
+    return yield* receipts.value
+      .run(
+        from!,
+        key,
+        encodeJsonText({
+          body,
+          modes: request.headers[McpInvocationContext.MODE_LIMIT_HEADER],
+          access: limited.client?.access,
+          files: limited.client?.filesLimit,
+          replicas: limited.client?.replicasLimit,
+          permissions,
+        }),
+        dispatch.pipe(
+          Effect.catchCause((cause) =>
+            Effect.fail(
+              new PeerConnectionError({
+                reason: "protocol",
+                message: "Peer call dispatch failed",
+                cause,
+              }),
+            ),
+          ),
+        ),
+        typeof body === "object" &&
+          body !== null &&
+          "params" in body &&
+          typeof body.params === "object" &&
+          body.params !== null &&
+          "name" in body.params &&
+          typeof body.params.name === "string" &&
+          [
+            "t3_project_create",
+            "t3_thread_launch",
+            "t3_thread_send",
+            "t3_thread_fork",
+            "t3_thread_transfer",
+            "t3_thread_move",
+            "delegate_task",
+            "create_threads",
+            "schedule_task",
+            "t3_project_place",
+            "t3_thread_receive_fork",
+          ].includes(body.params.name),
+      )
+      .pipe(
+        Effect.catch((error) =>
+          Effect.succeed(
+            HttpServerResponse.jsonUnsafe({
+              jsonrpc: "2.0",
+              id: "id" in body ? body.id : null,
+              result: {
+                content: [
+                  {
+                    type: "text",
+                    text: encodeJsonText({ code: "invalid_request", message: error.message }),
+                  },
+                ],
+                isError: true,
+              },
+            }),
+          ),
+        ),
+      );
   }) satisfies McpAuthMiddleware;
 }).pipe(Effect.withSpan("McpHttpServer.makeAuthMiddleware"));
 

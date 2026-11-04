@@ -9,6 +9,7 @@ import {
   deriveMeshFooterStatus,
   meshFooterText,
   meshMachineLastSync,
+  meshConnectionText,
   setMachineReach,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import {
@@ -196,6 +197,12 @@ function MachineEditor(props: {
         control={<ColorPicker value={machine.color} onChange={props.onEdit} />}
       />
       {machine.version === null ? null : <SettingsRow title="Version" status={machine.version} />}
+      {machine.network ? (
+        <SettingsRow
+          title="Network"
+          status={meshConnectionText(machine, props.otherMachines) ?? undefined}
+        />
+      ) : null}
       <SettingsRow
         title="Last layout sync"
         description={props.now === 0 ? undefined : meshMachineLastSync(machine, props.now)}

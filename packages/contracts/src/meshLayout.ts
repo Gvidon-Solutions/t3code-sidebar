@@ -12,6 +12,7 @@ import {
   MeshConfigStatus,
 } from "./meshConfig.ts";
 import {
+  PeerConnectionStatus,
   SidebarProjectMount,
   SidebarProjectMountStatus,
   SidebarProjectMountState,
@@ -102,6 +103,7 @@ export const MeshLayoutStatus = Schema.Struct({
     ),
   ),
   peers: Schema.Array(MeshPeerState),
+  connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
 });
 export type MeshLayoutStatus = typeof MeshLayoutStatus.Type;
 

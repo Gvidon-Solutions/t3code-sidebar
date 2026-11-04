@@ -1,11 +1,16 @@
-import { linkPermissions } from "./MeshLinkPermissions.ts";
-import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
+import { forwardedCallLimits } from "./MeshLinkPermissions.ts";
+import {
+  EnvironmentId,
+  OrchestratorMcpFailure,
+  type PeerConnectionStatus,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
+import * as PeerTransport from "../peer/connection/PeerTransport.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
 import { PeerMcpClient, type PeerCallLimits } from "../peer/PeerMcpClient.ts";
 
@@ -20,6 +25,7 @@ export class MeshRelay extends Context.Service<
   MeshRelay,
   {
     readonly routes: Effect.Effect<readonly string[], OrchestratorMcpFailure>;
+    readonly status: Effect.Effect<readonly PeerConnectionStatus[]>;
     readonly relay: (
       input: typeof RelayInput.Type,
       hops: readonly string[],
@@ -35,6 +41,12 @@ export const layer = Layer.effect(
   MeshRelay,
   Effect.gen(function* () {
     const links = yield* PeerLinks;
+    const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
+    const status = Effect.suspend(
+      () =>
+        (Option.isSome(transport) ? transport.value.get()?.status : undefined) ??
+        Effect.succeed([]),
+    );
     const peers = yield* PeerMcpClient;
     const self = yield* (yield* ServerEnvironment).getEnvironmentId;
     const routes = links.list.pipe(
@@ -59,43 +71,16 @@ export const layer = Layer.effect(
         input.tool.startsWith("t3_mesh_")
       )
         return yield* refused;
-      const permissions = yield* linkPermissions(input.environmentId);
-      const threads =
-        input.tool.startsWith("t3_thread_") ||
-        input.tool.startsWith("t3_attachment_") ||
-        [
-          "t3_queue",
-          "t3_pending_request",
-          "create_threads",
-          "delegate_task",
-          "task_status",
-          "task_cancel",
-        ].includes(input.tool);
-      const replicas = input.tool === "t3_project_place" || input.tool === "t3_replica_adopt";
-      const files = input.tool === "t3_files_read" || input.tool === "t3_files_list";
-      if (
-        (threads && !permissions.threads) ||
-        (replicas && !permissions.replicas) ||
-        (files && permissions.files === "none")
-      )
-        return yield* refused;
-      const fileRank = { none: 0, projects: 1, all: 2 };
-      const incoming = limits.files ?? "all";
-      const narrowedFiles =
-        fileRank[incoming] < fileRank[permissions.files] ? incoming : permissions.files;
+      const narrowed = yield* forwardedCallLimits(input.tool, limits, input.environmentId);
       const target = yield* links.get(input.environmentId).pipe(Effect.mapError(() => refused));
       if (Option.isNone(target)) return yield* refused;
       return yield* peers.call({
         ...input,
-        limits: {
-          ...limits,
-          ...(files && narrowedFiles !== "all" ? { files: narrowedFiles } : {}),
-          ...(!permissions.replicas || limits.replicas === false ? { replicas: false } : {}),
-        },
+        limits: narrowed,
         hops: [...hops, self],
         success: Schema.Unknown,
       });
     });
-    return MeshRelay.of({ routes, relay });
+    return MeshRelay.of({ routes, relay, status });
   }),
 );

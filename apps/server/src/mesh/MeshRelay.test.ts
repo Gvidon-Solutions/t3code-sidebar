@@ -166,7 +166,7 @@ it.effect(
           ["A"],
           limits,
         ),
-      ).toEqual({ replicas: false });
+      ).toEqual({ files: "projects", replicas: false });
     }).pipe(
       Effect.provide(
         layer.pipe(

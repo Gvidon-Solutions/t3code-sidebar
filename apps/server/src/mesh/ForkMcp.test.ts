@@ -6,8 +6,10 @@ import {
   OrchestratorMcpFailure,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 import * as Mcp from "../mcp/McpHttpServer.ts";
 import { McpSessionRegistry } from "../mcp/McpSessionRegistry.ts";
@@ -16,6 +18,8 @@ import * as Settings from "../serverSettings.ts";
 import { ThreadForkService } from "./ThreadForkService.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import { layerTest } from "../replicas/MeshLayoutTestLayer.ts";
+import * as Receipts from "../peer/connection/PeerReceipts.ts";
+import * as Sqlite from "../persistence/Sqlite.ts";
 
 const encode = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 it.effect(
@@ -23,11 +27,20 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const mesh = yield* MeshLayoutService;
+      let received = 0;
+      const database = yield* Layer.build(Sqlite.layerMemory);
+      const services = yield* Layer.build(
+        Layer.mergeAll(
+          Settings.layerTest({ linkedEnvironmentsEnabled: true }),
+          Receipts.layer.pipe(Layer.provide(Layer.succeedContext(database))),
+        ),
+      );
+      const settings = Context.get(services, Settings.ServerSettingsService);
       const transport = Mcp.layerMcpTransport.pipe(
         Layer.provide(
           Layer.mergeAll(
+            Layer.succeedContext(services),
             Layer.succeed(MeshLayoutService, mesh),
-            Settings.layerTest({ linkedEnvironmentsEnabled: true }),
             Layer.mock(McpSessionRegistry)({
               // @effect-diagnostics-next-line effectSucceedWithVoid:off - Registry absence requires undefined.
               resolve: () => Effect.succeed(undefined),
@@ -60,7 +73,10 @@ it.effect(
                         message: "Fork transaction storage failed.",
                       }),
                     )
-                  : Effect.succeed({ ok: true }),
+                  : Effect.sync(() => {
+                      received++;
+                      return { ok: true };
+                    }),
             }),
           ),
         ),
@@ -69,15 +85,17 @@ it.effect(
         Layer.build,
       );
       const client = yield* HttpClient.HttpClient;
-      const post = Effect.fn("test.meshPost")((token: string, body: unknown, session?: string) =>
-        client.post("/mcp", {
-          headers: {
-            authorization: `Bearer ${token}`,
-            accept: "application/json, text/event-stream",
-            ...(session ? { "mcp-session-id": session } : {}),
-          },
-          body: HttpBody.text(encode(body), "application/json"),
-        }),
+      const post = Effect.fn("test.meshPost")(
+        (token: string, body: unknown, session?: string, key?: string) =>
+          client.post("/mcp", {
+            headers: {
+              authorization: `Bearer ${token}`,
+              accept: "application/json, text/event-stream",
+              ...(session ? { "mcp-session-id": session } : {}),
+              ...(key ? { "t3-idempotency-key": key } : {}),
+            },
+            body: HttpBody.text(encode(body), "application/json"),
+          }),
       );
       const body = {
         jsonrpc: "2.0",
@@ -90,9 +108,23 @@ it.effect(
       };
       expect((yield* post("agent", body)).status).toBe(403);
       expect((yield* post("readonly", body)).status).toBe(403);
-      const accepted = yield* post("link", body);
+      const accepted = yield* post("link", body, undefined, "fork-once");
       expect(accepted.status).toBe(200);
       expect(yield* accepted.text).toContain('"ok":true');
+      expect((yield* post("link", body, undefined, "fork-once")).status).toBe(200);
+      expect(received).toBe(1);
+      const sql = Context.get(database, SqlClient.SqlClient);
+      expect(yield* sql`SELECT request_key FROM peer_call_receipts`).toEqual([
+        { request_key: "fork-once" },
+      ]);
+      yield* sql`UPDATE peer_call_receipts SET result=NULL WHERE request_key='fork-once'`;
+      expect(yield* sql`SELECT result FROM peer_call_receipts`).toEqual([{ result: null }]);
+      expect((yield* post("link", body, undefined, "fork-once")).status).toBe(200);
+      expect(received).toBe(2);
+      yield* settings.updateSettings({ linkedEnvironmentsEnabled: false });
+      expect((yield* post("link", body, undefined, "fork-once")).status).toBe(403);
+      expect(received).toBe(2);
+      yield* settings.updateSettings({ linkedEnvironmentsEnabled: true });
       const failed = yield* post("link", {
         ...body,
         params: { ...body.params, arguments: { action: "rollback", forkId: "storage-failure" } },

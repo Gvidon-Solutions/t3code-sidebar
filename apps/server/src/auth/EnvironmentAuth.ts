@@ -1,4 +1,3 @@
-import type { EnvironmentId } from "@t3tools/contracts";
 import {
   AuthAccessTokenType,
   AuthAccessWriteScope,
@@ -80,7 +79,8 @@ export interface McpClientSession {
   readonly access: AuthMcpClientAccess;
   /** Another T3 Code environment's link, whose work here stays within it. */
   readonly peerLink: boolean;
-  readonly peerEnvironmentId?: EnvironmentId;
+  /** The environment that registered the peer link, when it named itself. */
+  readonly peerEnvironmentId?: string;
 }
 
 export interface AuthenticatedSession {
@@ -542,7 +542,7 @@ export class EnvironmentAuth extends Context.Service<
       readonly label: string;
       readonly access: AuthMcpClientAccess;
       readonly peerLink: boolean;
-      readonly peerEnvironmentId?: EnvironmentId;
+      readonly peerEnvironmentId?: string;
       readonly client: AuthClientMetadata;
     }) => Effect.Effect<
       {

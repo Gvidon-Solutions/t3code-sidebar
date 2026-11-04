@@ -79,6 +79,7 @@ describe("FilesRpc", () => {
         Layer.provide(linksMock([there])),
         Layer.provide(
           Layer.mock(PeerMcpClient.PeerMcpClient)({
+            connectionAvailable: () => Effect.succeed(false),
             call: (input: unknown) =>
               Ref.update(calls, (current) => [...current, input]).pipe(
                 Effect.as(remoteResult as never),
@@ -114,6 +115,7 @@ describe("FilesRpc", () => {
         Layer.provide(linksMock([there])),
         Layer.provide(
           Layer.mock(PeerMcpClient.PeerMcpClient)({
+            connectionAvailable: () => Effect.succeed(false),
             call: (input: { tool: string }) =>
               Ref.update(calls, (current) => [...current, input]).pipe(
                 Effect.as(
@@ -163,6 +165,7 @@ describe("FilesRpc", () => {
         Layer.provide(linksMock([there])),
         Layer.provide(
           Layer.mock(PeerMcpClient.PeerMcpClient)({
+            connectionAvailable: () => Effect.succeed(false),
             call: () =>
               Effect.fail(
                 new OrchestratorMcpFailure({
@@ -200,6 +203,7 @@ describe("FilesRpc", () => {
         Layer.provide(linksMock([there])),
         Layer.provide(
           Layer.mock(PeerMcpClient.PeerMcpClient)({
+            connectionAvailable: () => Effect.succeed(false),
             call: (input: { tool: string; environmentId: string }) =>
               Ref.update(calls, (current) => [...current, input]).pipe(
                 Effect.as((input.tool === "t3_mesh_routes" ? [far] : remoteResult) as never),
@@ -243,6 +247,7 @@ describe("FilesRpc", () => {
         Layer.provide(linksMock([there])),
         Layer.provide(
           Layer.mock(PeerMcpClient.PeerMcpClient)({
+            connectionAvailable: () => Effect.succeed(false),
             call: () =>
               Effect.fail(
                 new OrchestratorMcpFailure({

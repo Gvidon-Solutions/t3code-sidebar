@@ -11,7 +11,6 @@ import {
   type PeerLink,
   type PeerLinkCreateInput,
   PeerLinkError,
-  type PeerLinkStatus,
   type PeerLinkSummary,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -33,6 +32,7 @@ import * as HttpApiClient from "effect/http-api/HttpApiClient";
 import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassification";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import * as PeerTransport from "./connection/PeerTransport.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ServerSettings from "../serverSettings.ts";
 
@@ -79,12 +79,26 @@ export class PeerLinks extends Context.Service<
       Option.Option<{ readonly environmentId: EnvironmentId; readonly label: string }>
     >;
     readonly list: Effect.Effect<ReadonlyArray<PeerLinkSummary>, PeerLinkError>;
+    /** The linked environment ids, without asking any peer whether it answers. */
+    readonly ids: Effect.Effect<ReadonlyArray<EnvironmentId>, PeerLinkError>;
+    /** Stores a link a peer granted over an authenticated connection (no pairing code). */
+    readonly acceptGrant: (input: {
+      readonly environmentId: EnvironmentId;
+      readonly label: string;
+      readonly urls: ReadonlyArray<string>;
+      readonly access: PeerLink["access"];
+      readonly token: string;
+      readonly expiresAt?: number;
+    }) => Effect.Effect<void, PeerLinkError>;
     /** The stored link, without asking the peer whether it answers. */
     readonly get: (
       environmentId: EnvironmentId,
     ) => Effect.Effect<Option.Option<PeerLink>, PeerLinkError>;
     /** Forgets the link here. The peer still lists the session until it is revoked there. */
-    readonly unlink: (environmentId: EnvironmentId) => Effect.Effect<boolean, PeerLinkError>;
+    readonly unlink: (
+      environmentId: EnvironmentId,
+      options?: { readonly notifyPeer?: boolean },
+    ) => Effect.Effect<boolean, PeerLinkError>;
     /** An address that answers as the linked peer, with its token, ready to call. */
     readonly resolve: (
       environmentId: EnvironmentId,
@@ -166,6 +180,7 @@ const linkLimitsHold = (peer: { readonly capabilities: ExecutionEnvironmentCapab
 const make = Effect.gen(function* () {
   const changes = yield* PubSub.unbounded<void>();
   const sql = yield* SqlClient.SqlClient;
+  const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const crypto = yield* Crypto.Crypto;
   const httpClient = yield* HttpClient.HttpClient;
@@ -234,7 +249,7 @@ const make = Effect.gen(function* () {
       origin: string,
       input: PeerLinkCreateInput,
       clientName: string,
-      selfId: EnvironmentId,
+      environmentId: EnvironmentId,
     ) {
       const client = yield* clientFor(origin);
       // Only the peer's own refusals are rejections. A dropped connection or
@@ -243,9 +258,9 @@ const make = Effect.gen(function* () {
         .register({
           payload: {
             client_name: clientName,
-            environment_id: selfId,
             redirect_uris: [LINK_REDIRECT_URI],
             software_id: MCP_PEER_LINK_SOFTWARE_ID,
+            environment_id: environmentId,
           },
         })
         .pipe(
@@ -497,20 +512,81 @@ const make = Effect.gen(function* () {
       Effect.orElseSucceed(() => Option.none()),
     );
 
-  const statusOf = (link: PeerLink, now: DateTime.Utc) =>
-    DateTime.isLessThanOrEqualTo(link.expiresAt, now)
-      ? Effect.succeed<PeerLinkStatus>("expired")
-      : Effect.findFirst(link.urls, (url) =>
-          describe(url).pipe(
-            Effect.map(
-              (found) => Option.isSome(found) && found.value.environmentId === link.environmentId,
+  const statusOf = Effect.fn("PeerLinks.statusOf")(function* (link: PeerLink, now: DateTime.Utc) {
+    if (DateTime.isLessThanOrEqualTo(link.expiresAt, now)) return "expired" as const;
+    const network = Option.isSome(transport) ? transport.value.get() : undefined;
+    if (
+      network &&
+      (yield* network.status).some(
+        (state) => state.environmentId === link.environmentId && state.state !== "offline",
+      )
+    )
+      return "reachable" as const;
+    const answered = yield* Effect.findFirst(link.urls, (url) =>
+      describe(url).pipe(
+        Effect.map(
+          (found) => Option.isSome(found) && found.value.environmentId === link.environmentId,
+        ),
+      ),
+    );
+    return Option.isSome(answered) ? ("reachable" as const) : ("unreachable" as const);
+  });
+
+  const ids: PeerLinks["Service"]["ids"] = readRows.pipe(
+    Effect.map((rows) => rows.map((row) => EnvironmentId.make(row.environment_id))),
+  );
+
+  const acceptGrant: PeerLinks["Service"]["acceptGrant"] = Effect.fn("PeerLinks.acceptGrant")(
+    function* (input) {
+      // Reverse trust must not discard an existing outbound address or access choice.
+      const now = yield* DateTime.now;
+      const previous = yield* readRow(input.environmentId);
+      if (
+        Option.isSome(previous) &&
+        DateTime.isGreaterThan(DateTime.makeUnsafe(previous.value.expires_at), now)
+      )
+        return;
+      const expiresAt =
+        input.expiresAt === undefined
+          ? DateTime.add(now, { days: 30 })
+          : DateTime.makeUnsafe(input.expiresAt);
+      const secretName = yield* newSecretName;
+      yield* secrets
+        .set(secretName, new TextEncoder().encode(input.token))
+        .pipe(Effect.catch(failStorage));
+      const urlsJson = yield* encodeUrls([...input.urls]).pipe(Effect.catch(failStorage));
+      yield* sql`
+        INSERT INTO peer_environment_links (
+          environment_id, secret_name, label, urls_json, access, linked_at, expires_at,
+          last_reached_at, last_error, fenced
+        ) VALUES (
+          ${input.environmentId}, ${secretName}, ${input.label}, ${urlsJson}, ${input.access},
+          ${DateTime.formatIso(now)}, ${DateTime.formatIso(expiresAt)},
+          ${DateTime.formatIso(now)}, NULL, 1
+        )
+        ON CONFLICT (environment_id) DO UPDATE SET
+          secret_name = excluded.secret_name,
+          fenced = excluded.fenced,
+          label = excluded.label,
+          urls_json = excluded.urls_json,
+          access = excluded.access,
+          linked_at = excluded.linked_at,
+          expires_at = excluded.expires_at,
+          last_reached_at = excluded.last_reached_at,
+          last_error = NULL
+      `.pipe(Effect.catch(failStorage));
+      if (Option.isSome(previous) && previous.value.secret_name !== secretName) {
+        yield* secrets
+          .remove(previous.value.secret_name)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("Replaced reverse-link secret could not be removed", { error }),
             ),
-          ),
-        ).pipe(
-          Effect.map((answered): PeerLinkStatus =>
-            Option.isSome(answered) ? "reachable" : "unreachable",
-          ),
-        );
+          );
+      }
+      yield* PubSub.publish(changes, undefined);
+    },
+  );
 
   const list: PeerLinks["Service"]["list"] = Effect.gen(function* () {
     const links = yield* Effect.forEach(yield* readRows, toLink);
@@ -533,7 +609,19 @@ const make = Effect.gen(function* () {
     );
 
   const unlink: PeerLinks["Service"]["unlink"] = Effect.fn("PeerLinks.unlink")(
-    function* (environmentId) {
+    function* (environmentId, options) {
+      const network = Option.isSome(transport) ? transport.value.get() : undefined;
+      if (network)
+        yield* network.revoke(environmentId, options?.notifyPeer ?? true).pipe(
+          Effect.mapError(
+            (cause) =>
+              new PeerLinkError({
+                reason: "storage",
+                message: "Peer credential revocation failed",
+                cause,
+              }),
+          ),
+        );
       const deleted = yield* sql<{ secret_name: string }>`
         DELETE FROM peer_environment_links WHERE environment_id = ${environmentId}
         RETURNING secret_name
@@ -541,6 +629,7 @@ const make = Effect.gen(function* () {
       for (const row of deleted) {
         yield* secrets.remove(row.secret_name).pipe(Effect.catch(failStorage));
       }
+      yield* PubSub.publish(changes, undefined);
       return deleted.length > 0;
     },
   );
@@ -617,11 +706,21 @@ const make = Effect.gen(function* () {
     );
 
   return PeerLinks.of({
-    changes: Stream.fromPubSub(changes),
+    changes: Option.isSome(transport)
+      ? Stream.merge(
+          Stream.fromPubSub(changes),
+          transport.value.activity.pipe(
+            Stream.filter((activity) => activity.kind === "connected"),
+            Stream.map(() => undefined),
+          ),
+        )
+      : Stream.fromPubSub(changes),
     enabled,
     link,
     describe: describeUrl,
     list,
+    ids,
+    acceptGrant,
     get,
     unlink,
     resolve,

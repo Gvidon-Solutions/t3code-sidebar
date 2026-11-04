@@ -92,6 +92,14 @@ test("machine inventory, mesh status, replicas and layout reach transports", () 
     ["layout", "get", "--json"],
   ])
     assert.ok(run(args).calls.some((c) => c.name === "meshLayout.get"));
+  const status = JSON.parse(run(["mesh", "status", "--json"]).out);
+  assert.equal(status.connections[0].state, "direct");
+  assert.equal(status.connections[1].via, peer);
+  assert.equal(status.connections[2].lastError, "Peer heartbeat timed out");
+  const text = run(["mesh", "status"]).out;
+  assert.match(text, /connected directly/);
+  assert.match(text, /via lab/);
+  assert.match(text, /offline since 2026-11-04.*Peer heartbeat timed out/);
 });
 test("place, unplace, retry resolve Russian machine and send server contracts", () => {
   const primary = run(["place", "Demo", "--on", "лаборатория", "--primary", "--path", "/checkout"]);

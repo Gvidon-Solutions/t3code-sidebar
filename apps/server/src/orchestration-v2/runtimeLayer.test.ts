@@ -8693,6 +8693,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           });
           const decodeFork = Schema.decodeUnknownEffect(ForkTransportInput);
           const peer = Layer.mock(PeerMcpClient.PeerMcpClient)({
+            connectionAvailable: () => Effect.succeed(false),
             call: (request) =>
               (targetOffline
                 ? Effect.fail(

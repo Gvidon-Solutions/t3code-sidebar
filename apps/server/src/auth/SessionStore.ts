@@ -62,7 +62,8 @@ export interface VerifiedSession {
   readonly runtimeModeCeiling?: RuntimeMode;
   /** An MCP client that is another T3 Code environment's peer link. */
   readonly peerLink?: true;
-  readonly peerEnvironmentId?: EnvironmentId;
+  /** The environment that registered the peer link, when it named itself. */
+  readonly peerEnvironmentId?: string;
 }
 
 export interface VerifiedWebSocketTicket extends VerifiedSession {
@@ -385,7 +386,7 @@ export class SessionStore extends Context.Service<
       readonly proofKeyThumbprint?: string;
       readonly runtimeModeCeiling?: RuntimeMode;
       readonly peerLink?: boolean;
-      readonly peerEnvironmentId?: EnvironmentId;
+      readonly peerEnvironmentId?: string;
       readonly replaceActiveForSubjectAndMethod?: boolean;
       readonly replaceSessionId?: AuthSessionId;
     }) => Effect.Effect<IssuedSession, SessionCredentialInternalError>;
@@ -443,6 +444,7 @@ const SessionClaims = Schema.Struct({
   rtc: Schema.optionalKey(RuntimeMode),
   /** Signed, so a client cannot shed its peer link's limits. */
   plk: Schema.optionalKey(Schema.Literal(1)),
+  pei: Schema.optionalKey(Schema.String),
   penv: Schema.optionalKey(EnvironmentId),
   iat: Schema.Number,
   exp: Schema.Number,
@@ -664,12 +666,8 @@ const make = Effect.gen(function* () {
         method: input?.method ?? "browser-session-cookie",
         ...(input?.proofKeyThumbprint ? { jkt: input.proofKeyThumbprint } : {}),
         ...(input?.runtimeModeCeiling ? { rtc: input.runtimeModeCeiling } : {}),
-        ...(input?.peerLink === true
-          ? {
-              plk: 1 as const,
-              ...(input.peerEnvironmentId ? { penv: input.peerEnvironmentId } : {}),
-            }
-          : {}),
+        ...(input?.peerLink === true ? { plk: 1 as const } : {}),
+        ...(input?.peerEnvironmentId ? { pei: input.peerEnvironmentId } : {}),
         iat: issuedAt.epochMilliseconds,
         exp: expiresAt.epochMilliseconds,
       };
@@ -852,9 +850,8 @@ const make = Effect.gen(function* () {
         scopes: row.value.scopes,
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
         ...(claims.rtc ? { runtimeModeCeiling: claims.rtc } : {}),
-        ...(claims.plk === 1
-          ? { peerLink: true as const, ...(claims.penv ? { peerEnvironmentId: claims.penv } : {}) }
-          : {}),
+        ...(claims.plk === 1 ? { peerLink: true as const } : {}),
+        ...((claims.pei ?? claims.penv) ? { peerEnvironmentId: claims.pei ?? claims.penv } : {}),
       } satisfies VerifiedSession;
     },
   );

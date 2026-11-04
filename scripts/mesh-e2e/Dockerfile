@@ -5,10 +5,10 @@
 # Mutagen is downloaded from GitHub releases and checked against a pinned
 # SHA-256; bump both ARGs together.
 
-FROM node:24-bookworm AS build
+FROM node:26.12.1-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git \
  && rm -rf /var/lib/apt/lists/*
-RUN corepack enable
+RUN npm install -g pnpm@12.14.0
 WORKDIR /src
 COPY . .
 ENV CI=1
@@ -20,13 +20,13 @@ RUN cd apps/server && node scripts/cli.ts build
 RUN pnpm --filter t3 deploy --prod --legacy --config.allowUnusedPatches=true /out \
  && test -f /out/dist/bin.mjs && test -d /out/dist/client
 
-FROM node:24-bookworm-slim
+FROM node:26.12.1-bookworm-slim
 ARG CODEX_VERSION=0.162.1
 ARG MUTAGEN_VERSION=0.18.1
 ARG MUTAGEN_SHA256=7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl git openssh-client ripgrep tini less procps jq \
+      ca-certificates curl git openssh-client openssh-server ripgrep tini less procps jq \
  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli.gpg \
  && echo "deb [signed-by=/usr/share/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
  && apt-get update && apt-get install -y --no-install-recommends gh \
@@ -40,7 +40,9 @@ RUN curl -fsSL -o /tmp/mutagen.tar.gz \
  && rm -f /tmp/mutagen.tar.gz
 
 RUN npm install -g @openai/codex@${CODEX_VERSION} && npm cache clean --force
-RUN groupadd -g 10001 t3 && useradd -m -u 10001 -g 10001 -s /bin/bash t3
+RUN groupadd -g 10001 t3 && useradd -m -u 10001 -g 10001 -s /bin/bash -p '*' t3 \
+ && mkdir -p /run/sshd \
+ && chown t3:t3 /etc/ssh/ssh_host_*_key
 COPY --from=build /out /opt/t3
 ENV NODE_ENV=production HOME=/home/t3
 USER t3

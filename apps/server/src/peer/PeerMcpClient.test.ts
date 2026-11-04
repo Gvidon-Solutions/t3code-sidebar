@@ -97,14 +97,16 @@ it.effect.each([false, true])(
     ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );
 
-it.effect("renews a missing peer session once and reuses its replacement", () =>
+it.effect("renews a missing peer session once and preserves creation keys through renewal", () =>
   Effect.gen(function* () {
     const sessionHeaders: Array<string | undefined> = [];
+    const requestKeys: Array<string | undefined> = [];
     const statuses = [200, 202, 404, 200, 202, 200, 200];
     const http = HttpClient.make((request) =>
       Effect.sync(() => {
         const index = sessionHeaders.length;
         sessionHeaders.push(request.headers["mcp-session-id"]);
+        requestKeys.push(request.headers["t3-idempotency-key"]);
         const status = statuses[index];
         if (status === undefined) throw new Error("Unexpected retry");
         return HttpClientResponse.fromWeb(
@@ -163,8 +165,8 @@ it.effect("renews a missing peer session once and reuses its replacement", () =>
       expect(
         yield* client.call({
           environmentId: box.environmentId,
-          tool: "probe",
-          arguments: {},
+          tool: "t3_thread_transfer",
+          arguments: { action: "fork", threadId: "source" },
           limits: { runtimeMode: "approval-required", interactionMode: "plan" },
           success: Result,
         }),
@@ -179,5 +181,9 @@ it.effect("renews a missing peer session once and reuses its replacement", () =>
       "renewed",
       "renewed",
     ]);
+    expect(requestKeys[2]).toMatch(/^peer:[0-9a-f]{64}$/);
+    expect(requestKeys[5]).toBe(requestKeys[2]);
+    expect(requestKeys[6]).toMatch(/^peer:[0-9a-f]{64}$/);
+    expect(requestKeys[6]).not.toBe(requestKeys[2]);
   }).pipe(Effect.scoped),
 );

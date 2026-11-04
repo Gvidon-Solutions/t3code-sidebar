@@ -43,7 +43,7 @@ GOR_UNIT=t3code-sidebar.service
 GOR_LEGACY_UNIT=t3-mesh-e2e.service
 GV_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
 GOR_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
-IMAGE=t3-mesh-e2e:dev
+IMAGE="${MESH_E2E_IMAGE:-t3-mesh-e2e:dev}"
 MUTAGEN_VERSION=0.18.1
 MUTAGEN_SHA256=7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f
 
@@ -66,7 +66,7 @@ gor_ssh() {
   if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
     control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/gor")
   fi
-  ssh -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes \
+  ssh -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no \
     -o ConnectTimeout=10 "${control[@]}" "$GOR_HOST" "$@"
 }
 
@@ -75,7 +75,7 @@ gor_scp() {
   if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
     control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/gor")
   fi
-  scp -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes \
+  scp -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no \
     -o ConnectTimeout=10 "${control[@]}" "$@"
 }
 
@@ -84,7 +84,7 @@ vps_ssh() {
   if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
     control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/vps")
   fi
-  ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o ConnectTimeout=10 "${control[@]}" "$VPS_HOST" "$@"
+  ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$VPS_HOST" "$@"
 }
 
 require_bins() {

@@ -51,6 +51,7 @@ export interface MeshLinkedWith {
 }
 
 export interface MeshMachine extends MachineDisplay {
+  readonly network?: import("@t3tools/contracts").PeerConnectionStatus;
   readonly aliases: readonly string[];
   readonly environmentId: string;
   readonly connectedHere: boolean;
@@ -74,6 +75,7 @@ export interface MeshMachineBuildInput {
   readonly connections?: readonly MeshMachineConnection[];
   readonly links?: readonly MeshLinkSource[];
   readonly peerStates?: readonly MeshPeerStateView[];
+  readonly peerConnections?: readonly import("@t3tools/contracts").PeerConnectionStatus[];
 }
 
 function newest(left: string | null, right: string | null): string | null {
@@ -108,6 +110,34 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
   const { config } = input;
   const connections = input.connections ?? [];
   const links = input.links ?? [];
+  const rootIds = new Set(
+    connections
+      .filter((connection) => connection.connected)
+      .map((connection) => connection.environmentId),
+  );
+  const reports = Object.entries(config.machines).flatMap(([source, machine]) =>
+    rootIds.has(source) && machine.reported?.connections
+      ? machine.reported.connections.map((connection) => ({
+          ...connection,
+          sourceEnvironmentId: source,
+          observedAt: connection.observedAt ?? machine.reported!.reportedAt,
+        }))
+      : [],
+  );
+  const networkBySource = new Map<string, import("@t3tools/contracts").PeerConnectionStatus>();
+  const keyOf = (connection: import("@t3tools/contracts").PeerConnectionStatus) =>
+    JSON.stringify([connection.sourceEnvironmentId ?? "", connection.environmentId]);
+  const currentSources = new Set((input.peerConnections ?? []).map(keyOf));
+  for (const connection of [
+    ...(input.peerConnections ?? []),
+    ...reports.filter((report) => !currentSources.has(keyOf(report))),
+  ]) {
+    const key = keyOf(connection);
+    const previous = networkBySource.get(key);
+    if (!previous || (connection.observedAt ?? "") > (previous.observedAt ?? ""))
+      networkBySource.set(key, connection);
+  }
+  const networkStates = [...networkBySource.values()];
   const peerStates = input.peerStates ?? [];
   const connectionById = new Map(connections.map((entry) => [entry.environmentId, entry]));
 
@@ -207,17 +237,26 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
       const reach: Record<string, SidebarMachineReach> = {
         ...config.machines[environmentId]?.reach,
       };
+      const candidates = networkStates.filter(
+        (connection) => connection.environmentId === environmentId,
+      );
+      const network =
+        candidates.find((connection) => connection.state === "direct") ??
+        candidates.find((connection) => connection.state === "relayed") ??
+        candidates[0];
       return {
         environmentId,
+        ...(network === undefined ? {} : { network }),
         aliases: config.machines[environmentId]?.aliases ?? [],
         label: display.label,
         tag: display.tag,
         color: display.color,
         connectedHere: connection?.connected === true,
         linkedWith,
-        version: connection?.version ?? null,
+        version: connection?.version ?? config.machines[environmentId]?.reported?.version ?? null,
         lastExchangeAt: peerState?.lastExchangeAt ?? null,
         lastError:
+          network?.lastError ??
           peerState?.lastError ??
           links.find((source) => source.environmentId === environmentId && source.error)?.error ??
           peerLinks.find((link) => link.lastError)?.lastError ??
@@ -356,4 +395,16 @@ export async function linkMeshMachines<A>(input: {
       ? {}
       : { expectedEnvironmentId: input.target.environmentId, expectedLabel: input.target.label }),
   });
+}
+
+export function meshConnectionText(
+  machine: Pick<MeshMachine, "network">,
+  machines: readonly Pick<MeshMachine, "environmentId" | "label">[],
+): string | null {
+  const state = machine.network;
+  if (!state) return null;
+  if (state.state === "direct") return "Connected directly";
+  if (state.state === "relayed")
+    return `Via ${machines.find((item) => item.environmentId === state.via)?.label ?? "linked machine"}`;
+  return state.offlineSince ? `Offline since ${state.offlineSince}` : "Offline";
 }

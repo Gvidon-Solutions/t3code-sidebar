@@ -10,6 +10,7 @@ import { McpSessionRegistry } from "../mcp/McpSessionRegistry.ts";
 import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
 import { MeshReplicator } from "./MeshReplicator.ts";
+import { MeshRelay } from "./MeshRelay.ts";
 
 const encode = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 it.effect(
@@ -48,6 +49,20 @@ it.effect(
               sync: Effect.void,
               status: Effect.succeed({ peers: [] }),
             }),
+            Layer.mock(MeshRelay)({
+              routes: Effect.succeed(["studio"]),
+              status: Effect.succeed([
+                {
+                  environmentId: "studio",
+                  state: "direct",
+                  via: null,
+                  direction: "inbound",
+                  connectedAt: "2026-11-04T00:00:00.000Z",
+                  offlineSince: null,
+                  lastError: null,
+                },
+              ]),
+            }),
           ),
         ),
       );
@@ -79,6 +94,18 @@ it.effect(
       const accepted = yield* post("link", body);
       expect(accepted.status).toBe(200);
       expect(yield* accepted.text).toContain('"seq\\":0');
+      const legacyRoutes = yield* post("link", {
+        ...body,
+        params: { name: "t3_mesh_routes", arguments: {} },
+      });
+      expect(yield* legacyRoutes.text).toContain('[\\"studio\\"]');
+      const routes = yield* post("link", {
+        ...body,
+        params: { name: "t3_mesh_routes", arguments: { details: true } },
+      });
+      const details = yield* routes.text;
+      expect(details).toContain('\\"connections\\"');
+      expect(details).toContain('\\"state\\":\\"direct\\"');
       const init = yield* post("agent", {
         jsonrpc: "2.0",
         id: 1,

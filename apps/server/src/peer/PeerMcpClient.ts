@@ -6,19 +6,33 @@ import {
   type RuntimeMode,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Hex from "effect/encoding/Hex";
 import * as HttpBody from "effect/http/HttpBody";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
 import * as PeerLinks from "./PeerLinks.ts";
+import * as PeerSessions from "./connection/PeerSessions.ts";
+import * as PeerTransport from "./connection/PeerTransport.ts";
+import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 
 /** The only MCP protocol version a T3 Code `/mcp` registers. */
 const PROTOCOL_VERSION = "2025-06-18";
+const encodeSeed = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
+
+/** The raw tool answer: MCP text the caller decodes, and whether the tool refused. */
+interface PeerCallAnswer {
+  readonly text: string;
+  readonly isError: boolean;
+}
 
 /** The limits a call carries to the peer: the calling agent's modes here. */
 export interface PeerCallLimits {
@@ -36,6 +50,7 @@ export interface PeerCallLimits {
 export class PeerMcpClient extends Context.Service<
   PeerMcpClient,
   {
+    readonly connectionAvailable?: (environmentId: string) => Effect.Effect<boolean>;
     /** Calls `tool` on the peer and decodes its structured result with `success`. */
     readonly call: <S extends Schema.Decoder<unknown>>(input: {
       readonly environmentId: EnvironmentId;
@@ -43,6 +58,7 @@ export class PeerMcpClient extends Context.Service<
       readonly arguments: Record<string, unknown>;
       readonly limits: PeerCallLimits;
       readonly hops?: readonly string[];
+      readonly idempotencyKey?: string;
       readonly success: S;
     }) => Effect.Effect<S["Type"], OrchestratorMcpFailure>;
   }
@@ -98,7 +114,10 @@ const responseJson = (contentType: string | undefined, text: string) =>
 
 const make = Effect.gen(function* () {
   const links = yield* PeerLinks.PeerLinks;
+  const crypto = yield* Crypto.Crypto;
+  const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
   const httpClient = yield* HttpClient.HttpClient;
+  const environment = yield* Effect.serviceOption(ServerEnvironment.ServerEnvironment);
   // One MCP session per peer and address, reused across calls. The peer keeps
   // sessions in memory, so a restart there answers 404 and we start a new one.
   const sessions = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
@@ -155,12 +174,24 @@ const make = Effect.gen(function* () {
     return sessionId;
   });
 
-  const call: PeerMcpClient["Service"]["call"] = Effect.fn("PeerMcpClient.call")(
-    function* (input) {
-      const resolved = yield* links
-        .resolve(input.environmentId)
-        .pipe(Effect.mapError(fromLinkError));
+  const callOverHttp = Effect.fn("PeerMcpClient.callOverHttp")(
+    function* (input: {
+      readonly url: string;
+      readonly token: string;
+      readonly tool: string;
+      readonly arguments: Record<string, unknown>;
+      readonly limits: PeerCallLimits;
+      readonly hops?: readonly string[];
+      readonly idempotencyKey?: string;
+      readonly callerEnvironmentId?: string;
+    }) {
       const limitHeader = {
+        ...(input.idempotencyKey === undefined
+          ? {}
+          : { "t3-idempotency-key": input.idempotencyKey }),
+        ...(input.callerEnvironmentId === undefined
+          ? {}
+          : { "t3-peer-environment-id": input.callerEnvironmentId }),
         ...(input.hops === undefined ? {} : { "t3-mesh-hops": input.hops.join(",") }),
         ...(input.limits.files
           ? { [McpInvocationContext.FILES_LIMIT_HEADER]: input.limits.files }
@@ -170,11 +201,11 @@ const make = Effect.gen(function* () {
           : {}),
         [McpInvocationContext.MODE_LIMIT_HEADER]: `${input.limits.runtimeMode}/${input.limits.interactionMode}`,
       };
-      const sessionKey = `${input.environmentId} ${resolved.url}`;
+      const sessionKey = `${input.url}\n${input.token}`;
       const callOnce = (sessionId: string) =>
         post(
-          resolved.url,
-          resolved.token,
+          input.url,
+          input.token,
           {
             jsonrpc: "2.0",
             id: 1,
@@ -184,14 +215,14 @@ const make = Effect.gen(function* () {
           { ...limitHeader, "mcp-session-id": sessionId, "mcp-protocol-version": PROTOCOL_VERSION },
         );
       const existing = (yield* Ref.get(sessions)).get(sessionKey);
-      const sessionId = existing ?? (yield* openSession(resolved.url, resolved.token, limitHeader));
+      const sessionId = existing ?? (yield* openSession(input.url, input.token, limitHeader));
       // The initialized session outlives a tool request, including a long wait or cancellation.
       if (existing === undefined) {
         yield* Ref.update(sessions, (current) => new Map(current).set(sessionKey, sessionId));
       }
       let response = yield* callOnce(sessionId);
       if (response.status === 404) {
-        const renewed = yield* openSession(resolved.url, resolved.token, limitHeader);
+        const renewed = yield* openSession(input.url, input.token, limitHeader);
         yield* Ref.update(sessions, (current) => new Map(current).set(sessionKey, renewed));
         response = yield* callOnce(renewed);
       }
@@ -226,36 +257,13 @@ const make = Effect.gen(function* () {
           message: body.error?.message ?? "The linked environment returned no result.",
         });
       }
-      const text = body.result.content.map((part) => part.text ?? "").join("");
-      if (body.result.isError === true) {
-        // A refusal keeps the peer's own code, so the agent sees why it was refused.
-        const refused = decodeFailure(text);
-        return yield* refused._tag === "Some"
-          ? new OrchestratorMcpFailure({ code: refused.value.code, message: refused.value.message })
-          : new OrchestratorMcpFailure({
-              code: "orchestration_error",
-              message: text || "The linked environment refused the call.",
-            });
-      }
-      const success = Schema.fromJsonString(input.success);
-      return yield* Schema.decodeEffect(success)(text).pipe(
-        Effect.mapError(
-          () =>
-            new OrchestratorMcpFailure({
-              code: "orchestration_error",
-              message:
-                "The linked environment's answer did not match this version. Update both environments.",
-            }),
-        ),
-      );
+      return {
+        text: body.result.content.map((part) => part.text ?? "").join(""),
+        isError: body.result.isError === true,
+      };
     },
-    (effect, input) =>
+    (effect) =>
       effect.pipe(
-        Effect.tapError((error) =>
-          links.recordOutcome(input.environmentId, { error: error.message }),
-        ),
-        Effect.tap(() => links.recordOutcome(input.environmentId, { error: null })),
-        // Recorded above with the transport's own message; the agent hears it plainly.
         Effect.catchTags({
           HttpClientError: () =>
             Effect.fail(
@@ -268,7 +276,156 @@ const make = Effect.gen(function* () {
       ),
   );
 
-  return PeerMcpClient.of({ call });
+  /** One decoding path for both transports: a refusal keeps the peer's own code. */
+  const decodeAnswer = <S extends Schema.Decoder<unknown>>(
+    success: S,
+    answer: PeerCallAnswer,
+  ): Effect.Effect<S["Type"], OrchestratorMcpFailure> =>
+    answer.isError
+      ? Effect.gen(function* () {
+          const refused = decodeFailure(answer.text);
+          return yield* refused._tag === "Some"
+            ? new OrchestratorMcpFailure({
+                code: refused.value.code,
+                message: refused.value.message,
+              })
+            : new OrchestratorMcpFailure({
+                code: "orchestration_error",
+                message: answer.text || "The linked environment refused the call.",
+              });
+        })
+      : Schema.decodeEffect(Schema.fromJsonString(success))(answer.text).pipe(
+          Effect.mapError(
+            () =>
+              new OrchestratorMcpFailure({
+                code: "orchestration_error",
+                message:
+                  "The linked environment's answer did not match this version. Update both environments.",
+              }),
+          ),
+        );
+
+  const call: PeerMcpClient["Service"]["call"] = Effect.fn("PeerMcpClient.call")(
+    function* (input) {
+      const creates =
+        /(?:create|launch|fork|handoff_import|receive_handoff|project_place|delegate_task|schedule_task|thread_send|thread_transfer)/.test(
+          input.tool,
+        );
+      const seed =
+        input.idempotencyKey === undefined
+          ? creates
+            ? [
+                input.tool,
+                typeof input.arguments.clientRequestId === "string"
+                  ? input.arguments.clientRequestId
+                  : yield* crypto.randomUUIDv4().pipe(Effect.orDie),
+              ]
+            : undefined
+          : ["explicit", input.idempotencyKey];
+      const key =
+        seed === undefined
+          ? undefined
+          : `peer:${Hex.encode(yield* crypto.digest("SHA-256", new TextEncoder().encode(encodeSeed(seed))).pipe(Effect.orDie))}`;
+      const argumentsWithIdentity =
+        key !== undefined &&
+        input.arguments.clientRequestId === undefined &&
+        [
+          "delegate_task",
+          "create_threads",
+          "schedule_task",
+          "t3_thread_launch",
+          "t3_thread_send",
+          "t3_thread_move",
+        ].includes(input.tool)
+          ? { ...input.arguments, clientRequestId: key }
+          : input.arguments;
+      const optionalSessions: Effect.Effect<Option.Option<PeerSessions.PeerSessions["Service"]>> =
+        Effect.serviceOption(PeerSessions.PeerSessions);
+      const captured = Option.isSome(transport) ? transport.value.get() : undefined;
+      const sessions = captured === undefined ? yield* optionalSessions : Option.some(captured);
+      const useConnection =
+        Option.isSome(sessions) &&
+        (yield* sessions.value.status).some(
+          (item) => item.environmentId === input.environmentId && item.state !== "offline",
+        );
+      let answer: PeerCallAnswer;
+      if (useConnection && Option.isSome(sessions)) {
+        const result = yield* sessions.value
+          .call({
+            environmentId: String(input.environmentId),
+            ...(key === undefined ? {} : { key }),
+            body: {
+              kind: "tool",
+              tool: input.tool,
+              arguments: argumentsWithIdentity,
+              limits: input.limits,
+              ...(input.hops === undefined ? {} : { hops: [...input.hops] }),
+            },
+          })
+          .pipe(
+            Effect.mapError(
+              (error) =>
+                new OrchestratorMcpFailure({
+                  code: "orchestration_error",
+                  message: error.message,
+                }),
+            ),
+          );
+        answer = { text: result.text, isError: result.isError };
+      } else {
+        const resolved = yield* links
+          .resolve(input.environmentId)
+          .pipe(Effect.mapError(fromLinkError));
+        answer = yield* callOverHttp({
+          url: resolved.url,
+          token: resolved.token,
+          ...(key === undefined ? {} : { idempotencyKey: key }),
+          ...(Option.isSome(environment)
+            ? { callerEnvironmentId: String(yield* environment.value.getEnvironmentId) }
+            : {}),
+          tool: input.tool,
+          arguments: argumentsWithIdentity,
+          limits: input.limits,
+          ...(input.hops === undefined ? {} : { hops: input.hops }),
+        });
+      }
+      const value: (typeof input.success)["Type"] = yield* decodeAnswer(input.success, answer);
+      return value;
+    },
+    (effect, input) =>
+      effect.pipe(
+        Effect.timeout("60 seconds"),
+        Effect.catchTags({
+          TimeoutError: () =>
+            Effect.fail(
+              new OrchestratorMcpFailure({
+                code: "orchestration_error",
+                message: "Peer call timed out",
+              }),
+            ),
+        }),
+        Effect.tapError((error) =>
+          links.recordOutcome(input.environmentId, { error: error.message }),
+        ),
+        Effect.tap(() => links.recordOutcome(input.environmentId, { error: null })),
+      ),
+  );
+
+  return PeerMcpClient.of({
+    call,
+    connectionAvailable: Effect.fn("PeerMcpClient.connectionAvailable")((environmentId) => {
+      const network = Option.isSome(transport) ? transport.value.get() : undefined;
+      return network
+        ? network.status.pipe(
+            Effect.map((states) =>
+              states.some(
+                (state) => state.environmentId === environmentId && state.state !== "offline",
+              ),
+            ),
+          )
+        : Effect.succeed(false);
+    }),
+  });
 });
 
-export const layer = Layer.effect(PeerMcpClient, make);
+export const layer = Layer.effect(PeerMcpClient, make).pipe(Layer.provide(NodeCrypto.layer));

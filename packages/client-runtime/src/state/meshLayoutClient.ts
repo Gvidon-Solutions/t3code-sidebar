@@ -11,11 +11,12 @@ import {
   materialize,
   merge,
   tick,
+  keys,
   type Hlc,
   type MeshLayoutDocument,
 } from "@t3tools/shared/meshLayout";
 import * as Schema from "effect/Schema";
-import type { Atom } from "effect/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import type * as EnvironmentRegistry from "../connection/registry.ts";
 import {
   createEnvironmentRpcCommand,
@@ -449,11 +450,20 @@ export class MeshLayoutStore {
 export function createMeshLayoutAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry.EnvironmentRegistry | R, E>,
 ) {
+  const subscribe = createEnvironmentRpcSubscriptionAtomFamily(runtime, {
+    label: "environment-data:mesh-layout:subscribe",
+    tag: MESH_WS_METHODS.layoutSubscribe,
+  });
+  const connectionChanges = Atom.family((environmentId: EnvironmentId) =>
+    subscribe({ environmentId, input: {} }).pipe(
+      Atom.map(
+        (result) =>
+          AsyncResult.getOrElse(result, () => null)?.document[keys.machine(environmentId)]?.h ?? "",
+      ),
+    ),
+  );
   return {
-    subscribe: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
-      label: "environment-data:mesh-layout:subscribe",
-      tag: MESH_WS_METHODS.layoutSubscribe,
-    }),
+    subscribe,
     get: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:mesh-layout:get",
       tag: MESH_WS_METHODS.layoutGet,
@@ -466,6 +476,7 @@ export function createMeshLayoutAtoms<R, E>(
       label: "environment-data:mesh-layout:status",
       tag: MESH_WS_METHODS.status,
       refreshIntervalMs: 60_000,
+      refreshTrigger: ({ environmentId }) => connectionChanges(environmentId),
     }),
   };
 }
