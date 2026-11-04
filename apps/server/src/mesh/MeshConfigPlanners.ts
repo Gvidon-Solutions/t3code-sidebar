@@ -127,11 +127,43 @@ export const layer = Layer.effect(
         );
       }),
     };
+    const reconcileProject = Effect.fn("MeshConfigPlanners.reconcileProject")(function* (
+      key: string,
+    ) {
+      const state = (yield* snapshot).config;
+      const service = yield* replicaService;
+      yield* Effect.forEach(
+        (state.projectMounts[key] ?? []).filter(
+          (rep) => rep.role === "replica" && replicaDriver(state, rep) === mesh.environmentId,
+        ),
+        (rep) =>
+          service.retry({ logicalKey: key, environmentId: rep.environmentId }).pipe(
+            Effect.mapError(failure),
+            Effect.flatMap((status) =>
+              status.state === "error"
+                ? Effect.fail(
+                    new MeshConfigError({
+                      reason: "storage",
+                      message: status.message ?? status.problems.join("; "),
+                    }),
+                  )
+                : Effect.void,
+            ),
+          ),
+        { concurrency: 4, discard: true },
+      );
+    });
     const projectActions = Effect.fn("MeshConfigPlanners.projectActions")(function* (kind: string) {
       const state = (yield* snapshot).config;
       return Object.entries(state.projectMounts).flatMap(([key, reps]) => {
         const title = titleOf(state.projectTitles, key);
-        return title && reps.some((rep) => rep.environmentId === mesh.environmentId)
+        return title &&
+          reps.some(
+            (rep) =>
+              rep.role === "replica" &&
+              (rep.environmentId === mesh.environmentId ||
+                replicaDriver(state, rep) === mesh.environmentId),
+          )
           ? [
               {
                 id: `${kind}/${key}`,
@@ -169,14 +201,14 @@ export const layer = Layer.effect(
             },
           }))
           .pipe(Effect.mapError(failure));
-        yield* (yield* replicaService).reconcile.pipe(Effect.mapError(failure));
+        yield* reconcileProject(key);
       }),
     };
     const conflicts: ConfigPlanner = {
       name: "conflicts",
       plan: Effect.fn("MeshConfigPlanners.conflicts.plan")(() => projectActions("conflicts")),
-      reconcile: Effect.fn("MeshConfigPlanners.conflicts.reconcile")(function* () {
-        yield* (yield* replicaService).reconcile.pipe(Effect.mapError(failure));
+      reconcile: Effect.fn("MeshConfigPlanners.conflicts.reconcile")(function* (action) {
+        yield* reconcileProject(yield* requireProject(action));
       }),
     };
     const marker = (key: string, environmentId: string) =>
@@ -282,7 +314,7 @@ export const layer = Layer.effect(
               },
             }))
             .pipe(Effect.mapError(failure));
-          yield* service.reconcile.pipe(Effect.mapError(failure));
+          yield* reconcileProject(key);
         }
       }),
     };

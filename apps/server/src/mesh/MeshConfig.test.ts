@@ -84,6 +84,59 @@ const oncePlanners = Layer.succeed(Config.MeshConfigPlanners, [
     ),
   },
 ]);
+it.effect(
+  "reconciles the latest revision after observed changes queue behind a running action",
+  () =>
+    Effect.gen(function* () {
+      const entered = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const finished = yield* Deferred.make<void>();
+      const executed: string[] = [];
+      const planners = Layer.succeed(Config.MeshConfigPlanners, [
+        {
+          name: "revision",
+          plan: (doc) =>
+            Effect.succeed([
+              {
+                id: String(doc.machines.studio?.label),
+                server: "studio",
+                description: "Apply latest revision",
+              },
+            ]),
+          reconcile: Effect.fn("test.reconcileRevision")(function* (action) {
+            executed.push(action.id);
+            if (action.id === "first") {
+              yield* Deferred.succeed(entered, undefined);
+              yield* Deferred.await(release);
+            } else yield* Deferred.succeed(finished, undefined);
+          }),
+        },
+      ]);
+      yield* Effect.gen(function* () {
+        const config = yield* Config.MeshConfig;
+        const mesh = yield* MeshLayoutService;
+        const first = yield* config.apply(
+          { schema: 1, machines: { studio: { label: "first" } } },
+          null,
+        );
+        yield* config.start;
+        yield* Deferred.await(entered);
+        yield* mesh.apply({
+          "mesh.machineBinding/studio": { h: yield* mesh.nextHlc, v: "studio" },
+        });
+        yield* config.apply(
+          { schema: 1, machines: { studio: { label: "latest" } } },
+          first.revision,
+        );
+        yield* Deferred.succeed(release, undefined);
+        yield* Deferred.await(finished);
+        expect(executed.filter((id) => id === "first")).toHaveLength(1);
+        expect(executed).toContain("latest");
+      }).pipe(
+        Effect.provide(Config.layer.pipe(Layer.provideMerge(layout), Layer.provide(planners))),
+      );
+    }).pipe(Effect.scoped),
+);
 it.layer(Config.layer.pipe(Layer.provideMerge(layout), Layer.provide(oncePlanners)))(
   "MeshConfig completed action retention",
   (it) => {

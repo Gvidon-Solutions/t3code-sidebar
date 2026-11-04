@@ -211,11 +211,16 @@ export const layer = Layer.effect(
             .filter(([key, entry]) => key.startsWith("mesh.configHistory/") && entry.v !== null)
             .map(([key]) => key)
             .sort(),
-          machines: snapshot.config.machines,
+          machines: Object.fromEntries(
+            Object.entries(snapshot.config.machines).map(([id, machine]) => {
+              const { reported: _reported, ...identity } = machine;
+              return [id, identity];
+            }),
+          ),
         }),
       })),
       Stream.changesWith((a, b) => a.signature === b.signature),
-      Stream.map(({ snapshot }) => revisionAt(snapshot.document, "mesh.config")),
+      Stream.mapEffect(() => current),
     );
     const retries = Stream.fromSchedule(Schedule.spaced("30 seconds")).pipe(
       Stream.filterEffect(() =>
@@ -228,114 +233,116 @@ export const layer = Layer.effect(
     const start = Effect.gen(function* () {
       if (yield* Ref.getAndSet(started, true)) return;
       yield* Stream.merge(inputs, retries).pipe(
-        Stream.runForEach((revision) =>
-          Effect.gen(function* () {
-            if (!revision) return;
-            const lastRevision = yield* Ref.get(activeRevision);
-            const observed = yield* mesh.read;
-            const stored = decodeStatus(
-              observed.document[`mesh.configStatus/${encodeURIComponent(mesh.environmentId)}`]?.v,
-            );
-            const previous =
-              lastRevision === revision.revision
-                ? yield* SubscriptionRef.get(statuses)
-                : stored._tag === "Some" && stored.value.revision === revision.revision
-                  ? stored.value.actions
-                  : [];
-            const errors = referenceErrors(revision.doc);
-            if (errors.length)
-              return yield* new MeshConfigError({
-                reason: "validation",
-                message: errors.map((e) => `${e.path}: ${e.message}`).join("; "),
-              });
-            const bound = bindingsFromLayout(observed.document);
-            const actions = (yield* Effect.forEach(planners, (planner) =>
-              planner.plan(revision.doc, undefined).pipe(
-                Effect.provideService(MeshLayoutService, mesh),
-                Effect.map((actions) => actions.map((action) => ({ planner, action }))),
-              ),
-            ))
-              .flat()
-              .filter(
-                ({ action }) =>
-                  action.server === "*" ||
-                  action.server === mesh.environmentId ||
-                  bound[action.server] === mesh.environmentId,
+        Stream.runForEach(() =>
+          Effect.flatMap(current, (revision) =>
+            Effect.gen(function* () {
+              if (!revision) return;
+              const lastRevision = yield* Ref.get(activeRevision);
+              const observed = yield* mesh.read;
+              const stored = decodeStatus(
+                observed.document[`mesh.configStatus/${encodeURIComponent(mesh.environmentId)}`]?.v,
               );
-            const pendingIds = new Set(actions.map(({ action }) => action.id));
-            const completed = previous.filter(
-              (item) => item.state === "done" && !pendingIds.has(item.id),
-            );
-            yield* SubscriptionRef.set(statuses, [
-              ...completed,
-              ...actions.map(({ action }) => ({ ...action, state: "in_progress" as const })),
-            ]);
-            yield* Ref.set(activeRevision, revision.revision);
-            yield* publishStatus(revision.revision).pipe(
-              Effect.catch((error) => Effect.logError("Config status persistence failed", error)),
-            );
-            yield* Effect.forEach(
-              actions,
-              ({ planner, action }, index) =>
-                planner.reconcile(action, revision.doc).pipe(
+              const previous =
+                lastRevision === revision.revision
+                  ? yield* SubscriptionRef.get(statuses)
+                  : stored._tag === "Some" && stored.value.revision === revision.revision
+                    ? stored.value.actions
+                    : [];
+              const errors = referenceErrors(revision.doc);
+              if (errors.length)
+                return yield* new MeshConfigError({
+                  reason: "validation",
+                  message: errors.map((e) => `${e.path}: ${e.message}`).join("; "),
+                });
+              const bound = bindingsFromLayout(observed.document);
+              const actions = (yield* Effect.forEach(planners, (planner) =>
+                planner.plan(revision.doc, undefined).pipe(
                   Effect.provideService(MeshLayoutService, mesh),
-                  Effect.timeout("60 seconds"),
-                  Effect.matchEffect({
-                    onSuccess: () =>
-                      SubscriptionRef.update(statuses, (items) =>
-                        items.map((item, i) =>
-                          i === completed.length + index
-                            ? { ...item, state: "done" as const }
-                            : item,
-                        ),
-                      ),
-                    onFailure: (error) =>
-                      SubscriptionRef.update(statuses, (items) =>
-                        items.map((item, i) =>
-                          i === completed.length + index
-                            ? { ...item, state: "failed" as const, reason: error.message }
-                            : item,
-                        ),
-                      ),
-                  }),
+                  Effect.map((actions) => actions.map((action) => ({ planner, action }))),
                 ),
-              { concurrency: 4, discard: true },
-            );
-            yield* publishStatus(revision.revision).pipe(
-              Effect.catch((error) => Effect.logError("Config status persistence failed", error)),
-            );
-            const expired = (yield* history).slice(50);
-            if (expired.length) {
-              const h = yield* mesh.nextHlc;
-              yield* mesh.apply(
-                Object.fromEntries(
-                  expired.map((old) => [
-                    `mesh.configHistory/${encodeURIComponent(old.revision)}`,
-                    { v: null, h },
-                  ]),
-                ),
+              ))
+                .flat()
+                .filter(
+                  ({ action }) =>
+                    action.server === "*" ||
+                    action.server === mesh.environmentId ||
+                    bound[action.server] === mesh.environmentId,
+                );
+              const pendingIds = new Set(actions.map(({ action }) => action.id));
+              const completed = previous.filter(
+                (item) => item.state === "done" && !pendingIds.has(item.id),
               );
-            }
-          }).pipe(
-            Effect.catch((error) =>
-              Effect.gen(function* () {
-                if (revision) yield* Ref.set(activeRevision, revision.revision);
-                yield* SubscriptionRef.set(statuses, [
-                  {
-                    id: "config/reconcile",
-                    server: mesh.environmentId,
-                    description: "Reconcile config",
-                    state: "failed",
-                    reason: error.message,
-                  },
-                ]);
-                if (revision)
-                  yield* publishStatus(revision.revision).pipe(
-                    Effect.catch((storage) =>
-                      Effect.logError("Config status persistence failed", storage),
-                    ),
-                  );
-              }),
+              yield* SubscriptionRef.set(statuses, [
+                ...completed,
+                ...actions.map(({ action }) => ({ ...action, state: "in_progress" as const })),
+              ]);
+              yield* Ref.set(activeRevision, revision.revision);
+              yield* publishStatus(revision.revision).pipe(
+                Effect.catch((error) => Effect.logError("Config status persistence failed", error)),
+              );
+              yield* Effect.forEach(
+                actions,
+                ({ planner, action }, index) =>
+                  planner.reconcile(action, revision.doc).pipe(
+                    Effect.provideService(MeshLayoutService, mesh),
+                    Effect.timeout("60 seconds"),
+                    Effect.matchEffect({
+                      onSuccess: () =>
+                        SubscriptionRef.update(statuses, (items) =>
+                          items.map((item, i) =>
+                            i === completed.length + index
+                              ? { ...item, state: "done" as const }
+                              : item,
+                          ),
+                        ),
+                      onFailure: (error) =>
+                        SubscriptionRef.update(statuses, (items) =>
+                          items.map((item, i) =>
+                            i === completed.length + index
+                              ? { ...item, state: "failed" as const, reason: error.message }
+                              : item,
+                          ),
+                        ),
+                    }),
+                  ),
+                { concurrency: 4, discard: true },
+              );
+              yield* publishStatus(revision.revision).pipe(
+                Effect.catch((error) => Effect.logError("Config status persistence failed", error)),
+              );
+              const expired = (yield* history).slice(50);
+              if (expired.length) {
+                const h = yield* mesh.nextHlc;
+                yield* mesh.apply(
+                  Object.fromEntries(
+                    expired.map((old) => [
+                      `mesh.configHistory/${encodeURIComponent(old.revision)}`,
+                      { v: null, h },
+                    ]),
+                  ),
+                );
+              }
+            }).pipe(
+              Effect.catch((error) =>
+                Effect.gen(function* () {
+                  if (revision) yield* Ref.set(activeRevision, revision.revision);
+                  yield* SubscriptionRef.set(statuses, [
+                    {
+                      id: "config/reconcile",
+                      server: mesh.environmentId,
+                      description: "Reconcile config",
+                      state: "failed",
+                      reason: error.message,
+                    },
+                  ]);
+                  if (revision)
+                    yield* publishStatus(revision.revision).pipe(
+                      Effect.catch((storage) =>
+                        Effect.logError("Config status persistence failed", storage),
+                      ),
+                    );
+                }),
+              ),
             ),
           ),
         ),

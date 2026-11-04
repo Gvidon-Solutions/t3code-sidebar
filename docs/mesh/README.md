@@ -329,6 +329,9 @@ Reconciliation runs on config, binding and project/representation changes, resum
 retries failed actions every thirty seconds. Reported status is replicated; an unreported or stale
 server is shown as waiting rather than done. Conditional and manual replica rules do not eagerly
 materialize copies: thread placement uses the existing replica service when that lifecycle is triggered.
+Queued observations always reconcile the current revision; reported machine facts do not schedule
+config work. Project actions retry only that project's driven sessions, so an unrelated stalled
+replica cannot hold a config action behind a full-mesh scan.
 
 N1 transports must preserve the optional `PeerCallLimits.files` and `replicas` ceilings
 (`T3-Files-Limit` / `T3-Replicas-Limit` on HTTP) and the authenticated `peerEnvironmentId` in the

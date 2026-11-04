@@ -1,5 +1,5 @@
 import type { Json } from "@t3tools/shared/meshLayout";
-import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
+import { MeshConfigError, ReplicaError, type MeshConfigDocument } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -52,7 +52,20 @@ it.effect(
   "installs display and permission policy and recreates real sessions when ignores/mode change",
   () => {
     const h = makeReplicaHarness();
-    const dependencies = runtime.pipe(Layer.provideMerge(h.layer));
+    const dependencies = Layer.effect(
+      ReplicaRuntime,
+      Effect.map(ProjectReplicaService, (service) => ({
+        get: Effect.succeed({
+          ...service,
+          reconcile: Effect.fail(
+            new ReplicaError({
+              reason: "unreachable",
+              message: "An unrelated project cannot reconcile",
+            }),
+          ),
+        }),
+      })),
+    ).pipe(Layer.provideMerge(h.layer));
     return Effect.gen(function* () {
       yield* seed;
       const mesh = yield* MeshLayoutService;
