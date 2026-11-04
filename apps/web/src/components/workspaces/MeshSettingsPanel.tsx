@@ -1,33 +1,24 @@
+import { useEnvironmentQuery } from "../../state/query";
+import { meshLayoutAtoms } from "../../state/meshLayout";
+import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
+import { useNowMinute } from "../../hooks/useNowMinute";
+import { MeshConfigDialog } from "./MeshConfigDialog";
 import { linkRequestFailureMessage } from "@t3tools/client-runtime/link-request";
 import {
-  machineDisplayOf,
-  setMachineDisplay,
-  type MachineDisplayPatch,
-} from "@t3tools/client-runtime/state/machine-display";
-import {
   linkMeshMachines,
-  deriveMeshFooterStatus,
-  meshFooterText,
-  meshMachineLastSync,
   meshConnectionText,
-  setMachineReach,
+  partitionMeshMachines,
+  forgetMachineFacts,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { WORKSPACE_COLORS } from "@t3tools/client-runtime/state/sidebar-workspaces";
-import {
-  AuthAccessWriteScope,
-  AuthSettingsWriteScope,
-  type EnvironmentId,
-} from "@t3tools/contracts";
+import { AuthAccessWriteScope, type EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
-import { Link2Icon, MonitorIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
-import { requestConfirmDialog } from "~/confirmDialog";
 import { mintPairingCodeOn } from "~/state/peerPairingCode";
 import { peerLinkEnvironment } from "~/state/peerLinks";
 import {
@@ -37,13 +28,8 @@ import {
 } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
-import { useNowMinute } from "../../hooks/useNowMinute";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
-import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
-import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
-import { AddEnvironmentDialog } from "../settings/AddEnvironmentDialog";
-import { Switch } from "../ui/switch";
-import { searchableSetting } from "../settings/settingsSearch";
+import { useEnvironments } from "../../state/environments";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
 import {
@@ -60,232 +46,10 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { MachineTag } from "./MachineTag";
-import { linkSourceOptions, linkTargetOptions, shouldOfferConnect } from "./meshSettings.logic";
-
-const COLOR_NAMES = ["Blue", "Coral", "Green", "Violet", "Amber", "Teal", "Rose", "Olive"];
-const NO_MACHINES = "No machines yet.";
+import { linkSourceOptions, linkTargetOptions } from "./meshSettings.logic";
 
 const failureToast = (title: string, description: string) =>
   toastManager.add(stackedThreadToast({ type: "error", title, description }));
-
-function ColorPicker(props: {
-  readonly value: string;
-  readonly onChange: (patch: MachineDisplayPatch) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      {WORKSPACE_COLORS.map((color, index) => {
-        const selected = props.value === color;
-        return (
-          <button
-            key={color}
-            type="button"
-            aria-label={`Color ${COLOR_NAMES[index] ?? color}`}
-            aria-pressed={selected}
-            className={`size-6 rounded-full outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${
-              selected ? "ring-2 ring-foreground/60" : ""
-            }`}
-            style={{ backgroundColor: color }}
-            onClick={() => props.onChange({ color })}
-          />
-        );
-      })}
-      <button
-        type="button"
-        className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-foreground/8 hover:text-foreground"
-        onClick={() => props.onChange({ color: null })}
-      >
-        Automatic
-      </button>
-    </div>
-  );
-}
-
-function MachineEditor(props: {
-  readonly machine: ReturnType<typeof useMeshOverview>["machines"][number];
-  readonly otherMachines: ReadonlyArray<{
-    readonly environmentId: string;
-    readonly label: string;
-    readonly tag: string;
-  }>;
-  readonly now: number;
-  readonly onEdit: (patch: MachineDisplayPatch) => void;
-  readonly onReach: (
-    target: string,
-    reach: { ssh: string; identityFile?: string | null } | null,
-  ) => void;
-  readonly onUnlink: (source: string, target: string) => void;
-  readonly onConnect: () => void;
-}) {
-  const machine = props.machine;
-  const configured = machine.reach;
-  return (
-    <SettingsSection
-      id={`machine-${machine.environmentId}`}
-      headerLayout="responsive"
-      title={machine.label}
-      titleAction={<MachineTag machine={machine} />}
-      headerAction={
-        <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs text-muted-foreground">
-          <span className="rounded-full border border-border px-2 py-0.5">
-            This device: {machine.connectedHere ? "connected" : "not connected"}
-          </span>
-          {machine.linkedWith.length > 0 ? (
-            <span className="rounded-full border border-border px-2 py-0.5">
-              Linked with: {machine.linkedWith.map((entry) => entry.tag).join(", ")}
-            </span>
-          ) : null}
-          {machine.conflicts > 0 ? (
-            <span className="rounded-full border border-destructive/40 px-2 py-0.5 text-destructive">
-              {machine.conflicts} {machine.conflicts === 1 ? "conflict" : "conflicts"}
-            </span>
-          ) : null}
-        </div>
-      }
-    >
-      <SettingsRow
-        title="Label"
-        description="The machine's name in the sidebar. Its server label is used when empty."
-        control={
-          <Input
-            key={`label:${machine.label}`}
-            aria-label={`Label for ${machine.label}`}
-            defaultValue={machine.label}
-            className="w-full @min-[32rem]/settings-row:w-56"
-            onBlur={(event) => props.onEdit({ label: event.currentTarget.value })}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-          />
-        }
-      />
-      <SettingsRow
-        title="Tag"
-        description="Up to three characters. Shown on thread rows when one list mixes machines."
-        control={
-          <Input
-            key={`tag:${machine.tag}`}
-            aria-label={`Tag for ${machine.label}`}
-            defaultValue={machine.tag}
-            maxLength={3}
-            className="w-24 text-center"
-            onBlur={(event) => props.onEdit({ tag: event.currentTarget.value })}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-          />
-        }
-      />
-      <SettingsRow
-        title="Aliases"
-        description="Alternative names for commands and voice requests, separated by commas."
-        control={
-          <Input
-            key={`aliases:${machine.environmentId}:${machine.aliases.join(",")}`}
-            aria-label={`Aliases for ${machine.label}`}
-            defaultValue={machine.aliases.join(", ")}
-            onBlur={(event) => props.onEdit({ aliases: event.currentTarget.value.split(",") })}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-          />
-        }
-      />
-      <SettingsRow
-        title="Color"
-        description="Used by the tag chip and its tooltip."
-        control={<ColorPicker value={machine.color} onChange={props.onEdit} />}
-      />
-      {machine.version === null ? null : <SettingsRow title="Version" status={machine.version} />}
-      {machine.network ? (
-        <SettingsRow
-          title="Network"
-          status={meshConnectionText(machine, props.otherMachines) ?? undefined}
-        />
-      ) : null}
-      <SettingsRow
-        title="Last layout sync"
-        description={props.now === 0 ? undefined : meshMachineLastSync(machine, props.now)}
-        status={machine.lastError ?? undefined}
-      />
-      <SettingsRow
-        title="Replicas"
-        status={`${machine.replicas} ${machine.replicas === 1 ? "replica" : "replicas"}, ${
-          machine.primaries
-        } ${machine.primaries === 1 ? "primary" : "primaries"}`}
-      />
-      {shouldOfferConnect(machine) ? (
-        <SettingsRow
-          title="Connect this device"
-          description={machine.urls.join(", ")}
-          control={
-            <Button size="xs" variant="outline" onClick={props.onConnect}>
-              <PlusIcon className="size-3" />
-              Connect
-            </Button>
-          }
-        />
-      ) : null}
-      {props.otherMachines.map((other) => (
-        <SettingsRow
-          key={`reach:${other.environmentId}`}
-          title={`SSH route to ${other.label} (${other.tag})`}
-          description="Used by replicas and agents that run commands on the other machine."
-          control={
-            <div className="flex w-full flex-col gap-2 @min-[32rem]/settings-row:w-72">
-              <Input
-                key={`reach-ssh:${other.environmentId}:${configured[other.environmentId]?.ssh ?? ""}`}
-                aria-label={`SSH destination for ${other.environmentId}`}
-                defaultValue={configured[other.environmentId]?.ssh ?? ""}
-                placeholder="user@host or an ssh alias"
-                onBlur={(event) =>
-                  props.onReach(other.environmentId, {
-                    ssh: event.currentTarget.value,
-                    identityFile: configured[other.environmentId]?.identityFile ?? null,
-                  })
-                }
-              />
-              <Input
-                key={`reach-key:${other.environmentId}:${configured[other.environmentId]?.identityFile ?? ""}`}
-                aria-label={`Identity file for ${other.environmentId}`}
-                defaultValue={configured[other.environmentId]?.identityFile ?? ""}
-                placeholder="Identity file (optional)"
-                onBlur={(event) =>
-                  props.onReach(other.environmentId, {
-                    ssh: configured[other.environmentId]?.ssh ?? "",
-                    identityFile: event.currentTarget.value,
-                  })
-                }
-              />
-            </div>
-          }
-        />
-      ))}
-      {machine.linkedWith.length > 0 ? (
-        <SettingsRow
-          title="Links"
-          description={machine.linkedWith
-            .map((entry) => `${entry.label} (${entry.tag})`)
-            .join(", ")}
-          control={
-            <div className="flex flex-wrap gap-2">
-              {machine.linkedWith.map((entry) => (
-                <Button
-                  key={entry.environmentId}
-                  size="xs"
-                  variant="destructive-outline"
-                  onClick={() => props.onUnlink(entry.environmentId, machine.environmentId)}
-                >
-                  Unlink {entry.tag}
-                </Button>
-              ))}
-            </div>
-          }
-        />
-      ) : null}
-    </SettingsSection>
-  );
-}
 
 function usePermittedLinkSources(): ReadonlyArray<{
   readonly environmentId: EnvironmentId;
@@ -494,135 +258,121 @@ function LinkWithDialog(props: {
 
 export function MeshSettingsPanel() {
   const mesh = useMeshLayout();
-  const settings = usePrimarySettings();
-  const updateSettings = useUpdatePrimarySettings();
-  const canWrite = useEnvironmentScope(usePrimaryEnvironmentId(), AuthSettingsWriteScope);
-  const config = mesh.config ?? settings.sidebarWorkspaces;
-  const { machines, links } = useMeshOverview({ config });
-  const updateConfig = (edit: (current: typeof config) => typeof config) => {
-    if (mesh.source !== null) mesh.edit(edit);
-    else updateSettings({ sidebarWorkspaces: edit(config) });
-  };
-  const unlink = useAtomCommand(peerLinkEnvironment.unlink, { label: "unlink environment" });
-  const sources = usePermittedLinkSources().map((source) => ({
-    ...source,
-    label:
-      machines.find((machine) => machine.environmentId === source.environmentId)?.label ??
-      source.label,
-  }));
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [connectMachine, setConnectMachine] = useState<
-    ReturnType<typeof useMeshOverview>["machines"][number] | null
-  >(null);
-  const [connectError, setConnectError] = useState<string | null>(null);
+  const { machines: allMachines } = useMeshOverview({ config: mesh.config });
   const now = Date.parse(useNowMinute());
-  const meshOn = settings.linkedEnvironmentsEnabled && settings.meshEnabled;
-  const otherMachines = (environmentId: string) =>
-    machines
-      .filter((machine) => machine.environmentId !== environmentId)
-      .map((machine) => ({
-        environmentId: machine.environmentId,
-        label: machine.label,
-        tag: machine.tag,
-      }));
-  const search = searchableSetting("machines-names");
-  const footer = meshFooterText(deriveMeshFooterStatus({ enabled: meshOn, machines, now }));
-  const { environments } = useEnvironments();
-  const forget = async (sourceEnvironmentId: string, target: string) => {
-    const labelOf = (environmentId: string) =>
-      machines.find((machine) => machine.environmentId === environmentId)?.label ??
-      machineDisplayOf(config, environmentId, environmentId).label;
-    const confirmed = await (requestConfirmDialog(
-      `Unlink ${labelOf(target)} from ${labelOf(sourceEnvironmentId)}? The layout they share stays on both machines.`,
-      { variant: "destructive" },
-    ) ?? Promise.resolve(false));
-    if (!confirmed) return;
-    const result = await unlink({
-      environmentId: sourceEnvironmentId as EnvironmentId,
-      input: { environmentId: target as EnvironmentId },
-    });
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-      failureToast("Could not unlink the machine", String(squashAtomCommandFailure(result)));
-    }
-  };
-
+  const { active: machines, forgotten } = partitionMeshMachines(
+    allMachines,
+    mesh.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    now,
+  );
+  const sources = usePermittedLinkSources();
+  const applyStatus = useEnvironmentQuery(
+    mesh.source ? meshLayoutAtoms.configStatus({ environmentId: mesh.source, input: {} }) : null,
+  );
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   return (
     <SettingsPageContainer>
       <SettingsSection
-        id={search.id}
-        title={search.title}
-        icon={<MonitorIcon className="size-4" />}
+        title="Mesh"
+        headerAction={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter((machine) => machine.connectedHere || machine.network?.state === "direct" || machine.network?.state === "relayed").length} online`}
       >
         <SettingsRow
-          title="Use the mesh on this machine"
-          description="Enables linked environments and keeps the workspace layout in sync with linked machines."
+          title="Configuration"
           control={
-            <Switch
-              checked={meshOn}
-              disabled={!canWrite}
-              onCheckedChange={(checked) =>
-                updateSettings({
-                  linkedEnvironmentsEnabled: Boolean(checked),
-                  meshEnabled: Boolean(checked),
-                })
-              }
-              aria-label="Use the mesh on this machine"
-            />
+            <div className="flex gap-2">
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={mesh.source === null}
+                onClick={() => setEditing(true)}
+              >
+                Edit config
+              </Button>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={sources.length === 0}
+                onClick={() => setLinkOpen(true)}
+              >
+                Link a machine
+              </Button>
+            </div>
           }
         />
-        <SettingsRow
-          title="Link with a machine"
-          description="Pair two machines this app is connected to without copying codes. With one of them missing here, paste a code from its Connections settings instead."
-          control={
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={sources.length === 0}
-              onClick={() => setLinkOpen(true)}
-            >
-              <Link2Icon className="size-3" />
-              Link with…
-            </Button>
-          }
-        />
-        {footer === null ? null : <SettingsRow title="Status" description={footer} />}
       </SettingsSection>
-      {machines.length === 0 ? (
-        <p className="px-3 py-6 text-sm text-muted-foreground sm:px-4">{NO_MACHINES}</p>
-      ) : null}
-      {config === null
-        ? null
-        : machines.map((machine) => (
-            <MachineEditor
+      {machines.map((machine) => (
+        <SettingsSection
+          key={machine.environmentId}
+          title={machine.label}
+          titleAction={<MachineTag machine={machine} />}
+        >
+          <SettingsRow
+            title={mesh.config?.machines[machine.environmentId]?.title ?? machine.label}
+            status={
+              machine.connectedHere
+                ? "Online"
+                : (meshConnectionText(machine, machines) ?? "Offline")
+            }
+          />
+          {machine.version ? <SettingsRow title="Version" status={machine.version} /> : null}
+          <details className="px-4 py-2 text-sm">
+            <summary>Machine details</summary>
+            <p>{mesh.config?.machines[machine.environmentId]?.reported?.platform.os}</p>
+            <p>{meshConnectionText(machine, machines)}</p>
+            {machine.lastError ? <p role="alert">{machine.lastError}</p> : null}
+            <p>
+              {machine.replicas} {machine.replicas === 1 ? "replica" : "replicas"}
+            </p>
+            {Object.entries(mesh.config?.projectMountStatus ?? {}).flatMap(([key, statuses]) =>
+              statuses[machine.environmentId]
+                ? [
+                    <p key={key}>
+                      {mesh.config?.projectTitles[key] ?? "Project"}:{" "}
+                      {statuses[machine.environmentId]?.state} ·{" "}
+                      {statuses[machine.environmentId]?.message}
+                    </p>,
+                  ]
+                : [],
+            )}
+          </details>
+        </SettingsSection>
+      ))}
+      {forgotten.length ? (
+        <details>
+          <summary>Forgotten machines ({forgotten.length})</summary>
+          {forgotten.map((machine) => (
+            <SettingsRow
               key={machine.environmentId}
-              machine={machine}
-              otherMachines={otherMachines(machine.environmentId)}
-              now={now}
-              onEdit={(patch) =>
-                updateConfig((current) => setMachineDisplay(current, machine.environmentId, patch))
+              title={machine.label}
+              control={
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() =>
+                    mesh.edit((config) => forgetMachineFacts(config, machine.environmentId))
+                  }
+                >
+                  Forget
+                </Button>
               }
-              onReach={(target, reach) =>
-                updateConfig((current) =>
-                  setMachineReach(current, machine.environmentId, target, reach),
-                )
-              }
-              onUnlink={(source, target) => {
-                if (
-                  links.some(
-                    (entry) =>
-                      entry.environmentId === source &&
-                      entry.links.some((peer) => peer.environmentId === target),
-                  )
-                )
-                  void forget(source, target);
-                else void forget(target, source);
-              }}
-              onConnect={() => {
-                setConnectError(null);
-                setConnectMachine(machine);
-              }}
             />
           ))}
+        </details>
+      ) : null}
+      <SettingsSection title="Last config apply">
+        {applyStatus.error ? <p role="alert">{applyStatus.error}</p> : null}
+        {applyStatus.data?.servers.flatMap((server) =>
+          server.actions.map((action) => (
+            <SettingsRow
+              key={`${server.environmentId}:${action.id}`}
+              title={action.description}
+              status={action.state}
+              description={action.reason}
+            />
+          )),
+        )}
+      </SettingsSection>
       <LinkWithDialog
         open={linkOpen}
         onOpenChange={setLinkOpen}
@@ -630,20 +380,9 @@ export function MeshSettingsPanel() {
         sources={sources}
         initialSource={sources[0]?.environmentId ?? null}
       />
-      {connectMachine === null ? null : (
-        <AddEnvironmentDialog
-          open
-          hideTrigger
-          routeTarget={null}
-          error={connectError}
-          savedEnvironments={environments}
-          initialHost={connectMachine.urls[0] ?? ""}
-          onOpenChange={(open) => {
-            if (!open) setConnectMachine(null);
-          }}
-          onErrorChange={setConnectError}
-        />
-      )}
+      {editing && mesh.source ? (
+        <MeshConfigDialog environmentId={mesh.source} onClose={() => setEditing(false)} />
+      ) : null}
     </SettingsPageContainer>
   );
 }

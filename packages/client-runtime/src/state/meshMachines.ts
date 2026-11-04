@@ -57,6 +57,7 @@ export interface MeshMachine extends MachineDisplay {
   readonly connectedHere: boolean;
   /** Machines connected by an incoming or outgoing peer link. */
   readonly linkedWith: readonly MeshLinkedWith[];
+  readonly lastSeenAt?: string | null;
   readonly version: string | null;
   /** The last successful layout exchange, as the server recorded it. */
   readonly lastExchangeAt: string | null;
@@ -254,6 +255,20 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         connectedHere: connection?.connected === true,
         linkedWith,
         version: connection?.version ?? config.machines[environmentId]?.reported?.version ?? null,
+        lastSeenAt:
+          [
+            peerState?.lastExchangeAt,
+            config.machines[environmentId]?.reported?.reportedAt,
+            ...peerLinks.map((link) => link.lastReachedAt),
+            ...Object.values(config.projectMounts).flatMap((mounts) =>
+              mounts
+                .filter((mount) => mount.environmentId === environmentId)
+                .map((mount) => mount.createdAt),
+            ),
+          ]
+            .filter((value): value is string => typeof value === "string")
+            .sort()
+            .at(-1) ?? null,
         lastExchangeAt: peerState?.lastExchangeAt ?? null,
         lastError:
           network?.lastError ??
@@ -407,4 +422,61 @@ export function meshConnectionText(
   if (state.state === "relayed")
     return `Via ${machines.find((item) => item.environmentId === state.via)?.label ?? "linked machine"}`;
   return state.offlineSince ? `Offline since ${state.offlineSince}` : "Offline";
+}
+
+export function partitionMeshMachines(
+  machines: readonly MeshMachine[],
+  config: SidebarWorkspacesConfig,
+  now: number,
+) {
+  const forgotten: MeshMachine[] = [];
+  const active: MeshMachine[] = [];
+  for (const machine of machines) {
+    const seen = [
+      machine.lastSeenAt,
+      machine.lastExchangeAt,
+      config.machines[machine.environmentId]?.reported?.reportedAt,
+    ]
+      .filter((value): value is string => value != null)
+      .map(Date.parse)
+      .filter(Number.isFinite);
+    const online =
+      machine.connectedHere ||
+      machine.network?.state === "direct" ||
+      machine.network?.state === "relayed";
+    if (
+      !online &&
+      machine.linkedWith.length === 0 &&
+      seen.length > 0 &&
+      now - Math.max(...seen) >= 7 * 86_400_000
+    )
+      forgotten.push(machine);
+    else active.push(machine);
+  }
+  return { active, forgotten };
+}
+
+export function forgetMachineFacts(
+  config: SidebarWorkspacesConfig,
+  environmentId: string,
+): SidebarWorkspacesConfig {
+  const machines = { ...config.machines };
+  delete machines[environmentId];
+  return {
+    ...config,
+    machines,
+    projectMounts: Object.fromEntries(
+      Object.entries(config.projectMounts).map(([key, reps]) => [
+        key,
+        reps.filter((rep) => rep.environmentId !== environmentId),
+      ]),
+    ),
+    projectMountStatus: Object.fromEntries(
+      Object.entries(config.projectMountStatus).map(([key, statuses]) => {
+        const next = { ...statuses };
+        delete next[environmentId];
+        return [key, next];
+      }),
+    ),
+  };
 }

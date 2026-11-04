@@ -464,6 +464,24 @@ export function createMeshLayoutAtoms<R, E>(
   );
   return {
     subscribe,
+    configGet: createEnvironmentRpcCommand(runtime, {
+      label: "mesh-config:get",
+      tag: MESH_WS_METHODS.configGet,
+    }),
+    configPlan: createEnvironmentRpcCommand(runtime, {
+      label: "mesh-config:plan",
+      tag: MESH_WS_METHODS.configPlan,
+    }),
+    configApply: createEnvironmentRpcCommand(runtime, {
+      label: "mesh-config:apply",
+      tag: MESH_WS_METHODS.configApply,
+    }),
+    configStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "mesh-config:status",
+      tag: MESH_WS_METHODS.configStatus,
+      refreshIntervalMs: 5_000,
+      refreshTrigger: ({ environmentId }) => connectionChanges(environmentId),
+    }),
     get: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:mesh-layout:get",
       tag: MESH_WS_METHODS.layoutGet,
@@ -480,3 +498,5 @@ export function createMeshLayoutAtoms<R, E>(
     }),
   };
 }
+
+export * from "./meshConfigEditor.ts";

@@ -6,6 +6,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildMeshMachines,
+  partitionMeshMachines,
+  forgetMachineFacts,
   deriveMeshFooterStatus,
   machineReachOf,
   meshFooterText,
@@ -415,4 +417,24 @@ it("uses current peer network state ahead of persisted facts after a clock corre
     peerConnections: [offline],
   });
   expect(machines.find((machine) => machine.environmentId === "boreal")?.network).toEqual(offline);
+});
+
+it("excludes unlinked seven-day-old machines and forgets only their layout facts", () => {
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { studio: { label: "Studio" }, cloudbox: { label: "Cloudbox" } },
+  };
+  const machines = buildMeshMachines({
+    config,
+    connections: [{ environmentId: "studio", label: "Studio", connected: true }],
+  });
+  const { active, forgotten } = partitionMeshMachines(
+    machines.map((machine) => ({ ...machine, lastSeenAt: "2026-10-01T00:00:00Z" })),
+    config,
+    Date.parse("2026-11-05T00:00:00Z"),
+  );
+  expect(active.map((machine) => machine.environmentId)).toEqual(["studio"]);
+  expect(forgotten.map((machine) => machine.environmentId)).toEqual(["cloudbox"]);
+  expect(forgetMachineFacts(config, "cloudbox").machines).toEqual({ studio: { label: "Studio" } });
+  expect(config.machines.cloudbox).toBeDefined();
 });

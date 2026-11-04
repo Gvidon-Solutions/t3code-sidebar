@@ -1,3 +1,6 @@
+vi.mock(import("../../state/query"), () => ({
+  useEnvironmentQuery: (() => ({ data: null, error: null })) as never,
+}));
 import {
   DEFAULT_UNIFIED_SETTINGS,
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
@@ -6,7 +9,6 @@ import {
 import { buildMeshMachines } from "@t3tools/client-runtime/state/mesh-machines";
 import * as Option from "effect/Option";
 import { expect, it, vi } from "vite-plus/test";
-import { page, userEvent } from "vite-plus/test/browser";
 
 import { render } from "../../../test/render";
 import { MeshSettingsPanel } from "./MeshSettingsPanel";
@@ -77,29 +79,18 @@ vi.mock(import("../../state/use-atom-command"), () => ({
 it("shows the known server version and omits a version row for a link without one", async () => {
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
-  await expect.element(screen.getByText("Remote", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("Remote", { exact: true }).first()).toBeVisible();
   await expect.element(screen.getByText("Unknown", { exact: true })).not.toBeInTheDocument();
   await expect.element(screen.getByText("Version", { exact: true })).toBeVisible();
   await expect.element(screen.getByText("0.1.5", { exact: true })).toBeVisible();
-  await userEvent.hover(screen.getByText("Remote", { exact: true }));
-  await expect.element(page.getByText("Remote", { exact: true }).nth(1)).toBeVisible();
 });
 
-it("saves multilingual machine aliases through the shared layout editor and can clear them", async () => {
+it("keeps configuration fields in the config editor and shows machine state", async () => {
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
-  const field = screen.getByRole("textbox", { name: "Aliases for Local" });
-  await userEvent.fill(field, " Office , office, 研究室");
-  await userEvent.keyboard("{Enter}");
-  await vi.waitFor(() => expect(mocks.edit).toHaveBeenCalledTimes(1));
-  const before: SidebarWorkspacesConfig = {
-    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-    machines: { local: { label: "Local", tag: "LOC", reach: { remote: { ssh: "user@worker" } } } },
-  };
-  const saved = mocks.edit.mock.calls[0]![0](before);
-  expect(saved.machines.local).toEqual({ ...before.machines.local, aliases: ["office", "研究室"] });
-  await userEvent.fill(field, "");
-  await userEvent.keyboard("{Enter}");
-  await vi.waitFor(() => expect(mocks.edit).toHaveBeenCalledTimes(2));
-  expect(mocks.edit.mock.calls[1]![0](saved).machines.local).toEqual(before.machines.local);
+  await expect.element(screen.getByRole("button", { name: "Edit config" })).toBeVisible();
+  await expect.element(screen.getByRole("button", { name: "Link a machine" })).toBeVisible();
+  await expect.element(screen.getByRole("textbox")).not.toBeInTheDocument();
+  await expect.element(screen.getByText("2 machines · 1 online", { exact: true })).toBeVisible();
+  expect(mocks.edit).not.toHaveBeenCalled();
 });

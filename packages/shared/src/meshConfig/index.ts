@@ -1,6 +1,8 @@
 import { MeshConfigDocument, MeshConfigRevision } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
+
+export const configYaml = (doc: unknown): string => stringify(doc);
 
 export const defaults = (): MeshConfigDocument => ({ schema: 1, machines: {} });
 const decodeConfig = Schema.decodeUnknownSync(MeshConfigDocument, { errors: "all" });
