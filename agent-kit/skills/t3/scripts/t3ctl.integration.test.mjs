@@ -377,6 +377,29 @@ test("new uses destination defaults and resolves explicit models against destina
   assert.equal(selection.model, "model-from-destination");
 });
 
+test("fork selects an explicit destination model outside the default short list with its effort", () => {
+  const result = run([
+    "fork",
+    "mount work",
+    "--on",
+    "lab",
+    "--agent",
+    "custom",
+    "--model",
+    "cedar-extra",
+    "--effort",
+    "low",
+    "--json",
+  ]);
+  const input = result.calls.find((call) => call.name === "t3_thread_fork").args;
+  assert.equal(input.targetEnvironmentId, peer);
+  assert.deepEqual(input.modelSelection, {
+    instanceId: "custom",
+    model: "cedar-extra",
+    options: [{ id: "reasoningEffort", value: "low" }],
+  });
+});
+
 test("full selftest requires an explicit provider and models before any server operation", () => {
   const result = spawnSync("bash", [join(base, "selftest.sh")], {
     encoding: "utf8",

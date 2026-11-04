@@ -49,7 +49,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   to `packages/client-runtime/src/state/meshLayoutClient.ts` (`MeshLayoutStore`). The store
   owns snapshots, subscriptions, optimistic edits and the persisted reconnect outbox.
 - **Routing.** A call for another machine goes direct when linked, else through one relay hop:
-  `apps/server/src/mesh/MeshRouting.ts` (`callRouted`) used by `PeerForwarding`, files, handoff.
+  `apps/server/src/mesh/MeshRouting.ts` (`callRouted`) used by `PeerForwarding`, files and forks.
 - **Replicas.** `apps/server/src/replicas/`: `MutagenInstaller` (pinned 0.18.1, sha256),
   `MutagenRunner` (CLI wrapper, private `MUTAGEN_DATA_DIRECTORY`), `ProjectReplicaService`
   (reconcile on layout change + every 30 s; deterministic session names; state machine;
@@ -67,9 +67,23 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   Ignore changes recreate the session. Conflict copies remain protected from sync. A failed remote
   live-query retains the replicated status; missing RPC reachability is not a sync failure.
 - **Threads anywhere.** `t3_thread_self` (who am I), mesh-wide list/search/read/send/wait by id
-  (`MeshThreadAccess.ts`), moves: same machine = project change (`threadMove`), other machine =
-  **handoff** (`ThreadHandoffService.ts`, `handoffBundle.ts`: transcript + attachments as context,
-  any harness/model on the target, original archived with a link).
+  (`mcp/McpToolAccess.ts`). **Move** changes the project on the same machine only
+  (`ThreadMoveService.ts`; drag, menu, CLI and MCP; no model). **Fork to machine** creates a new
+  thread elsewhere (`ThreadForkService.ts`, `forkBundle.ts`, `ForkUploads.ts`, `forkTransport.ts`):
+  ensure/place the destination representation and wait for sync, flush it, copy the transcript
+  through the last completed turn plus attachments, create the thread with the chosen
+  harness/model/effort, optionally send a first message. The original is never archived and keeps
+  running; target and source store links both ways (`meshFork`, `meshForks`). Every step has a
+  timeout. The target stages an invisible, non-runnable fork in `ForkTransactions.ts`, with a
+  token and ten-minute persisted lease. Commit publishes creation, transcript and optional first
+  message in one orchestration transaction. The source persists its commit intent and retries
+  with 1–15 s backoff, including after restart. The target retains a small token receipt for
+  idempotency; startup resumes accepted commits and expires pending forks locally. Abort is
+  only a fast cleanup path. Staging and pending attachment blobs are removed after commit or expiry.
+  Fork model pickers use `threads.forkCatalog` on the source to read the target catalog over
+  the mesh, so clients need no separate connection to each destination. Catalog reads never
+  place replicas or stage threads and time out after thirty seconds.
+  Fork works on the same machine too. Old handoff "move" data still renders as ordinary links.
 - **Draft machine selection.** Web `components/chat/useDraftEnvironmentRouting.ts` and mobile
   `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen
   machine with `planThreadOnMachine`. Replica status supplies progress and registration; the
@@ -84,7 +98,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   tools or text, and justify growth).
 - **UI.** Web `apps/web/src/components/workspaces/` (MachineTag, ProjectMachineStrip
   `A ⇄ B C`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
-  MoveThreadModelDialog, MeshFooterStatus, FileMachineTag); mobile
+  ForkThreadDialog, MeshFooterStatus, FileMachineTag); mobile
   `apps/mobile/src/features/workspaces/` (same names). Pure logic lives in
   `packages/client-runtime/src/state/{meshLayout/*,machineDisplay,meshMachines}.ts`.
 
@@ -93,10 +107,11 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 - **CLI / skill:** `agent-kit/skills/t3` (`SKILL.md`, `scripts/t3ctl.mjs`). Mesh commands:
   `mesh authority [<machine>]`, `replica adopt <session> --project P`,
   `machines`, `machines alias <M> list|add|remove|clear`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,
-  `threads/status --all`, `open`, `open-file`, `cat`, `move`, `layout get|merge`, `agents sync|status`, `self`.
+  `threads/status --all`, `open`, `open-file`, `cat`, `fork --on`, `move --project`, `layout get|merge`, `agents sync|status`, `self`.
 - **MCP tools** (in the server): `t3_project_place`, `t3_project_machines`, `t3_thread_self`,
-  `t3_thread_*` with `environmentId` (or none — ids resolve across the mesh), `t3_files_read/list`,
-  `ui_open` with `environmentId`, link-only `t3_mesh_*` and handoff tools.
+  `t3_thread_*` with `environmentId` (or none — ids resolve across the mesh), `t3_thread_fork`
+  (`environmentId` = thread's machine, `targetEnvironmentId` = destination), `t3_files_read/list`,
+  `ui_open` with `environmentId`, link-only `t3_mesh_*` and the `t3_thread_receive_fork` receiver.
 - **Agent instructions:** `agent-kit/skills/t3/global/GLOBAL.md` (the owner's canonical text, Russian)
   and `machines.json`; rendered per machine with a one-line header into `~/.claude/CLAUDE.md`,
   `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`.
@@ -201,6 +216,17 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - A fresh SCP connection may be rejected while an existing SSH session remains healthy during
   bed restarts. Use the same owned control socket for deployment SSH and SCP. Deployment retries
   happen before fault injection; they are not proof of automatic replica recovery.
+- Fork staging is keyed by fork id and lives under `<stateDir>/fork-uploads`. It is deleted after a
+  successful commit and after pending expiry or abort; do not treat leftover staging as a thread. A fork's
+  target id is deterministic (`fork:<sha256>`), so retrying the same operation is idempotent.
+
+- Fork links must survive both server shell projections and the client shell conversion; testing
+  full thread records alone misses links disappearing from the sidebar and mobile menus.
+- Fork cleanup removes chunk directories and temporary pending attachment blobs; claimed copies
+  belong to the destination thread. Even a same-machine fork must copy attachments independently.
+- The F1 flush boundary uses the existing replica driver lookup and Mutagen runner. When the
+  session is driven elsewhere it routes a link-only flush to that driver; a primary has no session.
+  S1 can replace this boundary when replica ownership changes to replica-side driving.
 
 - Canonicalizing logical keys only in memory leaves obsolete SQLite rows available to the
   replication sequence reader. Persist removals in the same transaction as canonical inserts;

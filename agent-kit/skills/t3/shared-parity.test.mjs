@@ -58,7 +58,13 @@ test("zero-clock legacy entries use server shared adoption without losing offlin
 test("alias writes advance beyond observed clocks, including counter overflow", async () => {
   const { nextMachineClock } = await import("./scripts/t3ctl.mjs");
   const { tick } = await import("../../../packages/shared/src/meshLayout/index.ts");
-  for (const last of [null, "9999999999998.00042.peer", "9999999999998.99999.peer"]) {
+  for (const last of [
+    null,
+    "0000000000000.99999.peer",
+    "0000000300000.99999.peer",
+    "9999999999998.00042.peer",
+    "9999999999998.99999.peer",
+  ]) {
     const document = last
       ? { "machine/remote": { v: { aliases: ["office", "研究室"] }, h: last } }
       : {};
@@ -75,5 +81,8 @@ test("alias writes advance beyond observed clocks, including counter overflow", 
       },
     },
   };
-  assert.deepEqual(materialize(importLegacyEntries(config, "local")).machines, config.machines);
+  assert.deepEqual(
+    materialize(importLegacyEntries(config, "local")).machines,
+    materialize(importLegacy(config, "local", "0000000000000.00000.local")).machines,
+  );
 });

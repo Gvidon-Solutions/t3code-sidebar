@@ -1,5 +1,5 @@
 import { expect, it } from "vite-plus/test";
-import { handoffEntries, handoffText, HANDOFF_ITEM_CHAR_LIMIT } from "./handoffBundle.ts";
+import { forkEntries, lastForkableRun } from "./forkBundle.ts";
 import { MessageId, ThreadId, TurnItemId, ChatAttachmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
@@ -12,7 +12,7 @@ const attachment = {
   mimeType: "text/plain",
   sizeBytes: 3,
 };
-it("copies messages and tool outputs in order, keeps attachments, and marks each truncated item", () => {
+it("copies complete messages and tool outputs in order and keeps attachments", () => {
   const messageId = MessageId.make("L-user");
   const base = {
     id: TurnItemId.make("L-item"),
@@ -30,7 +30,7 @@ it("copies messages and tool outputs in order, keeps attachments, and marks each
     completedAt: now,
     updatedAt: now,
   };
-  const entries = handoffEntries({
+  const entries = forkEntries({
     messages: [
       {
         id: messageId,
@@ -64,7 +64,7 @@ it("copies messages and tool outputs in order, keeps attachments, and marks each
         ordinal: 2,
         type: "command_execution",
         input: "cat file.txt",
-        output: "x".repeat(HANDOFF_ITEM_CHAR_LIMIT + 20),
+        output: "x".repeat(32_020),
         exitCode: 0,
       },
       {
@@ -84,7 +84,20 @@ it("copies messages and tool outputs in order, keeps attachments, and marks each
     attachments: [attachment],
   });
   expect(entries[1]?.text).toContain("cat file.txt");
-  expect(entries[1]?.text).toContain("Truncated:");
-  expect(handoffText("short")).toBe("short");
+  expect(entries[1]?.text).toContain("x".repeat(32_020));
   expect(JSON.stringify(entries)).not.toContain("private reasoning");
+});
+
+it("uses the last completed turn and ignores a turn that is still running", () => {
+  const completed = { status: "completed" as const, ordinal: 1 };
+  const running = { status: "running" as const, ordinal: 2 };
+  expect(lastForkableRun([completed, running])).toBe(completed);
+  expect(lastForkableRun([running])).toBeUndefined();
+  expect(
+    lastForkableRun([
+      completed,
+      { status: "failed", ordinal: 3 },
+      { status: "waiting", ordinal: 4 },
+    ]),
+  ).toBe(completed);
 });

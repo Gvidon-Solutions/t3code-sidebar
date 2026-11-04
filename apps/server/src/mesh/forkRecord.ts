@@ -1,30 +1,31 @@
 import {
   MessageId,
   TurnItemId,
+  type MeshForkOrigin,
+  type MeshForkRef,
   type OrchestrationV2AppThread,
   type OrchestrationV2ConversationMessage,
   type OrchestrationV2TurnItem,
-  type ThreadHandoffState,
   type HandoffEntry,
 } from "@t3tools/contracts";
 import type * as DateTime from "effect/DateTime";
 
-export function planHandoffRecord(input: {
+export function planForkRecord(input: {
   readonly thread: OrchestrationV2AppThread;
-  readonly state: ThreadHandoffState;
+  readonly origin: MeshForkOrigin;
   readonly now: DateTime.Utc;
   readonly ordinal: number;
-  readonly entries?: readonly HandoffEntry[];
+  readonly entries: readonly HandoffEntry[];
   readonly marker?: string;
 }) {
-  const { thread, state, now } = input;
+  const { thread, origin, now } = input;
   const entries = [
     ...(input.marker ? [{ role: "assistant" as const, text: input.marker, attachments: [] }] : []),
-    ...(input.entries ?? []),
+    ...input.entries,
   ];
   const messages: OrchestrationV2ConversationMessage[] = entries.map((entry, index) => ({
     ...entry,
-    id: MessageId.make(`${state.id}:${state.phase}:message:${index}`),
+    id: MessageId.make(`${origin.id}:fork:message:${index}`),
     threadId: thread.id,
     runId: null,
     nodeId: null,
@@ -35,7 +36,7 @@ export function planHandoffRecord(input: {
     creationSource: "server",
   }));
   const items: OrchestrationV2TurnItem[] = messages.map((message, index) => ({
-    id: TurnItemId.make(`${state.id}:${state.phase}:item:${index}`),
+    id: TurnItemId.make(`${origin.id}:fork:item:${index}`),
     threadId: thread.id,
     runId: null,
     nodeId: null,
@@ -64,13 +65,26 @@ export function planHandoffRecord(input: {
   return {
     thread: {
       ...thread,
-      meshHandoff: state,
+      meshFork: origin,
       updatedAt: now,
       ...(messages.length > 0 ? { historyOrigin: "v1_import" as const } : {}),
-      ...(state.phase === "completed" || state.phase === "retracted" ? { archivedAt: now } : {}),
-      ...(state.phase === "undone" ? { archivedAt: null } : {}),
+      ...(thread.meshForks ? { meshForks: thread.meshForks } : {}),
     },
     messages,
     items,
+  };
+}
+
+export function planForkLinked(input: {
+  readonly thread: OrchestrationV2AppThread;
+  readonly fork: MeshForkRef;
+  readonly now: DateTime.Utc;
+}) {
+  const forks = input.thread.meshForks ?? [];
+  if (forks.some((entry) => entry.id === input.fork.id)) return input.thread;
+  return {
+    ...input.thread,
+    meshForks: [...forks, input.fork],
+    updatedAt: input.now,
   };
 }

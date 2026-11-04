@@ -1,5 +1,3 @@
-import type { ModelSelection } from "@t3tools/contracts";
-import { MoveThreadModelDialog } from "./MoveThreadModelDialog";
 import { useScratchProject } from "../../hooks/useScratchProject";
 import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
 import { ProjectMachineStrip } from "./ProjectMachineStrip";
@@ -10,11 +8,9 @@ import { threadDropProject } from "./threadDrop.logic";
  * layout and workspace bookkeeping. The workspace config is a shared server setting.
  */
 import { MoveProjectDialog } from "./MoveProjectDialog";
-import {
-  localThreadMoveTarget,
-  threadMoveValidity,
-  moveThreadWithConfirmation,
-} from "@t3tools/client-runtime/state/mesh-layout";
+import { Button } from "../ui/button";
+import { Dialog, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from "../ui/dialog";
+import { localThreadMoveTarget, moveThread } from "@t3tools/client-runtime/state/mesh-layout";
 import { useAtomValue } from "@effect/atom-react";
 import {
   scopedThreadKey,
@@ -608,30 +604,24 @@ export default function WorkspaceSidebar() {
   const [threadDrop, setThreadDrop] = useState<string | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const moveThreadCommand = useAtomCommand(threadEnvironment.move, { reportFailure: false });
-  const [moveModel, setMoveModel] = useState<{
+  const [moveConfirm, setMoveConfirm] = useState<{
     thread: SidebarThreadSummary;
     target: (typeof projects)[number];
   } | null>(null);
-  const moveToProject = async (
-    thread: SidebarThreadSummary,
-    target: (typeof projects)[number],
-    modelSelection?: ModelSelection,
-  ) => {
-    target = localThreadMoveTarget(config, thread.environmentId, target, projects);
-    if (!modelSelection) {
-      setMovingThread(null);
-      setMoveModel({ thread, target });
-      return;
-    }
-    setMoveModel(null);
+  const moveToProject = (thread: SidebarThreadSummary, target: (typeof projects)[number]) => {
+    const resolved = localThreadMoveTarget(config, thread.environmentId, target, projects);
     setMovingThread(null);
-    const validity = threadMoveValidity(thread, target);
-    const result = await moveThreadWithConfirmation({
+    if (resolved.environmentId !== thread.environmentId) return;
+    if (resolved.id === thread.projectId) return;
+    setMoveConfirm({ thread, target: resolved });
+  };
+  const confirmMove = async () => {
+    if (!moveConfirm) return;
+    const { thread, target } = moveConfirm;
+    setMoveConfirm(null);
+    const result = await moveThread({
       source: thread,
       target,
-      modelSelection,
-      machine: machineTag(config, target.environmentId),
-      confirm: async () => true,
       move: moveThreadCommand,
     });
     if (result === null) return;
@@ -644,13 +634,7 @@ export default function WorkspaceSidebar() {
       return;
     }
     toastManager.add({
-      title:
-        "Moved to " +
-        (validity === "cross-machine"
-          ? result.value.machine
-          : target.isScratch
-            ? "No project"
-            : target.title),
+      title: `Moved to ${target.isScratch ? "No project" : target.title} on ${config.machines[target.environmentId]?.title ?? machineDisplayFor(target.environmentId).label}`,
       timeout: 10_000,
       actionProps: {
         children: "Undo",
@@ -658,12 +642,7 @@ export default function WorkspaceSidebar() {
           void reportFailure("Could not undo move", () =>
             moveThreadCommand({
               environmentId: thread.environmentId,
-              input: {
-                threadId: thread.id,
-                ...(result.value.handoffId
-                  ? { undoHandoffId: result.value.handoffId }
-                  : { projectId: thread.projectId, modelSelection: thread.modelSelection }),
-              },
+              input: { threadId: thread.id, projectId: thread.projectId },
             }),
           );
         },
@@ -2088,48 +2067,41 @@ export default function WorkspaceSidebar() {
           />
         </Suspense>
       ) : null}
-      {moveModel ? (
-        <MoveThreadModelDialog
-          environmentId={moveModel.target.environmentId}
-          projectId={moveModel.target.id}
-          current={moveModel.thread.modelSelection}
-          machine={machineTag(config, moveModel.target.environmentId)}
-          crossMachine={moveModel.thread.environmentId !== moveModel.target.environmentId}
-          copyHere={
-            moveModel.thread.environmentId !== moveModel.target.environmentId
-              ? {
-                  label: `Create a copy of ${moveModel.target.title} on ${machineTag(config, moveModel.thread.environmentId)} and move here`,
-                  run: async () => {
-                    const result = await moveThreadCommand({
-                      environmentId: moveModel.thread.environmentId,
-                      input: {
-                        threadId: moveModel.thread.id,
-                        projectId: moveModel.target.id,
-                        targetEnvironmentId: moveModel.target.environmentId,
-                        createCopy: true,
-                      },
-                    });
-                    if (result._tag === "Failure") {
-                      failureToast("Could not move thread", squashAtomCommandFailure(result));
-                    } else {
-                      setMoveModel(null);
-                      toastManager.add({ title: `Moved to ${moveModel.target.title}` });
-                    }
-                  },
-                }
-              : undefined
-          }
-          onClose={() => setMoveModel(null)}
-          onMove={(selection) => void moveToProject(moveModel.thread, moveModel.target, selection)}
-        />
+      {moveConfirm ? (
+        <Dialog open onOpenChange={(open) => (!open ? setMoveConfirm(null) : undefined)}>
+          <DialogPopup>
+            <DialogHeader>
+              <DialogTitle>
+                Move to {moveConfirm.target.isScratch ? "No project" : moveConfirm.target.title}?
+              </DialogTitle>
+            </DialogHeader>
+            <DialogPanel>
+              <p>
+                {config.machines[moveConfirm.target.environmentId]?.title ??
+                  machineDisplayFor(moveConfirm.target.environmentId).label}
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setMoveConfirm(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => void confirmMove()}>
+                  Move to {moveConfirm.target.isScratch ? "No project" : moveConfirm.target.title}
+                </Button>
+              </div>
+            </DialogPanel>
+          </DialogPopup>
+        </Dialog>
       ) : null}
       {movingThread ? (
         <MoveProjectDialog
-          projects={projects}
+          projects={projects.filter(
+            (project) => project.environmentId === movingThread.environmentId,
+          )}
           label={(project) =>
             (project.isScratch ? "No project" : project.title) +
             " · " +
-            machineTag(config, project.environmentId)
+            (config.machines[project.environmentId]?.title ??
+              machineDisplayFor(project.environmentId).label)
           }
           onSelect={(project) => void moveToProject(movingThread, project)}
           onClose={() => setMovingThread(null)}

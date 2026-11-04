@@ -38,6 +38,7 @@ describe("buildThreadActionMenuItems", () => {
       });
       const expected = reversed
         ? [
+            "fork-machine",
             "unpin",
             "unsettle",
             "unsnooze",
@@ -48,6 +49,7 @@ describe("buildThreadActionMenuItems", () => {
             "delete",
           ]
         : [
+            "fork-machine",
             "pin",
             "settle",
             "snooze",

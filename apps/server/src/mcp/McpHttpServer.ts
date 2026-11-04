@@ -1,5 +1,5 @@
-import { interceptHandoffRequest } from "../mesh/HandoffMcp.ts";
-import { ThreadHandoffService } from "../mesh/ThreadHandoffService.ts";
+import { interceptForkRequest } from "../mesh/ForkMcp.ts";
+import { ThreadForkService } from "../mesh/ThreadForkService.ts";
 import { interceptMeshRequest } from "../mesh/MeshMcp.ts";
 import { MeshRelay } from "../mesh/MeshRelay.ts";
 import { MeshReplicator } from "../mesh/MeshReplicator.ts";
@@ -204,7 +204,7 @@ const linkedEnvironmentsOff = HttpServerResponse.jsonUnsafe(
 );
 
 const makeMcpAuthMiddleware = Effect.gen(function* () {
-  const handoffs = yield* Effect.serviceOption(ThreadHandoffService);
+  const forks = yield* Effect.serviceOption(ThreadForkService);
   const meshReplicator = yield* Effect.serviceOption(MeshReplicator);
   const meshRelay = yield* Effect.serviceOption(MeshRelay);
   const registry = yield* McpSessionRegistry.McpSessionRegistry;
@@ -239,13 +239,8 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const limited = withModeLimit(invocation, request);
     if (limited === undefined) return invalidModeLimit;
     const linkedEnvironments = yield* linksEnabled;
-    const handoffResponse = yield* interceptHandoffRequest(
-      request,
-      limited,
-      handoffs,
-      linkedEnvironments,
-    );
-    if (handoffResponse !== undefined) return handoffResponse;
+    const forkResponse = yield* interceptForkRequest(request, limited, forks, linkedEnvironments);
+    if (forkResponse !== undefined) return forkResponse;
     const meshResponse = yield* interceptMeshRequest(
       request,
       limited,

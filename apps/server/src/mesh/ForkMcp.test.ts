@@ -1,6 +1,6 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -9,11 +9,11 @@ import * as Mcp from "../mcp/McpHttpServer.ts";
 import { McpSessionRegistry } from "../mcp/McpSessionRegistry.ts";
 import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
-import { ThreadHandoffService } from "./ThreadHandoffService.ts";
+import { ThreadForkService } from "./ThreadForkService.ts";
 
 const encode = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 it.effect(
-  "accepts handoffs only for full-access link sessions and hides the receiver from agents",
+  "accepts forks only for full-access link sessions and hides the receiver from agents",
   () =>
     Effect.gen(function* () {
       const transport = Mcp.layerMcpTransport.pipe(
@@ -43,7 +43,17 @@ it.effect(
                 return Effect.succeed(scope);
               },
             }),
-            Layer.mock(ThreadHandoffService)({ receive: () => Effect.succeed({ ok: true }) }),
+            Layer.mock(ThreadForkService)({
+              receive: (input) =>
+                input.action === "rollback" && input.forkId === "storage-failure"
+                  ? Effect.fail(
+                      new OrchestratorMcpFailure({
+                        code: "orchestration_error",
+                        message: "Fork transaction storage failed.",
+                      }),
+                    )
+                  : Effect.succeed({ ok: true }),
+            }),
           ),
         ),
       );
@@ -66,8 +76,8 @@ it.effect(
         id: 2,
         method: "tools/call",
         params: {
-          name: "t3_thread_receive_handoff",
-          arguments: { action: "undo", handoffId: "L-id", threadId: "L-target" },
+          name: "t3_thread_receive_fork",
+          arguments: { action: "rollback", forkId: "L-fork" },
         },
       };
       expect((yield* post("agent", body)).status).toBe(403);
@@ -75,6 +85,11 @@ it.effect(
       const accepted = yield* post("link", body);
       expect(accepted.status).toBe(200);
       expect(yield* accepted.text).toContain('"ok":true');
+      const failed = yield* post("link", {
+        ...body,
+        params: { ...body.params, arguments: { action: "rollback", forkId: "storage-failure" } },
+      });
+      expect(yield* failed.text).toContain("orchestration_error");
       const init = yield* post("agent", {
         jsonrpc: "2.0",
         id: 1,
@@ -91,6 +106,6 @@ it.effect(
         init.headers["mcp-session-id"]!,
       );
       expect(listed.status).toBe(200);
-      expect(yield* listed.text).not.toContain("t3_thread_receive_handoff");
+      expect(yield* listed.text).not.toContain("t3_thread_receive_fork");
     }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
 );

@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-04 — T3 Mesh — Stage F1 fork to machine, local-only move
+
+- **What.** A thread can be forked to another machine as a new thread with any harness/model/effort; the original stays put and keeps running. Cross-machine "move" is gone. Moving between projects on one machine is a plain local move and needs no model.
+- **How.** Fork ensures the destination representation (place replica, wait for sync), flushes the session, copies the transcript through the last completed turn and its attachments, creates the thread with `<title> (fork)`, records links both ways (`meshFork`/`meshForks`), and optionally sends a first message. Target ids are deterministic; target preparation persists an invisible, non-runnable pending fork and a commit token for ten minutes. Commit atomically publishes the thread, history and optional first message. A durable source outbox retries commit with capped backoff; token receipts make retries idempotent. Pending leases and commit intents recover after restart; uncommitted forks expire and delete staging locally. The old handoff receiver and its undo/archive flow were removed; archived "moved to" messages still render as ordinary thread links. Web and Android add "Fork to machine…" with machine titles/labels and target model availability obtained through the source mesh connection; the same-machine move dialog uses project and machine titles. `t3ctl` gains `fork --on` and `move --project`.
+- **Where.** contracts `threadFork.ts`/`threadHandoffData.ts`; server `mesh/{ThreadForkService,ForkTransactions,ForkMcp,ForkUploads,forkBundle,forkTransport,forkRecord,ThreadMoveService}.ts`, orchestrator `thread.fork.record`/`thread.fork.linked`; client-runtime `threadCommands`, `meshLayout/threadMove`; web `ForkThreadDialog`, thread menu, sidebar drag and move dialog; mobile `ForkThreadSheet`, move sheet and thread menu; `agent-kit/skills/t3`.
+
 ### 2026-11-03 — T3 Mesh — Stage N authority and automatic conflict copies
 
 - **What:** a configurable authority, automatic conflict copies, stable project identities, explicit replica folders, safe takeover of manual Mutagen sessions, and recovery across server/daemon/tunnel interruptions.

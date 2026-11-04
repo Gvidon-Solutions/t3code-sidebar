@@ -1,6 +1,7 @@
 import { MeshLayoutProvider } from "./features/workspaces/useMeshLayout";
 import { PendingMeshDraftCoordinator } from "./features/workspaces/PendingMeshDraftCoordinator";
 import { MoveThreadSheet } from "./features/workspaces/MoveThreadSheet";
+import { ForkThreadSheet } from "./features/workspaces/ForkThreadSheet";
 import { installPermissionUpdateNotice } from "./features/connection/permissionUpdateNotice";
 import { installComposerAttachmentUploads } from "./state/composer-attachment-uploads";
 import { installThreadOutboxDelivery } from "./state/threadOutboxDelivery";
@@ -255,6 +256,7 @@ function AppContent() {
                 <Dialog.Host />
                 <ThreadArrangementHost />
                 <MoveThreadSheet />
+                <ForkThreadSheet />
                 <ProjectChipIconRasterizer />
               </NativeLayoutMetricsProvider>
             </GlobalVoiceInputControl>

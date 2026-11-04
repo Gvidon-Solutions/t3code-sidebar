@@ -5,6 +5,7 @@ export type ThreadActionMenuId =
   | "find"
   | "new-thread-on-branch"
   | "fork"
+  | "fork-machine"
   | "filter-by-project"
   | "turn-into-project"
   | "project-settings"
@@ -143,6 +144,7 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     ...(state.canFork ? [{ id: "fork" as const, label: "Fork", icon: "git-fork" }] : []),
+    { id: "fork-machine" as const, label: "Fork to machine…", icon: "git-fork" },
     ...(state.supports.pinning
       ? [
           state.isPinned
