@@ -78,7 +78,11 @@ REVISION=$(jq -er '.revision' "$WORK/ws-applied.json")
 if ctl gor mesh config apply --file "$WORK/desired.json" --base "$BASE" > "$WORK/stale.txt" 2>&1; then
   die 'stale apply unexpectedly succeeded'
 fi
-grep -F 'Config changed' "$WORK/stale.txt"
+jq -Rse --arg revision "$REVISION" '
+  capture("(?<json>\\{.*\\})").json | fromjson |
+  select(.reason=="stale_revision" and .current.revision==$revision and (.diff|type)=="array") |
+  {reason,message,currentRevision:.current.revision,diff}
+' "$WORK/stale.txt"
 deadline=$((SECONDS + 180))
 while :; do
   converged=1
