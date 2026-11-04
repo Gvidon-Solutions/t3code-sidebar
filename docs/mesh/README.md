@@ -106,6 +106,19 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 
 ## Interfaces
 
+R1 preparation code lives in `apps/server/src/run/`: `RunPlan.ts` selects the closest local
+representation and maps a lite replica's relative directory to its bound primary's
+`t3-<name>` host. `RunPreparation.ts` provides the flush/conflicts/problems gate, a bounded
+deadline, and a post-command flush through the `RunSync` port. `RunOutput.ts` rewrites complete
+project-root prefixes across UTF-8 packet boundaries. These modules are not connected to the
+runtime CLI or provider spawning; they do not yet make `t3 run` available. The contracts schema
+accepts `replicas.remoteCommands`; no shims consume that setting yet.
+
+The preparation tests deliberately keep scan problems blocking a run even though ordinary replica
+status treats them as warnings: a skipped source file must not allow execution on an older copy.
+Each preparation has its own deadline and no shared lock. The output mapper preserves a bounded
+tail, so a long line can stream without waiting for a newline.
+
 - **CLI / skill:** `agent-kit/skills/t3` (`SKILL.md`, `scripts/t3ctl.mjs`). Mesh commands:
   `mesh config get|plan|apply|rollback|history`, `mesh status`, `replica adopt <session> --project P`,
   `machines`, `machines alias <M> list|add|remove|clear`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,

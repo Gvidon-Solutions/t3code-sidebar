@@ -108,6 +108,17 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-05 — R1 preparation primitives (runtime integration incomplete)
+
+- **What.** Adds tested preparation and output-mapping modules for CONCEPT §7. This entry does
+  not announce an available `t3 run` command; CLI, SSH execution and thread shims are absent.
+- **How.** Resolve the closest representation, map the relative directory to the bound primary,
+  flush before checking conflicts/problems, refuse stale files with exit 75, bound synchronization
+  time and flush after completion. Streaming mapping preserves unrelated paths and split UTF-8.
+  The config schema validates `replicas.remoteCommands` as executable names.
+- **Where.** `apps/server/src/run/{RunPlan,RunPreparation,RunOutput}.ts` and adjacent tests;
+  `packages/contracts/src/meshConfig.ts` and its test.
+
 ### 2026-11-04 — Mesh config core (Stage C1)
 
 - **What.** The mesh is now configured by one desired-state document. Machines, link permissions, replica rules, ignores and conflict policy come from it; a one-time migration writes the first revision from existing settings. Authority is gone from layout, clients, CLI and MCP. Link permissions are enforced on the receiving server, and read-only links cannot read files outside project folders.
