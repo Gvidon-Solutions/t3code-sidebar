@@ -1,6 +1,7 @@
 import * as Deferred from "effect/Deferred";
 import * as Scope from "effect/Scope";
 import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
 import * as Directory from "./MeshProjectDirectory.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import { ProjectId } from "@t3tools/contracts";
@@ -435,5 +436,110 @@ it.effect("restores a wiped store with a new generation without erasing survivin
     yield* laptop.replicator.sync;
     expect((yield* laptop.mesh.read).config.projectTitles.example).toBe("Example");
     expect(yield* studio.mesh.read).toEqual(yield* laptop.mesh.read);
+  }).pipe(Effect.scoped),
+);
+
+it.effect("retries a failed push promptly instead of waiting for the next period", () =>
+  Effect.gen(function* () {
+    const nodes = new Map<
+      string,
+      { mesh: MeshLayoutService["Service"]; replicator: MeshReplicator["Service"] }
+    >();
+    const delivered = yield* Deferred.make<void>();
+    let chatboxUp = true;
+    let calls = 0;
+    let refused = 0;
+    const createNode = Effect.fn("test.createRetryNode")(function* (id: string) {
+      const deps = Layer.mergeAll(
+        Sqlite.layerMemory,
+        Settings.layerTest({ linkedEnvironmentsEnabled: true }),
+        Layer.succeed(ServerEnvironment, {
+          getEnvironmentId: Effect.succeed(EnvironmentId.make(id)),
+          getDescriptor: Effect.succeed(descriptorOf(id, id)),
+        }),
+        Layer.mock(PeerLinks)({
+          enabled: Effect.succeed(true),
+          list: Effect.sync(() =>
+            id !== "studio"
+              ? []
+              : [
+                  {
+                    environmentId: EnvironmentId.make("chatbox"),
+                    access: "full-access" as const,
+                    status: "reachable" as const,
+                    label: "chatbox",
+                    urls: [],
+                    linkedAt: DateTime.makeUnsafe(0),
+                    expiresAt: DateTime.makeUnsafe(9999999999999),
+                    lastReachedAt: null,
+                    lastError: null,
+                  } satisfies PeerLinkSummary,
+                ],
+          ),
+        }),
+        Layer.succeed(PeerMcpClient, {
+          call: Effect.fn("test.retryExchange")(function* <
+            S extends Schema.Decoder<unknown>,
+          >(input: {
+            environmentId: EnvironmentId;
+            tool: string;
+            arguments: Record<string, unknown>;
+            limits: import("../peer/PeerMcpClient.ts").PeerCallLimits;
+            success: S;
+          }) {
+            calls++;
+            if (!chatboxUp) {
+              refused++;
+              return yield* new OrchestratorMcpFailure({
+                code: "orchestration_error",
+                message: "chatbox is down",
+              });
+            }
+            const request = decodeExchange(input.arguments);
+            const response = yield* nodes
+              .get(input.environmentId)!
+              .replicator.exchange(request)
+              .pipe(
+                Effect.mapError(
+                  (error) =>
+                    new OrchestratorMcpFailure({
+                      code: "orchestration_error",
+                      message: error.message,
+                    }),
+                ),
+              );
+            if (Object.hasOwn(request.entries, "machine/studio"))
+              yield* Deferred.succeed(delivered, undefined);
+            // oxlint-disable-next-line t3code/no-inline-schema-compile -- The peer selects the response schema per call.
+            return yield* Schema.decodeEffect(input.success)(response).pipe(Effect.orDie);
+          }),
+        }),
+      );
+      const context = yield* Layer.build(
+        layer.pipe(Layer.provideMerge(Mesh.layer), Layer.provide(deps), Layer.fresh),
+      );
+      const node = {
+        mesh: yield* MeshLayoutService.pipe(Effect.provide(context)),
+        replicator: yield* MeshReplicator.pipe(Effect.provide(context)),
+      };
+      nodes.set(id, node);
+      return node;
+    });
+    const studio = yield* createNode("studio");
+    yield* createNode("chatbox");
+    yield* TestClock.adjust("1 second");
+    yield* studio.mesh.edit((config) => ({
+      ...config,
+      machines: { ...config.machines, studio: { label: "Studio" } },
+    }));
+    chatboxUp = false;
+    yield* TestClock.adjust("250 millis");
+    expect((yield* nodes.get("chatbox")!.mesh.read).config.machines.studio).toBeUndefined();
+    expect(refused).toBeGreaterThan(0);
+    expect(calls).toBeGreaterThan(refused);
+    chatboxUp = true;
+    yield* TestClock.adjust("2 seconds");
+    expect(Option.isSome(yield* Deferred.poll(delivered))).toBe(true);
+    expect((yield* nodes.get("chatbox")!.mesh.read).config.machines.studio?.label).toBe("Studio");
   }).pipe(Effect.scoped),
 );

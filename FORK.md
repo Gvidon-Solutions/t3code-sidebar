@@ -1532,8 +1532,9 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   opaque. Corrupt stored entries are quarantined; clock rejection counts and examples are visible
   in mesh status. Offline workspace edits use one application store and survive persistence reload.
 - **How.** Bound HLC generation and reception to five minutes ahead, exchange store generations
-  alongside sequence watermarks, debounce layout pushes by 200 ms, exchange safety watermarks
-  every minute, and collect thirty-day tombstones only after linked-peer acknowledgement.
+  alongside sequence watermarks, debounce layout pushes by 200 ms, retry failed peer exchanges
+  on a 1–15 s backoff, exchange safety watermarks every minute, and collect thirty-day
+  tombstones only after linked-peer acknowledgement.
   Canonical key migration removes obsolete persisted rows atomically.
 - **Where.** Shared `meshLayout/registry.ts`, `hlc.ts` and `migration/`; server
   `MeshLayoutServiceLive.ts`, `MeshReplicator.ts` and `mesh/migration/`; client-runtime

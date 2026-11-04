@@ -14,7 +14,9 @@ import { EnvironmentId, MeshLayoutEntries, MeshLayoutError } from "@t3tools/cont
 import type { MeshLayoutDocument } from "@t3tools/shared/meshLayout";
 import * as Context from "effect/Context";
 import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
@@ -149,8 +151,16 @@ export const layer = Layer.effect(
       known: typeof CatalogClocks.Type = {},
     ) => catalogs.filter((catalog) => (known[catalog.environmentId] ?? "") < catalog.h);
     const lock = yield* Semaphore.make(1);
-    const nextPeriodic = new Map<string, number>();
     const retries = new Map<string, { failures: number; after: number }>();
+    const retryTimers = new Map<
+      string,
+      { readonly token: object; readonly fiber: Fiber.Fiber<void, never> }
+    >();
+    yield* Effect.addFinalizer(() =>
+      Effect.forEach([...retryTimers.values()], (timer) => Fiber.interrupt(timer.fiber), {
+        discard: true,
+      }),
+    );
     const enabled = settings.getSettings.pipe(
       Effect.map((s) => s.meshEnabled && s.linkedEnvironmentsEnabled),
     );
@@ -274,7 +284,26 @@ export const layer = Layer.effect(
           : new MeshLayoutError({ reason: "storage", message: "Mesh exchange failed", cause }),
       ),
     );
-    const runSync = Effect.fn("MeshReplicator.runSync")((periodic: boolean) =>
+    const cancelRetry = Effect.fn("MeshReplicator.cancelRetry")(function* (id: string) {
+      const timer = retryTimers.get(id);
+      if (timer === undefined) return;
+      retryTimers.delete(id);
+      yield* Fiber.interrupt(timer.fiber);
+    });
+    const scheduleRetry = Effect.fn("MeshReplicator.scheduleRetry")(function* (
+      id: string,
+      delay: number,
+    ) {
+      yield* cancelRetry(id);
+      const token = {};
+      const fiber = yield* Effect.gen(function* () {
+        yield* Effect.sleep(Duration.millis(Math.max(0, delay)));
+        if (retryTimers.get(id)?.token === token) retryTimers.delete(id);
+        yield* sync.pipe(Effect.catch((cause) => Effect.logError("Mesh retry failed", cause)));
+      }).pipe(Effect.forkDetach);
+      retryTimers.set(id, { token, fiber });
+    });
+    const runSync = Effect.fn("MeshReplicator.runSync")(() =>
       lock
         .withPermit(
           Effect.gen(function* () {
@@ -286,7 +315,6 @@ export const layer = Layer.effect(
               if (peer.access !== "full-access" || peer.status === "expired") continue;
               const now = yield* Clock.currentTimeMillis;
               if ((retries.get(peer.environmentId)?.after ?? 0) > now) continue;
-              if (periodic && (nextPeriodic.get(peer.environmentId) ?? 0) > now) continue;
               yield* Effect.gen(function* () {
                 const watermark = yield* state(peer.environmentId);
                 const outgoing = yield* changesSince(watermark.sent_seq);
@@ -335,19 +363,18 @@ export const layer = Layer.effect(
                   incoming.seq,
                 );
                 retries.delete(peer.environmentId);
-                nextPeriodic.set(peer.environmentId, now + PERIODIC_PULL_MS);
+                yield* cancelRetry(peer.environmentId);
               }).pipe(
                 Effect.catch((cause) =>
                   Effect.gen(function* () {
                     const failures = (retries.get(peer.environmentId)?.failures ?? 0) + 1;
-                    retries.set(peer.environmentId, {
-                      failures,
-                      after:
-                        (yield* Clock.currentTimeMillis) +
-                        Math.min(MAX_RETRY_MS, 1000 * 2 ** Math.min(failures, 4)),
-                    });
+                    const now = yield* Clock.currentTimeMillis;
+                    const after =
+                      now + Math.min(MAX_RETRY_MS, 1000 * 2 ** Math.min(failures - 1, 4));
+                    retries.set(peer.environmentId, { failures, after });
                     yield* sql`INSERT INTO mesh_peer_state(environment_id, last_error) VALUES (${peer.environmentId}, ${String(cause)}) ON CONFLICT(environment_id) DO UPDATE SET last_error = excluded.last_error`;
                     yield* Effect.logWarning("Mesh peer exchange failed", cause);
+                    yield* scheduleRetry(peer.environmentId, after - now);
                   }),
                 ),
               );
@@ -367,7 +394,7 @@ export const layer = Layer.effect(
           ),
         ),
     );
-    const sync = runSync(false);
+    const sync: Effect.Effect<void, MeshLayoutError> = runSync();
     if (links.changes)
       yield* Stream.runForEach(links.changes, () =>
         sync.pipe(Effect.catch((cause) => Effect.logError("Mesh link replication failed", cause))),
@@ -375,20 +402,14 @@ export const layer = Layer.effect(
     yield* Stream.runForEach(Stream.groupedWithin(mesh.changes, 1000, "200 millis"), () =>
       sync.pipe(Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause))),
     ).pipe(Effect.forkScoped);
-    yield* runSync(true).pipe(
+    yield* runSync().pipe(
       Effect.catch((cause) => Effect.logError("Mesh periodic replication failed", cause)),
-      Effect.repeat(Schedule.spaced("60 seconds")),
+      Effect.repeat(Schedule.spaced(Duration.seconds(60))),
       Effect.forkScoped,
     );
     return MeshReplicator.of({ exchange, sync, status });
   }).pipe(Effect.provide(NodeCrypto.layer)),
 );
-
-/**
- * How often each linked peer is pulled when nothing changed here. Links point one way, so a peer
- * that cannot call us is only heard through these pulls; an empty exchange is cheap.
- */
-export const PERIODIC_PULL_MS = 60_000;
 
 /** Longest pause before retrying an unreachable peer; a peer that calls in resets it. */
 export const MAX_RETRY_MS = 15_000;

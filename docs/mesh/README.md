@@ -37,8 +37,9 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   old-settings adapter in `apps/server/src/mesh/migration/`. `MeshLayoutServiceLive.ts` keeps
   SQLite and the canonical document consistent; corrupt rows move to `mesh_layout_quarantine`.
   `MeshReplicator.ts` exchanges local sequence watermarks and store generations over
-  `PeerMcpClient`, pushes changes after 200 ms and exchanges watermarks every 60 seconds.
-  A changed generation resets both peer cursors. Clock rejections and quarantine reasons are
+  `PeerMcpClient`, pushes changes after 200 ms, retries a failed peer exchange on a
+  1–15 s backoff and exchanges watermarks every 60 seconds. A changed generation resets
+  both peer cursors. Clock rejections and quarantine reasons are
   exposed by `meshLayout.status`. Tombstones require thirty days and acknowledgement from
   every currently linked full-access peer before collection.
   Web and mobile mount one `MeshLayoutProvider` each; their hooks adapt RPC and persistence
@@ -204,3 +205,7 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - A server identity outlives its layout database. Sequence numbers alone cannot distinguish
   an empty replacement store from an already acknowledged store; exchange a persisted store
   generation as well and reset both cursors when it changes.
+- A push that failed because the peer was restarting was only retried by the next 60-second
+  safety exchange, and that exchange could skip a peer whose stored pull time was a few
+  milliseconds ahead. A machine killed mid-sync therefore stayed divergent for another minute.
+  Retry each failed peer exchange on a short backoff, and let the periodic exchange always run.
