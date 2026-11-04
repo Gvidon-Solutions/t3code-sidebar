@@ -1,3 +1,6 @@
+import * as Deferred from "effect/Deferred";
+import * as Scope from "effect/Scope";
+import * as Exit from "effect/Exit";
 import * as Directory from "./MeshProjectDirectory.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import { ProjectId } from "@t3tools/contracts";
@@ -269,7 +272,37 @@ it.effect("reports each peer's last exchange, error and sequence numbers", () =>
     const sql = yield* SqlClient.SqlClient.pipe(Effect.provide(context));
     yield* sql`INSERT INTO mesh_peer_state(environment_id, sent_seq, received_seq, last_exchange_at, last_error) VALUES ('B', 4, 7, '2026-01-01T00:00:00.000Z', NULL)`;
     yield* sql`INSERT INTO mesh_peer_state(environment_id, sent_seq, received_seq, last_exchange_at, last_error) VALUES ('C', 0, 0, NULL, 'offline')`;
+    const mesh = yield* MeshLayoutService.pipe(Effect.provide(context));
+    yield* mesh.edit((config) => ({ ...config, machines: { studio: { label: "Studio" } } }));
+    const first = yield* replicator.exchange({
+      fromEnvironmentId: "laptop",
+      generation: "before-wipe",
+      entries: {},
+      seq: 50,
+      ackReceivedSeq: 999,
+    });
+    expect(first.entries["machine/studio"]).toBeDefined();
+    yield* replicator.exchange({
+      fromEnvironmentId: "laptop",
+      generation: "before-wipe",
+      acknowledgedGeneration: first.generation,
+      entries: {},
+      seq: 50,
+      ackReceivedSeq: first.seq,
+    });
+    const reset = yield* replicator.exchange({
+      fromEnvironmentId: "laptop",
+      generation: "after-wipe",
+      entries: {},
+      seq: 0,
+      ackReceivedSeq: 0,
+    });
+    expect(reset.entries["machine/studio"]).toBeDefined();
+    expect((yield* mesh.read).config.machines.studio?.label).toBe("Studio");
+    yield* sql`DELETE FROM mesh_peer_state WHERE environment_id = 'laptop'`;
     expect(yield* replicator.status).toEqual({
+      quarantine: [],
+      clockRejections: [],
       peers: [
         {
           environmentId: "B",
@@ -287,5 +320,120 @@ it.effect("reports each peer's last exchange, error and sequence numbers", () =>
         },
       ],
     });
+  }).pipe(Effect.scoped),
+);
+
+it.effect("restores a wiped store with a new generation without erasing surviving replicas", () =>
+  Effect.gen(function* () {
+    const nodes = new Map<
+      string,
+      {
+        mesh: MeshLayoutService["Service"];
+        replicator: MeshReplicator["Service"];
+        scope: Scope.Closeable;
+      }
+    >();
+    const pushed = yield* Deferred.make<void>();
+    const createNode = Effect.fn("test.createNode")(function* (id: string) {
+      const deps = Layer.mergeAll(
+        Sqlite.layerMemory,
+        Settings.layerTest({ linkedEnvironmentsEnabled: true }),
+        Layer.succeed(ServerEnvironment, {
+          getEnvironmentId: Effect.succeed(EnvironmentId.make(id)),
+          getDescriptor: Effect.succeed(descriptorOf(id, id)),
+        }),
+        Layer.mock(PeerLinks)({
+          enabled: Effect.succeed(true),
+          list: Effect.sync(() =>
+            [...nodes.keys()]
+              .filter((other) => other !== id)
+              .map((other) => ({
+                environmentId: EnvironmentId.make(other),
+                access: "full-access" as const,
+                status: "reachable" as const,
+                label: other,
+                urls: [],
+                linkedAt: DateTime.makeUnsafe(0),
+                expiresAt: DateTime.makeUnsafe(9999999999999),
+                lastReachedAt: null,
+                lastError: null,
+              })),
+          ),
+        }),
+        Layer.succeed(PeerMcpClient, {
+          call: Effect.fn("test.exchange")(function* <S extends Schema.Decoder<unknown>>(input: {
+            environmentId: EnvironmentId;
+            tool: string;
+            arguments: Record<string, unknown>;
+            limits: import("../peer/PeerMcpClient.ts").PeerCallLimits;
+            success: S;
+          }) {
+            const response = yield* nodes
+              .get(input.environmentId)!
+              .replicator.exchange(decodeExchange(input.arguments))
+              .pipe(
+                Effect.mapError(
+                  (error) =>
+                    new OrchestratorMcpFailure({
+                      code: "orchestration_error",
+                      message: error.message,
+                    }),
+                ),
+              );
+            if (
+              input.environmentId === "laptop" &&
+              Object.hasOwn(decodeExchange(input.arguments).entries, "proj/example.title")
+            )
+              yield* Deferred.succeed(pushed, undefined);
+            // oxlint-disable-next-line t3code/no-inline-schema-compile -- The peer selects the response schema per call.
+            return yield* Schema.decodeEffect(input.success)(response).pipe(Effect.orDie);
+          }),
+        }),
+      );
+      const scope = yield* Scope.make();
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+      const context = yield* Layer.build(
+        layer.pipe(Layer.provideMerge(Mesh.layer), Layer.provide(deps), Layer.fresh),
+      ).pipe(Effect.provideService(Scope.Scope, scope));
+      const node = {
+        scope,
+        mesh: yield* MeshLayoutService.pipe(Effect.provide(context)),
+        replicator: yield* MeshReplicator.pipe(Effect.provide(context)),
+      };
+      nodes.set(id, node);
+      return node;
+    });
+    const studio = yield* createNode("studio");
+    let laptop = yield* createNode("laptop");
+    yield* studio.mesh.edit((config) => ({
+      ...config,
+      machines: { studio: { label: "Studio" } },
+      projectTitles: { example: "Example" },
+    }));
+    yield* TestClock.adjust("200 millis");
+    yield* Deferred.await(pushed);
+    yield* studio.replicator.sync;
+    expect((yield* laptop.mesh.read).config.projectTitles.example).toBe("Example");
+    const generation = (yield* laptop.replicator.exchange({
+      fromEnvironmentId: "studio",
+      entries: {},
+      seq: 0,
+      ackReceivedSeq: 0,
+    })).generation;
+    yield* Scope.close(laptop.scope, Exit.void);
+    laptop = yield* createNode("laptop");
+    expect((yield* laptop.mesh.read).config.projectTitles.example).toBeUndefined();
+    const newGeneration = (yield* laptop.replicator.exchange({
+      fromEnvironmentId: "studio",
+      entries: {},
+      seq: 0,
+      ackReceivedSeq: 0,
+    })).generation;
+    expect(newGeneration).not.toBe(generation);
+    yield* studio.replicator.sync;
+    yield* studio.replicator.sync;
+    yield* laptop.replicator.sync;
+    expect((yield* laptop.mesh.read).config.projectTitles.example).toBe("Example");
+    expect(yield* studio.mesh.read).toEqual(yield* laptop.mesh.read);
   }).pipe(Effect.scoped),
 );

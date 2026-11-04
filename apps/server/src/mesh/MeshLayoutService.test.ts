@@ -1,3 +1,4 @@
+import * as TestClock from "effect/testing/TestClock";
 import { it, expect } from "@effect/vitest";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG, EnvironmentId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -38,12 +39,12 @@ it.effect(
       expect((yield* service.read).config.workspaces).toEqual([{ id: "main", name: "main" }]);
       expect((yield* service.read).config.meshWriters).toEqual(["A"]);
       const settings = yield* Settings.ServerSettingsService.pipe(Effect.provide(context));
-      yield* service.apply({ "machine/new": { v: { label: "new" }, h: "9999999999000.00000.B" } });
+      yield* service.apply({ "machine/new": { v: { label: "new" }, h: "0000000001000.00000.B" } });
       expect((yield* service.read).config.meshWriters).toEqual(["A"]);
       yield* service.apply({ "writer/Z": { v: true, h: "0000000000000.00000.Z" } });
       expect((yield* service.read).config.meshWriters).toEqual(["A", "Z"]);
       const sql = yield* SqlClient.SqlClient.pipe(Effect.provide(context));
-      expect((yield* service.nextHlc) > "9999999999000.00000.B").toBe(true);
+      expect((yield* service.nextHlc) > "0000000001000.00000.B").toBe(true);
       const watermark = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
       const late = { "machine/late": { v: { label: "late" }, h: "0000000000001.00000.C" } };
       yield* service.apply(late);
@@ -119,23 +120,98 @@ it.effect(
     }).pipe(Effect.scoped, Effect.provide(Mesh.layer.pipe(Layer.provideMerge(dependencies)))),
 );
 
-it.effect("rejects unknown families, malformed clocks and oversized batches and entries", () =>
+it.effect(
+  "stores opaque families and rejects malformed clocks and oversized batches and entries",
+  () =>
+    Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.apply({ "unknown/key": { v: { future: true }, h: "0000000000100.00000.B" } });
+      expect((yield* mesh.read).document["unknown/key"]?.v).toEqual({ future: true });
+      for (const entries of [
+        { [`machine/${"x".repeat(65536)}`]: { v: null, h: "0000000000100.00000.B" } },
+        { "machine/B": { v: null, h: "broken" } },
+        { "machine/B": { v: "x".repeat(65537), h: "0000000000100.00000.B" } },
+        Object.fromEntries(
+          Array.from({ length: 5001 }, (_, i) => [
+            `machine/${i}`,
+            { v: null, h: "0000000000100.00000.B" },
+          ]),
+        ),
+      ])
+        expect(yield* mesh.apply(entries).pipe(Effect.flip)).toMatchObject({
+          reason: "invalid_entries",
+        });
+    }).pipe(Effect.provide(Mesh.layer.pipe(Layer.provide(dependencies)))),
+);
+
+it.effect("rejects future clocks, persists counts and quarantines corrupt rows on restart", () =>
   Effect.gen(function* () {
-    const mesh = yield* MeshLayoutService;
-    for (const entries of [
-      { "unknown/key": { v: null, h: "0000000000100.00000.B" } },
-      { [`machine/${"x".repeat(65536)}`]: { v: null, h: "0000000000100.00000.B" } },
-      { "machine/B": { v: null, h: "broken" } },
-      { "machine/B": { v: "x".repeat(65537), h: "0000000000100.00000.B" } },
-      Object.fromEntries(
-        Array.from({ length: 5001 }, (_, i) => [
-          `machine/${i}`,
-          { v: null, h: "0000000000100.00000.B" },
-        ]),
-      ),
-    ])
-      expect(yield* mesh.apply(entries).pipe(Effect.flip)).toMatchObject({
-        reason: "invalid_entries",
+    const context = yield* Layer.build(dependencies);
+    const build = () =>
+      Layer.build(Mesh.layer.pipe(Layer.provide(Layer.succeedContext(context)), Layer.fresh));
+    const first = yield* build();
+    const mesh = yield* MeshLayoutService.pipe(Effect.provide(first));
+    const sql = yield* SqlClient.SqlClient.pipe(Effect.provide(context));
+    const bad = {
+      "machine/cloudbox": { v: { label: "bad clock" }, h: "9999999999999.00000.cloudbox" },
+    };
+    yield* mesh.apply(bad, "cloudbox").pipe(Effect.flip);
+    yield* mesh.apply(bad, "cloudbox").pipe(Effect.flip);
+    expect((yield* sql<{ count: number }>`SELECT count FROM mesh_clock_rejections`)[0]!.count).toBe(
+      2,
+    );
+    expect((yield* mesh.read).document["machine/cloudbox"]).toBeUndefined();
+    yield* sql`INSERT INTO mesh_layout_entries(key,value,hlc,seq) VALUES ('ws/corrupt','{','broken',999)`;
+    yield* sql`INSERT INTO mesh_layout_entries(key,value,hlc,seq) VALUES ('fold/main/project','123','0000000000000.00000.studio',1000)`;
+    const restarted = yield* MeshLayoutService.pipe(Effect.provide(yield* build()));
+    expect((yield* restarted.read).config.workspaces).toEqual([{ id: "main", name: "main" }]);
+    expect(yield* sql`SELECT key FROM mesh_layout_quarantine ORDER BY key`).toEqual([
+      { key: "fold/main/project" },
+      { key: "ws/corrupt" },
+    ]);
+    expect(yield* sql`SELECT key FROM mesh_layout_entries WHERE key = 'ws/corrupt'`).toEqual([]);
+  }).pipe(Effect.scoped),
+);
+
+it.effect(
+  "keeps the persisted document canonical across a restart during legacy key migration",
+  () =>
+    Effect.gen(function* () {
+      const context = yield* Layer.build(dependencies);
+      const build = () =>
+        Layer.build(Mesh.layer.pipe(Layer.provide(Layer.succeedContext(context)), Layer.fresh));
+      const mesh = yield* MeshLayoutService.pipe(Effect.provide(yield* build()));
+      yield* mesh.apply({
+        "proj/title%3AExample.title": { v: "Example", h: "0000000000100.00000.studio" },
       });
-  }).pipe(Effect.provide(Mesh.layer.pipe(Layer.provide(dependencies)))),
+      const before = yield* mesh.read;
+      const sql = yield* SqlClient.SqlClient.pipe(Effect.provide(context));
+      const persisted = yield* sql<{ key: string }>`SELECT key FROM mesh_layout_entries`;
+      expect(persisted.map((row) => row.key).sort()).toEqual(Object.keys(before.document).sort());
+      const restarted = yield* MeshLayoutService.pipe(Effect.provide(yield* build()));
+      expect(yield* restarted.read).toEqual(before);
+    }).pipe(Effect.scoped),
+);
+
+it.effect(
+  "retains tombstones until thirty days and acknowledgement including an offline peer",
+  () =>
+    Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
+      const sql = yield* SqlClient.SqlClient;
+      yield* mesh.apply({ "machine/laptop": { v: null, h: "0000000000001.00000.studio" } });
+      const seq = (yield* sql<{
+        seq: number;
+      }>`SELECT seq FROM mesh_layout_entries WHERE key = 'machine/laptop'`)[0]!.seq;
+      yield* mesh.collectTombstones!(seq);
+      expect((yield* mesh.read).document["machine/laptop"]).toBeDefined();
+      yield* TestClock.adjust("31 days");
+      yield* mesh.collectTombstones!(0);
+      expect((yield* mesh.read).document["machine/laptop"]).toBeDefined();
+      yield* mesh.collectTombstones!(seq);
+      expect((yield* mesh.read).document["machine/laptop"]).toBeUndefined();
+      expect(yield* sql`SELECT key FROM mesh_layout_entries WHERE key = 'machine/laptop'`).toEqual(
+        [],
+      );
+    }).pipe(Effect.provide(Mesh.layer.pipe(Layer.provideMerge(dependencies)))),
 );

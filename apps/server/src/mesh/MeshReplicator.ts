@@ -1,3 +1,5 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as Crypto from "effect/Crypto";
 import * as NodeUtil from "node:util";
 import {
   MeshProjectDirectory,
@@ -25,6 +27,8 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 
 export const ExchangeInput = Schema.Struct({
+  generation: Schema.optionalKey(Schema.String),
+  acknowledgedGeneration: Schema.optional(Schema.String),
   projectCatalogs: Schema.optionalKey(Schema.Array(ProjectCatalog)),
   knownProjects: Schema.optionalKey(CatalogClocks),
   fromEnvironmentId: Schema.String,
@@ -33,6 +37,7 @@ export const ExchangeInput = Schema.Struct({
   ackReceivedSeq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 const ExchangeOutput = Schema.Struct({
+  generation: Schema.optionalKey(Schema.String),
   entries: MeshLayoutEntries,
   seq: Schema.Int,
   projectCatalogs: Schema.optionalKey(Schema.Array(ProjectCatalog)),
@@ -54,7 +59,7 @@ export class MeshReplicator extends Context.Service<
     ) => Effect.Effect<typeof ExchangeOutput.Type, MeshLayoutError>;
     readonly sync: Effect.Effect<void, MeshLayoutError>;
     /** Per-peer replication bookkeeping from `mesh_peer_state`. */
-    readonly status: Effect.Effect<{ readonly peers: ReadonlyArray<PeerStatus> }, MeshLayoutError>;
+    readonly status: Effect.Effect<import("@t3tools/contracts").MeshLayoutStatus, MeshLayoutError>;
   }
 >()("t3/mesh/MeshReplicator") {}
 
@@ -62,12 +67,35 @@ export const layer = Layer.effect(
   MeshReplicator,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const crypto = yield* Crypto.Crypto;
     const mesh = yield* MeshLayoutService;
     const peers = yield* PeerMcpClient;
     const links = yield* PeerLinks;
     const settings = yield* ServerSettingsService;
     const directory = yield* Effect.serviceOption(MeshProjectDirectory);
     const projects = yield* Effect.serviceOption(ProjectService);
+    yield* sql`CREATE TABLE IF NOT EXISTS mesh_layout_generation (id TEXT PRIMARY KEY, generation TEXT NOT NULL)`;
+    yield* sql`INSERT OR IGNORE INTO mesh_layout_generation(id,generation) VALUES ('local',${yield* crypto.randomUUIDv4().pipe(Effect.orDie)})`;
+    const generation = (yield* sql<{
+      generation: string;
+    }>`SELECT generation FROM mesh_layout_generation WHERE id = 'local'`)[0]!.generation;
+    const observeGeneration = Effect.fn("MeshReplicator.observeGeneration")(function* (
+      id: string,
+      observed: string | undefined,
+    ) {
+      if (observed === undefined) return false;
+      const previous = (yield* sql<{
+        generation: string;
+      }>`SELECT generation FROM mesh_layout_generation WHERE id = ${id}`)[0]?.generation;
+      if (previous === observed) return false;
+      yield* sql.withTransaction(
+        Effect.gen(function* () {
+          yield* sql`INSERT OR REPLACE INTO mesh_layout_generation(id,generation) VALUES (${id},${observed})`;
+          yield* sql`DELETE FROM mesh_peer_state WHERE environment_id = ${id}`;
+        }),
+      );
+      return true;
+    });
     const peerCatalogClocks = new Map<string, typeof CatalogClocks.Type>();
     const captureCatalogs = Effect.fn("MeshReplicator.captureCatalogs")(function* () {
       if (Option.isNone(directory)) return [] as readonly ProjectCatalog[];
@@ -177,6 +205,15 @@ export const layer = Layer.effect(
         last_error: string | null;
       }>`SELECT environment_id, sent_seq, received_seq, last_exchange_at, last_error FROM mesh_peer_state ORDER BY environment_id`;
       return {
+        quarantine: yield* sql<{
+          key: string;
+          reason: string;
+        }>`SELECT key, reason FROM mesh_layout_quarantine ORDER BY key`,
+        clockRejections: yield* sql<{
+          peerId: string;
+          count: number;
+          example: string;
+        }>`SELECT peer_id AS peerId, count, example FROM mesh_clock_rejections ORDER BY peer_id`,
         peers: rows.map((row): PeerStatus => ({
           environmentId: row.environment_id,
           lastExchangeAt: row.last_exchange_at,
@@ -197,20 +234,32 @@ export const layer = Layer.effect(
             reason: "disabled",
             message: "Mesh replication is disabled",
           });
-        yield* mesh.apply(input.entries as MeshLayoutDocument);
+        yield* observeGeneration(input.fromEnvironmentId, input.generation);
+        yield* mesh.apply(input.entries as MeshLayoutDocument, input.fromEnvironmentId);
         if (Option.isSome(directory))
           yield* directory.value.accept(
             (input.projectCatalogs ?? []).filter(
               (catalog) => catalog.environmentId !== mesh.environmentId,
             ),
           );
-        const output = yield* changesSince(input.ackReceivedSeq);
-        yield* record(input.fromEnvironmentId, input.ackReceivedSeq, input.seq);
+        const acknowledged =
+          input.acknowledgedGeneration === generation || input.generation === undefined
+            ? input.ackReceivedSeq
+            : 0;
+        const output = yield* changesSince(acknowledged);
+        yield* record(
+          input.fromEnvironmentId,
+          acknowledged,
+          input.generation === undefined || input.acknowledgedGeneration === generation
+            ? input.seq
+            : 0,
+        );
         // The peer just reached us, so it is up again: stop backing off from it.
         retries.delete(input.fromEnvironmentId);
         const catalogs = yield* captureCatalogs();
         return {
           ...output,
+          generation,
           ...(Option.isSome(directory)
             ? {
                 projectCatalogs: newerCatalogs(catalogs, input.knownProjects),
@@ -230,7 +279,10 @@ export const layer = Layer.effect(
         .withPermit(
           Effect.gen(function* () {
             if (!(yield* enabled)) return;
-            for (const peer of yield* links.list) {
+            const linked = (yield* links.list).filter(
+              (peer) => peer.access === "full-access" && peer.status !== "expired",
+            );
+            for (const peer of linked) {
               if (peer.access !== "full-access" || peer.status === "expired") continue;
               const now = yield* Clock.currentTimeMillis;
               if ((retries.get(peer.environmentId)?.after ?? 0) > now) continue;
@@ -252,6 +304,11 @@ export const layer = Layer.effect(
                           knownProjects: clocks(catalogs),
                         }
                       : {}),
+                    generation,
+                    acknowledgedGeneration: (yield* sql<{
+                      generation: string;
+                    }>`SELECT generation FROM mesh_layout_generation WHERE id = ${peer.environmentId}`)[0]
+                      ?.generation,
                     fromEnvironmentId: mesh.environmentId,
                     ...outgoing,
                     ackReceivedSeq: watermark.received_seq,
@@ -261,14 +318,22 @@ export const layer = Layer.effect(
                 });
                 if (incoming.knownProjects)
                   peerCatalogClocks.set(peer.environmentId, incoming.knownProjects);
-                yield* mesh.apply(incoming.entries as MeshLayoutDocument);
+                yield* mesh.apply(incoming.entries as MeshLayoutDocument, peer.environmentId);
                 if (Option.isSome(directory))
                   yield* directory.value.accept(
                     (incoming.projectCatalogs ?? []).filter(
                       (catalog) => catalog.environmentId !== mesh.environmentId,
                     ),
                   );
-                yield* record(peer.environmentId, outgoing.seq, incoming.seq);
+                const changedGeneration = yield* observeGeneration(
+                  peer.environmentId,
+                  incoming.generation,
+                );
+                yield* record(
+                  peer.environmentId,
+                  changedGeneration ? 0 : outgoing.seq,
+                  incoming.seq,
+                );
                 retries.delete(peer.environmentId);
                 nextPeriodic.set(peer.environmentId, now + PERIODIC_PULL_MS);
               }).pipe(
@@ -287,6 +352,12 @@ export const layer = Layer.effect(
                 ),
               );
             }
+            if (mesh.collectTombstones) {
+              let acknowledged = Number.MAX_SAFE_INTEGER;
+              for (const peer of linked)
+                acknowledged = Math.min(acknowledged, (yield* state(peer.environmentId)).sent_seq);
+              yield* mesh.collectTombstones(acknowledged);
+            }
           }),
         )
         .pipe(
@@ -301,23 +372,23 @@ export const layer = Layer.effect(
       yield* Stream.runForEach(links.changes, () =>
         sync.pipe(Effect.catch((cause) => Effect.logError("Mesh link replication failed", cause))),
       ).pipe(Effect.forkScoped);
-    yield* Stream.runForEach(Stream.debounce(mesh.changes, "500 millis"), () =>
+    yield* Stream.runForEach(Stream.groupedWithin(mesh.changes, 1000, "200 millis"), () =>
       sync.pipe(Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause))),
     ).pipe(Effect.forkScoped);
     yield* runSync(true).pipe(
       Effect.catch((cause) => Effect.logError("Mesh periodic replication failed", cause)),
-      Effect.repeat(Schedule.spaced("1 second")),
+      Effect.repeat(Schedule.spaced("60 seconds")),
       Effect.forkScoped,
     );
     return MeshReplicator.of({ exchange, sync, status });
-  }),
+  }).pipe(Effect.provide(NodeCrypto.layer)),
 );
 
 /**
  * How often each linked peer is pulled when nothing changed here. Links point one way, so a peer
  * that cannot call us is only heard through these pulls; an empty exchange is cheap.
  */
-export const PERIODIC_PULL_MS = 5_000;
+export const PERIODIC_PULL_MS = 60_000;
 
 /** Longest pause before retrying an unreachable peer; a peer that calls in resets it. */
 export const MAX_RETRY_MS = 15_000;
