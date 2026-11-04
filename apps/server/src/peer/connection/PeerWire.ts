@@ -31,8 +31,6 @@ class FrameQueue implements AsyncIterable<string>, AsyncIterator<string> {
 
   end() {
     this.ended = true;
-    this.items.length = 0;
-    this.bytes = 0;
     this.waiter?.(undefined);
     this.waiter = undefined;
   }

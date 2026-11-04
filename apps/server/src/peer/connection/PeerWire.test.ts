@@ -17,7 +17,14 @@ const echoLayer = HttpRouter.add(
     const request = yield* HttpServerRequest.HttpServerRequest;
     const wire = yield* PeerWire.acceptUpgrade(request);
     yield* Effect.promise(async () => {
-      for await (const frame of wire.frames) wire.send(`echo:${frame}`);
+      for await (const frame of wire.frames) {
+        wire.send(`echo:${frame}`);
+        if (frame === "close") {
+          wire.close();
+          break;
+        }
+      }
+      await wire.done;
     });
     return HttpServerResponse.empty();
   }),
@@ -51,7 +58,12 @@ it.live("dials an upgraded socket and exchanges frames with headers", () =>
         value: "echo:second",
         done: false,
       });
-      wire.close();
+      wire.send("close");
+      yield* Effect.promise(() => wire.done);
+      expect(yield* Effect.promise(() => frames.next())).toEqual({
+        value: "echo:close",
+        done: false,
+      });
       expect(yield* Effect.promise(() => frames.next())).toEqual({
         value: undefined,
         done: true,
