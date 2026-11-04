@@ -64,6 +64,8 @@ describe("mesh config", () => {
     });
   });
   it("rejects malformed fields with their paths", () => {
+    expect(() => parseConfig("schema: 1\nmachines: {}\nfuture: &loop {self: *loop}\n")).toThrow(/JSON/);
+    expect(() => parseConfig("schema: 1\nmachines: {}\nfuture: .inf\n")).toThrow(/JSON/);
     const cases: readonly [Record<string, unknown>, RegExp][] = [
       [{ schema: "1" }, /schema/],
       [{ machines: { "Bad Name": {} } }, /machines.*|Machine names must be slugs/s],
@@ -227,4 +229,21 @@ it("rejects conflicting overlapping project globs but merges compatible ignore o
       }),
     ),
   ).toEqual([]);
+  const unicode = parseConfig({
+    schema: 1,
+    machines: {},
+    projects: {
+      overrides: [
+        { project: "app😀", conflicts: "primary-wins" },
+        { project: "app?", conflicts: "newest-wins" },
+      ],
+    },
+  });
+  expect(projectPolicy(unicode, "app😀").conflicts).toBe("newest-wins");
+  expect(referenceErrors(unicode)).toEqual([
+    {
+      path: "projects.overrides.1.conflicts",
+      message: "Overlapping project override with projects.overrides.0",
+    },
+  ]);
 });

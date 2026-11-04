@@ -4,8 +4,9 @@ import { parse } from "yaml";
 
 export const defaults = (): MeshConfigDocument => ({ schema: 1, machines: {} });
 const decodeConfig = Schema.decodeUnknownSync(MeshConfigDocument, { errors: "all" });
+const decodeJson = Schema.decodeUnknownSync(Schema.Json);
 export const parseConfig = (input: unknown): MeshConfigDocument =>
-  decodeConfig(typeof input === "string" ? parse(input) : input);
+  decodeConfig(decodeJson(typeof input === "string" ? parse(input) : input));
 export const effectiveLinkPermissions = (config: MeshConfigDocument, a: string, b: string) => {
   const override = config.links?.overrides?.find(
     ({ between }) => between.includes(a) && between.includes(b),
@@ -130,7 +131,9 @@ export const configDiff = (
   );
 };
 
-const globsOverlap = (a: string, b: string) => {
+const globsOverlap = (patternA: string, patternB: string) => {
+  const a = [...patternA];
+  const b = [...patternB];
   const pending: [number, number][] = [[0, 0]];
   const seen = new Set<string>();
   while (pending.length) {
