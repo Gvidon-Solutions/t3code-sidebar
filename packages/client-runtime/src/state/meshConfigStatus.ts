@@ -91,9 +91,12 @@ export function meshMachineDetailRows(
       );
       const stored = config.projectMountStatus[key]?.[machine.environmentId];
       const lag = current?.lag;
+      const reason = [current?.message ?? stored?.message, ...(current?.problems ?? [])]
+        .filter(Boolean)
+        .join(" · ");
       rows.push({
         label: config.projectTitles[key] ?? "Project replica",
-        value: `${current?.state ?? stored?.state ?? "Unknown"} · ${lag ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}` : "Lag not reported"}${(current?.message ?? stored?.message) ? ` · ${current?.message ?? stored?.message}` : ""}`,
+        value: `${current?.state ?? stored?.state ?? "Unknown"} · ${lag ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}` : "Lag not reported"}${reason ? ` · ${reason}` : ""}`,
       });
     }
   return rows;

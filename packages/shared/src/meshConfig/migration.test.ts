@@ -105,6 +105,25 @@ it("keeps migration-only peer identities and SSH routes outside the public confi
     [],
     [],
   );
+  expect(Object.keys(migrated!.doc).sort()).toEqual([
+    "agents",
+    "links",
+    "machines",
+    "projects",
+    "replicas",
+    "schema",
+    "ssh",
+  ]);
+  for (const machine of Object.values(migrated!.doc.machines)) {
+    expect(
+      Object.keys(machine).every((key) =>
+        ["title", "label", "color", "reach", "ssh"].includes(key),
+      ),
+    ).toBe(true);
+    expect(Object.keys(machine.ssh ?? {}).every((key) => ["user", "port"].includes(key))).toBe(
+      true,
+    );
+  }
   expect(Object.keys(migrated!.doc.machines.studio!)).toEqual(["title"]);
   expect(Object.keys(migrated!.doc.machines.cloudbox!.ssh ?? {})).toEqual(["user"]);
   expect(JSON.stringify(migrated!.doc)).not.toContain("legacyPeerLabels");

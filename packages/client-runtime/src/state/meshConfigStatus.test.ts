@@ -105,5 +105,10 @@ it("shows replica lag and SSH route reasons while keeping absent reports unknown
     { label: "SSH to Studio", value: "Failed · Host key changed · checked 2026-11-05T00:01:00Z" },
     { label: "Field notes", value: "watching · 3 files behind · 64 bytes behind" },
   ]);
+  expect(
+    meshMachineDetailRows(machine, config, [
+      { ...live[0]!, state: "error", problems: ["Permission denied"] },
+    ])[1]?.value,
+  ).toContain("Permission denied");
   expect(meshMachineDetailRows(machine, config, [])[1]?.value).toContain("Lag not reported");
 });
