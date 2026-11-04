@@ -191,3 +191,29 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - A fresh SCP connection may be rejected while an existing SSH session remains healthy during
   bed restarts. Use the same owned control socket for deployment SSH and SCP. Deployment retries
   happen before fault injection; they are not proof of automatic replica recovery.
+
+## Config core interfaces (C1 foundation)
+
+`packages/contracts/src/meshConfig.ts` describes the §9 document and revision envelope.
+Every object retains unknown fields. `packages/shared/src/meshConfig/` parses JSON or YAML
+using the existing `yaml` dependency and resolves permissions, policies, rules, bindings and
+model aliases. A schema-valid document can still fail `referenceErrors` (unsupported version,
+missing machines, cyclic routes or duplicate link overrides).
+
+`apps/server/src/mesh/MeshConfig.ts` is the storage and executor port. Provide
+`MeshLayoutService` and `MeshConfigPlanners` to its `layer`. `plan` calls every registered
+planner without running effects. `apply` serializes local edits, checks `baseRevision`, writes
+current/history together, and tombstones revisions beyond fifty. `rollback` creates a new
+revision. `start` subscribes to stored revisions, including the current revision on restart;
+`status`/`statusChanges` expose each action's server, state and failure reason. Each action
+has a sixty-second deadline; failures do not cancel other actions.
+
+A planner supplies a stable `name`, pure `plan(doc, previous)` returning `{id, server,
+description}` actions, and an idempotent `reconcile(action, doc)` effect. This is the extension
+port for SSH (S1) and bootstrap, updates and agent configuration (B1). The core currently has
+no production registrations or transport wiring; callers must not infer that applying a
+revision changes machine labels, places replicas or updates link permissions yet.
+
+The receiving file service restricts read-only linked MCP calls to this server's representation
+roots after realpath, including directory completion. With no layout context it refuses the
+read. Full-access links retain their existing behavior pending config permission integration.

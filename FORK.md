@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-04 — Mesh config foundations and read-only file boundary
+
+- **What.** Adds the §9 config contract, pure resolution helpers and a storage/executor service for explicit planner registration. Read-only linked file calls are limited to local project representations. This is a partial C1 foundation, without production config API or planner registration.
+- **How.** Open Effect schemas preserve future fields; the existing YAML parser accepts both input formats. Revision checks, rollback and fifty-revision retention use layout entries. Receiving file checks resolve symlinks before checking representation roots.
+- **Where.** `packages/contracts/src/meshConfig.ts`, `packages/shared/src/meshConfig/`, server `mesh/MeshConfig.ts`, `mesh/validateEntries.ts` and `files/FilesService.ts`.
+
 ### 2026-11-03 — T3 Mesh — Stage N authority and automatic conflict copies
 
 - **What:** a configurable authority, automatic conflict copies, stable project identities, explicit replica folders, safe takeover of manual Mutagen sessions, and recovery across server/daemon/tunnel interruptions.
