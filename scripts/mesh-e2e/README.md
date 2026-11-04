@@ -250,12 +250,26 @@ installation instead of editing the owner's SSH files. The isolated gvidon unit 
 HOME under its base directory, so replica reconciliation cannot write the owner's SSH config.
 
 `network-proxies.sh up` places a transparent test proxy in front of each server; `block`
-rejects external HTTP POST /mcp while preserving WebSocket upgrades and other HTTP routes.
+rejects peer HTTP POST /mcp (identified by PeerMcpClient's `t3-peer-environment-id` header)
+while preserving local agent/CLI MCP, WebSocket upgrades and other HTTP routes. Without
+`peerOnlyMcp:true`, the proxy's `denyMcp` mode rejects every MCP client, as the local check does.
 `GET /__N1_network` reports accepted/refused MCP requests and upgrade counts. The proxy state
 files live under /tmp with an N1 prefix. `network-rounds.sh 1` and `2` run the existing rounds
 with N1 project/thread/file names and reuse the already-provisioned SSH routes. They preserve
 other stages' fixtures. `network-proxies.sh down` restores the original server ports and
 removes only the N1 proxy units/drop-ins.
+The VPS also gets a loopback outbound forwarder to gor's existing SSH tunnel. Pair the VPS
+to `http://127.0.0.1:13797`; Docker bridge addresses themselves do not qualify for plain HTTP
+under `peerOrigin`. Set `denyPeer:true` in the VPS front proxy state to reject inbound `/peer`
+connections while preserving its outbound connection and local control RPCs.
+
+After `network-rounds.sh 1`, run `network-bed.sh nat`, then `network-rounds.sh 2` to cover
+incoming-only reachability during replica operations. `network-bed.sh ssh` uses the packaged
+native binary for pinned-key SSH uploads/downloads and interruption, asserting that peer
+connections survive. `network-bed.sh faults` cuts the dedicated test tunnel for three minutes,
+then kills the server PID captured by the container wrapper and requires automatic recovery.
+Run `network-bed.sh restore` before `network-proxies.sh down` so the healthy mesh no longer
+depends on the temporary outbound forwarder. Every command requires the N1 bed lock.
 
 `network-ssh.mjs <binary> <base-dir> <machine> <user> <host-keys-json>` runs OpenSSH through
 the actual `t3 mesh pipe` ProxyCommand, pins reported host keys, checks a 200 MiB upload and

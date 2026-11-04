@@ -121,7 +121,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   notifications and credit-controlled half-closed Duplex streams; deterministic dial selection,
   heartbeat and independent jittered reconnects recover network loss. Durable creation receipts
   and command identities prevent duplicate work across reconnects and restarts. Calls use the
-  existing authenticated MCP router; disconnected and N-1 peers retain HTTP fallback.
+  existing authenticated MCP router; disconnected and N-1 peers retain HTTP fallback. Pipe
+  resets leave the link up even when older pipe frames are still in flight.
 - **Where.** Server peer/connection services, PeerMcpClient, mesh routing and MCP receipt boundary;
   contracts and client-runtime machine state; web/mobile Mesh settings and t3ctl mesh status.
   The t3 mesh pipe CLI bridges local private IPC to the peer's loopback sshd; its S1 contract is
