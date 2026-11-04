@@ -1,4 +1,5 @@
 import {
+  ChatAttachmentId,
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   EnvironmentId,
   OrchestratorMcpFailure,
@@ -8569,6 +8570,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         let placementReady = true;
         let targetOffline = false;
         let rejectRecord = false;
+        let rejectCopy = false;
         let flushReady = true;
         let flushes = 0;
         let pauseFlush = false;
@@ -8671,7 +8673,34 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                     Effect.orDie,
                     Effect.flatMap((input) => {
                       if (!target) return Effect.die("Target was not constructed.");
-                      return target.receive(input, limits);
+                      return target.receive(
+                        rejectCopy && input.action === "receive"
+                          ? {
+                              ...input,
+                              bundle: {
+                                ...input.bundle,
+                                entries: [
+                                  {
+                                    role: "user",
+                                    text: "missing upload",
+                                    attachments: [
+                                      {
+                                        type: "file",
+                                        id: ChatAttachmentId.make(
+                                          "pending-00000000-0000-4000-8000-000000000001",
+                                        ),
+                                        name: "note.txt",
+                                        mimeType: "text/plain",
+                                        sizeBytes: 1,
+                                      },
+                                    ],
+                                  },
+                                ],
+                              },
+                            }
+                          : input,
+                        limits,
+                      );
                     }),
                     Effect.flatMap((result) =>
                       decodePeerResponse(input.success, result).pipe(Effect.orDie),
@@ -8836,6 +8865,13 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         assert.include(flushFailure.message, "did not flush");
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         flushReady = true;
+        rejectCopy = true;
+        const copyFailure = yield* source
+          .fork({ ...input, commandId: CommandId.make("F1-copy-failure") }, limits)
+          .pipe(Effect.flip);
+        assert.include(copyFailure.message, "attachment not found");
+        assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
+        rejectCopy = false;
         pauseFlush = true;
         const timedFork = yield* source
           .fork({ ...input, commandId: CommandId.make("F1-flush-timeout") }, limits)
