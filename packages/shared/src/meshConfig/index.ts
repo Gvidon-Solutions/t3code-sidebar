@@ -66,7 +66,7 @@ export const machineByEnvironment = (
   environmentId: string,
 ) => {
   const name = Object.keys(bindings).find((n) => bindings[n] === environmentId);
-  return name === undefined ? undefined : { name, ...machineByName(config, name) };
+  return name === undefined ? undefined : { ...machineByName(config, name), name };
 };
 export const modelAlias = (config: MeshConfigDocument, name: string) =>
   config.agents?.aliases && Object.hasOwn(config.agents.aliases, name)

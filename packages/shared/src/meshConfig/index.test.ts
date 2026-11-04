@@ -136,10 +136,11 @@ describe("mesh config", () => {
   it("resolves stable machine bindings and configured model aliases", () => {
     const config = parseConfig({
       schema: 1,
-      machines: { studio: { title: "Studio" } },
+      machines: { studio: { title: "Studio", name: "future-display-name" } },
       agents: { aliases: { sol: { harness: "codex", model: "model" } } },
     });
     expect(machineByName(config, "studio")?.title).toBe("Studio");
+    expect(machineByName(config, "studio")?.name).toBe("future-display-name");
     expect(machineByName(config, "missing")).toBeUndefined();
     expect(machineByEnvironment(config, { studio: "environment-1" }, "environment-1")).toEqual({
       name: "studio",
