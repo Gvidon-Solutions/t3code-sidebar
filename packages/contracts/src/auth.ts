@@ -456,6 +456,8 @@ export const AuthMcpClientRegistration = Schema.Struct({
   software_id: Schema.optionalKey(Schema.String),
   redirect_uris: Schema.optionalKey(Schema.Array(Schema.String)),
   token_endpoint_auth_method: Schema.optionalKey(Schema.String),
+  /** The environment id of a peer link that registers, so its session names the caller. */
+  environment_id: Schema.optionalKey(Schema.String),
 });
 export type AuthMcpClientRegistration = typeof AuthMcpClientRegistration.Type;
 

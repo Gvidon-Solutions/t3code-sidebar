@@ -79,6 +79,8 @@ export interface McpClientSession {
   readonly access: AuthMcpClientAccess;
   /** Another T3 Code environment's link, whose work here stays within it. */
   readonly peerLink: boolean;
+  /** The environment that registered the peer link, when it named itself. */
+  readonly peerEnvironmentId?: string;
 }
 
 export interface AuthenticatedSession {
@@ -540,6 +542,7 @@ export class EnvironmentAuth extends Context.Service<
       readonly label: string;
       readonly access: AuthMcpClientAccess;
       readonly peerLink: boolean;
+      readonly peerEnvironmentId?: string;
       readonly client: AuthClientMetadata;
     }) => Effect.Effect<
       {
@@ -1299,6 +1302,9 @@ export const make = Effect.gen(function* () {
                 ? (session.runtimeModeCeiling ?? "approval-required")
                 : "read-only",
               peerLink: session.peerLink === true,
+              ...(session.peerEnvironmentId
+                ? { peerEnvironmentId: session.peerEnvironmentId }
+                : {}),
             } satisfies McpClientSession)
           : Effect.fail(
               new ServerAuthInvalidCredentialError({
@@ -1319,6 +1325,7 @@ export const make = Effect.gen(function* () {
         ttl: MCP_CLIENT_SESSION_TTL,
         ...(input.access === "read-only" ? {} : { runtimeModeCeiling: input.access }),
         peerLink: input.peerLink,
+        ...(input.peerEnvironmentId ? { peerEnvironmentId: input.peerEnvironmentId } : {}),
         client: { ...input.client, label: input.label, deviceType: "bot" },
       })
       .pipe(
