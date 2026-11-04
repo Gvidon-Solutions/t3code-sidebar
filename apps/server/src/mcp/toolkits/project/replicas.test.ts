@@ -103,7 +103,7 @@ it.effect(
         });
         yield* mesh.edit((config) => ({
           ...config,
-          machines: { ...config.machines, replica: {  } },
+          machines: { ...config.machines, replica: {} },
         }));
         const live = yield* tools
           .handle("t3_project_machines", { project: "repo" })

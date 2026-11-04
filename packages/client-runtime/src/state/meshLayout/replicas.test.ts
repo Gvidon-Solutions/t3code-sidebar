@@ -273,7 +273,9 @@ describe("mergeReplicaStatusLists", () => {
 describe("replicaDriverEnvironment", () => {
   it("always drives from the replica, including when machine facts are unavailable", () => {
     expect(replicaDriverEnvironment(empty, replica("beta", "alpha"))).toBe("beta");
-    expect(replicaDriverEnvironment(empty, { ...replica("beta", "alpha"), role: "primary" })).toBeNull();
+    expect(
+      replicaDriverEnvironment(empty, { ...replica("beta", "alpha"), role: "primary" }),
+    ).toBeNull();
   });
 });
 

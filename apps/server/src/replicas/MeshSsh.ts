@@ -1,4 +1,4 @@
-import { sshWrapper } from "./ReplicaPlatform.ts";
+import { sshWrapper } from "../peer/connection/PeerPlatform.ts";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
 import { bindingsFromLayout, effectiveLinkPermissions } from "@t3tools/shared/meshConfig";
 import * as HostProcess from "@t3tools/shared/HostProcess";

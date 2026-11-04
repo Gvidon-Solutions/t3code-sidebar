@@ -83,7 +83,9 @@ export class ProjectReplicaService extends Context.Service<
     readonly reconcile: Effect.Effect<void, ReplicaError>;
     readonly status: Effect.Effect<ReadonlyArray<ReplicaLiveStatus>>;
     readonly changes: Stream.Stream<{ readonly replicas: ReadonlyArray<ReplicaLiveStatus> }>;
-    readonly retry: (input: ReplicaRefInput) => Effect.Effect<ReplicaLiveStatus, ReplicaError>;
+    readonly retry: (
+      input: ReplicaRefInput & { readonly resume?: boolean },
+    ) => Effect.Effect<ReplicaLiveStatus, ReplicaError>;
   }
 >()("t3/replicas/ProjectReplicaService") {}
 
@@ -432,7 +434,22 @@ const make = Effect.gen(function* () {
       yield* runner.create(createInput);
       yield* publishPlacement({ ...base, sessionName: identity.name, state: "mounting" });
     } else {
-      if (session.paused) yield* runner.resume(identity.name);
+      if (session.paused) {
+        if (
+          config.projectMountStatus[logicalKey]?.[rep.environmentId]?.message ===
+          "SSH is off; cross-machine replicas are disabled."
+        ) {
+          yield* runner.resume(identity.name);
+          session = { ...session, paused: false };
+        } else {
+          yield* publishPlacement({
+            ...base,
+            sessionName: identity.name,
+            ...sessionStatus(session),
+          });
+          return;
+        }
+      }
       const previous = config.projectMountStatus[logicalKey]?.[rep.environmentId];
       const liveState = sessionStatus(session);
       const status = {
@@ -583,9 +600,38 @@ const make = Effect.gen(function* () {
               .map((rep) => sessionIdentity(rep.syncKey ?? key, rep.environmentId).name),
           ),
         );
-        for (const session of yield* runner.listExisting)
-          if (session.name && owned.has(session.name) && !session.paused)
-            yield* runner.pause(session.name);
+        const sessions = yield* runner.listExisting;
+        yield* Effect.forEach(
+          Object.entries(config.projectMounts).flatMap(([logicalKey, reps]) =>
+            reps
+              .filter((rep) => rep.role === "replica" && rep.environmentId === mesh.environmentId)
+              .map((rep) => ({ logicalKey, rep })),
+          ),
+          ({ logicalKey, rep }) =>
+            locks.withLock(
+              refKey(logicalKey, rep.environmentId),
+              Effect.gen(function* () {
+                const name = sessionIdentity(rep.syncKey ?? logicalKey, rep.environmentId).name;
+                const session = sessions.find(
+                  (session) => session.name === name && owned.has(name),
+                );
+                if (session && !session.paused) yield* runner.pause(name);
+                yield* publish(
+                  {
+                    logicalKey,
+                    environmentId: rep.environmentId,
+                    state: "paused",
+                    conflicts: [],
+                    problems: [],
+                    message: "SSH is off; cross-machine replicas are disabled.",
+                    updatedAt: DateTime.formatIso(yield* DateTime.now),
+                  },
+                  rep,
+                );
+              }),
+            ),
+          { concurrency: "unbounded", discard: true },
+        );
       }
       return;
     }
@@ -1143,9 +1189,11 @@ const make = Effect.gen(function* () {
             const state = session ? sessionStatus(session) : undefined;
             if (
               !state ||
-              state.state !== "watching" ||
+              (state.state !== "watching" && state.state !== "paused") ||
               state.conflicts.length ||
-              state.problems.length ||
+              state.problems.some(
+                (problem) => state.state !== "paused" || !problem.endsWith("is disconnected."),
+              ) ||
               state.skipped
             )
               return yield* new ReplicaError({
@@ -1408,9 +1456,12 @@ const make = Effect.gen(function* () {
       inspectSession(input).pipe(
         Effect.map((session) => [
           ...sessionStatus(session).problems,
-          ...[session.alpha, session.beta].flatMap((endpoint) =>
-            (endpoint.scanProblems ?? []).map((problem) => `${problem.path}: ${problem.error}`),
-          ),
+          ...[session.alpha, session.beta].flatMap((endpoint) => [
+            ...(endpoint.scanProblems ?? []).map((problem) => `${problem.path}: ${problem.error}`),
+            ...(endpoint.excludedScanProblems
+              ? [`${endpoint.excludedScanProblems} additional scan problems`]
+              : []),
+          ]),
         ]),
       ),
     ),
@@ -1647,7 +1698,8 @@ const make = Effect.gen(function* () {
         refKey(input.logicalKey, input.environmentId),
         Effect.gen(function* () {
           const sessions = yield* runner.list();
-          if (sessions.some((session) => session.name === name)) yield* runner.resume(name);
+          if (input.resume !== false && sessions.some((session) => session.name === name))
+            yield* runner.resume(name);
           yield* reconcileOne(input.logicalKey, { rep }, yield* runner.list());
         }).pipe(Effect.mapError(mapError)),
       );

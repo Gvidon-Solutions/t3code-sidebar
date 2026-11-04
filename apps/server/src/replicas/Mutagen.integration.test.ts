@@ -73,6 +73,11 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         );
         yield* fs.makeDirectory(path.join(alpha, "build"));
         yield* fs.writeFileString(path.join(alpha, "build", "output"), "ignored root output");
+        yield* fs.makeDirectory(path.join(alpha, "src", ".t3-conflicts"));
+        yield* fs.writeFileString(
+          path.join(alpha, "src", ".t3-conflicts", "source"),
+          "nested source",
+        );
         yield* fs.symlink(path.join(root, "outside"), path.join(alpha, "absolute-link"));
         yield* fs.symlink("../outside", path.join(alpha, "relative-outside"));
         yield* runner.create({
@@ -96,6 +101,24 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
           skipped: 2,
           problems: [],
         });
+        expect(yield* fs.readFileString(path.join(beta, "src", ".t3-conflicts", "source"))).toBe(
+          "nested source",
+        );
+        yield* fs.writeFileString(
+          path.join(beta, "src", ".t3-conflicts", "source"),
+          "nested change",
+        );
+        expect(
+          yield* runner.changedPaths({
+            source: { path: alpha, environmentId: "alpha" },
+            destination: { path: beta, environmentId: "beta" },
+            ignores: ["node_modules", "/build"],
+          }),
+        ).toEqual(["absolute-link", "relative-outside", "src/.t3-conflicts/source"]);
+        yield* fs.writeFileString(
+          path.join(beta, "src", ".t3-conflicts", "source"),
+          "nested source",
+        );
         expect(yield* fs.exists(path.join(beta, "absolute-link"))).toBe(false);
         expect(yield* fs.exists(path.join(beta, "relative-outside"))).toBe(false);
         yield* fs.writeFileString(path.join(beta, "hello"), "beta edit");

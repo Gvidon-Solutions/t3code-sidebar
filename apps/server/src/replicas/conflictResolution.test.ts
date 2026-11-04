@@ -1,4 +1,4 @@
-import { preserveConflictScript } from "./ReplicaPlatform.ts";
+import { preserveConflictScript } from "../peer/connection/PeerPlatform.ts";
 import { conflictMtimeScript } from "./conflictMtimeScript.ts";
 import { describe, expect, it } from "vite-plus/test";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Execute the exact portable shell command against real files.

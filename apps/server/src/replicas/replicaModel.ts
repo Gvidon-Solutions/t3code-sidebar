@@ -123,13 +123,20 @@ export function remoteRepresentation(
 
 const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", "/.t3-conflicts"];
 export function replicaIgnorePatterns(configured: readonly string[]): string[] {
-  const defaults = projectPolicy({ schema: 1, machines: {} }, "").ignore.filter(
-    (pattern) => !protectedIgnores.includes(pattern),
-  );
-  const alreadyPrefixed = defaults.every((pattern, index) => configured[index] === pattern);
+  const defaults = projectPolicy({ schema: 1, machines: {} }, "").ignore;
+  const prefix = defaults.filter((pattern) => !protectedIgnores.includes(pattern));
+  let offset = 0;
+  // User override order and duplicate negations are significant; only generated prefixes are removed.
+  for (;;) {
+    const generated = [defaults, prefix].find((patterns) =>
+      patterns.every((pattern, index) => configured[offset + index] === pattern),
+    );
+    if (!generated) break;
+    offset += generated.length;
+  }
   return [
-    ...(alreadyPrefixed ? [] : defaults),
-    ...configured.filter((pattern) => !protectedIgnores.includes(pattern)),
+    ...prefix,
+    ...configured.slice(offset).filter((pattern) => !protectedIgnores.includes(pattern)),
     ...protectedIgnores,
   ];
 }

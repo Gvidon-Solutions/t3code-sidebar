@@ -1,5 +1,10 @@
 import { expect, it } from "@effect/vitest";
-import { mutagenSshEnvironment, nodeCommand, sshArguments, sshWrapper } from "./ReplicaPlatform.ts";
+import {
+  mutagenSshEnvironment,
+  nodeCommand,
+  sshArguments,
+  sshWrapper,
+} from "../peer/connection/PeerPlatform.ts";
 it("builds the same bounded SSH command on Windows and POSIX with an explicit isolated home", () => {
   for (const home of ["/tmp/studio home", "C:\\Users\\Studio Home"]) {
     const args = sshArguments("t3-studio", home);

@@ -36,7 +36,7 @@ export function replicaContextNote(
     rep.role === "primary"
       ? "local"
       : (config.projectMountStatus[entry![0]]?.[environmentId]?.state ?? "pending");
-  return `Representation: ${rep.role}; mode: ${mode}; primary: ${fitUtf8(primaryName, 80)}${primary ? ` at ${fitUtf8(primary.path, 120)}` : ""}; sync: ${sync}. ${rep.role === "replica" ? (mode === "lite" ? "build/test/git: t3 run <cmd>." : "Build/test locally; git: t3 run git <args>.") : "Build/test/git locally."}`;
+  return `Representation: ${rep.role}; mode: ${mode}; primary: ${fitUtf8(primaryName, 80)}${primary ? ` at ${fitUtf8(primary.path, 120)}` : ""}; sync: ${sync}. ${rep.role === "replica" ? (mode === "lite" ? "build/test/git: t3 run <cmd>." : "Build/test locally; run git on the primary.") : "Build/test/git locally."}`;
 }
 
 const fitUtf8 = (value: string, budget: number) => {

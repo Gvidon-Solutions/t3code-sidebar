@@ -1,3 +1,4 @@
+import { proxyCommand } from "../peer/connection/PeerPlatform.ts";
 import type { MeshConfigDocument, SidebarMachine } from "@t3tools/contracts";
 
 const begin = "# t3-mesh begin";
@@ -28,7 +29,6 @@ const safe = (value: string) => {
   return value;
 };
 const quote = (value: string) => `"${safe(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-const shellQuote = (value: string) => `'${safe(value).replaceAll("'", "'\\''")}'`;
 export interface SshPeer {
   readonly name: string;
   readonly environmentId: string;
@@ -62,20 +62,7 @@ export function sshFiles(
     const user = peer.settings.ssh?.user ?? facts.user;
     if (!user || !facts.sshd) continue;
     const host = `t3-${peer.name}`;
-    const proxy = [
-      ...paths.runtime,
-      "mesh",
-      "pipe",
-      peer.environmentId,
-      "--base-dir",
-      paths.baseDir,
-    ]
-      .map(
-        paths.platform === "win32"
-          ? (value) => `"${safe(value).replaceAll("%", "%%")}"`
-          : shellQuote,
-      )
-      .join(" ");
+    const proxy = proxyCommand(paths.platform, paths.runtime, peer.environmentId, paths.baseDir);
     config.push(
       `Host ${host}`,
       `  HostName ${host}`,

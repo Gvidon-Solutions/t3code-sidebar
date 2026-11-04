@@ -139,7 +139,7 @@ export const layer = Layer.effect(
           (rep) => rep.role === "replica" && replicaDriver(state, rep) === mesh.environmentId,
         ),
         (rep) =>
-          service.retry({ logicalKey: key, environmentId: rep.environmentId }).pipe(
+          service.retry({ logicalKey: key, environmentId: rep.environmentId, resume: false }).pipe(
             Effect.mapError(failure),
             Effect.flatMap((status) =>
               status.state === "error"

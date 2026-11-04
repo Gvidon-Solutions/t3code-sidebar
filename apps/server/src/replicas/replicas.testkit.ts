@@ -122,7 +122,10 @@ export const makeReplicaHarness = (
           terminated.push(name);
           sessions = sessions.filter((s) => s.name !== name && s.identifier !== name);
         }),
-      pause: () => Effect.void,
+      pause: () =>
+        Effect.sync(() => {
+          sessions = sessions.map((session) => ({ ...session, paused: true }));
+        }),
       resume: () =>
         Effect.sync(() => {
           sessions = sessions.map((s) => ({ ...s, paused: false }));

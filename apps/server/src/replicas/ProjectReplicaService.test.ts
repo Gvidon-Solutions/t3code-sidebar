@@ -66,7 +66,42 @@ it.effect(
         h.setSession({ conflicts: [], paused: true });
         yield* service.reconcile;
         expect((yield* service.status)[0]?.state).toBe("paused");
+        expect(
+          (yield* service.retry({ logicalKey: "repo", environmentId: "replica", resume: false }))
+            .state,
+        ).toBe("paused");
         yield* service.retry({ logicalKey: "repo", environmentId: "replica" });
+        expect((yield* service.status)[0]?.state).toBe("watching");
+        let configClock = yield* mesh.nextHlc;
+        yield* mesh.apply({
+          "mesh.config": {
+            h: configClock,
+            v: {
+              revision: configClock,
+              doc: { schema: 1, machines: { source: {}, replica: {} }, ssh: { mode: "off" } },
+              author: "replica",
+              writtenAt: "",
+            },
+          },
+        });
+        yield* service.reconcile;
+        expect((yield* service.status)[0]).toMatchObject({
+          state: "paused",
+          message: "SSH is off; cross-machine replicas are disabled.",
+        });
+        configClock = yield* mesh.nextHlc;
+        yield* mesh.apply({
+          "mesh.config": {
+            h: configClock,
+            v: {
+              revision: configClock,
+              doc: { schema: 1, machines: { source: {}, replica: {} }, ssh: { mode: "managed" } },
+              author: "replica",
+              writtenAt: "",
+            },
+          },
+        });
+        yield* service.reconcile;
         expect((yield* service.status)[0]?.state).toBe("watching");
         h.setSession({ lastError: "offline" });
         yield* service.reconcile;
@@ -633,6 +668,14 @@ it.effect(
         message: expect.stringContaining("2 files skipped"),
       });
       expect((yield* service.status)[0]).toMatchObject({ state: "watching", skipped: 2 });
+      expect(yield* service.problems({ logicalKey: "repo", environmentId: "replica" })).toEqual([
+        "outside: absolute symlink",
+        "private: permission denied",
+      ]);
+      h.setSession({ alpha: { path: "/source", excludedScanProblems: 3 } });
+      expect(yield* service.problems({ logicalKey: "repo", environmentId: "replica" })).toEqual([
+        "3 additional scan problems",
+      ]);
       h.setSession({ alpha: { path: "/source" } });
       yield* service.reconcile;
       expect((yield* mesh.read).config.projectMountStatus.repo?.replica?.skipped).toBeUndefined();
