@@ -1,3 +1,4 @@
+import { MeshSsh } from "../replicas/MeshSsh.ts";
 import { replicaDriver } from "../replicas/replicaModel.ts";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
 import {
@@ -33,6 +34,7 @@ const titleOf = (titles: Readonly<Record<string, string>>, key: string) => title
 export const layer = Layer.effect(
   MeshConfigPlanners,
   Effect.gen(function* () {
+    const ssh = yield* MeshSsh;
     const mesh = yield* MeshLayoutService;
     const runtime = yield* ReplicaRuntime.ReplicaRuntime;
     const replicaService = runtime.get.pipe(Effect.mapError(failure));
@@ -318,6 +320,30 @@ export const layer = Layer.effect(
         }
       }),
     };
-    return MeshConfigPlanners.of([machines, links, replicas, ignores, conflicts]);
+    const sshPlanner: ConfigPlanner = {
+      name: "ssh",
+      plan: Effect.fn("MeshConfigPlanners.ssh.plan")(function* (doc) {
+        const bound = bindingsFromLayout((yield* snapshot).document);
+        return [
+          {
+            id: "ssh/blocks",
+            server: mesh.environmentId,
+            description: "Reconcile managed SSH blocks",
+          },
+          ...Object.entries(bound)
+            .filter(([, id]) => id !== mesh.environmentId)
+            .map(([machine]) => ({
+              id: `ssh/route/${machine}`,
+              server: mesh.environmentId,
+              machine,
+              description: `Check SSH route to ${machine} (${doc.ssh?.mode ?? "managed"})`,
+            })),
+        ];
+      }),
+      reconcile: Effect.fn("MeshConfigPlanners.ssh.reconcile")((action, doc) =>
+        ssh.reconcile(doc, action.machine),
+      ),
+    };
+    return MeshConfigPlanners.of([machines, links, sshPlanner, replicas, ignores, conflicts]);
   }),
 );

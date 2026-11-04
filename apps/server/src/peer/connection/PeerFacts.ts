@@ -1,3 +1,4 @@
+import { MeshSsh } from "../../replicas/MeshSsh.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- os.release reports the operating system build, absent from the platform references.
 import * as NodeOS from "node:os";
 import * as NodeFSP from "node:fs/promises";
@@ -16,6 +17,7 @@ export const PeerFacts = Schema.Struct({
   version: Schema.String,
   platform: Schema.Struct({ os: Schema.String, arch: Schema.String, release: Schema.String }),
   user: Schema.NullOr(Schema.String),
+  meshPublicKey: Schema.optionalKey(Schema.String),
   connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
   sshd: Schema.NullOr(Schema.Struct({ port: Schema.Int, hostKeys: Schema.Array(Schema.String) })),
 });
@@ -115,7 +117,9 @@ export const layer = () =>
   Layer.effect(
     PeerFactsReporter,
     Effect.gen(function* () {
+      const ssh = yield* MeshSsh;
       const collect = collectPeerFacts().pipe(
+        Effect.map((facts) => ({ ...facts, meshPublicKey: ssh.publicKey })),
         Effect.provideService(FileSystem.FileSystem, yield* FileSystem.FileSystem),
       );
       return { collect };

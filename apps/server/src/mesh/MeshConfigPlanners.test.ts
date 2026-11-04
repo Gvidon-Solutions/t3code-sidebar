@@ -1,3 +1,4 @@
+import { MeshSsh } from "../replicas/MeshSsh.ts";
 import type { Json } from "@t3tools/shared/meshLayout";
 import { MeshConfigError, ReplicaError, type MeshConfigDocument } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
@@ -115,7 +116,16 @@ it.effect(
       ).toBe("full");
       yield* plan("conflicts").reconcile((yield* plan("conflicts").plan(doc, undefined))[0]!, doc);
       expect(h.created).toHaveLength(2);
-    }).pipe(Effect.provide(Planners.layer.pipe(Layer.provideMerge(dependencies))));
+    }).pipe(
+      Effect.provide(
+        Planners.layer.pipe(
+          Layer.provide(
+            Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
+          ),
+          Layer.provideMerge(dependencies),
+        ),
+      ),
+    );
   },
 );
 it.effect("places and removes only rule-owned replicas, including removal after a restart", () => {
@@ -181,7 +191,12 @@ it.effect("places and removes only rule-owned replicas, including removal after 
     expect((yield* mesh.read).document["mesh.configReplica/repo/replica"]?.v).toBe(false);
   }).pipe(
     Effect.provide(
-      Planners.layer.pipe(Layer.provideMerge(runtime.pipe(Layer.provideMerge(h.layer)))),
+      Planners.layer.pipe(
+        Layer.provide(
+          Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
+        ),
+        Layer.provideMerge(runtime.pipe(Layer.provideMerge(h.layer))),
+      ),
     ),
   );
 });
@@ -227,7 +242,12 @@ it.effect(
       expect((yield* mesh.read).config.machines["cloudbox-env"]?.title).toBe("Cloudbox");
     }).pipe(
       Effect.provide(
-        Planners.layer.pipe(Layer.provideMerge(runtime.pipe(Layer.provideMerge(h.layer)))),
+        Planners.layer.pipe(
+          Layer.provide(
+            Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
+          ),
+          Layer.provideMerge(runtime.pipe(Layer.provideMerge(h.layer))),
+        ),
       ),
     );
   },

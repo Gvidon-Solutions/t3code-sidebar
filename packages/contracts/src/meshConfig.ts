@@ -34,6 +34,7 @@ export const MeshConfigDocument = open({
       ssh: Schema.optionalKey(
         open({
           user: Schema.optionalKey(Schema.String),
+          host: Schema.optionalKey(Schema.String),
           port: Schema.optionalKey(
             Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
           ),

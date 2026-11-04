@@ -68,6 +68,7 @@ export const SidebarMachineReported = Schema.Struct({
   user: Schema.NullOr(Schema.String),
   /** Absent when the machine has no readable sshd host keys. */
   sshd: Schema.NullOr(SidebarMachineReportedSshd),
+  meshPublicKey: Schema.optionalKey(Schema.String),
   reportedAt: Schema.String,
   connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
 });
