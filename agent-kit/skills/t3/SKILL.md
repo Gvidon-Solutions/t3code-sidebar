@@ -25,7 +25,8 @@ Run `node ~/.agents/skills/t3/scripts/t3ctl.mjs` (Node 22+), or the installed `t
 | List work | `status [--all]`, `threads [--project P] [--all]` |
 | Read a thread | `show <T> [--full]`, `output <T>`, `wait <T> [--timeout 5m]` |
 | Start a thread | `new --project <P> [--on M] [--agent INSTANCE --model MODEL] [--file BRIEF] "task"` |
-| Continue or fork | `send <T> "message" [--wait]`, `fork <T> [--title TITLE]` |
+| Continue or fork | `send <T> "message" [--wait]`, `fork <T> [--title TITLE]`, `fork <T> --on <M> [--agent/--model/--effort]` to continue on another machine |
+| Move on this machine | `move <T> --project P` |
 | Handle a question | `requests <T>`, `answer <T> "answer"`, `approve <T> acceptForSession` |
 | Stop requested work | `stop <T>` |
 | Find/open | `find "words" --all`, `open <T>`, `open-file <path> [--on M]` |
@@ -44,7 +45,7 @@ Run `node ~/.agents/skills/t3/scripts/t3ctl.mjs` (Node 22+), or the installed `t
 
 1. Start a new top-level thread only when asked. Give its first message a complete brief: goal, target paths, constraints, acceptance criteria. Use `--file` for longer briefs. Use native orchestration tools for delegation; CLI thread creation is not delegation.
 2. Opening a thread or file on the user's screen: use native `ui_open` with the full id and environment id. The CLI's `open` and `open-file` print links for outside clients.
-3. Read output with `show <T>` / `output <T>`; answer questions and approvals with `requests`, `answer`, and `approve` within the user's authorization. Fork a session with `fork <T>`, preserving context.
+3. Read output with `show <T>` / `output <T>`; answer questions and approvals with `requests`, `answer`, and `approve` within the user's authorization. Fork a session with `fork <T>`, preserving context; `fork <T> --on <M>` creates a new thread on another machine and leaves the original in place. Move a thread between projects on its own machine with `move <T> --project P`.
 4. Permanent deletion, bulk mutations, link removal and live server restarts require explicit authorization. Preview a bulk operation before applying it. For a restart or upgrade, explain the target, purpose and rollback first; one approval covers one restart. Never stop unrelated threads or services.
 5. Report issues and requested results through the native inbox tools from inside a T3 thread, so the calling thread receives replies. Check for an existing issue first, use a stable dedupe key, keep waitingForOwner accurate, and resolve only after verifying. The CLI inbox is a fallback for outside clients.
 6. `t3_thread_self` / `t3ctl self` identifies the current thread and representation. `show`, `send`, `wait`, `stop`, `requests`, and `answer` resolve full thread ids across the mesh. Keep returned `mcp:…` identifiers intact.

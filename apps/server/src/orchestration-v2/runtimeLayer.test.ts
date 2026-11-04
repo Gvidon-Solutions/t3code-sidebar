@@ -8696,28 +8696,38 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
             peerLinks,
             peer,
             Layer.mock(ProviderRegistry.ProviderRegistry)({
-              getProviders: Effect.succeed([
-                {
-                  instanceId: modelSelection.instanceId,
-                  driver: ProviderDriverKind.make("codex"),
-                  enabled: true,
-                  installed: true,
-                  status: "ready",
-                  auth: { status: "authenticated" },
-                  version: null,
-                  checkedAt: "2026-11-03T00:00:00Z",
-                  models: [
-                    {
-                      slug: modelSelection.model,
-                      name: "Source model",
-                      isCustom: false,
-                      capabilities: null,
-                    },
-                  ],
-                  slashCommands: [],
-                  skills: [],
-                },
-              ]),
+              getProviders: Effect.succeed(
+                [
+                  {
+                    instanceId: modelSelection.instanceId,
+                    driver: ProviderDriverKind.make("codex"),
+                    enabled: true,
+                    installed: true,
+                    status: "ready",
+                    auth: { status: "authenticated" },
+                    version: null,
+                    checkedAt: "2026-11-03T00:00:00Z",
+                    models: [
+                      {
+                        slug: modelSelection.model,
+                        name: "Source model",
+                        isCustom: false,
+                        capabilities: null,
+                      },
+                    ],
+                    slashCommands: [],
+                    skills: [],
+                  },
+                ].flatMap((provider) => [
+                  provider,
+                  {
+                    ...provider,
+                    instanceId: ProviderInstanceId.make("opencode"),
+                    driver: ProviderDriverKind.make("opencode"),
+                    models: [{ ...provider.models[0]!, slug: "cedar-model" }],
+                  },
+                ]),
+              ),
             }),
             ForkSecrets.layer.pipe(
               Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "L-fork-" })),
@@ -8768,10 +8778,18 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
             ...input,
             commandId: CommandId.make("F1-local-fork"),
             targetEnvironmentId: EnvironmentId.make("A"),
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("opencode"),
+              model: "cedar-model",
+            },
           },
           limits,
         );
         assert.equal(localFork.environmentId, "A");
+        assert.deepEqual(
+          (yield* orchestrator.getThreadProjection(localFork.threadId)).thread.modelSelection,
+          { instanceId: ProviderInstanceId.make("opencode"), model: "cedar-model" },
+        );
         assert.equal(
           (yield* orchestrator.getThreadProjection(localFork.threadId)).thread.meshFork?.threadId,
           sourceId,

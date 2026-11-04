@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { replicaStatusCopy } from "@t3tools/client-runtime/state/mesh-layout";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import {
   type EnvironmentId,
@@ -94,6 +95,23 @@ export function ForkThreadSheet() {
     );
   const targetTitle = sourceConfig.machines[target]?.title ?? label(target);
   const online = serverConfigs.has(target);
+  const logicalKey = Object.keys(sourceConfig.projectMounts).find((key) =>
+    sourceConfig.projectMounts[key]?.some(
+      (rep) => rep.environmentId === thread.environmentId && rep.projectId === thread.projectId,
+    ),
+  );
+  const status = logicalKey ? sourceConfig.projectMountStatus[logicalKey]?.[target] : undefined;
+  const progress = status
+    ? replicaStatusCopy({
+        state: status.state,
+        progress: null,
+        conflicts: status.conflicts ?? 0,
+        message: status.message ?? null,
+        targetLabel: targetTitle,
+        sourceLabel:
+          sourceConfig.machines[thread.environmentId]?.title ?? label(thread.environmentId),
+      })
+    : null;
   return (
     <Sheet title={`Fork to ${targetTitle}`} onClose={close}>
       <View className="gap-4 p-4">
@@ -124,7 +142,11 @@ export function ForkThreadSheet() {
           value={message}
           onChangeText={setMessage}
         />
-        {busy ? <AppText role="status">Preparing and copying the conversation…</AppText> : null}
+        {busy ? (
+          <AppText role="status">
+            {progress ?? "Preparing the project and copying the conversation…"}
+          </AppText>
+        ) : null}
         {error ? <AppText className="text-destructive">{error}</AppText> : null}
         <Pressable
           accessibilityRole="button"
