@@ -64,7 +64,9 @@ describe("mesh config", () => {
     });
   });
   it("rejects malformed fields with their paths", () => {
-    expect(() => parseConfig("schema: 1\nmachines: {}\nfuture: &loop {self: *loop}\n")).toThrow(/JSON/);
+    expect(() => parseConfig("schema: 1\nmachines: {}\nfuture: &loop {self: *loop}\n")).toThrow(
+      /JSON/,
+    );
     expect(() => parseConfig("schema: 1\nmachines: {}\nfuture: .inf\n")).toThrow(/JSON/);
     const cases: readonly [Record<string, unknown>, RegExp][] = [
       [{ schema: "1" }, /schema/],
