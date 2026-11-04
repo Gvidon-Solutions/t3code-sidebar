@@ -222,3 +222,6 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   the actual file hashes to match within its deadline as well as the replicated layout hash.
   Likewise, an ignore update must await the replacement session's requested configuration;
   the previous session can still report `watching` before the new layout reaches its machine.
+  Await the resulting diagnostics too, since session replacement first publishes `mounting`.
+- Quiesce and drain replica reconciliation before constructing conflicting test files: it
+  automatically resumes paused sessions and can otherwise overwrite a fixture during setup.

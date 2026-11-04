@@ -46,8 +46,13 @@ done
 test "$(jq -r '.[0].identifier' "$WORK/N-live-before-ignores.json")" != "$(jq -r '.[0].identifier' "$WORK/N-live-after-ignores.json")"
 jq -e 'length==1 and (.[0].ignore.paths | index("absolute-link")!=null and index("relative-outside")!=null and index("private")!=null)' "$WORK/N-live-after-ignores.json" >/dev/null
 wait_converged 'N per-replica ignore update'
-ctl vps tool t3_project_machines "$(jq -nc --arg title "$warning_title" '{project:$title}')" > "$WORK/N-live-ignored.json"
-jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .status.state=="watching" and (.status.skipped // 0)==0' "$WORK/N-live-ignored.json" >/dev/null
+ignore_deadline=$((SECONDS+TIMEOUT))
+while :; do
+  ctl vps tool t3_project_machines "$(jq -nc --arg title "$warning_title" '{project:$title}')" > "$WORK/N-live-ignored.json"
+  if jq -e --arg env "$GV_ENV" '.representations[] | select(.environmentId==$env) | .status.state=="watching" and (.status.skipped // 0)==0' "$WORK/N-live-ignored.json" >/dev/null; then break; fi
+  [ "$SECONDS" -lt "$ignore_deadline" ] || die 'Updated ignore diagnostics did not reach the remote machine'
+  sleep 1
+done
 rexec gor ln -s "../$(basename "$warning_root")-outside" "$warning_root/fresh-outside"
 mut gv sync flush "$(jq -r '.[0].name' "$WORK/N-live-after-ignores.json")"
 assert_live_regression_recovery() {
