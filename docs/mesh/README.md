@@ -191,3 +191,41 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - A fresh SCP connection may be rejected while an existing SSH session remains healthy during
   bed restarts. Use the same owned control socket for deployment SSH and SCP. Deployment retries
   happen before fault injection; they are not proof of automatic replica recovery.
+
+## N1 connection wire kernel
+
+`apps/server/src/peer/connection/PeerChannel.ts` implements the session framing kernel;
+`PeerChannel.test.ts` exercises it with two independent endpoints. This kernel is not yet
+connected to the server listener or `PeerMcpClient`. HTTP remains the production peer transport.
+It does not establish mutual trust, discover routes, persist receipts or implement the S1
+`openPipe(machine, target)` service. S1 must not depend on this as a completed network API.
+
+The kernel accepts one complete JSON text frame at `receive`, with a 1 MiB frame ceiling.
+`call(body, { key, signal, timeoutMs })` returns a Promise, defaults to 60 seconds and propagates
+cancellation to the receiving handler's AbortSignal. Requests and results use distinct UUIDs;
+keys coalesce identical in-flight requests and retain their outcome for this session only.
+Reusing a key with a different JSON body fails. The current cache refuses new keys after 4096
+receipts; a production adapter needs durable receipts independent of session lifetime before
+using this for retryable creation. There are at most 128 pending outbound calls and 128 pipes.
+`event(name, body)` is unacknowledged delivery to the other endpoint.
+
+`openPipe(target)` returns a Node Duplex with independent readable and writable halves. Its
+write callback waits for receiver credit; callers must honor `write()` backpressure or use
+`pipeline`. Each direction starts with 256 KiB of credit and sends at most 32 KiB per data frame.
+A reader replenishes credit when pulling buffered data. `end()` closes only the writable half;
+`destroy()` resets the pipe. Connection loss fails all outstanding writes, calls and pipes.
+The target callback must attach an error handler and connect the accepted stream to its target.
+The kernel carries target strings; authorizing `sshd` and resolving its loopback port belongs
+to the authenticated server adapter, never to the wire decoder.
+
+An adapter supplies synchronous frame enqueueing, close, call/event/target handlers and a
+monotonic clock. It must bound its socket output queue, deliver frames in order, authenticate
+before exposing the channel, reauthorize each call, call `tick()` regularly, and call `close()`
+on socket loss. `tick` sends a ping after 15 seconds and fails after 45 seconds of silence or
+an unanswered ping, even if unrelated incoming traffic continues. `preferConnection` defines
+which dial direction wins when both sockets exist; `reconnectDelay` supplies capped jittered
+backoff. These helpers do not themselves own sockets, select connections or schedule reconnects.
+
+The tests prove framing, concurrent calls and key rejection, cancellation/deadlines, heartbeat,
+credit bounds, half-close, a 200 MiB stream and interruption. They do not substitute for the
+three-server bed, HTTPS-disabled MCP proof or an SSH ProxyCommand test.

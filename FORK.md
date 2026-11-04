@@ -108,6 +108,15 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-04 — N1 session framing kernel (internal, not server-integrated)
+
+- **What.** Adds a tested multiplexed session kernel for calls, notifications and byte pipes.
+  This does not yet change the peer transport used by the product; N1 acceptance is incomplete.
+- **How.** JSON frames, request deadlines and cancellation, session-scoped receipts, credit-based
+  Duplex streams with half-close, explicit heartbeat ticks and connection-selection/backoff rules.
+- **Where.** `apps/server/src/peer/connection/PeerChannel.ts` and its tests; the internal API and
+  integration boundary are described in `docs/mesh/README.md`.
+
 ### 2026-11-03 — T3 Mesh — Stage N authority and automatic conflict copies
 
 - **What:** a configurable authority, automatic conflict copies, stable project identities, explicit replica folders, safe takeover of manual Mutagen sessions, and recovery across server/daemon/tunnel interruptions.
