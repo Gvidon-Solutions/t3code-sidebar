@@ -1,5 +1,11 @@
 import * as Schema from "effect/Schema";
-import { SidebarMachine, SidebarProjectMount, SidebarProjectMountStatus } from "@t3tools/contracts";
+import {
+  SidebarWorkspace,
+  SidebarWorkspaceRule,
+  SidebarMachine,
+  SidebarProjectMount,
+  SidebarProjectMountStatus,
+} from "@t3tools/contracts";
 import type { MeshLayoutEntry } from "./document.ts";
 
 const sort = { sort: Schema.String };
@@ -22,13 +28,13 @@ export const layoutKeyFamilies = {
   ws: family(
     Schema.Struct({
       ...sort,
-      name: Schema.String,
+      name: SidebarWorkspace.fields.name,
       icon: Schema.optionalKey(Schema.String),
       color: Schema.optionalKey(Schema.String),
     }),
     2,
   ),
-  rule: family(Schema.Struct({ ...sort, match: Schema.String, workspace: Schema.String }), 2),
+  rule: family(Schema.Struct({ ...sort, ...SidebarWorkspaceRule.fields }), 2),
   place: family(
     Schema.Struct({
       ...sort,
@@ -72,6 +78,7 @@ export function validateLayoutEntry(key: string, entry: MeshLayoutEntry): string
     : undefined;
   if (spec === undefined) return null;
   if (parts.length !== spec.segments) return "invalid key segment count";
+  if (name === "ws" && !parts[1]!.trim()) return "workspace id must not be blank";
   if (entry.v === null) return null;
   if (name === "proj" && key.endsWith(".title"))
     return typeof entry.v === "string" ? null : "project title must be a string";

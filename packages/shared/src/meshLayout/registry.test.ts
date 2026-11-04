@@ -1,3 +1,6 @@
+import { SidebarWorkspacesConfig } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
+const isConfig = Schema.is(SidebarWorkspacesConfig);
 import { expect, it } from "vite-plus/test";
 import { validateLayoutEntry, layoutKeyFamilies } from "./registry.ts";
 import { merge, type MeshLayoutDocument } from "./document.ts";
@@ -16,6 +19,54 @@ it("validates every registered family and forwards unknown values without materi
       validateLayoutEntry(name, { v: key === "legacy" ? {} : [], h: "0000000000000.00000.studio" }),
     ).not.toBeNull();
   }
+  expect(
+    validateLayoutEntry("ws/blank", {
+      v: { name: "  ", sort: "a0" },
+      h: "0000000000000.00000.studio",
+    }),
+  ).not.toBeNull();
+  expect(
+    validateLayoutEntry("rule/blank", {
+      v: { match: "", workspace: "main", sort: "a0" },
+      h: "0000000000000.00000.studio",
+    }),
+  ).not.toBeNull();
+  expect(
+    validateLayoutEntry("ws/%20", {
+      v: { name: "Main", sort: "a0" },
+      h: "0000000000000.00000.studio",
+    }),
+  ).not.toBeNull();
+  expect(
+    isConfig(
+      materialize({
+        "ws/main": { v: { name: "Main", sort: "a0", id: 123 }, h: "0000000000000.00000.studio" },
+        "order/example": { v: { sort: "a0", id: 123 }, h: "0000000000000.00000.studio" },
+        "place/example/main": {
+          v: { sort: "a0", workspace: 123, project: 123 },
+          h: "0000000000000.00000.studio",
+        },
+      }),
+    ),
+  ).toBe(true);
+  expect(
+    isConfig(
+      materialize({
+        "rep/__proto__/studio": {
+          v: {
+            environmentId: "studio",
+            path: "/project",
+            transport: "git",
+            role: "primary",
+            createdAt: "",
+          },
+          h: "0000000000000.00000.studio",
+        },
+        "place/__proto__/constructor": { v: { sort: "a0" }, h: "0000000000000.00000.studio" },
+        "fold/constructor/__proto__": { v: "quiet", h: "0000000000000.00000.studio" },
+      }),
+    ),
+  ).toBe(true);
   const opaque = { "future/data": { v: { shape: [1, true] }, h: "0000000000000.00000.studio" } };
   expect(validateLayoutEntry("future/data", opaque["future/data"])).toBeNull();
   expect(merge({}, opaque)).toEqual(opaque);

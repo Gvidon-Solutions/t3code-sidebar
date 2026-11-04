@@ -173,10 +173,14 @@ it.effect("rejects future clocks, persists counts and quarantines corrupt rows o
     expect((yield* mesh.read).document["machine/cloudbox"]).toBeUndefined();
     yield* sql`INSERT INTO mesh_layout_entries(key,value,hlc,seq) VALUES ('ws/corrupt','{','broken',999)`;
     yield* sql`INSERT INTO mesh_layout_entries(key,value,hlc,seq) VALUES ('fold/main/project','123','0000000000000.00000.studio',1000)`;
+    yield* sql`INSERT INTO mesh_layout_entries(key,value,hlc,seq) VALUES ('ws/blank','{"name":"  ","sort":"a0"}','0000000000000.00000.studio',1001)`;
+    yield* sql`INSERT INTO mesh_layout_entries(key,value,hlc,seq) VALUES ('rep/__proto__/studio','{"environmentId":"studio","path":"/project","transport":"git","role":"primary","createdAt":""}','0000000000000.00000.studio',1002)`;
     const restarted = yield* MeshLayoutService.pipe(Effect.provide(yield* build()));
+    expect((yield* restarted.read).config.projectMounts["__proto__"]?.[0]?.path).toBe("/project");
     expect((yield* restarted.read).config.workspaces).toEqual([{ id: "main", name: "main" }]);
     expect(yield* sql`SELECT key FROM mesh_layout_quarantine ORDER BY key`).toEqual([
       { key: "fold/main/project" },
+      { key: "ws/blank" },
       { key: "ws/corrupt" },
     ]);
     expect(yield* sql`SELECT key FROM mesh_layout_entries WHERE key = 'ws/corrupt'`).toEqual([]);

@@ -1,3 +1,5 @@
+import * as PubSub from "effect/PubSub";
+import * as Stream from "effect/Stream";
 import * as Deferred from "effect/Deferred";
 import * as Scope from "effect/Scope";
 import * as Exit from "effect/Exit";
@@ -241,14 +243,19 @@ it.effect(
     }).pipe(Effect.scoped),
 );
 
-it.effect("reports each peer's last exchange, error and sequence numbers", () =>
+it.effect("reports peer watermarks and retains old tombstones while a linked peer is offline", () =>
   Effect.gen(function* () {
+    yield* TestClock.adjust("31 days");
+    let linked: PeerLinkSummary[] = [];
     const peers = Layer.succeed(PeerMcpClient, {
-      call: () => Effect.die("the status test never calls a peer"),
+      call: () =>
+        Effect.fail(
+          new OrchestratorMcpFailure({ code: "orchestration_error", message: "laptop offline" }),
+        ),
     });
     const links = Layer.mock(PeerLinks)({
       enabled: Effect.succeed(true),
-      list: Effect.succeed([]),
+      list: Effect.sync(() => linked),
     });
     const env = Layer.succeed(ServerEnvironment, {
       getEnvironmentId: Effect.succeed(EnvironmentId.make("A")),
@@ -321,6 +328,31 @@ it.effect("reports each peer's last exchange, error and sequence numbers", () =>
         },
       ],
     });
+    linked = [
+      {
+        environmentId: EnvironmentId.make("laptop"),
+        access: "full-access",
+        status: "unreachable",
+        label: "Laptop",
+        urls: [],
+        linkedAt: DateTime.makeUnsafe(0),
+        expiresAt: DateTime.makeUnsafe(9999999999999),
+        lastReachedAt: null,
+        lastError: "offline",
+      },
+    ];
+    yield* mesh.apply({ "machine/deleted": { v: null, h: "0000000000001.00000.studio" } });
+    yield* replicator.sync;
+    expect((yield* mesh.read).document["machine/deleted"]).toBeDefined();
+    const seq = (yield* sql<{ seq: number }>`SELECT seq FROM mesh_layout_meta`)[0]!.seq;
+    yield* replicator.exchange({
+      fromEnvironmentId: "laptop",
+      entries: {},
+      seq: 1,
+      ackReceivedSeq: seq,
+    });
+    yield* replicator.sync;
+    expect((yield* mesh.read).document["machine/deleted"]).toBeUndefined();
   }).pipe(Effect.scoped),
 );
 
@@ -446,6 +478,8 @@ it.effect("retries a failed push promptly instead of waiting for the next period
       { mesh: MeshLayoutService["Service"]; replicator: MeshReplicator["Service"] }
     >();
     const delivered = yield* Deferred.make<void>();
+    const reconnected = yield* Deferred.make<void>();
+    const connectionChanges = yield* PubSub.unbounded<void>();
     let chatboxUp = true;
     let calls = 0;
     let refused = 0;
@@ -459,6 +493,7 @@ it.effect("retries a failed push promptly instead of waiting for the next period
         }),
         Layer.mock(PeerLinks)({
           enabled: Effect.succeed(true),
+          changes: Stream.fromPubSub(connectionChanges),
           list: Effect.sync(() =>
             id !== "studio"
               ? []
@@ -510,6 +545,13 @@ it.effect("retries a failed push promptly instead of waiting for the next period
               );
             if (Object.hasOwn(request.entries, "machine/studio"))
               yield* Deferred.succeed(delivered, undefined);
+            if (
+              request.entries["machine/studio"]?.v &&
+              typeof request.entries["machine/studio"].v === "object" &&
+              "label" in request.entries["machine/studio"].v &&
+              request.entries["machine/studio"].v.label === "After reconnect"
+            )
+              yield* Deferred.succeed(reconnected, undefined);
             // oxlint-disable-next-line t3code/no-inline-schema-compile -- The peer selects the response schema per call.
             return yield* Schema.decodeEffect(input.success)(response).pipe(Effect.orDie);
           }),
@@ -541,5 +583,14 @@ it.effect("retries a failed push promptly instead of waiting for the next period
     yield* TestClock.adjust("2 seconds");
     expect(Option.isSome(yield* Deferred.poll(delivered))).toBe(true);
     expect((yield* nodes.get("chatbox")!.mesh.read).config.machines.studio?.label).toBe("Studio");
+    yield* studio.mesh.edit((config) => ({
+      ...config,
+      machines: { studio: { label: "After reconnect" } },
+    }));
+    yield* PubSub.publish(connectionChanges, undefined);
+    yield* Deferred.await(reconnected);
+    expect((yield* nodes.get("chatbox")!.mesh.read).config.machines.studio?.label).toBe(
+      "After reconnect",
+    );
   }).pipe(Effect.scoped),
 );
