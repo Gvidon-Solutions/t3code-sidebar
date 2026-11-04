@@ -163,6 +163,7 @@ export const layer = Layer.effect(
               "true",
             ],
             timeout: "15 seconds",
+            timeoutBehavior: "timedOutResult",
           });
           if (result.code !== 0)
             return yield* new MeshConfigError({
