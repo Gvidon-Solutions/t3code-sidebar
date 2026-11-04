@@ -13,11 +13,11 @@ proxy=/tmp/N1-network-proxy.mjs
 node_binary=$(command -v node)
 if [ "$action" = up ]; then
   cp "$MESH_DIR/network-proxy.mjs" "$proxy"
-  printf '{"denyMcp":false,"cut":false}\n' > "$state"
+  printf '{"denyMcp":true,"peerOnlyMcp":true,"cut":false}\n' > "$state"
   gor_scp "$proxy" "$GOR_HOST:$proxy"
-  gor_ssh "printf '{\"denyMcp\":false,\"cut\":false}\\n' > '$state'"
-  scp -F "$VPS_SSH_CONFIG" "$proxy" "$VPS_HOST:$VPS_DIR/tmp/N1-network-proxy.mjs"
-  vps_ssh "printf '{\"denyMcp\":false,\"cut\":false}\\n' > '$VPS_DIR/tmp/N1-network-state.json'; chmod 644 '$VPS_DIR/tmp/N1-network-proxy.mjs' '$VPS_DIR/tmp/N1-network-state.json'"
+  gor_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$state'"
+  scp -F "$VPS_SSH_CONFIG" -o StrictHostKeyChecking=yes -o UpdateHostKeys=no "$proxy" "$VPS_HOST:$VPS_DIR/tmp/N1-network-proxy.mjs"
+  vps_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$VPS_DIR/tmp/N1-network-state.json'; printf '{\"denyMcp\":false,\"cut\":false}\\n' > '$VPS_DIR/tmp/N1-outbound-state.json'; chmod 644 '$VPS_DIR/tmp/N1-network-proxy.mjs' '$VPS_DIR/tmp/N1-network-state.json' '$VPS_DIR/tmp/N1-outbound-state.json'"
   install -d "$HOME/.config/systemd/user/$GV_UNIT.d"
   printf '[Service]\nExecStart=\nExecStart=%s/%s/t3 serve --base-dir %s --host 127.0.0.1 --port %s --no-browser\n' "$GV_RUNTIME_ROOT" "$BUILD_VERSION" "$GV_BASE_DIR" "$((GV_PORT + 1))" > "$HOME/.config/systemd/user/$GV_UNIT.d/$dropin"
   cat > "$HOME/.config/systemd/user/$name" <<EOF
@@ -54,7 +54,7 @@ services:
     command:
       - sh
       - -c
-      - node /tmp/N1-network-proxy.mjs 3791 3792 /tmp/N1-network-state.json 0.0.0.0 & if [ -f /tmp/N1-sshd_config ]; then /usr/sbin/sshd -D -e -f /tmp/N1-sshd_config & fi; echo $$$$ > /tmp/N1-server-spawn.pid; exec node /opt/t3/dist/bin.mjs serve --base-dir /home/t3/.t3 --host 127.0.0.1 --port 3792 --no-browser
+      - node /tmp/N1-network-proxy.mjs 3791 3792 /tmp/N1-network-state.json 0.0.0.0 & node /tmp/N1-network-proxy.mjs 13797 13797 /tmp/N1-outbound-state.json 127.0.0.1 172.17.0.1 & if [ -f /tmp/N1-sshd_config ]; then /usr/sbin/sshd -D -e -f /tmp/N1-sshd_config & fi; echo $$$$ > /tmp/N1-server-spawn.pid; exec node /opt/t3/dist/bin.mjs serve --base-dir /home/t3/.t3 --host 127.0.0.1 --port 3792 --no-browser
 EOF
   vps_ssh "cd '$VPS_DIR'; docker compose -f compose.yaml -f N1-compose.yaml up -d --force-recreate"
 elif [ "$action" = down ]; then
@@ -65,9 +65,9 @@ elif [ "$action" = down ]; then
   gor_ssh "systemctl --user stop '$name'; rm \"\$HOME/.config/systemd/user/$name\" \"\$HOME/.config/systemd/user/$GOR_UNIT.d/$dropin\"; systemctl --user daemon-reload; systemctl --user restart '$GOR_UNIT'"
   vps_ssh "cd '$VPS_DIR'; docker compose -f compose.yaml up -d --force-recreate"
 elif [ "$action" = block ]; then
-  printf '{"denyMcp":true,"cut":false}\n' > "$state"
-  gor_ssh "printf '{\"denyMcp\":true,\"cut\":false}\\n' > '$state'"
-  vps_ssh "printf '{\"denyMcp\":true,\"cut\":false}\\n' > '$VPS_DIR/tmp/N1-network-state.json'"
+  printf '{"denyMcp":true,"peerOnlyMcp":true,"cut":false}\n' > "$state"
+  gor_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$state'"
+  vps_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$VPS_DIR/tmp/N1-network-state.json'"
 else
   die "Usage: network-proxies.sh up|block|down"
 fi

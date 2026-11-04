@@ -257,7 +257,7 @@ try {
   await docker([
     "node",
     "-e",
-    "require('node:fs').writeFileSync('/tmp/N1-front-state.json',JSON.stringify({denyMcp:true,cut:false}))",
+    "require('node:fs').writeFileSync('/tmp/N1-front-state.json',JSON.stringify({denyMcp:true,cut:false,denyPeer:true}))",
   ]);
   const nativeBaselines = new Map();
   for (const node of [studio, cloudbox, laptop]) {
@@ -266,6 +266,9 @@ try {
     nativeBaselines.set(node.id, await (await fetch(`${node.origin}/__N1_network`)).json());
   }
   console.log("PASS native POST /mcp disabled on all three receiving servers");
+  if ((await fetch(`${studio.origin}/peer`)).status !== 503)
+    throw new Error("Studio still accepts inbound peer connections");
+  console.log("PASS studio rejects inbound peer connections while outbound calls and relay work");
   await docker([
     "node",
     "-e",
@@ -279,7 +282,6 @@ try {
   console.log("PASS production files.read over the one-hop connection path");
   const identity = NodePath.join(work, "identity");
   await run("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", identity]);
-  await run("docker", ["exec", "-u", "0", container, "usermod", "-p", "*", "t3"]);
   await docker(["mkdir", "-p", "/home/t3/.ssh"]);
   await docker(["chmod", "700", "/home/t3/.ssh"]);
   await run("docker", ["cp", `${identity}.pub`, `${container}:/home/t3/.ssh/N1_authorized_keys`]);

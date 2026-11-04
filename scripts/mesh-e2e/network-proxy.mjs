@@ -7,7 +7,14 @@ const [listen, backend, stateFile, host = "127.0.0.1", backendHost = "127.0.0.1"
 if (!listen || !backend || !stateFile)
   throw new Error("Usage: network-proxy.mjs LISTEN_PORT BACKEND_PORT STATE_FILE");
 const sockets = new Set();
-const counts = { mcp: 0, refusedMcp: 0, upgrades: 0, refusedUpgrades: 0 };
+const counts = {
+  mcp: 0,
+  refusedMcp: 0,
+  peerMcp: 0,
+  refusedPeerMcp: 0,
+  upgrades: 0,
+  refusedUpgrades: 0,
+};
 let state = { denyMcp: false, cut: false };
 function refresh() {
   try {
@@ -27,9 +34,17 @@ const server = NodeHttp.createServer((request, response) => {
   }
   refresh();
   const mcp = request.method === "POST" && request.url?.split("?")[0] === "/mcp";
+  const peer = request.url?.split("?")[0] === "/peer";
+  const peerMcp = mcp && typeof request.headers["t3-peer-environment-id"] === "string";
   if (mcp) counts.mcp++;
-  if (state.cut || (mcp && state.denyMcp)) {
+  if (peerMcp) counts.peerMcp++;
+  if (
+    state.cut ||
+    (mcp && state.denyMcp && (!state.peerOnlyMcp || peerMcp)) ||
+    (peer && state.denyPeer)
+  ) {
     if (mcp) counts.refusedMcp++;
+    if (peerMcp) counts.refusedPeerMcp++;
     response.writeHead(503, { "content-type": "text/plain" });
     response.end("N1 injected network failure");
     return;
@@ -55,7 +70,7 @@ const server = NodeHttp.createServer((request, response) => {
 });
 server.on("upgrade", (request, socket, head) => {
   refresh();
-  if (state.cut) {
+  if (state.cut || (state.denyPeer && request.url?.split("?")[0] === "/peer")) {
     counts.refusedUpgrades++;
     socket.end("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
     return;

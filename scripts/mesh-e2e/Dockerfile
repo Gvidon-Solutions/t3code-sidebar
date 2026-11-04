@@ -40,7 +40,7 @@ RUN curl -fsSL -o /tmp/mutagen.tar.gz \
  && rm -f /tmp/mutagen.tar.gz
 
 RUN npm install -g @openai/codex@${CODEX_VERSION} && npm cache clean --force
-RUN groupadd -g 10001 t3 && useradd -m -u 10001 -g 10001 -s /bin/bash t3 \
+RUN groupadd -g 10001 t3 && useradd -m -u 10001 -g 10001 -s /bin/bash -p '*' t3 \
  && mkdir -p /run/sshd \
  && chown t3:t3 /etc/ssh/ssh_host_*_key
 COPY --from=build /out /opt/t3
