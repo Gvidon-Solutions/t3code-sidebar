@@ -199,10 +199,14 @@ JS
 probe d-grouping grouping
 probe sessions mut sync list --label-selector t3-logical --template '{{json .}}'
 SESSION=$(jq -r --arg path "$VPATH" '.[] | select(.beta.path==$path) | .name' "$WORK/sessions.out")
+probe e-quiesce ws_rpc vps server.updateSettings '{"patch":{"replicasEnabled":false}}'
+probe e-drain vps_ssh 'docker restart t3-mesh-e2e'
+probe e-health wait_health "$VPS_ORIGIN" 60
 probe e-pause mut sync pause "$SESSION"
 probe e-alpha gor_ssh "printf 'alpha-$MARK\n' > /home/user/xdev-e2e/demo/round2-conflict.txt"
 probe e-beta vexec sh -c "printf 'beta-$MARK\n' > '$VPATH/round2-conflict.txt'"
 probe e-resume mut sync resume "$SESSION"
+probe e-enable ws_rpc vps server.updateSettings '{"patch":{"replicasEnabled":true}}'
 probe e-recovered wait_replica vps "$KEY" "$VPS_ENV" watching
 probe e-flush mut sync flush "$SESSION"
 probe e-content vexec grep -F "alpha-$MARK" "$VPATH/round2-conflict.txt"
@@ -236,7 +240,7 @@ probe h-mesh ctl gor mesh status
 for command in find status machines mesh; do
  for tag in GV GR VP; do probe "h-$command-tag-$tag" grep -w "$tag" "$WORK/h-$command.out"; done
 done
-probe i-prompt vexec sh -c 'files=$(rg -l "$1" /home/t3/.codex/sessions); test -n "$files" && printf "%s\n" "$files" | xargs rg -l "Run git and builds on the primary"' sh "$MARK-a"
+probe i-prompt vexec sh -c 'files=$(rg -l "$1" /home/t3/.codex/sessions); test -n "$files" && printf "%s\n" "$files" | xargs rg -l "Run git and builds on |t3 run"' sh "$MARK-a"
 probe g-remove tool gor t3_project_place "$(jq -nc --arg p "$KEY" --arg m "$VPS_ENV" '{project:$p,machine:$m,action:"remove"}')"
 wait_gone() {
  local deadline=$((SECONDS+TIMEOUT))
