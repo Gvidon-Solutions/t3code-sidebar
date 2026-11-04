@@ -220,3 +220,5 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - A replica's `watching` status is not a file-delivery barrier after a crash: it can describe
   the last completed cycle while a new scan or transfer is pending. Crash acceptance waits for
   the actual file hashes to match within its deadline as well as the replicated layout hash.
+  Likewise, an ignore update must await the replacement session's requested configuration;
+  the previous session can still report `watching` before the new layout reaches its machine.

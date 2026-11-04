@@ -32,7 +32,17 @@ warning_hash=$(node --input-type=module -e 'import {createHash} from "node:crypt
 mut gv sync list --label-selector "t3-logical=$warning_hash" --template '{{json .}}' > "$WORK/N-live-before-ignores.json"
 rexec gor chmod 600 "$warning_root/private"
 ctl vps place "$warning_title" --on "$GV_ENV" --ignore absolute-link --ignore relative-outside --ignore private --wait 120 --json > "$WORK/N-live-ignore-place.json"
-mut gv sync list --label-selector "t3-logical=$warning_hash" --template '{{json .}}' > "$WORK/N-live-after-ignores.json"
+previous_session=$(jq -r '.[0].identifier' "$WORK/N-live-before-ignores.json")
+ignore_deadline=$((SECONDS+TIMEOUT))
+while :; do
+  mut gv sync list --label-selector "t3-logical=$warning_hash" --template '{{json .}}' > "$WORK/N-live-after-ignores.json"
+  if jq -e --arg previous "$previous_session" 'length==1 and .[0].identifier!=$previous and (.[0].ignore.paths | index("absolute-link")!=null and index("relative-outside")!=null and index("private")!=null)' "$WORK/N-live-after-ignores.json" >/dev/null; then break; fi
+  if [ "$SECONDS" -ge "$ignore_deadline" ]; then
+    cat "$WORK/N-live-after-ignores.json" >&2
+    die 'Ignore update did not replace the sync session within the deadline'
+  fi
+  sleep 1
+done
 test "$(jq -r '.[0].identifier' "$WORK/N-live-before-ignores.json")" != "$(jq -r '.[0].identifier' "$WORK/N-live-after-ignores.json")"
 jq -e 'length==1 and (.[0].ignore.paths | index("absolute-link")!=null and index("relative-outside")!=null and index("private")!=null)' "$WORK/N-live-after-ignores.json" >/dev/null
 wait_converged 'N per-replica ignore update'

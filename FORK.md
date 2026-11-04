@@ -1536,6 +1536,6 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   on a 1–15 s backoff, exchange safety watermarks every minute, and collect thirty-day
   tombstones only after linked-peer acknowledgement.
   Canonical key migration removes obsolete persisted rows atomically.
-- **Where.** Shared `meshLayout/registry.ts`, `hlc.ts` and `migration/`; server
+- **Where.** Shared `meshLayout/registry.ts`, `configSchema.ts`, `hlc.ts` and `migration/`; server
   `MeshLayoutServiceLive.ts`, `MeshReplicator.ts` and `mesh/migration/`; client-runtime
   `MeshLayoutStore`, web/mobile `useMeshLayout` providers and application roots.
