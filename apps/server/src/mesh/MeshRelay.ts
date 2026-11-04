@@ -1,3 +1,4 @@
+import { forwardedCallLimits } from "./MeshLinkPermissions.ts";
 import {
   EnvironmentId,
   OrchestratorMcpFailure,
@@ -70,11 +71,12 @@ export const layer = Layer.effect(
         input.tool.startsWith("t3_mesh_")
       )
         return yield* refused;
+      const narrowed = yield* forwardedCallLimits(input.tool, limits, input.environmentId);
       const target = yield* links.get(input.environmentId).pipe(Effect.mapError(() => refused));
       if (Option.isNone(target)) return yield* refused;
       return yield* peers.call({
         ...input,
-        limits,
+        limits: narrowed,
         hops: [...hops, self],
         success: Schema.Unknown,
       });

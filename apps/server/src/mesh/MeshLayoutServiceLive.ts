@@ -73,7 +73,7 @@ export const layer = Layer.effect(
     yield* sql`INSERT OR IGNORE INTO mesh_layout_meta (id, hlc, seq) VALUES (1, ${tick(0, null, environmentId)}, 0)`;
     const state = yield* SubscriptionRef.make({ document, config: materialize(document) });
     const persist = Effect.fn("MeshLayoutService.persist")(function* (entries: MeshLayoutDocument) {
-      // Client clocks carry device ids; authority membership records servers, not clock writers.
+      // Client clocks carry device ids; writer membership records servers, not clock writers.
       const writers: MeshLayoutDocument = {
         [`writer/${encodeURIComponent(environmentId)}`]: {
           v: true,

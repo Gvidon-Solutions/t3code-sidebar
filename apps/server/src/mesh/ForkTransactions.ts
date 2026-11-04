@@ -18,6 +18,8 @@ import * as Hex from "effect/encoding/Hex";
 import { ServerConfig } from "../config.ts";
 
 const ForkLimits = Schema.Struct({
+  replicas: Schema.optionalKey(Schema.Boolean),
+  files: Schema.optionalKey(Schema.Literals(["all", "projects", "none"])),
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
 });

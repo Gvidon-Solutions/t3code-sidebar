@@ -1,4 +1,3 @@
-import { meshAuthorityOf } from "@t3tools/shared/meshLayout";
 import { linkRequestFailureMessage } from "@t3tools/client-runtime/link-request";
 import {
   machineDisplayOf,
@@ -569,30 +568,6 @@ export function MeshSettingsPanel() {
               }
               aria-label="Use the mesh on this machine"
             />
-          }
-        />
-        <SettingsRow
-          title={`Authority: ${machines.find((m) => m.environmentId === meshAuthorityOf(config))?.label ?? "Automatic"}`}
-          description="File conflicts keep this machine's version, or the primary's when it has no representation. Losing versions are saved in .t3-conflicts."
-          control={
-            <Select
-              value={meshAuthorityOf(config) ?? ""}
-              disabled={!canWrite}
-              onValueChange={(value) => {
-                if (value) updateConfig((current) => ({ ...current, meshAuthority: value }));
-              }}
-            >
-              <SelectTrigger aria-label="Mesh authority">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                {machines.map((machine) => (
-                  <SelectItem key={machine.environmentId} value={machine.environmentId}>
-                    {machine.label}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
           }
         />
         <SettingsRow

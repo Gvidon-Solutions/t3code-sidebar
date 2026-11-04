@@ -1,5 +1,6 @@
 import {
   AuthSessionId,
+  EnvironmentId,
   AuthStandardClientScopes,
   AuthEnvironmentScopes,
   type AuthClientMetadata,
@@ -443,8 +444,8 @@ const SessionClaims = Schema.Struct({
   rtc: Schema.optionalKey(RuntimeMode),
   /** Signed, so a client cannot shed its peer link's limits. */
   plk: Schema.optionalKey(Schema.Literal(1)),
-  /** The peer-link environment that presented this session, signed with it. */
   pei: Schema.optionalKey(Schema.String),
+  penv: Schema.optionalKey(EnvironmentId),
   iat: Schema.Number,
   exp: Schema.Number,
 });
@@ -850,7 +851,7 @@ const make = Effect.gen(function* () {
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
         ...(claims.rtc ? { runtimeModeCeiling: claims.rtc } : {}),
         ...(claims.plk === 1 ? { peerLink: true as const } : {}),
-        ...(claims.pei ? { peerEnvironmentId: claims.pei } : {}),
+        ...((claims.pei ?? claims.penv) ? { peerEnvironmentId: claims.pei ?? claims.penv } : {}),
       } satisfies VerifiedSession;
     },
   );

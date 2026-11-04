@@ -76,6 +76,7 @@ if(process.env.T3CTL_TEST_SSH_INSTALL) {
     assert.equal(r.status, Number(extra.expectedCode || 0), r.stderr);
     return {
       out: r.stdout,
+      err: r.stderr,
       calls: readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse),
       installed: NodeFS.existsSync(join(dir, "home/runtime/versions/0.0.9-N/t3")),
     };
@@ -345,7 +346,7 @@ test("server install falls back without authenticated gh to public HTTPS or a li
   assert.match(sshResult.out, /from lab/);
 });
 
-test("aliases read and edit the layout machine without replacing other fields", () => {
+test("aliases preserve other fields and edit config with its base revision or legacy layout", () => {
   const listing = run(["machines", "alias", "lab", "list", "--json"]);
   assert.deepEqual(JSON.parse(listing.out).aliases, ["лаборатория", "лаборатории"]);
   assert.ok(!listing.calls.some((call) => call.name === "meshLayout.apply"));
@@ -354,7 +355,19 @@ test("aliases read and edit the layout machine without replacing other fields", 
     ["remove", ["ЛАБОРАТОРИЯ"], ["лаборатории"]],
     ["clear", [], undefined],
   ]) {
-    const result = run(["machines", "alias", "лаборатория", operation, ...rest, "--json"]);
+    const args = ["machines", "alias", "лаборатория", operation, ...rest, "--json"];
+    const configured = run(args);
+    const apply = configured.calls.find((call) => call.name === "t3_mesh_config_apply").args;
+    assert.equal(apply.baseRevision, "1");
+    assert.deepEqual(apply.doc.machines.cloudbox, {
+      title: "lab",
+      label: "LB",
+      color: "#123456",
+      future: "keep",
+      ...(expected ? { aliases: expected } : {}),
+    });
+    assert.ok(!configured.calls.some((call) => call.name === "meshLayout.apply"));
+    const result = run(args, { T3CTL_TEST_LEGACY_CONFIG: "1" });
     const entries = result.calls.find((call) => call.name === "meshLayout.apply").args.entries;
     assert.deepEqual(Object.keys(entries), [`machine/${peer}`]);
     const entry = entries[`machine/${peer}`];
@@ -383,6 +396,17 @@ test("new uses destination defaults and resolves explicit models against destina
     .modelSelection;
   assert.equal(selection.instanceId, "custom");
   assert.equal(selection.model, "model-from-destination");
+  for (const options of [
+    ["--agent", "studio-agent"],
+    ["--model", "studio-agent"],
+    ["--agent", "custom", "--model", "studio-agent"],
+  ]) {
+    const aliased = run(["new", "--project", "Demo", "--on", "lab", ...options, "task"]);
+    assert.deepEqual(
+      aliased.calls.find((call) => call.name === "t3_thread_launch").args.modelSelection,
+      { instanceId: "custom", model: "model-from-destination" },
+    );
+  }
 });
 
 test("fork selects an explicit destination model outside the default short list with its effort", () => {
@@ -422,4 +446,36 @@ test("full selftest requires an explicit provider and models before any server o
   assert.equal(result.status, 1);
   assert.match(result.stderr, /set T3CTL_SELFTEST_AGENT from the test server's model catalog/);
   assert.equal(result.stdout, "");
+});
+
+test("mesh config CLI reaches get, plan, apply, rollback, history and status transports", () => {
+  assert.equal(JSON.parse(run(["mesh", "config", "get", "--json"]).out).current.revision, "1");
+  const planned = run(["mesh", "config", "plan", "schema: 1", "--json"]);
+  assert.equal(
+    planned.calls.find((call) => call.name === "t3_mesh_config_plan").args.doc,
+    "schema: 1",
+  );
+  const applied = run(["mesh", "config", "apply", "schema: 1", "--json"]);
+  assert.deepEqual(applied.calls.find((call) => call.name === "t3_mesh_config_apply").args, {
+    doc: "schema: 1",
+    baseRevision: "1",
+  });
+  const stale = run(["mesh", "config", "apply", "schema: 1", "--base", "old", "--json"]);
+  assert.equal(
+    stale.calls.find((call) => call.name === "t3_mesh_config_apply").args.baseRevision,
+    "old",
+  );
+  const rejected = run(["mesh", "config", "apply", "schema: 1", "--base", "old", "--json"], {
+    T3CTL_TEST_STALE_CONFIG: "1", expectedCode: 1,
+  });
+  const failure = JSON.parse(rejected.err.slice(rejected.err.indexOf("{")));
+  assert.equal(failure.reason, "stale_revision");
+  assert.equal(failure.current.doc.future.length, 2000);
+  assert.deepEqual(failure.diff, [{ path: "$.machines.studio.title", before: "Studio", after: "Studio updated" }]);
+  assert.equal(JSON.parse(run(["mesh", "config", "rollback", "1", "--json"]).out).revision, "3");
+  assert.equal(JSON.parse(run(["mesh", "config", "history", "--json"]).out).revisions.length, 1);
+  assert.equal(
+    JSON.parse(run(["mesh", "status", "--json"]).out).configStatus.servers[0].actions[0].state,
+    "done",
+  );
 });

@@ -3,7 +3,7 @@
 Read this before changing anything that touches machines, projects across machines, replicas,
 the shared sidebar layout, thread moves, files on other machines, the `t3` skill or the agent
 instructions. It is the map; the law is `docs/mesh/CONCEPT.md` (v2, wins on conflict) and `docs/sidebar-cross-device.md` §0 (object model,
-invariants, authority rule). Keep both current when you change behaviour.
+invariants, conflict policy). Keep both current when you change behaviour.
 
 ## What it is
 
@@ -16,9 +16,9 @@ readable from anywhere, and agents that know where they are.
 
 | Entity            | What it is                                                                                                      | Where it lives                                                |
 | ----------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Machine           | one T3 server (`environmentId`), label/tag/color/aliases, SSH routes to other machines                          | layout `machine/<env>`                                        |
-| Link              | server-to-server MCP session (pairing code, full access for the mesh)                                           | each server's PeerLinks table                                 |
-| Mesh              | machines + links; one **authority** machine (`mesh.authority`)                                                  | layout                                                        |
+| Machine           | one T3 server (`environmentId`), label/tag/color/aliases, SSH routes to other machines                          | config + layout `machine/<env>`                               |
+| Link              | server-to-server MCP session with config-defined permissions                                                    | each server's PeerLinks table                                 |
+| Mesh              | machines + links; desired state in the mesh config (`mesh.config`), no central authority                        | layout `mesh.config`, bindings                                |
 | Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>.title`, `rep/<id>/<env>`, `alias/*`         |
 | Representation    | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores)                            | layout `rep/*`                                                |
 | Sync session      | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
@@ -36,8 +36,10 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   retain their opaque values. Import/adoption lives under `meshLayout/migration/`, with the
   old-settings adapter in `apps/server/src/mesh/migration/`. `MeshLayoutServiceLive.ts` keeps
   SQLite and the canonical document consistent; corrupt rows move to `mesh_layout_quarantine`.
-  `configSchema.ts` validates config/history documents, including nested C1 fields, while
+  The registry validates config/history documents with the canonical contracts schema,
   preserving unknown fields for newer versions.
+  Machine projections use the wire schema too: newer reported facts remain in the document,
+  while older clients derive exactly the same snapshot as the server sends.
   `MeshReplicator.ts` exchanges local sequence watermarks and store generations over
   `PeerMcpClient`, pushes changes after 200 ms, retries a failed peer exchange on a
   1–15 s backoff and exchanges watermarks every 60 seconds. A changed generation resets
@@ -105,7 +107,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 ## Interfaces
 
 - **CLI / skill:** `agent-kit/skills/t3` (`SKILL.md`, `scripts/t3ctl.mjs`). Mesh commands:
-  `mesh authority [<machine>]`, `replica adopt <session> --project P`,
+  `mesh config get|plan|apply|rollback|history`, `mesh status`, `replica adopt <session> --project P`,
   `machines`, `machines alias <M> list|add|remove|clear`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,
   `threads/status --all`, `open`, `open-file`, `cat`, `fork --on`, `move --project`, `layout get|merge`, `agents sync|status`, `self`.
 - **MCP tools** (in the server): `t3_project_place`, `t3_project_machines`, `t3_thread_self`,
@@ -126,9 +128,9 @@ agent-kit/install.sh --apply    # install on registry machines (backups under ~/
 agent-kit/install.sh --dest ~/.agents/skills/t3-next   # stage for the test bed only
 ```
 
-Machine names, tags and aliases are runtime layout data, not CLI constants. Settings › Mesh and
-`machines alias` edit the same optional `aliases` array on `machine/<env>`. Alias edits retain the
-other machine fields; standalone CLI writes must advance beyond every observed HLC. Unspecified
+Machine names, tags and aliases are config data, not CLI constants. `machines alias` applies the
+bound machine's optional `aliases` array through config concurrency checks; N-1 servers retain the
+layout edit path. Alias edits retain the other machine and unknown config fields. Unspecified
 thread model and permissions are resolved by the destination server, never by owner preferences
 compiled into the CLI.
 
@@ -151,7 +153,10 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - Three-machine bed: `scripts/mesh-e2e/README.md` (gor main server + isolated gvidon :3795 +
   VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
   `round1.sh` (layout, links, files, old clients), `round2.sh` (replicas on real Mutagen, t3ctl),
-  `round3.sh` (crashes, partitions, authority). They must stay green.
+  `round3.sh` (crashes, partitions, duplicate claims). They must stay green.
+  `config.sh` verifies C1 config planning/apply, stale-base refusal, label/title convergence on
+  three servers and a real registered replica. It requires the C1 bed lock and an existing
+  deployment; `MESH_E2E_ARTIFACTS` selects its build metadata. Fixtures are C1-prefixed.
 - Agent behaviour eval: `docs/mesh-agent-eval.md` records the earlier bed methodology. After
   changing SKILL.md or GLOBAL.md, run model-level routing cases using customer-defined machine
   identities/aliases and configured models; do not make old owner-name translations part of the product contract.
@@ -209,7 +214,7 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - Ignore changes must reach the running session. Compare the full ordered ignore configuration;
   missing configuration is not proof that an old session already matches.
 - Build parity fixtures from `materialize({})` so schema additions do not leave undefined maps.
-  Compare the standalone encoder with shared core for authority, titles, aliases and diagnostics.
+  Compare the standalone encoder with shared core for titles, aliases and diagnostics.
 - A healthy replicated status must survive a failed optional live-query. Keep the persisted
   diagnostics and log query reachability separately; do not fabricate errors for every remote
   copy. Registered machine strips must keep skipped-file notes instead of replacing them with synced.
@@ -251,6 +256,92 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   Await the resulting diagnostics too, since session replacement first publishes `mounting`.
 - Quiesce and drain replica reconciliation before constructing conflicting test files: it
   automatically resumes paused sessions and can otherwise overwrite a fixture during setup.
+
+## Mesh config core (Stage C1)
+
+The desired state is `docs/mesh/CONCEPT.md` §9. `packages/contracts/src/meshConfig.ts` is the open
+Effect schema and revision/status envelope; unknown fields survive every round trip. Both JSON and
+YAML are accepted (`parseConfig` uses the repo's `yaml` dependency); cyclic and non-finite YAML
+values are refused before JSON storage. `packages/shared/src/meshConfig/`
+holds the pure policy: `defaults`, `effectiveLinkPermissions`, `projectPolicy` (conflicts, replica
+mode, merged ignores), `replicaRules`, `machineByName`/`ByEnvironment`/`ByPeerLabel`, `modelAlias`
+and `configDiff` for stale-apply hints.
+
+Storage lives in layout entries: `mesh.config` = `{ revision, doc, author, writtenAt }`,
+`mesh.configHistory/<revision>` (last fifty; older ones are tombstoned), bindings
+`mesh.machineBinding/<name>`, and each server's `mesh.configStatus/<environmentId>`. `mesh.configReplica/<project>/<environment>` tracks rule-owned placements and
+`mesh.linkPolicy/<receiver>/<peer>` reports installed permissions. These are
+key families in `packages/shared/src/meshLayout/registry.ts`; the server's `validateEntries.ts`
+uses that registry and reserves config writes for `meshConfig.apply`.
+
+`apps/server/src/mesh/MeshConfig.ts` is the service: `current`, `changes`, `plan`, `apply`,
+`rollback`, `history`, `status`, and `start` (the layer starts it). Apply is serialized, validates
+the schema and references, checks `baseRevision`, writes current and history together, and reports a
+path-level diff for a stale base. `MeshConfigPlanners` is the extension port: each planner has a
+stable name, a read-only `plan(doc, previous)` effect returning actions and an idempotent
+`reconcile(action, doc)` effect. Planners capture their dependencies in their registration layer;
+the executor supplies the layout service. An action names its executing environment (or a bound
+machine name); each server executes only its own actions.
+Diff sides are optional on the wire: an absent `before` means an added field, an absent `after`
+means a removed field, and `null` remains an actual config value.
+
+Registered planners (`mesh/MeshConfigPlanners.ts`):
+
+| Planner     | Plans                                       | Reconcile                                                                           |
+| ----------- | ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `machines`  | machine label/title/color/alias changes     | binds joined machines, removes obsolete display facts; materialization reads config |
+| `links`     | effective permission changes for every pair | publishes installed policy; receivers read the config                               |
+| `conflicts` | per-project conflict-policy changes         | reconciles sessions using project policy                                            |
+| `ignores`   | per-project ignore changes                  | writes merged ignores and recreates affected sessions                               |
+| `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place`, including `action: remove`                     |
+
+S1 (SSH) and B1 (bootstrap, updates, agent instructions) add planners through the same port; nothing
+else should grow a second reconciliation path. Every action has a sixty-second deadline, failures do
+not cancel other actions, and status keeps `done` / `in_progress` / `failed` plus the reason, for
+every server.
+Completed actions remain visible for their revision when the observed diff disappears, including
+after restart. Planner action ids must be stable and namespaced by planner.
+
+Link permissions are enforced on the receiving server by `mesh/MeshLinkPermissions.ts`: the peer
+machine is resolved from its environment id in the signed OAuth session; N-1 sessions use legacy
+labels excluding the receiver itself. Ambiguous labels use the intersection of candidate policies;
+re-linking supplies an exact signed identity. Then `effectiveLinkPermissions` decides
+`files`, `replicas` and `threads`. Files resolve real paths first; `projects` allows only this
+machine's representation roots, `none` refuses, and an unknown peer falls back to the configured
+defaults. A read-only link never reads outside project folders even when the config says `all`.
+Replica placement, thread tools and the private fork receiver check their permission at the receiving handler.
+Peer WebSocket frames carry the same file/replica ceilings as HTTP calls. Both relay transports
+intersect receiver and destination policies; receipt replay checks current permissions before
+returning a saved result, so a policy change cannot expose an earlier authorized response.
+
+Migration (`mesh/MeshConfigMigration.ts`, shared `meshConfig/migration.ts`) runs once on start when
+`mesh.config` is absent. It writes the first revision from the legacy layout: machine labels, tags,
+colors and aliases, SSH routes (reported `ssh.user`/`ssh.port` plus preserved route data), replica
+ignores, project ignores and existing links (`files: all`, so today's meshes behave as before). It
+also writes the name-to-environment bindings. It is idempotent: a present `mesh.config` stops it.
+
+Interfaces: MCP `t3_mesh_config_get`, `t3_mesh_config_plan`, `t3_mesh_config_apply`,
+`t3_mesh_config_rollback`, `t3_mesh_config_history`, `t3_mesh_status`; WS `meshConfig.get/plan/apply/status`;
+CLI `mesh config get|plan|apply|rollback|history` and `mesh status`. The CLI prints JSON for `get`;
+JSON and YAML are accepted on plan/apply.
+
+Reconciliation runs on config, binding and project/representation changes, resumes on startup, and
+retries failed actions every thirty seconds. Reported status is replicated; an unreported or stale
+server is shown as waiting rather than done. Conditional and manual replica rules do not eagerly
+materialize copies: thread placement uses the existing replica service when that lifecycle is triggered.
+Queued observations always reconcile the current revision; reported machine facts do not schedule
+config work. Project actions retry only that project's driven sessions, so an unrelated stalled
+replica cannot hold a config action behind a full-mesh scan.
+
+N1 transports must preserve the optional `PeerCallLimits.files` and `replicas` ceilings
+(`T3-Files-Limit` / `T3-Replicas-Limit` on HTTP) and the authenticated `peerEnvironmentId` in the
+receiving invocation context. The fork receiver passes the replica ceiling through placement and
+persisted transactions: a thread may use an existing representation while a denied link cannot
+create one implicitly. Relay checks the
+origin/destination policy before forwarding and can only narrow the receiving server's own policy.
+Raw client `meshLayout.apply` writes cannot change config, history, bindings or reconciliation facts;
+use `meshConfig.apply` with a base revision. Migration preserves aliases, routes under machine
+`ssh.host`/`ssh.routes`, and legacy peer labels; those optional fields remain forward-compatible.
 
 ## Persistent peer connections and S1 pipes
 

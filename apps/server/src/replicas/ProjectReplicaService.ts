@@ -1,10 +1,13 @@
+import { EnvironmentId, ProjectPlaceResult } from "@t3tools/contracts";
+import { callRouted } from "../mesh/MeshRouting.ts";
 import { MeshProjectDirectory } from "../mesh/MeshProjectDirectory.ts";
 import { lookupMeshProject } from "./meshProjectLookup.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
 import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
 import { adoptionSides } from "./adoptionModel.ts";
 import { normalizeRepresentationPath } from "@t3tools/shared/meshLayout";
-import { meshMachineLabel, meshAuthorityOf, conflictWinner } from "@t3tools/shared/meshLayout";
+import { meshMachineLabel } from "@t3tools/shared/meshLayout";
+import { configFromLayout, conflictWinner, projectPolicy } from "@t3tools/shared/meshConfig";
 import { forkParked } from "../serverActivation.ts";
 import * as NodeUtil from "node:util";
 import type * as Scope from "effect/Scope";
@@ -24,7 +27,6 @@ import {
   type SidebarProjectMount,
   type SidebarWorkspacesConfig,
   type ProjectPlaceInput,
-  type ProjectPlaceResult,
   type ProjectMachinesResult,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -119,7 +121,6 @@ const make = Effect.gen(function* () {
   const reconciliationInput = (config: SidebarWorkspacesConfig) => ({
     mounts: config.projectMounts,
     machines: config.machines,
-    authority: meshAuthorityOf(config),
     observed: Object.fromEntries(
       Object.entries(config.projectMountStatus)
         .map(
@@ -337,7 +338,7 @@ const make = Effect.gen(function* () {
         message: "Replica source representation is missing.",
       });
 
-    const defaults = yield* settings.getSettings;
+    const defaults = yield* readSettings;
     const route =
       config.machines[driver]?.reach?.[
         driver === rep.environmentId ? source.environmentId : rep.environmentId
@@ -347,9 +348,14 @@ const make = Effect.gen(function* () {
         reason: "unreachable",
         message: "Replica SSH route is missing.",
       });
+    const desiredConfig = configFromLayout((yield* mesh.read).document);
     const createInput = {
       ...identity,
-      ignores: replicaIgnorePatterns([...defaults.replicaIgnores, ...(rep.ignores ?? [])]),
+      ignores: replicaIgnorePatterns(
+        desiredConfig
+          ? projectPolicy(desiredConfig, config.projectTitles[logicalKey] ?? logicalKey).ignore
+          : [...defaults.replicaIgnores, ...(rep.ignores ?? [])],
+      ),
       alpha:
         driver === source.environmentId
           ? source.path
@@ -426,27 +432,68 @@ const make = Effect.gen(function* () {
           : {}),
       };
       if (status.conflicts.length && status.state !== "error") {
-        const loser =
-          conflictWinner(config, source.environmentId, rep.environmentId) === "alpha"
-            ? rep
-            : source;
-        const route =
-          loser.environmentId === mesh.environmentId
+        const policy = projectPolicy(
+          configFromLayout((yield* mesh.read).document) ?? { schema: 1, machines: {} },
+          config.projectTitles[logicalKey] ?? logicalKey,
+        ).conflicts;
+        const routeOf = (entry: SidebarProjectMount) =>
+          entry.environmentId === mesh.environmentId
             ? undefined
-            : config.machines[mesh.environmentId]?.reach?.[loser.environmentId];
-        if (loser.environmentId !== mesh.environmentId && !route)
-          return yield* new ReplicaError({
-            reason: "unreachable",
-            message: "Cannot reach the losing side to preserve conflict copies.",
+            : config.machines[mesh.environmentId]?.reach?.[entry.environmentId];
+        const mtime = Effect.fn("ProjectReplicaService.conflictMtime")(function* (
+          entry: SidebarProjectMount,
+          root: string,
+        ) {
+          const route = routeOf(entry);
+          if (entry.environmentId !== mesh.environmentId && !route)
+            return yield* new ReplicaError({
+              reason: "unreachable",
+              message: "Cannot reach conflict endpoint to compare modification times.",
+            });
+          return yield* runner.conflictMtime({
+            root: entry.path,
+            paths: [root],
+            environmentId: entry.environmentId,
+            ...(route ? { route } : {}),
           });
-        yield* runner.pause(identity.name);
-        yield* runner.preserveConflicts({
-          root: loser.path,
-          environmentId: loser.environmentId,
-          paths: status.conflicts,
-          iso: now,
-          ...(route ? { route } : {}),
         });
+        yield* runner.pause(identity.name);
+        const losing = yield* Effect.forEach(
+          status.conflicts,
+          (root) =>
+            Effect.gen(function* () {
+              const [primaryTime, replicaTime] =
+                policy === "newest-wins"
+                  ? yield* Effect.all([mtime(source, root), mtime(rep, root)])
+                  : [0, 0];
+              return {
+                root,
+                loser:
+                  conflictWinner(policy, primaryTime!, replicaTime!) === "alpha" ? rep : source,
+              };
+            }),
+          { concurrency: 4 },
+        );
+        for (const endpoint of [source, rep]) {
+          const paths = losing
+            .filter(({ loser }) => loser.environmentId === endpoint.environmentId)
+            .map(({ root }) => root);
+          if (!paths.length) continue;
+          const route = routeOf(endpoint);
+          if (endpoint.environmentId !== mesh.environmentId && !route)
+            return yield* new ReplicaError({
+              reason: "unreachable",
+              message: "Cannot reach the losing side to preserve conflict copies.",
+            });
+          yield* runner.preserveConflicts({
+            root: endpoint.path,
+            environmentId: endpoint.environmentId,
+            paths,
+            iso: now,
+            ...(route ? { route } : {}),
+          });
+        }
+        const loser = losing[0]!.loser;
         if (ignoresChanged || !session.ignore?.paths?.includes(".t3-conflicts")) {
           yield* runner.terminate(identity.name);
           yield* runner.create(createInput);
@@ -460,7 +507,7 @@ const make = Effect.gen(function* () {
           message: `Resolved ${status.conflicts.length} conflicts automatically · copies in .t3-conflicts`,
           conflictCopies: {
             environmentId: loser.environmentId,
-            path: `${loser.path}/.t3-conflicts/${now}/`,
+            path: `${loser.path}/.t3-conflicts/${now.replace(/[:.]/g, "-")}/`,
           },
         });
         return;
@@ -474,7 +521,23 @@ const make = Effect.gen(function* () {
       ? cause
       : new ReplicaError({ reason: "storage", message: "Replica reconciliation failed.", cause });
   const reconcile = Effect.fn("ProjectReplicaService.reconcile")(function* () {
-    if (!(yield* settings.getSettings).replicasEnabled) return;
+    if (!(yield* readSettings).replicasEnabled) {
+      const desired = configFromLayout((yield* mesh.read).document);
+      if (desired?.ssh?.mode === "off") {
+        const config = (yield* mesh.read).config;
+        const owned = new Set(
+          Object.entries(config.projectMounts).flatMap(([key, reps]) =>
+            reps
+              .filter((rep) => replicaDriver(config, rep) === mesh.environmentId)
+              .map((rep) => sessionIdentity(rep.syncKey ?? key, rep.environmentId).name),
+          ),
+        );
+        for (const session of yield* runner.listExisting)
+          if (session.name && owned.has(session.name) && !session.paused)
+            yield* runner.pause(session.name);
+      }
+      return;
+    }
     const initial = (yield* mesh.read).config;
     for (const [logicalKey, reps] of Object.entries(initial.projectMounts)) {
       for (const rep of reps) {
@@ -645,7 +708,7 @@ const make = Effect.gen(function* () {
         known.set(refKey(logicalKey, rep.environmentId), identity.name);
     }
     const terminated = new Set<string>();
-    // Raw claims also retain sessions removed by authority selection or a role change.
+    // Raw claims also retain sessions removed by a role change or a config replica rule.
     for (const [key, entry] of Object.entries(document)) {
       if (!key.startsWith("rep/")) continue;
       const [, logicalKey, environmentId] = key.split("/").map(decodeURIComponent);
@@ -769,7 +832,17 @@ const make = Effect.gen(function* () {
   const reconcileSafely = reconciliationLock.withPermit(
     reconcile().pipe(Effect.mapError(mapError)),
   );
-  const readSettings = settings.getSettings.pipe(Effect.mapError(mapError));
+  const readSettings = Effect.gen(function* () {
+    const legacy = yield* settings.getSettings.pipe(Effect.mapError(mapError));
+    const desired = configFromLayout((yield* mesh.read).document);
+    return desired
+      ? {
+          ...legacy,
+          replicasEnabled: desired.ssh?.mode !== "off",
+          replicaIgnores: desired.replicas?.ignore ?? [],
+        }
+      : legacy;
+  });
   const resolveMachine = (config: SidebarWorkspacesConfig, name: string) => {
     const candidates = [
       ...new Set([
@@ -953,6 +1026,63 @@ const make = Effect.gen(function* () {
           }))).config;
         }
         if (input.action === "remove") {
+          const removing = config.projectMounts[logicalKey]?.find(
+            (entry) => entry.environmentId === environmentId,
+          );
+          if (
+            configFromLayout((yield* mesh.read).document) &&
+            removing?.role === "replica" &&
+            removing.transport === "mutagen"
+          ) {
+            const driver = replicaDriver(config, removing);
+            if (!driver)
+              return yield* new ReplicaError({
+                reason: "unreachable",
+                message: "Cannot verify unsynced changes: the replica driver is unavailable.",
+              });
+            if (driver !== mesh.environmentId) {
+              if (Option.isNone(links) || Option.isNone(peers))
+                return yield* new ReplicaError({
+                  reason: "unreachable",
+                  message: "Cannot reach the replica driver to verify unsynced changes.",
+                });
+              return yield* callRouted(
+                { links: links.value, peers: peers.value, self: mesh.environmentId },
+                {
+                  environmentId: EnvironmentId.make(driver),
+                  tool: "t3_project_place",
+                  arguments: { ...input, machine: environmentId },
+                  limits: { runtimeMode: "full-access", interactionMode: "default" },
+                  success: ProjectPlaceResult,
+                },
+              ).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ReplicaError({ reason: "unreachable", message: cause.message, cause }),
+                ),
+              );
+            }
+            const name = sessionIdentity(removing.syncKey ?? logicalKey, environmentId).name;
+            yield* runner.flush(name);
+            const session = (yield* runner.list(name)).find(
+              (entry) => entry.name === name || entry.identifier === name,
+            );
+            const state = session ? sessionStatus(session) : undefined;
+            if (
+              !state ||
+              state.state !== "watching" ||
+              state.conflicts.length ||
+              state.problems.length
+            )
+              return yield* new ReplicaError({
+                reason: "mutagen",
+                message:
+                  "Cannot remove replica with unsynced changes: " +
+                  (state
+                    ? [...state.conflicts, ...state.problems, state.state].join(", ")
+                    : "sync session unavailable"),
+              });
+          }
           yield* mesh.edit((current) => {
             const projectMounts = { ...current.projectMounts };
             const reps = (projectMounts[logicalKey] ?? []).filter(
@@ -1312,7 +1442,6 @@ const make = Effect.gen(function* () {
       return {
         logicalKey,
         title: config.projectTitles[logicalKey] || localProject?.title || "Untitled project",
-        ...(meshAuthorityOf(config) ? { authorityEnvironmentId: meshAuthorityOf(config)! } : {}),
         representations: (config.projectMounts[logicalKey] ?? []).map((rep) => {
           const status = config.projectMountStatus[logicalKey]?.[rep.environmentId];
           const current = live.find(

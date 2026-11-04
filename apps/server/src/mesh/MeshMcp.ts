@@ -45,11 +45,15 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
               : relay.value.routes
             : decodeRelay(call.value.params.arguments).pipe(
                 Effect.flatMap((input) =>
-                  relay.value.relay(
-                    input,
-                    request.headers[HOP_HEADER]?.split(",") ?? [],
-                    McpInvocationContext.clientModeCeiling(limited.client),
-                  ),
+                  relay.value
+                    .relay(input, request.headers[HOP_HEADER]?.split(",") ?? [], {
+                      ...McpInvocationContext.clientModeCeiling(limited.client),
+                      ...(limited.client?.filesLimit ? { files: limited.client.filesLimit } : {}),
+                      ...(limited.client?.replicasLimit === false ? { replicas: false } : {}),
+                    })
+                    .pipe(
+                      Effect.provideService(McpInvocationContext.McpInvocationContext, limited),
+                    ),
                 ),
               )
         ).pipe(

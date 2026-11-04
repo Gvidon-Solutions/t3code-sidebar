@@ -1,10 +1,11 @@
+import { linkPermissions } from "./MeshLinkPermissions.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
-import { clientModeCeiling } from "../mcp/McpInvocationContext.ts";
+import { clientModeCeiling, McpInvocationContext } from "../mcp/McpInvocationContext.ts";
 import { ThreadForkService } from "./ThreadForkService.ts";
 import { ForkTransportInput } from "./forkTransport.ts";
 
@@ -35,10 +36,20 @@ export const interceptForkRequest = Effect.fn("ForkMcp.interceptRequest")(functi
       { error: "fork_requires_full_access_link" },
       { status: 403 },
     );
+  const permissions = yield* linkPermissions().pipe(
+    Effect.provideService(McpInvocationContext, scope),
+  );
+  if (!permissions.threads)
+    return HttpServerResponse.jsonUnsafe({ error: "link_threads_denied" }, { status: 403 });
   if (Option.isNone(service))
     return HttpServerResponse.jsonUnsafe({ error: "fork_unavailable" }, { status: 503 });
   const result = yield* decodeInput(call.value.params.arguments).pipe(
-    Effect.flatMap((input) => service.value.receive(input, clientModeCeiling(scope.client))),
+    Effect.flatMap((input) =>
+      service.value.receive(input, {
+        ...clientModeCeiling(scope.client),
+        ...(!permissions.replicas ? { replicas: false } : {}),
+      }),
+    ),
     Effect.match({
       onSuccess: (value) => ({
         content: [{ type: "text", text: encode(value) }],

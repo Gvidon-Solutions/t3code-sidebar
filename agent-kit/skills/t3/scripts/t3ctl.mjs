@@ -373,21 +373,10 @@ async function meshDisplayConfig(layout, machines) {
   return { ...layout.config, projectTitles };
 }
 
-export function meshAuthorityEdit(layout, environmentId, now) {
-  const last = layout.document?.["mesh.authority"]?.h ?? "0000000000000.00000.seed";
-  let ms = Math.max(now, Number(last.slice(0, 13)));
-  let counter = ms === Number(last.slice(0, 13)) ? Number(last.slice(14, 19)) + 1 : 0;
-  if (counter >= 100000) {
-    ms++;
-    counter = 0;
-  }
+export function meshConfigApplyInput(snapshot, doc, base) {
   return {
-    entries: {
-      "mesh.authority": {
-        v: environmentId,
-        h: `${String(ms).padStart(13, "0")}.${String(counter).padStart(5, "0")}.${layout.environmentId}`,
-      },
-    },
+    doc,
+    baseRevision: base === undefined ? (snapshot?.current?.revision ?? null) : base,
   };
 }
 
@@ -617,7 +606,6 @@ export function encodeLegacyEntries(config, doc = {}) {
     put(MESH_KEYS.machine(env), machine);
   for (const [key, title] of Object.entries(config.projectTitles ?? {}))
     put(MESH_KEYS.projectTitle(key), title);
-  if (config.meshAuthority) put("mesh.authority", config.meshAuthority);
   for (const [alias, logical] of Object.entries(config.projectAliases ?? {}))
     put(MESH_KEYS.alias(alias), logical);
   for (const [logical, reps] of Object.entries(config.projectMounts ?? {}))
@@ -693,20 +681,38 @@ async function editMachineAliases(pos, opt) {
               [...(current.aliases ?? []), ...requested].map((alias) => [normalized(alias), alias]),
             ).values(),
           ];
-  const next = { ...current };
-  if (aliases.length) next.aliases = aliases;
-  else delete next.aliases;
-  const key = `machine/${encodeURIComponent(machine.environmentId)}`;
-  await withWs((client) =>
-    client.rpc("meshLayout.apply", {
-      entries: {
-        [key]: {
-          v: Object.keys(next).length ? next : null,
-          h: nextMachineClock(snapshot.document, Date.now(), `cli-${randomUUID()}`),
+  const desired = snapshot.document?.["mesh.config"]?.v;
+  if (desired?.doc) {
+    const binding = Object.entries(snapshot.document).find(
+      ([key, entry]) => key.startsWith("mesh.machineBinding/") && entry.v === machine.environmentId,
+    );
+    if (!binding) die(`machine ${machine.label} has no config binding`);
+    const name = binding[0].slice("mesh.machineBinding/".length);
+    const next = { ...desired.doc.machines[name] };
+    if (aliases.length) next.aliases = aliases;
+    else delete next.aliases;
+    await (
+      await mcp()
+    ).call("t3_mesh_config_apply", {
+      doc: { ...desired.doc, machines: { ...desired.doc.machines, [name]: next } },
+      baseRevision: desired.revision,
+    });
+  } else {
+    const next = { ...current };
+    if (aliases.length) next.aliases = aliases;
+    else delete next.aliases;
+    const key = `machine/${encodeURIComponent(machine.environmentId)}`;
+    await withWs((client) =>
+      client.rpc("meshLayout.apply", {
+        entries: {
+          [key]: {
+            v: Object.keys(next).length ? next : null,
+            h: nextMachineClock(snapshot.document, Date.now(), `cli-${randomUUID()}`),
+          },
         },
-      },
-    }),
-  );
+      }),
+    );
+  }
   if (opt.json) return json({ environmentId: machine.environmentId, aliases });
   console.log(`${machine.label}: ${aliases.join(", ") || "no aliases"}`);
 }
@@ -912,7 +918,8 @@ class Mcp {
       .filter((c) => c.type === "text")
       .map((c) => c.text)
       .join("\n");
-    if (res.isError) die(`${name}: ${clip(text, 1500)}`);
+    if (res.isError)
+      die(`${name}: ${name.startsWith("t3_mesh_config_") ? text : clip(text, 1500)}`);
     if (res.structuredContent !== undefined) return res.structuredContent;
     try {
       return JSON.parse(text);
@@ -1588,6 +1595,21 @@ async function modelSelection(opt, { required = true, environmentId } = {}) {
       : null;
   let agent = String(opt.agent || "").trim();
   let model = opt.model ? String(opt.model) : "";
+  const desired = (await layoutSnapshot()).document?.["mesh.config"]?.v?.doc;
+  const configuredAgent = desired?.agents?.aliases?.[agent];
+  const configuredModel = desired?.agents?.aliases?.[model];
+  for (const alias of [configuredAgent, configuredModel]) {
+    if (alias && (typeof alias.harness !== "string" || typeof alias.model !== "string"))
+      die("Invalid configured model alias");
+  }
+  if (configuredAgent) {
+    agent = configuredAgent.harness;
+    if (!model) model = configuredAgent.model;
+  }
+  if (configuredModel) {
+    if (!agent) agent = configuredModel.harness;
+    model = configuredModel.model;
+  }
   model = MODEL_ALIASES[model.toLowerCase()] ?? model;
   const aliasModel = MODEL_ALIASES[agent.toLowerCase()];
   if (aliasModel && !model) model = aliasModel;
@@ -2299,20 +2321,64 @@ const commands = {
 
   async mesh(pos, opt) {
     const sub = pos[0] || "status";
-    if (sub === "authority") {
-      let layout = await layoutSnapshot();
-      if (pos[1]) {
-        const machine = resolveMachineRef(pos[1], await collectMachines({ layout }));
-        layout = await withWs((c) =>
-          c.rpc("meshLayout.apply", meshAuthorityEdit(layout, machine.environmentId, Date.now())),
-        );
+    if (sub === "config") {
+      const action = pos[1] || "get";
+      const client = await mcp();
+      const readDoc = () =>
+        opt.file
+          ? readFileSync(expandHome(opt.file), "utf8")
+          : pos[2] === "-" || (!pos[2] && !process.stdin.isTTY)
+            ? readFileSync(0, "utf8")
+            : existsSync(expandHome(pos[2]))
+              ? readFileSync(expandHome(pos[2]), "utf8")
+              : pos[2];
+      if (action === "get") {
+        const snapshot = await client.call("t3_mesh_config_get");
+        if (opt.json || !snapshot.current) return json(snapshot);
+        console.log(JSON.stringify(snapshot.current.doc, null, 2));
+        return;
       }
-      const id = layout.config.meshAuthority || [...(layout.config.meshWriters ?? [])].sort()[0];
-      const machine = (await collectMachines({ layout })).find((m) => m.environmentId === id);
-      if (opt.json)
-        return json({ authorityEnvironmentId: id ?? null, label: machine?.label ?? null });
-      console.log(`Authority: ${machine?.label ?? "Automatic"}`);
-      return;
+      if (action === "plan" || action === "apply") {
+        const doc = readDoc();
+        if (doc === undefined) die("pass the config: --file <path>, a path, or - for stdin");
+        if (action === "plan") {
+          const planned = await client.call("t3_mesh_config_plan", { doc });
+          if (opt.json) return json(planned);
+          const snapshot = await client.call("t3_mesh_config_get");
+          for (const item of planned.actions) {
+            const server =
+              Object.keys(snapshot.bindings).find(
+                (name) => snapshot.bindings[name] === item.server,
+              ) ?? (planned.doc.machines?.[item.server] ? item.server : "each server");
+            console.log(`${server.padEnd(16)} ${item.description}`);
+          }
+          return;
+        }
+        const snapshot = await client.call("t3_mesh_config_get");
+        const revision = await client.call(
+          "t3_mesh_config_apply",
+          meshConfigApplyInput(snapshot, doc, opt.base),
+        );
+        if (opt.json) return json(revision);
+        console.log(`applied ${revision.revision}`);
+        return;
+      }
+      if (action === "rollback") {
+        const revision = pos[2];
+        if (!revision) die("use: mesh config rollback <revision>");
+        const applied = await client.call("t3_mesh_config_rollback", { revision });
+        if (opt.json) return json(applied);
+        console.log(`applied ${applied.revision} (rolled back to ${revision})`);
+        return;
+      }
+      if (action === "history") {
+        const history = await client.call("t3_mesh_config_history");
+        if (opt.json) return json(history);
+        for (const revision of history.revisions)
+          console.log(`${revision.revision}  ${revision.author}  ${revision.writtenAt}`);
+        return;
+      }
+      die("use: mesh config get|plan|apply|rollback|history [--file PATH] [--base REV]");
     }
     if (sub === "status") {
       const layout = await layoutSnapshot();
@@ -2326,6 +2392,12 @@ const commands = {
       );
       const connections = network.connections ?? [];
       const rows = replicaRows(layout.config, live.replicas);
+      let configStatus = { servers: [] };
+      try {
+        configStatus = await (await mcp()).call("t3_mesh_status");
+      } catch (error) {
+        configStatus = { servers: [], error: error.message };
+      }
       const result = {
         local: machines.find((m) => m.local) ?? null,
         layout: {
@@ -2357,6 +2429,7 @@ const commands = {
           message: row.live?.message ?? row.status?.message ?? null,
         })),
         replicasError: live.error,
+        configStatus,
         settings: settings
           ? {
               linkedEnvironmentsEnabled: settings.linkedEnvironmentsEnabled,
@@ -2395,6 +2468,13 @@ const commands = {
           `  ${row.rep.role.padEnd(8)} ${tagOf(row.rep.environmentId).padEnd(3)} ${clip(meshProjectTitle(displayConfig, row.logicalKey, row.rep.path), 38).padEnd(38)} ${replicaStateText(row)}`,
         );
       if (live.error && !live.disabled) console.log(`  replicas: ${clip(live.error, 160)}`);
+      for (const server of configStatus.servers ?? [])
+        for (const action of server.actions) {
+          const reason = action.reason ? `  ${clip(action.reason, 100)}` : "";
+          console.log(
+            `  config ${action.state.padEnd(11)} ${tagOf(server.environmentId).padEnd(3)} ${action.description}${reason}`,
+          );
+        }
       return;
     }
     if (sub === "link") {
@@ -4184,7 +4264,8 @@ READ
   models [agent]                          harnesses (provider instances), models, options
   env | doctor                            server identity | health check after updates
   machines [--json] [--probe]             every known machine: tag, label, id, version, links, replicas
-  mesh authority [<machine>]             show or set the authority
+  mesh config get|plan|apply|rollback|history
+  mesh status
   machines alias <M> [list|add <alias>…|remove <alias>…|clear]  shared machine aliases
   mesh status [--json]                    links, layout revision, replicas
   mesh link <M> [--url URL] [--ssh DEST]  link a machine (full access; pairing code minted over ssh)

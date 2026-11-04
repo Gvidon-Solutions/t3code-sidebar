@@ -18,7 +18,10 @@ import * as PeerLinks from "./PeerLinks.ts";
 import * as PeerMcpClient from "./PeerMcpClient.ts";
 import { descriptorOf, layerLinkingEnvironment, linkTo, servePeer } from "./PeerLinks.testkit.ts";
 
-const Result = Schema.Struct({ modes: Schema.String });
+const Result = Schema.Struct({
+  modes: Schema.String,
+  replicas: Schema.optionalKey(Schema.Boolean),
+});
 const toolkit = Toolkit.make(
   Tool.make("probe", {
     description: "Returns this request's mode limits.",
@@ -42,7 +45,10 @@ it.effect.each([false, true])(
         const modes = McpInvocationContext.McpInvocationContext.pipe(
           Effect.map((scope) => {
             const ceiling = McpInvocationContext.clientModeCeiling(scope.client);
-            return { modes: `${ceiling.runtimeMode}/${ceiling.interactionMode}` };
+            return {
+              modes: `${ceiling.runtimeMode}/${ceiling.interactionMode}`,
+              ...(scope.client?.replicasLimit === false ? { replicas: false } : {}),
+            };
           }),
         );
         const handlers = McpToolAccess.toLayer(toolkit, {
@@ -79,10 +85,10 @@ it.effect.each([false, true])(
             environmentId: box.environmentId,
             tool: "probe",
             arguments: {},
-            limits: { runtimeMode: "approval-required", interactionMode: "plan" },
+            limits: { runtimeMode: "approval-required", interactionMode: "plan", replicas: false },
             success: Result,
           }),
-        ).toEqual({ modes: "approval-required/plan" });
+        ).toEqual({ modes: "approval-required/plan", replicas: false });
         // One tool POST; no second initialize or initialized notification.
         expect((yield* Ref.get(b.bearers)).length - before).toBe(1);
         yield* Deferred.succeed(release, undefined);

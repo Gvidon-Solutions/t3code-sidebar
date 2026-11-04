@@ -5,6 +5,7 @@ import { ThreadForkService } from "../mesh/ThreadForkService.ts";
 import { interceptMeshRequest } from "../mesh/MeshMcp.ts";
 import { MeshRelay } from "../mesh/MeshRelay.ts";
 import { MeshReplicator } from "../mesh/MeshReplicator.ts";
+import { forwardedCallLimits, linkPermissions } from "../mesh/MeshLinkPermissions.ts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -55,6 +56,8 @@ import * as PreviewControlsHandlers from "./toolkits/previewControls/handlers.ts
 import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
 import * as EnvironmentHandlers from "./toolkits/environment/handlers.ts";
 import { ProjectToolkit } from "./toolkits/project/tools.ts";
+import { MeshToolkit } from "./toolkits/mesh/tools.ts";
+import * as MeshHandlers from "./toolkits/mesh/handlers.ts";
 import * as ProjectHandlers from "./toolkits/project/handlers.ts";
 import { AttachmentToolkit } from "./toolkits/attachment/tools.ts";
 import * as AttachmentHandlers from "./toolkits/attachment/handlers.ts";
@@ -178,7 +181,8 @@ const parseModeLimit = (value: string) => {
 const invalidModeLimit = HttpServerResponse.jsonUnsafe(
   {
     error: "invalid_mode_limit",
-    message: "T3-Mode-Limit must be <runtimeMode>/<interactionMode>, e.g. auto/default.",
+    message:
+      "T3-Mode-Limit must be <runtimeMode>/<interactionMode>; T3-Files-Limit must be all, projects or none; T3-Replicas-Limit must be true or false.",
   },
   { status: 400, headers: { "cache-control": "no-store" } },
 );
@@ -188,12 +192,24 @@ const withModeLimit = (
   invocation: McpInvocationContext.McpInvocationScope,
   request: HttpServerRequest.HttpServerRequest,
 ): McpInvocationContext.McpInvocationScope | undefined => {
+  if (invocation.client === undefined) return invocation;
+  const files = request.headers[McpInvocationContext.FILES_LIMIT_HEADER];
+  if (files !== undefined && files !== "all" && files !== "projects" && files !== "none")
+    return undefined;
+  if (files) invocation = { ...invocation, client: { ...invocation.client!, filesLimit: files } };
+  const replicas = request.headers[McpInvocationContext.REPLICAS_LIMIT_HEADER];
+  if (replicas !== undefined && replicas !== "true" && replicas !== "false") return undefined;
+  if (replicas !== undefined)
+    invocation = {
+      ...invocation,
+      client: { ...invocation.client!, replicasLimit: replicas === "true" },
+    };
   const header = request.headers[McpInvocationContext.MODE_LIMIT_HEADER];
-  if (header === undefined || invocation.client === undefined) return invocation;
+  if (header === undefined) return invocation;
   const limit = parseModeLimit(header);
   return Option.isNone(limit)
     ? undefined
-    : { ...invocation, client: { ...invocation.client, narrowedTo: limit.value } };
+    : { ...invocation, client: { ...invocation.client!, narrowedTo: limit.value } };
 };
 
 // The Linked environments beta is off here: links wait until it is on again.
@@ -206,6 +222,7 @@ const linkedEnvironmentsOff = HttpServerResponse.jsonUnsafe(
 );
 
 const makeMcpAuthMiddleware = Effect.gen(function* () {
+  const permissionContext = yield* Effect.context<never>();
   const receipts = yield* Effect.serviceOption(PeerReceipts.PeerReceipts);
   const forks = yield* Effect.serviceOption(ThreadForkService);
   const meshReplicator = yield* Effect.serviceOption(MeshReplicator);
@@ -296,6 +313,45 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
       body.method !== "tools/call"
     )
       return yield* dispatch;
+    const permissions = yield* linkPermissions().pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, callInvocation),
+      Effect.provideContext(permissionContext),
+    );
+    if (
+      "params" in body &&
+      typeof body.params === "object" &&
+      body.params !== null &&
+      "name" in body.params &&
+      typeof body.params.name === "string"
+    ) {
+      const allowed = yield* forwardedCallLimits(body.params.name, {
+        runtimeMode: limited.client?.narrowedTo?.runtimeMode ?? "full-access",
+        interactionMode: limited.client?.narrowedTo?.interactionMode ?? "default",
+        ...(limited.client?.filesLimit ? { files: limited.client.filesLimit } : {}),
+        ...(limited.client?.replicasLimit === false ? { replicas: false } : {}),
+      }).pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, callInvocation),
+        Effect.provideContext(permissionContext),
+        Effect.result,
+      );
+      if (allowed._tag === "Failure")
+        return HttpServerResponse.jsonUnsafe({
+          jsonrpc: "2.0",
+          id: "id" in body ? body.id : null,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: encodeJsonText({
+                  code: "capability_denied",
+                  message: allowed.failure.message,
+                }),
+              },
+            ],
+            isError: true,
+          },
+        });
+    }
     return yield* receipts.value
       .run(
         from!,
@@ -304,6 +360,9 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
           body,
           modes: request.headers[McpInvocationContext.MODE_LIMIT_HEADER],
           access: limited.client?.access,
+          files: limited.client?.filesLimit,
+          replicas: limited.client?.replicasLimit,
+          permissions,
         }),
         dispatch.pipe(
           Effect.catchCause((cause) =>
@@ -1238,6 +1297,9 @@ const layerEnvironmentToolkit = toolkitRegistration(
 
 export const layerProjectRegistration = toolkitRegistration(ProjectToolkit, ProjectHandlers.layer);
 
+// Fork: mesh config and reconciliation status.
+export const layerMeshToolkit = toolkitRegistration(MeshToolkit, MeshHandlers.layer);
+
 export const layerAttachmentToolkit = toolkitRegistration(
   AttachmentToolkit,
   AttachmentHandlers.layer,
@@ -1282,6 +1344,7 @@ export const layerMcpTransport = McpServer.layerHttp({
 
 /** Every tool the T3 MCP server advertises. AgentContextBudget.test.ts measures this set. */
 export const layerTools = Layer.mergeAll(
+  layerMeshToolkit,
   layerPreviewToolkit,
   layerOrchestratorToolkit,
   layerThreadToolkit,

@@ -33,6 +33,8 @@ import * as PeerFacts from "./PeerFacts.ts";
 import * as PeerTransport from "./PeerTransport.ts";
 import { PeerChannel, preferConnection, reconnectDelay } from "./PeerChannel.ts";
 import { PeerConnectionError } from "./PeerConnectionError.ts";
+import { forwardedCallLimits } from "../../mesh/MeshLinkPermissions.ts";
+import { McpInvocationContext, type McpCapability } from "../../mcp/McpInvocationContext.ts";
 export { PeerConnectionError };
 
 /** The JSON body a peer call carries over the connection. */
@@ -42,6 +44,8 @@ export const PeerCallBody = Schema.Union([
     tool: Schema.String,
     arguments: Schema.Record(Schema.String, Schema.Unknown),
     limits: Schema.Struct({
+      files: Schema.optionalKey(Schema.Literals(["all", "projects", "none"])),
+      replicas: Schema.optionalKey(Schema.Boolean),
       runtimeMode: RuntimeMode,
       interactionMode: ProviderInteractionMode,
     }),
@@ -54,6 +58,8 @@ export const PeerCallBody = Schema.Union([
     tool: Schema.String,
     arguments: Schema.Record(Schema.String, Schema.Unknown),
     limits: Schema.Struct({
+      files: Schema.optionalKey(Schema.Literals(["all", "projects", "none"])),
+      replicas: Schema.optionalKey(Schema.Boolean),
       runtimeMode: RuntimeMode,
       interactionMode: ProviderInteractionMode,
     }),
@@ -523,13 +529,32 @@ const make = Effect.gen(function* () {
           message: "Mesh relay allows one hop and no loops",
         });
       }
+      const limits = yield* forwardedCallLimits(body.tool, body.limits, body.environmentId).pipe(
+        Effect.provideService(McpInvocationContext, {
+          environmentId: EnvironmentId.make(selfId),
+          requestNamespace: `peer:${environmentId}`,
+          issuedAt: 0,
+          capabilities: new Set<McpCapability>(),
+          thread: undefined,
+          client: {
+            sessionId: `peer:${environmentId}`,
+            label: environmentId,
+            access: live.get(environmentId)!.access,
+            linked: true,
+            peerEnvironmentId: environmentId,
+          },
+        }),
+        Effect.mapError(
+          (error) => new PeerConnectionError({ reason: "relay", message: error.message }),
+        ),
+      );
       return yield* call({
         environmentId: body.environmentId,
         body: {
           kind: "tool",
           tool: body.tool,
           arguments: body.arguments,
-          limits: body.limits,
+          limits,
           hops: [environmentId, selfId],
           ...(body.key === undefined ? {} : { key: body.key }),
         },

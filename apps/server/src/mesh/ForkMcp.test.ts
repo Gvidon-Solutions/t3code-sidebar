@@ -1,6 +1,10 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  OrchestratorMcpFailure,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
@@ -12,6 +16,8 @@ import { McpSessionRegistry } from "../mcp/McpSessionRegistry.ts";
 import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
 import { ThreadForkService } from "./ThreadForkService.ts";
+import { MeshLayoutService } from "./MeshLayoutService.ts";
+import { layerTest } from "../replicas/MeshLayoutTestLayer.ts";
 import * as Receipts from "../peer/connection/PeerReceipts.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 
@@ -20,6 +26,7 @@ it.effect(
   "accepts forks only for full-access link sessions and hides the receiver from agents",
   () =>
     Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
       let received = 0;
       const database = yield* Layer.build(Sqlite.layerMemory);
       const services = yield* Layer.build(
@@ -33,6 +40,7 @@ it.effect(
         Layer.provide(
           Layer.mergeAll(
             Layer.succeedContext(services),
+            Layer.succeed(MeshLayoutService, mesh),
             Layer.mock(McpSessionRegistry)({
               // @effect-diagnostics-next-line effectSucceedWithVoid:off - Registry absence requires undefined.
               resolve: () => Effect.succeed(undefined),
@@ -122,6 +130,21 @@ it.effect(
         params: { ...body.params, arguments: { action: "rollback", forkId: "storage-failure" } },
       });
       expect(yield* failed.text).toContain("orchestration_error");
+      const h = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.config": {
+          h,
+          v: {
+            revision: h,
+            doc: { schema: 1, machines: {}, links: { default: { threads: false } } },
+            author: "studio",
+            writtenAt: "2026-01-01T00:00:00Z",
+          },
+        },
+      });
+      const denied = yield* post("link", body);
+      expect(denied.status).toBe(403);
+      expect(yield* denied.text).toContain("link_threads_denied");
       const init = yield* post("agent", {
         jsonrpc: "2.0",
         id: 1,
@@ -139,5 +162,13 @@ it.effect(
       );
       expect(listed.status).toBe(200);
       expect(yield* listed.text).not.toContain("t3_thread_receive_fork");
-    }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.merge(
+          NodeHttpServer.layerTest,
+          layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG),
+        ),
+      ),
+    ),
 );

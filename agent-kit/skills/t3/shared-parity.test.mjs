@@ -22,7 +22,6 @@ test("standalone encoder agrees with shared core and clocks can be received", ()
       machines: { offline: { label: "Offline" } },
       projectMounts: { x: [] },
       projectTitles: { x: "Shared project title" },
-      meshAuthority: "offline",
       projectAliases: { "legacy:/path": "x" },
       projectMountStatus: {
         x: {
@@ -55,11 +54,13 @@ test("zero-clock legacy entries use server shared adoption without losing offlin
   assert.deepEqual(config.placements["offline:/path"], ["a"]);
 });
 
-test("alias writes advance beyond observed clocks, including counter overflow", async () => {
+test("alias writes match bounded shared clocks, including counter overflow", async () => {
   const { nextMachineClock } = await import("./scripts/t3ctl.mjs");
   const { tick } = await import("../../../packages/shared/src/meshLayout/index.ts");
   for (const last of [
     null,
+    "0000000000042.99999.peer",
+    "0000000300042.99999.peer",
     "0000000000000.99999.peer",
     "0000000300000.99999.peer",
     "9999999999998.00042.peer",
@@ -82,7 +83,7 @@ test("alias writes advance beyond observed clocks, including counter overflow", 
     },
   };
   assert.deepEqual(
-    materialize(importLegacyEntries(config, "local")).machines,
-    materialize(importLegacy(config, "local", "0000000000000.00000.local")).machines,
+    { ...materialize(importLegacyEntries(config, "local")).machines },
+    config.machines,
   );
 });

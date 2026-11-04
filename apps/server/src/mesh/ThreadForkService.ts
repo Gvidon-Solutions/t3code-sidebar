@@ -181,92 +181,95 @@ export const layer = Layer.effect(
           Effect.mapError(() => invalid("Cannot identify the fork.")),
           Effect.map((digest) => ThreadId.make(`fork:${Hex.encode(digest)}`)),
         );
-    const resolveRepresentation = Effect.fn("ThreadForkService.resolveRepresentation")(
-      function* (input: {
+    const resolveRepresentation = Effect.fn("ThreadForkService.resolveRepresentation")(function* (
+      input: {
         readonly projectId?: ProjectId | undefined;
         readonly logicalKey?: string | undefined;
-      }) {
-        const snapshot = yield* mesh.read;
-        let logicalKey = input.logicalKey;
-        let projectId = input.projectId;
-        if (projectId !== undefined) {
-          const project = yield* projects.getById(projectId).pipe(Effect.mapError(failure));
-          if (Option.isNone(project)) return yield* invalid("The destination project is missing.");
-          logicalKey =
-            logicalKey ??
-            Object.keys(snapshot.config.projectMounts).find((key) =>
-              snapshot.config.projectMounts[key]?.some(
-                (rep) => rep.environmentId === self && rep.projectId === projectId,
-              ),
-            ) ??
-            logicalKey;
-        }
-        if (logicalKey === undefined) return yield* invalid("The destination project is missing.");
-        let rep = snapshot.config.projectMounts[logicalKey]?.find(
-          (entry) => entry.environmentId === self,
-        );
-        let placed = false;
-        if (
-          !rep ||
-          !rep.projectId ||
-          (rep.role === "replica" &&
-            snapshot.config.projectMountStatus[logicalKey]?.[self]?.state !== "watching")
-        ) {
-          const replicas = yield* replicaRuntime.get.pipe(Effect.mapError(failure));
-          const result = yield* replicas
-            .place({ project: logicalKey, machine: self, wait: 90 })
-            .pipe(
-              Effect.mapError(failure),
-              Effect.timeoutOption("100 seconds"),
-              Effect.flatMap(
-                Option.match({
-                  onNone: () =>
-                    Effect.fail(invalid("The project placement did not finish in time.")),
-                  onSome: Effect.succeed,
-                }),
-              ),
-            );
-          if (!result.ready || !result.representation?.projectId)
-            return yield* invalid("The destination project representation did not become ready.");
-          rep = result.representation;
-          placed = true;
-        }
+      },
+      limits: PeerCallLimits,
+    ) {
+      const snapshot = yield* mesh.read;
+      let logicalKey = input.logicalKey;
+      let projectId = input.projectId;
+      if (projectId !== undefined) {
+        const project = yield* projects.getById(projectId).pipe(Effect.mapError(failure));
+        if (Option.isNone(project)) return yield* invalid("The destination project is missing.");
+        logicalKey =
+          logicalKey ??
+          Object.keys(snapshot.config.projectMounts).find((key) =>
+            snapshot.config.projectMounts[key]?.some(
+              (rep) => rep.environmentId === self && rep.projectId === projectId,
+            ),
+          ) ??
+          logicalKey;
+      }
+      if (logicalKey === undefined) return yield* invalid("The destination project is missing.");
+      let rep = snapshot.config.projectMounts[logicalKey]?.find(
+        (entry) => entry.environmentId === self,
+      );
+      let placed = false;
+      if (
+        !rep ||
+        !rep.projectId ||
+        (rep.role === "replica" &&
+          snapshot.config.projectMountStatus[logicalKey]?.[self]?.state !== "watching")
+      ) {
+        if (limits.replicas === false)
+          return yield* new OrchestratorMcpFailure({
+            code: "capability_denied",
+            message: "This link may not place project replicas on this server.",
+          });
         const replicas = yield* replicaRuntime.get.pipe(Effect.mapError(failure));
-        const driver = rep.role === "replica" ? replicaDriver(snapshot.config, rep) : undefined;
-        if (rep.role === "replica" && !driver)
-          return yield* invalid("The replica has no sync driver.");
-        const flush =
-          rep.role !== "replica"
-            ? Effect.succeed(true)
-            : driver === self
-              ? replicas.flush({ logicalKey, environmentId: self }).pipe(Effect.mapError(failure))
-              : remote(
-                  EnvironmentId.make(driver!),
-                  { action: "flush", forkId: "flush", logicalKey, environmentId: self },
-                  { runtimeMode: "full-access", interactionMode: "default" },
-                ).pipe(Effect.map((result) => "ok" in result && result.ok));
-        const flushed = yield* flush.pipe(
-          Effect.timeoutOption("60 seconds"),
+        const result = yield* replicas.place({ project: logicalKey, machine: self, wait: 90 }).pipe(
           Effect.mapError(failure),
+          Effect.timeoutOption("100 seconds"),
           Effect.flatMap(
             Option.match({
-              onNone: () => Effect.fail(invalid("The sync session did not flush in time.")),
+              onNone: () => Effect.fail(invalid("The project placement did not finish in time.")),
               onSome: Effect.succeed,
             }),
           ),
         );
-        if (!flushed) return yield* invalid("The sync driver did not flush the replica.");
-        const config = yield* mesh.read;
-        return {
-          projectId: ProjectId.make(rep.projectId!),
-          logicalKey,
-          title: config.config.projectTitles[logicalKey] ?? "Untitled project",
-          machine: machineTitle(self, config),
-          placed,
-          flushed,
-        };
-      },
-    );
+        if (!result.ready || !result.representation?.projectId)
+          return yield* invalid("The destination project representation did not become ready.");
+        rep = result.representation;
+        placed = true;
+      }
+      const replicas = yield* replicaRuntime.get.pipe(Effect.mapError(failure));
+      const driver = rep.role === "replica" ? replicaDriver(snapshot.config, rep) : undefined;
+      if (rep.role === "replica" && !driver)
+        return yield* invalid("The replica has no sync driver.");
+      const flush =
+        rep.role !== "replica"
+          ? Effect.succeed(true)
+          : driver === self
+            ? replicas.flush({ logicalKey, environmentId: self }).pipe(Effect.mapError(failure))
+            : remote(
+                EnvironmentId.make(driver!),
+                { action: "flush", forkId: "flush", logicalKey, environmentId: self },
+                { runtimeMode: "full-access", interactionMode: "default" },
+              ).pipe(Effect.map((result) => "ok" in result && result.ok));
+      const flushed = yield* flush.pipe(
+        Effect.timeoutOption("60 seconds"),
+        Effect.mapError(failure),
+        Effect.flatMap(
+          Option.match({
+            onNone: () => Effect.fail(invalid("The sync session did not flush in time.")),
+            onSome: Effect.succeed,
+          }),
+        ),
+      );
+      if (!flushed) return yield* invalid("The sync driver did not flush the replica.");
+      const config = yield* mesh.read;
+      return {
+        projectId: ProjectId.make(rep.projectId!),
+        logicalKey,
+        title: config.config.projectTitles[logicalKey] ?? "Untitled project",
+        machine: machineTitle(self, config),
+        placed,
+        flushed,
+      };
+    });
     const validateModel = Effect.fn("ThreadForkService.validateModel")(function* (
       selection: ForkBundle["modelSelection"] | undefined,
     ) {
@@ -413,7 +416,7 @@ export const layer = Layer.effect(
           token: previous.token,
           result: previous.phase === "committed" ? previous.result : result,
         };
-      const rep = yield* resolveRepresentation({ logicalKey: bundle.logicalKey });
+      const rep = yield* resolveRepresentation({ logicalKey: bundle.logicalKey }, limits);
       yield* validateModel(bundle.modelSelection);
       if (exceededDispatchModeLimit(limits, bundle))
         return yield* invalid("The target link does not permit this thread's modes.");
@@ -508,10 +511,10 @@ export const layer = Layer.effect(
               return { token: previous.token, result: previous.result };
             if (previous?.phase === "pending" || previous?.phase === "committing")
               return yield* stageFork(previous.bundle, previous.limits);
-            const rep = yield* resolveRepresentation({
-              projectId: input.projectId,
-              logicalKey: input.logicalKey,
-            });
+            const rep = yield* resolveRepresentation(
+              { projectId: input.projectId, logicalKey: input.logicalKey },
+              limits,
+            );
             yield* validateModel(input.modelSelection);
             return {
               projectId: rep.projectId,

@@ -28,3 +28,13 @@ export const validateEntries = Effect.fn("MeshLayout.validateEntries")(function*
       });
   }
 });
+
+export const validateClientEntries = Effect.fn("MeshLayout.validateClientEntries")(function* (
+  entries: Readonly<Record<string, unknown>>,
+) {
+  if (Object.keys(entries).some((key) => /^mesh\.(?:config|machineBinding|linkPolicy)/.test(key)))
+    return yield* new MeshLayoutError({
+      reason: "invalid_entries",
+      message: "Mesh config entries must be changed through meshConfig.apply",
+    });
+});

@@ -1,3 +1,4 @@
+import { conflictCopyPath } from "./conflictResolution.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, expect } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -115,11 +116,16 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
           yield* runner.flush("t3-integration");
           expect(yield* fs.readFileString(path.join(alpha, "hello"))).toBe(winner);
           expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe(winner);
-          expect(yield* fs.readFileString(path.join(loser, `.t3-conflicts/${iso}/hello`))).toBe(
+          expect(yield* fs.readFileString(path.join(loser, conflictCopyPath(iso, "hello")))).toBe(
             losing,
           );
           expect(
-            yield* fs.exists(path.join(loser === alpha ? beta : alpha, `.t3-conflicts/${iso}`)),
+            yield* fs.exists(
+              path.join(
+                loser === alpha ? beta : alpha,
+                `.t3-conflicts/${iso.replace(/[:.]/g, "-")}`,
+              ),
+            ),
           ).toBe(false);
         }
         yield* runner.terminate("t3-integration");

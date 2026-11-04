@@ -5,9 +5,13 @@ import {
   SidebarMachine,
   SidebarProjectMount,
   SidebarProjectMountStatus,
+  MeshConfigRevision,
+  MeshConfigServerStatus,
+  LinkPermissions,
+  MachineName,
 } from "@t3tools/contracts";
 import type { MeshLayoutEntry } from "./document.ts";
-import { meshConfigRevisionSchema } from "./configSchema.ts";
+const isMachineName = Schema.is(MachineName);
 
 const sort = { sort: Schema.String };
 const sorted = Schema.Struct(sort);
@@ -54,9 +58,15 @@ export const layoutKeyFamilies = {
   legacy: family(Schema.Array(Schema.String), 2),
   "ws.default": family(Schema.String, 1),
   "ws.quietAfterDays": family(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })), 1),
-  "mesh.config": family(meshConfigRevisionSchema, 1),
-  "mesh.configHistory": family(meshConfigRevisionSchema, 2),
-  "mesh.machineBinding": family(Schema.String, 2),
+  "mesh.config": family(MeshConfigRevision, 1),
+  "mesh.configHistory": family(MeshConfigRevision, 2),
+  "mesh.machineBinding": family(
+    Schema.String.check(Schema.makeFilter((value) => value.trim().length > 0)),
+    2,
+  ),
+  "mesh.configStatus": family(MeshConfigServerStatus, 2),
+  "mesh.configReplica": family(Schema.Boolean, 3),
+  "mesh.linkPolicy": family(LinkPermissions, 3),
 };
 
 export function validateLayoutEntry(key: string, entry: MeshLayoutEntry): string | null {
@@ -75,6 +85,8 @@ export function validateLayoutEntry(key: string, entry: MeshLayoutEntry): string
   if (spec === undefined) return null;
   if (parts.length !== spec.segments) return "invalid key segment count";
   if (name === "ws" && !parts[1]!.trim()) return "workspace id must not be blank";
+  if (name === "mesh.machineBinding" && !isMachineName(parts[1]!))
+    return "machine name must be a slug";
   if (entry.v === null) return null;
   if (name === "proj" && key.endsWith(".title"))
     return typeof entry.v === "string" ? null : "project title must be a string";

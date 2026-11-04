@@ -1,11 +1,22 @@
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 const isConfig = Schema.is(SidebarWorkspacesConfig);
+const decodeConfig = Schema.decodeSync(SidebarWorkspacesConfig);
 import { expect, it } from "vite-plus/test";
 import { validateLayoutEntry, layoutKeyFamilies } from "./registry.ts";
 import { merge, type MeshLayoutDocument } from "./document.ts";
 import { materialize } from "./materialize.ts";
 it("validates every registered family and forwards unknown values without materializing them", () => {
+  const futureMachine = {
+    "machine/studio": {
+      v: { label: "Studio", futureFacts: { version: "future" } },
+      h: "0000000000000.00000.studio",
+    },
+  };
+  const forwardedMachine = merge({}, futureMachine);
+  expect(forwardedMachine).toEqual(futureMachine);
+  expect(materialize(forwardedMachine).machines.studio).toEqual({ label: "Studio" });
+  expect(decodeConfig(materialize(forwardedMachine))).toEqual(materialize(forwardedMachine));
   for (const key of Object.keys(layoutKeyFamilies)) {
     const name = [
       key,
@@ -95,6 +106,21 @@ it("validates every registered family and forwards unknown values without materi
     }
   }
   const opaque = { "future/data": { v: { shape: [1, true] }, h: "0000000000000.00000.studio" } };
+  for (const [key, value] of Object.entries({
+    "mesh.machineBinding/studio": "studio-env",
+    "mesh.configStatus/studio-env": { environmentId: "studio-env", revision: null, actions: [] },
+    "mesh.configReplica/project/studio-env": true,
+    "mesh.linkPolicy/studio-env/laptop": { files: "projects", replicas: true, threads: false },
+  }))
+    expect(validateLayoutEntry(key, { v: value, h: "0000000000000.00000.studio" })).toBeNull();
+  for (const [key, value] of [
+    ["mesh.machineBinding/Bad Name", "studio-env"],
+    ["mesh.machineBinding/studio", "  "],
+    ["mesh.configStatus/studio-env", { environmentId: "studio-env" }],
+    ["mesh.configReplica/project/studio-env", "true"],
+    ["mesh.linkPolicy/studio-env/laptop", { files: "root" }],
+  ] as const)
+    expect(validateLayoutEntry(key, { v: value, h: "0000000000000.00000.studio" })).not.toBeNull();
   expect(validateLayoutEntry("future/data", opaque["future/data"])).toBeNull();
   expect(merge({}, opaque)).toEqual(opaque);
   expect(materialize(opaque)).toEqual(materialize({}));

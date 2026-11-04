@@ -33,6 +33,7 @@ import * as Environment from "../../environment/ServerEnvironment.ts";
 import * as ServerHttp from "../../http.ts";
 import * as Mcp from "../../mcp/McpHttpServer.ts";
 import * as McpAccess from "../../mcp/McpToolAccess.ts";
+import { McpInvocationContext } from "../../mcp/McpInvocationContext.ts";
 import * as Registry from "../../mcp/McpSessionRegistry.ts";
 import * as Sqlite from "../../persistence/Sqlite.ts";
 import * as Settings from "../../serverSettings.ts";
@@ -59,9 +60,18 @@ class Api extends HttpApi.make("environment")
   .add(EnvironmentHttpApi.groups.metadata)
   .add(EnvironmentHttpApi.groups.mcpOAuth) {}
 const Answer = Schema.Struct({ count: Schema.Number });
+const LimitsAnswer = Schema.Struct({
+  files: Schema.optionalKey(Schema.Literals(["all", "projects", "none"])),
+  replicas: Schema.optionalKey(Schema.Boolean),
+});
 const isExchange = Schema.is(Replication.ExchangeInput);
 const isRoutes = Schema.is(Schema.Struct({ routes: Schema.Array(Schema.String) }));
 const toolkit = Toolkit.make(
+  Tool.make("t3_limits_fixture", {
+    description: "Reports receiving call limits.",
+    success: LimitsAnswer,
+  }),
+  Tool.make("t3_thread_fixture", { description: "Reads one thread fixture.", success: Answer }),
   Tool.make("t3_create_fixture", { description: "Creates one fixture.", success: Answer }),
   Tool.make("t3_wait_fixture", { description: "Waits until cancelled.", success: Answer }),
   Tool.make("schedule_task", {
@@ -151,6 +161,18 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
     Mcp.toolkitRegistration(
       toolkit,
       McpAccess.toLayer(toolkit, {
+        t3_limits_fixture: McpAccess.reads(() =>
+          Effect.map(Effect.serviceOption(McpInvocationContext), (invocation) => {
+            const scope = Option.getOrThrow(invocation);
+            return {
+              ...(scope.client?.filesLimit ? { files: scope.client.filesLimit } : {}),
+              ...(scope.client?.replicasLimit === undefined
+                ? {}
+                : { replicas: scope.client.replicasLimit }),
+            };
+          }),
+        ),
+        t3_thread_fixture: McpAccess.reads(() => Effect.succeed({ count: 99 })),
         t3_create_fixture: McpAccess.reads(() => Effect.sync(() => ({ count: ++count }))),
         t3_wait_fixture: McpAccess.reads(() =>
           Deferred.succeed(waitingStarted, undefined).pipe(
@@ -280,6 +302,14 @@ it.live(
         idempotencyKey: "create-once",
       };
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
+      const limitedRequest = {
+        ...request,
+        tool: "t3_limits_fixture",
+        idempotencyKey: "limited-fixture",
+        limits: { ...request.limits, files: "none" as const, replicas: false },
+        success: LimitsAnswer,
+      };
+      expect(yield* studio.client.call(limitedRequest)).toEqual({ files: "none", replicas: false });
       expect(cloudbox.externalMcp()).toBeGreaterThan(0);
       const previousPosts = cloudbox.externalMcp();
       cloudbox.blockHttp();
@@ -296,6 +326,9 @@ it.live(
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(cloudbox.count()).toBe(1);
       expect(cloudbox.externalMcp()).toBe(previousPosts);
+      expect(
+        yield* studio.client.call({ ...limitedRequest, idempotencyKey: "limited-socket" }),
+      ).toEqual({ files: "none", replicas: false });
       const ordinary = yield* cloudbox.auth.issueMcpClientSession({
         label: "ordinary client",
         access: "full-access",
@@ -325,6 +358,27 @@ it.live(
       yield* Fiber.join(reconnected);
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(cloudbox.count()).toBe(1);
+      const threadRequest = {
+        ...request,
+        tool: "t3_thread_fixture",
+        idempotencyKey: "thread-before-policy-change",
+      };
+      expect(yield* studio.client.call(threadRequest)).toEqual({ count: 99 });
+      const h = yield* cloudbox.mesh.nextHlc;
+      yield* cloudbox.mesh.apply({
+        "mesh.config": {
+          h,
+          v: {
+            revision: h,
+            author: "cloudbox",
+            writtenAt: "",
+            doc: { schema: 1, machines: {}, links: { default: { threads: false } } },
+          },
+        },
+      });
+      expect((yield* studio.client.call(threadRequest).pipe(Effect.flip)).code).toBe(
+        "capability_denied",
+      );
       yield* cloudbox.auth.revokeSession(legacy.sessionId);
       expect((yield* studio.client.call(request).pipe(Effect.result))._tag).toBe("Failure");
       const unlinked = yield* waitEvent(studio, "peer.unlinked", cloudbox.id);
@@ -578,6 +632,53 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
     expect(yield* cloudbox.client.call(request)).toEqual({ count: 1 });
     expect(yield* laptop.client.call(request)).toEqual({ count: 2 });
     expect(yield* laptop.client.call(request)).toEqual({ count: 2 });
+    const policyClock = yield* cloudbox.mesh.nextHlc;
+    yield* cloudbox.mesh.apply({
+      "mesh.config": {
+        h: policyClock,
+        v: {
+          revision: policyClock,
+          author: "cloudbox",
+          writtenAt: "",
+          doc: {
+            schema: 1,
+            machines: { studio: {}, cloudbox: {}, laptop: {} },
+            links: {
+              default: { files: "all" },
+              overrides: [
+                {
+                  between: ["studio", "laptop"],
+                  files: "projects",
+                  replicas: false,
+                  threads: false,
+                },
+              ],
+            },
+          },
+        },
+      },
+      "mesh.machineBinding/studio": { h: policyClock, v: studio.id },
+      "mesh.machineBinding/cloudbox": { h: policyClock, v: cloudbox.id },
+      "mesh.machineBinding/laptop": { h: policyClock, v: laptop.id },
+    });
+    expect(
+      yield* laptop.client.call({
+        ...request,
+        tool: "t3_limits_fixture",
+        idempotencyKey: "limited-fixture",
+        success: LimitsAnswer,
+      }),
+    ).toEqual({ files: "projects", replicas: false });
+    expect(
+      (yield* laptop.client
+        .call({ ...request, tool: "t3_thread_fixture", idempotencyKey: "limited-fixture" })
+        .pipe(Effect.flip)).message,
+    ).toContain("does not allow");
+    expect(
+      (yield* laptop.client
+        .call({ ...request, tool: "t3_project_place", idempotencyKey: "limited-fixture" })
+        .pipe(Effect.flip)).message,
+    ).toContain("does not allow");
     expect(
       (yield* laptop.sessions.status).find((state) => state.environmentId === studio.id),
     ).toMatchObject({ state: "relayed", via: cloudbox.id });

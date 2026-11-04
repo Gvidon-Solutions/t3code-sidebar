@@ -108,6 +108,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-04 — Mesh config core (Stage C1)
+
+- **What.** The mesh is now configured by one desired-state document. Machines, link permissions, replica rules, ignores and conflict policy come from it; a one-time migration writes the first revision from existing settings. Authority is gone from layout, clients, CLI and MCP. Link permissions are enforced on the receiving server, and read-only links cannot read files outside project folders.
+- **How.** `mesh.config`/history/bindings/status are validated layout entries. The `MeshConfig` service validates schema and references, plans with registered planners, applies with optimistic concurrency (stale base gets a path diff), rolls back as a new revision, keeps fifty revisions and publishes per-server action status. Planners cover display, links, replica placement through `ProjectReplicaService`, representation ignores and conflict policy; SSH and bootstrap add planners later. The schema accepts JSON or YAML and preserves unknown fields. The receiver resolves the authenticated peer environment id (intersecting candidate policies for ambiguous N-1 labels) and applies `effectiveLinkPermissions`; file checks realpath first, replica and thread handlers check their permission, and an unknown peer gets defaults. Existing links migrate to `files: all`.
+- **Where.** `packages/contracts/src/meshConfig.ts`, `packages/shared/src/meshConfig/`, server `mesh/{MeshConfig,MeshConfigPlanners,MeshConfigMigration,MeshLinkPermissions}.ts`, shared `meshLayout/registry.ts`, server `mesh/migration/layoutMigration.ts`, `files/FilesService.ts`, `mcp/toolkits/mesh/`; web/mobile Mesh settings and authority pickers; `agent-kit/skills/t3`.
+
 ### 2026-11-04 — N1 persistent peer connections and SSH byte pipes
 
 - **L1 integration.** Layout pushes use authenticated connection events, and connection-up
@@ -1562,6 +1568,6 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   on a 1–15 s backoff, exchange safety watermarks every minute, and collect thirty-day
   tombstones only after linked-peer acknowledgement.
   Canonical key migration removes obsolete persisted rows atomically.
-- **Where.** Shared `meshLayout/registry.ts`, `configSchema.ts`, `hlc.ts` and `migration/`; server
+- **Where.** Shared `meshLayout/registry.ts` (canonical config contracts), `hlc.ts` and `migration/`; server
   `MeshLayoutServiceLive.ts`, `MeshReplicator.ts` and `mesh/migration/`; client-runtime
   `MeshLayoutStore`, web/mobile `useMeshLayout` providers and application roots.

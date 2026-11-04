@@ -8,6 +8,7 @@ import * as HttpEffect from "effect/http/HttpEffect";
 
 import * as PeerCredentials from "./PeerCredentials.ts";
 import { PeerCallDispatcher, PeerConnectionError } from "./PeerSessions.ts";
+import { FILES_LIMIT_HEADER, REPLICAS_LIMIT_HEADER } from "../../mcp/McpInvocationContext.ts";
 
 const ResponseBody = Schema.Struct({
   result: Schema.optionalKey(
@@ -126,6 +127,12 @@ export const layer = Layer.effect(
                 "mcp-protocol-version": "2025-06-18",
                 ...(body.key === undefined ? {} : { "t3-idempotency-key": body.key }),
                 "t3-mode-limit": `${body.limits.runtimeMode}/${body.limits.interactionMode}`,
+                ...(body.limits.files === undefined
+                  ? {}
+                  : { [FILES_LIMIT_HEADER]: body.limits.files }),
+                ...(body.limits.replicas === undefined
+                  ? {}
+                  : { [REPLICAS_LIMIT_HEADER]: String(body.limits.replicas) }),
                 ...(body.hops === undefined ? {} : { "t3-mesh-hops": body.hops.join(",") }),
               },
               signal,

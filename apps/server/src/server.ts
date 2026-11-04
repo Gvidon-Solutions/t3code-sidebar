@@ -6,6 +6,9 @@ import * as MeshSettings from "./mesh/migration/MeshSettings.ts";
 import * as MeshRelayLive from "./mesh/MeshRelay.ts";
 import * as MeshReplication from "./mesh/MeshReplicator.ts";
 import * as MeshLayoutLive from "./mesh/MeshLayoutServiceLive.ts";
+import * as MeshConfig from "./mesh/MeshConfig.ts";
+import * as MeshConfigPlanners from "./mesh/MeshConfigPlanners.ts";
+import * as MeshConfigMigration from "./mesh/MeshConfigMigration.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Random from "effect/Random";
@@ -573,6 +576,12 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   ),
 );
 
+const layerMeshConfig = MeshConfig.layer.pipe(
+  Layer.provide(MeshConfigPlanners.layer.pipe(Layer.provide(layerOrchestrationV2Runtime))),
+  Layer.provide(MeshConfigMigration.layer.pipe(Layer.provide(PeerLinks.layer))),
+);
+const layerMeshConfigRuntime = MeshConfig.startedLayer.pipe(Layer.provideMerge(layerMeshConfig));
+
 const layerOrchestrationApplication = CheckpointDiffQuery.layer.pipe(
   Layer.provideMerge(layerCheckpointStore),
   Layer.provideMerge(layerOrchestrationV2Runtime),
@@ -860,6 +869,7 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
   Layer.provideMerge(layerPeerNetwork),
   Layer.provide(layerCommandReadiness),
+  Layer.provideMerge(layerMeshConfigRuntime),
   Layer.provide(ServerHttp.layerBrowserApiCors),
   Layer.provide(ServerHttp.layerHttpCompression),
 );

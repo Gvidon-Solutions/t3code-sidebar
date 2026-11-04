@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   AuthMcpClientAccess,
+  MCP_PEER_LINK_SOFTWARE_ID,
   AuthStandardClientScopes,
   type AuthCreatePairingCredentialInput,
   EnvironmentHttpApi,
@@ -50,7 +51,7 @@ const makeLayerRoutes = (capture: (auth: EnvironmentAuth.EnvironmentAuth["Servic
       Layer.provide(
         McpOAuthHttp.layer.pipe(
           Layer.provide(McpOAuth.layer),
-          Layer.provide(ServerSettings.layerTest()),
+          Layer.provide(ServerSettings.layerTest({ linkedEnvironmentsEnabled: true })),
         ),
       ),
       Layer.provide(AuthHttp.layerAuthenticatedAuth),
@@ -325,6 +326,8 @@ it.live("signs in a hosted agent with an https callback that asked for a client 
           headers: { "content-type": "application/json" },
           body: encodeJson({
             client_name: "Hosted bot",
+            software_id: MCP_PEER_LINK_SOFTWARE_ID,
+            environment_id: "cloudbox-environment",
             redirect_uris: [callbackUrl],
             token_endpoint_auth_method: "client_secret_post",
           }),
@@ -372,7 +375,12 @@ it.live("signs in a hosted agent with an https callback that asked for a client 
           at("/mcp", { headers: { authorization: `Bearer ${token.access_token}` } }),
         ),
       );
-      expect(signedIn).toMatchObject({ label: "Hosted bot", access: "approval-required" });
+      expect(signedIn).toMatchObject({
+        label: "Hosted bot",
+        access: "approval-required",
+        peerLink: true,
+        peerEnvironmentId: "cloudbox-environment",
+      });
     }),
   ),
 );

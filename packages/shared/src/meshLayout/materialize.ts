@@ -1,18 +1,19 @@
 import { validateLayoutEntry } from "./registry.ts";
-import { authoredBy } from "./authorship.ts";
 import { normalizeRepresentationPath } from "./representationPath.ts";
-import { meshAuthorityOf } from "./authority.ts";
+import { configFromLayout, bindingsFromLayout } from "../meshConfig/index.ts";
 import { keys } from "./document.ts";
+import { SidebarMachine } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import type {
   SidebarWorkspacesConfig,
   SidebarWorkspace,
   SidebarWorkspaceRule,
-  SidebarMachine,
   SidebarProjectMount,
   SidebarProjectMountStatus,
 } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "./document.ts";
 const dictionary = <T>(): Record<string, T> => Object.create(null) as Record<string, T>;
+const decodeMachine = Schema.decodeUnknownSync(SidebarMachine);
 
 export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const workspaces: (SidebarWorkspace & { sort: string })[] = [];
@@ -71,7 +72,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         (workspaceFold[a] ??= dictionary())[b] = v as "quiet" | "active";
         break;
       case "machine":
-        machines[a] = v as SidebarMachine;
+        machines[a] = decodeMachine(v);
         break;
       case "proj":
         if (
@@ -131,12 +132,6 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         .map((key) => decodeURIComponent(key.slice(7))),
     ),
   ].sort();
-  const authority = meshAuthorityOf({
-    meshWriters: writers,
-    ...(typeof doc["mesh.authority"]?.v === "string"
-      ? { meshAuthority: doc["mesh.authority"].v }
-      : {}),
-  });
   const claims = Object.entries(projectMounts).flatMap(([logical, reps]) =>
     reps.map((rep) => ({
       logical,
@@ -146,7 +141,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   );
   claims.sort(
     (a, b) =>
-      Number(authoredBy(doc, b.entry, authority)) - Number(authoredBy(doc, a.entry, authority)) ||
+      b.entry.h.localeCompare(a.entry.h) ||
       (a.logical < b.logical ? -1 : a.logical > b.logical ? 1 : 0),
   );
   const claimed = new Set<string>();
@@ -156,10 +151,23 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
       projectMounts[logical] = projectMounts[logical]!.filter((other) => other !== rep);
     else claimed.add(identity);
   }
+  const desired = configFromLayout(doc);
+  if (desired)
+    for (const [name, environmentId] of Object.entries(bindingsFromLayout(doc))) {
+      const machine = desired.machines[name];
+      if (!machine) continue;
+      const aliases = Array.isArray(machine.aliases)
+        ? machine.aliases.filter((alias): alias is string => typeof alias === "string")
+        : undefined;
+      machines[environmentId] = {
+        ...machines[environmentId],
+        ...(machine.title !== undefined ? { label: machine.title, title: machine.title } : {}),
+        ...(machine.label !== undefined ? { tag: machine.label } : {}),
+        ...(machine.color !== undefined ? { color: machine.color } : {}),
+        ...(aliases ? { aliases } : {}),
+      };
+    }
   return {
-    ...(typeof doc["mesh.authority"]?.v === "string"
-      ? { meshAuthority: doc["mesh.authority"].v }
-      : {}),
     ...(writers.length ? { meshWriters: writers } : {}),
     workspaces: workspaces.map(({ sort: _sort, ...w }) => w),
     rules: rules.map(({ sort: _sort, id: _id, ...r }) => r),

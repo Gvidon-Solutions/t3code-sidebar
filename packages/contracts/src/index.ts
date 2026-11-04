@@ -78,4 +78,5 @@ export * from "./clientRpcPermissions.ts";
 export * from "./meshLayout.ts";
 
 export * from "./threadHandoff.ts";
+export * from "./meshConfig.ts";
 export * from "./threadFork.ts";

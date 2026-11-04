@@ -1,3 +1,13 @@
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  type FilesError,
+  type FilesReadResult,
+  type FilesListResult,
+} from "@t3tools/contracts";
+import * as Stream from "effect/Stream";
+import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
+import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 // @effect-diagnostics nodeBuiltinImport:off - sparse files make the hard size limit cheap to test.
 import * as NodeFSP from "node:fs/promises";
 
@@ -162,6 +172,192 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService", (it) => {
 
       const error = yield* files.read({ absolutePath: stateFile }).pipe(Effect.flip);
       expect(reasonOf(error)).toBe("permission_denied");
+    }),
+  );
+});
+
+it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link", (it) => {
+  it.effect(
+    "refuses read-only escapes and allows valid projects despite an unrelated missing root",
+    () =>
+      Effect.gen(function* () {
+        const files = yield* FilesService.FilesService;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const project = yield* makeTempDir;
+        const outside = yield* makeTempDir;
+        yield* writeTextFile(project, "inside.txt", "inside");
+        yield* writeTextFile(outside, "secret.txt", "secret");
+        yield* fs.symlink(outside, path.join(project, "escape")).pipe(Effect.orDie);
+        const snapshot = {
+          document: {},
+          config: {
+            ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+            projectMounts: {
+              removed: [
+                {
+                  environmentId: "studio",
+                  role: "primary" as const,
+                  transport: "git" as const,
+                  createdAt: "2026-01-01T00:00:00Z",
+                  path: path.join(outside, "removed"),
+                },
+              ],
+              app: [
+                {
+                  environmentId: "studio",
+                  role: "primary" as const,
+                  transport: "git" as const,
+                  createdAt: "2026-01-01T00:00:00Z",
+                  path: project,
+                },
+              ],
+            },
+          },
+        };
+        const invoke = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+          effect.pipe(
+            Effect.provideService(McpInvocationContext, {
+              environmentId: EnvironmentId.make("studio"),
+              capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
+              issuedAt: 0,
+              requestNamespace: "test",
+              thread: undefined,
+              client: { sessionId: "link", label: "laptop", linked: true, access: "read-only" },
+            }),
+            Effect.provideService(
+              MeshLayoutService,
+              MeshLayoutService.of({
+                environmentId: "studio",
+                read: Effect.succeed(snapshot),
+                changes: Stream.empty,
+                apply: () => Effect.succeed(snapshot),
+                edit: () => Effect.succeed(snapshot),
+                editLegacy: () => Effect.succeed(snapshot),
+                nextHlc: Effect.succeed("0000000000000.00000.studio"),
+              }),
+            ),
+          );
+        expect(
+          yield* invoke(files.read({ absolutePath: path.join(project, "inside.txt") })),
+        ).toMatchObject({ contents: "inside" });
+        for (const target of [
+          path.join(outside, "secret.txt"),
+          path.join(project, "escape", "secret.txt"),
+        ]) {
+          expect(
+            reasonOf(yield* invoke(files.read({ absolutePath: target })).pipe(Effect.flip)),
+          ).toBe("permission_denied");
+        }
+        expect(
+          reasonOf(yield* invoke(files.list({ partialPath: `${outside}/` })).pipe(Effect.flip)),
+        ).toBe("permission_denied");
+      }),
+  );
+  it.effect("enforces config file permissions on the receiving server", () =>
+    Effect.gen(function* () {
+      const files = yield* FilesService.FilesService;
+      const path = yield* Path.Path;
+      const project = yield* makeTempDir;
+      const outside = yield* makeTempDir;
+      yield* writeTextFile(project, "inside.txt", "inside");
+      yield* writeTextFile(outside, "secret.txt", "secret");
+      const config = (files: "all" | "projects" | "none") => ({
+        schema: 1,
+        machines: { studio: { title: "Studio" }, laptop: { title: "Laptop" } },
+        links: {
+          default: { files },
+          overrides: [{ between: ["studio", "laptop"], files }],
+        },
+      });
+      const invoke = (
+        permission: "all" | "projects" | "none",
+        access: "full-access" | "read-only",
+        filesLimit?: "projects" | "none",
+        missingOperation?: "read" | "list",
+      ) =>
+        Effect.gen(function* () {
+          const revision = {
+            revision: "0000000000001.00000.studio",
+            doc: config(permission),
+            author: "studio",
+            writtenAt: "2026-01-01T00:00:00Z",
+          };
+          const snapshot = {
+            document: {
+              "mesh.config": { v: revision, h: "0000000000001.00000.studio" },
+              "mesh.machineBinding/studio": { v: "studio", h: "0000000000001.00000.studio" },
+              "mesh.machineBinding/laptop": { v: "laptop", h: "0000000000001.00000.studio" },
+            },
+            config: {
+              ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+              projectMounts: {
+                app: [
+                  {
+                    environmentId: "studio",
+                    role: "primary" as const,
+                    transport: "git" as const,
+                    createdAt: "2026-01-01T00:00:00Z",
+                    path: project,
+                  },
+                ],
+              },
+            },
+          };
+          const missing = path.join(outside, "missing");
+          const operation: Effect.Effect<FilesReadResult | FilesListResult, FilesError> =
+            missingOperation === "list"
+              ? files.list({ partialPath: `${missing}/` })
+              : files.read({
+                  absolutePath:
+                    missingOperation === "read" ? missing : path.join(outside, "secret.txt"),
+                });
+          return yield* operation.pipe(
+            Effect.provideService(McpInvocationContext, {
+              environmentId: EnvironmentId.make("studio"),
+              capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
+              issuedAt: 0,
+              requestNamespace: "test",
+              thread: undefined,
+              client: {
+                sessionId: "link",
+                label: "T3 Code · Laptop",
+                linked: true,
+                access,
+                ...(filesLimit ? { filesLimit } : {}),
+              },
+            }),
+            Effect.provideService(
+              MeshLayoutService,
+              MeshLayoutService.of({
+                environmentId: "studio",
+                read: Effect.succeed(snapshot),
+                changes: Stream.empty,
+                apply: () => Effect.succeed(snapshot),
+                edit: () => Effect.succeed(snapshot),
+                editLegacy: () => Effect.succeed(snapshot),
+                nextHlc: Effect.succeed("0000000000001.00000.studio"),
+              }),
+            ),
+          );
+        });
+      expect(yield* invoke("all", "full-access")).toMatchObject({ contents: "secret" });
+      expect(reasonOf(yield* invoke("all", "full-access", "projects").pipe(Effect.flip))).toBe(
+        "permission_denied",
+      );
+      expect(reasonOf(yield* invoke("none", "full-access").pipe(Effect.flip))).toBe(
+        "permission_denied",
+      );
+      for (const operation of ["read", "list"] as const)
+        expect(
+          reasonOf(yield* invoke("none", "full-access", undefined, operation).pipe(Effect.flip)),
+        ).toBe("permission_denied");
+      expect(reasonOf(yield* invoke("projects", "full-access").pipe(Effect.flip))).toBe(
+        "permission_denied",
+      );
+      expect(reasonOf(yield* invoke("all", "read-only").pipe(Effect.flip))).toBe(
+        "permission_denied",
+      );
     }),
   );
 });

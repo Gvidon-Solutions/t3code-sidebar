@@ -2,9 +2,9 @@ import * as Schema from "effect/Schema";
 
 const open = <const F extends Schema.Struct.Fields>(fields: F) =>
   Schema.StructWithRest(Schema.Struct(fields), [Schema.Record(Schema.String, Schema.Unknown)]);
-const MachineName = Schema.String.check(Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/));
+export const MachineName = Schema.String.check(Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/));
 const isMachineName = Schema.is(MachineName);
-const LinkPermissions = open({
+export const LinkPermissions = open({
   files: Schema.optionalKey(Schema.Literals(["all", "projects", "none"])),
   replicas: Schema.optionalKey(Schema.Boolean),
   threads: Schema.optionalKey(Schema.Boolean),
@@ -14,7 +14,7 @@ const Policy = {
   replica: Schema.optionalKey(Schema.Literals(["lite", "full"])),
   ignore: Schema.optionalKey(Schema.Array(Schema.String)),
 };
-const MeshConfigDocument = open({
+export const MeshConfigDocument = open({
   schema: Schema.Number,
   t3: Schema.optionalKey(open({ version: Schema.optionalKey(Schema.String) })),
   machines: Schema.Record(
@@ -89,9 +89,61 @@ const MeshConfigDocument = open({
     }),
   ),
 });
-export const meshConfigRevisionSchema = Schema.Struct({
+export type MeshConfigDocument = typeof MeshConfigDocument.Type;
+export const MeshConfigRevision = Schema.Struct({
   revision: Schema.String,
   doc: MeshConfigDocument,
   author: Schema.String,
   writtenAt: Schema.String,
 });
+export type MeshConfigRevision = typeof MeshConfigRevision.Type;
+export class MeshConfigError extends Schema.TaggedError<MeshConfigError>()("MeshConfigError", {
+  reason: Schema.Literals(["validation", "stale_revision", "not_found", "storage"]),
+  message: Schema.String,
+  current: Schema.optionalKey(MeshConfigRevision),
+  diff: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        path: Schema.String,
+        before: Schema.optionalKey(Schema.Unknown),
+        after: Schema.optionalKey(Schema.Unknown),
+      }),
+    ),
+  ),
+}) {}
+
+export const MeshConfigAction = Schema.Struct({
+  id: Schema.String,
+  server: Schema.String,
+  description: Schema.String,
+  project: Schema.optionalKey(Schema.String),
+  machine: Schema.optionalKey(Schema.String),
+});
+export type MeshConfigAction = typeof MeshConfigAction.Type;
+export const MeshConfigActionStatus = Schema.Struct({
+  ...MeshConfigAction.fields,
+  state: Schema.Literals(["done", "in_progress", "failed"]),
+  reason: Schema.optionalKey(Schema.String),
+});
+export const MeshConfigServerStatus = Schema.Struct({
+  environmentId: Schema.String,
+  revision: Schema.NullOr(Schema.String),
+  actions: Schema.Array(MeshConfigActionStatus),
+});
+export const MeshConfigStatus = Schema.Struct({ servers: Schema.Array(MeshConfigServerStatus) });
+export type MeshConfigStatus = typeof MeshConfigStatus.Type;
+export const MeshConfigSnapshot = Schema.Struct({
+  current: Schema.NullOr(MeshConfigRevision),
+  bindings: Schema.Record(Schema.String, Schema.String),
+});
+export const MeshConfigPlan = Schema.Struct({
+  doc: MeshConfigDocument,
+  actions: Schema.Array(MeshConfigAction),
+});
+export const MeshConfigPlanInput = Schema.Struct({ doc: Schema.Unknown });
+export const MeshConfigApplyInput = Schema.Struct({
+  doc: Schema.Unknown,
+  baseRevision: Schema.NullOr(Schema.String),
+});
+export const MeshConfigRollbackInput = Schema.Struct({ revision: Schema.String });
+export const MeshConfigHistory = Schema.Struct({ revisions: Schema.Array(MeshConfigRevision) });
