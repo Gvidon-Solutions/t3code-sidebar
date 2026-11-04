@@ -8594,6 +8594,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         let expiredSignal = yield* Deferred.make<void>();
         let dropStageReply = false;
         let dropCommitReply = false;
+        let stallCommitReply = false;
         let commitCalls = 0;
         let stagedThreadId: ThreadId | undefined;
         let commitDropped = yield* Deferred.make<void>();
@@ -8748,12 +8749,14 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
                               dropCommitReply = false;
                               return Deferred.succeed(commitDropped, undefined).pipe(
                                 Effect.andThen(
-                                  Effect.fail(
-                                    new OrchestratorMcpFailure({
-                                      code: "orchestration_error",
-                                      message: "Commit response dropped.",
-                                    }),
-                                  ),
+                                  stallCommitReply
+                                    ? Effect.never
+                                    : Effect.fail(
+                                        new OrchestratorMcpFailure({
+                                          code: "orchestration_error",
+                                          message: "Commit response dropped.",
+                                        }),
+                                      ),
                                 ),
                               );
                             }
@@ -9000,14 +9003,21 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
 
         dropCommitReply = true;
+        stallCommitReply = true;
         const callsBefore = commitCalls;
         const retrying = yield* source
           .fork({ ...input, commandId: CommandId.make("F1-dropped-commit") }, limits)
           .pipe(Effect.forkChild);
         yield* Deferred.await(commitDropped);
+        yield* TestClock.adjust("120 seconds");
+        assert.equal(
+          (yield* journals.get("A")!.read("source:F1-dropped-commit"))?.phase,
+          "outgoing",
+        );
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount + 1);
         yield* TestClock.adjust("1 second");
         const committed = yield* Fiber.join(retrying);
+        stallCommitReply = false;
         assert.equal(commitCalls - callsBefore, 2);
         assert.equal(
           (yield* orchestrator.getShellSnapshot()).threads.filter(

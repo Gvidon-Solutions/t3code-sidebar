@@ -128,7 +128,8 @@ export const layer = Layer.effect(
         Effect.timeoutOption(STEP_TIMEOUT),
         Effect.flatMap(
           Option.match({
-            onNone: () => Effect.fail(invalid("The thread command did not finish in time.")),
+            onNone: () =>
+              Effect.fail(failure({ message: "The thread command did not finish in time." })),
             onSome: Effect.succeed,
           }),
         ),
@@ -151,7 +152,8 @@ export const layer = Layer.effect(
         Effect.timeoutOption(STEP_TIMEOUT),
         Effect.flatMap(
           Option.match({
-            onNone: () => Effect.fail(invalid("The target machine did not answer in time.")),
+            onNone: () =>
+              Effect.fail(failure({ message: "The target machine did not answer in time." })),
             onSome: Effect.succeed,
           }),
         ),
