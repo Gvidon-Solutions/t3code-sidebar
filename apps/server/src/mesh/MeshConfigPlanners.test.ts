@@ -142,6 +142,29 @@ it.effect("places and removes only rule-owned replicas, including removal after 
     expect(orphan).toMatchObject({ server: "replica", machine: "laptop" });
     yield* replicas.reconcile(orphan!, withoutRules);
     expect(yield* replicas.plan(withoutRules, undefined)).toEqual([]);
+    yield* mesh.edit((config) => ({
+      ...config,
+      projectMounts: {
+        repo: [
+          ...config.projectMounts.repo!,
+          {
+            environmentId: "replica",
+            path: "/independent",
+            role: "primary" as const,
+            transport: "git" as const,
+            createdAt: "",
+          },
+        ],
+      },
+    }));
+    const promotedClock = yield* mesh.nextHlc;
+    yield* mesh.apply({ "mesh.configReplica/repo/replica": { v: true, h: promotedClock } });
+    const [promoted] = yield* replicas.plan(withoutRules, undefined);
+    yield* replicas.reconcile(promoted!, withoutRules);
+    expect(
+      (yield* mesh.read).config.projectMounts.repo?.find((r) => r.environmentId === "replica"),
+    ).toMatchObject({ role: "primary", path: "/independent" });
+    expect((yield* mesh.read).document["mesh.configReplica/repo/replica"]?.v).toBe(false);
   }).pipe(
     Effect.provide(
       Planners.layer.pipe(Layer.provideMerge(runtime.pipe(Layer.provideMerge(h.layer)))),

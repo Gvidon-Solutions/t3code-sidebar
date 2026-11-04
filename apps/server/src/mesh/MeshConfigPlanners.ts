@@ -252,7 +252,7 @@ export const layer = Layer.effect(
         if (
           remove &&
           !(yield* snapshot).config.projectMounts[key]?.some(
-            (rep) => rep.environmentId === environmentId,
+            (rep) => rep.environmentId === environmentId && rep.role === "replica",
           )
         ) {
           yield* write(marker(key, environmentId), false);
