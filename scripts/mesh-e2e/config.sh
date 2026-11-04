@@ -118,5 +118,6 @@ echo '$ t3ctl mesh status'
 ctl gor mesh status --json > "$WORK/status.json"
 ws_rpc gor meshConfig.status '{}' > "$WORK/ws-status.json"
 jq -e '.servers|length>=2' "$WORK/ws-status.json" >/dev/null
-jq '{servers:[.servers[]|{environmentId,revision,states:[.actions[].state]|unique}]}' "$WORK/status.json"
+jq -e '.configStatus.servers|length>=2' "$WORK/status.json" >/dev/null
+jq '{servers:[.configStatus.servers[]|{environmentId,revision,states:[.actions[].state]|unique}]}' "$WORK/status.json"
 echo "PASS C1 config rename, stale base refusal, three-server convergence and real replica ($TITLE)"
