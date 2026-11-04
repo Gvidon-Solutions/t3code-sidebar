@@ -337,7 +337,7 @@ test("server install falls back without authenticated gh to public HTTPS or a li
   assert.match(sshResult.out, /from lab/);
 });
 
-test("aliases read and edit the layout machine without replacing other fields", () => {
+test("aliases preserve other fields and edit config with its base revision or legacy layout", () => {
   const listing = run(["machines", "alias", "lab", "list", "--json"]);
   assert.deepEqual(JSON.parse(listing.out).aliases, ["лаборатория", "лаборатории"]);
   assert.ok(!listing.calls.some((call) => call.name === "meshLayout.apply"));
@@ -346,7 +346,19 @@ test("aliases read and edit the layout machine without replacing other fields", 
     ["remove", ["ЛАБОРАТОРИЯ"], ["лаборатории"]],
     ["clear", [], undefined],
   ]) {
-    const result = run(["machines", "alias", "лаборатория", operation, ...rest, "--json"]);
+    const args = ["machines", "alias", "лаборатория", operation, ...rest, "--json"];
+    const configured = run(args);
+    const apply = configured.calls.find((call) => call.name === "t3_mesh_config_apply").args;
+    assert.equal(apply.baseRevision, "1");
+    assert.deepEqual(apply.doc.machines.cloudbox, {
+      title: "lab",
+      label: "LB",
+      color: "#123456",
+      future: "keep",
+      ...(expected ? { aliases: expected } : {}),
+    });
+    assert.ok(!configured.calls.some((call) => call.name === "meshLayout.apply"));
+    const result = run(args, { T3CTL_TEST_LEGACY_CONFIG: "1" });
     const entries = result.calls.find((call) => call.name === "meshLayout.apply").args.entries;
     assert.deepEqual(Object.keys(entries), [`machine/${peer}`]);
     const entry = entries[`machine/${peer}`];

@@ -38,7 +38,16 @@ if (process.env.T3CTL_TEST_REMOTE_DRIVER)
   config.machines[peer].reach = { [self]: { ssh: "atlas" } };
 const meshDoc = {
   schema: 1,
-  machines: { studio: { title: "Studio" } },
+  machines: {
+    studio: { title: "Studio" },
+    cloudbox: {
+      title: "lab",
+      label: "LB",
+      color: "#123456",
+      aliases: ["лаборатория", "лаборатории"],
+      future: "keep",
+    },
+  },
   agents: { aliases: { "studio-agent": { harness: "codex", model: "model-from-destination" } } },
 };
 const meshRevision = {
@@ -50,7 +59,13 @@ const meshRevision = {
 const snapshot = {
   environmentId: self,
   config,
-  document: { "mesh.config": { v: meshRevision, h: "0000000000001.00000.studio" } },
+  document: process.env.T3CTL_TEST_LEGACY_CONFIG
+    ? {}
+    : {
+        "mesh.config": { v: meshRevision, h: "0000000000001.00000.studio" },
+        "mesh.machineBinding/studio": { v: self, h: "0000000000001.00000.studio" },
+        "mesh.machineBinding/cloudbox": { v: peer, h: "0000000000001.00000.studio" },
+      },
 };
 const thread = {
   threadId: process.env.T3CTL_TEST_FULL_ID ? "mcp:full-thread-example-0123456789" : "thread-1",

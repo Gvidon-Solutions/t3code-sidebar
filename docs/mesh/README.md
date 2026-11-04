@@ -16,8 +16,8 @@ readable from anywhere, and agents that know where they are.
 
 | Entity            | What it is                                                                                                      | Where it lives                                                |
 | ----------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Machine           | one T3 server (`environmentId`), label/tag/color/aliases, SSH routes to other machines                          | config + layout `machine/<env>`                                        |
-| Link              | server-to-server MCP session with config-defined permissions                                           | each server's PeerLinks table                                 |
+| Machine           | one T3 server (`environmentId`), label/tag/color/aliases, SSH routes to other machines                          | config + layout `machine/<env>`                               |
+| Link              | server-to-server MCP session with config-defined permissions                                                    | each server's PeerLinks table                                 |
 | Mesh              | machines + links; desired state in the mesh config (`mesh.config`), no central authority                        | layout `mesh.config`, bindings                                |
 | Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>.title`, `rep/<id>/<env>`, `alias/*`         |
 | Representation    | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores)                            | layout `rep/*`                                                |
@@ -101,9 +101,9 @@ agent-kit/install.sh --apply    # install on registry machines (backups under ~/
 agent-kit/install.sh --dest ~/.agents/skills/t3-next   # stage for the test bed only
 ```
 
-Machine names, tags and aliases are runtime layout data, not CLI constants. Settings › Mesh and
-`machines alias` edit the same optional `aliases` array on `machine/<env>`. Alias edits retain the
-other machine fields; standalone CLI writes must advance beyond every observed HLC. Unspecified
+Machine names, tags and aliases are config data, not CLI constants. `machines alias` applies the
+bound machine's optional `aliases` array through config concurrency checks; N-1 servers retain the
+layout edit path. Alias edits retain the other machine and unknown config fields. Unspecified
 thread model and permissions are resolved by the destination server, never by owner preferences
 compiled into the CLI.
 
@@ -218,13 +218,13 @@ machine name); each server executes only its own actions.
 
 Registered planners (`mesh/MeshConfigPlanners.ts`):
 
-| Planner     | Plans                                       | Reconcile                                |
-| ----------- | ------------------------------------------- | ---------------------------------------- |
-| `machines`  | machine label/title/color/alias changes     | verifies the name is bound               |
-| `links`     | effective permission changes for every pair | declarative; receivers read the config   |
-| `conflicts` | per-project conflict-policy changes         | declarative; replicas read the policy    |
-| `ignores`   | per-project ignore changes                  | writes merged ignores to representations |
-| `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place`      |
+| Planner     | Plans                                       | Reconcile                                                                           |
+| ----------- | ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `machines`  | machine label/title/color/alias changes     | binds joined machines, removes obsolete display facts; materialization reads config |
+| `links`     | effective permission changes for every pair | publishes installed policy; receivers read the config                               |
+| `conflicts` | per-project conflict-policy changes         | reconciles sessions using project policy                                            |
+| `ignores`   | per-project ignore changes                  | writes merged ignores and recreates affected sessions                               |
+| `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place`                                                 |
 
 S1 (SSH) and B1 (bootstrap, updates, agent instructions) add planners through the same port; nothing
 else should grow a second reconciliation path. Every action has a sixty-second deadline, failures do

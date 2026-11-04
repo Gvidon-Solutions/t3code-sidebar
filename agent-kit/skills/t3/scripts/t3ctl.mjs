@@ -679,20 +679,38 @@ async function editMachineAliases(pos, opt) {
               [...(current.aliases ?? []), ...requested].map((alias) => [normalized(alias), alias]),
             ).values(),
           ];
-  const next = { ...current };
-  if (aliases.length) next.aliases = aliases;
-  else delete next.aliases;
-  const key = `machine/${encodeURIComponent(machine.environmentId)}`;
-  await withWs((client) =>
-    client.rpc("meshLayout.apply", {
-      entries: {
-        [key]: {
-          v: Object.keys(next).length ? next : null,
-          h: nextMachineClock(snapshot.document, Date.now(), `cli-${randomUUID()}`),
+  const desired = snapshot.document?.["mesh.config"]?.v;
+  if (desired?.doc) {
+    const binding = Object.entries(snapshot.document).find(
+      ([key, entry]) => key.startsWith("mesh.machineBinding/") && entry.v === machine.environmentId,
+    );
+    if (!binding) die(`machine ${machine.label} has no config binding`);
+    const name = binding[0].slice("mesh.machineBinding/".length);
+    const next = { ...desired.doc.machines[name] };
+    if (aliases.length) next.aliases = aliases;
+    else delete next.aliases;
+    await (
+      await mcp()
+    ).call("t3_mesh_config_apply", {
+      doc: { ...desired.doc, machines: { ...desired.doc.machines, [name]: next } },
+      baseRevision: desired.revision,
+    });
+  } else {
+    const next = { ...current };
+    if (aliases.length) next.aliases = aliases;
+    else delete next.aliases;
+    const key = `machine/${encodeURIComponent(machine.environmentId)}`;
+    await withWs((client) =>
+      client.rpc("meshLayout.apply", {
+        entries: {
+          [key]: {
+            v: Object.keys(next).length ? next : null,
+            h: nextMachineClock(snapshot.document, Date.now(), `cli-${randomUUID()}`),
+          },
         },
-      },
-    }),
-  );
+      }),
+    );
+  }
   if (opt.json) return json({ environmentId: machine.environmentId, aliases });
   console.log(`${machine.label}: ${aliases.join(", ") || "no aliases"}`);
 }
@@ -2315,7 +2333,10 @@ const commands = {
           if (opt.json) return json(planned);
           const snapshot = await client.call("t3_mesh_config_get");
           for (const item of planned.actions) {
-            const server = Object.keys(snapshot.bindings).find((name) => snapshot.bindings[name] === item.server) ?? (planned.doc.machines?.[item.server] ? item.server : "each server");
+            const server =
+              Object.keys(snapshot.bindings).find(
+                (name) => snapshot.bindings[name] === item.server,
+              ) ?? (planned.doc.machines?.[item.server] ? item.server : "each server");
             console.log(`${server.padEnd(16)} ${item.description}`);
           }
           return;
