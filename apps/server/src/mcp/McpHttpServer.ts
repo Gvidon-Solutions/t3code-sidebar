@@ -241,6 +241,8 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     }
     const limited = withModeLimit(invocation, request);
     if (limited === undefined) return invalidModeLimit;
+    const linkedEnvironments = yield* linksEnabled;
+    if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
     const key = request.headers["t3-idempotency-key"];
     const peer = invocation.client?.linked === true;
     const from =
@@ -261,7 +263,6 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
           }
         : limited;
     const dispatch = Effect.gen(function* () {
-      const linkedEnvironments = yield* linksEnabled;
       const forkResponse = yield* interceptForkRequest(
         request,
         callInvocation,
@@ -277,7 +278,6 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         linkedEnvironments,
       );
       if (meshResponse !== undefined) return meshResponse;
-      if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
       return yield* httpEffect.pipe(
         Effect.provideService(McpInvocationContext.McpInvocationContext, {
           ...callInvocation,
@@ -328,13 +328,13 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
             "t3_thread_launch",
             "t3_thread_send",
             "t3_thread_fork",
+            "t3_thread_transfer",
             "t3_thread_move",
             "delegate_task",
             "create_threads",
             "schedule_task",
             "t3_project_place",
-            "t3_handoff_import",
-            "t3_thread_receive_handoff",
+            "t3_thread_receive_fork",
           ].includes(body.params.name),
       )
       .pipe(

@@ -239,7 +239,7 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
     client: Context.get(context, Client.PeerMcpClient),
     http: Context.get(context, HttpClient.HttpClient),
     transport: Context.get(context, Transport.PeerTransport),
-    mesh: options.layout ? Context.get(context, MeshLayoutService) : undefined,
+    mesh: Context.get(context, MeshLayoutService),
     auth: Context.get(common, Auth.EnvironmentAuth),
     count: () => count,
     waitingStarted,
@@ -581,7 +581,14 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
     expect(
       (yield* laptop.sessions.status).find((state) => state.environmentId === studio.id),
     ).toMatchObject({ state: "relayed", via: cloudbox.id });
-    const stream = yield* PipeIpc.connectLocalPipe(laptop.baseDir, studio.id);
+    yield* laptop.mesh.edit((config) => ({
+      ...config,
+      machines: {
+        ...config.machines,
+        [studio.id]: { ...config.machines[studio.id], title: "Studio build" },
+      },
+    }));
+    const stream = yield* PipeIpc.connectLocalPipe(laptop.baseDir, "Studio build");
     const payload = Buffer.alloc(1024 * 1024, 71);
     const received = yield* Effect.promise(async () => {
       const hash = NodeCrypto.createHash("sha256");

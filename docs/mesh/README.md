@@ -310,12 +310,16 @@ PeerPipeIpc resolves the name using the local server's links/layout, then bridge
 through the live network. It opens no state database or peer credential in the ProxyCommand
 process. Unix IPC lives in a private per-user directory with a 0600 socket; Windows uses a named
 pipe. Diagnostics go to stderr. Use the same base directory as the running local server.
+Names resolve through configured titles, labels, tags, aliases and environment IDs; known
+offline machines retain their names.
 
 Mesh status includes direct / relayed (via) / offline since, last error and source/observation
 time. The shared client machine builder chooses current observations before stale replicated
 facts; web/desktop Settings, mobile Settings and t3ctl mesh status consume these states.
 t3_mesh_routes keeps its N-1 array result by default; details:true adds connections alongside
-routes. C1 must apply its receiving-side permissions before receipt replay in McpHttpServer.
+routes. Link enablement and mode limits are checked before receipt replay in McpHttpServer;
+C1's receiving-side permissions must run at that same boundary. F1's receive-fork requests and
+thread transfers retain creation keys across MCP session renewal and recover pending receipts.
 L1 pushes authenticated `mesh.layout.push` events through PeerTransport; incoming events use
 the same generation, identity and catalog validation as exchanges. PeerLinks.changes includes
 connection-up activity, resetting replication backoff. Confirmed MCP watermark exchanges on

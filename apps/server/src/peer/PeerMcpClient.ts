@@ -300,7 +300,7 @@ const make = Effect.gen(function* () {
   const call: PeerMcpClient["Service"]["call"] = Effect.fn("PeerMcpClient.call")(
     function* (input) {
       const creates =
-        /(?:create|launch|fork|handoff_import|receive_handoff|project_place|delegate_task|schedule_task|thread_send)/.test(
+        /(?:create|launch|fork|handoff_import|receive_handoff|project_place|delegate_task|schedule_task|thread_send|thread_transfer)/.test(
           input.tool,
         );
       const seed =

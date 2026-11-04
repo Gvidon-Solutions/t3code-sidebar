@@ -128,6 +128,7 @@ export const layer = Layer.effectDiscard(
         return [
           String(id),
           labels.get(id),
+          machine?.title,
           machine?.label,
           machine?.tag,
           ...(machine?.aliases ?? []),
