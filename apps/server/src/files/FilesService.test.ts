@@ -1,4 +1,10 @@
-import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG, EnvironmentId } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  type FilesError,
+  type FilesReadResult,
+  type FilesListResult,
+} from "@t3tools/contracts";
 import * as Stream from "effect/Stream";
 import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
@@ -171,71 +177,82 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService", (it) => {
 });
 
 it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link", (it) => {
-  it.effect("refuses outside reads and symlink escapes for read-only links", () =>
-    Effect.gen(function* () {
-      const files = yield* FilesService.FilesService;
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const project = yield* makeTempDir;
-      const outside = yield* makeTempDir;
-      yield* writeTextFile(project, "inside.txt", "inside");
-      yield* writeTextFile(outside, "secret.txt", "secret");
-      yield* fs.symlink(outside, path.join(project, "escape")).pipe(Effect.orDie);
-      const snapshot = {
-        document: {},
-        config: {
-          ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-          projectMounts: {
-            app: [
-              {
-                environmentId: "studio",
-                role: "primary" as const,
-                transport: "git" as const,
-                createdAt: "2026-01-01T00:00:00Z",
-                path: project,
-              },
-            ],
+  it.effect(
+    "refuses read-only escapes and allows valid projects despite an unrelated missing root",
+    () =>
+      Effect.gen(function* () {
+        const files = yield* FilesService.FilesService;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const project = yield* makeTempDir;
+        const outside = yield* makeTempDir;
+        yield* writeTextFile(project, "inside.txt", "inside");
+        yield* writeTextFile(outside, "secret.txt", "secret");
+        yield* fs.symlink(outside, path.join(project, "escape")).pipe(Effect.orDie);
+        const snapshot = {
+          document: {},
+          config: {
+            ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+            projectMounts: {
+              removed: [
+                {
+                  environmentId: "studio",
+                  role: "primary" as const,
+                  transport: "git" as const,
+                  createdAt: "2026-01-01T00:00:00Z",
+                  path: path.join(outside, "removed"),
+                },
+              ],
+              app: [
+                {
+                  environmentId: "studio",
+                  role: "primary" as const,
+                  transport: "git" as const,
+                  createdAt: "2026-01-01T00:00:00Z",
+                  path: project,
+                },
+              ],
+            },
           },
-        },
-      };
-      const invoke = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-        effect.pipe(
-          Effect.provideService(McpInvocationContext, {
-            environmentId: EnvironmentId.make("studio"),
-            capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
-            issuedAt: 0,
-            requestNamespace: "test",
-            thread: undefined,
-            client: { sessionId: "link", label: "laptop", linked: true, access: "read-only" },
-          }),
-          Effect.provideService(
-            MeshLayoutService,
-            MeshLayoutService.of({
-              environmentId: "studio",
-              read: Effect.succeed(snapshot),
-              changes: Stream.empty,
-              apply: () => Effect.succeed(snapshot),
-              edit: () => Effect.succeed(snapshot),
-              editLegacy: () => Effect.succeed(snapshot),
-              nextHlc: Effect.succeed("0000000000000.00000.studio"),
+        };
+        const invoke = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+          effect.pipe(
+            Effect.provideService(McpInvocationContext, {
+              environmentId: EnvironmentId.make("studio"),
+              capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
+              issuedAt: 0,
+              requestNamespace: "test",
+              thread: undefined,
+              client: { sessionId: "link", label: "laptop", linked: true, access: "read-only" },
             }),
-          ),
-        );
-      expect(
-        yield* invoke(files.read({ absolutePath: path.join(project, "inside.txt") })),
-      ).toMatchObject({ contents: "inside" });
-      for (const target of [
-        path.join(outside, "secret.txt"),
-        path.join(project, "escape", "secret.txt"),
-      ]) {
+            Effect.provideService(
+              MeshLayoutService,
+              MeshLayoutService.of({
+                environmentId: "studio",
+                read: Effect.succeed(snapshot),
+                changes: Stream.empty,
+                apply: () => Effect.succeed(snapshot),
+                edit: () => Effect.succeed(snapshot),
+                editLegacy: () => Effect.succeed(snapshot),
+                nextHlc: Effect.succeed("0000000000000.00000.studio"),
+              }),
+            ),
+          );
         expect(
-          reasonOf(yield* invoke(files.read({ absolutePath: target })).pipe(Effect.flip)),
+          yield* invoke(files.read({ absolutePath: path.join(project, "inside.txt") })),
+        ).toMatchObject({ contents: "inside" });
+        for (const target of [
+          path.join(outside, "secret.txt"),
+          path.join(project, "escape", "secret.txt"),
+        ]) {
+          expect(
+            reasonOf(yield* invoke(files.read({ absolutePath: target })).pipe(Effect.flip)),
+          ).toBe("permission_denied");
+        }
+        expect(
+          reasonOf(yield* invoke(files.list({ partialPath: `${outside}/` })).pipe(Effect.flip)),
         ).toBe("permission_denied");
-      }
-      expect(
-        reasonOf(yield* invoke(files.list({ partialPath: `${outside}/` })).pipe(Effect.flip)),
-      ).toBe("permission_denied");
-    }),
+      }),
   );
   it.effect("enforces config file permissions on the receiving server", () =>
     Effect.gen(function* () {
@@ -257,6 +274,7 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
         permission: "all" | "projects" | "none",
         access: "full-access" | "read-only",
         filesLimit?: "projects" | "none",
+        missingOperation?: "read" | "list",
       ) =>
         Effect.gen(function* () {
           const revision = {
@@ -286,7 +304,15 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
               },
             },
           };
-          return yield* files.read({ absolutePath: path.join(outside, "secret.txt") }).pipe(
+          const missing = path.join(outside, "missing");
+          const operation: Effect.Effect<FilesReadResult | FilesListResult, FilesError> =
+            missingOperation === "list"
+              ? files.list({ partialPath: `${missing}/` })
+              : files.read({
+                  absolutePath:
+                    missingOperation === "read" ? missing : path.join(outside, "secret.txt"),
+                });
+          return yield* operation.pipe(
             Effect.provideService(McpInvocationContext, {
               environmentId: EnvironmentId.make("studio"),
               capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
@@ -322,6 +348,10 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
       expect(reasonOf(yield* invoke("none", "full-access").pipe(Effect.flip))).toBe(
         "permission_denied",
       );
+      for (const operation of ["read", "list"] as const)
+        expect(
+          reasonOf(yield* invoke("none", "full-access", undefined, operation).pipe(Effect.flip)),
+        ).toBe("permission_denied");
       expect(reasonOf(yield* invoke("projects", "full-access").pipe(Effect.flip))).toBe(
         "permission_denied",
       );

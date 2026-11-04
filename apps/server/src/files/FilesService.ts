@@ -95,7 +95,16 @@ export const make = Effect.gen(function* () {
       .flat()
       .filter((rep) => rep.environmentId === scope.value.environmentId);
     for (const root of roots) {
-      const realRoot = yield* realPath(expand(root.path));
+      const realRoot = yield* realPath(expand(root.path)).pipe(
+        Effect.catchIf(
+          (error) => error.reason === "not_found",
+          () =>
+            Effect.logDebug("Ignoring missing representation root during file authorization", {
+              path: root.path,
+            }).pipe(Effect.as(undefined)),
+        ),
+      );
+      if (realRoot === undefined) continue;
       const relative = path.relative(realRoot, target);
       if (
         relative === "" ||
@@ -106,7 +115,16 @@ export const make = Effect.gen(function* () {
     return yield* filesError("permission_denied", target);
   });
 
+  const assertLinkFilesEnabled = Effect.fn("FilesService.assertLinkFilesEnabled")(function* (
+    target: string,
+  ) {
+    const permissions = yield* linkPermissions();
+    if (permissions.linked && permissions.files === "none")
+      return yield* filesError("permission_denied", target);
+  });
+
   const read: FilesService["Service"]["read"] = Effect.fn("FilesService.read")(function* (input) {
+    yield* assertLinkFilesEnabled(input.absolutePath);
     const requested = expand(input.absolutePath);
     if (!path.isAbsolute(requested)) {
       return yield* filesError("invalid_path", input.absolutePath);
@@ -160,6 +178,7 @@ export const make = Effect.gen(function* () {
   });
 
   const list: FilesService["Service"]["list"] = Effect.fn("FilesService.list")(function* (input) {
+    yield* assertLinkFilesEnabled(input.partialPath);
     const requested = expand(input.partialPath);
     if (!path.isAbsolute(requested)) {
       return yield* filesError("invalid_path", input.partialPath);

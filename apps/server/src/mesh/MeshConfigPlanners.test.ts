@@ -66,6 +66,11 @@ it.effect(
         label: "Laptop",
         tag: "LT",
       });
+      expect((yield* mesh.read).config.machines.source).toMatchObject({
+        label: "Studio",
+        tag: "ST",
+        color: "blue",
+      });
       expect((yield* mesh.read).document["machine/replica"]?.v).not.toHaveProperty("label");
       const permission = (yield* plan("links").plan(doc, undefined)).find(
         (a) => a.server === "replica",
