@@ -93,6 +93,14 @@ export const MeshPeerState = Schema.Struct({
 export type MeshPeerState = typeof MeshPeerState.Type;
 
 export const MeshLayoutStatus = Schema.Struct({
+  quarantine: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ key: Schema.String, reason: Schema.String })),
+  ),
+  clockRejections: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({ peerId: Schema.String, count: Schema.Int, example: Schema.String }),
+    ),
+  ),
   peers: Schema.Array(MeshPeerState),
 });
 export type MeshLayoutStatus = typeof MeshLayoutStatus.Type;

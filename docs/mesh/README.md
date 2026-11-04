@@ -31,13 +31,23 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 
 ## How it flows
 
-- **Layout replication.** `packages/shared/src/meshLayout/` is a pure LWW-map CRDT (HLC clocks,
-  fractional order keys, `materialize`/`diff`, `importLegacy`/`adoptLegacy`). Every server stores
-  it (`apps/server/src/mesh/MeshLayoutServiceLive.ts`, migration 077, per-entry local `seq`) and
-  gossips it to linked peers with `t3_mesh_exchange` (`MeshReplicator.ts`; seq watermarks, pull
-  every 5 s, backoff ≤ 15 s, transitive). Clients read/write through `meshLayout.get/apply/subscribe`
-  (`packages/client-runtime/src/state/meshLayoutClient.ts`, offline outbox). Old clients writing
-  the whole `sidebarWorkspaces` setting are diffed (`MeshSettings.ts`), never replace it.
+- **Layout replication.** `packages/shared/src/meshLayout/` owns the LWW map, bounded HLC,
+  ordering and materialization. `registry.ts` validates known key families; unknown families
+  retain their opaque values. Import/adoption lives under `meshLayout/migration/`, with the
+  old-settings adapter in `apps/server/src/mesh/migration/`. `MeshLayoutServiceLive.ts` keeps
+  SQLite and the canonical document consistent; corrupt rows move to `mesh_layout_quarantine`.
+  `configSchema.ts` validates config/history documents, including nested C1 fields, while
+  preserving unknown fields for newer versions.
+  `MeshReplicator.ts` exchanges local sequence watermarks and store generations over
+  `PeerMcpClient`, pushes changes after 200 ms, retries a failed peer exchange on a
+  1–15 s backoff and exchanges watermarks every 60 seconds. A changed generation resets
+  both peer cursors. Connection-up notifications clear retry backoff before exchanging
+  watermarks. Clock rejections and quarantine reasons are
+  exposed by `meshLayout.status`. Tombstones require thirty days and acknowledgement from
+  every currently linked full-access peer before collection.
+  Web and mobile mount one `MeshLayoutProvider` each; their hooks adapt RPC and persistence
+  to `packages/client-runtime/src/state/meshLayoutClient.ts` (`MeshLayoutStore`). The store
+  owns snapshots, subscriptions, optimistic edits and the persisted reconnect outbox.
 - **Routing.** A call for another machine goes direct when linked, else through one relay hop:
   `apps/server/src/mesh/MeshRouting.ts` (`callRouted`) used by `PeerForwarding`, files, handoff.
 - **Replicas.** `apps/server/src/replicas/`: `MutagenInstaller` (pinned 0.18.1, sha256),
@@ -195,6 +205,30 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   bed restarts. Use the same owned control socket for deployment SSH and SCP. Deployment retries
   happen before fault injection; they are not proof of automatic replica recovery.
 
+- Canonicalizing logical keys only in memory leaves obsolete SQLite rows available to the
+  replication sequence reader. Persist removals in the same transaction as canonical inserts;
+  compare persisted keys and the snapshot, then restart in the regression test.
+- A server identity outlives its layout database. Sequence numbers alone cannot distinguish
+  an empty replacement store from an already acknowledged store; exchange a persisted store
+  generation as well and reset both cursors when it changes.
+- A push that failed because the peer was restarting was only retried by the next 60-second
+  safety exchange, and that exchange could skip a peer whose stored pull time was a few
+  milliseconds ahead. A machine killed mid-sync therefore stayed divergent for another minute.
+  Retry each failed peer exchange on a short backoff, and let the periodic exchange always run.
+
+- Removing polling must preserve project discovery: local project commits publish catalog
+  changes, and received catalog changes trigger relay delivery even when the layout did not
+  change. Listening only to layout entries leaves a newly created, unplaced project invisible
+  until the minute exchange and makes the remote lookup deadline expire.
+- A replica's `watching` status is not a file-delivery barrier after a crash: it can describe
+  the last completed cycle while a new scan or transfer is pending. Crash acceptance waits for
+  the actual file hashes to match within its deadline as well as the replicated layout hash.
+  Likewise, an ignore update must await the replacement session's requested configuration;
+  the previous session can still report `watching` before the new layout reaches its machine.
+  Await the resulting diagnostics too, since session replacement first publishes `mounting`.
+- Quiesce and drain replica reconciliation before constructing conflicting test files: it
+  automatically resumes paused sessions and can otherwise overwrite a fixture during setup.
+
 ## Mesh config core (Stage C1)
 
 The desired state is `docs/mesh/CONCEPT.md` §9. `packages/contracts/src/meshConfig.ts` is the open
@@ -209,7 +243,8 @@ Storage lives in layout entries: `mesh.config` = `{ revision, doc, author, writt
 `mesh.configHistory/<revision>` (last fifty; older ones are tombstoned), bindings
 `mesh.machineBinding/<name>`, and each server's `mesh.configStatus/<environmentId>`. `mesh.configReplica/<project>/<environment>` tracks rule-owned placements and
 `mesh.linkPolicy/<receiver>/<peer>` reports installed permissions. These are
-key families in `apps/server/src/mesh/validateEntries.ts`.
+key families in `packages/shared/src/meshLayout/registry.ts`; the server's `validateEntries.ts`
+uses that registry and reserves config writes for `meshConfig.apply`.
 
 `apps/server/src/mesh/MeshConfig.ts` is the service: `current`, `changes`, `plan`, `apply`,
 `rollback`, `history`, `status`, and `start` (the layer starts it). Apply is serialized, validates

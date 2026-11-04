@@ -1,16 +1,16 @@
 import { MeshLayoutError } from "@t3tools/contracts";
 import { validateEntries } from "./validateEntries.ts";
 import * as Schema from "effect/Schema";
-import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
+import { migrateLayout, legacySettingsDiff } from "./migration/layoutMigration.ts";
 import {
-  adoptLegacy,
-  migrateLogicalProjectIds,
   diff,
   importLegacy,
   materialize,
   merge,
   receive,
   tick,
+  isFutureHlc,
+  validateLayoutEntry,
   type MeshLayoutDocument,
 } from "@t3tools/shared/meshLayout";
 import * as Clock from "effect/Clock";
@@ -40,7 +40,24 @@ export const layer = Layer.effect(
     const environmentId = yield* (yield* ServerEnvironment).getEnvironmentId;
     const lock = yield* Semaphore.make(1);
     const readRows = sql<Row>`SELECT key, value, hlc, seq FROM mesh_layout_entries`;
-    const rows = yield* readRows;
+    yield* sql`CREATE TABLE IF NOT EXISTS mesh_layout_quarantine (key TEXT PRIMARY KEY, value TEXT, hlc TEXT NOT NULL, reason TEXT NOT NULL)`;
+    yield* sql`CREATE TABLE IF NOT EXISTS mesh_clock_rejections (peer_id TEXT PRIMARY KEY, count INTEGER NOT NULL, example TEXT NOT NULL, last_logged INTEGER NOT NULL)`;
+    const stored = yield* readRows;
+    const rows: Row[] = [];
+    const now = yield* Clock.currentTimeMillis;
+    for (const row of stored) {
+      const reason = storedRowReason(row, now);
+      if (reason === null) rows.push(row);
+      else {
+        yield* sql.withTransaction(
+          Effect.gen(function* () {
+            yield* sql`INSERT OR REPLACE INTO mesh_layout_quarantine(key,value,hlc,reason) VALUES (${row.key},${row.value},${row.hlc},${reason})`;
+            yield* sql`DELETE FROM mesh_layout_entries WHERE key = ${row.key}`;
+          }),
+        );
+        yield* Effect.logWarning("Quarantined mesh layout row", row.key, reason);
+      }
+    }
     let document: MeshLayoutDocument = Object.fromEntries(
       rows.map((row) => [
         row.key,
@@ -63,12 +80,7 @@ export const layer = Layer.effect(
           h: tick(0, null, environmentId),
         },
       };
-      const combined = migrateLogicalProjectIds(merge(merge(document, writers), entries));
-      const merged = Object.entries(combined)
-        .filter(([key]) => key.startsWith("ws/"))
-        .some(([, entry]) => entry.h.startsWith("0000000000000."))
-        ? adoptLegacy(DEFAULT_SIDEBAR_WORKSPACES_CONFIG, combined)
-        : combined;
+      const merged = migrateLayout(merge(merge(document, writers), entries));
       yield* sql.withTransaction(
         Effect.gen(function* () {
           const meta = (yield* sql<{
@@ -79,6 +91,10 @@ export const layer = Layer.effect(
           let seq = meta.seq;
           const now = yield* Clock.currentTimeMillis;
           for (const entry of Object.values(entries)) clock = receive(clock, entry.h, now);
+          for (const row of yield* readRows) {
+            if (!Object.hasOwn(merged, row.key))
+              yield* sql`DELETE FROM mesh_layout_entries WHERE key = ${row.key}`;
+          }
           for (const [key, entry] of Object.entries(merged)) {
             if (merged[key] === document[key]) continue;
             seq++;
@@ -116,10 +132,29 @@ export const layer = Layer.effect(
     return MeshLayoutService.of({
       environmentId,
       read: SubscriptionRef.get(state),
-      apply: Effect.fn("MeshLayoutService.apply")(function* (entries) {
-        yield* validateEntries(entries);
-        return yield* lock.withPermit(persist(entries));
-      }),
+      apply: Effect.fn("MeshLayoutService.apply")(
+        function* (entries, peerId = "local") {
+          yield* validateEntries(entries);
+          const now = yield* Clock.currentTimeMillis;
+          const rejected = Object.entries(entries).filter(([, entry]) => isFutureHlc(entry.h, now));
+          if (rejected.length > 0) {
+            const example = yield* encodeJson(rejected.at(-1));
+            const previous = (yield* sql<{
+              last_logged: number;
+            }>`SELECT last_logged FROM mesh_clock_rejections WHERE peer_id = ${peerId}`)[0];
+            const log = previous === undefined || now - previous.last_logged >= 60_000;
+            yield* sql`INSERT INTO mesh_clock_rejections(peer_id,count,example,last_logged) VALUES (${peerId},${rejected.length},${example},${now}) ON CONFLICT(peer_id) DO UPDATE SET count = count + excluded.count, example = excluded.example, last_logged = ${log ? now : previous!.last_logged}`;
+            if (log)
+              yield* Effect.logWarning("Mesh clock guard rejected future entries", peerId, example);
+            return yield* new MeshLayoutError({
+              reason: "invalid_entries",
+              message: "clock more than five minutes ahead",
+            });
+          }
+          return yield* lock.withPermit(persist(entries));
+        },
+        Effect.mapError((cause) => (isMeshError(cause) ? cause : storageError(cause))),
+      ),
       edit: Effect.fn("MeshLayoutService.edit")(function* (update) {
         return yield* lock.withPermit(
           Effect.gen(function* () {
@@ -131,16 +166,39 @@ export const layer = Layer.effect(
       editLegacy: Effect.fn("MeshLayoutService.editLegacy")((before, after) =>
         lock.withPermit(
           Effect.gen(function* () {
-            const compatible = {
-              ...after,
-              ...(Object.keys(after.projectTitles ?? {}).length === 0 &&
-              Object.keys(before.projectTitles).length > 0
-                ? { projectTitles: before.projectTitles }
-                : {}),
-            };
-            return yield* persist(diff(before, compatible, document, yield* nextHlc));
+            return yield* persist(legacySettingsDiff(before, after, document, yield* nextHlc));
           }),
         ),
+      ),
+      collectTombstones: Effect.fn("MeshLayoutService.collectTombstones")(
+        (acknowledgedSeq: number) =>
+          lock
+            .withPermit(
+              Effect.gen(function* () {
+                const cutoff = (yield* Clock.currentTimeMillis) - 30 * 24 * 60 * 60 * 1000;
+                const expired = (yield* readRows).filter(
+                  (row) =>
+                    row.value === null &&
+                    row.seq <= acknowledgedSeq &&
+                    Number(row.hlc.slice(0, 13)) < cutoff,
+                );
+                yield* sql.withTransaction(
+                  Effect.gen(function* () {
+                    for (const row of expired)
+                      yield* sql`DELETE FROM mesh_layout_entries WHERE key = ${row.key} AND seq = ${row.seq}`;
+                  }),
+                );
+                if (expired.length > 0) {
+                  document = Object.fromEntries(
+                    Object.entries(document).filter(
+                      ([key]) => !expired.some((row) => row.key === key),
+                    ),
+                  );
+                  yield* SubscriptionRef.set(state, { document, config: materialize(document) });
+                }
+              }),
+            )
+            .pipe(Effect.mapError(storageError)),
       ),
       nextHlc: lock.withPermit(nextHlc),
       changes: SubscriptionRef.changes(state),
@@ -150,3 +208,20 @@ export const layer = Layer.effect(
 
 const decodeJson = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
+function storedRowReason(row: Row, now: number): string | null {
+  try {
+    const reason = validateLayoutEntry(row.key, {
+      v:
+        row.value === null
+          ? null
+          : (decodeJson(row.value) as import("@t3tools/shared/meshLayout").Json),
+      h: row.hlc,
+    });
+    return reason ?? (isFutureHlc(row.hlc, now) ? "clock more than five minutes ahead" : null);
+  } catch (cause) {
+    return String(cause);
+  }
+}
+
+const isMeshError = Schema.is(MeshLayoutError);

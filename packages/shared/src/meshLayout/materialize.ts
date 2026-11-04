@@ -1,3 +1,4 @@
+import { validateLayoutEntry } from "./registry.ts";
 import { normalizeRepresentationPath } from "./representationPath.ts";
 import { configFromLayout, bindingsFromLayout } from "../meshConfig/index.ts";
 import { keys } from "./document.ts";
@@ -10,18 +11,23 @@ import type {
   SidebarProjectMountStatus,
 } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "./document.ts";
+const dictionary = <T>(): Record<string, T> => Object.create(null) as Record<string, T>;
+
 export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const workspaces: (SidebarWorkspace & { sort: string })[] = [];
   const rules: (SidebarWorkspaceRule & { sort: string; id: string })[] = [];
-  const placements: Record<string, string[]> = {};
-  const assignments: Record<string, string> = {};
-  const workspaceProjectOrder: Record<string, string[]> = {};
-  const workspaceFold: Record<string, Record<string, "quiet" | "active">> = {};
-  const machines: Record<string, SidebarMachine> = {};
-  const projectTitles: Record<string, string> = {};
-  const projectAliases: Record<string, string> = {};
-  const projectMounts: Record<string, SidebarProjectMount[]> = {};
-  const projectMountStatus: Record<string, Record<string, SidebarProjectMountStatus>> = {};
+  const placements: Record<string, string[]> = dictionary();
+  const assignments: Record<string, string> = dictionary();
+  const workspaceProjectOrder: Record<string, string[]> = dictionary();
+  const workspaceFold: Record<string, Record<string, "quiet" | "active">> = dictionary();
+  const machines: Record<string, SidebarMachine> = dictionary();
+  const projectTitles: Record<string, string> = dictionary();
+  const projectAliases: Record<string, string> = dictionary();
+  const projectMounts: Record<string, SidebarProjectMount[]> = dictionary();
+  const projectMountStatus: Record<
+    string,
+    Record<string, SidebarProjectMountStatus>
+  > = dictionary();
   const orders: { id: string; sort: string }[] = [];
   const places: {
     project: string;
@@ -31,9 +37,9 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     ordered?: boolean;
     placementIndex?: number;
   }[] = [];
-  const legacy: Record<string, Json> = {};
+  const legacy: Record<string, Json> = dictionary();
   for (const [key, { v }] of Object.entries(doc).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    if (v === null) continue;
+    if (v === null || validateLayoutEntry(key, doc[key]!) !== null) continue;
     if (key.startsWith("proj/") && key.endsWith(".title") && typeof v === "string") {
       const id = decodeURIComponent(key.slice(5, -6));
       if ((doc[keys.project(id)]?.h ?? "") <= doc[key]!.h) projectTitles[id] = v;
@@ -42,26 +48,26 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     const [family, a = "", b = ""] = key.split("/").map(decodeURIComponent);
     switch (family) {
       case "ws":
-        workspaces.push({ id: a, ...(v as Omit<SidebarWorkspace, "id"> & { sort: string }) });
+        workspaces.push({ ...(v as Omit<SidebarWorkspace, "id"> & { sort: string }), id: a });
         break;
       case "rule":
-        rules.push({ id: a, ...(v as SidebarWorkspaceRule & { sort: string }) });
+        rules.push({ ...(v as SidebarWorkspaceRule & { sort: string }), id: a });
         break;
       case "place":
         places.push({
+          ...(v as { sort: string; placed?: boolean; ordered?: boolean }),
           project: a,
           workspace: b,
-          ...(v as { sort: string; placed?: boolean; ordered?: boolean }),
         });
         break;
       case "order":
-        orders.push({ id: a, ...(v as { sort: string }) });
+        orders.push({ ...(v as { sort: string }), id: a });
         break;
       case "workspaceOrder":
         workspaceProjectOrder[a] = [];
         break;
       case "fold":
-        (workspaceFold[a] ??= {})[b] = v as "quiet" | "active";
+        (workspaceFold[a] ??= dictionary())[b] = v as "quiet" | "active";
         break;
       case "machine":
         machines[a] = v as SidebarMachine;
@@ -82,12 +88,12 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         (projectMounts[a] ??= []).push(v as SidebarProjectMount);
         break;
       case "repstatus":
-        (projectMountStatus[a] ??= {})[b] = v as SidebarProjectMountStatus;
+        (projectMountStatus[a] ??= dictionary())[b] = v as SidebarProjectMountStatus;
         break;
       case "empty":
-        if (a === "workspaceFold") workspaceFold[b] ??= {};
+        if (a === "workspaceFold") workspaceFold[b] ??= dictionary();
         if (a === "projectMounts") projectMounts[b] ??= [];
-        if (a === "projectMountStatus") projectMountStatus[b] ??= {};
+        if (a === "projectMountStatus") projectMountStatus[b] ??= dictionary();
         break;
       case "legacy":
         legacy[a] = v;
