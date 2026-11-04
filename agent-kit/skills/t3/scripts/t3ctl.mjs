@@ -1592,7 +1592,10 @@ async function modelSelection(opt, { required = true, environmentId } = {}) {
   if (agent) agent = AGENT_ALIASES[agent.toLowerCase()] ?? agent;
   const caps = await (
     await mcp()
-  ).call("orchestrator_capabilities", environmentId ? { environmentId } : {});
+  ).call("orchestrator_capabilities", {
+    ...(environmentId ? { environmentId } : {}),
+    ...(model ? { search: model } : {}),
+  });
   const providers = caps.providers || [];
   if (!agent && model)
     agent = providers.find((p) => p.models.some((x) => x.id === model))?.providerInstanceId ?? "";
