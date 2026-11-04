@@ -1,5 +1,6 @@
 import {
   AuthAccessWriteScope,
+  EnvironmentId,
   type AuthMcpApprovalDecision,
   type AuthMcpAuthorizationRequest,
   type AuthMcpAuthorizationServerMetadata,
@@ -138,6 +139,7 @@ const ClientIdPayload = Schema.Struct({
   r: Schema.Array(Schema.String),
   /** Registered as another T3 Code environment's peer link. */
   p: Schema.optionalKey(Schema.Literal(1)),
+  e: Schema.optionalKey(EnvironmentId),
 });
 const decodeClientIdPayload = Schema.decodeUnknownOption(Schema.fromJsonString(ClientIdPayload));
 
@@ -146,6 +148,7 @@ export interface McpOAuthClient {
   readonly name: string;
   readonly redirectUris: ReadonlyArray<string>;
   readonly peerLink: boolean;
+  readonly peerEnvironmentId?: EnvironmentId;
 }
 
 export class McpOAuthPageError extends Schema.TaggedError<McpOAuthPageError>()(
@@ -180,6 +183,7 @@ interface PendingCode {
   readonly clientId: string;
   readonly clientName: string;
   readonly peerLink: boolean;
+  readonly peerEnvironmentId?: EnvironmentId;
   readonly redirectUri: string;
   readonly codeChallenge: string;
   readonly resource: string;
@@ -258,9 +262,19 @@ const make = Effect.gen(function* () {
 
   const sign = (domain: string, payload: string) => signPayload(`${domain}.${payload}`, signingKey);
 
-  const signClientId = (name: string, redirectUris: ReadonlyArray<string>, peerLink: boolean) => {
+  const signClientId = (
+    name: string,
+    redirectUris: ReadonlyArray<string>,
+    peerLink: boolean,
+    peerEnvironmentId: EnvironmentId | undefined,
+  ) => {
     const body = base64UrlEncode(
-      JSON.stringify({ v: 1, n: name, r: redirectUris, ...(peerLink ? { p: 1 } : {}) }),
+      JSON.stringify({
+        v: 1,
+        n: name,
+        r: redirectUris,
+        ...(peerLink ? { p: 1, ...(peerEnvironmentId ? { e: peerEnvironmentId } : {}) } : {}),
+      }),
     );
     return `${body}.${sign("mcp-client-id", body)}`;
   };
@@ -282,6 +296,7 @@ const make = Effect.gen(function* () {
           name: payload.n,
           redirectUris: payload.r,
           peerLink: payload.p === 1,
+          ...(payload.p === 1 && payload.e ? { peerEnvironmentId: payload.e } : {}),
         })),
       ),
     );
@@ -337,10 +352,13 @@ const make = Effect.gen(function* () {
         });
       }
       return {
-        clientId: signClientId(name, redirectUris, peerLink),
+        clientId: signClientId(name, redirectUris, peerLink, metadata.environment_id),
         name,
         redirectUris,
         peerLink,
+        ...(peerLink && metadata.environment_id
+          ? { peerEnvironmentId: metadata.environment_id }
+          : {}),
       };
     },
   );
@@ -424,6 +442,9 @@ const make = Effect.gen(function* () {
         clientId: authorization.client.clientId,
         clientName: authorization.client.name,
         peerLink: authorization.client.peerLink,
+        ...(authorization.client.peerEnvironmentId
+          ? { peerEnvironmentId: authorization.client.peerEnvironmentId }
+          : {}),
         redirectUri: authorization.redirectUri,
         codeChallenge: authorization.codeChallenge,
         resource: authorization.resource,
@@ -527,6 +548,7 @@ const make = Effect.gen(function* () {
           label: pending.clientName,
           access: pending.access,
           peerLink: pending.peerLink,
+          ...(pending.peerEnvironmentId ? { peerEnvironmentId: pending.peerEnvironmentId } : {}),
           client: deriveAuthClientMetadata({ request }),
         })
         .pipe(
@@ -580,6 +602,9 @@ export const layerMcpClientAuthenticator = Layer.effect(
                     label: client.label,
                     access: client.access,
                     linked: client.peerLink,
+                    ...(client.peerEnvironmentId
+                      ? { peerEnvironmentId: client.peerEnvironmentId }
+                      : {}),
                     ...(client.peerLink ? {} : { webOrigin: requestUrls(request).issuer }),
                   },
                   capabilities: new Set<McpInvocationContext.McpCapability>([

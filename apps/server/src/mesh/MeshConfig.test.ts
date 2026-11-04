@@ -44,13 +44,15 @@ const layer = Config.layer.pipe(
       {
         name: "machines",
         plan: (doc) =>
-          Object.keys(doc.machines).map((server) => ({
-            id: `machine/${server}`,
-            server,
-            description: "Update machine display",
-          })),
+          Effect.succeed(
+            Object.keys(doc.machines).map((server) => ({
+              id: `machine/${server}`,
+              server: "studio",
+              description: "Update machine display",
+            })),
+          ),
         reconcile: (action) =>
-          action.server === "cloudbox"
+          action.id === "machine/cloudbox"
             ? Effect.fail(
                 new MeshConfigError({ reason: "storage", message: "Replica server offline" }),
               )
@@ -65,10 +67,12 @@ it.layer(layer)("MeshConfig storage", (it) => {
       const config = yield* Config.MeshConfig;
       const first = yield* config.apply({ schema: 1, machines: { studio: { label: "ST" } } }, null);
       expect((yield* config.plan(first.doc)).actions).toHaveLength(1);
-      const stale = yield* config.apply(first.doc, null).pipe(Effect.flip);
+      const stale = yield* config
+        .apply({ schema: 1, machines: { studio: { label: "S3" } } }, null)
+        .pipe(Effect.flip);
       expect(stale.reason).toBe("stale_revision");
       expect(stale.current?.revision).toBe(first.revision);
-      expect(stale.diff?.[0]?.path).toBe("$");
+      expect(stale.diff?.[0]?.path).toBe("$.machines.studio.label");
       const second = yield* config.apply(
         { schema: 1, machines: { studio: { label: "S2" } } },
         first.revision,
@@ -109,7 +113,9 @@ it.layer(layer)("MeshConfig storage", (it) => {
         ),
         Stream.runHead,
       );
-      expect(Option.getOrThrow(states)).toEqual([
+      expect(
+        (yield* config.status).servers.find((server) => server.environmentId === "studio")?.actions,
+      ).toEqual([
         {
           id: "machine/studio",
           server: "studio",
@@ -118,12 +124,13 @@ it.layer(layer)("MeshConfig storage", (it) => {
         },
         {
           id: "machine/cloudbox",
-          server: "cloudbox",
+          server: "studio",
           description: "Update machine display",
           state: "failed",
           reason: "Replica server offline",
         },
       ]);
+      expect(Option.getOrThrow(states)).toHaveLength(2);
     }),
   );
 });

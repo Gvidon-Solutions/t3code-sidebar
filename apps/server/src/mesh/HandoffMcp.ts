@@ -1,3 +1,5 @@
+import { linkPermissions } from "./MeshLinkPermissions.ts";
+import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -33,6 +35,8 @@ export const interceptHandoffRequest = Effect.fn("HandoffMcp.interceptRequest")(
       { error: "handoff_requires_full_access_link" },
       { status: 403 },
     );
+  if (!(yield* linkPermissions().pipe(Effect.provideService(McpInvocationContext, scope))).threads)
+    return HttpServerResponse.jsonUnsafe({ error: "link_threads_denied" }, { status: 403 });
   if (Option.isNone(service))
     return HttpServerResponse.jsonUnsafe({ error: "handoff_unavailable" }, { status: 503 });
   const result = yield* decodeInput(call.value.params.arguments).pipe(

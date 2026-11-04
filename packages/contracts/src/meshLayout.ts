@@ -3,6 +3,15 @@ import * as Rpc from "effect/rpc/Rpc";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
 import {
+  MeshConfigApplyInput,
+  MeshConfigError,
+  MeshConfigPlan,
+  MeshConfigPlanInput,
+  MeshConfigRevision,
+  MeshConfigSnapshot,
+  MeshConfigStatus,
+} from "./meshConfig.ts";
+import {
   SidebarProjectMount,
   SidebarProjectMountStatus,
   SidebarProjectMountState,
@@ -97,10 +106,15 @@ export const MESH_WS_METHODS = {
   replicasRetry: "replicas.retry",
   replicasUnmanaged: "replicas.unmanaged",
   replicasAdopt: "replicas.adopt",
+  configGet: "meshConfig.get",
+  configPlan: "meshConfig.plan",
+  configApply: "meshConfig.apply",
+  configStatus: "meshConfig.status",
 } as const;
 
 const LayoutError = Schema.Union([MeshLayoutError, EnvironmentAuthorizationError]);
 const ReplicaRpcError = Schema.Union([ReplicaError, EnvironmentAuthorizationError]);
+const ConfigRpcError = Schema.Union([MeshConfigError, EnvironmentAuthorizationError]);
 
 export const WsMeshLayoutGetRpc = Rpc.make(MESH_WS_METHODS.layoutGet, {
   payload: Schema.Struct({}),
@@ -158,7 +172,6 @@ export const ProjectPlaceResult = Schema.Struct({
 export type ProjectPlaceResult = typeof ProjectPlaceResult.Type;
 export const ProjectMachinesResult = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
-  authorityEnvironmentId: Schema.optionalKey(Schema.String),
   logicalKey: Schema.String,
   representations: Schema.Array(
     Schema.Struct({
@@ -204,6 +217,26 @@ const WsReplicasAdoptRpc = Rpc.make(MESH_WS_METHODS.replicasAdopt, {
   success: ProjectPlaceResult,
   error: ReplicaRpcError,
 });
+const WsMeshConfigGetRpc = Rpc.make(MESH_WS_METHODS.configGet, {
+  payload: Schema.Struct({}),
+  success: MeshConfigSnapshot,
+  error: ConfigRpcError,
+});
+const WsMeshConfigPlanRpc = Rpc.make(MESH_WS_METHODS.configPlan, {
+  payload: MeshConfigPlanInput,
+  success: MeshConfigPlan,
+  error: ConfigRpcError,
+});
+const WsMeshConfigApplyRpc = Rpc.make(MESH_WS_METHODS.configApply, {
+  payload: MeshConfigApplyInput,
+  success: MeshConfigRevision,
+  error: ConfigRpcError,
+});
+const WsMeshConfigStatusRpc = Rpc.make(MESH_WS_METHODS.configStatus, {
+  payload: Schema.Struct({}),
+  success: MeshConfigStatus,
+  error: ConfigRpcError,
+});
 export const MeshRpcs = [
   WsMeshLayoutGetRpc,
   WsMeshLayoutApplyRpc,
@@ -213,4 +246,8 @@ export const MeshRpcs = [
   WsReplicasRetryRpc,
   WsReplicasUnmanagedRpc,
   WsReplicasAdoptRpc,
+  WsMeshConfigGetRpc,
+  WsMeshConfigPlanRpc,
+  WsMeshConfigApplyRpc,
+  WsMeshConfigStatusRpc,
 ] as const;

@@ -1,3 +1,4 @@
+import { conflictMtimeScript } from "./conflictMtimeScript.ts";
 import { replicaIgnorePatterns } from "./replicaModel.ts";
 import { replicaManifestScript } from "./replicaManifestScript.ts";
 import { preserveConflictCommand } from "./conflictResolution.ts";
@@ -84,6 +85,12 @@ export class MutagenRunner extends Context.Service<
       readonly route?: { readonly ssh: string; readonly identityFile?: string };
       readonly environmentId: string;
     }) => Effect.Effect<void, ReplicaError>;
+    readonly conflictMtime: (input: {
+      readonly root: string;
+      readonly paths: readonly string[];
+      readonly route?: { readonly ssh: string; readonly identityFile?: string };
+      readonly environmentId: string;
+    }) => Effect.Effect<number, ReplicaError>;
     readonly create: (input: CreateSession) => Effect.Effect<void, ReplicaError>;
     readonly list: (
       selector?: string,
@@ -289,6 +296,56 @@ const make = Effect.gen(function* () {
           message: "Cannot preserve losing conflict versions.",
           cause: result,
         });
+    }),
+    conflictMtime: Effect.fn("MutagenRunner.conflictMtime")(function* (input) {
+      const source = yield* Effect.try({
+        try: () => conflictMtimeScript(input.root, input.paths),
+        catch: (cause) =>
+          new ReplicaError({ reason: "storage", message: "Unsafe conflict path.", cause }),
+      });
+      const script = `node -e "eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())"`;
+      const route = input.route;
+      const port = route?.ssh.match(/:(\d+)$/);
+      const result = yield* runner
+        .run({
+          command: route ? "ssh" : "node",
+          args: route
+            ? [
+                "-o",
+                "BatchMode=yes",
+                ...(port && !route.identityFile ? ["-p", port[1]!] : []),
+                "--",
+                route.identityFile
+                  ? `t3-mesh-${input.environmentId}`
+                  : route.ssh.replace(/:\d+$/, ""),
+                script,
+              ]
+            : ["-e", source],
+          timeout: "30 seconds",
+        })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new ReplicaError({
+                reason: "storage",
+                message: "Cannot read conflict modification times.",
+                cause,
+              }),
+          ),
+        );
+      if (result.code !== 0)
+        return yield* new ReplicaError({
+          reason: "storage",
+          message: "Cannot read conflict modification times.",
+          cause: result,
+        });
+      const parsed = Number(result.stdout.trim());
+      if (!result.stdout.trim() || !Number.isFinite(parsed))
+        return yield* new ReplicaError({
+          reason: "storage",
+          message: "Invalid conflict modification time.",
+        });
+      return parsed;
     }),
     create: Effect.fn("MutagenRunner.create")((input) =>
       run([

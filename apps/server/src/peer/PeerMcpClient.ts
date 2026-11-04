@@ -22,6 +22,7 @@ const PROTOCOL_VERSION = "2025-06-18";
 
 /** The limits a call carries to the peer: the calling agent's modes here. */
 export interface PeerCallLimits {
+  readonly files?: "all" | "projects" | "none";
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
 }
@@ -160,6 +161,9 @@ const make = Effect.gen(function* () {
         .pipe(Effect.mapError(fromLinkError));
       const limitHeader = {
         ...(input.hops === undefined ? {} : { "t3-mesh-hops": input.hops.join(",") }),
+        ...(input.limits.files
+          ? { [McpInvocationContext.FILES_LIMIT_HEADER]: input.limits.files }
+          : {}),
         [McpInvocationContext.MODE_LIMIT_HEADER]: `${input.limits.runtimeMode}/${input.limits.interactionMode}`,
       };
       const sessionKey = `${input.environmentId} ${resolved.url}`;

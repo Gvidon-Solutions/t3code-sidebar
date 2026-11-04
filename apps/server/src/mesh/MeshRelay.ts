@@ -1,3 +1,4 @@
+import { linkPermissions } from "./MeshLinkPermissions.ts";
 import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -58,11 +59,35 @@ export const layer = Layer.effect(
         input.tool.startsWith("t3_mesh_")
       )
         return yield* refused;
+      const permissions = yield* linkPermissions(input.environmentId);
+      const threads =
+        input.tool.startsWith("t3_thread_") ||
+        input.tool.startsWith("t3_attachment_") ||
+        [
+          "t3_queue",
+          "t3_pending_request",
+          "create_threads",
+          "delegate_task",
+          "task_status",
+          "task_cancel",
+        ].includes(input.tool);
+      const replicas = input.tool === "t3_project_place" || input.tool === "t3_replica_adopt";
+      const files = input.tool === "t3_files_read" || input.tool === "t3_files_list";
+      if (
+        (threads && !permissions.threads) ||
+        (replicas && !permissions.replicas) ||
+        (files && permissions.files === "none")
+      )
+        return yield* refused;
+      const fileRank = { none: 0, projects: 1, all: 2 };
+      const incoming = limits.files ?? "all";
+      const narrowedFiles =
+        fileRank[incoming] < fileRank[permissions.files] ? incoming : permissions.files;
       const target = yield* links.get(input.environmentId).pipe(Effect.mapError(() => refused));
       if (Option.isNone(target)) return yield* refused;
       return yield* peers.call({
         ...input,
-        limits,
+        limits: files && narrowedFiles !== "all" ? { ...limits, files: narrowedFiles } : limits,
         hops: [...hops, self],
         success: Schema.Unknown,
       });

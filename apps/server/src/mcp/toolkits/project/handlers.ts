@@ -32,6 +32,7 @@ import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { resolveRuntimeMode } from "../../delegatedTaskModes.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import { linkPermissions } from "../../../mesh/MeshLinkPermissions.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { newCommandId, readCaller, resolveProjectId, unavailable } from "../../threadAccess.ts";
 import { ProjectToolkit } from "./tools.ts";
@@ -101,12 +102,28 @@ const sharedProjectTitles = Effect.fn("mcp.sharedProjectTitles")(function* (
 });
 export const layer = McpToolAccess.toLayer(ProjectToolkit, {
   t3_project_place: McpToolAccess.writesEnvironment((input) =>
-    ReplicaRuntime.getService.pipe(
-      Effect.flatMap((replicas) => replicas.place(input)),
-      Effect.mapError(
-        (cause) => new OrchestratorMcpFailure({ code: "invalid_request", message: cause.message }),
-      ),
-    ),
+    Effect.gen(function* () {
+      const permissions = yield* linkPermissions();
+      if (permissions.linked && !permissions.replicas)
+        return yield* new OrchestratorMcpFailure({
+          code: "capability_denied",
+          message: "This link may not place or remove replicas here.",
+        });
+      const replicas = yield* ReplicaRuntime.getService.pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorMcpFailure({ code: "invalid_request", message: cause.message }),
+        ),
+      );
+      return yield* replicas
+        .place(input)
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new OrchestratorMcpFailure({ code: "invalid_request", message: cause.message }),
+          ),
+        );
+    }),
   ),
   t3_project_machines: McpToolAccess.reads((input) =>
     Effect.gen(function* () {

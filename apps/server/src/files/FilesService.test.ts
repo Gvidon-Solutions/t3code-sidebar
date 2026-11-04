@@ -237,4 +237,97 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
       ).toBe("permission_denied");
     }),
   );
+  it.effect("enforces config file permissions on the receiving server", () =>
+    Effect.gen(function* () {
+      const files = yield* FilesService.FilesService;
+      const path = yield* Path.Path;
+      const project = yield* makeTempDir;
+      const outside = yield* makeTempDir;
+      yield* writeTextFile(project, "inside.txt", "inside");
+      yield* writeTextFile(outside, "secret.txt", "secret");
+      const config = (files: "all" | "projects" | "none") => ({
+        schema: 1,
+        machines: { studio: { title: "Studio" }, laptop: { title: "Laptop" } },
+        links: {
+          default: { files },
+          overrides: [{ between: ["studio", "laptop"], files }],
+        },
+      });
+      const invoke = (
+        permission: "all" | "projects" | "none",
+        access: "full-access" | "read-only",
+        filesLimit?: "projects" | "none",
+      ) =>
+        Effect.gen(function* () {
+          const revision = {
+            revision: "0000000000001.00000.studio",
+            doc: config(permission),
+            author: "studio",
+            writtenAt: "2026-01-01T00:00:00Z",
+          };
+          const snapshot = {
+            document: {
+              "mesh.config": { v: revision, h: "0000000000001.00000.studio" },
+              "mesh.machineBinding/studio": { v: "studio", h: "0000000000001.00000.studio" },
+              "mesh.machineBinding/laptop": { v: "laptop", h: "0000000000001.00000.studio" },
+            },
+            config: {
+              ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+              projectMounts: {
+                app: [
+                  {
+                    environmentId: "studio",
+                    role: "primary" as const,
+                    transport: "git" as const,
+                    createdAt: "2026-01-01T00:00:00Z",
+                    path: project,
+                  },
+                ],
+              },
+            },
+          };
+          return yield* files.read({ absolutePath: path.join(outside, "secret.txt") }).pipe(
+            Effect.provideService(McpInvocationContext, {
+              environmentId: EnvironmentId.make("studio"),
+              capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
+              issuedAt: 0,
+              requestNamespace: "test",
+              thread: undefined,
+              client: {
+                sessionId: "link",
+                label: "T3 Code · Laptop",
+                linked: true,
+                access,
+                ...(filesLimit ? { filesLimit } : {}),
+              },
+            }),
+            Effect.provideService(
+              MeshLayoutService,
+              MeshLayoutService.of({
+                environmentId: "studio",
+                read: Effect.succeed(snapshot),
+                changes: Stream.empty,
+                apply: () => Effect.succeed(snapshot),
+                edit: () => Effect.succeed(snapshot),
+                editLegacy: () => Effect.succeed(snapshot),
+                nextHlc: Effect.succeed("0000000000001.00000.studio"),
+              }),
+            ),
+          );
+        });
+      expect(yield* invoke("all", "full-access")).toMatchObject({ contents: "secret" });
+      expect(reasonOf(yield* invoke("all", "full-access", "projects").pipe(Effect.flip))).toBe(
+        "permission_denied",
+      );
+      expect(reasonOf(yield* invoke("none", "full-access").pipe(Effect.flip))).toBe(
+        "permission_denied",
+      );
+      expect(reasonOf(yield* invoke("projects", "full-access").pipe(Effect.flip))).toBe(
+        "permission_denied",
+      );
+      expect(reasonOf(yield* invoke("all", "read-only").pipe(Effect.flip))).toBe(
+        "permission_denied",
+      );
+    }),
+  );
 });

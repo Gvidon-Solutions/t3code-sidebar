@@ -3,6 +3,7 @@ import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 
 import {
   AuthSessionId,
+  EnvironmentId,
   ForwardCompatibleArray,
   ClientSurface,
   ClientWebDeployment,
@@ -452,6 +453,7 @@ export type AuthMcpAuthorizationServerMetadata = typeof AuthMcpAuthorizationServ
 export const MCP_PEER_LINK_SOFTWARE_ID = "t3code-peer-link";
 
 export const AuthMcpClientRegistration = Schema.Struct({
+  environment_id: Schema.optionalKey(EnvironmentId),
   client_name: Schema.optionalKey(Schema.String),
   software_id: Schema.optionalKey(Schema.String),
   redirect_uris: Schema.optionalKey(Schema.Array(Schema.String)),

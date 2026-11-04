@@ -133,9 +133,6 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             const compatible = {
               ...after,
-              ...(after.meshAuthority === undefined && before.meshAuthority
-                ? { meshAuthority: before.meshAuthority }
-                : {}),
               ...(Object.keys(after.projectTitles ?? {}).length === 0 &&
               Object.keys(before.projectTitles).length > 0
                 ? { projectTitles: before.projectTitles }

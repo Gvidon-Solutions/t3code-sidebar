@@ -19,6 +19,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Option from "effect/Option";
 import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
+import { linkPermissions } from "../mesh/MeshLinkPermissions.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 
 import { makeIsServerInternalPath } from "../auth/serverInternalPaths.ts";
@@ -81,12 +82,12 @@ export const make = Effect.gen(function* () {
 
   const authorizeLinkPath = Effect.fn("FilesService.authorizeLinkPath")(function* (target: string) {
     const scope = yield* Effect.serviceOption(McpInvocationContext);
-    if (
-      Option.isNone(scope) ||
-      scope.value.client?.linked !== true ||
-      scope.value.client.access !== "read-only"
-    )
-      return;
+    if (Option.isNone(scope) || scope.value.client?.linked !== true) return;
+    const permissions = yield* linkPermissions();
+    if (permissions.files === "none") return yield* filesError("permission_denied", target);
+    // A read-only link never reads outside this machine's project folders,
+    // even when the config would allow all files.
+    if (permissions.files === "all" && scope.value.client.access !== "read-only") return;
     const mesh = yield* Effect.serviceOption(MeshLayoutService);
     if (Option.isNone(mesh)) return yield* filesError("permission_denied", target);
     const snapshot = yield* mesh.value.read;

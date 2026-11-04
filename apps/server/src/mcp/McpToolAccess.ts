@@ -1,6 +1,7 @@
 import { discoverThreadMachines, probeThread } from "../mesh/MeshThreadAccess.ts";
 import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
+import { linkPermissions } from "../mesh/MeshLinkPermissions.ts";
 import { ThreadId, ProjectId } from "@t3tools/contracts";
 import { resolveLaunchProject } from "../replicas/RemoteReplicaLaunch.ts";
 import {
@@ -584,6 +585,35 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
           );
       });
     };
+  }
+  for (const [name, handler] of Object.entries(handlers)) {
+    const domain =
+      name.startsWith("t3_thread_") ||
+      name.startsWith("t3_attachment_") ||
+      [
+        "t3_queue",
+        "t3_pending_request",
+        "create_threads",
+        "delegate_task",
+        "task_status",
+        "task_cancel",
+      ].includes(name)
+        ? "threads"
+        : name === "t3_project_place" || name === "t3_replica_adopt"
+          ? "replicas"
+          : undefined;
+    if (!domain) continue;
+    const invoke = handler as (params: object) => Effect.Effect<unknown, OrchestratorMcpFailure>;
+    handlers[name] = (params: object) =>
+      Effect.gen(function* () {
+        const permissions = yield* linkPermissions();
+        if (permissions.linked && !permissions[domain])
+          return yield* new OrchestratorMcpFailure({
+            code: "capability_denied",
+            message: `This link may not access ${domain} on this server.`,
+          });
+        return yield* invoke(params);
+      });
   }
   return handlers as Toolkit.HandlersFrom<Tools>;
 });

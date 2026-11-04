@@ -27,6 +27,7 @@ export const makeReplicaHarness = (
   onRegister: Effect.Effect<void, ProjectService.ProjectServiceError> = Effect.void,
   onCreate: Effect.Effect<void, ReplicaError> = Effect.void,
   onListExisting: Effect.Effect<void, ReplicaError> = Effect.void,
+  onConflictMtime: (root: string, paths: readonly string[]) => number = () => 0,
 ) => {
   const replica: SidebarProjectMount = {
     environmentId: "replica",
@@ -87,6 +88,7 @@ export const makeReplicaHarness = (
         Effect.sync(() => {
           preserved.push(input);
         }),
+      conflictMtime: (input) => Effect.sync(() => onConflictMtime(input.root, input.paths)),
       list: () => Effect.sync(() => sessions).pipe(Effect.tap(() => onList)),
       listExisting: Effect.sync(() => sessions).pipe(Effect.tap(() => onListExisting)),
       create: (input) =>

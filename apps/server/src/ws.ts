@@ -1,7 +1,9 @@
 import { recordLayoutAuthors } from "@t3tools/shared/meshLayout";
 import { ThreadHandoffService } from "./mesh/ThreadHandoffService.ts";
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
-import { MESH_WS_METHODS, ServerSettingsError } from "@t3tools/contracts";
+import { MeshConfig } from "./mesh/MeshConfig.ts";
+import { validateClientEntries } from "./mesh/validateEntries.ts";
+import { MESH_WS_METHODS, MeshConfigError, ServerSettingsError } from "@t3tools/contracts";
 import * as ReplicaRpc from "./replicas/ReplicaRpc.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -1289,6 +1291,11 @@ export const layerWsRpc = (
       const inbox = yield* InboxService.InboxService;
       const mesh = yield* MeshLayoutService;
       const meshReplicator = yield* MeshReplicator;
+      const meshConfig = yield* Effect.serviceOption(MeshConfig);
+      const meshConfigService = Effect.fromOption(
+        meshConfig,
+        () => new MeshConfigError({ reason: "storage", message: "Mesh config is unavailable." }),
+      );
       const meshSnapshot = (
         snapshot: import("./mesh/MeshLayoutService.ts").MeshLayoutSnapshot,
       ) => ({ ...snapshot, environmentId: mesh.environmentId });
@@ -2169,16 +2176,43 @@ export const layerWsRpc = (
         // Fork: T3 Mesh shared layout.
         [MESH_WS_METHODS.layoutGet]: () => mesh.read.pipe(Effect.map(meshSnapshot)),
         [MESH_WS_METHODS.layoutApply]: ({ entries }) =>
-          mesh
-            .apply(
-              recordLayoutAuthors(
-                entries as import("@t3tools/shared/meshLayout").MeshLayoutDocument,
-                mesh.environmentId,
-              ),
-            )
-            .pipe(Effect.map(meshSnapshot)),
+          validateClientEntries(entries).pipe(
+            Effect.andThen(
+              mesh
+                .apply(
+                  recordLayoutAuthors(
+                    entries as import("@t3tools/shared/meshLayout").MeshLayoutDocument,
+                    mesh.environmentId,
+                  ),
+                )
+                .pipe(Effect.map(meshSnapshot)),
+            ),
+          ),
         [MESH_WS_METHODS.layoutSubscribe]: () => mesh.changes.pipe(Stream.map(meshSnapshot)),
         [MESH_WS_METHODS.status]: () => meshReplicator.status,
+        [MESH_WS_METHODS.configGet]: () =>
+          meshConfigService.pipe(
+            Effect.flatMap((config) =>
+              Effect.all([config.current, mesh.read]).pipe(
+                Effect.map(([current, snapshot]) => ({
+                  current: current ?? null,
+                  bindings: Object.fromEntries(
+                    Object.entries(snapshot.document).flatMap(([key, entry]) =>
+                      key.startsWith("mesh.machineBinding/") && typeof entry.v === "string"
+                        ? [[decodeURIComponent(key.slice(20)), entry.v] as const]
+                        : [],
+                    ),
+                  ),
+                })),
+              ),
+            ),
+          ),
+        [MESH_WS_METHODS.configPlan]: ({ doc }) =>
+          meshConfigService.pipe(Effect.flatMap((config) => config.plan(doc))),
+        [MESH_WS_METHODS.configApply]: ({ doc, baseRevision }) =>
+          meshConfigService.pipe(Effect.flatMap((config) => config.apply(doc, baseRevision))),
+        [MESH_WS_METHODS.configStatus]: () =>
+          meshConfigService.pipe(Effect.flatMap((config) => config.status)),
         // Fork: agent inbox. The owner's side; agents use the MCP tools.
         [INBOX_WS_METHODS.subscribe]: (input) => inbox.subscribe(input),
         [INBOX_WS_METHODS.subscribeIssue]: ({ issueId }) => inbox.subscribeIssue(issueId),
@@ -3349,6 +3383,7 @@ export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const mesh = yield* MeshLayoutService;
     const meshReplicator = yield* MeshReplicator;
+    const meshConfig = yield* Effect.serviceOption(MeshConfig);
     const threadHandoffs = yield* ThreadHandoffService;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
@@ -3440,6 +3475,11 @@ export const layer = Layer.unwrap(
               ),
               Layer.provide(Layer.succeed(MeshLayoutService, mesh)),
               Layer.provide(Layer.succeed(MeshReplicator, meshReplicator)),
+              Layer.provide(
+                Option.isSome(meshConfig)
+                  ? Layer.succeed(MeshConfig, meshConfig.value)
+                  : Layer.empty,
+              ),
               Layer.provide(Layer.succeed(ThreadHandoffService, threadHandoffs)),
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),

@@ -53,6 +53,8 @@ import * as PreviewControlsHandlers from "./toolkits/previewControls/handlers.ts
 import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
 import * as EnvironmentHandlers from "./toolkits/environment/handlers.ts";
 import { ProjectToolkit } from "./toolkits/project/tools.ts";
+import { MeshToolkit } from "./toolkits/mesh/tools.ts";
+import * as MeshHandlers from "./toolkits/mesh/handlers.ts";
 import * as ProjectHandlers from "./toolkits/project/handlers.ts";
 import { AttachmentToolkit } from "./toolkits/attachment/tools.ts";
 import * as AttachmentHandlers from "./toolkits/attachment/handlers.ts";
@@ -186,12 +188,17 @@ const withModeLimit = (
   invocation: McpInvocationContext.McpInvocationScope,
   request: HttpServerRequest.HttpServerRequest,
 ): McpInvocationContext.McpInvocationScope | undefined => {
+  if (invocation.client === undefined) return invocation;
+  const files = request.headers[McpInvocationContext.FILES_LIMIT_HEADER];
+  if (files !== undefined && files !== "all" && files !== "projects" && files !== "none")
+    return undefined;
+  if (files) invocation = { ...invocation, client: { ...invocation.client!, filesLimit: files } };
   const header = request.headers[McpInvocationContext.MODE_LIMIT_HEADER];
-  if (header === undefined || invocation.client === undefined) return invocation;
+  if (header === undefined) return invocation;
   const limit = parseModeLimit(header);
   return Option.isNone(limit)
     ? undefined
-    : { ...invocation, client: { ...invocation.client, narrowedTo: limit.value } };
+    : { ...invocation, client: { ...invocation.client!, narrowedTo: limit.value } };
 };
 
 // The Linked environments beta is off here: links wait until it is on again.
@@ -1144,6 +1151,9 @@ const layerEnvironmentToolkit = toolkitRegistration(
 
 export const layerProjectRegistration = toolkitRegistration(ProjectToolkit, ProjectHandlers.layer);
 
+// Fork: mesh config and reconciliation status.
+export const layerMeshToolkit = toolkitRegistration(MeshToolkit, MeshHandlers.layer);
+
 export const layerAttachmentToolkit = toolkitRegistration(
   AttachmentToolkit,
   AttachmentHandlers.layer,
@@ -1188,6 +1198,7 @@ export const layerMcpTransport = McpServer.layerHttp({
 
 /** Every tool the T3 MCP server advertises. AgentContextBudget.test.ts measures this set. */
 export const layerTools = Layer.mergeAll(
+  layerMeshToolkit,
   layerPreviewToolkit,
   layerOrchestratorToolkit,
   layerThreadToolkit,

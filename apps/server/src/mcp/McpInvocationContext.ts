@@ -40,6 +40,8 @@ export interface McpClientCaller {
    * session as `linkOrigin`, and it changes only that work (`linkOrigin.ts`).
    */
   readonly linked?: boolean | undefined;
+  readonly peerEnvironmentId?: EnvironmentId;
+  readonly filesLimit?: "all" | "projects" | "none";
   /**
    * Narrower modes the client asked for on this request (`T3-Mode-Limit`):
    * another environment passing on the limits of the agent it calls for.
@@ -55,6 +57,7 @@ export interface McpClientCaller {
  * the limits of the agent it calls for. It can only narrow (see
  * `clientModeCeiling`), so a client gains nothing by sending a broad one.
  */
+export const FILES_LIMIT_HEADER = "t3-files-limit";
 export const MODE_LIMIT_HEADER = "t3-mode-limit";
 
 export interface ClientModes {

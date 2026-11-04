@@ -8,7 +8,7 @@ export function conflictCopyPath(iso: string, relative: string): string {
     relative.split("/")[0] === ".t3-conflicts"
   )
     throw new Error("Unsafe conflict path");
-  return `.t3-conflicts/${iso}/${relative}`;
+  return `.t3-conflicts/${iso.replace(/[:.]/g, "-")}/${relative}`;
 }
 
 export function conflictRoots(paths: readonly string[]): string[] {
@@ -30,7 +30,7 @@ export function preserveConflictCommand(
     const parents = [
       ...new Set([
         ".t3-conflicts",
-        `.t3-conflicts/${iso}`,
+        `.t3-conflicts/${iso.replace(/[:.]/g, "-")}`,
         ...relative
           .split("/")
           .slice(0, -1)
