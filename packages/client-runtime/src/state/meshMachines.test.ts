@@ -6,6 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildMeshMachines,
+  meshMachineFactTimes,
   partitionMeshMachines,
   forgetMachineFacts,
   deriveMeshFooterStatus,
@@ -471,4 +472,70 @@ it("does not resurrect a forgotten machine through replica source facts", () => 
     "cloudbox",
   ]);
   expect(next.projectMounts.demo?.[0]?.path).toBe("/copy");
+});
+
+it("merges duplicate phone connections by environment identity and separates unnamed and stale machines", () => {
+  const config: SidebarWorkspacesConfig = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: {
+      studio: { title: "Studio", tag: "GV" },
+      cloudbox: {},
+      stale: { title: "Old laptop" },
+    },
+  };
+  const machines = buildMeshMachines({
+    config,
+    connections: [
+      {
+        environmentId: "studio",
+        label: "Studio",
+        connected: true,
+        version: "1.5",
+        urls: ["https://studio.example"],
+      },
+      {
+        environmentId: "studio",
+        label: "studio",
+        connected: false,
+        version: "0.9",
+        urls: ["http://studio.local"],
+      },
+      { environmentId: "cloudbox", label: "07e7a1a797ee", connected: true, version: "1.4" },
+    ],
+    peerStates: [
+      {
+        environmentId: "stale",
+        lastExchangeAt: "2026-10-01T00:00:00Z",
+        lastError: null,
+        sentSeq: 0,
+        receivedSeq: 0,
+      },
+    ],
+  });
+  expect(machines).toHaveLength(3);
+  expect(machines.find((machine) => machine.environmentId === "studio")).toMatchObject({
+    connectedHere: true,
+    version: "1.5",
+    urls: ["https://studio.example", "http://studio.local"],
+  });
+  expect(machines.find((machine) => machine.environmentId === "cloudbox")?.label).toBe(
+    "Unnamed machine",
+  );
+  const groups = partitionMeshMachines(machines, config, Date.parse("2026-11-05T00:00:00Z"));
+  expect(groups.active).toHaveLength(2);
+  expect(groups.forgotten.map((machine) => machine.environmentId)).toEqual(["stale"]);
+});
+
+it("ages unlinked layout-only machines from their replicated fact clock", () => {
+  const factsObservedAt = meshMachineFactTimes({
+    "machine/old-laptop": { h: "1759276800000.00000.studio" },
+  });
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { "old-laptop": { title: "Laptop" } },
+  };
+  const machines = buildMeshMachines({ config, factsObservedAt });
+  expect(
+    partitionMeshMachines(machines, config, Date.parse("2026-11-05T00:00:00Z")).forgotten,
+  ).toHaveLength(1);
 });

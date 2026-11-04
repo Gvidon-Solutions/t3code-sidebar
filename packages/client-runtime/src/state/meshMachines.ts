@@ -1,3 +1,4 @@
+import * as DateTime from "effect/DateTime";
 import type {
   EnvironmentId,
   PeerLinkCreateInput,
@@ -16,6 +17,7 @@ export interface MeshMachineConnection {
   readonly label: string;
   readonly version?: string | null;
   readonly connected: boolean;
+  readonly platform?: { readonly os: string; readonly arch: string };
   /** Addresses this client knows for the machine, most preferred first. */
   readonly urls?: readonly string[];
 }
@@ -53,6 +55,8 @@ export interface MeshLinkedWith {
 export interface MeshMachine extends MachineDisplay {
   readonly network?: import("@t3tools/contracts").PeerConnectionStatus;
   readonly aliases: readonly string[];
+  readonly unnamed: boolean;
+  readonly platform?: { readonly os: string; readonly arch: string };
   readonly environmentId: string;
   readonly connectedHere: boolean;
   /** Machines connected by an incoming or outgoing peer link. */
@@ -76,6 +80,7 @@ export interface MeshMachineBuildInput {
   readonly connections?: readonly MeshMachineConnection[];
   readonly links?: readonly MeshLinkSource[];
   readonly peerStates?: readonly MeshPeerStateView[];
+  readonly factsObservedAt?: Readonly<Record<string, string>>;
   readonly peerConnections?: readonly import("@t3tools/contracts").PeerConnectionStatus[];
 }
 
@@ -140,7 +145,26 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
   }
   const networkStates = [...networkBySource.values()];
   const peerStates = input.peerStates ?? [];
-  const connectionById = new Map(connections.map((entry) => [entry.environmentId, entry]));
+  const connectionById = new Map<string, MeshMachineConnection>();
+  for (const entry of connections) {
+    const previous = connectionById.get(entry.environmentId);
+    const preferred = previous?.connected && !entry.connected ? previous : entry;
+    const other = preferred === entry ? previous : entry;
+    const platform = preferred.platform ?? other?.platform;
+    connectionById.set(entry.environmentId, {
+      ...previous,
+      ...entry,
+      label:
+        machineDisplayOf({ machines: {} }, entry.environmentId, preferred.label).label ===
+        "Unnamed machine"
+          ? (other?.label ?? preferred.label)
+          : preferred.label,
+      connected: entry.connected || previous?.connected === true,
+      version: preferred.version ?? other?.version ?? null,
+      ...(platform ? { platform } : {}),
+      urls: [...new Set([...(previous?.urls ?? []), ...(entry.urls ?? [])])],
+    });
+  }
 
   const ids = new Set<string>();
   for (const connection of connections) ids.add(connection.environmentId);
@@ -245,10 +269,13 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         candidates.find((connection) => connection.state === "direct") ??
         candidates.find((connection) => connection.state === "relayed") ??
         candidates[0];
+      const platform = connection?.platform ?? config.machines[environmentId]?.reported?.platform;
       return {
         environmentId,
         ...(network === undefined ? {} : { network }),
         aliases: config.machines[environmentId]?.aliases ?? [],
+        unnamed: display.label === "Unnamed machine",
+        ...(platform ? { platform } : {}),
         label: display.label,
         tag: display.tag,
         color: display.color,
@@ -258,6 +285,7 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         lastSeenAt:
           [
             peerState?.lastExchangeAt,
+            input.factsObservedAt?.[environmentId],
             config.machines[environmentId]?.reported?.reportedAt,
             ...peerLinks.map((link) => link.lastReachedAt),
             ...Object.values(config.projectMounts).flatMap((mounts) =>
@@ -486,4 +514,18 @@ export function forgetMachineFacts(
       }),
     ),
   };
+}
+
+export * from "./meshConfigStatus.ts";
+
+export function meshMachineFactTimes(document: Readonly<Record<string, { readonly h: string }>>) {
+  const times: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(document)) {
+    if (!key.startsWith("machine/")) continue;
+    const environmentId = decodeURIComponent(key.slice("machine/".length));
+    const milliseconds = Number(entry.h.slice(0, 13));
+    if (Number.isFinite(milliseconds))
+      times[environmentId] = DateTime.formatIso(DateTime.makeUnsafe(milliseconds));
+  }
+  return times;
 }

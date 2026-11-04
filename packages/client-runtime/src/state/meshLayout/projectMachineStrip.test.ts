@@ -27,6 +27,7 @@ describe("projectMachineStrip", () => {
   ] as const)("shows %s from live status over stored status", (state, tone, pending, copy) => {
     const config = {
       ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
       projectMounts: { demo: [rep("at", "replica")] },
       projectMountStatus: { demo: { at: { state: "error" as const, updatedAt: "" } } },
     };
@@ -40,13 +41,14 @@ describe("projectMachineStrip", () => {
     };
     const model = projectMachineStrip(config, group, [live]);
     expect(model.chips[0]).toMatchObject({ state, tone, pending });
-    expect(model.description).toBe(`Replica on at (${copy})`);
+    expect(model.description).toBe(`Replica on Studio (${copy})`);
     expect(projectMachineStrip(config, group, []).chips[0]?.state).toBe("error");
   });
   it("keeps skipped-file warnings visible and calm on a registered strip", () => {
     const model = projectMachineStrip(
       {
         ...empty,
+        machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
         projectMounts: { demo: [rep("at", "replica")] },
         projectMountStatus: {
           demo: {
@@ -68,6 +70,7 @@ describe("projectMachineStrip", () => {
   it("orders primaries in layout order, then replicas, and counts all hidden chips", () => {
     const config = {
       ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
       projectMounts: {
         demo: [
           rep("vps", "replica"),
@@ -95,20 +98,27 @@ describe("projectMachineStrip", () => {
     expect(projectMachineStrip(empty, group, []).chips[0]?.environmentId).toBe("lab");
     expect(
       projectMachineStrip(
-        { ...empty, machines: { at: {} } },
+        {
+          ...empty,
+          machines: { at: {} },
+        },
         { ...group, knownEnvironmentIds: [] },
         [],
       ).chips,
     ).toHaveLength(1);
   });
   it("shows only scratch thread machines once, ignoring representations", () => {
-    const config = { ...empty, projectMounts: { demo: [rep("vps", "replica")] } };
+    const config = {
+      ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
+      projectMounts: { demo: [rep("vps", "replica")] },
+    };
     const model = projectMachineStrip(
       config,
       { ...group, isScratch: true, environmentIds: ["at", "lab", "at"] },
       [],
     );
     expect(model.chips.map((chip) => chip.environmentId)).toEqual(["at", "lab"]);
-    expect(model.description).toBe("Scratch on at · Scratch on lab");
+    expect(model.description).toBe("Scratch on Studio · Scratch on Laptop");
   });
 });

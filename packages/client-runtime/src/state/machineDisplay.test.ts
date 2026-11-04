@@ -23,10 +23,10 @@ const config: SidebarWorkspacesConfig = {
 
 describe("machineDisplayOf", () => {
   it("keeps short alphanumeric labels whole and abbreviates longer labels", () => {
-    expect(machineDisplayOf(config, "lab", "lab")).toEqual({
+    expect(machineDisplayOf(config, "lab-id", "lab")).toEqual({
       label: "lab",
       tag: "LAB",
-      color: workspaceColor({ id: "lab" }),
+      color: workspaceColor({ id: "lab-id" }),
     });
     for (const [label, tag] of [
       ["a", "A"],
@@ -57,8 +57,8 @@ describe("machineDisplayOf", () => {
   });
 
   it("keeps unnamed machine ids out of display labels", () => {
-    expect(machineDisplayOf(config, "e2e6225c", "  ").label).toBe("Unidentified machine");
-    expect(machineDisplayOf(config, "e2e6225c", "").tag).toBe("UN");
+    expect(machineDisplayOf(config, "e2e6225c", "  ").label).toBe("Unnamed machine");
+    expect(machineDisplayOf(config, "e2e6225c", "").tag).toBe("?");
   });
 
   it("derives the colour from the environment id like workspaces do", () => {
