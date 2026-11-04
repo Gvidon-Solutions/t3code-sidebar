@@ -64,7 +64,9 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   through the last completed turn plus attachments, create the thread with the chosen
   harness/model/effort, optionally send a first message. The original is never archived and keeps
   running; target and source store links both ways (`meshFork`, `meshForks`). Every step has a
-  timeout, failures roll back the target, and staging files are deleted on success and failure.
+  timeout, receiver failures roll back the target, and staging files are deleted on success and failure.
+  Source-side failure requests a remote rollback; if that peer is unreachable, cleanup is logged
+  but has no durable retry. The strict failure-atomic guarantee of CONCEPT §8 is not complete.
   Fork works on the same machine too. Old handoff "move" data still renders as ordinary links.
 - **Draft machine selection.** Web `components/chat/useDraftEnvironmentRouting.ts` and mobile
   `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen
