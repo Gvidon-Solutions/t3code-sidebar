@@ -634,8 +634,10 @@ export function nextMachineClock(document, now, deviceId) {
     .sort()
     .at(-1);
   const [lastMs, lastCounter] = last?.split(".") ?? ["0", "0"];
-  let ms = Math.max(Math.floor(now), Number(lastMs));
+  const ceiling = Math.floor(now) + 300_000;
+  let ms = Math.min(ceiling, Math.max(Math.floor(now), Number(lastMs)));
   let counter = last && ms === Number(lastMs) ? Number(lastCounter) + 1 : 0;
+  if (ms === ceiling) counter = Math.min(counter, 99999);
   if (counter > 99999) {
     ms++;
     counter = 0;

@@ -36,7 +36,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   retain their opaque values. Import/adoption lives under `meshLayout/migration/`, with the
   old-settings adapter in `apps/server/src/mesh/migration/`. `MeshLayoutServiceLive.ts` keeps
   SQLite and the canonical document consistent; corrupt rows move to `mesh_layout_quarantine`.
-  `configSchema.ts` validates config/history documents, including nested C1 fields, while
+  The registry validates config/history documents with the canonical contracts schema,
   preserving unknown fields for newer versions.
   `MeshReplicator.ts` exchanges local sequence watermarks and store generations over
   `PeerMcpClient`, pushes changes after 200 ms, retries a failed peer exchange on a
@@ -265,7 +265,7 @@ Registered planners (`mesh/MeshConfigPlanners.ts`):
 | `links`     | effective permission changes for every pair | publishes installed policy; receivers read the config                               |
 | `conflicts` | per-project conflict-policy changes         | reconciles sessions using project policy                                            |
 | `ignores`   | per-project ignore changes                  | writes merged ignores and recreates affected sessions                               |
-| `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place`                                                 |
+| `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place` / `unplace`                                     |
 
 S1 (SSH) and B1 (bootstrap, updates, agent instructions) add planners through the same port; nothing
 else should grow a second reconciliation path. Every action has a sixty-second deadline, failures do
@@ -291,8 +291,8 @@ also writes the name-to-environment bindings. It is idempotent: a present `mesh.
 
 Interfaces: MCP `t3_mesh_config_get`, `t3_mesh_config_plan`, `t3_mesh_config_apply`,
 `t3_mesh_config_rollback`, `t3_mesh_config_history`, `t3_mesh_status`; WS `meshConfig.get/plan/apply/status`;
-CLI `mesh config get|plan|apply|rollback|history` and `mesh status`. The CLI prints JSON for `get`
-both formats are accepted on apply.
+CLI `mesh config get|plan|apply|rollback|history` and `mesh status`. The CLI prints JSON for `get`;
+JSON and YAML are accepted on plan/apply.
 
 Reconciliation runs on config, binding and project/representation changes, resumes on startup, and
 retries failed actions every thirty seconds. Reported status is replicated; an unreported or stale
