@@ -1,3 +1,4 @@
+import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { SecretProviderId } from "@t3tools/contracts";
@@ -5,7 +6,10 @@ import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
-import { mergeProviderInstanceEnvironment } from "./instanceEnvironment.ts";
+import {
+  mergeProviderInstanceEnvironment,
+  ProviderRuntimeEnvironment,
+} from "./instanceEnvironment.ts";
 
 describe("mergeProviderInstanceEnvironment", () => {
   it.effect.each([
@@ -82,3 +86,21 @@ describe("mergeProviderInstanceEnvironment", () => {
     }),
   );
 });
+
+it.effect(
+  "adds the runtime bin after provider PATH overrides without changing harness command lookup",
+  () =>
+    Effect.gen(function* () {
+      const environment = yield* mergeProviderInstanceEnvironment(
+        [{ name: "PATH", value: "/custom/bin", sensitive: false }],
+        { PATH: "/base/bin" },
+      );
+      expect(environment.PATH).toBe(`/runtime/bin${NodePath.delimiter}/custom/bin`);
+      expect(environment.T3CODE_RUN_SOCKET).toBe("private-socket");
+    }).pipe(
+      Effect.provideService(ProviderRuntimeEnvironment, {
+        directory: "/runtime/bin",
+        environment: { T3CODE_RUN_SOCKET: "private-socket" },
+      }),
+    ),
+);

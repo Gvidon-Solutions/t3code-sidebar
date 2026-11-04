@@ -35,9 +35,9 @@ export class RunPreparationError extends Schema.TaggedError<RunPreparationError>
       case "resolution":
         return "Cannot resolve the replica's primary for t3 run.";
       case "sync":
-        return "Replica synchronization failed; the command was not started.";
+        return "Replica synchronization failed.";
       case "timeout":
-        return "Replica synchronization timed out; the command was not started.";
+        return "Replica synchronization timed out.";
       case "files":
         return `Replica files block t3 run:\n${this.paths.join("\n")}`;
     }
@@ -48,6 +48,7 @@ type Plan = ReturnType<typeof resolveRunPlan>;
 export class RunPreparation extends Context.Service<
   RunPreparation,
   {
+    readonly resolve: (cwd: string) => Effect.Effect<Plan, RunPreparationError>;
     readonly prepare: (
       cwd: string,
       timeout: Duration.Input,
@@ -89,21 +90,25 @@ export const layer = Layer.effect(
         }),
       );
     });
+    const resolve = Effect.fn("RunPreparation.resolve")(function* (cwd: string) {
+      const { document, config } = yield* mesh.read;
+      const doc = configFromLayout(document);
+      return yield* Effect.try({
+        try: () =>
+          resolveRunPlan({
+            cwd,
+            config,
+            environmentId: mesh.environmentId,
+            bindings: bindingsFromLayout(document),
+            ...(doc?.ssh?.mode ? { sshMode: doc.ssh.mode } : {}),
+          }),
+        catch: (cause) => new RunPreparationError({ reason: "resolution", paths: [], cause }),
+      });
+    });
     return RunPreparation.of({
+      resolve,
       prepare: Effect.fn("RunPreparation.prepare")(function* (cwd, timeout) {
-        const { document, config } = yield* mesh.read;
-        const doc = configFromLayout(document);
-        const plan = yield* Effect.try({
-          try: () =>
-            resolveRunPlan({
-              cwd,
-              config,
-              environmentId: mesh.environmentId,
-              bindings: bindingsFromLayout(document),
-              ...(doc?.ssh?.mode ? { sshMode: doc.ssh.mode } : {}),
-            }),
-          catch: (cause) => new RunPreparationError({ reason: "resolution", paths: [], cause }),
-        });
+        const plan = yield* resolve(cwd);
         if (plan.kind === "remote") yield* synchronize(plan, timeout, true);
         return plan;
       }),
