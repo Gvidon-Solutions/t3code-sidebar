@@ -31,13 +31,19 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 
 ## How it flows
 
-- **Layout replication.** `packages/shared/src/meshLayout/` is a pure LWW-map CRDT (HLC clocks,
-  fractional order keys, `materialize`/`diff`, `importLegacy`/`adoptLegacy`). Every server stores
-  it (`apps/server/src/mesh/MeshLayoutServiceLive.ts`, migration 077, per-entry local `seq`) and
-  gossips it to linked peers with `t3_mesh_exchange` (`MeshReplicator.ts`; seq watermarks, pull
-  every 5 s, backoff ≤ 15 s, transitive). Clients read/write through `meshLayout.get/apply/subscribe`
-  (`packages/client-runtime/src/state/meshLayoutClient.ts`, offline outbox). Old clients writing
-  the whole `sidebarWorkspaces` setting are diffed (`MeshSettings.ts`), never replace it.
+- **Layout replication.** `packages/shared/src/meshLayout/` owns the LWW map, bounded HLC,
+  ordering and materialization. `registry.ts` validates known key families; unknown families
+  retain their opaque values. Import/adoption lives under `meshLayout/migration/`, with the
+  old-settings adapter in `apps/server/src/mesh/migration/`. `MeshLayoutServiceLive.ts` keeps
+  SQLite and the canonical document consistent; corrupt rows move to `mesh_layout_quarantine`.
+  `MeshReplicator.ts` exchanges local sequence watermarks and store generations over
+  `PeerMcpClient`, pushes changes after 200 ms and exchanges watermarks every 60 seconds.
+  A changed generation resets both peer cursors. Clock rejections and quarantine reasons are
+  exposed by `meshLayout.status`. Tombstones require thirty days and acknowledgement from
+  every currently linked full-access peer before collection.
+  Web and mobile mount one `MeshLayoutProvider` each; their hooks adapt RPC and persistence
+  to `packages/client-runtime/src/state/meshLayoutClient.ts` (`MeshLayoutStore`). The store
+  owns snapshots, subscriptions, optimistic edits and the persisted reconnect outbox.
 - **Routing.** A call for another machine goes direct when linked, else through one relay hop:
   `apps/server/src/mesh/MeshRouting.ts` (`callRouted`) used by `PeerForwarding`, files, handoff.
 - **Replicas.** `apps/server/src/replicas/`: `MutagenInstaller` (pinned 0.18.1, sha256),
@@ -191,3 +197,10 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - A fresh SCP connection may be rejected while an existing SSH session remains healthy during
   bed restarts. Use the same owned control socket for deployment SSH and SCP. Deployment retries
   happen before fault injection; they are not proof of automatic replica recovery.
+
+- Canonicalizing logical keys only in memory leaves obsolete SQLite rows available to the
+  replication sequence reader. Persist removals in the same transaction as canonical inserts;
+  compare persisted keys and the snapshot, then restart in the regression test.
+- A server identity outlives its layout database. Sequence numbers alone cannot distinguish
+  an empty replacement store from an already acknowledged store; exchange a persisted store
+  generation as well and reset both cursors when it changes.

@@ -75,7 +75,7 @@ if [ -z "$DEMO" ]; then
  probe register-demo tool gor t3_project_create '{"title":"demo","workspaceRoot":"/home/user/xdev-e2e/demo"}'
  DEMO=$(jq -r '.id // empty' "$WORK/register-demo.out")
 fi
-KEY="$GOR_ENV:/home/user/xdev-e2e/demo"
+KEY=$(node --input-type=module -e 'import {createHash} from "node:crypto"; console.log("lp-"+createHash("sha256").update(process.argv[1]).digest("hex"))' "$GOR_ENV:/home/user/xdev-e2e/demo")
 MARK="round2-$RUN_TS"
 LAUNCH=$(jq -nc --arg p "$DEMO" --arg e "$VPS_ENV" --arg key "$MARK-a" --arg msg "In your current working directory on this VPS replica, use a local shell command to append the exact line $MARK-a to README.md. Mutagen syncs this local edit back to gor. Do not access the primary, request a machine link, run git, or create other files. Finish after making the local edit." '{projectId:$p,environmentId:$e,clientRequestId:$key,title:$key,message:$msg,modelSelection:{instanceId:"codex",model:"gpt-6-luna"},runtimeMode:"full-access"}')
 wait_replica() {
@@ -202,13 +202,10 @@ probe e-pause mut sync pause "$SESSION"
 probe e-alpha gor_ssh "printf 'alpha-$MARK\n' > /home/user/xdev-e2e/demo/round2-conflict.txt"
 probe e-beta vexec sh -c "printf 'beta-$MARK\n' > '$VPATH/round2-conflict.txt'"
 probe e-resume mut sync resume "$SESSION"
-probe e-conflict wait_replica vps "$KEY" "$VPS_ENV" conflict
-probe e-conflict-path jq -e --arg key "$KEY" --arg env "$VPS_ENV" '.[].replicas[] | select(.logicalKey==$key and .environmentId==$env) | .conflicts | index("round2-conflict.txt") != null' "$WORK/status-vps.json"
-probe e-resolve vexec rm -f "$VPATH/round2-conflict.txt"
-probe e-retry ws_rpc vps replicas.retry "$(jq -nc --arg k "$KEY" --arg e "$VPS_ENV" '{logicalKey:$k,environmentId:$e}')"
 probe e-recovered wait_replica vps "$KEY" "$VPS_ENV" watching
 probe e-flush mut sync flush "$SESSION"
 probe e-content vexec grep -F "alpha-$MARK" "$VPATH/round2-conflict.txt"
+probe e-preserved-loser vexec sh -c 'find "$1/.t3-conflicts" -type f -name round2-conflict.txt -exec cat {} \; | grep -F "$2"' sh "$VPATH" "beta-$MARK"
 wait_converged "resolved conflict status converges before placement retries"
 for n in 1 2; do probe "f-place-$n" tool gor t3_project_place "$(jq -nc --arg p "$KEY" --arg m "$VPS_ENV" '{project:$p,machine:$m,wait:90}')"; probe "f-launch-$n" tool gor t3_thread_launch "$LAUNCH"; done
 probe f-one-launch node --input-type=module -e 'import{readFileSync}from"node:fs";import assert from"node:assert/strict";const a=JSON.parse(readFileSync(process.argv[1])),b=JSON.parse(readFileSync(process.argv[2]));assert(a.threadId);assert.equal(a.threadId,b.threadId);console.log(a.threadId)' "$WORK/f-launch-1.out" "$WORK/f-launch-2.out"
