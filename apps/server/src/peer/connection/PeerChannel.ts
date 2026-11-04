@@ -249,15 +249,18 @@ export class PeerChannel {
           break;
         case "end": {
           const pipe = this.pipes.get(frame.id);
-          if (!pipe || pipe.remoteEnded) throw new Error("Invalid peer pipe end");
+          // Reset can race with frames already in flight on the connection.
+          if (!pipe) break;
+          if (pipe.remoteEnded) throw new Error("Invalid peer pipe end");
           pipe.remoteEnded = true;
           pipe.stream.push(null);
           break;
         }
         case "credit": {
           const pipe = this.pipes.get(frame.id);
-          if (!pipe || frame.bytes <= 0 || pipe.credit + frame.bytes > WINDOW)
-            throw new Error("Invalid peer pipe credit");
+          if (frame.bytes <= 0 || frame.bytes > WINDOW) throw new Error("Invalid peer pipe credit");
+          if (!pipe) break;
+          if (pipe.credit + frame.bytes > WINDOW) throw new Error("Invalid peer pipe credit");
           pipe.credit += frame.bytes;
           this.flush(pipe, frame.id);
           break;
@@ -265,14 +268,10 @@ export class PeerChannel {
         case "data": {
           const pipe = this.pipes.get(frame.id);
           const data = Buffer.from(frame.data, "base64");
-          if (
-            !pipe ||
-            pipe.remoteEnded ||
-            data.length === 0 ||
-            data.length > CHUNK ||
-            pipe.received + data.length > WINDOW ||
-            data.toString("base64") !== frame.data
-          )
+          if (data.length === 0 || data.length > CHUNK || data.toString("base64") !== frame.data)
+            throw new Error("Invalid peer pipe data");
+          if (!pipe) break;
+          if (pipe.remoteEnded || pipe.received + data.length > WINDOW)
             throw new Error("Invalid peer pipe data");
           pipe.received += data.length;
           pipe.stream.push(data);

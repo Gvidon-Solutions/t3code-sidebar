@@ -60,6 +60,7 @@ class Api extends HttpApi.make("environment")
   .add(EnvironmentHttpApi.groups.mcpOAuth) {}
 const Answer = Schema.Struct({ count: Schema.Number });
 const isExchange = Schema.is(Replication.ExchangeInput);
+const isRoutes = Schema.is(Schema.Struct({ routes: Schema.Array(Schema.String) }));
 const toolkit = Toolkit.make(
   Tool.make("t3_create_fixture", { description: "Creates one fixture.", success: Answer }),
   Tool.make("t3_wait_fixture", { description: "Waits until cancelled.", success: Answer }),
@@ -607,7 +608,21 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
       digest: expected.digest("hex"),
     });
     expect(studio.externalMcp() + cloudbox.externalMcp() + laptop.externalMcp()).toBe(0);
+    const withdrawn = yield* laptop.sessions.events.pipe(
+      Stream.filter(
+        (event) =>
+          event.environmentId === cloudbox.id &&
+          event.name === "peer.routes" &&
+          isRoutes(event.body) &&
+          !event.body.routes.includes(studio.id),
+      ),
+      Stream.runHead,
+      Effect.forkScoped({ startImmediately: true }),
+    );
     yield* studio.sessions.stop;
+    yield* Fiber.join(withdrawn);
+    const offline = yield* PipeIpc.connectLocalPipe(laptop.baseDir, studio.id).pipe(Effect.flip);
+    expect(offline.message).toContain("No live peer connection reaches");
     yield* cloudbox.sessions.stop;
     yield* laptop.sessions.stop;
   }).pipe(Effect.scoped),

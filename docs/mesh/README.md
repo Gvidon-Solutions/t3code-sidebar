@@ -268,8 +268,10 @@ host keys received in facts. There is no SSH implementation or private SSH key i
 Honor write() backpressure or use pipeline(). Each direction starts with 256 KiB of receiver
 credit and sends at most 32 KiB per data frame. end() sends EOF on the writable half while the
 readable half remains open; destroy(error) resets both halves and preserves the reason. A
-cancelled AbortSignal resets that pipe. Connection loss fails outstanding calls, pipes and
-writes; streams do not resume after a reconnect. Start a fresh SSH session after a transport
+cancelled AbortSignal resets that pipe. Resetting a pipe leaves the connection and other calls
+up, discarding that pipe's frames still in flight. Known offline machines retain their identity
+and report a missing connection. Connection loss fails outstanding calls, pipes and writes;
+streams do not resume after a reconnect. Start a fresh SSH session after a transport
 failure. Attach an error handler before using a returned Duplex. The manager's event(env,
 name, body) returns false if delivery could not be queued; events are unacknowledged, so layout
 replication must retain its reconnect/watermark safety net.
@@ -302,3 +304,7 @@ reachability and one-hop relay. PeerNetwork disables external POST /mcp after co
 checks a 200 MiB relay transfer by byte count and SHA-256.
 The CLI subprocess test checks binary stdio, nonzero refusal, stderr diagnostics and that no
 database is opened by the ProxyCommand process.
+The shared-bed runners live in scripts/mesh-e2e: network-rounds.sh runs both acceptance rounds;
+network-bed.sh exercises blocked inbound peers, native SSH transfers/interruption, a three-minute
+tunnel cut and automatic server restart. The fault proxy rejects peer HTTP MCP separately from
+local agent/CLI MCP. See that directory's README for isolation and cleanup.

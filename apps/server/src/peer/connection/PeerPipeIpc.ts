@@ -108,9 +108,7 @@ export const layer = Layer.effectDiscard(
       const ids = [
         ...new Set([
           ...(yield* links.ids).map(String),
-          ...(yield* sessions.status)
-            .filter((state) => state.state !== "offline")
-            .map((state) => state.environmentId),
+          ...(yield* sessions.status).map((state) => state.environmentId),
         ]),
       ];
       const labels = new Map(

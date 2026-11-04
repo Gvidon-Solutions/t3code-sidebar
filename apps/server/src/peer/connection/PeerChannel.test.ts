@@ -190,7 +190,31 @@ it("bounds a stalled reader, resumes on consumption and preserves half-close", a
   p.right.close(new Error("test complete"));
 });
 
-it("interrupts blocked writes and in-flight calls when the connection is lost", async () => {
+it("isolates interrupted pipes and fails pending work when the connection is lost", async () => {
+  const interrupted = pair();
+  const pipe = interrupted.left.openPipe("sshd");
+  const id = JSON.parse(interrupted.leftWire[0]!).id as string;
+  const pipeError = new Promise<Error>((resolve) => pipe.once("error", resolve));
+  interrupted.pump();
+  const remoteError = new Promise<Error>((resolve) =>
+    interrupted.receivedPipes[0]!.once("error", resolve),
+  );
+  pipe.destroy(new Error("pipe interrupted"));
+  interrupted.left.receive(JSON.stringify({ type: "credit", id, bytes: 1 }));
+  interrupted.left.receive(JSON.stringify({ type: "data", id, data: "bGF0ZQ==" }));
+  interrupted.left.receive(JSON.stringify({ type: "end", id }));
+  interrupted.pump();
+  expect((await pipeError).message).toBe("pipe interrupted");
+  expect((await remoteError).message).toBe("pipe interrupted");
+  expect(interrupted.closed).toEqual([]);
+  const subsequent = interrupted.left.call({ action: "after interruption" });
+  interrupted.pump();
+  await vi.waitFor(() => expect(interrupted.rightWire).toHaveLength(1));
+  interrupted.pump();
+  expect(await subsequent).toEqual({ action: "after interruption" });
+  interrupted.left.close(new Error("test complete"));
+  interrupted.right.close(new Error("test complete"));
+
   const p = pair();
   const stream = p.left.openPipe("sshd");
   const errored = new Promise<Error>((resolve) => stream.once("error", resolve));
