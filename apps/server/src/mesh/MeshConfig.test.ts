@@ -132,6 +132,31 @@ it.layer(Config.layer.pipe(Layer.provideMerge(layout), Layer.provide(oncePlanner
     );
   },
 );
+it.effect("streams replicated config revisions and suppresses unrelated layout changes", () =>
+  Effect.gen(function* () {
+    const config = yield* Config.MeshConfig;
+    const mesh = yield* MeshLayoutService;
+    const ready = yield* Deferred.make<void>();
+    const changes = yield* config.changes.pipe(
+      Stream.tap(() => Deferred.succeed(ready, undefined)),
+      Stream.take(2),
+      Stream.runCollect,
+      Effect.forkScoped,
+    );
+    yield* Deferred.await(ready);
+    const h = yield* mesh.nextHlc;
+    yield* mesh.apply({ "future/report": { v: "unrelated", h } });
+    const revision = {
+      revision: h,
+      doc: { schema: 1, machines: { studio: {} } },
+      author: "cloudbox",
+      writtenAt: "2026-01-01T00:00:00Z",
+    };
+    yield* mesh.apply({ "mesh.config": { v: revision, h } });
+    expect(yield* Fiber.join(changes)).toEqual([undefined, revision]);
+    expect(yield* config.current).toEqual(revision);
+  }).pipe(Effect.provide(layer)),
+);
 it.layer(layer)("MeshConfig storage", (it) => {
   it.effect("validates, plans, rejects stale edits, rolls back and retains fifty revisions", () =>
     Effect.gen(function* () {
