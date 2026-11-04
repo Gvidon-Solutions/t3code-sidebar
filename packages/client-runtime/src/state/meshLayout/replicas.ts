@@ -132,13 +132,10 @@ export function planThreadOnMachine(input: {
 
 /** The environment whose server drives (or holds) a replica's Mutagen session. */
 export function replicaDriverEnvironment(
-  config: SidebarWorkspacesConfig,
+  _config: SidebarWorkspacesConfig,
   rep: SidebarProjectMount,
 ): string | null {
-  if (!rep.source) return null;
-  if (config.machines[rep.environmentId]?.reach?.[rep.source]?.ssh) return rep.environmentId;
-  if (config.machines[rep.source]?.reach?.[rep.environmentId]?.ssh) return rep.source;
-  return null;
+  return rep.role === "replica" && rep.source ? rep.environmentId : null;
 }
 
 export interface PendingReplicaRow {

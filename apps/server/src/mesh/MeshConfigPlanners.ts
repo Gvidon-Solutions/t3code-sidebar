@@ -91,7 +91,7 @@ export const layer = Layer.effect(
         if (value && typeof value === "object" && !Array.isArray(value)) {
           const facts = Object.fromEntries(
             Object.entries(value).filter(
-              ([field]) => !["label", "title", "tag", "color", "aliases"].includes(field),
+              ([field]) => !["label", "title", "tag", "color", "aliases", "reach"].includes(field),
             ),
           );
           yield* write(key, facts);
@@ -245,25 +245,6 @@ export const layer = Layer.effect(
                 project: key,
                 description: `Place ${title} on ${rule.on}`,
               });
-          }
-          for (const [name, server] of Object.entries(bound)) {
-            if (
-              state.document[marker(key, server)]?.v !== true ||
-              replicaRules(doc, title).some((rule) => rule.on === name)
-            )
-              continue;
-            actions.push({
-              id: `replicas/remove/${key}/${name}`,
-              server: state.config.projectMounts[key]?.some((rep) => rep.environmentId === server)
-                ? (replicaDriver(
-                    state.config,
-                    state.config.projectMounts[key]!.find((rep) => rep.environmentId === server)!,
-                  ) ?? server)
-                : server,
-              machine: name,
-              project: key,
-              description: `Remove managed replica ${title} from ${name}`,
-            });
           }
         }
         return actions;

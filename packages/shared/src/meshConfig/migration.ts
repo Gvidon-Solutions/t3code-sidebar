@@ -1,5 +1,17 @@
+import * as Schema from "effect/Schema";
 import type { MeshConfigDocument, SidebarWorkspacesConfig } from "@t3tools/contracts";
 import type { MeshLayoutDocument } from "../meshLayout/document.ts";
+
+const legacyMachine = Schema.decodeUnknownOption(
+  Schema.Struct({
+    reach: Schema.optionalKey(
+      Schema.Record(
+        Schema.String,
+        Schema.Struct({ ssh: Schema.String, identityFile: Schema.optionalKey(Schema.String) }),
+      ),
+    ),
+  }),
+);
 
 export function migrateConfig(
   document: MeshLayoutDocument,
@@ -56,16 +68,22 @@ export function migrateConfig(
   }
   const names = Object.keys(bindings);
   const routes = names.flatMap((from) =>
-    Object.entries(layout.machines[bindings[from]!]?.reach ?? {}).flatMap(([target, route]) => {
+    Object.entries(
+      (() => {
+        const id = bindings[from]!;
+        const decoded = legacyMachine(
+          document[`machine/${encodeURIComponent(id)}`]?.v ?? layout.machines[id],
+        );
+        return decoded._tag === "Some" ? (decoded.value.reach ?? {}) : {};
+      })(),
+    ).flatMap(([target, route]) => {
       const to = names.find((name) => bindings[name] === target);
       return to ? [{ from, to, route }] : [];
     }),
   );
-  for (const { from, to, route } of routes) {
+  for (const { to, route } of routes) {
     const target = machines[to]!;
     const previous = target.ssh;
-    const oldRoutes =
-      typeof previous?.routes === "object" && previous.routes !== null ? previous.routes : {};
     const match = /^(?:([^@]+)@)?(.+?)(?::(\d+))?$/.exec(route.ssh);
     machines[to] = {
       ...target,
@@ -75,7 +93,6 @@ export function migrateConfig(
         ...(match?.[1] ? { user: match[1] } : {}),
         ...(match?.[3] ? { port: Number(match[3]) } : {}),
         host: match?.[2] ?? route.ssh,
-        routes: { ...oldRoutes, [from]: route },
       },
     };
   }

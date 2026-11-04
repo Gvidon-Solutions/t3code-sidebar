@@ -1781,7 +1781,7 @@ effectIt.effect("injects the primary SSH command into a replica's actual provide
           },
         ],
       },
-      machines: { replica: { reach: { primary: { ssh: "primary-host" } } } },
+      machines: { replica: {  } },
     });
     yield* harness.start.pipe(Effect.provide(ReplicaMeshTest.layerTest("replica", config)));
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain(

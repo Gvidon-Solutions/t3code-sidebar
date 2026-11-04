@@ -38,7 +38,8 @@ export const collectPeerFacts = Effect.fn("PeerFacts.collect")(function* (
   const architecture = yield* HostProcess.Architecture;
   const environment = yield* HostProcess.Environment;
   const user = yield* HostProcess.Username;
-  const directory = options.sshDir ?? sshDirectory(platform, environment);
+  const directory =
+    options.sshDir ?? environment.T3_MESH_SSHD_DIR ?? sshDirectory(platform, environment);
   const read = Effect.fn("PeerFacts.readPublicFile")((path: string) =>
     fs
       .readFileString(path)

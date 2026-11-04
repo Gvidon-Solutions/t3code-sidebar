@@ -41,6 +41,8 @@ const seed = Effect.gen(function* () {
     },
   }));
   yield* mesh.apply({
+    "mesh.machineBinding/source": { v: null, h },
+    "mesh.machineBinding/replica": { v: null, h },
     "mesh.machineBinding/studio": { v: "source", h },
     "mesh.machineBinding/laptop": { v: "replica", h },
     "mesh.config": {
@@ -128,78 +130,67 @@ it.effect(
     );
   },
 );
-it.effect("places and removes only rule-owned replicas, including removal after a restart", () => {
-  const h = makeReplicaHarness();
-  return Effect.gen(function* () {
-    yield* seed;
-    const mesh = yield* MeshLayoutService;
-    yield* mesh.edit((config) => ({
-      ...config,
-      projectMounts: { repo: config.projectMounts.repo!.filter((r) => r.role === "primary") },
-    }));
-    const planners = yield* MeshConfigPlanners;
-    const replicas = planners.find((planner) => planner.name === "replicas")!;
-    const [place] = yield* replicas.plan(doc, undefined);
-    expect(place).toMatchObject({ server: "replica", machine: "laptop", project: "repo" });
-    yield* replicas.reconcile(place!, doc);
-    expect(
-      (yield* mesh.read).config.projectMounts.repo?.find((r) => r.environmentId === "replica"),
-    ).toMatchObject({ role: "replica", mode: "full" });
-    expect(yield* replicas.plan(doc, undefined)).toEqual([]);
-    const withoutRules = { ...doc, replicas: { rules: [] } };
-    const [remove] = yield* replicas.plan(withoutRules, undefined);
-    expect(remove?.id).toContain("replicas/remove/");
-    h.setSession({ status: "watching", conflicts: [{ root: "unsynced.txt" }] });
-    expect((yield* replicas.reconcile(remove!, withoutRules).pipe(Effect.flip)).message).toContain(
-      "unsynced.txt",
-    );
-    expect((yield* mesh.read).document["mesh.configReplica/repo/replica"]?.v).toBe(true);
-    h.setSession({ status: "watching", conflicts: [] });
-    yield* replicas.reconcile(remove!, withoutRules);
-    expect(
-      (yield* mesh.read).config.projectMounts.repo?.some((r) => r.environmentId === "replica"),
-    ).toBe(false);
-    expect(yield* replicas.plan(withoutRules, undefined)).toEqual([]);
-    const clock = yield* mesh.nextHlc;
-    yield* mesh.apply({ "mesh.configReplica/repo/replica": { v: true, h: clock } });
-    const [orphan] = yield* replicas.plan(withoutRules, undefined);
-    expect(orphan).toMatchObject({ server: "replica", machine: "laptop" });
-    yield* replicas.reconcile(orphan!, withoutRules);
-    expect(yield* replicas.plan(withoutRules, undefined)).toEqual([]);
-    yield* mesh.edit((config) => ({
-      ...config,
-      projectMounts: {
-        repo: [
-          ...config.projectMounts.repo!,
-          {
-            environmentId: "replica",
-            path: "/independent",
-            role: "primary" as const,
-            transport: "git" as const,
-            createdAt: "",
-          },
-        ],
-      },
-    }));
-    const promotedClock = yield* mesh.nextHlc;
-    yield* mesh.apply({ "mesh.configReplica/repo/replica": { v: true, h: promotedClock } });
-    const [promoted] = yield* replicas.plan(withoutRules, undefined);
-    yield* replicas.reconcile(promoted!, withoutRules);
-    expect(
-      (yield* mesh.read).config.projectMounts.repo?.find((r) => r.environmentId === "replica"),
-    ).toMatchObject({ role: "primary", path: "/independent" });
-    expect((yield* mesh.read).document["mesh.configReplica/repo/replica"]?.v).toBe(false);
-  }).pipe(
-    Effect.provide(
-      Planners.layer.pipe(
-        Layer.provide(
-          Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
+it.effect(
+  "places rule-owned replicas and preserves their files and representation when a rule is removed",
+  () => {
+    const h = makeReplicaHarness();
+    return Effect.gen(function* () {
+      yield* seed;
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMounts: { repo: config.projectMounts.repo!.filter((r) => r.role === "primary") },
+      }));
+      const planners = yield* MeshConfigPlanners;
+      const replicas = planners.find((planner) => planner.name === "replicas")!;
+      const [place] = yield* replicas.plan(doc, undefined);
+      expect(place).toMatchObject({ server: "replica", machine: "laptop", project: "repo" });
+      yield* replicas.reconcile(place!, doc);
+      expect(
+        (yield* mesh.read).config.projectMounts.repo?.find((r) => r.environmentId === "replica"),
+      ).toMatchObject({ role: "replica", mode: "full" });
+      expect(yield* replicas.plan(doc, undefined)).toEqual([]);
+      const withoutRules = { ...doc, replicas: { rules: [] } };
+      expect(yield* replicas.plan(withoutRules, undefined)).toEqual([]);
+      expect(
+        (yield* mesh.read).config.projectMounts.repo?.some(
+          (rep) => rep.environmentId === "replica",
         ),
-        Layer.provideMerge(runtime.pipe(Layer.provideMerge(h.layer))),
+      ).toBe(true);
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMounts: {
+          repo: [
+            ...config.projectMounts.repo!,
+            {
+              environmentId: "replica",
+              path: "/independent",
+              role: "primary" as const,
+              transport: "git" as const,
+              createdAt: "",
+            },
+          ],
+        },
+      }));
+      const promotedClock = yield* mesh.nextHlc;
+      yield* mesh.apply({ "mesh.configReplica/repo/replica": { v: true, h: promotedClock } });
+      expect(yield* replicas.plan(withoutRules, undefined)).toEqual([]);
+      expect(
+        (yield* mesh.read).config.projectMounts.repo?.find((r) => r.environmentId === "replica"),
+      ).toMatchObject({ role: "primary", path: "/independent" });
+      expect((yield* mesh.read).document["mesh.configReplica/repo/replica"]?.v).toBe(true);
+    }).pipe(
+      Effect.provide(
+        Planners.layer.pipe(
+          Layer.provide(
+            Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
+          ),
+          Layer.provideMerge(runtime.pipe(Layer.provideMerge(h.layer))),
+        ),
       ),
-    ),
-  );
-});
+    );
+  },
+);
 it.effect(
   "reports unbound machines and keeps manual/conditional rules from creating replicas eagerly",
   () => {

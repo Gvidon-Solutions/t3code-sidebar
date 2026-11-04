@@ -1,3 +1,4 @@
+import { preserveConflictScript } from "./ReplicaPlatform.ts";
 import { conflictMtimeScript } from "./conflictMtimeScript.ts";
 import { describe, expect, it } from "vite-plus/test";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Execute the exact portable shell command against real files.
@@ -7,7 +8,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Synchronous fixture paths for the shell command.
 import * as NodePath from "node:path";
-import { conflictCopyPath, conflictRoots, preserveConflictCommand } from "./conflictResolution.ts";
+import { conflictCopyPath, conflictRoots } from "./conflictResolution.ts";
 const iso = "2026-11-03T10:20:30.000Z";
 describe("conflict copies", () => {
   it("keeps paths, rejects traversal and never archives its own copies", () => {
@@ -23,9 +24,9 @@ describe("conflict copies", () => {
     try {
       NodeFS.mkdirSync(NodePath.join(root, "src"));
       NodeFS.writeFileSync(NodePath.join(root, "src/a'file"), "loser");
-      NodeChildProcess.execFileSync("sh", [
-        "-c",
-        preserveConflictCommand(root, iso, ["src", "deleted"]),
+      NodeChildProcess.execFileSync(process.execPath, [
+        "-e",
+        preserveConflictScript(root, iso, ["src", "deleted"]),
       ]);
       expect(
         NodeFS.readFileSync(NodePath.join(root, conflictCopyPath(iso, "src/a'file")), "utf8"),
@@ -33,7 +34,10 @@ describe("conflict copies", () => {
       expect(NodeFS.existsSync(NodePath.join(root, "src"))).toBe(false);
       NodeFS.mkdirSync(NodePath.join(root, "src"));
       expect(() =>
-        NodeChildProcess.execFileSync("sh", ["-c", preserveConflictCommand(root, iso, ["src"])]),
+        NodeChildProcess.execFileSync(process.execPath, [
+          "-e",
+          preserveConflictScript(root, iso, ["src"]),
+        ]),
       ).toThrow();
       expect(NodeFS.existsSync(NodePath.join(root, "src"))).toBe(true);
     } finally {

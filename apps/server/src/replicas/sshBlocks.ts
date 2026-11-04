@@ -37,6 +37,7 @@ export function sshFiles(
   peers: readonly SshPeer[],
   paths: {
     readonly runtime: readonly string[];
+    readonly platform?: string;
     readonly baseDir: string;
     readonly identity: string;
     readonly knownHosts: string;
@@ -67,7 +68,11 @@ export function sshFiles(
       "--base-dir",
       paths.baseDir,
     ]
-      .map(shellQuote)
+      .map(
+        paths.platform === "win32"
+          ? (value) => `"${safe(value).replaceAll("%", "%%")}"`
+          : shellQuote,
+      )
       .join(" ");
     config.push(
       `Host ${host}`,

@@ -1,20 +1,13 @@
 import { meshMachineLabel } from "@t3tools/shared/meshLayout";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 
-const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-
 export function primarySshCommand(
-  config: SidebarWorkspacesConfig,
-  environmentId: string,
-  primaryEnvironmentId: string,
-  path: string,
-): string | null {
-  const route = config.machines[environmentId]?.reach?.[primaryEnvironmentId];
-  if (!route) return null;
-  const ssh = route.identityFile ? `t3-mesh-${primaryEnvironmentId}` : route.ssh;
-  const port = /^(.*):(\d+)$/.exec(ssh);
-  const command = port ? `ssh -p ${port[2]} ${quote(port[1]!)}` : `ssh ${quote(ssh)}`;
-  return `${command} ${quote(`cd ${quote(path)} && <command>`)}`;
+  _config: SidebarWorkspacesConfig,
+  _environmentId: string,
+  _primaryEnvironmentId: string,
+  _path: string,
+): string {
+  return "t3 run <command>";
 }
 
 export function replicaContextNote(
@@ -22,25 +15,28 @@ export function replicaContextNote(
   environmentId: string,
   projectId: string,
 ): string {
-  const reps = Object.values(config.projectMounts).find((reps) =>
+  const entry = Object.entries(config.projectMounts).find(([, reps]) =>
     reps.some((rep) => rep.environmentId === environmentId && rep.projectId === projectId),
   );
-  const replica = reps?.find(
-    (rep) =>
-      rep.environmentId === environmentId && rep.projectId === projectId && rep.role === "replica",
+  const rep = entry?.[1].find(
+    (rep) => rep.environmentId === environmentId && rep.projectId === projectId,
   );
-  const primary = replica && reps?.find((rep) => rep.environmentId === replica.source);
-  if (!replica) return "";
-  if (!primary)
-    return "This project is a synchronized replica. Its primary representation is unavailable; restore it before running git or builds.";
-  const primaryName = meshMachineLabel(config, primary.environmentId, "the primary machine");
-  const route = config.machines[environmentId]?.reach?.[primary.environmentId];
-  if (!route)
-    return `This project is a synchronized replica of ${primaryName} at ${primary.path}. Run git and builds on that primary. Add an SSH reach route before running those commands.`;
-  const ssh = route.identityFile ? `t3-mesh-${primary.environmentId}` : route.ssh;
-  const port = /^(.*):(\d+)$/.exec(ssh);
-  const command = port ? `ssh -p ${port[2]} ${quote(port[1]!)}` : `ssh ${quote(ssh)}`;
-  return `This project is a synchronized replica. Run git and builds on ${primaryName}, using ${command} ${quote(`cd ${quote(primary.path)} && <command>`)}. Mutagen synchronizes working files in both directions; .git and build dependencies stay on the primary.`;
+  if (!rep) return "Representation: primary; mode: full; primary: this machine; sync: local.";
+  const primary =
+    rep.role === "primary"
+      ? rep
+      : entry?.[1].find(
+          (candidate) => candidate.environmentId === rep.source && candidate.role === "primary",
+        );
+  const mode = rep.role === "primary" ? "full" : (rep.mode ?? "lite");
+  const primaryName = primary
+    ? meshMachineLabel(config, primary.environmentId, "the primary machine")
+    : "unavailable";
+  const sync =
+    rep.role === "primary"
+      ? "local"
+      : (config.projectMountStatus[entry![0]]?.[environmentId]?.state ?? "pending");
+  return `Representation: ${rep.role}; mode: ${mode}; primary: ${fitUtf8(primaryName, 80)}${primary ? ` at ${fitUtf8(primary.path, 120)}` : ""}; sync: ${sync}. ${rep.role === "replica" ? (mode === "lite" ? "build/test/git: t3 run <cmd>." : "Build/test locally; git: t3 run git <args>.") : "Build/test/git locally."}`;
 }
 
 const fitUtf8 = (value: string, budget: number) => {
@@ -63,6 +59,8 @@ export function threadContextNote(
   replicaNote: string,
 ): string {
   const prefix = `Thread ${fitUtf8(threadId, 160)}; machine ${fitUtf8(environmentId, 80)}. Call t3_thread_self for details.`;
-  const note = replicaNote || "This project is primary on this machine.";
+  const note =
+    replicaNote ||
+    "Representation: primary; mode: full; primary on this machine; sync: local; build/test/git locally.";
   return fitUtf8(`${prefix} ${note}`, 600);
 }

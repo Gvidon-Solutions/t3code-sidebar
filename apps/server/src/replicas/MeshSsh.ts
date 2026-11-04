@@ -1,3 +1,4 @@
+import { sshWrapper } from "./ReplicaPlatform.ts";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
 import { bindingsFromLayout, effectiveLinkPermissions } from "@t3tools/shared/meshConfig";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -32,6 +33,7 @@ export const layer = Layer.effect(
   MeshSsh,
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+    const platform = yield* HostProcess.Platform;
     const path = yield* Path.Path;
     const home = yield* HostProcess.HomeDirectory;
     const env = yield* HostProcess.Environment;
@@ -69,6 +71,15 @@ export const layer = Layer.effect(
       return (yield* fs.readFileString(`${identity}.pub`)).trim();
     });
     const publicKey = yield* prepare.pipe(Effect.mapError(mapError));
+    if (env.T3_MESH_SSH_HOME && platform !== "win32") {
+      const bin = path.join(directory, "bin");
+      yield* fs.makeDirectory(bin, { recursive: true, mode: 0o700 });
+      for (const program of ["ssh", "scp"] as const) {
+        const wrapper = sshWrapper(platform, process.execPath, configFile, program);
+        yield* fs.writeFileString(path.join(bin, wrapper.name), wrapper.contents);
+        yield* fs.chmod(path.join(bin, wrapper.name), 0o700);
+      }
+    }
     const write = Effect.fn("MeshSsh.write")(function* (
       filePath: string,
       lines: readonly string[],
@@ -114,6 +125,7 @@ export const layer = Layer.effect(
             Effect.gen(function* () {
               const files = yield* Effect.try(() =>
                 sshFiles(peers, {
+                  platform,
                   baseDir,
                   identity,
                   knownHosts,

@@ -16,30 +16,3 @@ export function conflictRoots(paths: readonly string[]): string[] {
     .sort()
     .filter((p, i, all) => !all.slice(0, i).some((parent) => p.startsWith(`${parent}/`)));
 }
-
-const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
-
-export function preserveConflictCommand(
-  root: string,
-  iso: string,
-  paths: readonly string[],
-): string {
-  const commands = conflictRoots(paths).map((relative) => {
-    const copy = conflictCopyPath(iso, relative);
-    const parent = copy.slice(0, copy.lastIndexOf("/"));
-    const parents = [
-      ...new Set([
-        ".t3-conflicts",
-        `.t3-conflicts/${iso.replace(/[:.]/g, "-")}`,
-        ...relative
-          .split("/")
-          .slice(0, -1)
-          .map((_, i, parts) => parts.slice(0, i + 1).join("/")),
-        ...parent.split("/").map((_, i, parts) => parts.slice(0, i + 1).join("/")),
-      ]),
-    ];
-    const guards = parents.map((p) => `test ! -L ${quote(p)}`).join(" && ");
-    return `${guards} || exit 1; if [ -e ${quote(relative)} ] || [ -L ${quote(relative)} ]; then mkdir -p -- ${quote(parent)} && test ! -e ${quote(copy)} && test ! -L ${quote(copy)} && mv -- ${quote(relative)} ${quote(copy)} || exit 1; fi`;
-  });
-  return `set -eu; cd -- ${quote(root)}; ${commands.join("; ")}`;
-}

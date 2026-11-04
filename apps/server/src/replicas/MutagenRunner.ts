@@ -1,7 +1,13 @@
 import { conflictMtimeScript } from "./conflictMtimeScript.ts";
 import { replicaIgnorePatterns } from "./replicaModel.ts";
 import { replicaManifestScript } from "./replicaManifestScript.ts";
-import { preserveConflictCommand } from "./conflictResolution.ts";
+import {
+  preserveConflictScript,
+  nodeCommand,
+  sshArguments,
+  mutagenSshEnvironment,
+} from "./ReplicaPlatform.ts";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { ReplicaError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -73,6 +79,11 @@ export interface CreateSession {
 export class MutagenRunner extends Context.Service<
   MutagenRunner,
   {
+    readonly changedPaths: (input: {
+      readonly source: ReplicaEndpoint;
+      readonly destination: ReplicaEndpoint;
+      readonly ignores: readonly string[];
+    }) => Effect.Effect<readonly string[], ReplicaError>;
     readonly assertReplicaPath: (input: {
       readonly source: ReplicaEndpoint;
       readonly destination: ReplicaEndpoint;
@@ -111,15 +122,24 @@ export class MutagenRunner extends Context.Service<
 >()("t3/replicas/MutagenRunner") {}
 
 const isReplicaError = Schema.is(ReplicaError);
+const encodeString = Schema.encodeSync(Schema.fromJsonString(Schema.String));
 const encodeIgnores = Schema.encodeEffect(Schema.fromJsonString(Schema.Array(Schema.String)));
 const decodeManifest = Schema.decodeEffect(
-  Schema.fromJsonString(Schema.Struct({ entries: Schema.Number, hash: Schema.String })),
+  Schema.fromJsonString(
+    Schema.Struct({
+      entries: Schema.Number,
+      hash: Schema.String,
+      files: Schema.Record(Schema.String, Schema.String),
+    }),
+  ),
 );
 
 const make = Effect.gen(function* () {
   const installer = yield* MutagenInstaller.MutagenInstaller;
   const runner = yield* ProcessRunner.ProcessRunner;
   const fs = yield* FileSystem.FileSystem;
+  const environment = yield* HostProcess.Environment;
+  const platform = yield* HostProcess.Platform;
   const run = Effect.fn("MutagenRunner.run")(function* (
     args: ReadonlyArray<string>,
     foreign = false,
@@ -132,8 +152,11 @@ const make = Effect.gen(function* () {
         env: {
           ...process.env,
           MUTAGEN_DATA_DIRECTORY: foreign ? undefined : installer.dataDirectory,
+          ...(!foreign
+            ? mutagenSshEnvironment(platform, environment.T3_MESH_SSH_HOME, installer.dataDirectory)
+            : {}),
         },
-        timeout: "10 minutes",
+        timeout: "60 seconds",
       })
       .pipe(
         Effect.mapError(
@@ -179,26 +202,18 @@ const make = Effect.gen(function* () {
           }),
       ),
     );
-    const args = ["-e", replicaManifestScript, "--", endpoint.path, encodedIgnores];
-    const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+    const pathJson = encodeString(endpoint.path);
+    const ignoresJson = encodeString(encodedIgnores);
+    const source = `process.argv = ['node', ${pathJson}, ${ignoresJson}];\n${replicaManifestScript}`;
+    const args = ["-e", source];
     const route = endpoint.route;
-    const port = route?.ssh.match(/:(\d+)$/);
     const result = yield* runner
       .run({
         command: route ? "ssh" : "node",
         args: route
-          ? [
-              "-o",
-              "BatchMode=yes",
-              ...(port && !route.identityFile ? ["-p", port[1]!] : []),
-              "--",
-              route.identityFile
-                ? `t3-mesh-${endpoint.environmentId}`
-                : route.ssh.replace(/:\d+$/, ""),
-              ["node", ...args].map(quote).join(" "),
-            ]
+          ? [...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME), nodeCommand(source)]
           : args,
-        timeout: "10 minutes",
+        timeout: "60 seconds",
       })
       .pipe(
         Effect.mapError(
@@ -244,6 +259,15 @@ const make = Effect.gen(function* () {
     foreignAction: Effect.fn("MutagenRunner.foreignAction")((action, session) =>
       run(["sync", action, session], true).pipe(Effect.asVoid),
     ),
+    changedPaths: Effect.fn("MutagenRunner.changedPaths")(function* (input) {
+      const [alpha, beta] = yield* Effect.all(
+        [manifest(input.source, input.ignores), manifest(input.destination, input.ignores)],
+        { concurrency: 2 },
+      );
+      return [...new Set([...Object.keys(alpha.files), ...Object.keys(beta.files)])]
+        .filter((file) => alpha.files[file] !== beta.files[file])
+        .sort();
+    }),
     assertReplicaPath: Effect.fn("MutagenRunner.assertReplicaPath")(function* (input) {
       const destination = yield* manifest(input.destination, input.ignores);
       if (destination.entries === 0) return;
@@ -257,28 +281,18 @@ const make = Effect.gen(function* () {
     }),
     preserveConflicts: Effect.fn("MutagenRunner.preserveConflicts")(function* (input) {
       const script = yield* Effect.try({
-        try: () => preserveConflictCommand(input.root, input.iso, input.paths),
+        try: () => preserveConflictScript(input.root, input.iso, input.paths),
         catch: (cause) =>
           new ReplicaError({ reason: "storage", message: "Unsafe conflict copy path.", cause }),
       });
       const route = input.route;
-      const port = route?.ssh.match(/:(\d+)$/);
       const result = yield* runner
         .run({
-          command: route ? "ssh" : "sh",
+          command: route ? "ssh" : "node",
           args: route
-            ? [
-                "-o",
-                "BatchMode=yes",
-                ...(port && !route.identityFile ? ["-p", port[1]!] : []),
-                "--",
-                route.identityFile
-                  ? `t3-mesh-${input.environmentId}`
-                  : route.ssh.replace(/:\d+$/, ""),
-                script,
-              ]
-            : ["-c", script],
-          timeout: "10 minutes",
+            ? [...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME), nodeCommand(script)]
+            : ["-e", script],
+          timeout: "60 seconds",
         })
         .pipe(
           Effect.mapError(
@@ -303,23 +317,12 @@ const make = Effect.gen(function* () {
         catch: (cause) =>
           new ReplicaError({ reason: "storage", message: "Unsafe conflict path.", cause }),
       });
-      const script = `node -e "eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())"`;
       const route = input.route;
-      const port = route?.ssh.match(/:(\d+)$/);
       const result = yield* runner
         .run({
           command: route ? "ssh" : "node",
           args: route
-            ? [
-                "-o",
-                "BatchMode=yes",
-                ...(port && !route.identityFile ? ["-p", port[1]!] : []),
-                "--",
-                route.identityFile
-                  ? `t3-mesh-${input.environmentId}`
-                  : route.ssh.replace(/:\d+$/, ""),
-                script,
-              ]
+            ? [...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME), nodeCommand(source)]
             : ["-e", source],
           timeout: "30 seconds",
         })

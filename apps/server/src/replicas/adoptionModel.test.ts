@@ -15,12 +15,12 @@ it.each([false, true])(
     const config = {
       ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
       machines: {
-        source: { reach: { target: { ssh: "user@target-host:2222" } } },
-        target: { label: "Target" },
+        source: {},
+        target: { label: "target" },
       },
     };
     const local = { protocol: "local", path: "/source" },
-      remote = { protocol: "ssh", host: "target-host", path: "/chosen/copy" };
+      remote = { protocol: "ssh", host: "t3-target", path: "/chosen/copy" };
     const session = {
       identifier: "N-manual",
       paused: false,

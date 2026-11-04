@@ -4,7 +4,6 @@ import { useNavigation } from "@react-navigation/native";
 import {
   meshMachineLastSync,
   meshConnectionText,
-  setMachineReach,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import { Switch } from "react-native";
 import { useMeshOverview } from "../workspaces/useMeshOverview";
@@ -283,39 +282,6 @@ export function SettingsMachinesRouteScreen() {
                       </Pressable>
                     </>
                   ) : null}
-                  {machines
-                    .filter((other) => other.environmentId !== environmentId)
-                    .map((other) => (
-                      <View key={other.environmentId} className="gap-2">
-                        <Text>SSH route to {other.label}</Text>
-                        <AppTextInput
-                          accessibilityLabel={`SSH destination for ${other.label}`}
-                          defaultValue={machine.reach[other.environmentId]?.ssh ?? ""}
-                          placeholder="user@host or SSH alias"
-                          onEndEditing={(e) =>
-                            updateConfig((c) =>
-                              setMachineReach(c, environmentId, other.environmentId, {
-                                ssh: e.nativeEvent.text,
-                                identityFile: machine.reach[other.environmentId]?.identityFile,
-                              }),
-                            )
-                          }
-                        />
-                        <AppTextInput
-                          accessibilityLabel={`Identity file for ${other.label}`}
-                          defaultValue={machine.reach[other.environmentId]?.identityFile ?? ""}
-                          placeholder="Identity file (optional)"
-                          onEndEditing={(e) =>
-                            updateConfig((c) =>
-                              setMachineReach(c, environmentId, other.environmentId, {
-                                ssh: machine.reach[other.environmentId]?.ssh ?? "",
-                                identityFile: e.nativeEvent.text,
-                              }),
-                            )
-                          }
-                        />
-                      </View>
-                    ))}
                 </View>
               </MachineEditor>
             </View>

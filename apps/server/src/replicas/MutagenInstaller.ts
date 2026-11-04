@@ -61,12 +61,12 @@ const make = Effect.gen(function* () {
         message: `Mutagen does not support ${target}.`,
       });
     const archive = `mutagen_${target}_v0.18.1.tar.gz`;
-    const response = yield* http.get(
-      `https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/${archive}`,
-    );
+    const response = yield* http
+      .get(`https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/${archive}`)
+      .pipe(Effect.timeout("30 seconds"));
     if (response.status !== 200)
       return yield* new ReplicaError({ reason: "mutagen", message: "Mutagen download failed." });
-    const bytes = new Uint8Array(yield* response.arrayBuffer);
+    const bytes = new Uint8Array(yield* response.arrayBuffer.pipe(Effect.timeout("30 seconds")));
     if (Hex.encode(yield* crypto.digest("SHA-256", bytes)) !== checksum)
       return yield* new ReplicaError({
         reason: "mutagen",
@@ -77,6 +77,7 @@ const make = Effect.gen(function* () {
     yield* fs.writeFile(archivePath, bytes);
     const result = yield* runner.run({
       command: "tar",
+      timeout: "30 seconds",
       args: ["-xzf", archivePath, "-C", staging],
       env: { ...process.env, MUTAGEN_DATA_DIRECTORY: join(baseDir, "mutagen") },
     });

@@ -54,7 +54,6 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
     user: "dev",
     port: 2222,
     host: "cloudbox",
-    routes: { studio: { ssh: "dev@cloudbox:2222", identityFile: "/keys/test" } },
   });
   const config = parseConfig(result?.doc);
   expect(referenceErrors(config)).toEqual([]);

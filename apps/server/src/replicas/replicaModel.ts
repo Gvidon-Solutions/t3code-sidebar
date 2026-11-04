@@ -13,12 +13,8 @@ export function sessionIdentity(logicalKey: string, environmentId: string) {
   const environmentTag = environmentId.slice(0, 8);
   return { name: `t3-${logicalHash}-${environmentTag}`, logicalHash, environmentTag };
 }
-export function replicaDriver(config: SidebarWorkspacesConfig, replica: SidebarProjectMount) {
-  if (!replica.source) return undefined;
-  if (config.machines[replica.environmentId]?.reach?.[replica.source]?.ssh)
-    return replica.environmentId;
-  if (config.machines[replica.source]?.reach?.[replica.environmentId]?.ssh) return replica.source;
-  return undefined;
+export function replicaDriver(_config: SidebarWorkspacesConfig, replica: SidebarProjectMount) {
+  return replica.role === "replica" && replica.source ? replica.environmentId : undefined;
 }
 export function sessionStatus(
   session: MutagenSession,
@@ -99,15 +95,8 @@ export function sessionStatus(
   };
 }
 
-export function sshEndpoint(
-  route: { readonly ssh: string; readonly identityFile?: string },
-  environmentId: string,
-  root: string,
-) {
-  if (route.identityFile) return `t3-mesh-${environmentId}:${root}`;
-  return /:\d+$/.test(route.ssh)
-    ? `ssh://${route.ssh}${root.startsWith("/") ? "" : "/"}${root}`
-    : `${route.ssh}:${root}`;
+export function sshEndpoint(route: { readonly ssh: string }, _environmentId: string, root: string) {
+  return `${route.ssh}:${root}`;
 }
 
 export function remoteRepresentation(

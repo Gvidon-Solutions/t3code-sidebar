@@ -271,19 +271,9 @@ describe("mergeReplicaStatusLists", () => {
 });
 
 describe("replicaDriverEnvironment", () => {
-  it("is the replica when it has a route to the source, else the source when it has a route back", () => {
-    const rep = replica("beta", "alpha");
-    const forward = {
-      ...empty,
-      machines: { beta: { reach: { alpha: { ssh: "alpha.local" } } } },
-    };
-    const backward = {
-      ...empty,
-      machines: { alpha: { reach: { beta: { ssh: "beta.local" } } } },
-    };
-    expect(replicaDriverEnvironment(forward, rep)).toBe("beta");
-    expect(replicaDriverEnvironment(backward, rep)).toBe("alpha");
-    expect(replicaDriverEnvironment(empty, rep)).toBeNull();
+  it("always drives from the replica, including when machine facts are unavailable", () => {
+    expect(replicaDriverEnvironment(empty, replica("beta", "alpha"))).toBe("beta");
+    expect(replicaDriverEnvironment(empty, { ...replica("beta", "alpha"), role: "primary" })).toBeNull();
   });
 });
 
