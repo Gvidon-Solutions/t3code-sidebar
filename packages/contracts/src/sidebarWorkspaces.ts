@@ -59,6 +59,16 @@ export type SidebarMachineReportedSshd = typeof SidebarMachineReportedSshd.Type;
  * reported facts live here; names, tags and reach belong to the mesh config.
  */
 export const SidebarMachineReported = Schema.Struct({
+  sshRoutes: Schema.optionalKey(
+    Schema.Record(
+      Schema.String,
+      Schema.Struct({
+        status: Schema.Literals(["ok", "failed", "unknown"]),
+        reason: Schema.optionalKey(Schema.String),
+        checkedAt: Schema.String,
+      }),
+    ),
+  ),
   version: Schema.String,
   platform: Schema.Struct({
     os: Schema.String,

@@ -51,6 +51,12 @@ export class MeshLayoutError extends Schema.TaggedError<MeshLayoutError>()("Mesh
 
 /** Live state of one replica on the machine that drives or holds it. */
 export const ReplicaLiveStatus = Schema.Struct({
+  lag: Schema.optionalKey(
+    Schema.Struct({
+      filesBehind: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+      bytesBehind: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+    }),
+  ),
   skipped: SidebarProjectMountStatus.fields.skipped,
   skippedPaths: SidebarProjectMountStatus.fields.skippedPaths,
   conflictCopies: Schema.optionalKey(

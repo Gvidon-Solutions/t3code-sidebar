@@ -1,5 +1,5 @@
 import { MeshConfigRevision } from "@t3tools/contracts";
-import { migrateConfig } from "@t3tools/shared/meshConfig/migration";
+import { migrateConfig, extractConfigMigration } from "@t3tools/shared/meshConfig/migration";
 import type { Json, MeshLayoutDocument } from "@t3tools/shared/meshLayout";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
@@ -17,7 +17,11 @@ export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const mesh = yield* MeshLayoutService;
     const snapshot = yield* mesh.read;
-    if (Object.hasOwn(snapshot.document, "mesh.config")) return;
+    if (Object.hasOwn(snapshot.document, "mesh.config")) {
+      const entries = extractConfigMigration(snapshot.document, yield* mesh.nextHlc);
+      if (Object.keys(entries).length) yield* mesh.apply(entries);
+      return;
+    }
     const self = yield* (yield* ServerEnvironment).getDescriptor;
     const settings = yield* (yield* ServerSettingsService).getSettings;
     const peers = yield* (yield* PeerLinks).list;
@@ -31,6 +35,7 @@ export const layer = Layer.effectDiscard(
     if (!migration) return;
     const h = yield* mesh.nextHlc;
     const revision = {
+      sequence: 1,
       revision: h,
       doc: migration.doc,
       author: mesh.environmentId,
@@ -43,6 +48,8 @@ export const layer = Layer.effectDiscard(
     };
     for (const [name, environmentId] of Object.entries(migration.bindings))
       entries[`mesh.machineBinding/${name}`] = { v: environmentId, h };
+    for (const [name, metadata] of Object.entries(migration.migration))
+      entries[`mesh.machineMigration/${encodeURIComponent(name)}`] = { v: metadata as Json, h };
     yield* mesh.apply(entries);
   }),
 );
