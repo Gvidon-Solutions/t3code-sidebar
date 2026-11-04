@@ -43,7 +43,7 @@ GOR_UNIT=t3code-sidebar.service
 GOR_LEGACY_UNIT=t3-mesh-e2e.service
 GV_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
 GOR_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
-IMAGE=t3-mesh-e2e:dev
+IMAGE="${MESH_E2E_IMAGE:-t3-mesh-e2e:dev}"
 MUTAGEN_VERSION=0.18.1
 MUTAGEN_SHA256=7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f
 

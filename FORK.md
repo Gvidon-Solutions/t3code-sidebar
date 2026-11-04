@@ -108,14 +108,20 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
-### 2026-11-04 — N1 session framing kernel (internal, not server-integrated)
+### 2026-11-04 — N1 persistent peer connections and SSH byte pipes
 
-- **What.** Adds a tested multiplexed session kernel for calls, notifications and byte pipes.
-  This does not yet change the peer transport used by the product; N1 acceptance is incomplete.
-- **How.** JSON frames, request deadlines and cancellation, session-scoped receipts, credit-based
-  Duplex streams with half-close, explicit heartbeat ticks and connection-selection/backoff rules.
-- **Where.** `apps/server/src/peer/connection/PeerChannel.ts` and its tests; the internal API and
-  integration boundary are described in `docs/mesh/README.md`.
+- **What.** Linked servers keep one bidirectional connection, upgrade one-way links to mutual
+  trust, relay through one reachable neighbor and expose the SSH byte pipe used by managed SSH.
+  Settings and the CLI report direct, relayed and offline states with failure reasons.
+- **How.** Authenticated WebSocket framing multiplexes deadline/cancellable MCP calls,
+  notifications and credit-controlled half-closed Duplex streams; deterministic dial selection,
+  heartbeat and independent jittered reconnects recover network loss. Durable creation receipts
+  and command identities prevent duplicate work across reconnects and restarts. Calls use the
+  existing authenticated MCP router; disconnected and N-1 peers retain HTTP fallback.
+- **Where.** Server peer/connection services, PeerMcpClient, mesh routing and MCP receipt boundary;
+  contracts and client-runtime machine state; web/mobile Mesh settings and t3ctl mesh status.
+  The t3 mesh pipe CLI bridges local private IPC to the peer's loopback sshd; its S1 contract is
+  documented in docs/mesh/README.md.
 
 ### 2026-11-03 — T3 Mesh — Stage N authority and automatic conflict copies
 

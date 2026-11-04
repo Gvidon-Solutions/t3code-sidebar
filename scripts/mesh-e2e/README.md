@@ -239,3 +239,33 @@ when absent, copies the existing local Codex auth fixture into the isolated
 container HOME (override its source with `MESH_E2E_CODEX_AUTH`). Credentials never
 enter evidence logs. The installer test temporarily moves only the test server's
 `bin` directory aside and proves T3 restores pinned Mutagen on first use.
+
+## N1 transport acceptance
+
+Hold the shared bed lock before deploying or running these scenarios. Build in the current
+worktree with `MESH_E2E_BUILD_CURRENT=1`, an owned `MESH_E2E_ARTIFACTS` directory and
+`MESH_E2E_IMAGE=t3-mesh-e2e:n1`; the build uses Node 26 and includes system OpenSSH for the
+pipe check. `MESH_E2E_REUSE_NETWORK=1 deploy.sh` retains existing keys, tunnels and Mutagen
+installation instead of editing the owner's SSH files. The isolated gvidon unit has its own
+HOME under its base directory, so replica reconciliation cannot write the owner's SSH config.
+
+`network-proxies.sh up` places a transparent test proxy in front of each server; `block`
+rejects external HTTP POST /mcp while preserving WebSocket upgrades and other HTTP routes.
+`GET /__N1_network` reports accepted/refused MCP requests and upgrade counts. The proxy state
+files live under /tmp with an N1 prefix. `network-rounds.sh 1` and `2` run the existing rounds
+with N1 project/thread/file names and reuse the already-provisioned SSH routes. They preserve
+other stages' fixtures. `network-proxies.sh down` restores the original server ports and
+removes only the N1 proxy units/drop-ins.
+
+`network-ssh.mjs <binary> <base-dir> <machine> <user> <host-keys-json>` runs OpenSSH through
+the actual `t3 mesh pipe` ProxyCommand, pins reported host keys, checks a 200 MiB upload and
+download by SHA-256, interrupts an upload and verifies a new SSH session. Use
+`N1_SSH_PREPARE_ONLY=1` to generate an isolated client public key first, authorize that key
+only in the test sshd, and pass its private path with `N1_SSH_IDENTITY` for the test run.
+No key, token or generated known_hosts file belongs in the repository.
+
+For an independent local check while the shared bed is occupied, run
+`N1_IMAGE=t3-mesh-e2e:n1 node scripts/mesh-e2e/network-local.mjs` after building that image.
+It starts two isolated source servers and one disposable container, exercises incoming-only
+reachability, a relayed file read and the full SSH transfer/interruption checks. It uses owned
+temporary homes and keys, stops its captured child processes and removes only its own container.

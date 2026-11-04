@@ -192,40 +192,75 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   bed restarts. Use the same owned control socket for deployment SSH and SCP. Deployment retries
   happen before fault injection; they are not proof of automatic replica recovery.
 
-## N1 connection wire kernel
+## Persistent peer connections and S1 pipes
 
-`apps/server/src/peer/connection/PeerChannel.ts` implements the session framing kernel;
-`PeerChannel.test.ts` exercises it with two independent endpoints. This kernel is not yet
-connected to the server listener or `PeerMcpClient`. HTTP remains the production peer transport.
-It does not establish mutual trust, discover routes, persist receipts or implement the S1
-`openPipe(machine, target)` service. S1 must not depend on this as a completed network API.
+A link maintains one authenticated WebSocket at GET /peer. PeerSessions reconciles each link
+independently; the lower environment ID's outbound socket wins simultaneous dials. A peer
+with no advertised address can receive calls on its outbound connection. Plain WS follows the
+same loopback/encrypted-tailnet origin restriction as the HTTP peer client. Reverse credentials
+are minted locally, exchanged on the authenticated connection and persisted in the secret store;
+legacy one-way links upgrade when their first connection succeeds. Unlink revokes both sets of
+credentials and sends the remote unlink before closing when the peer is reachable.
 
-The kernel accepts one complete JSON text frame at `receive`, with a 1 MiB frame ceiling.
-`call(body, { key, signal, timeoutMs })` returns a Promise, defaults to 60 seconds and propagates
-cancellation to the receiving handler's AbortSignal. Requests and results use distinct UUIDs;
-keys coalesce identical in-flight requests and retain their outcome for this session only.
-Reusing a key with a different JSON body fails. The current cache refuses new keys after 4096
-receipts; a production adapter needs durable receipts independent of session lifetime before
-using this for retryable creation. There are at most 128 pending outbound calls and 128 pipes.
-`event(name, body)` is unacknowledged delivery to the other endpoint.
+Code boundaries:
 
-`openPipe(target)` returns a Node Duplex with independent readable and writable halves. Its
-write callback waits for receiver credit; callers must honor `write()` backpressure or use
-`pipeline`. Each direction starts with 256 KiB of credit and sends at most 32 KiB per data frame.
-A reader replenishes credit when pulling buffered data. `end()` closes only the writable half;
-`destroy()` resets the pipe. Connection loss fails all outstanding writes, calls and pipes.
-The target callback must attach an error handler and connect the accepted stream to its target.
-The kernel carries target strings; authorizing `sshd` and resolving its loopback port belongs
-to the authenticated server adapter, never to the wire decoder.
+- PeerChannel owns JSON framing, per-call deadlines/cancellation, notifications, pipe credit and
+  half-close. PeerWire adapts ordered WebSocket I/O with bounded queues and scoped cleanup.
+- PeerSessions owns deterministic selection, heartbeat (15 s / 45 s), independent reconnect
+  backoff (1–15 s, jitter), direct-route advertisements and a maximum of one relay hop.
+- PeerCallDispatcherLive invokes the existing authenticated MCP router in process. It does not
+  POST to a loopback HTTP endpoint. PeerMcpClient uses a connected route first and retains HTTPS
+  MCP fallback for disconnected or N-1 peers; existing routing/files/thread/layout callers use
+  that same service. PeerTransport is the shared construction-time slot that breaks the router
+  and peer-client dependency cycle, so every caller observes the same connection manager.
+- PeerReceipts stores creation responses across reconnects/restarts. The request key is scoped
+  to the original caller through a relay; payload/access changes cannot reuse it. Standard
+  creating tools receive deterministic command IDs on a resumed request. An unfinished unknown
+  extension tool is refused explicitly instead of replaying an unclassified side effect.
+  The frame layer does not cache answers: every repeated key reaches current authentication
+  and permission checks before the receipt is read.
+- PeerFacts reads system public SSH host keys, global sshd port (including Include files), OS,
+  architecture, version and user; absent keys are reported as absent. PeerPlatform owns system
+  paths and private local socket permissions. Facts and connection observations are written to
+  machine/<env>.reported; labels and reach policy belong to C1's mesh config.
 
-An adapter supplies synchronous frame enqueueing, close, call/event/target handlers and a
-monotonic clock. It must bound its socket output queue, deliver frames in order, authenticate
-before exposing the channel, reauthorize each call, call `tick()` regularly, and call `close()`
-on socket loss. `tick` sends a ping after 15 seconds and fails after 45 seconds of silence or
-an unanswered ping, even if unrelated incoming traffic continues. `preferConnection` defines
-which dial direction wins when both sockets exist; `reconnectDelay` supplies capped jittered
-backoff. These helpers do not themselves own sockets, select connections or schedule reconnects.
+S1 calls PeerSessions.openPipe({ environmentId, target: "sshd", signal? }). It returns an
+Effect of a Node Duplex or a typed PeerConnectionError. The target always connects to the
+receiving machine's loopback sshd, at its reported port (22 by default). It requires a full-access
+link. Relay selection is transparent, takes at most one hop, and never permits arbitrary TCP
+hosts or ports. This is a byte transport; S1 supplies OpenSSH authentication and pins the public
+host keys received in facts. There is no SSH implementation or private SSH key in the pipe.
 
-The tests prove framing, concurrent calls and key rejection, cancellation/deadlines, heartbeat,
-credit bounds, half-close, a 200 MiB stream and interruption. They do not substitute for the
-three-server bed, HTTPS-disabled MCP proof or an SSH ProxyCommand test.
+Honor write() backpressure or use pipeline(). Each direction starts with 256 KiB of receiver
+credit and sends at most 32 KiB per data frame. end() sends EOF on the writable half while the
+readable half remains open; destroy(error) resets both halves and preserves the reason. A
+cancelled AbortSignal resets that pipe. Connection loss fails outstanding calls, pipes and
+writes; streams do not resume after a reconnect. Start a fresh SSH session after a transport
+failure. Attach an error handler before using a returned Duplex. The manager's event(env,
+name, body) returns false if delivery could not be queued; events are unacknowledged, so layout
+replication must retain its reconnect/watermark safety net.
+There are at most 128 pending calls and 128 pipes per connection; JSON frames are limited to
+32 MiB and transport queues to 64 MiB. Calls default to a 60 s deadline. Use the existing
+server-scoped PeerSessions service; another manager would own competing sockets.
+
+The server binary exposes t3 mesh pipe <machine-name-or-env> [--base-dir <server-base>].
+PeerPipeIpc resolves the name using the local server's links/layout, then bridges stdin/stdout
+through the live network. It opens no state database or peer credential in the ProxyCommand
+process. Unix IPC lives in a private per-user directory with a 0600 socket; Windows uses a named
+pipe. Diagnostics go to stderr. Use the same base directory as the running local server.
+
+Mesh status includes direct / relayed (via) / offline since, last error and source/observation
+time. The shared client machine builder chooses current observations before stale replicated
+facts; web/desktop Settings, mobile Settings and t3ctl mesh status consume these states.
+t3_mesh_routes keeps its N-1 array result by default; details:true adds connections alongside
+routes. C1 must apply its receiving-side permissions before receipt replay in McpHttpServer.
+L1 uses PeerMcpClient.call for layout delivery and may subscribe to PeerSessions.events for
+peer.connected; F1's creating calls must retain the same idempotency key across a retry.
+
+PeerChannel, PeerSessions, PeerWire, PeerFacts, PeerReceipts and PeerNetwork tests cover framing,
+credit bounds, half-close/interruption, real stopped-reading sockets, both tie arrival orders,
+independent reconnects and changed addresses, durable receipts, mutual unlink, incoming-only
+reachability and one-hop relay. PeerNetwork disables external POST /mcp after connecting and
+checks a 200 MiB relay transfer by byte count and SHA-256.
+The CLI subprocess test checks binary stdio, nonzero refusal, stderr diagnostics and that no
+database is opened by the ProxyCommand process.
