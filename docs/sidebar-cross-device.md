@@ -21,6 +21,8 @@ voice can do everything by name: "создай тред в проекте X на
 
 ## 0. Object model (the law; code must match it exactly)
 
+> **Superseded in part (2026-11-04):** `docs/mesh/CONCEPT.md` is the law for T3 Mesh v2 (no authority, mesh config, persistent links, managed SSH, lite replicas, `t3 run`, fork instead of cross-machine move). Where they differ, CONCEPT.md wins.
+
 Primitives (unchanged, owned by T3/upstream or the OS): **Machine** (one T3 server, `environmentId`), **Link** (PeerLink between two machines), **Folder** (a directory on one machine), **Thread** (lives on exactly one machine, has a working directory), **Sync session** (one Mutagen session keeping two folders equal), **Layout document** (the replicated CRDT).
 
 Layers built on them:

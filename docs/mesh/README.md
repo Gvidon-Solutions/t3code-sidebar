@@ -2,7 +2,7 @@
 
 Read this before changing anything that touches machines, projects across machines, replicas,
 the shared sidebar layout, thread moves, files on other machines, the `t3` skill or the agent
-instructions. It is the map; the law is `docs/sidebar-cross-device.md` §0 (object model,
+instructions. It is the map; the law is `docs/mesh/CONCEPT.md` (v2, wins on conflict) and `docs/sidebar-cross-device.md` §0 (object model,
 invariants, authority rule). Keep both current when you change behaviour.
 
 ## What it is
