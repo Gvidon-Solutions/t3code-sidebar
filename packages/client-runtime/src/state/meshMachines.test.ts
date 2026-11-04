@@ -437,6 +437,16 @@ it("excludes unlinked seven-day-old machines and forgets only their layout facts
   expect(forgotten.map((machine) => machine.environmentId)).toEqual(["cloudbox"]);
   expect(forgetMachineFacts(config, "cloudbox").machines).toEqual({ studio: { label: "Studio" } });
   expect(config.machines.cloudbox).toBeDefined();
+  expect(
+    deriveMeshFooterStatus({
+      enabled: true,
+      machines: [
+        ...active,
+        ...forgotten.map((machine) => ({ ...machine, lastSeenAt: "2026-10-01T00:00:00Z" })),
+      ],
+      now: Date.parse("2026-11-05T00:00:00Z"),
+    }),
+  ).toEqual({ kind: "synced", count: 1 });
 });
 
 it("does not resurrect a forgotten machine through replica source facts", () => {
