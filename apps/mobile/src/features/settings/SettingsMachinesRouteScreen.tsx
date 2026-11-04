@@ -1,4 +1,3 @@
-import { meshAuthorityOf } from "@t3tools/shared/meshLayout";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { minuteTick } from "@t3tools/client-runtime/clock";
 import { useNavigation } from "@react-navigation/native";
@@ -226,26 +225,6 @@ export function SettingsMachinesRouteScreen() {
           {linkOpen ? (
             <MeshLinkForm links={links} machines={machines} onDone={() => setLinkOpen(false)} />
           ) : null}
-        </SettingsSection>
-        <SettingsSection
-          title={`Authority: ${machines.find((m) => m.environmentId === meshAuthorityOf(base))?.label ?? "Automatic"}`}
-        >
-          {machines.map((machine) => (
-            <Pressable
-              key={machine.environmentId}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: meshAuthorityOf(base) === machine.environmentId }}
-              className="p-4"
-              onPress={() =>
-                updateConfig((current) => ({ ...current, meshAuthority: machine.environmentId }))
-              }
-            >
-              <Text>
-                {meshAuthorityOf(base) === machine.environmentId ? "✓ " : ""}
-                {machine.label}
-              </Text>
-            </Pressable>
-          ))}
         </SettingsSection>
         {config === null ? (
           <SettingsSection>

@@ -36,7 +36,22 @@ config.projectMounts["lp-remote"] = [
 ];
 if (process.env.T3CTL_TEST_REMOTE_DRIVER)
   config.machines[peer].reach = { [self]: { ssh: "atlas" } };
-const snapshot = { environmentId: self, config, document: {} };
+const meshDoc = {
+  schema: 1,
+  machines: { studio: { title: "Studio" } },
+  agents: { aliases: { "studio-agent": { harness: "codex", model: "model-from-destination" } } },
+};
+const meshRevision = {
+  revision: "1",
+  doc: meshDoc,
+  author: self,
+  writtenAt: "2026-01-01T00:00:00Z",
+};
+const snapshot = {
+  environmentId: self,
+  config,
+  document: { "mesh.config": { v: meshRevision, h: "0000000000001.00000.studio" } },
+};
 const thread = {
   threadId: process.env.T3CTL_TEST_FULL_ID ? "mcp:full-thread-example-0123456789" : "thread-1",
   title: process.env.T3CTL_TEST_LONG_TITLE
@@ -57,6 +72,31 @@ const tools = ["t3_project_place", "t3_project_machines", "t3_pending_request"].
 function call(name, args) {
   log(name, args);
   switch (name) {
+    case "t3_mesh_config_get":
+      return { current: meshRevision, bindings: { studio: self } };
+    case "t3_mesh_config_plan":
+      return {
+        doc: args.doc,
+        actions: [{ id: "machines/studio", server: self, description: "Apply display" }],
+      };
+    case "t3_mesh_config_apply":
+      return { ...meshRevision, revision: "2", doc: args.doc };
+    case "t3_mesh_config_rollback":
+      return { ...meshRevision, revision: "3" };
+    case "t3_mesh_config_history":
+      return { revisions: [meshRevision] };
+    case "t3_mesh_status":
+      return {
+        servers: [
+          {
+            environmentId: self,
+            revision: "1",
+            actions: [
+              { id: "machines/studio", server: self, description: "Apply display", state: "done" },
+            ],
+          },
+        ],
+      };
     case "t3_environment_read":
       return env(args.environmentId);
     case "t3_project_list":

@@ -22,7 +22,6 @@ test("standalone encoder agrees with shared core and clocks can be received", ()
       machines: { offline: { label: "Offline" } },
       projectMounts: { x: [] },
       projectTitles: { x: "Shared project title" },
-      meshAuthority: "offline",
       projectAliases: { "legacy:/path": "x" },
       projectMountStatus: {
         x: {

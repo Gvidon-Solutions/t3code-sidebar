@@ -7,12 +7,12 @@ import {
   buildMeshLinkInput,
   buildPlaceInput,
   meshProjectTitle,
-  meshAuthorityEdit,
   buildUiOpenTarget,
   defaultMachineTag,
   encodeLegacyEntries,
   fileDeepLink,
   importLegacyEntries,
+  meshConfigApplyInput,
   normalizeMachineName,
   parseArgs,
   resolveMachineRef,
@@ -255,23 +255,21 @@ NodeTest.test("mesh display names never expose logical or legacy keys", () => {
     NodeAssert.equal(meshProjectTitle({}, key, "/"), "Untitled project");
   }
 });
-NodeTest.test(
-  "authority edits advance past a future remote clock without electing a CLI device",
-  () => {
-    const edit = meshAuthorityEdit(
-      {
-        environmentId: "server",
-        document: { "mesh.authority": { h: "9999999999000.99999.remote", v: "old" } },
-      },
-      "new",
-      1,
-    );
-    NodeAssert.deepEqual(edit.entries["mesh.authority"], {
-      h: "9999999999001.00000.server",
-      v: "new",
-    });
-  },
-);
+NodeTest.test("mesh config apply uses the current revision unless a base is given", () => {
+  const snapshot = { current: { revision: "10.00000.studio" } };
+  NodeAssert.deepEqual(meshConfigApplyInput(snapshot, "schema: 1", undefined), {
+    doc: "schema: 1",
+    baseRevision: "10.00000.studio",
+  });
+  NodeAssert.deepEqual(meshConfigApplyInput(snapshot, "schema: 1", "9.00000.studio"), {
+    doc: "schema: 1",
+    baseRevision: "9.00000.studio",
+  });
+  NodeAssert.deepEqual(meshConfigApplyInput({ current: null }, "schema: 1", undefined), {
+    doc: "schema: 1",
+    baseRevision: null,
+  });
+});
 
 NodeTest.test("place retains repeated ignore patterns and the requested transport", () => {
   const parsed = parseArgs([

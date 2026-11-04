@@ -108,11 +108,11 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
-### 2026-11-04 — Mesh config foundations and read-only file boundary
+### 2026-11-04 — Mesh config core (Stage C1)
 
-- **What.** Adds the §9 config contract, pure resolution helpers and a storage/executor service for explicit planner registration. Read-only linked file calls are limited to local project representations. This is a partial C1 foundation, without production config API or planner registration.
-- **How.** Open Effect schemas preserve future fields; the existing YAML parser accepts both input formats. Revision checks, rollback and fifty-revision retention use layout entries. Receiving file checks resolve symlinks before checking representation roots.
-- **Where.** `packages/contracts/src/meshConfig.ts`, `packages/shared/src/meshConfig/`, server `mesh/MeshConfig.ts`, `mesh/validateEntries.ts` and `files/FilesService.ts`.
+- **What.** The mesh is now configured by one desired-state document. Machines, link permissions, replica rules, ignores and conflict policy come from it; a one-time migration writes the first revision from existing settings. Authority is gone from layout, clients, CLI and MCP. Link permissions are enforced on the receiving server, and read-only links cannot read files outside project folders.
+- **How.** `mesh.config`/history/bindings/status are validated layout entries. The `MeshConfig` service validates schema and references, plans with registered planners, applies with optimistic concurrency (stale base gets a path diff), rolls back as a new revision, keeps fifty revisions and publishes per-server action status. Planners cover display, links, replica placement through `ProjectReplicaService`, representation ignores and conflict policy; SSH and bootstrap add planners later. The schema accepts JSON or YAML and preserves unknown fields. The receiver resolves the authenticated peer environment id (unambiguous legacy label for N-1 sessions) and applies `effectiveLinkPermissions`; file checks realpath first, replica and thread handlers check their permission, and an unknown peer gets defaults. Existing links migrate to `files: all`.
+- **Where.** `packages/contracts/src/meshConfig.ts`, `packages/shared/src/meshConfig/`, server `mesh/{MeshConfig,MeshConfigPlanners,MeshConfigMigration,MeshLinkPermissions}.ts`, `mesh/validateEntries.ts`, `files/FilesService.ts`, `mcp/toolkits/mesh/`; web/mobile Mesh settings and authority pickers; `agent-kit/skills/t3`.
 
 ### 2026-11-03 — T3 Mesh — Stage N authority and automatic conflict copies
 

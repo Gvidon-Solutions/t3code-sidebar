@@ -375,6 +375,20 @@ test("new uses destination defaults and resolves explicit models against destina
     .modelSelection;
   assert.equal(selection.instanceId, "custom");
   assert.equal(selection.model, "model-from-destination");
+  const aliased = run([
+    "new",
+    "--project",
+    "Demo",
+    "--on",
+    "lab",
+    "--agent",
+    "studio-agent",
+    "task",
+  ]);
+  assert.equal(
+    aliased.calls.find((call) => call.name === "t3_thread_launch").args.modelSelection.model,
+    "model-from-destination",
+  );
 });
 
 test("full selftest requires an explicit provider and models before any server operation", () => {
@@ -391,4 +405,29 @@ test("full selftest requires an explicit provider and models before any server o
   assert.equal(result.status, 1);
   assert.match(result.stderr, /set T3CTL_SELFTEST_AGENT from the test server's model catalog/);
   assert.equal(result.stdout, "");
+});
+
+test("mesh config CLI reaches get, plan, apply, rollback, history and status transports", () => {
+  assert.equal(JSON.parse(run(["mesh", "config", "get", "--json"]).out).current.revision, "1");
+  const planned = run(["mesh", "config", "plan", "schema: 1", "--json"]);
+  assert.equal(
+    planned.calls.find((call) => call.name === "t3_mesh_config_plan").args.doc,
+    "schema: 1",
+  );
+  const applied = run(["mesh", "config", "apply", "schema: 1", "--json"]);
+  assert.deepEqual(applied.calls.find((call) => call.name === "t3_mesh_config_apply").args, {
+    doc: "schema: 1",
+    baseRevision: "1",
+  });
+  const stale = run(["mesh", "config", "apply", "schema: 1", "--base", "old", "--json"]);
+  assert.equal(
+    stale.calls.find((call) => call.name === "t3_mesh_config_apply").args.baseRevision,
+    "old",
+  );
+  assert.equal(JSON.parse(run(["mesh", "config", "rollback", "1", "--json"]).out).revision, "3");
+  assert.equal(JSON.parse(run(["mesh", "config", "history", "--json"]).out).revisions.length, 1);
+  assert.equal(
+    JSON.parse(run(["mesh", "status", "--json"]).out).configStatus.servers[0].actions[0].state,
+    "done",
+  );
 });

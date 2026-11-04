@@ -3,6 +3,11 @@
 Law: [sidebar-cross-device.md §0](sidebar-cross-device.md#0-object-model-the-law-code-must-match-it-exactly).
 The implementation extends the existing document, contracts and services. It retains L's rename/move work, M's thread controls and QA's presentation changes from `xdev`.
 
+> **Stage C1 update (2026-11-04):** `docs/mesh/CONCEPT.md` wins. The mesh authority described in the
+> Stage N rows below is removed: conflict winner comes from the mesh config's project policy
+> (`primary-wins` default, `newest-wins` by mtime), and `mesh.authority` entries are ignored as
+> unknown data. Read the authority rows as historical Stage N evidence, not current behaviour.
+
 Paths below are relative to `packages/shared/src/meshLayout`, `packages/client-runtime/src/state`, or `apps/server/src` unless a client/CLI path is stated explicitly. Test names identify behavioral proofs, not merely type checks.
 
 ## Invariants

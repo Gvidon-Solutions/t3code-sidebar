@@ -59,4 +59,34 @@ Customer-specific agent instructions and SSH routes belong in `global/GLOBAL.md`
 
 Run `T3CTL_OFFLINE_ONLY=1 bash scripts/selftest.sh` for offline checks. Live checks require `T3CTL_ISOLATED_TEST=1` and an explicit `T3CTL_ORIGIN`; use a disposable server base directory and runtime. Full selftests require `T3CTL_SELFTEST_AGENT`, `T3CTL_SELFTEST_MODEL` and `T3CTL_SELFTEST_ALT_MODEL` from the test server's catalog. They can spend real model turns: run them only when that behavior is needed and authorized. Do not use a customer's live state for tests.
 
+## Mesh config (desired state)
+
+The mesh is configured by one document. Edit it with `mesh config`; never edit machine or link settings by hand.
+
+```yaml
+schema: 1                 # required
+machines:
+  studio:                 # slug name, stable everywhere
+    label: ST             # short tag in the UI
+    title: Studio         # display name
+    color: blue
+    aliases: [desk]
+    reach: auto           # auto | { address: https://host:port } | { via: other-slug }
+    ssh: { user: dev, port: 22 }
+links:
+  default: { files: projects, replicas: true, threads: true }  # files: all|projects|none
+  overrides: [{ between: [studio, laptop], files: all }]
+ssh: { mode: managed }    # managed | existing | off
+projects:
+  defaults: { conflicts: primary-wins, replica: lite, ignore: [] }
+  overrides: [{ project: "app*", replica: full, ignore: [/data] }]  # title globs
+replicas:
+  ignore: ["*.log"]
+  rules: [{ project: "*", on: laptop, when: always }]  # always | harness-unavailable | manual
+agents:
+  aliases: { 1017: { harness: opencode, model: deepseek/deepseek-flash } }
+```
+
+Commands: `mesh config get`, `mesh config plan --file c.yaml`, `mesh config apply --file c.yaml [--base REV]`, `mesh config rollback REV`, `mesh config history`. Apply is optimistic: pass the revision it was based on, or let the CLI read the current one. A stale base is refused with a path diff. `mesh status` shows every action per server as done, in progress or failed with the reason. Files permission defaults to `projects`; `all` lets a linked peer read any file this server's user can read; `none` refuses. A read-only link is always limited to project folders. New machines are bound to their environment id when they join; do not type environment ids in the config.
+
 The mesh requires meshLayout, replicas, files and project placement APIs. Older servers fall back to legacy layout reads; placement and alias edits explain that a mesh build is required. Legacy layout migration is dry-run first, preserves offline keys, and backs up configs before applying. Never create or remove links or representations unless requested.
