@@ -8,6 +8,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as Ref from "effect/Ref";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import * as Config from "./MeshConfig.ts";
 
@@ -60,6 +62,75 @@ const layer = Config.layer.pipe(
       },
     ]),
   ),
+);
+const oncePlanners = Layer.succeed(Config.MeshConfigPlanners, [
+  {
+    name: "once",
+    plan: Effect.fn("test.once.plan")(function* () {
+      const mesh = yield* MeshLayoutService;
+      return (yield* mesh.read).document["mesh.machineBinding/studio"]?.v
+        ? []
+        : [{ id: "once/studio", server: "studio", description: "Bind studio" }];
+    }),
+    reconcile: Effect.fn("test.once.reconcile")(
+      function* () {
+        const mesh = yield* MeshLayoutService;
+        const h = yield* mesh.nextHlc;
+        yield* mesh.apply({ "mesh.machineBinding/studio": { v: "studio", h } });
+      },
+      Effect.mapError(
+        (error) => new MeshConfigError({ reason: "storage", message: error.message }),
+      ),
+    ),
+  },
+]);
+it.layer(Config.layer.pipe(Layer.provideMerge(layout), Layer.provide(oncePlanners)))(
+  "MeshConfig completed action retention",
+  (it) => {
+    it.effect("retains done actions after their world changes and after a restart", () =>
+      Effect.gen(function* () {
+        const config = yield* Config.MeshConfig;
+        const mesh = yield* MeshLayoutService;
+        yield* config.apply({ schema: 1, machines: { studio: {} } }, null);
+        const ready = yield* Deferred.make<void>();
+        const reports = yield* config.statusChanges.pipe(
+          Stream.tap(() => Deferred.succeed(ready, undefined)),
+          Stream.drop(1),
+          Stream.take(3),
+          Stream.runCollect,
+          Effect.forkScoped,
+        );
+        yield* Deferred.await(ready);
+        yield* config.start;
+        const completed = {
+          id: "once/studio",
+          server: "studio",
+          description: "Bind studio",
+          state: "done",
+        };
+        expect((yield* Fiber.join(reports)).at(-1)).toEqual([completed]);
+        yield* Effect.gen(function* () {
+          const restarted = yield* Config.MeshConfig;
+          expect(restarted).not.toBe(config);
+          yield* restarted.start;
+          const actions = yield* restarted.statusChanges.pipe(
+            Stream.filter((items) =>
+              items.some((item) => item.id === "once/studio" && item.state === "done"),
+            ),
+            Stream.runHead,
+          );
+          expect(Option.getOrThrow(actions)).toEqual([completed]);
+        }).pipe(
+          Effect.provide(
+            Layer.fresh(Config.layer).pipe(
+              Layer.provide(Layer.succeed(MeshLayoutService, mesh)),
+              Layer.provide(oncePlanners),
+            ),
+          ),
+        );
+      }),
+    );
+  },
 );
 it.layer(layer)("MeshConfig storage", (it) => {
   it.effect("validates, plans, rejects stale edits, rolls back and retains fifty revisions", () =>

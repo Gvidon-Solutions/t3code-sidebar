@@ -231,14 +231,24 @@ export const layer = Layer.effect(
         Stream.runForEach((revision) =>
           Effect.gen(function* () {
             if (!revision) return;
-            yield* Ref.set(activeRevision, revision.revision);
+            const lastRevision = yield* Ref.get(activeRevision);
+            const observed = yield* mesh.read;
+            const stored = decodeStatus(
+              observed.document[`mesh.configStatus/${encodeURIComponent(mesh.environmentId)}`]?.v,
+            );
+            const previous =
+              lastRevision === revision.revision
+                ? yield* SubscriptionRef.get(statuses)
+                : stored._tag === "Some" && stored.value.revision === revision.revision
+                  ? stored.value.actions
+                  : [];
             const errors = referenceErrors(revision.doc);
             if (errors.length)
               return yield* new MeshConfigError({
                 reason: "validation",
                 message: errors.map((e) => `${e.path}: ${e.message}`).join("; "),
               });
-            const bound = bindingsFromLayout((yield* mesh.read).document);
+            const bound = bindingsFromLayout(observed.document);
             const actions = (yield* Effect.forEach(planners, (planner) =>
               planner.plan(revision.doc, undefined).pipe(
                 Effect.provideService(MeshLayoutService, mesh),
@@ -252,10 +262,15 @@ export const layer = Layer.effect(
                   action.server === mesh.environmentId ||
                   bound[action.server] === mesh.environmentId,
               );
-            yield* SubscriptionRef.set(
-              statuses,
-              actions.map(({ action }) => ({ ...action, state: "in_progress" as const })),
+            const pendingIds = new Set(actions.map(({ action }) => action.id));
+            const completed = previous.filter(
+              (item) => item.state === "done" && !pendingIds.has(item.id),
             );
+            yield* SubscriptionRef.set(statuses, [
+              ...completed,
+              ...actions.map(({ action }) => ({ ...action, state: "in_progress" as const })),
+            ]);
+            yield* Ref.set(activeRevision, revision.revision);
             yield* publishStatus(revision.revision).pipe(
               Effect.catch((error) => Effect.logError("Config status persistence failed", error)),
             );
@@ -269,13 +284,15 @@ export const layer = Layer.effect(
                     onSuccess: () =>
                       SubscriptionRef.update(statuses, (items) =>
                         items.map((item, i) =>
-                          i === index ? { ...item, state: "done" as const } : item,
+                          i === completed.length + index
+                            ? { ...item, state: "done" as const }
+                            : item,
                         ),
                       ),
                     onFailure: (error) =>
                       SubscriptionRef.update(statuses, (items) =>
                         items.map((item, i) =>
-                          i === index
+                          i === completed.length + index
                             ? { ...item, state: "failed" as const, reason: error.message }
                             : item,
                         ),
@@ -302,6 +319,7 @@ export const layer = Layer.effect(
           }).pipe(
             Effect.catch((error) =>
               Effect.gen(function* () {
+                if (revision) yield* Ref.set(activeRevision, revision.revision);
                 yield* SubscriptionRef.set(statuses, [
                   {
                     id: "config/reconcile",

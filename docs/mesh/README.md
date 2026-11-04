@@ -236,6 +236,8 @@ S1 (SSH) and B1 (bootstrap, updates, agent instructions) add planners through th
 else should grow a second reconciliation path. Every action has a sixty-second deadline, failures do
 not cancel other actions, and status keeps `done` / `in_progress` / `failed` plus the reason, for
 every server.
+Completed actions remain visible for their revision when the observed diff disappears, including
+after restart. Planner action ids must be stable and namespaced by planner.
 
 Link permissions are enforced on the receiving server by `mesh/MeshLinkPermissions.ts`: the peer
 machine is resolved from its environment id in the signed OAuth session; N-1 sessions use legacy
