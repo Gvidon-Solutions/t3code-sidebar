@@ -1,3 +1,22 @@
+vi.mock("../../components/ui/Sheet", () => ({
+  Sheet: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+}));
+vi.mock("../../components/ui/Button", () => ({
+  Button: ({
+    label,
+    onPress,
+    disabled,
+  }: {
+    label: string;
+    onPress: () => void;
+    disabled?: boolean;
+  }) => (
+    <button disabled={disabled} onClick={onPress}>
+      {label}
+    </button>
+  ),
+}));
+vi.mock("../../state/meshReplicas", () => ({ useReplicaStatuses: () => [] }));
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
@@ -62,7 +81,7 @@ it("shows state and opens editing and pairing without machine settings fields", 
   try {
     act(() => root.render(<SettingsMachinesRouteScreen />));
     expect(container.textContent).toContain("1 machine · 1 online");
-    expect(container.textContent).toContain("Version: 1.0");
+    expect(container.textContent).toContain("1.0");
     expect(container.querySelector("input")).toBeNull();
     act(() =>
       [...container.querySelectorAll("button")]

@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { MeshConfigRevision, type EnvironmentId } from "@t3tools/contracts";
 import { MeshConfigEditor } from "@t3tools/client-runtime/state/mesh-layout-client";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
@@ -19,6 +19,7 @@ export function MeshConfigDialog({
   onClose: () => void;
 }) {
   const mesh = useMeshLayout();
+  const gutter = useRef<HTMLPreElement>(null);
   const get = useAtomCommand(meshLayoutAtoms.configGet, { reportFailure: false });
   const plan = useAtomCommand(meshLayoutAtoms.configPlan, { reportFailure: false });
   const apply = useAtomCommand(meshLayoutAtoms.configApply, { reportFailure: false });
@@ -65,10 +66,11 @@ export function MeshConfigDialog({
         </DialogHeader>
         <DialogPanel>
           <div className="flex flex-col gap-3">
-            <div className="flex max-h-96 overflow-auto rounded border border-border font-mono text-xs leading-5">
+            <div className="flex h-80 overflow-hidden rounded border border-border font-mono text-xs leading-5">
               <pre
+                ref={gutter}
                 aria-hidden="true"
-                className="select-none bg-muted px-2 py-2 text-muted-foreground"
+                className="select-none overflow-hidden bg-muted px-2 py-2 text-muted-foreground"
               >
                 {state.text
                   .split("\n")
@@ -80,8 +82,12 @@ export function MeshConfigDialog({
                 disabled={state.busy}
                 aria-invalid={state.error !== null}
                 aria-describedby="mesh-config-errors"
+                wrap="off"
+                onScroll={(event) => {
+                  if (gutter.current) gutter.current.scrollTop = event.currentTarget.scrollTop;
+                }}
                 spellCheck={false}
-                className="min-h-72 min-w-0 flex-1 resize-y bg-background p-2 outline-none"
+                className="min-w-0 flex-1 resize-none overflow-auto bg-background p-2 outline-none"
                 value={state.text}
                 onChange={(event) => editor.edit(event.target.value)}
               />
@@ -127,13 +133,13 @@ export function MeshConfigDialog({
             </div>
             <details>
               <summary>History</summary>
-              {history.map((revision) => (
+              {history.map((revision, index) => (
                 <div
                   key={revision.revision}
                   className="flex items-center justify-between gap-2 py-2"
                 >
                   <span>
-                    {revision.writtenAt} · {revision.author}
+                    Config r{revision.sequence ?? history.length - index} · {revision.writtenAt}
                   </span>
                   <Button
                     variant="outline"
@@ -141,7 +147,7 @@ export function MeshConfigDialog({
                     disabled={state.busy}
                     onClick={() => editor.restore(revision)}
                   >
-                    Restore {revision.revision}
+                    Restore r{revision.sequence ?? history.length - index}
                   </Button>
                 </div>
               ))}

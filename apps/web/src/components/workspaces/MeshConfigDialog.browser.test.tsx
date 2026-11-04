@@ -64,6 +64,7 @@ it("edits YAML, shows validation paths and plans a history restoration before ap
   );
   const yaml = screen.getByRole("textbox", { name: "Mesh YAML" });
   await expect.element(yaml).toHaveValue("schema: 1\nmachines: {}\n");
+  await expect.element(screen.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
   await yaml.fill(
     "schema: 1\nmachines: {}\nreplicas:\n  rules: [{project: '*', on: missing, when: manual}]",
   );
@@ -72,13 +73,17 @@ it("edits YAML, shows validation paths and plans a history restoration before ap
     .element(screen.getByRole("alert"))
     .toHaveTextContent("replicas.rules.0.on: Unknown machine: missing");
   await screen.getByText("History", { exact: true }).click();
-  await screen.getByRole("button", { name: "Restore old" }).click();
+  await screen.getByRole("button", { name: "Restore r1" }).click();
   await expect.element(yaml).toHaveValue("schema: 1\nmachines: {}\nssh:\n  mode: off\n");
   await expect.element(screen.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
   await screen.getByRole("button", { name: "Plan", exact: true }).click();
   await expect
     .element(screen.getByRole("list", { name: "Config plan" }))
     .toHaveTextContent("Write managed SSH config");
+  await yaml.fill("schema: 1\nmachines: {}\nssh: {mode: managed}\n");
+  await expect.element(screen.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
+  await screen.getByRole("button", { name: "Restore r1" }).click();
+  await screen.getByRole("button", { name: "Plan", exact: true }).click();
   await screen.getByRole("button", { name: "Apply", exact: true }).click();
   await vi.waitFor(() =>
     expect(mocks.apply).toHaveBeenCalledWith({

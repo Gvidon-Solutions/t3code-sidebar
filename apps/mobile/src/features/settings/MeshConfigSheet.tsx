@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useResolveClassNames } from "uniwind";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Modal, ScrollView, View, Pressable } from "react-native";
@@ -5,6 +6,7 @@ import { MeshConfigRevision, type EnvironmentId } from "@t3tools/contracts";
 import { MeshConfigEditor } from "@t3tools/client-runtime/state/mesh-layout-client";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import * as Schema from "effect/Schema";
+import { Button } from "../../components/ui/Button";
 import { AppText, AppTextInput } from "../../components/ui/AppText";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { meshLayoutAtoms } from "../../state/mesh-layout";
@@ -20,7 +22,8 @@ export function MeshConfigSheet({
   onClose: () => void;
 }) {
   const mesh = useMeshLayout();
-  const surfaceStyle = useResolveClassNames("flex-1 bg-sheet px-5 py-8");
+  const insets = useSafeAreaInsets();
+  const surfaceStyle = useResolveClassNames("flex-1 bg-sheet px-5");
   const get = useAtomCommand(meshLayoutAtoms.configGet, { reportFailure: false });
   const plan = useAtomCommand(meshLayoutAtoms.configPlan, { reportFailure: false });
   const apply = useAtomCommand(meshLayoutAtoms.configApply, { reportFailure: false });
@@ -57,7 +60,9 @@ export function MeshConfigSheet({
     .sort((a, b) => b.writtenAt.localeCompare(a.writtenAt));
   return (
     <Modal visible presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View style={surfaceStyle}>
+      <View
+        style={[surfaceStyle, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+      >
         <ScrollView keyboardShouldPersistTaps="handled">
           <View className="gap-4">
             <AppText className="text-xl font-t3-bold">Mesh config</AppText>
@@ -69,24 +74,43 @@ export function MeshConfigSheet({
             >
               <AppText>Close</AppText>
             </Pressable>
-            <View className="flex-row rounded border border-border">
-              <AppText accessibilityElementsHidden className="px-2 py-3 font-mono text-xs">
-                {state.text
-                  .split("\n")
-                  .map((_, i) => i + 1)
-                  .join("\n")}
-              </AppText>
-              <AppTextInput
-                accessibilityLabel="Mesh YAML"
-                editable={!state.busy}
-                multiline
-                autoCapitalize="none"
-                autoCorrect={false}
-                className="min-h-72 flex-1 px-2 py-3 font-mono text-xs text-foreground"
-                value={state.text}
-                onChangeText={editor.edit}
-                style={{ textAlignVertical: "top" }}
-              />
+            <View className="rounded border border-border" style={{ height: 320 }}>
+              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                <ScrollView horizontal keyboardShouldPersistTaps="handled">
+                  <View className="flex-row">
+                    <AppText
+                      accessibilityElementsHidden
+                      className="px-2 py-3 font-mono text-xs"
+                      style={{ lineHeight: 18 }}
+                    >
+                      {state.text
+                        .split("\n")
+                        .map((_, i) => i + 1)
+                        .join("\n")}
+                    </AppText>
+                    <AppTextInput
+                      accessibilityLabel="Mesh YAML"
+                      editable={!state.busy}
+                      multiline
+                      scrollEnabled={false}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      className="px-2 py-3 font-mono text-xs text-foreground"
+                      value={state.text}
+                      onChangeText={editor.edit}
+                      style={{
+                        textAlignVertical: "top",
+                        lineHeight: 18,
+                        width: Math.max(
+                          320,
+                          ...state.text.split("\n").map((line) => line.length * 8 + 32),
+                        ),
+                        height: Math.max(320, (state.text.split("\n").length + 1) * 18 + 24),
+                      }}
+                    />
+                  </View>
+                </ScrollView>
+              </ScrollView>
             </View>
             {state.error ? (
               <AppText accessibilityRole="alert" className="text-danger-foreground">
@@ -106,26 +130,23 @@ export function MeshConfigSheet({
                 </Pressable>
               </>
             ) : null}
+            {state.actions?.length === 0 ? <AppText>No changes needed.</AppText> : null}
             {state.actions?.map((action) => (
               <AppText key={action.id}>{action.description}</AppText>
             ))}
-            <View className="flex-row gap-6">
-              <Pressable
-                accessibilityRole="button"
+            <View className="flex-row gap-3">
+              <Button
+                label="Plan"
+                tone="secondary"
                 disabled={state.busy}
                 onPress={() => void editor.plan()}
-                className="min-h-[45px] justify-center"
-              >
-                <AppText>Plan</AppText>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
+              />
+              <Button
+                tone="primary"
+                label="Apply"
                 disabled={state.busy || state.actions === null}
                 onPress={() => void editor.apply()}
-                className="min-h-[45px] justify-center"
-              >
-                <AppText>Apply</AppText>
-              </Pressable>
+              />
             </View>
             <Pressable
               accessibilityRole="button"
@@ -136,7 +157,7 @@ export function MeshConfigSheet({
               <AppText>History</AppText>
             </Pressable>
             {historyOpen
-              ? history.map((revision) => (
+              ? history.map((revision, index) => (
                   <Pressable
                     key={revision.revision}
                     accessibilityRole="button"
@@ -144,7 +165,7 @@ export function MeshConfigSheet({
                     className="min-h-[45px] justify-center"
                   >
                     <AppText>
-                      Restore {revision.writtenAt} · {revision.author}
+                      Restore r{revision.sequence ?? history.length - index} · {revision.writtenAt}
                     </AppText>
                   </Pressable>
                 ))

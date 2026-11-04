@@ -43,6 +43,7 @@ export class MeshConfigEditor {
     stale: null,
     busy: false,
   };
+  private plannedText: string | null = null;
   private listeners = new Set<() => void>();
   private readonly rpc: ConfigRpc;
   constructor(rpc: ConfigRpc) {
@@ -59,7 +60,10 @@ export class MeshConfigEditor {
     this.state = { ...this.state, ...patch };
     for (const listener of this.listeners) listener();
   }
-  edit = (text: string) => this.set({ text, actions: null, error: null, stale: null });
+  edit = (text: string) => {
+    this.plannedText = null;
+    this.set({ text, actions: null, error: null, stale: null });
+  };
   private async run(operation: () => Promise<void>) {
     if (this.state.busy) return;
     this.set({ busy: true, error: null });
@@ -87,16 +91,22 @@ export class MeshConfigEditor {
   restore = (revision: MeshConfigRevision) => this.edit(configYaml(revision.doc));
   plan = () =>
     this.run(async () => {
-      const doc = parseConfig(this.state.text);
+      const text = this.state.text;
+      this.plannedText = null;
+      this.set({ actions: null });
+      const doc = parseConfig(text);
       const errors = referenceErrors(doc);
       if (errors.length)
         throw new Error(errors.map((error) => `${error.path}: ${error.message}`).join("\n"));
       const plan = await this.rpc.plan(doc);
-      this.set({ actions: plan.actions });
+      if (this.state.text === text) {
+        this.plannedText = text;
+        this.set({ actions: plan.actions });
+      }
     });
   apply = () =>
     this.run(async () => {
-      if (this.state.actions === null)
+      if (this.state.actions === null || this.plannedText !== this.state.text)
         throw new Error("Plan the configuration before applying it.");
       const revision = await this.rpc.apply(
         parseConfig(this.state.text),

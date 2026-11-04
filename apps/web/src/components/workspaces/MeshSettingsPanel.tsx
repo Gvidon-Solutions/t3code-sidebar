@@ -1,3 +1,4 @@
+import { useReplicaStatuses } from "../../state/meshReplicas";
 import { useEnvironmentQuery } from "../../state/query";
 import { meshLayoutAtoms } from "../../state/meshLayout";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
@@ -6,6 +7,9 @@ import { MeshConfigDialog } from "./MeshConfigDialog";
 import { linkRequestFailureMessage } from "@t3tools/client-runtime/link-request";
 import {
   linkMeshMachines,
+  meshConfigHistory,
+  meshConfigApplyGroups,
+  meshMachineDetailRows,
   meshConnectionText,
   partitionMeshMachines,
   forgetMachineFacts,
@@ -30,7 +34,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { useEnvironments } from "../../state/environments";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "../settings/settingsLayout";
+import { SettingsPageContainer, SettingsSection } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -271,108 +275,173 @@ export function MeshSettingsPanel() {
   );
   const [linkOpen, setLinkOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [detail, setDetail] = useState<string | null>(null);
+  const live = useReplicaStatuses();
+  const config = mesh.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
+  const selected = machines.find((machine) => machine.environmentId === detail);
+  const groups = meshConfigApplyGroups(
+    applyStatus.data,
+    meshConfigHistory(mesh.state?.snapshot?.document ?? {}),
+    now,
+  );
+  const online = (machine: (typeof machines)[number]) =>
+    machine.connectedHere ||
+    machine.network?.state === "direct" ||
+    machine.network?.state === "relayed";
   return (
     <SettingsPageContainer>
       <SettingsSection
         title="Mesh"
-        headerAction={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter((machine) => machine.connectedHere || machine.network?.state === "direct" || machine.network?.state === "relayed").length} online`}
+        headerAction={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter(online).length} online`}
       >
-        <SettingsRow
-          title="Configuration"
-          control={
-            <div className="flex gap-2">
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={mesh.source === null}
-                onClick={() => setEditing(true)}
+        <div className="flex gap-2 px-4 py-3">
+          <Button size="sm" disabled={mesh.source === null} onClick={() => setEditing(true)}>
+            Edit config
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={sources.length === 0}
+            onClick={() => setLinkOpen(true)}
+          >
+            Link a machine
+          </Button>
+        </div>
+        <ul className="divide-y divide-border/60">
+          {machines.map((machine) => (
+            <li key={machine.environmentId}>
+              <button
+                type="button"
+                aria-label={`Open ${machine.label} details`}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring"
+                onClick={() => setDetail(machine.environmentId)}
               >
-                Edit config
-              </Button>
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={sources.length === 0}
-                onClick={() => setLinkOpen(true)}
-              >
-                Link a machine
-              </Button>
-            </div>
-          }
-        />
+                <MachineTag machine={machine} />
+                <span className="min-w-0 flex-1 truncate font-medium">{machine.label}</span>
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 shrink-0 rounded-full ${online(machine) ? "bg-success" : "bg-muted-foreground"}`}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {online(machine)
+                    ? machine.network?.state === "relayed"
+                      ? meshConnectionText(machine, machines)
+                      : "Online"
+                    : (meshConnectionText(machine, machines) ??
+                      (machine.lastSeenAt ? `Offline since ${machine.lastSeenAt}` : "Offline"))}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {machine.version ?? "Version not reported"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {machine.platform?.os ?? "Platform not reported"}
+                </span>
+                <span aria-hidden="true">›</span>
+              </button>
+              {machine.unnamed ? (
+                <div className="px-4 pb-2">
+                  <Button size="xs" variant="ghost" onClick={() => setEditing(true)}>
+                    Name it in config
+                  </Button>
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       </SettingsSection>
-      {machines.map((machine) => (
-        <SettingsSection
-          key={machine.environmentId}
-          title={machine.label}
-          titleAction={<MachineTag machine={machine} />}
+      {selected ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDetail(null);
+          }}
         >
-          <SettingsRow
-            title={mesh.config?.machines[machine.environmentId]?.title ?? machine.label}
-            status={
-              machine.connectedHere
-                ? "Online"
-                : (meshConnectionText(machine, machines) ?? "Offline")
-            }
-          />
-          {machine.version ? <SettingsRow title="Version" status={machine.version} /> : null}
-          <details className="px-4 py-2 text-sm">
-            <summary>Machine details</summary>
-            <p>{mesh.config?.machines[machine.environmentId]?.reported?.platform.os}</p>
-            <p>{meshConnectionText(machine, machines)}</p>
-            {machine.lastError ? <p role="alert">{machine.lastError}</p> : null}
-            <p>
-              {machine.replicas} {machine.replicas === 1 ? "replica" : "replicas"}
-            </p>
-            {Object.entries(mesh.config?.projectMountStatus ?? {}).flatMap(([key, statuses]) =>
-              statuses[machine.environmentId]
-                ? [
-                    <p key={key}>
-                      {mesh.config?.projectTitles[key] ?? "Project"}:{" "}
-                      {statuses[machine.environmentId]?.state} ·{" "}
-                      {statuses[machine.environmentId]?.message}
-                    </p>,
-                  ]
-                : [],
-            )}
-          </details>
-        </SettingsSection>
-      ))}
+          <DialogPopup>
+            <DialogHeader>
+              <DialogTitle>{selected.label}</DialogTitle>
+              <DialogDescription>Machine details</DialogDescription>
+            </DialogHeader>
+            <DialogPanel>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-muted-foreground">Reach path</dt>
+                  <dd>
+                    {meshConnectionText(selected, machines) ??
+                      (online(selected) ? "Connected directly" : "Offline")}
+                  </dd>
+                </div>
+                {selected.lastError ? (
+                  <div>
+                    <dt>Last error</dt>
+                    <dd role="alert">{selected.lastError}</dd>
+                  </div>
+                ) : null}
+                {meshMachineDetailRows(selected, config, live).map((row) => (
+                  <div key={row.label}>
+                    <dt className="text-muted-foreground">{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {selected.unnamed ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDetail(null);
+                    setEditing(true);
+                  }}
+                >
+                  Name it in config
+                </Button>
+              ) : null}
+            </DialogPanel>
+          </DialogPopup>
+        </Dialog>
+      ) : null}
       {forgotten.length ? (
         <details>
           <summary>Forgotten machines ({forgotten.length})</summary>
           {forgotten.map((machine) => (
-            <SettingsRow
+            <div
               key={machine.environmentId}
-              title={machine.label}
-              control={
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() =>
-                    mesh.edit((config) => forgetMachineFacts(config, machine.environmentId))
-                  }
-                >
-                  Forget
-                </Button>
-              }
-            />
+              className="flex items-center justify-between px-4 py-2"
+            >
+              <span>{machine.label}</span>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() =>
+                  mesh.edit((config) => forgetMachineFacts(config, machine.environmentId))
+                }
+              >
+                Forget
+              </Button>
+            </div>
           ))}
         </details>
       ) : null}
-      <SettingsSection title="Last config apply">
-        {applyStatus.error ? <p role="alert">{applyStatus.error}</p> : null}
-        {applyStatus.data?.servers.flatMap((server) =>
-          server.actions.map((action) => (
-            <SettingsRow
-              key={`${server.environmentId}:${action.id}`}
-              title={action.description}
-              status={action.state}
-              description={action.reason}
-            />
-          )),
-        )}
-      </SettingsSection>
+      {applyStatus.error ? <p role="alert">{applyStatus.error}</p> : null}
+      {groups.map((group) => (
+        <SettingsSection key={group.revision} title={group.title}>
+          <ul className="space-y-2 px-4 py-3 text-sm">
+            {group.actions.map((action) => (
+              <li key={`${action.server}:${action.id}`}>
+                <span>
+                  {action.description} ·{" "}
+                  {action.state === "in_progress"
+                    ? "In progress"
+                    : action.state === "done"
+                      ? "Done"
+                      : "Failed"}
+                </span>
+                {action.reason ? (
+                  <p className="text-xs text-muted-foreground">{action.reason}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </SettingsSection>
+      ))}
       <LinkWithDialog
         open={linkOpen}
         onOpenChange={setLinkOpen}
@@ -381,7 +450,11 @@ export function MeshSettingsPanel() {
         initialSource={sources[0]?.environmentId ?? null}
       />
       {editing && mesh.source ? (
-        <MeshConfigDialog environmentId={mesh.source} onClose={() => setEditing(false)} />
+        <MeshConfigDialog
+          key={mesh.source}
+          environmentId={mesh.source}
+          onClose={() => setEditing(false)}
+        />
       ) : null}
     </SettingsPageContainer>
   );

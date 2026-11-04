@@ -1,3 +1,4 @@
+vi.mock("../../state/meshReplicas", () => ({ useReplicaStatuses: () => [] }));
 vi.mock(import("../../state/query"), () => ({
   useEnvironmentQuery: (() => ({ data: null, error: null })) as never,
 }));
@@ -14,6 +15,7 @@ import { render } from "../../../test/render";
 import { MeshSettingsPanel } from "./MeshSettingsPanel";
 
 const mocks = vi.hoisted(() => ({
+  review: false,
   edit: vi.fn<(update: (config: SidebarWorkspacesConfig) => SidebarWorkspacesConfig) => void>(),
 }));
 
@@ -28,7 +30,7 @@ vi.mock(import("../../hooks/useSettings"), async (original) => ({
 }));
 vi.mock(import("../../hooks/useMeshLayout"), () => ({
   useMeshLayout: (() => ({
-    config: DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    config: reviewConfig(),
     source: "local",
     edit: mocks.edit,
   })) as never,
@@ -36,8 +38,16 @@ vi.mock(import("../../hooks/useMeshLayout"), () => ({
 vi.mock(import("../../hooks/useMeshOverview"), () => ({
   useMeshOverview: () => ({
     machines: buildMeshMachines({
-      config: DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-      connections: [{ environmentId: "local", label: "Local", connected: true, version: "0.1.5" }],
+      config: reviewConfig(),
+      connections: [
+        { environmentId: "local", label: "Local", connected: true, version: "0.1.5" },
+        ...(mocks.review
+          ? [
+              { environmentId: "local", label: "Duplicate", connected: false },
+              { environmentId: "unnamed", label: "07e7a1a797ee", connected: true },
+            ]
+          : []),
+      ],
       links: [
         {
           environmentId: "local",
@@ -77,15 +87,17 @@ vi.mock(import("../../state/use-atom-command"), () => ({
 }));
 
 it("shows the known server version and omits a version row for a link without one", async () => {
+  mocks.review = false;
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
   await expect.element(screen.getByText("Remote", { exact: true }).first()).toBeVisible();
   await expect.element(screen.getByText("Unknown", { exact: true })).not.toBeInTheDocument();
-  await expect.element(screen.getByText("Version", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("Version", { exact: true })).not.toBeInTheDocument();
   await expect.element(screen.getByText("0.1.5", { exact: true })).toBeVisible();
 });
 
 it("keeps configuration fields in the config editor and shows machine state", async () => {
+  mocks.review = false;
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
   await expect.element(screen.getByRole("button", { name: "Edit config" })).toBeVisible();
@@ -93,4 +105,40 @@ it("keeps configuration fields in the config editor and shows machine state", as
   await expect.element(screen.getByRole("textbox")).not.toBeInTheDocument();
   await expect.element(screen.getByText("2 machines · 1 online", { exact: true })).toBeVisible();
   expect(mocks.edit).not.toHaveBeenCalled();
+});
+
+function reviewConfig(): SidebarWorkspacesConfig {
+  return mocks.review
+    ? {
+        ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+        machines: {
+          stale: {
+            title: "Old laptop",
+            reported: {
+              version: "1.0",
+              user: null,
+              sshd: null,
+              platform: { os: "linux", arch: "x64", release: "test" },
+              reportedAt: "2026-10-01T00:00:00Z",
+            },
+          },
+        },
+      }
+    : DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
+}
+it("deduplicates phone-shaped connections, names unknown hosts and excludes forgotten layout facts from the count", async () => {
+  mocks.review = true;
+  mocks.edit.mockReset();
+  await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
+  await expect.element(screen.getByText("3 machines · 2 online", { exact: true })).toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: "Open Unnamed machine details" }))
+    .toBeVisible();
+  await expect.element(screen.getByRole("button", { name: "Name it in config" })).toBeVisible();
+  await expect.element(screen.getByText("07e7a1a797ee", { exact: true })).not.toBeInTheDocument();
+  await expect.element(screen.getByText("Old laptop", { exact: true })).not.toBeVisible();
+  await screen.getByText("Forgotten machines (1)").click();
+  await expect.element(screen.getByText("Old laptop", { exact: true })).toBeVisible();
+  await screen.getByRole("button", { name: "Forget", exact: true }).click();
+  expect(mocks.edit).toHaveBeenCalledOnce();
 });

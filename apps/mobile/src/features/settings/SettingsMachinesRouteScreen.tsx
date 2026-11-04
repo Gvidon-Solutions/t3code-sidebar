@@ -1,3 +1,6 @@
+import { Button } from "../../components/ui/Button";
+import { Sheet } from "../../components/ui/Sheet";
+import { useReplicaStatuses } from "../../state/meshReplicas";
 import { useEnvironmentQuery } from "../../state/query";
 import { meshLayoutAtoms } from "../../state/mesh-layout";
 import { minuteTick } from "@t3tools/client-runtime/clock";
@@ -6,6 +9,9 @@ import { useState, useSyncExternalStore } from "react";
 import { Pressable, View } from "react-native";
 import {
   meshConnectionText,
+  meshMachineDetailRows,
+  meshConfigApplyGroups,
+  meshConfigHistory,
   partitionMeshMachines,
   forgetMachineFacts,
 } from "@t3tools/client-runtime/state/mesh-machines";
@@ -37,80 +43,112 @@ export function SettingsMachinesRouteScreen() {
   const [linkOpen, setLinkOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
+  const live = useReplicaStatuses();
+  const base = config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
+  const selected = machines.find((machine) => machine.environmentId === detail);
+  const groups = meshConfigApplyGroups(
+    applyStatus.data,
+    meshConfigHistory(mesh.state?.snapshot?.document ?? {}),
+    now,
+  );
+  const online = (machine: (typeof machines)[number]) =>
+    machine.connectedHere ||
+    machine.network?.state === "direct" ||
+    machine.network?.state === "relayed";
   return (
     <SettingsScreen title="Mesh">
       <ScreenScrollView contentContainerClassName="gap-3 px-5 py-4">
         <SettingsSection
-          title={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter((machine) => machine.connectedHere || machine.network?.state === "direct" || machine.network?.state === "relayed").length} online`}
+          title={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter(online).length} online`}
         >
-          <Pressable
-            accessibilityRole="button"
-            disabled={mesh.source === null}
-            onPress={() => setEditing(true)}
-            className="min-h-[45px] p-4"
-          >
-            <AppText>Edit config</AppText>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: linkOpen }}
-            onPress={() => setLinkOpen(!linkOpen)}
-            className="min-h-[45px] p-4"
-          >
-            <AppText>Link a machine</AppText>
-          </Pressable>
+          <View className="flex-row flex-wrap gap-2 p-4">
+            <Button
+              label="Edit config"
+              tone="primary"
+              disabled={mesh.source === null}
+              onPress={() => setEditing(true)}
+            />
+            <Button
+              label="Link a machine"
+              tone="secondary"
+              onPress={() => setLinkOpen(!linkOpen)}
+            />
+          </View>
           {linkOpen ? (
             <MeshLinkForm links={links} machines={machines} onDone={() => setLinkOpen(false)} />
           ) : null}
-        </SettingsSection>
-        {machines.map((machine) => (
-          <SettingsSection
-            key={machine.environmentId}
-            title={config?.machines[machine.environmentId]?.title ?? machine.label}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: detail === machine.environmentId }}
-              onPress={() =>
-                setDetail(detail === machine.environmentId ? null : machine.environmentId)
-              }
-              className="min-h-[45px] gap-2 p-4"
-            >
-              <AppText>
-                {machine.tag} · {machine.label}
-              </AppText>
-              <AppText>
-                {machine.connectedHere
-                  ? "Online"
-                  : (meshConnectionText(machine, machines) ?? "Offline")}
-              </AppText>
-              {machine.version ? <AppText>Version: {machine.version}</AppText> : null}
-            </Pressable>
-            {detail === machine.environmentId ? (
-              <View className="gap-2 px-4 pb-4">
-                <AppText>{config?.machines[machine.environmentId]?.reported?.platform.os}</AppText>
-                <AppText>{meshConnectionText(machine, machines)}</AppText>
-                {machine.lastError ? (
-                  <AppText accessibilityRole="alert">{machine.lastError}</AppText>
-                ) : null}
-                <AppText>
-                  {machine.replicas} {machine.replicas === 1 ? "replica" : "replicas"}
+          {machines.map((machine) => (
+            <View key={machine.environmentId}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${machine.label} details`}
+                onPress={() => setDetail(machine.environmentId)}
+                className="min-h-[52px] flex-row items-center gap-2 border-t border-border-subtle px-4 py-3"
+              >
+                <AppText className="font-mono text-xs" style={{ color: machine.color }}>
+                  {machine.tag}
                 </AppText>
-                {Object.entries(config?.projectMountStatus ?? {}).flatMap(([key, statuses]) =>
-                  statuses[machine.environmentId]
-                    ? [
-                        <AppText key={key}>
-                          {config?.projectTitles[key] ?? "Project"}:{" "}
-                          {statuses[machine.environmentId]?.state} ·{" "}
-                          {statuses[machine.environmentId]?.message}
-                        </AppText>,
-                      ]
-                    : [],
-                )}
-              </View>
-            ) : null}
-          </SettingsSection>
-        ))}
+                <AppText numberOfLines={1} className="min-w-0 flex-1 font-t3-medium">
+                  {machine.label}
+                </AppText>
+                <View
+                  accessibilityElementsHidden
+                  className={`size-1.5 shrink-0 rounded-full ${online(machine) ? "bg-adaptive-emerald-600-400" : "bg-foreground-muted"}`}
+                />
+                <AppText
+                  numberOfLines={1}
+                  style={{ maxWidth: 110 }}
+                  className="text-xs text-foreground-muted"
+                >
+                  {online(machine)
+                    ? machine.network?.state === "relayed"
+                      ? meshConnectionText(machine, machines)
+                      : "Online"
+                    : (meshConnectionText(machine, machines) ??
+                      (machine.lastSeenAt ? `Offline since ${machine.lastSeenAt}` : "Offline"))}
+                </AppText>
+                <AppText numberOfLines={1} className="text-xs text-foreground-muted">
+                  {[machine.version, machine.platform?.os].filter(Boolean).join(" · ")}
+                </AppText>
+                <AppText>›</AppText>
+              </Pressable>
+              {machine.unnamed ? (
+                <View className="px-4 pb-2">
+                  <Button label="Name it in config" tone="text" onPress={() => setEditing(true)} />
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </SettingsSection>
+        {selected ? (
+          <Sheet title={selected.label} onClose={() => setDetail(null)}>
+            <ScreenScrollView contentContainerClassName="gap-3 p-5">
+              <AppText>
+                Reach path:{" "}
+                {meshConnectionText(selected, machines) ??
+                  (online(selected) ? "Connected directly" : "Offline")}
+              </AppText>
+              {selected.lastError ? (
+                <AppText accessibilityRole="alert">{selected.lastError}</AppText>
+              ) : null}
+              {meshMachineDetailRows(selected, base, live).map((row) => (
+                <View key={row.label}>
+                  <AppText className="text-xs text-foreground-muted">{row.label}</AppText>
+                  <AppText>{row.value}</AppText>
+                </View>
+              ))}
+              {selected.unnamed ? (
+                <Button
+                  label="Name it in config"
+                  onPress={() => {
+                    setDetail(null);
+                    setEditing(true);
+                  }}
+                />
+              ) : null}
+            </ScreenScrollView>
+          </Sheet>
+        ) : null}
         {forgotten.length ? (
           <SettingsSection>
             <Pressable
@@ -123,37 +161,53 @@ export function SettingsMachinesRouteScreen() {
             </Pressable>
             {forgottenOpen
               ? forgotten.map((machine) => (
-                  <Pressable
+                  <View
                     key={machine.environmentId}
-                    accessibilityRole="button"
-                    onPress={() =>
-                      mesh.edit((config) => forgetMachineFacts(config, machine.environmentId))
-                    }
-                    className="min-h-[45px] p-4"
+                    className="flex-row items-center justify-between px-4 py-2"
                   >
-                    <AppText>Forget {machine.label}</AppText>
-                  </Pressable>
+                    <AppText>{machine.label}</AppText>
+                    <Button
+                      label="Forget"
+                      tone="secondary"
+                      onPress={() =>
+                        mesh.edit((config) => forgetMachineFacts(config, machine.environmentId))
+                      }
+                    />
+                  </View>
                 ))
               : null}
           </SettingsSection>
         ) : null}
-        <SettingsSection title="Last config apply">
-          <View className="gap-2 p-4">
-            {applyStatus.error ? (
-              <AppText accessibilityRole="alert">{applyStatus.error}</AppText>
-            ) : null}
-            {applyStatus.data?.servers.flatMap((server) =>
-              server.actions.map((action) => (
-                <AppText key={`${server.environmentId}:${action.id}`}>
-                  {action.description}: {action.state}
-                  {action.reason ? ` · ${action.reason}` : ""}
-                </AppText>
-              )),
-            )}
-          </View>
-        </SettingsSection>
+        {applyStatus.error ? (
+          <AppText accessibilityRole="alert">{applyStatus.error}</AppText>
+        ) : null}
+        {groups.map((group) => (
+          <SettingsSection key={group.revision} title={group.title}>
+            <View className="gap-3 p-4">
+              {group.actions.map((action) => (
+                <View key={`${action.server}:${action.id}`}>
+                  <AppText>
+                    {action.description} ·{" "}
+                    {action.state === "in_progress"
+                      ? "In progress"
+                      : action.state === "done"
+                        ? "Done"
+                        : "Failed"}
+                  </AppText>
+                  {action.reason ? (
+                    <AppText className="text-xs text-foreground-muted">{action.reason}</AppText>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          </SettingsSection>
+        ))}
         {editing && mesh.source ? (
-          <MeshConfigSheet environmentId={mesh.source} onClose={() => setEditing(false)} />
+          <MeshConfigSheet
+            key={mesh.source}
+            environmentId={mesh.source}
+            onClose={() => setEditing(false)}
+          />
         ) : null}
       </ScreenScrollView>
     </SettingsScreen>

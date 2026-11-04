@@ -70,3 +70,21 @@ it("shows stale diffs, rebases edits onto the current config and restores histor
   expect(editor.getSnapshot().base?.revision).toBe("second");
   expect(editor.getSnapshot().text).not.toContain("version");
 });
+
+it("does not enable Apply when the text changes during an outstanding plan", async () => {
+  const pending = Promise.withResolvers<{ actions: [] }>();
+  const apply = vi.fn(async () => revision("next"));
+  const editor = new MeshConfigEditor({
+    get: async () => ({ current: revision("base") }),
+    plan: () => pending.promise,
+    apply,
+  });
+  await editor.load();
+  const planning = editor.plan();
+  editor.edit("schema: 1\nmachines: {}\nssh: {mode: off}\n");
+  pending.resolve({ actions: [] });
+  await planning;
+  expect(editor.getSnapshot().actions).toBeNull();
+  await editor.apply();
+  expect(apply).not.toHaveBeenCalled();
+});
