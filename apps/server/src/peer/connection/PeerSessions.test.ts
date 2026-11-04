@@ -39,6 +39,7 @@ const E = EnvironmentId.make("e");
 
 const facts: PeerFacts.PeerFacts = {
   version: "1",
+  meshPublicKey: "ssh-ed25519 BBBB",
   platform: { os: "Linux", arch: "x64", release: "test" },
   user: "tester",
   sshd: { port: 22, hostKeys: ["ssh-ed25519 AAAA"] },
@@ -227,6 +228,7 @@ describe("PeerSessions", () => {
           platform: facts.platform,
           user: "tester",
           sshd: facts.sshd,
+          meshPublicKey: facts.meshPublicKey,
         });
         yield* sessions.close(B, "Fixture tunnel disappeared");
         const state = (yield* Queue.take(updates)).machines[SELF]?.reported?.connections?.[0];
