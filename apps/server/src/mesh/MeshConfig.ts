@@ -259,6 +259,8 @@ export const layer = Layer.effect(
           Effect.flatMap(current, (revision) =>
             Effect.gen(function* () {
               if (!revision) return;
+              if (revision.doc.schema !== 1)
+                return yield* new MeshConfigError({ reason: "validation", message: `Unsupported schema: ${revision.doc.schema}` });
               const identity = repairMachineIdentity((yield* mesh.read).document, revision.doc);
               if (
                 identity.changed &&
