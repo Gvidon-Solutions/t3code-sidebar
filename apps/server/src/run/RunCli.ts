@@ -200,6 +200,7 @@ export async function runCli(args: readonly string[]) {
     }
     let result: Awaited<ReturnType<typeof remoteRun>>;
     let remoteFailed = false;
+    let remoteFailure: Error | undefined;
     try {
       result = await remoteRun(
         plan,
@@ -228,14 +229,26 @@ export async function runCli(args: readonly string[]) {
       }
     } catch (cause) {
       remoteFailed = true;
-      throw cause;
+      remoteFailure = cause instanceof Error ? cause : new Error(String(cause));
+      throw remoteFailure;
     } finally {
       process.stdout.write(stdout.end());
       process.stderr.write(stderr.end());
       const flushed = options.bg
         ? { ok: true as const }
-        : await requestRun("finish", cwd, remoteFailed ? 1000 : options.timeoutMs);
-      if (!flushed.ok && !remoteFailed) {
+        : await requestRun("finish", cwd, remoteFailed ? 1000 : options.timeoutMs).catch(
+            (cause: unknown) => ({
+              ok: false as const,
+              code: 75,
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+          );
+      if (!flushed.ok && remoteFailure)
+        throw new Error(
+          `${remoteFailure.message}; post-run synchronization failed: ${flushed.message}`,
+          { cause: remoteFailure },
+        );
+      if (!flushed.ok) {
         process.stderr.write(`${flushed.message}\n`);
         process.exitCode = flushed.code;
       }

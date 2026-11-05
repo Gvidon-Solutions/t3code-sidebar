@@ -654,6 +654,27 @@ try {
     "replica edit",
   );
   report("converged", { sessions: finalSessions.length, losingVersion: "preserved" });
+  const teardownCode =
+    "require('net').createServer(()=>{}).listen(45555,'0.0.0.0',()=>console.log('TEARDOWN_READY'))";
+  const teardown = launch(["--", "node", "-e", teardownCode], env);
+  await teardown.ready("TEARDOWN_READY");
+  const held = NodeNet.connect(childPort, "127.0.0.1");
+  await new Promise<void>((resolve, reject) => {
+    held.once("connect", resolve);
+    held.once("error", reject);
+  });
+  const closed = new Promise<void>((resolve) => held.once("close", () => resolve()));
+  await managed.dispose();
+  disposeRuntime = undefined;
+  blocked = true;
+  for (const pair of pairs) pair.destroy();
+  const lost = await teardown.result;
+  report("local_server_lost_during_cleanup", lost);
+  NodeAssert.equal(lost.code, 255);
+  NodeAssert.match(lost.stderr, /Cannot run on cloudbox:/);
+  NodeAssert.match(lost.stderr, /post-run synchronization/);
+  NodeAssert.equal(lost.stderr.trim().split("\n").length, 1);
+  await closed;
   report("PASS", "real sshd + Mutagen; all local run scenarios");
 } finally {
   if (daemon && daemon.exitCode === null && daemon.signalCode === null) {
