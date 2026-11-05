@@ -522,6 +522,14 @@ const buildCliArchive = Effect.fn("buildCliArchive")(function* (input: {
   yield* fs.copyFile(builtExecutable, path.join(contentDir, executableName));
   yield* stageWebClient(webClient, path.join(contentDir, "client"));
   yield* fs.copy(resourceMonitorDir, path.join(contentDir, "resource-monitor"));
+  yield* fs.copy(
+    path.join(repoRoot, "agent-kit/skills/t3"),
+    path.join(contentDir, "agent-kit/skills/t3"),
+  );
+  yield* fs.remove(path.join(contentDir, "agent-kit/skills/t3/global"), {
+    recursive: true,
+    force: true,
+  });
   yield* stageRuntimeExternals({
     repoRoot,
     stageDir: contentDir,

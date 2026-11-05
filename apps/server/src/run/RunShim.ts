@@ -98,7 +98,7 @@ export async function runShim(command: string, args: readonly string[]) {
           process.execve(binary, [command, ...args], environment);
           return;
         }
-        const { nativeInvocation } = await import("./RunPlatform.ts");
+        const { nativeInvocation } = await import("../platform/ServerPlatform.ts");
         const resolved = nativeInvocation(binary, args, environment);
         const child = NodeChildProcess.spawn(resolved.command, resolved.args, {
           env: environment,

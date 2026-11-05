@@ -1,4 +1,4 @@
-import { proxyCommand } from "../peer/connection/PeerPlatform.ts";
+import { proxyCommand } from "../platform/ServerPlatform.ts";
 import type { MeshConfigDocument, SidebarMachine } from "@t3tools/contracts";
 
 const begin = "# t3-mesh begin";
@@ -59,7 +59,8 @@ export function sshFiles(
         `restrict,pty,port-forwarding,permitopen="127.0.0.1:*",permitopen="[::1]:*",permitlisten="127.0.0.1:*",permitlisten="[::1]:*" ${facts.meshPublicKey}`,
       );
     }
-    const user = peer.settings.ssh?.user ?? facts.user;
+    const user =
+      peer.settings.ssh?.user ?? peer.settings.bootstrap?.ssh.split("@")[0] ?? facts.user;
     if (!user || !facts.sshd) continue;
     const host = `t3-${peer.name}`;
     const proxy = proxyCommand(paths.platform, paths.runtime, peer.environmentId, paths.baseDir);

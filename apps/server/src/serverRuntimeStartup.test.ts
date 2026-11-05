@@ -1,3 +1,4 @@
+import { MeshRollout } from "./mesh/MeshRollout.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
@@ -60,6 +61,7 @@ it.effect.each([
         scenario === "disabled-default" ? "custom" : "codex",
       );
       const events: ServerLifecycleStreamEvent[] = [];
+      const phases: string[] = [];
       const recovery = {
         terminalizedRuns: 0,
         stoppedSessions: 0,
@@ -199,10 +201,21 @@ it.effect.each([
                 );
           },
         }),
+        Layer.mock(MeshRollout)({
+          trial: true,
+          checkTrial: Effect.sync(() => {
+            phases.push("health");
+          }),
+          finishTrial: Effect.sync(() => {
+            phases.push("release");
+          }),
+        }),
         Layer.mock(ServiceLauncherClient.ServiceLauncherClient)({
           managed: false,
-          // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-          prepareTrial: Effect.succeed(undefined),
+          prepareTrial: Effect.sync(() => {
+            phases.push("commit");
+            return undefined;
+          }),
         }),
         Layer.mock(GitVcsDriver.GitVcsDriver)({}),
         Layer.mock(AnalyticsService.AnalyticsService)({}),
@@ -224,6 +237,7 @@ it.effect.each([
         if (scenario === "project-failure") {
           assert.isUndefined(welcome);
         } else {
+          assert.deepEqual(phases, ["activate", "health", "commit", "release"]);
           assert.isDefined(welcome);
           if (welcome?.type === "welcome") {
             assert.equal(welcome.payload.bootstrapProjectId, projectId);
@@ -231,7 +245,13 @@ it.effect.each([
           }
         }
       }).pipe(
-        Effect.provide(ServerRuntimeStartup.layerWithOptions().pipe(Layer.provide(dependencies))),
+        Effect.provide(
+          ServerRuntimeStartup.layerWithOptions({
+            activate: Effect.sync(() => {
+              phases.push("activate");
+            }),
+          }).pipe(Layer.provide(dependencies)),
+        ),
         Effect.provideService(ServerActivation, Effect.never),
       );
     }),

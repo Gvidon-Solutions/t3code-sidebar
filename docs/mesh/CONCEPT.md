@@ -27,16 +27,16 @@ Nothing may assume a particular machine, OS, count of machines or the owner's se
 
 ## 2. Entities
 
-| Entity | What | Stored in |
-|---|---|---|
-| Mesh | the set of linked servers | every server |
-| Machine | one T3 server (`environmentId`); name, label, tag, color, reach, platform | config (settings) + layout (reported facts) |
-| Link | mutual trust between two servers + a persistent connection when reachable | both servers (PeerLinks) |
-| Logical project | opaque id (never shown) + title + representations | layout `proj/*`, `rep/*`, `alias/*` |
-| Representation | (machine, folder, role `primary` or `replica`, replica mode `lite` or `full`) | layout `rep/<id>/<env>` |
-| Thread | lives on exactly one machine, working dir inside one representation (or no project) | that machine's DB |
-| Workspace | presentation only: placement, order, fold | layout `ws/*`, `place/*`, `fold/*` |
-| Mesh config | desired state: machines, links, ssh, replica rules, ignores, conflict policy, agents, T3 version | layout `mesh.config` (+ history) |
+| Entity          | What                                                                                             | Stored in                                   |
+| --------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| Mesh            | the set of linked servers                                                                        | every server                                |
+| Machine         | one T3 server (`environmentId`); name, label, tag, color, reach, platform                        | config (settings) + layout (reported facts) |
+| Link            | mutual trust between two servers + a persistent connection when reachable                        | both servers (PeerLinks)                    |
+| Logical project | opaque id (never shown) + title + representations                                                | layout `proj/*`, `rep/*`, `alias/*`         |
+| Representation  | (machine, folder, role `primary` or `replica`, replica mode `lite` or `full`)                    | layout `rep/<id>/<env>`                     |
+| Thread          | lives on exactly one machine, working dir inside one representation (or no project)              | that machine's DB                           |
+| Workspace       | presentation only: placement, order, fold                                                        | layout `ws/*`, `place/*`, `fold/*`          |
+| Mesh config     | desired state: machines, links, ssh, replica rules, ignores, conflict policy, agents, T3 version | layout `mesh.config` (+ history)            |
 
 Invariants I1–I5 of the old spec stay (one project per (machine, path); one sync session per
 replica; one title everywhere; no opaque id or legacy key shown as a name; workspaces never
@@ -113,7 +113,7 @@ authority.
   bun, uv/pip, cargo, go) and refreshes it when lock files change; git still only on the primary.
 - **Ignores:** VCS + defaults anchored to the project root (`/node_modules`, `/.venv`, `/dist`,
   `/build`, `/target`, `/.t3`, `/.t3-conflicts`, plus `node_modules` at any depth) + config ignores
-  + per-project ignores. Changing ignores recreates the session with the same name.
+  - per-project ignores. Changing ignores recreates the session with the same name.
 - **Conflicts:** resolved automatically. Policy per project from config, default `primary-wins`
   (alternative `newest-wins`). The losing version is copied to
   `<loser>/.t3-conflicts/<ISO-time-with-dashes>/<relative path>` before being replaced. Status note,
@@ -177,34 +177,34 @@ revision (optimistic concurrency: a stale base is rejected with a diff to rebase
 ```yaml
 schema: 1
 t3:
-  version: 0.1.7-sidebar.1        # target server version; absent = no managed updates
+  version: 0.1.7-sidebar.1 # target server version; absent = no managed updates
 machines:
-  gvidon:                          # machine name: stable slug used everywhere in the config
-    label: GV                      # tag shown in the UI
+  gvidon: # machine name: stable slug used everywhere in the config
+    label: GV # tag shown in the UI
     title: gvidon
     color: blue
-    reach: auto                    # auto | { address: https://host:port } | { via: <machine> }
-    ssh: { user: user, port: 22 }  # optional overrides; reported values otherwise
-    bootstrap: { ssh: "user@host:22", os: linux }   # optional: T3 installs itself there
+    reach: auto # auto | { address: https://host:port } | { via: <machine> }
+    ssh: { user: user, port: 22 } # optional overrides; reported values otherwise
+    bootstrap: { ssh: "user@host:22", os: linux } # optional: T3 installs itself there
 links:
   default: { files: projects, replicas: true, threads: true }
   overrides:
     - { between: [gvidon, operalia], files: all }
 ssh:
-  mode: managed                    # managed | existing | off
+  mode: managed # managed | existing | off
 projects:
   defaults: { conflicts: primary-wins, replica: lite, ignore: [] }
   overrides:
-    - { project: "calf*", replica: lite, ignore: [/data] }     # matched by title glob
+    - { project: "calf*", replica: lite, ignore: [/data] } # matched by title glob
 replicas:
   ignore: ["*.log"]
   rules:
-    - { project: "*", on: operalia, when: harness-unavailable }  # always | harness-unavailable | manual
+    - { project: "*", on: operalia, when: harness-unavailable } # always | harness-unavailable | manual
 agents:
   aliases:
     1017: { harness: opencode, model: deepseek/deepseek-flash }
-    sol:  { harness: codex, model: gpt-6.1-sol }
-  instructions: |                  # optional shared text, written as its own managed block
+    sol: { harness: codex, model: gpt-6.1-sol }
+  instructions: | # optional shared text, written as its own managed block
     …
 ```
 

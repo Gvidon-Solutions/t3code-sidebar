@@ -7,7 +7,7 @@ import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import { pipeAddress, preparePipeAddress } from "../peer/connection/PeerPlatform.ts";
+import { pipeAddress, preparePipeAddress } from "../platform/ServerPlatform.ts";
 
 it.live(
   "the mesh pipe binary bridges binary stdio and fails visibly when the local server refuses a target",

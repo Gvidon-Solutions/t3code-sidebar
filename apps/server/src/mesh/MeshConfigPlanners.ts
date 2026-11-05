@@ -1,3 +1,6 @@
+import { MeshBootstrap } from "./MeshBootstrap.ts";
+import { MeshRollout } from "./MeshRollout.ts";
+import { MeshAgentKit } from "./MeshAgentKit.ts";
 import { MeshSsh } from "../replicas/MeshSsh.ts";
 import { replicaDriver } from "../replicas/replicaModel.ts";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
@@ -35,6 +38,9 @@ export const layer = Layer.effect(
   MeshConfigPlanners,
   Effect.gen(function* () {
     const ssh = yield* MeshSsh;
+    const agents = yield* MeshAgentKit;
+    const bootstrap = yield* MeshBootstrap;
+    const rollout = yield* MeshRollout;
     const mesh = yield* MeshLayoutService;
     const runtime = yield* ReplicaRuntime.ReplicaRuntime;
     const replicaService = runtime.get.pipe(Effect.mapError(failure));
@@ -328,6 +334,71 @@ export const layer = Layer.effect(
         ssh.reconcile(doc, action.machine),
       ),
     };
-    return MeshConfigPlanners.of([machines, links, sshPlanner, replicas, ignores, conflicts]);
+    const agentPlanner: ConfigPlanner = {
+      name: "agents",
+      plan: Effect.fn("MeshConfigPlanners.agents.plan")(() =>
+        Effect.succeed([
+          {
+            id: "agents/kit",
+            server: mesh.environmentId,
+            description: "Install bundled t3 skill and managed mesh instructions",
+          },
+        ]),
+      ),
+      reconcile: Effect.fn("MeshConfigPlanners.agents.reconcile")((_action, doc) =>
+        agents.reconcile(doc),
+      ),
+    };
+    const bootstrapPlanner: ConfigPlanner = {
+      name: "bootstrap",
+      timeout: "15 minutes",
+      plan: Effect.fn("MeshConfigPlanners.bootstrap.plan")(function* (doc) {
+        const bound = bindingsFromLayout((yield* snapshot).document);
+        return Object.entries(doc.machines)
+          .filter(([name, machine]) => machine.bootstrap && !bound[name])
+          .map(([name]) => ({
+            id: `bootstrap/${name}`,
+            machine: name,
+            server: mesh.environmentId,
+            description: `Bootstrap ${name} over SSH`,
+          }));
+      }),
+      reconcile: Effect.fn("MeshConfigPlanners.bootstrap.reconcile")((action, doc) =>
+        action.machine
+          ? bootstrap.reconcile(action.machine, doc)
+          : Effect.fail(
+              new MeshConfigError({ reason: "validation", message: "Missing bootstrap machine" }),
+            ),
+      ),
+    };
+    const updatePlanner: ConfigPlanner = {
+      name: "updates",
+      timeout: "15 minutes",
+      plan: Effect.fn("MeshConfigPlanners.updates.plan")((doc) =>
+        Effect.succeed(
+          doc.t3?.version
+            ? [
+                {
+                  id: "updates/runtime",
+                  server: mesh.environmentId,
+                  description: `Ensure runtime ${doc.t3.version} through the rolling update lease`,
+                },
+              ]
+            : [],
+        ),
+      ),
+      reconcile: () => rollout.reconcile,
+    };
+    return MeshConfigPlanners.of([
+      bootstrapPlanner,
+      updatePlanner,
+      machines,
+      links,
+      sshPlanner,
+      replicas,
+      ignores,
+      conflicts,
+      agentPlanner,
+    ]);
   }),
 );

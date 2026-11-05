@@ -68,7 +68,8 @@ export const layer = Layer.effect(
         hops.includes(self) ||
         hops.includes(input.environmentId) ||
         input.environmentId === self ||
-        input.tool.startsWith("t3_mesh_")
+        (input.tool.startsWith("t3_mesh_") &&
+          !["t3_mesh_update_vote", "t3_mesh_update_health"].includes(input.tool))
       )
         return yield* refused;
       const narrowed = yield* forwardedCallLimits(input.tool, limits, input.environmentId);

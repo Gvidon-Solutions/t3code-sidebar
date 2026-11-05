@@ -10,7 +10,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { sshDirectory } from "./PeerPlatform.ts";
+import { sshDirectory } from "../../platform/ServerPlatform.ts";
 import packageJson from "../../../package.json" with { type: "json" };
 
 export const PeerFacts = Schema.Struct({

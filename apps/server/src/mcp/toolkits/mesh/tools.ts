@@ -1,4 +1,12 @@
 import {
+  MeshMachineAddInput,
+  MeshVersionUpdateInput,
+  MeshUpdateVoteInput,
+  MeshUpdateHealth,
+  ProjectId,
+  SecretRef,
+} from "@t3tools/contracts";
+import {
   MeshConfigApplyInput,
   MeshConfigHistory,
   MeshConfigPlan,
@@ -92,7 +100,51 @@ const StatusTool = Tool.make("t3_mesh_status", {
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 
+const MachineAdd = Tool.make("t3_mesh_machine_add", {
+  ...shared,
+  description:
+    "Add a bootstrap machine to mesh config through plan/apply. Credentials are supplied separately through a one-time secret reference.",
+  parameters: MeshMachineAddInput,
+  success: MeshConfigRevision,
+}).annotate(Tool.Destructive, true);
+const VersionUpdate = Tool.make("t3_mesh_update", {
+  ...shared,
+  description: "Plan or apply a target runtime version for the mesh's serialized rolling update.",
+  parameters: MeshVersionUpdateInput,
+  success: Schema.Union([MeshConfigPlan, MeshConfigRevision]),
+}).annotate(Tool.Destructive, true);
+const UpdateVote = Tool.make("t3_mesh_update_vote", {
+  ...shared,
+  description: "Linked-server update lease grant/release. Requires the authenticated lease owner.",
+  parameters: MeshUpdateVoteInput,
+  success: Schema.Boolean,
+}).annotate(Tool.Destructive, true);
+const UpdateHealth = Tool.make("t3_mesh_update_health", {
+  ...shared,
+  description:
+    "Read runtime version, layout clocks and replica readiness for update health checks.",
+  parameters: Tool.EmptyParams,
+  success: MeshUpdateHealth,
+}).annotate(Tool.Readonly, true);
+const BootstrapCredential = Tool.make("t3_mesh_bootstrap_credential", {
+  ...shared,
+  description:
+    "Provide one-use SSH agent, identity path or password secretRef for an unjoined bootstrap machine. Never put a password in config or tool text.",
+  parameters: Schema.Struct({
+    name: Schema.String,
+    kind: Schema.Literals(["agent", "key", "password"]),
+    identityFile: Schema.optionalKey(Schema.String),
+    secretRef: Schema.optionalKey(SecretRef),
+    projectId: Schema.optionalKey(ProjectId),
+  }),
+  success: Schema.Struct({ accepted: Schema.Boolean }),
+}).annotate(Tool.Destructive, true);
 export const MeshToolkit = Toolkit.make(
+  MachineAdd,
+  VersionUpdate,
+  UpdateVote,
+  UpdateHealth,
+  BootstrapCredential,
   RunRuntimeTool,
   GetTool,
   PlanTool,

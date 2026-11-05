@@ -319,3 +319,39 @@ it.effect("records startup identity repair as a revision and moves a renamed bin
     expect((yield* mesh.read).document["mesh.machineBinding/studio"]?.v).toBeNull();
   }).pipe(Effect.scoped, Effect.provide(layer)),
 );
+
+it.effect("retains but refuses a replicated future config schema before running planners", () =>
+  Effect.gen(function* () {
+    const service = yield* Config.MeshConfig;
+    const mesh = yield* MeshLayoutService;
+    const h = yield* mesh.nextHlc;
+    yield* mesh.apply({
+      "mesh.config": {
+        h,
+        v: {
+          revision: h,
+          doc: { schema: 2, machines: { studio: {} }, future: { enabled: true } },
+          author: "cloudbox",
+          writtenAt: "",
+        },
+      },
+    });
+    yield* service.start;
+    const status = yield* service.statusChanges.pipe(
+      Stream.filter((actions) => actions.some((action) => action.state === "failed")),
+      Stream.take(1),
+      Stream.runCollect,
+    );
+    expect(Array.from(status)[0]).toEqual([
+      expect.objectContaining({
+        id: "config/reconcile",
+        state: "failed",
+        reason: "Unsupported schema: 2",
+      }),
+    ]);
+    expect((yield* mesh.read).document["mesh.config"]?.v).toMatchObject({
+      doc: { future: { enabled: true } },
+    });
+    expect(Object.keys((yield* mesh.read).document)).not.toContain("mesh.machineBinding/studio");
+  }).pipe(Effect.scoped, Effect.provide(layer)),
+);

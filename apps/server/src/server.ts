@@ -1,3 +1,8 @@
+import * as MeshStartupAccess from "./mesh/MeshStartupAccess.ts";
+import * as MeshStateBackup from "./mesh/MeshStateBackup.ts";
+import * as MeshBootstrap from "./mesh/MeshBootstrap.ts";
+import * as MeshRuntimeArchive from "./mesh/MeshRuntimeArchive.ts";
+import * as MeshRollout from "./mesh/MeshRollout.ts";
 import * as MeshSsh from "./replicas/MeshSsh.ts";
 import * as MeshApplicationEvents from "./persistence/OrchestrationEventStore.ts";
 import * as MeshProjects from "./mesh/MeshProjectDirectory.ts";
@@ -8,6 +13,8 @@ import * as MeshRelayLive from "./mesh/MeshRelay.ts";
 import * as MeshReplication from "./mesh/MeshReplicator.ts";
 import * as MeshLayoutLive from "./mesh/MeshLayoutServiceLive.ts";
 import * as MeshConfig from "./mesh/MeshConfig.ts";
+import * as MeshAgentMigration from "./mesh/MeshAgentMigration.ts";
+import * as MeshAgentKit from "./mesh/MeshAgentKit.ts";
 import * as MeshConfigPlanners from "./mesh/MeshConfigPlanners.ts";
 import * as MeshConfigMigration from "./mesh/MeshConfigMigration.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
@@ -581,17 +588,40 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   ),
 );
 
+const layerSelfUpdate = ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate));
+const layerMeshBootstrap = MeshBootstrap.layer.pipe(
+  Layer.provide(MeshRuntimeArchive.layer),
+  Layer.provide(ProcessRunner.layer),
+  Layer.provide(layerPeerLinks),
+  Layer.provide(layerMesh),
+);
+const layerMeshRollout = MeshRollout.layer.pipe(
+  Layer.provide(MeshStateBackup.layer),
+  Layer.provide(layerPeerLinks),
+  Layer.provide(layerSelfUpdate),
+  Layer.provide(layerPeerMcp),
+  Layer.provide(layerOrchestrationV2Runtime),
+  Layer.provide(layerMesh),
+);
 const layerMeshSsh = MeshSsh.layer.pipe(Layer.provide(layerMesh));
 const layerMeshConfig = MeshConfig.layer.pipe(
   Layer.provide(
     MeshConfigPlanners.layer.pipe(
+      Layer.provide(layerMeshBootstrap),
+      Layer.provide(layerMeshRollout),
+      Layer.provide(MeshAgentKit.layer),
       Layer.provide(layerOrchestrationV2Runtime),
       Layer.provide(layerMeshSsh),
     ),
   ),
   Layer.provide(MeshConfigMigration.layer.pipe(Layer.provide(PeerLinks.layer))),
 );
-const layerMeshConfigRuntime = MeshConfig.startedLayer.pipe(Layer.provideMerge(layerMeshConfig));
+const layerMeshConfigRuntime = Layer.merge(MeshConfig.startedLayer, MeshAgentMigration.layer).pipe(
+  Layer.provideMerge(layerMeshConfig),
+  Layer.provide(MeshAgentKit.layer),
+  Layer.provideMerge(layerMeshBootstrap),
+  Layer.provideMerge(layerMeshRollout),
+);
 
 const layerOrchestrationApplication = CheckpointDiffQuery.layer.pipe(
   Layer.provideMerge(layerCheckpointStore),
@@ -776,7 +806,13 @@ const layerRuntimeDependencies = layerRuntimeCoreDependencies.pipe(
 const layerCommandReadiness = HttpRouter.middleware(
   (httpEffect) =>
     Effect.flatMap(ServerRuntimeStartup.ServerRuntimeStartup, (startup) =>
-      startup.awaitCommandReady.pipe(Effect.orDie, Effect.andThen(httpEffect)),
+      MeshStartupAccess.allowed.pipe(
+        Effect.flatMap((allowed) =>
+          allowed
+            ? httpEffect
+            : startup.awaitCommandReady.pipe(Effect.orDie, Effect.andThen(httpEffect)),
+        ),
+      ),
     ),
   { global: true },
 );
@@ -879,7 +915,7 @@ const layerMakeRoutes = Layer.mergeAll(
   ),
 
   Layer.provide(PreviewAutomationBroker.layer),
-  Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
+  Layer.provide(layerSelfUpdate),
   Layer.provideMerge(layerPeerNetwork),
   Layer.provide(layerCommandReadiness),
   Layer.provideMerge(layerMeshConfigRuntime),
@@ -1182,7 +1218,11 @@ const layerMakeServer = Layer.unwrap(
         ],
         { concurrency: "unbounded" },
       ).pipe(Effect.asVoid),
-    }).pipe(Layer.provideMerge(layerRuntimeDependencies), Layer.provide(layerLauncher));
+    }).pipe(
+      Layer.provideMerge(layerMeshRollout),
+      Layer.provideMerge(layerRuntimeDependencies),
+      Layer.provide(layerLauncher),
+    );
 
     const layerRoutes = HttpRouter.serve(layerMakeRoutes.pipe(Layer.provide(layerLauncher)), {
       disableLogger: !config.logWebSocketEvents,

@@ -1,3 +1,4 @@
+import { MeshRollout } from "./mesh/MeshRollout.ts";
 import {
   CommandId,
   DEFAULT_MODEL,
@@ -634,7 +635,12 @@ const make = Effect.fn("serverRuntimeStartup.make")(function* (options?: Startup
     yield* runStartupPhase("http.wait", Deferred.await(httpListening));
     yield* runStartupPhase("auxiliary-roots.parked", options?.awaitAuxiliaryParked ?? Effect.void);
 
+    const rollout = yield* Effect.serviceOption(MeshRollout);
+    const earlyActivation = rollout._tag === "Some" && rollout.value.trial;
+    if (earlyActivation) yield* options?.activate ?? Effect.void;
+    if (rollout._tag === "Some") yield* rollout.value.checkTrial;
     const updateOutcome = yield* launcher.prepareTrial;
+    if (rollout._tag === "Some") yield* rollout.value.finishTrial;
 
     yield* Effect.logDebug("startup phase: publishing welcome event", {
       environmentId: environment.environmentId,
@@ -656,7 +662,7 @@ const make = Effect.fn("serverRuntimeStartup.make")(function* (options?: Startup
       }),
     );
 
-    yield* options?.activate ?? Effect.void;
+    if (!earlyActivation) yield* options?.activate ?? Effect.void;
     yield* Effect.logDebug("Accepting commands");
     yield* commandGate.signalCommandReady;
     yield* Effect.logDebug("startup phase: publishing ready event");

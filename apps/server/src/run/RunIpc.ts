@@ -13,13 +13,13 @@ class RunIpcError extends Schema.TaggedError<RunIpcError>()("RunIpcError", {
     return "Cannot start the local t3 run endpoint.";
   }
 }
-import { preparePipeAddress, securePipeAddress } from "../peer/connection/PeerPlatform.ts";
+import { preparePipeAddress, securePipeAddress } from "../platform/ServerPlatform.ts";
 import { ServerConfig } from "../config.ts";
 import * as Control from "./RunControl.ts";
 import * as Preparation from "./RunPreparation.ts";
 import * as SyncLive from "./RunSyncLive.ts";
 import { decodeRequest, encodeResponse } from "./RunProtocol.ts";
-import { runAddress } from "./RunPlatform.ts";
+import { runAddress } from "../platform/ServerPlatform.ts";
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const config = yield* ServerConfig;

@@ -1,3 +1,4 @@
+import { defaultAgentAliases } from "./index.ts";
 import * as Schema from "effect/Schema";
 import type { Json } from "../meshLayout/document.ts";
 import {
@@ -144,7 +145,7 @@ export function migrateConfig(
       })),
     },
     replicas: { ignore: [...ignores], rules: [] },
-    agents: { aliases: {} },
+    agents: { aliases: defaultAgentAliases() },
   };
   return { doc, bindings, migration };
 }

@@ -6,8 +6,13 @@ import * as Schema from "effect/Schema";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveSelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeRuntime";
 import { ServerConfig } from "../config.ts";
-import { shellWord, privateDirectory, runAddress } from "./RunPlatform.ts";
-import { bashStartup, zshStartup, commandShellEnvironment } from "./RunShellEnvironment.ts";
+import {
+  privateDirectory,
+  runAddress,
+  pathDelimiter,
+  runLauncherFiles,
+} from "../platform/ServerPlatform.ts";
+import { bashStartup, zshStartup, commandShellEnvironment } from "../platform/ServerPlatform.ts";
 
 export class RunEnvironmentError extends Schema.TaggedError<RunEnvironmentError>()(
   "RunEnvironmentError",
@@ -43,9 +48,7 @@ export const install = Effect.fn("RunEnvironment.install")(function* () {
         await NodeFSP.writeFile(NodePath.join(zshDirectory, file), zshStartup(file), {
           mode: 0o600,
         });
-      const command = [invocation.command, ...selfInvocationArgs(invocation, [])]
-        .map(shellWord)
-        .join(" ");
+      const command = [invocation.command, ...selfInvocationArgs(invocation, [])];
       const launcherEnvironment = {
         ...(sshConfig ? { T3CODE_RUN_SSH_CONFIG: sshConfig } : {}),
         T3CODE_RUN_SOCKET: runAddress(config.baseDir, platform, userId),
@@ -53,27 +56,14 @@ export const install = Effect.fn("RunEnvironment.install")(function* () {
         T3CODE_RUN_SHIMS: shims,
         T3CODE_RUN_BIN: directory,
       };
-      const launcher = `#!/bin/sh\n${Object.entries(launcherEnvironment)
-        .map(([key, value]) => `export ${key}=${shellWord(value)}`)
-        .join("\n")}\nexec ${command} "$@"\n`;
-      await NodeFSP.writeFile(NodePath.join(directory, "t3"), launcher, { mode: 0o700 });
-      if (platform === "win32") {
-        const windowsCommand = [invocation.command, ...selfInvocationArgs(invocation, [])]
-          .map((word) => `"${word.replaceAll('"', '""')}"`)
-          .join(" ");
-        await NodeFSP.writeFile(
-          NodePath.join(directory, "t3.cmd"),
-          `@echo off\r\n${Object.entries(launcherEnvironment)
-            .map(([key, value]) => `set "${key}=${value.replaceAll("%", "%%")}"`)
-            .join("\r\n")}\r\n${windowsCommand} %*\r\n`,
-        );
-      }
+      for (const file of runLauncherFiles(platform, directory, command, launcherEnvironment))
+        await NodeFSP.writeFile(file.path, file.content, { mode: file.mode });
       await NodeFSP.writeFile(
         NodePath.join(config.baseDir, "run", "opencode-plugin.mjs"),
         `export const T3RunShellEnvironment = async () => ({
   "shell.env": async (_input, output) => {
     const shimDirectory = process.env.T3CODE_RUN_SHIMS;
-    if (shimDirectory) output.env.PATH = shimDirectory + "${platform === "win32" ? ";" : ":"}" + (output.env.PATH || process.env.PATH || "");
+    if (shimDirectory) output.env.PATH = shimDirectory + "${pathDelimiter(platform)}" + (output.env.PATH || process.env.PATH || "");
   }
 });\n`,
       );
@@ -86,7 +76,7 @@ export const install = Effect.fn("RunEnvironment.install")(function* () {
           T3CODE_RUN_SOCKET: runAddress(config.baseDir, platform, userId),
           T3CODE_RUN_SHIMS: shims,
           T3CODE_RUN_BIN: directory,
-          T3CODE_RUN_DELIMITER: platform === "win32" ? ";" : ":",
+          T3CODE_RUN_DELIMITER: pathDelimiter(platform),
           T3CODE_RUN_MANIFEST: NodePath.join(config.baseDir, "run", "manifest.json"),
           T3CODE_RUN_OPENCODE_PLUGIN: NodePath.join(config.baseDir, "run", "opencode-plugin.mjs"),
         },

@@ -6,7 +6,7 @@ import {
   nodeCommand,
   sshArguments,
   mutagenSshEnvironment,
-} from "../peer/connection/PeerPlatform.ts";
+} from "../platform/ServerPlatform.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { ReplicaError } from "@t3tools/contracts";
 import * as Context from "effect/Context";

@@ -1,3 +1,4 @@
+import { executableName, mutagenTarget } from "../platform/ServerPlatform.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Crypto from "effect/Crypto";
 import * as Hex from "effect/encoding/Hex";
@@ -45,15 +46,13 @@ const make = Effect.gen(function* () {
   const runner = yield* ProcessRunner.ProcessRunner;
   const lock = yield* Semaphore.make(1);
   const bin = join(baseDir, "bin");
-  const executable = join(bin, platformName === "win32" ? "mutagen.exe" : "mutagen");
+  const executable = join(bin, executableName("mutagen", platformName));
   const install = Effect.fn("MutagenInstaller.install")(function* () {
     const override = (yield* settings.getSettings).mutagenPath;
     if (override) return override;
     if ((yield* fs.exists(executable)) && (yield* fs.exists(join(bin, "mutagen-agents.tar.gz"))))
       return executable;
-    const platform = platformName === "win32" ? "windows" : platformName;
-    const arch = architecture === "x64" ? "amd64" : architecture;
-    const target = `${platform}_${arch}`;
+    const target = mutagenTarget(platformName, architecture);
     const checksum = checksums[target];
     if (!checksum)
       return yield* new ReplicaError({
@@ -89,10 +88,7 @@ const make = Effect.gen(function* () {
     yield* fs.makeDirectory(bin, { recursive: true });
     // Publish the executable last so an interrupted installation is retried.
     yield* fs.copyFile(join(staging, "mutagen-agents.tar.gz"), join(bin, "mutagen-agents.tar.gz"));
-    yield* fs.copyFile(
-      join(staging, platformName === "win32" ? "mutagen.exe" : "mutagen"),
-      `${executable}.tmp`,
-    );
+    yield* fs.copyFile(join(staging, executableName("mutagen", platformName)), `${executable}.tmp`);
     yield* fs.chmod(`${executable}.tmp`, 0o755);
     yield* fs.rename(`${executable}.tmp`, executable);
     return executable;

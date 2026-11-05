@@ -2,14 +2,14 @@
 // @effect-diagnostics nodeBuiltinImport:off -- The detached forwarding guardian writes its own diagnostic log outside synchronized files.
 // @effect-diagnostics globalTimers:off -- Reconnect backoff belongs to the lifetime of this standalone guardian process.
 import * as NodeNet from "node:net";
-import { guardianAddress } from "./RunPlatform.ts";
+import { guardianAddress } from "../platform/ServerPlatform.ts";
 import { requestRun } from "./RunClient.ts";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as Schema from "effect/Schema";
 import { RunPlan } from "./RunProtocol.ts";
 import { remoteRun } from "./RunTransport.ts";
-import { namespaceOf, privateDirectory, workerStateRoot } from "./RunPlatform.ts";
+import { namespaceOf, privateDirectory, workerStateRoot } from "../platform/ServerPlatform.ts";
 const decode = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({

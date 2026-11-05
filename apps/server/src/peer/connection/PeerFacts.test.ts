@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { collectPeerFacts } from "./PeerFacts.ts";
-import { sshDirectory } from "./PeerPlatform.ts";
+import { sshDirectory } from "../../platform/ServerPlatform.ts";
 
 it.effect.each([
   { key: "ssh-ed25519 AAAA", config: "Port 2222\n", port: 2222, include: null },

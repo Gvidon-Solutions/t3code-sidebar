@@ -1,3 +1,4 @@
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import { MeshConfigRevision } from "@t3tools/contracts";
 import { localMachineClaim } from "@t3tools/shared/meshConfig";
 import { migrateConfig, extractConfigMigration } from "@t3tools/shared/meshConfig/migration";
@@ -25,6 +26,7 @@ export const layer = Layer.effectDiscard(
       if (Object.keys(entries).length) yield* mesh.apply(entries);
       return;
     }
+    if ((yield* HostProcess.Environment).T3_MESH_JOINING === "1") return;
     const settings = yield* (yield* ServerSettingsService).getSettings;
     const peers = yield* (yield* PeerLinks).list;
     const migration = migrateConfig(

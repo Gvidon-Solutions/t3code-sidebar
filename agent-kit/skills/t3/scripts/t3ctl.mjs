@@ -45,27 +45,7 @@ const DEFAULTS = {
   mode: process.env.T3CTL_MODE || "",
 };
 const RUNTIME_MODES = ["approval-required", "auto-accept-edits", "auto", "full-access"];
-const AGENT_ALIASES = {
-  claude: "claudeAgent",
-  claudeagent: "claudeAgent",
-  opus: "claudeAgent",
-  sonnet: "claudeAgent",
-  fable: "claudeAgent",
-  haiku: "claudeAgent",
-  deepseek: "opencode",
-  1017: "opencode",
-};
-const MODEL_ALIASES = {
-  opus: "claude-opus-5-5",
-  sonnet: "claude-sonnet-5-5",
-  fable: "claude-fable-5-1",
-  haiku: "claude-haiku-5-5",
-  luna: "gpt-6-luna",
-  astra: "gpt-6-astra",
-  sol: "gpt-6.1-sol",
-  deepseek: "deepseek/deepseek-flash",
-  1017: "deepseek/deepseek-flash",
-};
+const harnessName = value => String(value).replace(/Agent$/i, "").toLowerCase();
 
 // flags that never take a value, so `--queue "text"` keeps "text" as the message
 const DURATION_ARG = /^\d+(?:\.\d+)?(?:s|m|h|d|w)?$/;
@@ -1624,10 +1604,6 @@ async function modelSelection(opt, { required = true, environmentId } = {}) {
     if (!agent) agent = configuredModel.harness;
     model = configuredModel.model;
   }
-  model = MODEL_ALIASES[model.toLowerCase()] ?? model;
-  const aliasModel = MODEL_ALIASES[agent.toLowerCase()];
-  if (aliasModel && !model) model = aliasModel;
-  if (agent) agent = AGENT_ALIASES[agent.toLowerCase()] ?? agent;
   const caps = await (
     await mcp()
   ).call("orchestrator_capabilities", {
@@ -1640,10 +1616,10 @@ async function modelSelection(opt, { required = true, environmentId } = {}) {
   const configured =
     (!agent || !model) && !environmentId ? (await serverSettings()).defaultModelSelection : null;
   if (!agent)
-    agent = AGENT_ALIASES[DEFAULTS.agent] ?? (DEFAULTS.agent || configured?.instanceId || "");
+    agent = DEFAULTS.agent || configured?.instanceId || "";
   const prov =
     providers.find((p) => p.providerInstanceId === agent) ??
-    providers.find((p) => p.driverKind === agent) ??
+    providers.find((p) => harnessName(p.driverKind) === harnessName(agent)) ??
     (!agent ? providers.find((p) => p.models.length > 0) : undefined);
   if (!prov)
     die(
@@ -1878,7 +1854,15 @@ function placeProject(cfg, key, root, ids, scratch = false) {
 const THREAD_ORGANIZE = ["pin", "unpin", "settle", "unsettle", "archive", "unarchive", "unsnooze"];
 
 const commands = {
-  agents: async (pos, opt) => (await import("./agents-sync.mjs")).runAgents(pos, opt),
+  agents: async (pos, opt) => {
+    const client = await mcp();
+    if (pos[0] === "status") return json(await client.call("t3_mesh_status"));
+    if (pos[0] !== "sync") die("use: agents sync [--apply] | status");
+    const snapshot = await client.call("t3_mesh_config_get");
+    if (!snapshot.current) die("Create a mesh config first");
+    if (!opt.apply) return json(await client.call("t3_mesh_config_plan", { doc: snapshot.current.doc }));
+    return json(await client.call("t3_mesh_config_apply", { doc: snapshot.current.doc, baseRevision: snapshot.current.revision }));
+  },
   // Agent inbox (fork). Agents' side through MCP (t3ctl posts as an MCP client, not a thread);
   // the owner's side (reply, dismiss, reopen) through the UI's WS RPC.
   async inbox(pos, opt) {
@@ -2173,14 +2157,13 @@ const commands = {
   async models(pos, opt) {
     const caps = await (await mcp()).call("orchestrator_capabilities");
     if (opt.json) return json(caps);
-    const want = pos[0] || opt.agent;
+    const requested = pos[0] || opt.agent;
+    const desired = (await layoutSnapshot()).document?.["mesh.config"]?.v?.doc;
+    const want = desired?.agents?.aliases?.[requested]?.harness ?? requested;
     for (const p of caps.providers) {
       if (
         want &&
-        ![p.providerInstanceId, p.driverKind, AGENT_ALIASES[String(want).toLowerCase()]].includes(
-          want,
-        ) &&
-        p.providerInstanceId !== AGENT_ALIASES[String(want).toLowerCase()]
+        p.providerInstanceId !== want && harnessName(p.driverKind) !== harnessName(want)
       )
         continue;
       console.log(`${p.providerInstanceId}  (${p.displayName}, driver ${p.driverKind})`);
@@ -2335,6 +2318,17 @@ const commands = {
 
   async mesh(pos, opt) {
     const sub = pos[0] || "status";
+    if (sub === "machines" && pos[1] === "add") {
+      if (!pos[2] || !opt.ssh) die("use: mesh machines add <name> --ssh user@host[:port] [--identity-file PATH | --secret-ref REF --project-id ID]");
+      const client = await mcp();
+      const revision = await client.call("t3_mesh_machine_add", { name: pos[2], ssh: opt.ssh });
+      if (opt.identityFile || opt.secretRef) await client.call("t3_mesh_bootstrap_credential", { name: pos[2], kind: opt.secretRef ? "password" : "key", ...(opt.identityFile ? { identityFile: opt.identityFile } : {}), ...(opt.secretRef ? { secretRef: opt.secretRef, projectId: opt.projectId } : {}) });
+      return json(revision);
+    }
+    if (sub === "update") {
+      if (!pos[1]) die("use: mesh update <exact-version> [--plan]");
+      return json(await (await mcp()).call("t3_mesh_update", { version: pos[1], plan: Boolean(opt.plan) }));
+    }
     if (sub === "config") {
       const action = pos[1] || "get";
       const client = await mcp();
@@ -4279,7 +4273,7 @@ READ
 THREADS
   self                                  current thread identity (thread-scoped MCP environment)
   new [--project P | --scratch] [opts] "message"   start a thread (no project = scratch)
-      --agent claude|codex|deepseek|1017|<instance> (default: destination server settings)  --model M (aliases: opus sonnet fable haiku luna astra sol deepseek 1017)
+      --agent <harness|configured alias|instance> (default: destination server settings)  --model <model|configured alias>
       --effort low|medium|high|xhigh|max  --fast  --opt key=value (any model option)
       --mode ${RUNTIME_MODES.join("|")} (default: destination server settings)  --plan  --title T
       --worktree BRANCH|auto [--base REF] [--from-origin]  new git worktree for the thread

@@ -73,7 +73,8 @@ it.live(
           },
         },
       });
-      const environment = Layer.succeed(HostProcess.Environment, { T3_MESH_SSH_HOME: home });
+      const sshEnvironment: Record<string, string | undefined> = { T3_MESH_SSH_HOME: home };
+      const environment = Layer.succeed(HostProcess.Environment, sshEnvironment);
       const dependencies = Layer.mergeAll(
         mesh,
         links,
@@ -158,6 +159,18 @@ it.live(
           "laptop",
         );
         expect(calls.at(-1)?.args).toContain("my-laptop");
+        expect(calls.at(-1)?.args).toContain(config);
+        delete sshEnvironment.T3_MESH_SSH_HOME;
+        yield* ssh.reconcile(
+          {
+            ...doc,
+            ssh: { mode: "existing" },
+            machines: { studio: {}, laptop: { ssh: { host: "my-laptop" } } },
+          },
+          "laptop",
+        );
+        expect(calls.at(-1)?.args).not.toContain("-F");
+        sshEnvironment.T3_MESH_SSH_HOME = home;
         expect(yield* fs.readFileString(authorized)).not.toContain("BBBB");
         stderr = "Permission denied (publickey)";
         expect((yield* ssh.reconcile(doc, "laptop").pipe(Effect.flip)).message).toBe(

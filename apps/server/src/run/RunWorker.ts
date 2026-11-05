@@ -1,4 +1,4 @@
-import { WORKER_PLATFORM_SOURCE } from "./RunPlatform.ts";
+import { WORKER_PLATFORM_SOURCE } from "../platform/ServerPlatform.ts";
 export const RUN_WORKER_SOURCE = String.raw`
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');

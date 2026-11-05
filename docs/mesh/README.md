@@ -129,7 +129,7 @@ The runtime CLI and private local-server socket live in `apps/server/src/run/Run
 `RunPlan` maps the nearest representation's relative cwd onto its primary. `RunPreparation`
 consumes S1's public `flush/conflicts/problems(replica)` API through `RunSyncLive`. `RunTransport`
 uses managed `t3-<name>` hosts; `RunWorker` owns process groups and the primary's job registry.
-`RunGuardian` keeps background forwards alive and flushes completion; `RunPlatform` owns launch
+`RunGuardian` keeps background forwards alive and flushes completion; `ServerPlatform` owns launch
 quoting and IPC addresses. `RunOutput` maps complete root prefixes across UTF-8 chunks while
 emitting unrelated bytes immediately. Runtime/PTY discovery is restricted to replica-enabled
 peers (`t3_run_runtime`).
@@ -154,33 +154,33 @@ keys, daemon state and containers. The runtime tests use neutral project/machine
   `t3_thread_*` with `environmentId` (or none — ids resolve across the mesh), `t3_thread_fork`
   (`environmentId` = thread's machine, `targetEnvironmentId` = destination), `t3_files_read/list`,
   `ui_open` with `environmentId`, link-only `t3_mesh_*` and the `t3_thread_receive_fork` receiver.
-- **Agent instructions:** `agent-kit/skills/t3/global/GLOBAL.md` (the owner's canonical text, Russian)
-  and `machines.json`; rendered per machine with a one-line header into `~/.claude/CLAUDE.md`,
-  `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`.
+- **Agent instructions:** config `agents.instructions`, rendered into managed blocks in the harness instruction files.
 
-## The agent kit (skills and instructions live in this repo)
+## Runtime agent-kit reconciliation
 
-`agent-kit/` is the source of truth; machines hold installed copies. Edit here, commit, then:
+`mesh/MeshAgentKit.ts` installs the bundled skill into the shared and Claude/Codex/OpenCode
+skill directories through the config `agents/kit` planner action. It writes only the
+`<!-- t3-mesh begin -->` … `<!-- t3-mesh end -->` block in the three harness instruction
+files. Missing directories are created. Malformed or repeated markers fail reconciliation
+before instruction files are written. `agents.manageInstructions: false` disables instruction
+writes while skill installation remains enabled. Instruction errors appear in normal config status.
 
-```bash
-agent-kit/install.sh            # dry run: skill diff per machine + instruction diff
-agent-kit/install.sh --apply    # install on registry machines (backups under ~/.local/state/t3-agent-kit/)
-agent-kit/install.sh --dest ~/.agents/skills/t3-next   # stage for the test bed only
-```
+Isolated servers must set `T3_MESH_AGENT_HOME` to their sandbox home; `T3_MESH_AGENT_SOURCE`
+can select a fixture skill. CLI release archives carry `agent-kit/skills/t3` next to the
+executable, excluding the legacy personal `global` directory. Source development resolves the
+checkout kit. Node builds also stage the kit below `dist/agent-kit`, beside the bundled modules, so npm and desktop server distributions install their own version. Instruction rendering uses config machine names/labels and `agents.instructions`;
+it never reads personal text from the repository. On first startup, `MeshAgentMigration.ts` imports the old installed `~/.agents/skills/t3/global/GLOBAL.md` into config if instructions are absent. The per-server migration marker prevents later explicit edits from being overwritten. `T3_MESH_LEGACY_GLOBAL` selects another installed legacy file for isolated migration.
 
-Machine names, tags and aliases are config data, not CLI constants. `machines alias` applies the
-bound machine's optional `aliases` array through config concurrency checks; N-1 servers retain the
-layout edit path. Alias edits retain the other machine and unknown config fields. Unspecified
-thread model and permissions are resolved by the destination server, never by owner preferences
-compiled into the CLI.
+Replicated future-schema config remains stored and forwarded, but `MeshConfig.start` refuses to
+run planners or identity repair for it and publishes `Unsupported schema` as a failed status.
 
-Installation routes and personal agent instructions stay in `global/`; `T3CTL_AGENTS_CONFIG` selects
-another registry directory. SSH options, relay ids (`via`) and remote `nodeCommand` are data.
-`server install` requires an explicit `T3CTL_RELEASE_REPO`.
+## Agent kit staging and aliases
 
-Never edit `~/.agents/skills/t3` on a machine directly (it is overwritten), and never run
-`vp fmt` on the skill or GLOBAL.md (formatting is excluded on purpose: padded tables waste every
-agent's context). Keep SKILL.md under ~26 KB and general — no recipes for specific test phrases.
+`agent-kit/install.sh --dest DIR` stages a local copy. Servers distribute their bundled kit; no machine registry or personal instructions are shipped. `t3ctl agents sync` reapplies the current config and reports reconciliation status.
+
+Model shortcuts come from `agents.aliases`. Built-in initial config defaults include opus/sonnet/haiku/fable (Claude), luna/astra/sol (Codex), and deepseek/1017 (OpenCode). The CLI contains no model shortcut table; removing a configured alias removes that shortcut. Machine aliases remain `machines.<name>.aliases`. Unspecified models and permissions are resolved by the destination server.
+
+Never format `agent-kit/skills/t3/**`. Keep the skill general and compact.
 
 ## Testing
 
@@ -418,7 +418,7 @@ Code boundaries:
   The frame layer does not cache answers: every repeated key reaches current authentication
   and permission checks before the receipt is read.
 - PeerFacts reads system public SSH host keys, global sshd port (including Include files), OS,
-  architecture, version and user; absent keys are reported as absent. PeerPlatform owns system
+  architecture, version and user; absent keys are reported as absent. ServerPlatform owns system
   paths and private local socket permissions. Facts and connection observations are written to
   machine/<env>.reported; labels and reach policy belong to C1's mesh config.
 
@@ -514,7 +514,7 @@ this map, and connection-state updates preserve the latest locally reported chec
 
 Set `T3_MESH_SSH_HOME` to an isolated home for test servers. Route checks pass its
 `.ssh/config` explicitly. Mutagen uses isolated ssh/scp wrappers on POSIX and an
-isolated child USERPROFILE on Windows. This does not redirect a system sshd's
+native executable wrappers on Windows. This does not redirect a system sshd's
 AuthorizedKeysFile. The bed's `managed-sshd.mjs` prepares a separate system OpenSSH
 daemon configuration and host key; `T3_MESH_SSHD_DIR` makes PeerFacts report those
 facts. Its temporary-home fixture disables sshd StrictModes because `/tmp` is
@@ -533,7 +533,7 @@ queue); Mutagen reports the current file size, not a total queue size. A clean w
 session reports zero lag. Unmeasured connecting/paused/conflicted states omit lag.
 The primary remains the place for git in either replica mode.
 
-`peer/connection/PeerPlatform.ts` owns SSH process arguments, isolated transport wrappers and
+`platform/ServerPlatform.ts` owns SSH process arguments, isolated transport wrappers and
 portable Node fs conflict preservation. There is no remote `sh` conflict script.
 Both primary-wins and per-path newest-wins archive the loser before resetting sync;
 archive timestamps contain no colons. Scan problems remain warnings with paths.
@@ -558,7 +558,7 @@ sessions and then select the name when inspecting/removing a single session.
 The context note states representation, lite/full mode, primary and sync state;
 lite replicas say `build/test/git: t3 run <cmd>`. `AgentContextBudget.test.ts`
 measures the unchanged 600-byte dynamic ceiling and the static budgets (8334 Claude,
-10060 Codex, 57478 tool-list bytes). Field bounds reserve room for the command hint.
+10060 Codex, 59417 tool-list bytes). Field bounds reserve room for the command hint.
 
 The former Mutagen integration test downloaded a 102172827-byte release inside the
 test with no HTTP deadline and registered daemon cleanup before successful startup.
@@ -569,3 +569,33 @@ installation against that local archive and uses a private daemon/data directory
 The production installer bounds download headers, body and extraction. A stalled
 HTTP fixture proves the deadline. The synchronization phase uses the verified local archive;
 a cold fixture cache performs one bounded download before starting the private daemon.
+
+### Shared server platform boundary
+
+`platform/ServerPlatform.ts` replaces R1 `RunPlatform.ts` and S1 `PeerPlatform.ts`.
+Run launchers and peer/replica transports import it directly, including the shim's lazy native-invocation import. It owns login shell quoting, Windows batch/PTY invocation,
+private IPC paths and modes, SSH wrappers and conflict-copy names. The worker source
+fragment stays in this boundary because it executes on the primary without module imports.
+Existing `run/RunPlatform.test.ts`, `replicas/ReplicaPlatform.test.ts`, peer-facts,
+IPC and conflict-copy tests exercise the shared implementation.
+
+### Bootstrap and rolling updates (B1)
+
+`MeshBootstrap.ts` reconciles unbound `machines.<name>.bootstrap` entries. The server that can authenticate to the target detects OS/architecture, verifies the mesh-version release against SHA256SUMS, installs a platform service, obtains a pairing credential locally on the target, establishes N1 mutual trust and writes a C2 name binding. Individual step statuses are replicated under `mesh.bootstrapStatus`; a target-side lock and an installation sentinel make retries resumable. SSH keys and host pins live beneath the server base directory, apart from managed SSH blocks.
+
+Use `t3ctl mesh machines add cloudbox --ssh user@host[:port]`. SSH agent authentication is automatic; `--identity-file PATH` supplies a key path once. Passwords use the existing one-time secret API: request a secret, then call `t3_mesh_bootstrap_credential` with `kind: password`, `secretRef` and `projectId` (CLI flags `--secret-ref`/`--project-id`). Passwords are consumed into memory, passed only through SSH_ASKPASS's child environment and discarded after the attempt. Unused credentials expire after five minutes. They are never layout/config fields or status text. Authentication failure requires a fresh secret. Bootstrap requires service-manager permissions; Linux user services also require permission to enable linger.
+
+`MeshRuntimeArchive.ts` shares release URL/platform naming and SHA256SUMS parsing with the existing runtime installer. `MeshInstall.ts` executes `platform/ServerPlatform.ts` service plans: Linux systemd user+linger or root system unit, macOS launchd agent, Windows SCM host. The Windows host implements ServiceBase and supervises the launcher process tree.
+
+`t3ctl mesh update VERSION --plan` plans a config edit; without `--plan` it applies it. `MeshRollout.ts` orders bound config names lexically. A candidate obtains durable votes from every configured server before publishing the layout lease (owner/token/expiry). Outstanding votes fence a partitioned owner even after expiry; recovery by that owner releases them only when its launcher has no pending update. The existing protocol-3 launcher backs up the stopped state DB, installs/verifies and trials the selected runtime. Activation starts peer replication before the trial checks version, peer layout convergence and resumed replicas. Failure reason is recorded outside the DB so rollback preserves it; the restored server publishes a stop marker for that config revision before releasing its lease. A new config revision is required to retry. `T3_MESH_TEST_MODE=1` plus `T3_MESH_TEST_FAIL_HEALTH_VERSION` enables the test-only health failure.
+
+CLI operations have MCP equivalents `t3_mesh_machine_add`, `t3_mesh_update`, `t3_mesh_status` and the credential API. Peer-only update voting accepts trusted full-access links. Test servers set `T3_MESH_AGENT_HOME`, `T3_MESH_SSH_HOME`, private sshd and Mutagen data directories. Native Windows/macOS replica smoke coverage lives in `.github/workflows/mesh-platform-smoke.yml`.
+
+During a trial, the HTTP readiness gate admits authenticated full-access peer
+replication and update-control calls, including their MCP initialization. Other
+commands stay gated. Gating `/peer` and all local `/mcp` dispatch until commit
+would deadlock an incoming-only peer's layout convergence and replica resumption.
+A failed mesh trial atomically records its reason and exits the trial child, so
+protocol-3 launchers, including N-1 launchers, restore the DB immediately instead
+of waiting for the generic preparation timeout. The runtime startup tests assert
+activation → mesh health → launcher commit → lease release.

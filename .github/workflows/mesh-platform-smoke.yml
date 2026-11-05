@@ -1,0 +1,38 @@
+name: Mesh native platforms
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/server/**"
+      - "packages/**"
+      - "scripts/mesh-e2e/**"
+      - ".github/workflows/mesh-platform-smoke.yml"
+permissions:
+  contents: read
+jobs:
+  replica:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Windows OpenSSH server
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Test-Path "$env:SystemRoot/System32/OpenSSH/sshd.exe")) {
+            Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+          }
+      - name: Build server
+        run: node apps/server/scripts/cli.ts build
+      - name: Two local servers and a real replica
+        run: node scripts/mesh-e2e/platform-smoke.mjs

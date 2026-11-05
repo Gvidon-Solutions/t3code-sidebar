@@ -1,4 +1,4 @@
-import { preserveConflictScript } from "../peer/connection/PeerPlatform.ts";
+import { preserveConflictScript } from "../platform/ServerPlatform.ts";
 import { conflictMtimeScript } from "./conflictMtimeScript.ts";
 import { describe, expect, it } from "vite-plus/test";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Execute the exact portable shell command against real files.
@@ -8,7 +8,8 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Synchronous fixture paths for the shell command.
 import * as NodePath from "node:path";
-import { conflictCopyPath, conflictRoots } from "./conflictResolution.ts";
+import { conflictCopyPath } from "../platform/ServerPlatform.ts";
+import { conflictRoots } from "./conflictResolution.ts";
 const iso = "2026-11-03T10:20:30.000Z";
 describe("conflict copies", () => {
   it("keeps paths, rejects traversal and never archives its own copies", () => {

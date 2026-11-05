@@ -60,7 +60,7 @@ The runtime `t3` binary is on every thread's PATH. Use `t3 run [--timeout 30s] -
 
 Server connection overrides: `T3CODE_HOME`, `T3CTL_ORIGIN`, `T3CTL_UNIT`, `T3CTL_T3_BIN`; remote pairing uses `T3CTL_REMOTE_T3_BIN` and `T3CTL_REMOTE_HOME`. Discover the server identity with `env` and diagnose APIs/auth with `doctor`. Credentials are cached under the user's XDG configuration directory; never print them.
 
-Customer-specific agent instructions and SSH routes belong in `global/GLOBAL.md` and `global/machines.json`, or a directory selected by `T3CTL_AGENTS_CONFIG`. The registry supplies ids, labels, tags, roles, harness files, per-source SSH destinations/options, optional relay ids (`via`), and an optional remote `nodeCommand`. It is installation data, not the runtime machine-name resolver. `agents sync` previews changes by default; `--apply` backs up and verifies writes. `agent-kit/install.sh --dest DIR` stages a skill only; `--to ID[,ID] [--apply]` installs using registry routes. Never install on a live machine without authorization.
+Agent instructions belong in mesh config `agents.instructions`; machine identities and SSH settings belong in `machines`. Servers install the bundled skill and update only managed instruction blocks. Use `agents status` to inspect reconciliation and `agents sync` to reapply the current config. `agent-kit/install.sh --dest DIR` creates an offline staging copy.
 
 `server install` requires `T3CTL_RELEASE_REPO=organization/repository`. Version installation does not authorize activating or restarting it. Use the printed backup to roll back an authorized activation.
 
@@ -97,3 +97,10 @@ agents:
 Commands: `mesh config get`, `mesh config plan --file c.yaml`, `mesh config apply --file c.yaml [--base REV]`, `mesh config rollback REV`, `mesh config history`. Apply is optimistic: pass the revision it was based on, or let the CLI read the current one. A stale base is refused with a path diff. `mesh status` shows every action per server as done, in progress or failed with the reason. Files permission defaults to `projects`; `all` lets a linked peer read any file this server's user can read; `none` refuses. A read-only link is always limited to project folders. New machines are bound to their environment id when they join; do not type environment ids in the config.
 
 The mesh requires meshLayout, replicas, files and project placement APIs. Older servers fall back to legacy layout reads; placement and alias edits explain that a mesh build is required. Legacy layout migration is dry-run first, preserves offline keys, and backs up configs before applying. Never create or remove links or representations unless requested.
+
+## Bootstrap and runtime updates
+
+- `t3ctl mesh machines add NAME --ssh user@host[:port]` writes a bootstrap entry through config plan/apply. The mesh installs its runtime version, service, trust and machine binding. Use SSH agent authentication or `--identity-file PATH`. Passwords use a one-time secret reference (`--secret-ref REF --project-id ID`); never put a password in config or command text.
+- `t3ctl mesh update VERSION --plan` previews a version change; omit `--plan` to apply it. Machines update serially, with a DB backup and health-checked rollback. A failure stops that config revision.
+- `t3ctl mesh status` includes bootstrap steps and rollout failures. Resolve the reported reason before applying a new revision.
+- Model shortcuts are config `agents.aliases`. Servers install their bundled skill and manage only marked instruction blocks; personal instructions belong in `agents.instructions`. `agents.manageInstructions: false` disables those instruction writes.

@@ -475,3 +475,13 @@ test("mesh config CLI reaches get, plan, apply, rollback, history and status tra
     "done",
   );
 });
+
+test("bootstrap add and rolling update use their config services and credentials stay out of config", () => {
+  const added = run(["mesh", "machines", "add", "laptop", "--ssh", "user@laptop:2222", "--identity-file", "/isolated/key"]);
+  assert.deepEqual(added.calls.find(call => call.name === "t3_mesh_machine_add").args, { name: "laptop", ssh: "user@laptop:2222" });
+  assert.deepEqual(added.calls.find(call => call.name === "t3_mesh_bootstrap_credential").args, { name: "laptop", kind: "key", identityFile: "/isolated/key" });
+  const planned = run(["mesh", "update", "0.1.6", "--plan"]);
+  assert.deepEqual(planned.calls.find(call => call.name === "t3_mesh_update").args, { version: "0.1.6", plan: true });
+  const applied = run(["mesh", "update", "0.1.6"]);
+  assert.deepEqual(applied.calls.find(call => call.name === "t3_mesh_update").args, { version: "0.1.6", plan: false });
+});
