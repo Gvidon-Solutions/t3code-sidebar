@@ -129,7 +129,26 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   and `machines.json`; rendered per machine with a one-line header into `~/.claude/CLAUDE.md`,
   `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`.
 
-## The agent kit (skills and instructions live in this repo)
+## Runtime agent-kit reconciliation
+
+`mesh/MeshAgentKit.ts` installs the bundled skill into the shared and Claude/Codex/OpenCode
+skill directories through the config `agents/kit` planner action. It writes only the
+`<!-- t3-mesh begin -->` … `<!-- t3-mesh end -->` block in the three harness instruction
+files. Missing directories are created. Malformed or repeated markers fail reconciliation
+before instruction files are written. `agents.manageInstructions: false` disables instruction
+writes while skill installation remains enabled. Instruction errors appear in normal config status.
+
+Isolated servers must set `T3_MESH_AGENT_HOME` to their sandbox home; `T3_MESH_AGENT_SOURCE`
+can select a fixture skill. CLI release archives carry `agent-kit/skills/t3` next to the
+executable, excluding the legacy personal `global` directory. Source development resolves the
+checkout kit. Instruction rendering uses config machine names/labels and `agents.instructions`;
+it never reads the repository's personal instruction text. Legacy standalone installation below
+still exists; runtime reconciliation does not call it.
+
+Replicated future-schema config remains stored and forwarded, but `MeshConfig.start` refuses to
+run planners or identity repair for it and publishes `Unsupported schema` as a failed status.
+
+## The standalone agent kit (legacy installation)
 
 `agent-kit/` is the source of truth; machines hold installed copies. Edit here, commit, then:
 

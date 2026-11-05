@@ -40,7 +40,12 @@ export const MeshConfigDocument = open({
           ),
         }),
       ),
-      bootstrap: Schema.optionalKey(open({ ssh: Schema.String, os: Schema.String })),
+      bootstrap: Schema.optionalKey(
+        open({
+          ssh: Schema.String,
+          os: Schema.optionalKey(Schema.String),
+        }),
+      ),
     }),
   ).check(
     Schema.makeFilter((machines) => Object.keys(machines).every((name) => isMachineName(name)), {
@@ -87,6 +92,7 @@ export const MeshConfigDocument = open({
         Schema.Record(Schema.String, open({ harness: Schema.String, model: Schema.String })),
       ),
       instructions: Schema.optionalKey(Schema.String),
+      manageInstructions: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });

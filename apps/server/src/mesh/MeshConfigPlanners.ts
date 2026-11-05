@@ -1,3 +1,4 @@
+import { MeshAgentKit } from "./MeshAgentKit.ts";
 import { MeshSsh } from "../replicas/MeshSsh.ts";
 import { replicaDriver } from "../replicas/replicaModel.ts";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
@@ -35,6 +36,7 @@ export const layer = Layer.effect(
   MeshConfigPlanners,
   Effect.gen(function* () {
     const ssh = yield* MeshSsh;
+    const agents = yield* MeshAgentKit;
     const mesh = yield* MeshLayoutService;
     const runtime = yield* ReplicaRuntime.ReplicaRuntime;
     const replicaService = runtime.get.pipe(Effect.mapError(failure));
@@ -328,6 +330,29 @@ export const layer = Layer.effect(
         ssh.reconcile(doc, action.machine),
       ),
     };
-    return MeshConfigPlanners.of([machines, links, sshPlanner, replicas, ignores, conflicts]);
+    const agentPlanner: ConfigPlanner = {
+      name: "agents",
+      plan: Effect.fn("MeshConfigPlanners.agents.plan")(() =>
+        Effect.succeed([
+          {
+            id: "agents/kit",
+            server: mesh.environmentId,
+            description: "Install bundled t3 skill and managed mesh instructions",
+          },
+        ]),
+      ),
+      reconcile: Effect.fn("MeshConfigPlanners.agents.reconcile")((_action, doc) =>
+        agents.reconcile(doc),
+      ),
+    };
+    return MeshConfigPlanners.of([
+      machines,
+      links,
+      sshPlanner,
+      replicas,
+      ignores,
+      conflicts,
+      agentPlanner,
+    ]);
   }),
 );

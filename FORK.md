@@ -1613,3 +1613,14 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   repairs the config with a normal history revision. Forget removes claims along with bindings.
 - **Where.** Shared `meshConfig/identity`, server `MeshConfig`/`MeshConfigMigration`, shared layout
   registry/diff, client-runtime machine displays, web and mobile Mesh settings.
+
+### 2026-11-05 — B1 managed agent instructions and schema refusal
+
+- **What.** Servers reconcile bundled t3 skills and managed mesh instruction blocks from config.
+  A future-schema config is retained for forwarding and reported as unsupported without running
+  local reconciliation.
+- **How.** The agents planner installs skills independently of the instruction-management switch,
+  validates all existing instruction markers before writing and preserves surrounding text.
+  Test homes and skill sources are overridable. CLI archives include the skill without personal data.
+- **Where.** Server `mesh/MeshAgentKit.ts`, `MeshConfigPlanners.ts`, `MeshConfig.ts`, config
+  contracts and `scripts/build-cli-archive.ts`.

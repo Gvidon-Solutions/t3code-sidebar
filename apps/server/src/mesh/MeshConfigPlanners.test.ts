@@ -1,3 +1,4 @@
+import { MeshAgentKit } from "./MeshAgentKit.ts";
 import { MeshSsh } from "../replicas/MeshSsh.ts";
 import type { Json } from "@t3tools/shared/meshLayout";
 import { MeshConfigError, ReplicaError, type MeshConfigDocument } from "@t3tools/contracts";
@@ -121,6 +122,7 @@ it.effect(
     }).pipe(
       Effect.provide(
         Planners.layer.pipe(
+          Layer.provide(Layer.succeed(MeshAgentKit, { reconcile: () => Effect.void })),
           Layer.provide(
             Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
           ),
@@ -182,6 +184,7 @@ it.effect(
     }).pipe(
       Effect.provide(
         Planners.layer.pipe(
+          Layer.provide(Layer.succeed(MeshAgentKit, { reconcile: () => Effect.void })),
           Layer.provide(
             Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
           ),
@@ -234,6 +237,7 @@ it.effect(
     }).pipe(
       Effect.provide(
         Planners.layer.pipe(
+          Layer.provide(Layer.succeed(MeshAgentKit, { reconcile: () => Effect.void })),
           Layer.provide(
             Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
           ),

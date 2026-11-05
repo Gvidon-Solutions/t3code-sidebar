@@ -8,6 +8,7 @@ import * as MeshRelayLive from "./mesh/MeshRelay.ts";
 import * as MeshReplication from "./mesh/MeshReplicator.ts";
 import * as MeshLayoutLive from "./mesh/MeshLayoutServiceLive.ts";
 import * as MeshConfig from "./mesh/MeshConfig.ts";
+import * as MeshAgentKit from "./mesh/MeshAgentKit.ts";
 import * as MeshConfigPlanners from "./mesh/MeshConfigPlanners.ts";
 import * as MeshConfigMigration from "./mesh/MeshConfigMigration.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
@@ -581,6 +582,7 @@ const layerMeshSsh = MeshSsh.layer.pipe(Layer.provide(layerMesh));
 const layerMeshConfig = MeshConfig.layer.pipe(
   Layer.provide(
     MeshConfigPlanners.layer.pipe(
+      Layer.provide(MeshAgentKit.layer),
       Layer.provide(layerOrchestrationV2Runtime),
       Layer.provide(layerMeshSsh),
     ),
