@@ -36,6 +36,8 @@
         "mesh-e2e/network-local.mjs",
         "mesh-e2e/managed-sshd.mjs",
         "mesh-e2e/s1-bed.mjs",
+        "mesh-e2e/r1-harness.mjs",
+        "mesh-e2e/r1-bed.mjs",
         "setup-worktree.ts",
         "sign-macos.ts",
         "smoke-desktop-app.ts",

@@ -142,8 +142,9 @@ it.live("tracks a detached job through disconnect, live logs, list and process-g
       const list = await invoke("list").result;
       expect(
         list
-          .filter((frame) => frame.type === "out")
-          .map((frame) => Buffer.from(frame.data, "base64").toString())
+          .flatMap((frame) =>
+            frame.type === "out" ? [Buffer.from(frame.data, "base64").toString()] : [],
+          )
           .join(""),
       ).toContain(`${id}\trunning`);
       let stop: Promise<unknown> | undefined;
@@ -160,8 +161,9 @@ it.live("tracks a detached job through disconnect, live logs, list and process-g
       const exited = await invoke("list").result;
       expect(
         exited
-          .filter((frame) => frame.type === "out")
-          .map((frame) => Buffer.from(frame.data, "base64").toString())
+          .flatMap((frame) =>
+            frame.type === "out" ? [Buffer.from(frame.data, "base64").toString()] : [],
+          )
           .join(""),
       ).toContain(`${id}\texited`);
       id = undefined;

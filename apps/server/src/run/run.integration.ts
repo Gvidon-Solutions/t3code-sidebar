@@ -31,6 +31,8 @@ const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 const requireNative = NodeModule.createRequire(import.meta.url);
 const repo = NodePath.resolve(import.meta.dirname, "../../../..");
 const bin = NodePath.join(repo, "apps/server/src/bin.ts");
+const runtimeCommand = process.env.R1_RUN_BINARY ?? process.execPath;
+const runtimeArgs = process.env.R1_RUN_BINARY ? [] : [bin];
 const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "R1-run-integration-"));
 const primary = NodePath.join(root, "primary"),
   replica = NodePath.join(root, "replica");
@@ -65,7 +67,7 @@ async function command(
 }
 const mutagen = (...args: string[]) => command("mutagen", args, daemonEnv);
 function launch(args: readonly string[], env: NodeJS.ProcessEnv, cwd = replica) {
-  const child = NodeChildProcess.spawn(process.execPath, [bin, "run", ...args], {
+  const child = NodeChildProcess.spawn(runtimeCommand, [...runtimeArgs, "run", ...args], {
     cwd,
     env,
     stdio: ["ignore", "pipe", "pipe"],
@@ -348,8 +350,8 @@ try {
     Effect.map(ProjectReplicaService, (service) => ({ get: Effect.succeed(service) })),
   ).pipe(Layer.provide(replicas));
   const runtimeInfo = {
-    command: "/usr/local/bin/node",
-    entrypoint: bin,
+    command: process.env.R1_RUN_BINARY ?? "/usr/local/bin/node",
+    ...(process.env.R1_RUN_BINARY ? {} : { entrypoint: bin }),
     ptyModule: requireNative.resolve("node-pty"),
   };
   const peers = Layer.mock(PeerMcpClient)({
@@ -368,9 +370,17 @@ try {
   );
   const managed = ManagedRuntime.make(RunIpc.layer.pipe(Layer.provideMerge(base)));
   disposeRuntime = () => managed.dispose();
+  await NodeFSP.mkdir(NodePath.join(root, "client-home/.ssh"), { recursive: true });
+  await NodeFSP.copyFile(sshConfig, NodePath.join(root, "client-home/.ssh/config"));
   const installed = await managed.runPromise(
     RunEnvironment.install().pipe(
-      Effect.provideService(HostProcess.Arguments, [process.execPath, bin]),
+      Effect.provideService(HostProcess.Arguments, [runtimeCommand, ...runtimeArgs]),
+      Effect.provideService(HostProcess.ExecutablePath, runtimeCommand),
+      Effect.provideService(HostProcess.IsExecutable, Boolean(process.env.R1_RUN_BINARY)),
+      Effect.provideService(HostProcess.Environment, {
+        ...process.env,
+        T3_MESH_SSH_HOME: NodePath.join(root, "client-home"),
+      }),
     ),
   );
   await managed.runPromise(Effect.void);
@@ -378,7 +388,6 @@ try {
     ...process.env,
     ...installed.environment,
     PATH: `${installed.directory}${NodePath.delimiter}${process.env.PATH ?? ""}`,
-    T3CODE_RUN_SSH_CONFIG: sshConfig,
   });
   const run = async (name: string, args: readonly string[], cwd = replica) => {
     const result = await launch(args, env, cwd).result;
@@ -499,9 +508,9 @@ try {
   await mutagen("sync", "flush", session);
   const tty = requireNative("node-pty") as typeof import("node-pty");
   const terminal = tty.spawn(
-    process.execPath,
+    runtimeCommand,
     [
-      bin,
+      ...runtimeArgs,
       "run",
       "--",
       "node",
@@ -555,11 +564,39 @@ try {
   });
   await new Promise<void>((resolve) => bound.close(() => resolve()));
   report("forward_released", true);
-  for (const mode of ["interrupt", "cut"]) {
+  for (const mode of ["interrupt", "tty-interrupt", "terminate", "cut"]) {
     const childCode =
       "require('net').createServer(()=>{}).listen(45555,'0.0.0.0',()=>console.log('TREE_READY'))";
     const parentCode = `require('child_process').spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:['ignore','inherit','inherit']});setInterval(()=>{},1000)`;
-    const running = launch(["--", "node", "-e", parentCode], env);
+    const terminal =
+      mode === "tty-interrupt"
+        ? tty.spawn(runtimeCommand, [...runtimeArgs, "run", "--", "node", "-e", parentCode], {
+            cwd: replica,
+            env,
+            name: "xterm",
+            cols: 80,
+            rows: 24,
+          })
+        : undefined;
+    const running = terminal
+      ? (() => {
+          let stdout = "";
+          let markReady: (() => void) | undefined;
+          const ready = new Promise<void>((resolve) => {
+            markReady = resolve;
+          });
+          terminal.onData((data) => {
+            stdout += data;
+            if (stdout.includes("TREE_READY")) markReady?.();
+          });
+          return {
+            ready: () => ready,
+            result: new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
+              terminal.onExit((event) => resolve({ code: event.exitCode, stdout, stderr: "" })),
+            ),
+          };
+        })()
+      : launch(["--", "node", "-e", parentCode], env);
     await running.ready("TREE_READY");
     const socket = NodeNet.connect(childPort, "127.0.0.1");
     await new Promise<void>((resolve, reject) => {
@@ -567,14 +604,16 @@ try {
       socket.once("error", reject);
     });
     const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
-    if (mode === "interrupt") running.child.kill("SIGINT");
+    if (terminal) terminal.write("\x03");
+    else if ("child" in running && mode === "interrupt") running.child.kill("SIGINT");
+    else if ("child" in running && mode === "terminate") running.child.kill("SIGTERM");
     else {
       blocked = true;
       for (const pair of pairs) pair.destroy();
     }
     const result = await running.result;
     report(mode, result);
-    NodeAssert.equal(result.code, mode === "interrupt" ? 130 : 255);
+    NodeAssert.equal(result.code, mode === "cut" ? 255 : mode === "terminate" ? 143 : 130);
     await closed;
     if (mode === "cut") {
       const offline = await run("primary_offline", [

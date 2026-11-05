@@ -96,6 +96,8 @@ try {
   await NodeFSP.writeFile(
     base + "/userdata/settings.json",
     JSON.stringify({
+      meshEnabled: true,
+      linkedEnvironmentsEnabled: true,
       replicasEnabled: false,
       providerInstances: instances,
       defaultRuntimeMode: "full-access",
@@ -209,7 +211,33 @@ try {
   for (const name of Object.keys(doc.machines))
     doc.machines[name] = { ...doc.machines[name], title: "Laptop", label: "LP" };
   doc.machines.cloudbox = { title: "Cloudbox", label: "CB" };
+  const manifestReady = new Promise((resolve, reject) => {
+    let complete = false;
+    const watch = NodeFS.watch(base + "/run", { signal: AbortSignal.timeout(30000) }, async () => {
+      try {
+        const value = JSON.parse(await NodeFSP.readFile(base + "/run/manifest.json", "utf8"));
+        if (value.representations.some((rep) => rep.root === replica && rep.lite)) {
+          complete = true;
+          resolve();
+          watch.close();
+        }
+      } catch (error) {
+        if (error.code !== "ENOENT") {
+          watch.close();
+          reject(error);
+        }
+      }
+    });
+    watch.once("error", reject);
+    watch.once(
+      "close",
+      () =>
+        !complete &&
+        reject(Error("The configured machine binding never reached the runtime manifest")),
+    );
+  });
   await tool("t3_mesh_config_apply", { doc, baseRevision: config.current.revision });
+  await manifestReady;
   const models = {
     codex: process.env.R1_CODEX_MODEL || "gpt-6-luna",
     opencode: "deepseek/deepseek-flash",
@@ -221,7 +249,7 @@ try {
       modelSelection: { instanceId: provider, model: models[provider] },
       runtimeMode: "full-access",
       message:
-        "This is an authorized integration test of lite-replica guards. Use your native shell tool to run plain git status and plain npm --version as two separate commands in the current directory. Do not use t3 run, SSH, absolute binary paths, or workarounds. Do not modify files or initialize git. Report both exact exit codes and both guard lines, then finish.",
+        "This is an authorized integration test of lite-replica guards. The command names resolve to protective shims which must refuse with 127; the native git/npm binaries must never run. Exercising these refusals is the test, so execute both plain commands even though t3 run is normally correct for real work. Use your native shell tool to run plain git status and plain npm --version as two separate commands in the current directory. Do not use t3 run, SSH, absolute binary paths, or workarounds. Do not modify files or initialize git. After each command, capture its status with code=$? and print R1_EXIT=$code, then exit the shell with that code. Report both exact exit codes and both guard lines, then finish.",
     });
     threads.push(launch);
   }
@@ -238,26 +266,34 @@ try {
       limit: 100,
       maxCharsPerItem: 12000,
     });
-    NodeAssert.equal(read.thread.status, "completed");
-    NodeAssert.equal(read.thread.pendingRequestCount, 0);
-    const native = read.items
-      .filter((item) => item.type !== "user_message" && item.type !== "assistant_message")
-      .map((item) => JSON.stringify(item))
-      .join("\n");
-    for (const command of ["git status", "npm --version"])
-      NodeAssert.ok(
-        native.includes(
-          `This is a lite replica of R1 Harness replica; the environment is on cloudbox. Use: t3 run ${command}`,
-        ),
-        `${provider} did not execute guarded ${command}`,
-      );
-    NodeAssert.ok(native.includes("127"), `${provider} did not report native exit 127`);
     await NodeFSP.writeFile(
       NodePath.join(evidence, provider + ".json"),
       JSON.stringify(read, null, 2),
       {
         mode: 0o600,
       },
+    );
+    NodeAssert.equal(read.thread.status, "completed");
+    NodeAssert.equal(read.thread.pendingRequestCount, 0);
+    const native = read.items
+      .filter((item) => item.type === "command_execution")
+      .map((item) => item.text)
+      .join("\n");
+    for (const command of ["git status", "npm --version"]) {
+      const line = native
+        .split("\n")
+        .find(
+          (line) =>
+            line.startsWith(
+              "This is a lite replica of R1 Harness replica; the environment is on ",
+            ) && line.endsWith(`. Use: t3 run ${command}`),
+        );
+      NodeAssert.ok(line, `${provider} did not execute guarded ${command}`);
+    }
+    NodeAssert.equal(
+      native.match(/R1_EXIT=127/g)?.length,
+      2,
+      `${provider} did not expose both native exit codes`,
     );
     console.log(
       JSON.stringify({

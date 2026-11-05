@@ -1,0 +1,326 @@
+import * as NodeAssert from "node:assert/strict";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+import * as NodeOS from "node:os";
+import * as NodeNet from "node:net";
+export async function runScenarios(h) {
+  const { nodes, root, runtime, mcp, rpc, file, remote, run, upload, until, quote } = h;
+  const [studio, laptop, cloudbox] = nodes;
+  let doc = h.doc;
+  const cloud = (command) => remote("cloudbox", `docker exec R1-mesh-cloudbox ${command}`);
+  const source = "/bed/R1-primary";
+  await file(cloudbox, source + "/input.txt", "initial");
+  await file(cloudbox, source + "/README.md", "R1 primary");
+  const project = await mcp(cloudbox, "t3_project_create", {
+    title: "R1 Run primary",
+    workspaceRoot: source,
+  });
+  await mcp(cloudbox, "t3_project_place", {
+    project: project.id,
+    machine: cloudbox.id,
+    role: "primary",
+    path: source,
+  });
+  const key = (await mcp(cloudbox, "t3_project_machines", { project: project.id })).logicalKey;
+  const apply = async (next) => {
+    const current = await mcp(studio, "t3_mesh_config_get");
+    await mcp(studio, "t3_mesh_config_apply", {
+      doc: next,
+      baseRevision: current.current.revision,
+    });
+    doc = next;
+  };
+  await apply({
+    ...doc,
+    replicas: {
+      rules: [studio, laptop].map((node) => ({
+        project: "R1 Run primary",
+        on: node.host,
+        when: "always",
+      })),
+    },
+  });
+  for (const node of [studio, laptop]) {
+    const ready = await until(
+      `${node.name} R1 replica`,
+      () => mcp(node, "t3_project_machines", { project: key }),
+      (value) =>
+        value.representations.some(
+          (rep) => rep.environmentId === node.id && rep.status?.state === "watching",
+        ),
+    );
+    node.replica = ready.representations.find((rep) => rep.environmentId === node.id);
+    node.session = (await rpc(node, "replicas.status")).replicas.find(
+      (rep) => rep.logicalKey === key && rep.environmentId === node.id,
+    ).sessionName;
+    NodeAssert.ok(node.session);
+  }
+  const replica = studio.replica.path;
+  const mutate = (action) =>
+    run(runtime + "/mutagen", ["sync", action, studio.session], {
+      env: {
+        ...process.env,
+        HOME: studio.home,
+        MUTAGEN_DATA_DIRECTORY: studio.base + "/mutagen",
+        MUTAGEN_SSH_PATH: studio.base + "/mesh/ssh/bin",
+      },
+    });
+  await cloud(`mkdir -p /bed/home/.nvm/versions/node/v26.12.1/bin /bed/home/.local/bin`);
+  await upload(
+    "cloudbox",
+    NodePath.join(process.env.NVM_DIR || NodePath.join(NodeOS.homedir(), ".nvm"), "nvm.sh"),
+    root + "/nvm.sh",
+  );
+  const uv = (await run("sh", ["-c", "command -v uv"])).trim();
+  await upload("cloudbox", uv, root + "/uv");
+  await cloud(
+    `sh -c ${quote("cp /bed/nvm.sh /bed/home/.nvm/nvm.sh; cp /bed/uv /bed/home/.local/bin/uv; chmod 755 /bed/home/.local/bin/uv; ln -s /usr/local/bin/node /bed/home/.nvm/versions/node/v26.12.1/bin/node")}`,
+  );
+  const profile =
+    'export HOME=/bed/home\nexport PATH=/usr/bin:/bin\nexport NVM_DIR=/bed/home/.nvm\n. "$NVM_DIR/nvm.sh" --no-use\nnvm use --silent v26.12.1\nexport PATH=/bed/home/.local/bin:$PATH\nexport R1_LOGIN_PROFILE=loaded\n';
+  await file(cloudbox, "/home/t3/.bash_profile", profile);
+  const env = {
+    ...process.env,
+    HOME: studio.home,
+    T3CODE_HOME: studio.base,
+    T3CODE_RUN_SSH_CONFIG: studio.home + "/.ssh/config",
+  };
+  const cli = studio.base + "/run/bin/t3";
+  const launch = (args, cwd = replica) => {
+    const child = NodeChildProcess.spawn(cli, ["run", ...args], {
+      cwd,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "",
+      stderr = "";
+    const waiters = new Set();
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      for (const waiter of waiters)
+        if (stdout.includes(waiter.text)) {
+          waiters.delete(waiter);
+          waiter.resolve();
+        }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    const result = new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (code) => {
+        for (const waiter of waiters)
+          waiter.reject(Error(`Exited before ${waiter.text}: ${stderr}`));
+        resolve({ code, stdout, stderr });
+      });
+    });
+    return {
+      child,
+      result,
+      ready: (text) =>
+        stdout.includes(text)
+          ? Promise.resolve()
+          : new Promise((resolve, reject) => waiters.add({ text, resolve, reject })),
+    };
+  };
+  const execute = async (name, args, cwd) => {
+    const result = await launch(args, cwd).result;
+    console.log(name, JSON.stringify(result));
+    return result;
+  };
+  const login = await execute("login_nvm_uv", [
+    "--",
+    "node",
+    "-e",
+    "console.log(process.env.R1_LOGIN_PROFILE);console.log(process.version);console.log(require('child_process').execFileSync('uv',['--version']).toString().trim())",
+  ]);
+  NodeAssert.equal(login.code, 0);
+  NodeAssert.match(login.stdout, /loaded\nv26\.12\.1\nuv /);
+  await NodeFSP.mkdir(replica + "/nested");
+  const mapped = await execute(
+    "mapped_live_stream_exit",
+    [
+      "--",
+      "node",
+      "-e",
+      "process.stdout.write(process.cwd()+'\\n');process.stderr.write(process.cwd()+'/error\\n');process.exitCode=23",
+    ],
+    replica + "/nested",
+  );
+  NodeAssert.deepEqual(mapped, {
+    code: 23,
+    stdout: replica + "/nested\n",
+    stderr: replica + "/nested/error\n",
+  });
+  const ignored = await execute("ignored_outputs", [
+    "--",
+    "node",
+    "-e",
+    "const fs=require('fs');fs.writeFileSync('returned.txt','back');fs.mkdirSync('dist');fs.writeFileSync('dist/result.txt','stays')",
+  ]);
+  NodeAssert.equal(ignored.code, 0);
+  NodeAssert.equal(ignored.stderr, `dist/result.txt stayed on ${cloudbox.host}\n`);
+  NodeAssert.equal(await NodeFSP.readFile(replica + "/returned.txt", "utf8"), "back");
+  await NodeAssert.rejects(NodeFSP.access(replica + "/dist/result.txt"));
+  const concurrent = await Promise.all([
+    execute("concurrent_one", ["--", "node", "-e", "console.log('one')"]),
+    execute("concurrent_two", ["--", "node", "-e", "console.log('two')"]),
+  ]);
+  NodeAssert.ok(concurrent.every((value) => value.code === 0));
+  await mutate("pause");
+  await file(cloudbox, source + "/input.txt", "primary conflict");
+  await NodeFSP.writeFile(replica + "/input.txt", "replica conflict");
+  await mutate("resume");
+  await mutate("flush");
+  const conflict = await execute("conflict_before_run", [
+    "--",
+    "node",
+    "-e",
+    "require('fs').writeFileSync('must-not-run','bad')",
+  ]);
+  NodeAssert.equal(conflict.code, 75);
+  NodeAssert.match(conflict.stderr, /input.txt/);
+  await NodeAssert.rejects(cloud(`test -f ${source}/must-not-run`));
+  await mutate("pause");
+  await NodeFSP.mkdir(replica + "/.t3-conflicts/R1-saved", { recursive: true });
+  await NodeFSP.copyFile(replica + "/input.txt", replica + "/.t3-conflicts/R1-saved/input.txt");
+  await NodeFSP.writeFile(replica + "/input.txt", "primary conflict");
+  await mutate("resume");
+  await mutate("flush");
+  const portServer = NodeNet.createServer();
+  await new Promise((resolve) => portServer.listen(0, "127.0.0.1", resolve));
+  const port = portServer.address().port;
+  await new Promise((resolve) => portServer.close(resolve));
+  const serverCode = `require('net').createServer(s=>s.end('port-ok')).listen(${port},'127.0.0.1',()=>console.log('SERVER_READY'))`;
+  const started = await execute("background_start", [
+    "--bg",
+    "--ports",
+    String(port),
+    "--",
+    "node",
+    "-e",
+    serverCode,
+  ]);
+  NodeAssert.equal(started.code, 0);
+  const id = started.stdout.trim();
+  NodeAssert.match(id, /^[a-f0-9-]{36}$/);
+  const following = launch(["--logs", id, "--follow"]);
+  await following.ready("SERVER_READY");
+  const listing = await execute("background_list", ["--list"]);
+  NodeAssert.match(listing.stdout, new RegExp(id + "\\trunning"));
+  const response = await new Promise((resolve, reject) => {
+    let data = "";
+    const socket = NodeNet.connect(port, "127.0.0.1");
+    socket.on("error", reject);
+    socket.on("data", (chunk) => (data += chunk));
+    socket.on("end", () => resolve(data));
+  });
+  NodeAssert.equal(response, "port-ok");
+  console.log("background_loopback_forward", JSON.stringify(response));
+  NodeAssert.equal((await execute("background_stop", ["--stop", id])).code, 0);
+  const followed = await following.result;
+  NodeAssert.equal(followed.code, 143);
+  console.log("background_follow", JSON.stringify(followed));
+  await NodeAssert.rejects(
+    new Promise((resolve, reject) => {
+      const socket = NodeNet.connect(port, "127.0.0.1");
+      socket.on("error", reject);
+      socket.on("connect", () => {
+        socket.end();
+        resolve();
+      });
+    }),
+  );
+  console.log("forward_released", true);
+  const childCode = `require('net').createServer(()=>{}).listen(${port},'127.0.0.1',()=>console.log('TREE_READY'));setInterval(()=>{},1000)`;
+  const parentCode = `require('child_process').spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:['ignore','inherit','inherit']});setInterval(()=>{},1000)`;
+  const groupGone = () =>
+    cloud(
+      `node -e ${quote(`const s=require('net').connect(${port},'127.0.0.1');s.once('connect',()=>{s.destroy();process.exitCode=1});s.once('error',e=>{if(e.code!=='ECONNREFUSED')throw e})`)}`,
+    );
+  const interrupted = launch(["--", "node", "-e", parentCode]);
+  await interrupted.ready("TREE_READY");
+  interrupted.child.kill("SIGINT");
+  const interrupt = await interrupted.result;
+  console.log("ctrl_c_group", JSON.stringify(interrupt));
+  NodeAssert.equal(interrupt.code, 130);
+  await groupGone();
+  const cut = launch(["--", "node", "-e", parentCode]);
+  await cut.ready("TREE_READY");
+  await run("systemctl", ["--user", "stop", "R1-mesh-studio.service"]);
+  const severed = await cut.result;
+  console.log("network_cut_mid_command", JSON.stringify(severed));
+  NodeAssert.equal(severed.code, 255);
+  NodeAssert.equal(severed.stderr.trim().split("\n").length, 1);
+  await groupGone();
+  await run("systemctl", ["--user", "start", "R1-mesh-studio.service"]);
+  await until(
+    "studio recovery",
+    () => execute("recovery_probe", ["--", "node", "-e", "console.log('recovered')"]),
+    (value) => value.code === 0,
+  );
+  await remote("cloudbox", "docker pause R1-mesh-cloudbox");
+  try {
+    const offline = await execute("primary_offline", [
+      "--",
+      "node",
+      "-e",
+      "console.log('must-not-run')",
+    ]);
+    NodeAssert.equal(offline.code, 255);
+    NodeAssert.equal(offline.stdout, "");
+    NodeAssert.equal(offline.stderr.trim().split("\n").length, 1);
+  } finally {
+    await remote("cloudbox", "docker unpause R1-mesh-cloudbox");
+  }
+  await until(
+    "primary recovery",
+    () => execute("recovery_probe", ["--", "node", "-e", "console.log('recovered')"]),
+    (value) => value.code === 0,
+  );
+  const canonical = (value) =>
+    JSON.stringify(value, (_, v) =>
+      v && typeof v === "object" && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+        : v,
+    );
+  await until(
+    "identical project layouts",
+    () => Promise.all(nodes.map((node) => rpc(node, "meshLayout.get"))),
+    (values) =>
+      new Set(
+        values.map((value) =>
+          canonical({
+            mounts: value.config.projectMounts,
+            titles: value.config.projectTitles,
+            workspaces: value.config.projectWorkspaces,
+          }),
+        ),
+      ).size === 1,
+  );
+  for (const node of [studio, laptop]) {
+    const status = await until(
+      "final watching",
+      () => mcp(node, "t3_project_machines", { project: key }),
+      (value) =>
+        value.representations.find((rep) => rep.environmentId === node.id)?.status?.state ===
+        "watching",
+    );
+    NodeAssert.equal(status.representations.length, 3);
+  }
+  const sessions = JSON.parse(
+    await run(runtime + "/mutagen", ["sync", "list", "--template", "{{json .}}"], {
+      env: { ...env, MUTAGEN_DATA_DIRECTORY: studio.base + "/mutagen" },
+    }),
+  );
+  NodeAssert.equal(sessions.length, 1);
+  NodeAssert.equal(sessions[0].name, studio.session);
+  NodeAssert.equal(
+    await NodeFSP.readFile(replica + "/.t3-conflicts/R1-saved/input.txt", "utf8"),
+    "replica conflict",
+  );
+  console.log(
+    "PASS R1 CONCEPT §12: real three-node bed; login nvm/uv, live mapping, ignored outputs, concurrency, conflict refusal, background forwards, Ctrl-C, connection loss and offline primary; identical layouts and one session per replica; losing version preserved",
+  );
+}
