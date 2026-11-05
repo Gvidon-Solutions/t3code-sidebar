@@ -1586,3 +1586,13 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** Web `workspaces/MeshSettingsPanel`, `MeshConfigDialog`, `ForkThreadDialog`,
   `BranchToolbar`; mobile `settings/SettingsMachinesRouteScreen`, `MeshConfigSheet`, thread
   context pickers; shared `meshConfigEditor`, `meshMachines`, `meshLayout/replicas`.
+
+### 2026-11-05 — Stage C2 machine name collision recovery
+
+- **What.** Independently installed servers with equal hostnames keep distinct mesh names;
+  older unbound servers repair their identity on startup. Moving a machine's config key keeps
+  its binding. Equal titles show platform/host hints, and offline ages use compact durations.
+- **How.** Environment-keyed join claims survive replication; deterministic suffix allocation
+  repairs the config with a normal history revision. Forget removes claims along with bindings.
+- **Where.** Shared `meshConfig/identity`, server `MeshConfig`/`MeshConfigMigration`, shared layout
+  registry/diff, client-runtime machine displays, web and mobile Mesh settings.
