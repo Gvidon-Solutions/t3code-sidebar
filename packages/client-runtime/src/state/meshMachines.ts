@@ -80,7 +80,7 @@ export interface MeshMachineBuildInput {
   readonly connections?: readonly MeshMachineConnection[];
   readonly links?: readonly MeshLinkSource[];
   readonly peerStates?: readonly MeshPeerStateView[];
-  readonly factsObservedAt?: Readonly<Record<string, string>>;
+  readonly factsObservedAt?: Readonly<Record<string, string | null>>;
   readonly peerConnections?: readonly import("@t3tools/contracts").PeerConnectionStatus[];
 }
 
@@ -312,7 +312,15 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         urls,
         reach,
       };
-    });
+    })
+    .filter(
+      (machine) =>
+        input.factsObservedAt?.[machine.environmentId] !== null ||
+        machine.connectedHere ||
+        machine.network?.state === "direct" ||
+        machine.network?.state === "relayed" ||
+        machine.linkedWith.length > 0,
+    );
 }
 
 export type MeshFooterStatus =
@@ -518,11 +526,17 @@ export function forgetMachineFacts(
 
 export * from "./meshConfigStatus.ts";
 
-export function meshMachineFactTimes(document: Readonly<Record<string, { readonly h: string }>>) {
-  const times: Record<string, string> = {};
+export function meshMachineFactTimes(
+  document: Readonly<Record<string, { readonly h: string; readonly v?: unknown }>>,
+) {
+  const times: Record<string, string | null> = {};
   for (const [key, entry] of Object.entries(document)) {
     if (!key.startsWith("machine/")) continue;
     const environmentId = decodeURIComponent(key.slice("machine/".length));
+    if (entry.v === null) {
+      times[environmentId] = null;
+      continue;
+    }
     const milliseconds = Number(entry.h.slice(0, 13));
     if (Number.isFinite(milliseconds))
       times[environmentId] = DateTime.formatIso(DateTime.makeUnsafe(milliseconds));

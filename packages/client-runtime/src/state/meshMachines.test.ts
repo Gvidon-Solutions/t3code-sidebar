@@ -539,3 +539,23 @@ it("ages unlinked layout-only machines from their replicated fact clock", () => 
     partitionMeshMachines(machines, config, Date.parse("2026-11-05T00:00:00Z")).forgotten,
   ).toHaveLength(1);
 });
+
+it("keeps forgotten layout facts absent when desired config and an old phone connection remain", () => {
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { cloudbox: { title: "Cloudbox" } },
+  };
+  const factsObservedAt = meshMachineFactTimes({
+    "machine/cloudbox": { v: null, h: "1793836800000.00000.studio" },
+  });
+  const connection = { environmentId: "cloudbox", label: "Cloudbox", connected: false };
+  expect(buildMeshMachines({ config, factsObservedAt, connections: [connection] })).toEqual([]);
+  expect(
+    buildMeshMachines({
+      config,
+      factsObservedAt,
+      connections: [{ ...connection, connected: true }],
+    }),
+  ).toHaveLength(1);
+  expect(config.machines.cloudbox.title).toBe("Cloudbox");
+});
