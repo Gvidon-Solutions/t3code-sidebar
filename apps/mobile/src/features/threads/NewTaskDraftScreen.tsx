@@ -1014,6 +1014,7 @@ export function NewTaskDraftScreen(props: {
       config={mesh.config}
       environmentId={chosenEnvironmentId ?? selectedProject.environmentId}
       projectId={selectedProject.id}
+      projectEnvironmentId={selectedProject.environmentId}
     >
       <View className="flex-row items-center gap-1 px-2">
         <ComposerInlineControl

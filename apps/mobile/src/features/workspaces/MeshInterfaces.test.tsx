@@ -256,6 +256,18 @@ it("hides local git controls for a replica and retains controls for a primary", 
   expect(screen.container.textContent).toBe("git on Studio · t3 run");
   expect(screen.container.querySelector("button")).toBeNull();
   screen.render(
+    <ReplicaWorkspaceControls
+      config={config}
+      environmentId="cloudbox"
+      projectId="primary"
+      projectEnvironmentId="studio"
+    >
+      <button>Branch · Current checkout</button>
+    </ReplicaWorkspaceControls>,
+  );
+  expect(screen.container.textContent).toBe("git on Studio · t3 run");
+  expect(screen.container.querySelector("button")).toBeNull();
+  screen.render(
     <ReplicaWorkspaceControls config={config} environmentId="studio" projectId="primary">
       <button>Branch · Current checkout</button>
     </ReplicaWorkspaceControls>,

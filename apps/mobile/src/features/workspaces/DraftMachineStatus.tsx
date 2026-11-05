@@ -50,8 +50,14 @@ export function ReplicaWorkspaceControls(props: {
   config: SidebarWorkspacesConfig | null;
   environmentId: string;
   projectId: string;
+  projectEnvironmentId?: string;
   children: ReactNode;
 }) {
-  const label = replicaExecutionLabel(props.config, props.environmentId, props.projectId);
+  const label = replicaExecutionLabel(
+    props.config,
+    props.environmentId,
+    props.projectId,
+    props.projectEnvironmentId,
+  );
   return label ? <AppText textRole="footnote">{label}</AppText> : props.children;
 }

@@ -417,5 +417,21 @@ it("identifies replica git ownership without offering local git controls", () =>
     },
   };
   expect(replicaExecutionLabel(config, "cloudbox", "copy")).toBe("git on Studio · t3 run");
+  expect(replicaExecutionLabel(config, "cloudbox", "source", "studio")).toBe(
+    "git on Studio · t3 run",
+  );
+  expect(
+    replicaExecutionLabel(
+      {
+        ...config,
+        projectMounts: {
+          demo: [config.projectMounts.demo[0]!, replica("cloudbox", "studio")],
+        },
+      },
+      "cloudbox",
+      "source",
+      "studio",
+    ),
+  ).toBe("git on Studio · t3 run");
   expect(replicaExecutionLabel(config, "studio", "source")).toBeNull();
 });

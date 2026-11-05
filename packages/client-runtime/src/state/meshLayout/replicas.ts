@@ -428,11 +428,18 @@ export function replicaExecutionLabel(
   config: SidebarWorkspacesConfig | null,
   environmentId: string,
   projectId: string,
+  projectEnvironmentId?: string,
 ): string | null {
   if (!config) return null;
   for (const mounts of Object.values(config.projectMounts)) {
+    const ownsProject =
+      projectEnvironmentId !== undefined &&
+      mounts.some(
+        (mount) => mount.environmentId === projectEnvironmentId && mount.projectId === projectId,
+      );
     const rep = mounts.find(
-      (mount) => mount.environmentId === environmentId && mount.projectId === projectId,
+      (mount) =>
+        mount.environmentId === environmentId && (ownsProject || mount.projectId === projectId),
     );
     if (rep?.role !== "replica") continue;
     const primaryId = rep.source ?? mounts.find((mount) => mount.role === "primary")?.environmentId;

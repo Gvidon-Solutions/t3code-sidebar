@@ -628,6 +628,7 @@ export const BranchToolbar = memo(function BranchToolbar({
     mesh.config,
     draftMachineId ?? environmentId,
     projectId,
+    environmentId,
   );
   const showGitControls = requestedGitControls && executionLabel === null;
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
