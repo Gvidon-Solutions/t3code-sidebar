@@ -246,8 +246,7 @@ export const layer = Layer.effect(
             const result = yield* runner.run({
               command: "ssh",
               args: [
-                "-F",
-                configFile,
+                ...(mode === "managed" || env.T3_MESH_SSH_HOME ? ["-F", configFile] : []),
                 "-o",
                 "BatchMode=yes",
                 "-o",
