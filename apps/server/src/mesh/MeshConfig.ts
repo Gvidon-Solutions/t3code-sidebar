@@ -149,6 +149,7 @@ export const layer = Layer.effect(
             ),
           );
           const revision: MeshConfigRevision = {
+            sequence: (before?.sequence ?? (yield* history).length) + 1,
             revision: h,
             doc: planned.doc,
             author: mesh.environmentId,

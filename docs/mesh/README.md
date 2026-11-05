@@ -98,6 +98,16 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 - **Context injection.** Every turn gets a short machine/project/representation note (budget in
   `apps/server/src/provider/agentContextBudget.json`; update it to the measured size when you add
   tools or text, and justify growth).
+- **Config editing.** Web `MeshConfigDialog` and mobile `MeshConfigSheet` share
+  `client-runtime/state/meshConfigEditor.ts`: load a base revision, validate YAML, request a
+  server plan, and apply against that revision. Stale applies retain the draft and show the
+  server diff; reload rebases local changes over the latest document and requires a new plan.
+  Restoring a layout history revision follows the same plan/apply path. Apply requires a successful
+  plan of the current text. Settings groups apply actions by revision and merges client connections
+  by the descriptor environment ID. Machine details read optional replica lag and reported SSH
+  route checks; absent producer reports remain unknown. Config owns names and SSH settings.
+  A draft's selected machine can change before its project registration completes: replica git
+  ownership therefore resolves through the source project's logical group, including pending copies.
 - **UI.** Web `apps/web/src/components/workspaces/` (MachineTag, ProjectMachineStrip
   `A ⇄ B C`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
   ForkThreadDialog, MeshFooterStatus, FileMachineTag); mobile
@@ -172,6 +182,11 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
 - Back up `userdata/statev2.sqlite` (`sqlite3 .backup`), `settings.json` and the unit first.
 
 ## Lessons already paid for (do not repeat)
+
+- Forget must remove the machine binding and detach replica source references as well as
+  reported facts, or materialization reconstructs the forgotten machine. Keep replica folders.
+- Shell readiness is a store milestone. Project visibility is not a receipt: quiet folders,
+  workspace filtering and responsive composer labels can hide or duplicate the project title.
 
 - A temporary RPC handler spread after the real ones silently disabled the feature: never leave
   fallback handlers that can shadow real ones; test that each RPC reaches its real handler.
@@ -314,11 +329,12 @@ Peer WebSocket frames carry the same file/replica ceilings as HTTP calls. Both r
 intersect receiver and destination policies; receipt replay checks current permissions before
 returning a saved result, so a policy change cannot expose an earlier authorized response.
 
-Migration (`mesh/MeshConfigMigration.ts`, shared `meshConfig/migration.ts`) runs once on start when
-`mesh.config` is absent. It writes the first revision from the legacy layout: machine labels, tags,
-colors and aliases, SSH routes (reported `ssh.user`/`ssh.port` plus preserved route data), replica
-ignores, project ignores and existing links (`files: all`, so today's meshes behave as before). It
-also writes the name-to-environment bindings. It is idempotent: a present `mesh.config` stops it.
+Migration (`mesh/MeshConfigMigration.ts`, shared `meshConfig/migration.ts`) writes the first
+revision from legacy labels, tags, colors, public SSH user/port, ignores and existing link permissions.
+Name-to-environment bindings live in `mesh.machineBinding/`; legacy aliases, peer labels and SSH
+host/routes live in protected `mesh.machineMigration/` entries. Existing revisions and history are
+cleaned idempotently on startup, preserving unknown public fields. Internal migration data never
+belongs in the editable document.
 
 Interfaces: MCP `t3_mesh_config_get`, `t3_mesh_config_plan`, `t3_mesh_config_apply`,
 `t3_mesh_config_rollback`, `t3_mesh_config_history`, `t3_mesh_status`; WS `meshConfig.get/plan/apply/status`;
@@ -340,8 +356,9 @@ persisted transactions: a thread may use an existing representation while a deni
 create one implicitly. Relay checks the
 origin/destination policy before forwarding and can only narrow the receiving server's own policy.
 Raw client `meshLayout.apply` writes cannot change config, history, bindings or reconciliation facts;
-use `meshConfig.apply` with a base revision. Migration preserves aliases, routes under machine
-`ssh.host`/`ssh.routes`, and legacy peer labels; those optional fields remain forward-compatible.
+use `meshConfig.apply` with a base revision. Migration-only identity and route metadata is protected
+alongside config and bindings. Older peer documents remain readable during rollout; startup extracts
+their internal migration fields.
 
 ## Persistent peer connections and S1 pipes
 

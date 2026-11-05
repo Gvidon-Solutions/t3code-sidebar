@@ -41,18 +41,17 @@ export function DraftMachineHint({
     selection,
   );
   const local = defaultUsableDraftModel(config, current?.projectId ?? null);
-  const provider =
-    config?.providers.find((provider) => provider.instanceId === selection.instanceId)
-      ?.displayName ?? selection.instanceId;
   return (
     <div role="status" className="text-xs text-muted-foreground">
+      {reason}
+      {" · "}
       {alternative ? (
         <button
           type="button"
           className="underline"
           onClick={() => onMachine(alternative.environmentId)}
         >
-          {provider} works on {alternative.label}. Switch machine
+          Switch to {alternative.label} where it works
         </button>
       ) : local ? (
         <button
@@ -62,9 +61,7 @@ export function DraftMachineHint({
         >
           Use {local.model} here
         </button>
-      ) : (
-        reason
-      )}
+      ) : null}
     </div>
   );
 }

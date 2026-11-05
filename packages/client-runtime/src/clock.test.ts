@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { deadlineStore, secondTick } from "./clock.ts";
+import { deadlineStore, secondTick, minuteTickToEpochMs } from "./clock.ts";
 
 describe("deadlineStore", () => {
   afterEach(() => {
@@ -137,4 +137,14 @@ describe("secondTick", () => {
     unsubscribeNext();
     expect(vi.getTimerCount()).toBe(0);
   });
+});
+
+it("parses minute clocks in UTC in a different local timezone", () => {
+  vi.stubEnv("TZ", "America/Los_Angeles");
+  try {
+    expect(minuteTickToEpochMs("2026-11-05T00:00")).toBe(Date.UTC(2026, 10, 5));
+    expect(minuteTickToEpochMs("2026-11-05T00:00:00Z")).toBe(Date.UTC(2026, 10, 5));
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });

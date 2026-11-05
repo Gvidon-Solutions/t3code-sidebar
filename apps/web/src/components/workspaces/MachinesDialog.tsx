@@ -112,6 +112,20 @@ export function MachinesDialog(props: {
                     <div className="break-all font-mono text-2xs text-muted-foreground">
                       {rep.path}
                     </div>
+                    {rep.role === "replica" ? (
+                      <span className="text-xs text-muted-foreground">
+                        {(() => {
+                          const lag = props.liveStatuses.find(
+                            (item) =>
+                              item.environmentId === rep.environmentId &&
+                              item.logicalKey === props.logicalKey,
+                          )?.lag;
+                          return lag
+                            ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}`
+                            : "Lag not reported";
+                        })()}
+                      </span>
+                    ) : null}
                     {status.status.skippedPaths?.length ? (
                       <ul
                         aria-label="Skipped files"
@@ -152,7 +166,7 @@ export function MachinesDialog(props: {
                           Open copies
                         </Button>
                       ) : null}
-                      {rep.role === "primary" ? (
+                      {rep.role === "primary" && status.text !== "Synced" ? (
                         <AdoptReplicaAction
                           environmentId={rep.environmentId}
                           logicalKey={props.logicalKey}
@@ -230,7 +244,7 @@ export function MachinesDialog(props: {
             <AlertDialogDescription>
               {removingRole === "replica"
                 ? "Synchronization stops and the replica is removed from this mesh folder."
-                : "The primary is removed from this mesh folder."}{" "}
+                : "Removing the primary leaves replicas without their git and build machine. Choose another primary before continuing."}{" "}
               Files already on the machine stay where they are.
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -1,8 +1,10 @@
+import { useMeshLayout } from "./useMeshLayout";
 import * as Cause from "effect/Cause";
 import { useAtomValue } from "@effect/atom-react";
 import { offersLinkedEnvironments } from "@t3tools/client-runtime/link-request";
 import {
   buildMeshMachines,
+  meshMachineFactTimes,
   type MeshLinkSource,
   type MeshMachine,
   type MeshMachineConnection,
@@ -100,11 +102,15 @@ export function useMeshOverview(input: { readonly config: SidebarWorkspacesConfi
   readonly connections: ReadonlyArray<MeshMachineConnection>;
   readonly links: ReadonlyArray<MeshLinkSource>;
 } {
+  const mesh = useMeshLayout();
   const { environments } = useEnvironments();
   const connections = environments.map((environment): MeshMachineConnection => ({
-    environmentId: environment.environmentId,
+    environmentId: environment.serverConfig?.environment.environmentId ?? environment.environmentId,
     label: environment.label,
     version: environment.serverConfig?.environment.serverVersion ?? null,
+    ...(environment.serverConfig?.environment.platform
+      ? { platform: environment.serverConfig.environment.platform }
+      : {}),
     connected: environment.connection.phase === "connected",
     ...(environment.displayUrl === null ? {} : { urls: [environment.displayUrl] }),
   }));
@@ -122,9 +128,15 @@ export function useMeshOverview(input: { readonly config: SidebarWorkspacesConfi
         environment.serverConfig?.environment.capabilities.meshLayout === true,
     )
     .map((environment) => environment.environmentId);
-  const links = useAtomValue(
+  const rawLinks = useAtomValue(
     peerLinksSourcesAtom(linkSourceIds.length === 0 ? NO_IDS : JSON.stringify(linkSourceIds)),
   );
+  const links = rawLinks.map((source) => ({
+    ...source,
+    environmentId:
+      environments.find((environment) => environment.environmentId === source.environmentId)
+        ?.serverConfig?.environment.environmentId ?? source.environmentId,
+  }));
   const peerStates = useAtomValue(
     peerStatesAtom(statusSourceIds.length === 0 ? NO_IDS : JSON.stringify(statusSourceIds)),
   );
@@ -138,6 +150,7 @@ export function useMeshOverview(input: { readonly config: SidebarWorkspacesConfi
     links,
     peerStates,
     peerConnections,
+    factsObservedAt: meshMachineFactTimes(mesh.state?.snapshot?.document ?? {}),
   });
   return { machines, connections, links };
 }

@@ -1,5 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+import { ReplicaLiveStatus } from "./meshLayout.ts";
+import { SidebarMachineReported } from "./sidebarWorkspaces.ts";
 import { MeshConfigError } from "./meshConfig.ts";
 
 it("round trips stale revision errors with added, removed and changed config fields over JSON", () => {
@@ -19,4 +21,36 @@ it("round trips stale revision errors with added, removed and changed config fie
     { path: "$.removed", before: null },
     { path: "$.changed", before: "old", after: "new" },
   ]);
+});
+
+const decodeReplica = Schema.decodeUnknownSync(ReplicaLiveStatus);
+const decodeReported = Schema.decodeUnknownSync(SidebarMachineReported);
+it("preserves optional replica lag and SSH route checks and accepts older reports", () => {
+  const replica = {
+    logicalKey: "notes",
+    environmentId: "cloudbox",
+    state: "watching",
+    conflicts: [],
+    problems: [],
+    updatedAt: "2026-11-05T00:00:00Z",
+  };
+  expect(decodeReplica(replica).lag).toBeUndefined();
+  expect(
+    decodeReplica({
+      ...replica,
+      lag: { filesBehind: 2, bytesBehind: 64 },
+    }).lag,
+  ).toEqual({ filesBehind: 2, bytesBehind: 64 });
+  const reported = {
+    version: "1.5",
+    user: null,
+    sshd: null,
+    platform: { os: "linux", arch: "x64", release: "test" },
+    reportedAt: "2026-11-05T00:00:00Z",
+  };
+  expect(decodeReported(reported).sshRoutes).toBeUndefined();
+  const sshRoutes = {
+    studio: { status: "failed", reason: "Host key changed", checkedAt: "2026-11-05T00:00:00Z" },
+  };
+  expect(decodeReported({ ...reported, sshRoutes }).sshRoutes).toEqual(sshRoutes);
 });

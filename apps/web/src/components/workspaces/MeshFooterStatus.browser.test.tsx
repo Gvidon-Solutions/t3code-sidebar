@@ -1,3 +1,5 @@
+import { buildMeshMachines } from "@t3tools/client-runtime/state/mesh-machines";
+import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
@@ -8,14 +10,10 @@ vi.mock(import("../../hooks/useSettings"), () => ({ usePrimarySettings: (() => t
 vi.mock(import("../../hooks/useNowMinute"), () => ({ useNowMinute: () => "2026-11-03T00:00:00Z" }));
 vi.mock(import("../../hooks/useMeshOverview"), () => ({
   useMeshOverview: (() => ({
-    machines: [
-      {
-        environmentId: "qa",
-        label: "QA",
-        lastError: null,
-        lastLayoutSyncAt: "2026-11-03T00:00:00Z",
-      },
-    ],
+    machines: buildMeshMachines({
+      config: DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      connections: [{ environmentId: "studio", label: "Studio", connected: true }],
+    }),
   })) as never,
 }));
 

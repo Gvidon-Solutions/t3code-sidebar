@@ -56,12 +56,19 @@ export function machineDisplayOf(
 ): MachineDisplay {
   const machine = config.machines[environmentId];
   const label =
-    machine?.label?.trim() ||
-    (!/^[a-f\d]{8}(?:-[a-f\d-]+)?$/i.test(fallbackLabel.trim()) ? fallbackLabel.trim() : "") ||
-    "Unknown machine";
+    [machine?.title, machine?.label, fallbackLabel === environmentId ? undefined : fallbackLabel]
+      .map((value) => value?.trim())
+      .find(
+        (value) =>
+          value &&
+          !/^(?:[a-f\d]{8,64}|[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12})$/i.test(value) &&
+          !["Unknown machine", "Unidentified machine"].includes(value),
+      ) ?? "Unnamed machine";
   return {
     label,
-    tag: normalizeMachineTag(machine?.tag ?? "") ?? defaultMachineTag(label, environmentId),
+    tag:
+      normalizeMachineTag(machine?.tag ?? "") ??
+      (label === "Unnamed machine" ? "?" : defaultMachineTag(label, environmentId)),
     color: machine?.color?.trim() || workspaceColor({ id: environmentId }),
   };
 }

@@ -37,6 +37,7 @@ it.effect("reserves config keys for the config API and validates status/policy f
       "mesh.config",
       "mesh.configHistory/revision",
       "mesh.machineBinding/studio",
+      "mesh.machineMigration/studio",
       "mesh.configStatus/studio",
       "mesh.configReplica/app/studio",
       "mesh.linkPolicy/studio/laptop",
