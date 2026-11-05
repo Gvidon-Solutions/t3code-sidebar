@@ -85,7 +85,7 @@ export function MachinesSheet(props: {
           const row = representationRow(props.config, props.liveStatuses, props.projectKey, rep);
           const display =
             props.machines.find((machine) => machine.environmentId === rep.environmentId) ??
-            machineDisplayOf(props.config, rep.environmentId, "Unidentified machine");
+            machineDisplayOf(props.config, rep.environmentId, "Unnamed machine");
           const { label, tag, color } = display;
           return (
             <View
@@ -141,6 +141,20 @@ export function MachinesSheet(props: {
               >
                 {row.text}
               </Text>
+              {rep.role === "replica" ? (
+                <Text className="text-xs text-foreground-muted">
+                  {(() => {
+                    const lag = props.liveStatuses.find(
+                      (item) =>
+                        item.environmentId === rep.environmentId &&
+                        item.logicalKey === props.projectKey,
+                    )?.lag;
+                    return lag
+                      ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}`
+                      : "Lag not reported";
+                  })()}
+                </Text>
+              ) : null}
               {row.status.skippedPaths?.length ? (
                 <View accessibilityLabel="Skipped files" className="gap-1">
                   {row.status.skippedPaths.map((problem) => (

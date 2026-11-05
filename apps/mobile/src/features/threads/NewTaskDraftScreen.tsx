@@ -1,5 +1,5 @@
+import { DraftMachineStatus, ReplicaWorkspaceControls } from "../workspaces/DraftMachineStatus";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
-import { replicaExecutionLabel } from "@t3tools/client-runtime/state/mesh-layout";
 import { useSyncExternalStore } from "react";
 import { CommandId, MessageId } from "@t3tools/contracts";
 import { pendingMeshDrafts, serializePendingAttachments } from "../../state/pendingMeshDrafts";
@@ -880,52 +880,31 @@ export function NewTaskDraftScreen(props: {
     : null;
   const environmentControl = (
     <View>
-      {modelUnavailable &&
-        !flow.mountingStatus &&
-        !(pendingSend && pendingSend.state !== "sent") && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              if (modelMachine) void flow.switchEnvironment(modelMachine.environmentId);
-              else if (modelHere) flow.setSelectedModelKey(modelHere.key);
-            }}
-          >
-            <Text textRole="footnote">
-              {modelMachine
-                ? `${modelUnavailable} · Switch to ${modelMachine.environmentLabel} where it works`
-                : modelHere
-                  ? `${modelUnavailable} · Use ${modelHere.label} here`
-                  : modelUnavailable}
-            </Text>
-          </Pressable>
-        )}
-      {pendingSend && pendingSend.state !== "sent" && (
-        <Text textRole="footnote">
-          {pendingSend.error ?? "Message queued. You can leave this screen."}
-        </Text>
-      )}
-      {pendingSend?.error && (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            void pendingMeshDrafts
-              .retry(pendingSend.draftId)
-              .catch((error) => Dialog.alert("Retry failed", String(error)));
-          }}
-        >
-          <Text>Retry send</Text>
-        </Pressable>
-      )}
-      {flow.mountingStatus && !(pendingSend && pendingSend.state !== "sent") && (
-        <Text accessibilityRole="text" textRole="footnote">
-          {flow.mountingStatus}
-        </Text>
-      )}
-      {flow.retryMount && (
-        <Pressable accessibilityRole="button" onPress={flow.retryMount}>
-          <Text>Retry</Text>
-        </Pressable>
-      )}
+      <DraftMachineStatus
+        error={pendingSend?.error}
+        preparing={flow.mountingStatus}
+        queued={Boolean(pendingSend && pendingSend.state !== "sent")}
+        reason={modelUnavailable}
+        alternative={modelMachine?.environmentLabel}
+        localModel={modelHere?.label}
+        onSwitch={
+          modelMachine
+            ? () => {
+                void flow.switchEnvironment(modelMachine.environmentId);
+              }
+            : undefined
+        }
+        onModel={modelHere ? () => flow.setSelectedModelKey(modelHere.key) : undefined}
+        onRetry={
+          pendingSend?.error
+            ? () => {
+                void pendingMeshDrafts
+                  .retry(pendingSend.draftId)
+                  .catch((error) => Dialog.alert("Retry failed", String(error)));
+              }
+            : (flow.retryMount ?? undefined)
+        }
+      />
       <DraftEnvironmentControl
         display={
           flow.environments.find((machine) => machine.environmentId === chosenEnvironmentId)
@@ -1030,44 +1009,45 @@ export function NewTaskDraftScreen(props: {
       </NativeScrollEdgeEffectsContext>
     );
 
-  const executionLabel = replicaExecutionLabel(
-    mesh.config,
-    chosenEnvironmentId ?? selectedProject.environmentId,
-    selectedProject.id,
-  );
-  const workspaceControls = executionLabel ? (
-    <Text textRole="footnote">{executionLabel}</Text>
-  ) : (
-    <View className="flex-row items-center gap-1 px-2">
-      <ComposerInlineControl
-        accessibilityHint={`Switches to ${flow.workspaceMode === "local" ? "a new worktree" : "the current checkout"}`}
-        accessibilityLabel={workspaceLabel}
-        disabled={isComposerInteractionLocked || !flow.isGitRepo}
-        renderIcon={(size) => (
-          <NewTaskWorkspaceIcon
-            workspaceMode={flow.workspaceMode}
-            worktreePath={flow.selectedWorktreePath}
-            size={size}
-          />
-        )}
-        label={workspaceLabel}
-        maxWidth="100%"
-        onPress={() => flow.setWorkspaceMode(flow.workspaceMode === "local" ? "worktree" : "local")}
-        showChevron={false}
-      />
-
-      <View className="min-w-0 shrink">
+  const workspaceControls = (
+    <ReplicaWorkspaceControls
+      config={mesh.config}
+      environmentId={chosenEnvironmentId ?? selectedProject.environmentId}
+      projectId={selectedProject.id}
+    >
+      <View className="flex-row items-center gap-1 px-2">
         <ComposerInlineControl
-          accessibilityLabel={`${flow.workspaceMode === "worktree" ? "Base branch" : "Branch"}: ${selectedBranchLabel}`}
-          chevronDirection="right"
+          accessibilityHint={`Switches to ${flow.workspaceMode === "local" ? "a new worktree" : "the current checkout"}`}
+          accessibilityLabel={workspaceLabel}
           disabled={isComposerInteractionLocked || !flow.isGitRepo}
-          icon="arrow.triangle.branch"
-          label={showBranchLoading ? "Loading branches…" : selectedBranchLabel}
+          renderIcon={(size) => (
+            <NewTaskWorkspaceIcon
+              workspaceMode={flow.workspaceMode}
+              worktreePath={flow.selectedWorktreePath}
+              size={size}
+            />
+          )}
+          label={workspaceLabel}
           maxWidth="100%"
-          onPress={() => openContextPicker("NewTaskBranch")}
+          onPress={() =>
+            flow.setWorkspaceMode(flow.workspaceMode === "local" ? "worktree" : "local")
+          }
+          showChevron={false}
         />
+
+        <View className="min-w-0 shrink">
+          <ComposerInlineControl
+            accessibilityLabel={`${flow.workspaceMode === "worktree" ? "Base branch" : "Branch"}: ${selectedBranchLabel}`}
+            chevronDirection="right"
+            disabled={isComposerInteractionLocked || !flow.isGitRepo}
+            icon="arrow.triangle.branch"
+            label={showBranchLoading ? "Loading branches…" : selectedBranchLabel}
+            maxWidth="100%"
+            onPress={() => openContextPicker("NewTaskBranch")}
+          />
+        </View>
       </View>
-    </View>
+    </ReplicaWorkspaceControls>
   );
 
   if (!flow.selectedModel) {

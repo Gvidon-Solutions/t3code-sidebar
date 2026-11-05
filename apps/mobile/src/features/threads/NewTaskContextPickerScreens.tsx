@@ -1,3 +1,4 @@
+import { MachinePickerGroups } from "../workspaces/MachinePickerGroups";
 import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { SearchField } from "../../components/ui/SearchField";
@@ -181,10 +182,6 @@ function PickerSurface(props: { readonly children: ReactNode }) {
 
 export function NewTaskEnvironmentPickerRouteScreen() {
   const flow = useNewTaskFlow();
-  const [showUnavailable, setShowUnavailable] = useState(false);
-  const available = flow.environments.filter((environment) => !environment.disabled);
-  const unavailable = flow.environments.filter((environment) => environment.disabled);
-  const visible = showUnavailable ? [...available, ...unavailable] : available;
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   return (
@@ -209,36 +206,31 @@ export function NewTaskEnvironmentPickerRouteScreen() {
           showsVerticalScrollIndicator={false}
         >
           <PickerSurface>
-            {visible.map((environment, index) => (
-              <EnvironmentPickerRow
-                key={String(environment.environmentId)}
-                environmentId={environment.environmentId}
-                isLast={index === visible.length - 1}
-                disabled={environment.disabled === true}
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  void flow.switchEnvironment(environment.environmentId).then((switched) => {
-                    if (switched) navigation.goBack();
-                  });
-                }}
-                selected={
-                  (flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId) ===
-                  environment.environmentId
-                }
-                title={environment.environmentLabel}
-              />
-            ))}
-          </PickerSurface>
-          {unavailable.length ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showUnavailable }}
-              onPress={() => setShowUnavailable(!showUnavailable)}
-              className="min-h-[45px] justify-center p-4"
+            <MachinePickerGroups
+              machines={flow.environments}
+              available={(environment) => !environment.disabled}
             >
-              <Text>Unavailable ({unavailable.length})</Text>
-            </Pressable>
-          ) : null}
+              {(environment, index, count) => (
+                <EnvironmentPickerRow
+                  key={String(environment.environmentId)}
+                  environmentId={environment.environmentId}
+                  isLast={index === count - 1}
+                  disabled={environment.disabled === true}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    void flow.switchEnvironment(environment.environmentId).then((switched) => {
+                      if (switched) navigation.goBack();
+                    });
+                  }}
+                  selected={
+                    (flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId) ===
+                    environment.environmentId
+                  }
+                  title={environment.environmentLabel}
+                />
+              )}
+            </MachinePickerGroups>
+          </PickerSurface>
         </ScrollView>
       </ScreenContent>
     </View>

@@ -9,6 +9,7 @@ it("opens Machines without toggling its folder, including after a live status ch
   const toggle = vi.fn();
   const config = {
     ...empty,
+    machines: { at: { title: "Studio" }, lab: { title: "Laptop" }, vps: { title: "Cloudbox" } },
     projectMounts: {
       demo: [
         {
@@ -48,7 +49,7 @@ it("opens Machines without toggling its folder, including after a live status ch
     screen.getByRole("button", { name: model.description }).element().textContent?.match(/⇄/g),
   ).toHaveLength(1);
   expect(
-    screen.getByRole("img", { name: "Machine: at" }).element().querySelector("[aria-hidden]"),
+    screen.getByRole("img", { name: "Machine: Studio" }).element().querySelector("[aria-hidden]"),
   ).not.toBeNull();
   expect(toggle).not.toHaveBeenCalled();
   const synced = projectMachineStrip(config, group, [
@@ -68,7 +69,7 @@ it("opens Machines without toggling its folder, including after a live status ch
   );
   await expect.element(screen.getByRole("button", { name: synced.description })).toBeVisible();
   expect(
-    screen.getByRole("img", { name: "Machine: at" }).element().querySelector("[aria-hidden]"),
+    screen.getByRole("img", { name: "Machine: Studio" }).element().querySelector("[aria-hidden]"),
   ).toBeNull();
   const primaries = projectMachineStrip(
     {

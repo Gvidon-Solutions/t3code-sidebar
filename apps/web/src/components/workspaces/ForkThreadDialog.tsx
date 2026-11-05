@@ -1,3 +1,4 @@
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { Combobox, ComboboxInput, ComboboxPopup, ComboboxList, ComboboxItem } from "../ui/combobox";
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -35,11 +36,8 @@ function machineLabel(
   environmentId: string,
   fallback: string,
 ): { label: string; title: string } {
-  const machine = config?.machines[environmentId];
-  return {
-    label: machine?.label ?? machine?.tag ?? fallback,
-    title: machine?.title ?? machine?.label ?? machine?.tag ?? fallback,
-  };
+  const display = machineDisplayOf({ machines: config?.machines ?? {} }, environmentId, fallback);
+  return { label: display.label, title: display.label };
 }
 
 export function ForkThreadDialogHost() {
@@ -74,7 +72,7 @@ export function ForkThreadDialog(props: {
       mesh.config,
       environmentId,
       environments.find((environment) => environment.environmentId === environmentId)?.label ??
-        "Unidentified machine",
+        "Unnamed machine",
     );
   const source = {
     shell: readThreadShell(scopeThreadRef(request.environmentId, request.threadId)),
@@ -285,11 +283,11 @@ export function ForkThreadDialog(props: {
               Copies the conversation through its last completed turn. The original stays where it
               is and keeps running.
             </p>
-            {syncCopy ? (
+            {target ? (
               <p role="status" className="text-sm text-muted-foreground">
-                {syncCopy === "Synced"
+                {syncCopy === "Synced" || (!syncCopy && target === source.environmentId)
                   ? `Project synced on ${displayMachine(target).title}`
-                  : syncCopy}
+                  : (syncCopy ?? `Preparing project on ${displayMachine(target).title}`)}
               </p>
             ) : null}
             {loadingModels ? (

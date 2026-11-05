@@ -1,3 +1,4 @@
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { mobileMoveProjectLabel } from "./threadMove.logic";
 import { useAtomValue } from "@effect/atom-react";
 import { movingThread } from "./moveThreadState";
@@ -36,9 +37,10 @@ export function MoveThreadSheet() {
       >
         <AppText className="p-4 text-muted-foreground">
           Stays on{" "}
-          {config?.machines[target.environmentId]?.title ??
-            config?.machines[target.environmentId]?.label ??
-            "this machine"}
+          {
+            machineDisplayOf(config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG, target.environmentId, "")
+              .label
+          }
           ; only its project changes.
         </AppText>
         <Pressable

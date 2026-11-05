@@ -2078,10 +2078,8 @@ export default function WorkspaceSidebar() {
             </DialogHeader>
             <DialogPanel>
               <p>
-                Stays on{" "}
-                {config.machines[moveConfirm.target.environmentId]?.title ??
-                  machineDisplayFor(moveConfirm.target.environmentId).label}
-                ; only its project changes.
+                Stays on {machineDisplayFor(moveConfirm.target.environmentId).label}; only its
+                project changes.
               </p>
               <div className="mt-4 flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setMoveConfirm(null)}>

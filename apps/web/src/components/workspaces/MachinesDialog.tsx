@@ -112,6 +112,20 @@ export function MachinesDialog(props: {
                     <div className="break-all font-mono text-2xs text-muted-foreground">
                       {rep.path}
                     </div>
+                    {rep.role === "replica" ? (
+                      <span className="text-xs text-muted-foreground">
+                        {(() => {
+                          const lag = props.liveStatuses.find(
+                            (item) =>
+                              item.environmentId === rep.environmentId &&
+                              item.logicalKey === props.logicalKey,
+                          )?.lag;
+                          return lag
+                            ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}`
+                            : "Lag not reported";
+                        })()}
+                      </span>
+                    ) : null}
                     {status.status.skippedPaths?.length ? (
                       <ul
                         aria-label="Skipped files"
