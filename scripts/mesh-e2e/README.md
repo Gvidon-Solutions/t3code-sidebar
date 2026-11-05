@@ -344,7 +344,11 @@ image), a fresh `R1_BED_ROOT`, and administrator SSH argument arrays in `R1_LAPT
 `R1_CLOUDBOX_SSH`. Stop the previous isolated :3795 unit first. The runner owns `R1-mesh-*`
 units, a disposable VPS container and private homes, and uses real S1 managed hosts and sync
 APIs. `r1-bed-scenarios.mjs` checks the CONCEPT §12 run scenarios, background forwards and
-converged project layouts/session counts. The connection-cut scenario stops only its own
-replica server while a command runs; the offline scenario pauses only its own VPS container.
-Afterward stop the owned units/container, restore the previous isolated :3795 unit and release
+converged project layouts/session counts. The connection-cut scenario severs the command’s N1 SSH byte pipe using its captured
+ProxyCommand PID; servers and other sessions stay up. The offline scenario pauses only its
+own VPS container.
+The conflict fixture briefly stops its second replica driver and restarts its own isolated
+driver, so the automatic conflict policy cannot consume the conflict before the run gate sees it.
+The second driver is restored in a finalizer. Afterward stop the owned units/container,
+restore the previous isolated :3795 unit and release
 the lock. Keep fixture files and conflict copies; never publish `control.json` or auth state.

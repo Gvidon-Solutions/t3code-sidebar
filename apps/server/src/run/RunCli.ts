@@ -8,7 +8,7 @@ import { awaitForwardingStop } from "./RunGuardianControl.ts";
 import { requestRun } from "./RunClient.ts";
 import { remoteRun } from "./RunTransport.ts";
 import { rewriteRunOutput } from "./RunOutput.ts";
-import type { RemoteRunPlan } from "./RunProtocol.ts";
+import { MAX_RUN_TIMEOUT_MS, type RemoteRunPlan } from "./RunProtocol.ts";
 
 export function parseRunArgs(args: readonly string[]) {
   let bg = false,
@@ -50,8 +50,10 @@ export function parseRunArgs(args: readonly string[]) {
       if (!duration) throw new Error("--timeout needs a duration such as 30s or 5m.");
       const units: Record<string, number> = { ms: 1, s: 1000, m: 60000, h: 3600000, d: 86400000 };
       timeoutMs = Number(duration[1]) * units[duration[2] ?? "s"]!;
-      if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 86400000)
-        throw new Error("Timeout must be between 1ms and 24h.");
+      if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_RUN_TIMEOUT_MS)
+        throw new Error(
+          "Timeout must be a positive whole number of milliseconds within the runtime timer range.",
+        );
     } else throw new Error(`Unknown t3 run option: ${arg}`);
   }
   const management = Number(list) + Number(logs !== undefined) + Number(stop !== undefined);

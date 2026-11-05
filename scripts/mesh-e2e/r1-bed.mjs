@@ -233,6 +233,7 @@ const mcp = async (node, name, args = {}) => {
     }),
   });
   const source = await response.text();
+  if (!response.ok) throw Error(`MCP ${name}: HTTP ${response.status}: ${source.slice(-2000)}`);
   const value = JSON.parse(
     source.startsWith("data:")
       ? source

@@ -19,6 +19,7 @@ it("preserves command argv and parses execution and background management option
     timeoutMs: 90000,
     command: ["node", "-e", "a b"],
   });
+  expect(parseRunArgs(["--timeout", "25h", "--", "make"]).timeoutMs).toBe(90000000);
   expect(parseRunArgs(["git", "status", "--porcelain"]).command).toEqual([
     "git",
     "status",
@@ -33,7 +34,7 @@ it("preserves command argv and parses execution and background management option
     ["--ports", "0", "--", "echo"],
     ["--ports", "65536", "--", "echo"],
     ["--timeout", "-1s", "echo"],
-    ["--timeout", "25h", "echo"],
+    ["--timeout", "30d", "echo"],
     ["--list", "echo"],
     ["--follow", "echo"],
     ["--logs", "../bad"],

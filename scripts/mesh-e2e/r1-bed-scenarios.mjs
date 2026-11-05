@@ -12,10 +12,11 @@ export async function runScenarios(h) {
   const source = "/bed/R1-primary";
   await file(cloudbox, source + "/input.txt", "initial");
   await file(cloudbox, source + "/README.md", "R1 primary");
-  const project = await mcp(cloudbox, "t3_project_create", {
-    title: "R1 Run primary",
-    workspaceRoot: source,
-  });
+  const project =
+    (await mcp(cloudbox, "t3_project_list", { limit: 100 })).projects.find(
+      (project) => project.workspaceRoot === source,
+    ) ??
+    (await mcp(cloudbox, "t3_project_create", { title: "R1 Run primary", workspaceRoot: source }));
   await mcp(cloudbox, "t3_project_place", {
     project: project.id,
     machine: cloudbox.id,
@@ -51,9 +52,7 @@ export async function runScenarios(h) {
         ),
     );
     node.replica = ready.representations.find((rep) => rep.environmentId === node.id);
-    node.session = (await rpc(node, "replicas.status")).replicas.find(
-      (rep) => rep.logicalKey === key && rep.environmentId === node.id,
-    ).sessionName;
+    node.session = node.replica.live?.sessionName;
     NodeAssert.ok(node.session);
   }
   const replica = studio.replica.path;
@@ -75,7 +74,7 @@ export async function runScenarios(h) {
   const uv = (await run("sh", ["-c", "command -v uv"])).trim();
   await upload("cloudbox", uv, root + "/uv");
   await cloud(
-    `sh -c ${quote("cp /bed/nvm.sh /bed/home/.nvm/nvm.sh; cp /bed/uv /bed/home/.local/bin/uv; chmod 755 /bed/home/.local/bin/uv; ln -s /usr/local/bin/node /bed/home/.nvm/versions/node/v26.12.1/bin/node")}`,
+    `sh -ec ${quote("cp /bed/nvm.sh /bed/home/.nvm/nvm.sh; cp /bed/uv /bed/home/.local/bin/uv; chmod 755 /bed/home/.local/bin/uv; test -L /bed/home/.nvm/versions/node/v26.12.1/bin/node || ln -s /usr/local/bin/node /bed/home/.nvm/versions/node/v26.12.1/bin/node")}`,
   );
   const profile =
     'export HOME=/bed/home\nexport PATH=/usr/bin:/bin\nexport NVM_DIR=/bed/home/.nvm\n. "$NVM_DIR/nvm.sh" --no-use\nnvm use --silent v26.12.1\nexport PATH=/bed/home/.local/bin:$PATH\nexport R1_LOGIN_PROFILE=loaded\n';
@@ -87,10 +86,10 @@ export async function runScenarios(h) {
     T3CODE_RUN_SSH_CONFIG: studio.home + "/.ssh/config",
   };
   const cli = studio.base + "/run/bin/t3";
-  const launch = (args, cwd = replica) => {
-    const child = NodeChildProcess.spawn(cli, ["run", ...args], {
+  const launch = (args, cwd = replica, environment = env, executable = cli) => {
+    const child = NodeChildProcess.spawn(executable, ["run", ...args], {
       cwd,
-      env,
+      env: environment,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "",
@@ -137,7 +136,7 @@ export async function runScenarios(h) {
   ]);
   NodeAssert.equal(login.code, 0);
   NodeAssert.match(login.stdout, /loaded\nv26\.12\.1\nuv /);
-  await NodeFSP.mkdir(replica + "/nested");
+  await NodeFSP.mkdir(replica + "/nested", { recursive: true });
   const mapped = await execute(
     "mapped_live_stream_exit",
     [
@@ -157,7 +156,7 @@ export async function runScenarios(h) {
     "--",
     "node",
     "-e",
-    "const fs=require('fs');fs.writeFileSync('returned.txt','back');fs.mkdirSync('dist');fs.writeFileSync('dist/result.txt','stays')",
+    "const fs=require('fs');fs.writeFileSync('returned.txt','back');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/result.txt','stays')",
   ]);
   NodeAssert.equal(ignored.code, 0);
   NodeAssert.equal(ignored.stderr, `dist/result.txt stayed on ${cloudbox.host}\n`);
@@ -168,26 +167,44 @@ export async function runScenarios(h) {
     execute("concurrent_two", ["--", "node", "-e", "console.log('two')"]),
   ]);
   NodeAssert.ok(concurrent.every((value) => value.code === 0));
-  await mutate("pause");
-  await file(cloudbox, source + "/input.txt", "primary conflict");
-  await NodeFSP.writeFile(replica + "/input.txt", "replica conflict");
-  await mutate("resume");
-  await mutate("flush");
-  const conflict = await execute("conflict_before_run", [
-    "--",
-    "node",
-    "-e",
-    "require('fs').writeFileSync('must-not-run','bad')",
-  ]);
-  NodeAssert.equal(conflict.code, 75);
-  NodeAssert.match(conflict.stderr, /input.txt/);
-  await NodeAssert.rejects(cloud(`test -f ${source}/must-not-run`));
-  await mutate("pause");
-  await NodeFSP.mkdir(replica + "/.t3-conflicts/R1-saved", { recursive: true });
-  await NodeFSP.copyFile(replica + "/input.txt", replica + "/.t3-conflicts/R1-saved/input.txt");
-  await NodeFSP.writeFile(replica + "/input.txt", "primary conflict");
-  await mutate("resume");
-  await mutate("flush");
+  await remote("laptop", "systemctl --user stop R1-mesh-laptop.service");
+  try {
+    await run("systemctl", ["--user", "restart", "R1-mesh-studio.service"]);
+    studio.mcpInitialized = false;
+    delete studio.mcpSession;
+    await until(
+      "fresh conflict driver",
+      () => execute("conflict_driver_ready", ["--", "node", "-e", "console.log('ready')"]),
+      (value) => value.code === 0,
+    );
+    await cloud(
+      `node -e ${quote("require('fs').rmSync('/bed/R1-primary/must-not-run',{force:true})")}`,
+    );
+    await mutate("pause");
+    await file(cloudbox, source + "/input.txt", "primary conflict");
+    await NodeFSP.writeFile(replica + "/input.txt", "replica conflict");
+    await mutate("resume");
+    await mutate("flush");
+    const conflict = await execute("conflict_before_run", [
+      "--",
+      "node",
+      "-e",
+      "require('fs').writeFileSync('must-not-run','bad')",
+    ]);
+    NodeAssert.equal(conflict.code, 75);
+    NodeAssert.match(conflict.stderr, /input.txt/);
+    await NodeAssert.rejects(cloud(`test -f ${source}/must-not-run`));
+    await mutate("pause");
+    await NodeFSP.mkdir(replica + "/.t3-conflicts/R1-saved", { recursive: true });
+    await NodeFSP.copyFile(replica + "/input.txt", replica + "/.t3-conflicts/R1-saved/input.txt");
+    await NodeFSP.writeFile(replica + "/input.txt", "primary conflict");
+    await mutate("resume");
+    await mutate("flush");
+  } finally {
+    await remote("laptop", "systemctl --user start R1-mesh-laptop.service");
+    laptop.mcpInitialized = false;
+    delete laptop.mcpSession;
+  }
   const portServer = NodeNet.createServer();
   await new Promise((resolve) => portServer.listen(0, "127.0.0.1", resolve));
   const port = portServer.address().port;
@@ -246,20 +263,42 @@ export async function runScenarios(h) {
   console.log("ctrl_c_group", JSON.stringify(interrupt));
   NodeAssert.equal(interrupt.code, 130);
   await groupGone();
-  const cut = launch(["--", "node", "-e", parentCode]);
+  const managedConfig = await NodeFSP.readFile(studio.home + "/.ssh/config", "utf8");
+  const block = managedConfig
+    .split(/(?=^Host )/m)
+    .find((block) => block.startsWith(`Host t3-${cloudbox.host}\n`));
+  NodeAssert.ok(block);
+  const proxyLine = block.split("\n").find((line) => line.trimStart().startsWith("ProxyCommand "));
+  NodeAssert.ok(proxyLine);
+  const proxyPid = root + "/cut-proxy.pid";
+  const proxy = root + "/cut-proxy.sh";
+  await NodeFSP.writeFile(
+    proxy,
+    `#!/bin/sh\nprintf '%s' "$$" > ${quote(proxyPid)}\nexec ${proxyLine.trim().slice("ProxyCommand ".length)}\n`,
+    { mode: 0o700 },
+  );
+  const cutConfig = root + "/cut-ssh-config";
+  await NodeFSP.writeFile(
+    cutConfig,
+    managedConfig.replace(block, block.replace(proxyLine, `  ProxyCommand ${quote(proxy)}`)),
+    { mode: 0o600 },
+  );
+  const cut = launch(
+    ["--", "node", "-e", parentCode],
+    replica,
+    { ...env, T3CODE_RUN_SSH_CONFIG: cutConfig },
+    runtime + "/t3",
+  );
   await cut.ready("TREE_READY");
-  await run("systemctl", ["--user", "stop", "R1-mesh-studio.service"]);
+  const pipePid = Number(await NodeFSP.readFile(proxyPid, "utf8"));
+  NodeAssert.ok(Number.isSafeInteger(pipePid) && pipePid > 0);
+  process.kill(pipePid, "SIGTERM");
   const severed = await cut.result;
   console.log("network_cut_mid_command", JSON.stringify(severed));
   NodeAssert.equal(severed.code, 255);
+  NodeAssert.match(severed.stderr, /Cannot run on /);
   NodeAssert.equal(severed.stderr.trim().split("\n").length, 1);
   await groupGone();
-  await run("systemctl", ["--user", "start", "R1-mesh-studio.service"]);
-  await until(
-    "studio recovery",
-    () => execute("recovery_probe", ["--", "node", "-e", "console.log('recovered')"]),
-    (value) => value.code === 0,
-  );
   await remote("cloudbox", "docker pause R1-mesh-cloudbox");
   try {
     const offline = await execute("primary_offline", [

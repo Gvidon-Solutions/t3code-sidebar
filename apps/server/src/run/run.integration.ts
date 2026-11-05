@@ -27,6 +27,7 @@ import { ReplicaRuntime } from "../replicas/ReplicaRuntime.ts";
 import { decodeSessions } from "../replicas/MutagenRunner.ts";
 import * as RunIpc from "./RunIpc.ts";
 import * as RunEnvironment from "./RunEnvironment.ts";
+import { awaitForwardingStop } from "./RunGuardianControl.ts";
 const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 const requireNative = NodeModule.createRequire(import.meta.url);
 const repo = NodePath.resolve(import.meta.dirname, "../../../..");
@@ -647,6 +648,44 @@ try {
       await mutagen("sync", "flush", session);
     }
   }
+  await mutagen("sync", "terminate", session);
+  await mutagen(
+    "sync",
+    "create",
+    "--name",
+    session,
+    "--sync-mode",
+    "two-way-safe",
+    "--watch-mode",
+    "no-watch",
+    "--ignore-vcs",
+    "--ignore",
+    "/dist",
+    "--ignore",
+    "/.t3-conflicts",
+    `t3-cloudbox:${primary}`,
+    replica,
+  );
+  await mutagen("sync", "flush", session);
+  const completed = await run("background_natural_start", [
+    "--bg",
+    "--",
+    "node",
+    "-e",
+    "const fs=require('fs');fs.writeFileSync('bg-returned.txt','back');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/bg-output.txt','stays');console.log('BG_COMPLETE')",
+  ]);
+  NodeAssert.equal(completed.code, 0);
+  const completedId = completed.stdout.trim();
+  NodeAssert.match(completedId, /^[a-f0-9-]{36}$/);
+  await awaitForwardingStop(primary, completedId);
+  NodeAssert.equal(
+    await NodeFSP.readFile(NodePath.join(replica, "bg-returned.txt"), "utf8"),
+    "back",
+  );
+  const completedLogs = await run("background_natural_logs", ["--logs", completedId]);
+  NodeAssert.equal(completedLogs.code, 0);
+  NodeAssert.equal(completedLogs.stdout, "BG_COMPLETE\n");
+  NodeAssert.match(completedLogs.stderr, /dist\/bg-output.txt stayed on cloudbox/);
   const finalSessions = JSON.parse(await mutagen("sync", "list", "--template", "{{json .}}"));
   NodeAssert.equal(finalSessions.length, 1);
   NodeAssert.equal(

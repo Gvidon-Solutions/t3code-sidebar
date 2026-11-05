@@ -24,11 +24,12 @@ export const RunPlan = Schema.Union([
 ]);
 export type RunPlan = typeof RunPlan.Type;
 export type RemoteRunPlan = Extract<RunPlan, { kind: "remote" }>;
+export const MAX_RUN_TIMEOUT_MS = 2147483647 - 5000;
 export const RunRequest = Schema.Struct({
   action: Schema.Literals(["resolve", "prepare", "finish"]),
   cwd: Schema.String,
   tty: Schema.optionalKey(Schema.Boolean),
-  timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 86400000 })),
+  timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_RUN_TIMEOUT_MS })),
 });
 export const RunResponse = Schema.Union([
   Schema.Struct({
