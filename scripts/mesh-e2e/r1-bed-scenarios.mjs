@@ -92,6 +92,8 @@ export async function runScenarios(h) {
       env: environment,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
     let stdout = "",
       stderr = "";
     const waiters = new Set();

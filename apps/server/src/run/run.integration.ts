@@ -73,6 +73,8 @@ function launch(args: readonly string[], env: NodeJS.ProcessEnv, cwd = replica) 
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
   let stdout = "",
     stderr = "";
   const waiters = new Set<{ text: string; resolve: () => void; reject: (error: Error) => void }>();
@@ -709,6 +711,10 @@ try {
     ],
     env,
   ).result;
+  report("large_ignored_result", {
+    code: large.code,
+    error: large.code === 0 ? undefined : large.stderr.slice(0, 2048),
+  });
   NodeAssert.equal(large.code, 0);
   NodeAssert.equal(large.stderr.match(/dist\/dependency-/g)?.length, 16384);
   NodeAssert.equal(large.stderr.trim().split("\n").length, 1);

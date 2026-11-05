@@ -129,7 +129,8 @@ and configurable command shims. Provider shell startup overlays, Codex shell pol
 OpenCode shell hook apply guards to agent commands while native harness discovery retains real
 Git. Preserve this distinction: adding shims to the harness process's PATH breaks providers.
 Each preparation has an independent deadline; scan problems block execution even when the
-ordinary replica status presents them as warnings.
+ordinary replica status presents them as warnings. Keep completion metadata chunked as well
+as stdout/stderr: a dependency install can retain more paths than one transport frame.
 
 `pnpm --dir apps/server test:run-integration` exercises the real CLI, sshd and isolated Mutagen
 session (build `testFixtures/sshd.Dockerfile` as `t3-run-sshd-test:local` first). It owns all
