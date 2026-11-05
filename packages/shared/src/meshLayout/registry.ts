@@ -64,6 +64,10 @@ export const layoutKeyFamilies = {
     Schema.String.check(Schema.makeFilter((value) => value.trim().length > 0)),
     2,
   ),
+  "mesh.machineClaim": family(
+    Schema.Struct({ name: MachineName, machine: Schema.Record(Schema.String, Schema.Unknown) }),
+    2,
+  ),
   "mesh.configStatus": family(MeshConfigServerStatus, 2),
   "mesh.configReplica": family(Schema.Boolean, 3),
   "mesh.linkPolicy": family(LinkPermissions, 3),

@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Pressable, View } from "react-native";
 import {
   meshConnectionText,
+  offlineMachineText,
   meshMachineDetailRows,
   meshConfigApplyGroups,
   meshConfigHistory,
@@ -103,7 +104,7 @@ export function SettingsMachinesRouteScreen() {
                       ? meshConnectionText(machine, machines)
                       : "Online"
                     : (meshConnectionText(machine, machines) ??
-                      (machine.lastSeenAt ? `Offline since ${machine.lastSeenAt}` : "Offline"))}
+                      offlineMachineText(machine.lastSeenAt))}
                 </AppText>
                 <AppText numberOfLines={1} className="text-xs text-foreground-muted">
                   {[machine.version, machine.platform?.os].filter(Boolean).join(" · ")}

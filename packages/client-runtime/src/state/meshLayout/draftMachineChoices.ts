@@ -1,5 +1,5 @@
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
-import { machineDisplayOf } from "../machineDisplay.ts";
+import { machineDisplayOf, shortMachineHost } from "../machineDisplay.ts";
 import * as Effect from "effect/Effect";
 
 export interface DraftMachineIdentity {
@@ -39,8 +39,9 @@ export function draftMachineDisplays(
     for (const row of group) {
       const tag = config.machines[row.environmentId]?.tag;
       const distinctTag = tag && group.every((other) => other === row || other.tag !== row.tag);
-      const host = endpoint(row.url);
-      row.label = `${label} (${distinctTag ? row.tag : (host ?? "not connected")})`;
+      const host = shortMachineHost(row.url);
+      const platform = config.machines[row.environmentId]?.reported?.platform;
+      row.label = `${label} (${platform ? `${platform.os} · ${host ?? row.tag}` : distinctTag ? row.tag : (host ?? "not connected")})`;
     }
     const duplicates = group.filter((row) =>
       group.some((other) => other !== row && other.label === row.label),

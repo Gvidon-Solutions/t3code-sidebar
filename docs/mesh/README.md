@@ -448,6 +448,18 @@ network-bed.sh exercises blocked inbound peers, native SSH transfers/interruptio
 tunnel cut and automatic server restart. The fault proxy rejects peer HTTP MCP separately from
 local agent/CLI MCP. See that directory's README for isolation and cleanup.
 
+### Machine name collision recovery (C2)
+
+`mesh.machineClaim/<environmentId>` retains each join's requested slug and initial machine
+settings independently of the name-indexed bindings. `meshConfig/identity.ts` allocates names
+in environment-id order, reserving requested stems before suffixes. `MeshConfigMigration`
+writes claims for new installations and supplies the local descriptor for an older unbound
+installation. `MeshConfig.start` repairs merged bindings and the machine document in a fresh
+config/history revision. A unique unchanged machine entry moved to a different config key
+moves its binding and claim in the apply transaction. Forget tombstones the claim too.
+Never resolve independent joins by LWW of the binding alone: that loses the displaced identity.
+Web and mobile share duplicate-title hints and compact offline ages in client-runtime.
+
 ### Managed SSH and replicas v2 (S1)
 
 `replicas/MeshSsh.ts` owns the server key under `<baseDir>/mesh/ssh` and the

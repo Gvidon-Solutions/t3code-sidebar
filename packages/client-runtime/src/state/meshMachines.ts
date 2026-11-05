@@ -5,7 +5,7 @@ import type {
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
 
-import { machineDisplayOf, type MachineDisplay } from "./machineDisplay.ts";
+import { shortMachineHost, machineDisplayOf, type MachineDisplay } from "./machineDisplay.ts";
 
 /**
  * T3 Mesh (fork): one machine as Settings › Mesh shows it. Everything here is derived from the
@@ -271,7 +271,11 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         aliases: config.machines[environmentId]?.aliases ?? [],
         unnamed: display.label === "Unnamed machine",
         ...(platform ? { platform } : {}),
-        label: display.label,
+        label: Object.keys(config.machines).some(
+          (id) => id !== environmentId && machineDisplayOf(config, id, "").label === display.label,
+        )
+          ? `${display.label} (${platform?.os ?? "unknown OS"} · ${shortMachineHost(urls[0]) ?? display.tag})`
+          : display.label,
         tag: display.tag,
         color: display.color,
         connectedHere: connection?.connected === true,
@@ -314,7 +318,17 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         machine.network?.state === "direct" ||
         machine.network?.state === "relayed" ||
         machine.linkedWith.length > 0,
-    );
+    )
+    .map((machine, _index, machines) => {
+      const duplicates = machines.filter((other) => other.label === machine.label);
+      if (duplicates.length < 2) return machine;
+      const ordinal =
+        duplicates
+          .map((other) => other.environmentId)
+          .sort()
+          .indexOf(machine.environmentId) + 1;
+      return { ...machine, label: `${machine.label} · ${ordinal}` };
+    });
 }
 
 export type MeshFooterStatus =
@@ -414,7 +428,7 @@ export function meshConnectionText(
   if (state.state === "direct") return "Connected directly";
   if (state.state === "relayed")
     return `Via ${machines.find((item) => item.environmentId === state.via)?.label ?? "linked machine"}`;
-  return state.offlineSince ? `Offline since ${state.offlineSince}` : "Offline";
+  return offlineMachineText(state.offlineSince);
 }
 
 export function partitionMeshMachines(
@@ -498,4 +512,16 @@ export function meshMachineFactTimes(
       times[environmentId] = DateTime.formatIso(DateTime.makeUnsafe(milliseconds));
   }
   return times;
+}
+
+export function offlineMachineText(
+  since: string | null | undefined,
+  now = DateTime.toEpochMillis(DateTime.nowUnsafe()),
+): string {
+  const elapsed = since ? Math.max(0, now - Date.parse(since)) : NaN;
+  if (!Number.isFinite(elapsed)) return "Offline";
+  if (elapsed < 60_000) return "offline now";
+  if (elapsed < 3_600_000) return `offline ${Math.floor(elapsed / 60_000)} min`;
+  if (elapsed < 86_400_000) return `offline ${Math.floor(elapsed / 3_600_000)} h`;
+  return `offline ${Math.floor(elapsed / 86_400_000)} d`;
 }

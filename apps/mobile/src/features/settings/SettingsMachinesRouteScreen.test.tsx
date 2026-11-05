@@ -66,8 +66,27 @@ vi.mock("../workspaces/useMeshLayout", () => ({
 vi.mock("../workspaces/useMeshOverview", () => ({
   useMeshOverview: () => ({
     machines: buildMeshMachines({
-      config: DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-      connections: [{ environmentId: "studio", label: "Studio", connected: true, version: "1.0" }],
+      config: {
+        ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+        machines: { studio: { title: "Studio" }, cloudbox: { title: "Studio" } },
+      },
+      connections: [
+        {
+          environmentId: "studio",
+          label: "Studio",
+          connected: true,
+          version: "1.0",
+          platform: { os: "linux", arch: "x64" },
+          urls: ["https://desk.example:3795"],
+        },
+        {
+          environmentId: "cloudbox",
+          label: "Studio",
+          connected: true,
+          platform: { os: "darwin", arch: "arm64" },
+          urls: ["https://laptop.example:3795"],
+        },
+      ],
     }),
     links: [],
   }),
@@ -80,8 +99,10 @@ it("shows state and opens editing and pairing without machine settings fields", 
   const root = createRoot(container);
   try {
     act(() => root.render(<SettingsMachinesRouteScreen />));
-    expect(container.textContent).toContain("1 machine · 1 online");
+    expect(container.textContent).toContain("2 machines · 2 online");
     expect(container.textContent).toContain("1.0");
+    expect(container.textContent).toContain("Studio (linux · desk:3795)");
+    expect(container.textContent).toContain("Studio (darwin · laptop:3795)");
     expect(container.querySelector("input")).toBeNull();
     act(() =>
       [...container.querySelectorAll("button")]

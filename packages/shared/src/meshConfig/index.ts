@@ -255,3 +255,5 @@ export const migratedPeerLabelsFromLayout = (
       ];
     }),
   );
+
+export { repairMachineIdentity, renameMachineBindings, localMachineClaim } from "./identity.ts";

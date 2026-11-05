@@ -6,6 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildMeshMachines,
+  offlineMachineText,
   meshMachineFactTimes,
   partitionMeshMachines,
   forgetMachineFacts,
@@ -531,4 +532,32 @@ it("keeps forgotten layout facts absent when desired config and an old phone con
     }),
   ).toHaveLength(1);
   expect(config.machines.cloudbox.title).toBe("Cloudbox");
+});
+
+it("formats offline durations without an ISO date", () => {
+  const now = Date.parse("2026-05-10T00:00:00Z");
+  expect(offlineMachineText("2026-05-07T00:00:00Z", now)).toBe("offline 3 d");
+  expect(offlineMachineText("2026-05-09T22:00:00Z", now)).toBe("offline 2 h");
+  expect(offlineMachineText("invalid", now)).toBe("Offline");
+});
+
+it("keeps equal titles distinct even when platform and hostname are identical", () => {
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { a: { title: "Studio" }, b: { title: "Studio" } },
+  };
+  const result = buildMeshMachines({
+    config,
+    connections: ["b", "a"].map((environmentId) => ({
+      environmentId,
+      label: "Studio",
+      connected: true,
+      platform: { os: "linux", arch: "x64" },
+      urls: ["http://studio.example:3795"],
+    })),
+  });
+  expect(result.map((machine) => machine.label).sort()).toEqual([
+    "Studio (linux · studio:3795) · 1",
+    "Studio (linux · studio:3795) · 2",
+  ]);
 });
