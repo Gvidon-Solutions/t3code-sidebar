@@ -33,7 +33,9 @@ export class RunPreparationError extends Schema.TaggedError<RunPreparationError>
   override get message() {
     switch (this.reason) {
       case "resolution":
-        return "Cannot resolve the replica's primary for t3 run.";
+        return this.cause instanceof Error
+          ? this.cause.message
+          : "Cannot resolve the replica's primary for t3 run.";
       case "sync":
         return "Replica synchronization failed.";
       case "timeout":

@@ -1,6 +1,12 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import { EnvironmentId } from "@t3tools/contracts";
+import * as Option from "effect/Option";
+import { PeerLinks } from "../peer/PeerLinks.ts";
+import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
+import { callRouted } from "../mesh/MeshRouting.ts";
+import { RunRuntimeInfo } from "./RunProtocol.ts";
 import type * as Schema from "effect/Schema";
 import { configFromLayout } from "@t3tools/shared/meshConfig";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
@@ -19,6 +25,8 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const mesh = yield* MeshLayoutService;
     const preparation = yield* Preparation.RunPreparation;
+    const links = yield* Effect.serviceOption(PeerLinks);
+    const peers = yield* Effect.serviceOption(PeerMcpClient);
     return RunControl.of({
       request: Effect.fn("RunControl.request")(
         function* (request) {
@@ -27,10 +35,42 @@ export const layer = Layer.effect(
               ? yield* preparation.prepare(request.cwd, request.timeoutMs)
               : yield* preparation.resolve(request.cwd);
           if (request.action === "finish") yield* preparation.finish(plan, request.timeoutMs);
+          let resolvedPlan: Schema.Schema.Type<typeof import("./RunProtocol.ts").RunPlan> = plan;
+          if (plan.kind === "remote" && request.action === "resolve") {
+            if (Option.isNone(links) || Option.isNone(peers))
+              return {
+                ok: false,
+                code: 255,
+                message: "The primary runtime cannot be discovered without a mesh link.",
+              } as const;
+            const info = yield* callRouted(
+              { links: links.value, peers: peers.value, self: mesh.environmentId },
+              {
+                environmentId: EnvironmentId.make(plan.primaryEnvironmentId),
+                tool: "t3_run_runtime",
+                arguments: {},
+                limits: { replicas: true, runtimeMode: "full-access", interactionMode: "default" },
+                success: RunRuntimeInfo,
+              },
+            ).pipe(
+              Effect.timeout("3 seconds"),
+              Effect.mapError(
+                (cause) =>
+                  new Preparation.RunPreparationError({
+                    reason: "resolution",
+                    paths: [],
+                    cause: new Error(
+                      `Cannot discover the runtime on ${plan.machine}: ${cause instanceof Error ? cause.message : String(cause)}`,
+                    ),
+                  }),
+              ),
+            );
+            resolvedPlan = { ...plan, runtime: info };
+          }
           const doc = configFromLayout((yield* mesh.read).document);
           return {
             ok: true,
-            plan,
+            plan: resolvedPlan,
             remoteCommands: doc?.replicas?.remoteCommands ?? DEFAULT_REMOTE_COMMANDS,
           } as const;
         },

@@ -5,7 +5,12 @@ import * as Context from "effect/Context";
 import * as NodePath from "node:path";
 
 export const ProviderRuntimeEnvironment = Context.Reference<
-  { readonly directory: string; readonly environment: Readonly<Record<string, string>> } | undefined
+  | {
+      readonly directory: string;
+      readonly environment: Readonly<Record<string, string>>;
+      readonly mapEnvironment?: (environment: NodeJS.ProcessEnv) => NodeJS.ProcessEnv;
+    }
+  | undefined
 >("@t3tools/provider-core/server/instanceEnvironment/ProviderRuntimeEnvironment", {
   defaultValue: () => undefined,
 });
@@ -31,7 +36,12 @@ export const mergeProviderInstanceEnvironment = Effect.fn(function* (
   }
   if (runtime) {
     Object.assign(next, runtime.environment);
-    next.PATH = `${runtime.directory}${NodePath.delimiter}${next.PATH ?? ""}`;
+    next.PATH = [
+      runtime.directory,
+      ...(next.PATH ?? "")
+        .split(NodePath.delimiter)
+        .filter((directory) => directory !== runtime.directory),
+    ].join(NodePath.delimiter);
   }
-  return next;
+  return runtime?.mapEnvironment ? runtime.mapEnvironment(next) : next;
 });

@@ -74,4 +74,7 @@ it("names the primary machine in the injected note instead of presenting its id 
   const note = replicaContextNote(config, "replica", "p");
   expect(note).toContain("on worker (WK)");
   expect(note).not.toContain("opaque-primary");
+  expect(note).toContain("lite replica");
+  expect(note).toContain("t3 run -- <command>");
+  expect(note).toContain("Sync: unknown");
 });

@@ -81,7 +81,8 @@ export const forwardedCallLimits = Effect.fn("MeshLinkPermissions.forwardedCallL
       "task_status",
       "task_cancel",
     ].includes(tool);
-  const replicas = tool === "t3_project_place" || tool === "t3_replica_adopt";
+  const replicas =
+    tool === "t3_project_place" || tool === "t3_replica_adopt" || tool === "t3_run_runtime";
   const files = tool === "t3_files_read" || tool === "t3_files_list";
   if (
     (threads && (!local.threads || !target.threads)) ||

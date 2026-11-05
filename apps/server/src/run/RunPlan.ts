@@ -51,6 +51,7 @@ export function resolveRunPlan(input: {
     kind: "remote",
     logicalKey: match.logicalKey,
     environmentId: input.environmentId,
+    primaryEnvironmentId: primary.environmentId,
     title: input.config.projectTitles[match.logicalKey] || "Untitled project",
     machine,
     host: `t3-${machine}`,

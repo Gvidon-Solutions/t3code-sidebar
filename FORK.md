@@ -108,16 +108,18 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
-### 2026-11-05 — R1 preparation primitives (runtime integration incomplete)
+### 2026-11-05 — R1 replica command execution
 
-- **What.** Adds tested preparation and output-mapping modules for CONCEPT §7. This entry does
-  not announce an available `t3 run` command; CLI, SSH execution and thread shims are absent.
-- **How.** Resolve the closest representation, map the relative directory to the bound primary,
-  flush before checking conflicts/problems, refuse stale files with exit 75, bound synchronization
-  time and flush after completion. Streaming mapping preserves unrelated paths and split UTF-8.
-  The config schema validates `replicas.remoteCommands` as executable names.
-- **Where.** `apps/server/src/run/{RunPlan,RunPreparation,RunOutput}.ts` and adjacent tests;
-  `packages/contracts/src/meshConfig.ts` and its test.
+- **What.** `t3 run` executes lite-replica commands in the primary environment with live output,
+  exact exit status, conflict refusal, background jobs and loopback port forwarding. Threads
+  receive the runtime command and configurable guards for commands requiring that environment.
+- **How.** Resolve through the local server; flush and inspect S1's public sync APIs; use managed
+  `t3-<name>` SSH under the user's login shell. A supervisor owns each foreground process group;
+  detached primary jobs have list/logs/stop and a replica forwarding guardian. Flush back and
+  name ignored outputs. Shell-only guards preserve native harness Git discovery.
+- **Where.** `apps/server/src/run/`, CLI/bin/server seams, replica instructions and mesh runtime
+  discovery; provider-core environment injection, Codex/OpenCode/ACP shell seams;
+  `packages/contracts/src/meshConfig.ts`, `agent-kit/skills/t3/SKILL.md`.
 
 ### 2026-11-04 — Mesh config core (Stage C1)
 

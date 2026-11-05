@@ -19,10 +19,12 @@ it("rewrites only complete project-root path prefixes across every byte split", 
   }
 });
 it("streams long lines immediately and flushes the final root at EOF", () => {
+  const ready = rewriteRunOutput("/very/long/primary/project/root", "/copy");
+  expect(ready.write(Buffer.from("SERVER_READY\n")).toString()).toBe("SERVER_READY\n");
   const rewrite = rewriteRunOutput("/work/app", "/copy");
-  expect(rewrite.write(Buffer.from("x".repeat(10000)))).toHaveLength(9991);
+  expect(rewrite.write(Buffer.from("x".repeat(10000)))).toHaveLength(10000);
   expect(Buffer.concat([rewrite.write(Buffer.from(" /work/app")), rewrite.end()]).toString()).toBe(
-    "x".repeat(9) + " /copy",
+    " /copy",
   );
 });
 

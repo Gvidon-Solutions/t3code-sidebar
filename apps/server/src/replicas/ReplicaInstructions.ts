@@ -22,25 +22,30 @@ export function replicaContextNote(
   environmentId: string,
   projectId: string,
 ): string {
-  const reps = Object.values(config.projectMounts).find((reps) =>
+  const entry = Object.entries(config.projectMounts).find(([, reps]) =>
     reps.some((rep) => rep.environmentId === environmentId && rep.projectId === projectId),
   );
-  const replica = reps?.find(
+  const replica = entry?.[1].find(
     (rep) =>
       rep.environmentId === environmentId && rep.projectId === projectId && rep.role === "replica",
   );
-  const primary = replica && reps?.find((rep) => rep.environmentId === replica.source);
-  if (!replica) return "";
+  if (!entry || !replica) return "";
+  const mode = replica.mode ?? "lite";
+  const sync = config.projectMountStatus[entry[0]]?.[environmentId]?.state ?? "unknown";
+  const primary = entry[1].find(
+    (rep) => rep.environmentId === replica.source && rep.role === "primary",
+  );
   if (!primary)
-    return "This project is a synchronized replica. Its primary representation is unavailable; restore it before running git or builds.";
-  const primaryName = meshMachineLabel(config, primary.environmentId, "the primary machine");
-  const route = config.machines[environmentId]?.reach?.[primary.environmentId];
-  if (!route)
-    return `This project is a synchronized replica of ${primaryName} at ${primary.path}. Run git and builds on that primary. Add an SSH reach route before running those commands.`;
-  const ssh = route.identityFile ? `t3-mesh-${primary.environmentId}` : route.ssh;
-  const port = /^(.*):(\d+)$/.exec(ssh);
-  const command = port ? `ssh -p ${port[2]} ${quote(port[1]!)}` : `ssh ${quote(ssh)}`;
-  return `This project is a synchronized replica. Run git and builds on ${primaryName}, using ${command} ${quote(`cd ${quote(primary.path)} && <command>`)}. Mutagen synchronizes working files in both directions; .git and build dependencies stay on the primary.`;
+    return `This is a ${mode} replica; its primary representation is unavailable. Sync: ${sync}. Restore the primary before running commands.`;
+  const machine = fitUtf8(
+    meshMachineLabel(config, primary.environmentId, "the primary machine"),
+    80,
+  );
+  const command =
+    mode === "lite"
+      ? "Use t3 run -- <command> for git, dependencies, builds and tests."
+      : "Commands run locally here; git stays on the primary.";
+  return `This is a ${mode} replica. ${command} The environment is on ${machine} at ${fitUtf8(primary.path, 100)}. Sync: ${sync}.`;
 }
 
 const fitUtf8 = (value: string, budget: number) => {

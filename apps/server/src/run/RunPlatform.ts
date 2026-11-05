@@ -11,12 +11,37 @@ export const runAddress = (
   userId = process.getuid?.(),
 ) => `${pipeAddress(baseDir, platform, userId)}-run`;
 export const shellWord = (word: string) => `'${word.replaceAll("'", `'"'"'`)}'`;
-export const loginCommand = (script: string, argument: string, platform: string, tty: boolean) => {
+export const loginCommand = (
+  script: string,
+  argument: string,
+  platform: string,
+  _tty: boolean,
+  runtime?: { readonly command: string; readonly entrypoint?: string },
+) => {
   if (/win32|windows/i.test(platform)) {
     const escaped = (word: string) => `'${word.replaceAll("'", "''")}'`;
-    return `powershell.exe -NoLogo -Command "& node -e ${escaped(script)} -- ${escaped(argument)}; exit $LASTEXITCODE"`;
+    const invocation = runtime
+      ? [
+          runtime.command,
+          ...(runtime.entrypoint ? [runtime.entrypoint] : []),
+          "__run-worker",
+          argument,
+        ]
+      : ["node", "-e", script, "--", argument];
+    const body = `& ${invocation.map(escaped).join(" ")}; exit $LASTEXITCODE`;
+    return `powershell.exe -NoLogo -EncodedCommand ${Buffer.from(body, "utf16le").toString("base64")}`;
   }
-  const body = `${tty ? "stty raw -echo; " : ""}exec node -e ${shellWord(script)} -- ${shellWord(argument)}`;
+  const invocation = runtime
+    ? [
+        runtime.command,
+        ...(runtime.entrypoint ? [runtime.entrypoint] : []),
+        "__run-worker",
+        argument,
+      ]
+        .map(shellWord)
+        .join(" ")
+    : `node -e ${shellWord(script)} -- ${shellWord(argument)}`;
+  const body = `exec ${invocation}`;
   return `exec "$SHELL" -lc ${shellWord(body)}`;
 };
 export const workerStateRoot = (namespace: string) =>
@@ -32,3 +57,8 @@ export async function privateDirectory(directory: string) {
   )
     throw new Error("The run directory is not private or owned by this user.");
 }
+
+export const guardianAddress = (root: string, id: string) =>
+  process.platform === "win32"
+    ? `\\\\.\\pipe\\t3-run-forward-${namespaceOf(root)}-${id}`
+    : NodePath.join(workerStateRoot(namespaceOf(root)), `${id}.forward.sock`);

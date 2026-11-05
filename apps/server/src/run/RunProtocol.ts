@@ -1,10 +1,17 @@
 import * as Schema from "effect/Schema";
+export const RunRuntimeInfo = Schema.Struct({
+  command: Schema.String,
+  entrypoint: Schema.optionalKey(Schema.String),
+  ptyModule: Schema.String,
+});
 export const RunPlan = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("local") }),
   Schema.Struct({
     kind: Schema.Literal("remote"),
     logicalKey: Schema.String,
     environmentId: Schema.String,
+    primaryEnvironmentId: Schema.String,
+    runtime: Schema.optionalKey(RunRuntimeInfo),
     title: Schema.String,
     machine: Schema.String,
     host: Schema.String,
@@ -20,6 +27,7 @@ export type RemoteRunPlan = Extract<RunPlan, { kind: "remote" }>;
 export const RunRequest = Schema.Struct({
   action: Schema.Literals(["resolve", "prepare", "finish"]),
   cwd: Schema.String,
+  tty: Schema.optionalKey(Schema.Boolean),
   timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 86400000 })),
 });
 export const RunResponse = Schema.Union([
@@ -41,7 +49,10 @@ export const WorkerFrame = Schema.Union([
   Schema.Struct({ type: Schema.Literal("error"), message: Schema.String }),
 ]);
 export type WorkerFrame = typeof WorkerFrame.Type;
-export const decodeFrame = Schema.decodeUnknownSync(Schema.fromJsonString(WorkerFrame));
+export const FRAME_PREFIX = "\x1eT3RUN ";
+const decodeWorkerFrame = Schema.decodeUnknownSync(Schema.fromJsonString(WorkerFrame));
+export const decodeFrame = (line: string) =>
+  decodeWorkerFrame(line.startsWith(FRAME_PREFIX) ? line.slice(FRAME_PREFIX.length) : line);
 export const decodeRequest = Schema.decodeUnknownSync(Schema.fromJsonString(RunRequest));
 export const decodeResponse = Schema.decodeUnknownSync(Schema.fromJsonString(RunResponse));
 export const encodeResponse = Schema.encodeSync(Schema.fromJsonString(RunResponse));
@@ -58,3 +69,16 @@ export const DEFAULT_REMOTE_COMMANDS = [
   "go",
   "docker",
 ] as const;
+
+export const CommandManifest = Schema.Struct({
+  representations: Schema.Array(
+    Schema.Struct({
+      root: Schema.String,
+      lite: Schema.Boolean,
+      title: Schema.String,
+      machine: Schema.String,
+    }),
+  ),
+  commands: Schema.Array(Schema.String),
+});
+export const encodeManifest = Schema.encodeSync(Schema.fromJsonString(CommandManifest));

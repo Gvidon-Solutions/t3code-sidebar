@@ -14,7 +14,7 @@ Run `node ~/.agents/skills/t3/scripts/t3ctl.mjs` (Node 22+), or the installed `t
 - `machines --json` reads the authoritative environment ids, layout labels, tags, user-defined aliases, SSH destinations and links. `mesh status` shows connectivity. Match names generically; never translate a customer's machine name using a built-in table.
 - `machines alias <M> list|add <alias>…|remove <alias>…|clear` edits aliases in the shared layout. Settings › Mesh edits the same aliases. Aliases may use any language. Ask only when candidates are ambiguous.
 - `projects` resolves projects; `find "…" --all` searches thread titles and content across machines. Preserve full returned thread ids and environment ids. Read a thread before reporting about it.
-- A logical project has machine-local representations. Primaries own git; replicas are synchronized working copies. Before file operations, read `tool t3_project_machines '{"project":"<P>"}'` and choose the target representation's absolute path. In a replica, edit files there and run git, builds and tests at its primary using the configured SSH destination and primary path. Never initialize git in a replica.
+- A logical project has machine-local representations. Primaries own git; replicas are synchronized working copies. Before file operations, read `tool t3_project_machines '{"project":"<P>"}'` and choose the target representation's absolute path. In a lite replica, edit files there and use `t3 run -- <command…>` for git, dependencies, builds and tests. It resolves the primary and relative directory through the local server, flushes before and after execution, and refuses conflicts, file problems or a flush timeout. Never initialize git in a replica.
 - `new --project <P> --on <M> "brief"` places a missing replica, waits for registration, and launches there. `place <P> --on <M> [--wait]` only places a representation. No machine is tied to a particular harness: query its capabilities.
 - With no explicit model or permissions override, `new` delegates defaults to the destination project's/server's settings. `models` lists provider instances and their catalog. Explicit CLI overrides: `T3CTL_AGENT`, `T3CTL_CODEX_MODEL`, `T3CTL_CLAUDE_MODEL`, `T3CTL_MODE`. A user-requested model must be available at the destination; report failure without substituting another provider.
 
@@ -40,6 +40,12 @@ Run `node ~/.agents/skills/t3/scripts/t3ctl.mjs` (Node 22+), or the installed `t
 | Health | `env`, `doctor`, `mesh status`, `server status` |
 
 `<T>` is a full thread id, id prefix, or words from its title. `<P>` is a project name/id/path. `<M>` is an environment id/prefix, label, tag, user-defined alias or SSH destination. `--json` returns structured data. `help` describes additional options and commands.
+
+## Commands in lite replicas
+
+The runtime `t3` binary is on every thread's PATH. Use `t3 run [--timeout 30s] -- <command…>`; plain environment commands in a lite replica refuse with guidance and exit 127. `replicas.remoteCommands` configures that command list. Outside lite replicas, `t3 run` executes locally with the same arguments and stdio.
+
+`t3 run --bg [--ports 3000,8080] -- <command…>` starts a tracked process on the primary and forwards the requested ports to this machine's loopback. It survives the calling thread's disconnect. Use `t3 run --list`, `t3 run --logs <id> [--follow]`, and `t3 run --stop <id>`. Ignored outputs remain on the primary; the command names them. A sync refusal exits 75; an SSH transport failure exits 255. Fix the reported problem before retrying.
 
 ## Working rules
 

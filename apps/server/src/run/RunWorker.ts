@@ -7,13 +7,14 @@ const net = require('node:net');
 const crypto = require('node:crypto');
 const readline = require('node:readline');
 const { spawn } = require('node:child_process');
-const c = JSON.parse(Buffer.from(process.argv[1], 'base64').toString());
+const c = JSON.parse(Buffer.from(typeof __T3_RUN_PAYLOAD === 'string' ? __T3_RUN_PAYLOAD : process.argv[1], 'base64').toString());
+if (c.tty && process.stdin.isTTY) process.stdin.setRawMode(true);
 const root = path.join(os.tmpdir(), 't3-run-' + (process.getuid ? process.getuid() : 'user'), c.namespace);
 const record = id => path.join(root, id + '.json');
 const journal = id => path.join(root, id + '.ndjson');
-const address = id => process.platform === 'win32' ? '\\.\pipe\t3-run-' + c.namespace + '-' + id : path.join(root, id + '.sock');
+const address = id => process.platform === 'win32' ? '\\\\.\\pipe\\t3-run-' + c.namespace + '-' + id : path.join(root, id + '.sock');
 const validId = id => typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id);
-const frame = value => process.stdout.write(JSON.stringify(value) + '\n');
+const frame = value => process.stdout.write(String.fromCharCode(30) + 'T3RUN ' + JSON.stringify(value) + '\n');
 const atomic = async (file, value) => { const temp = file + '.' + crypto.randomUUID(); await fsp.writeFile(temp, JSON.stringify(value), {mode: 0o600}); await fsp.rename(temp, file); };
 const state = async id => JSON.parse(await fsp.readFile(record(id), 'utf8'));
 async function prepareRoot() {
@@ -88,8 +89,8 @@ async function observe(id, logs, follow) {
           const handle = await fsp.open(journal(id), 'r');
           try {
             const size = (await handle.stat()).size;
-            if (size > offset) {
-              const data = Buffer.alloc(size - offset);
+            while (size > offset) {
+              const data = Buffer.alloc(Math.min(65536, size - offset));
               const read = await handle.read(data, 0, data.length, offset);
               offset += read.bytesRead;
               buffer += data.subarray(0, read.bytesRead).toString();
@@ -97,7 +98,7 @@ async function observe(id, logs, follow) {
               while ((end = buffer.indexOf('\n')) >= 0) {
                 const item = JSON.parse(buffer.slice(0, end)); buffer = buffer.slice(end + 1);
                 if (item.type === 'done') completed = true;
-                frame(item);
+                if (!frame(item)) await new Promise(resolve => process.stdout.once('drain', resolve));
               }
             }
           } finally { await handle.close(); }
@@ -133,7 +134,7 @@ async function execute(job) {
   const emit = job ? value => fs.appendFileSync(journal(id), JSON.stringify(value) + '\n', {mode: 0o600}) : frame;
   const metadata = {id, name: c.args[0], cwd: c.cwd, ports: c.ports || [], startedAt: new Date().toISOString(), status: 'running'};
   function signal(sig) {
-    if (!child || finished) return;
+    if (!child || !Number.isSafeInteger(child.pid) || child.pid <= 0 || finished) return;
     if (process.platform === 'win32') {
       const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {stdio: 'ignore'});
       killer.on('error', e => emit({type: 'error', message: e.message}));
@@ -148,10 +149,23 @@ async function execute(job) {
     killTimer = setTimeout(() => signal('SIGKILL'), 1000);
   }
   if (job) await fsp.writeFile(journal(id), '', {mode: 0o600});
-  child = spawn(c.args[0], c.args.slice(1), {cwd: c.cwd, env: process.env, detached: true, stdio: ['pipe', 'pipe', 'pipe']});
+  if (c.tty) {
+    if (!c.ptyModule) throw Error('The primary terminal runtime was not discovered');
+    const {EventEmitter} = require('node:events');
+    const {PassThrough, Writable} = require('node:stream');
+    const pty = require(c.ptyModule).spawn(c.args[0], c.args.slice(1), {cwd:c.cwd, env:process.env, name:process.env.TERM || 'xterm-256color', cols:c.cols || 80, rows:c.rows || 24, encoding:null});
+    child = new EventEmitter(); child.pid = pty.pid;
+    child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    child.stdin = new Writable({write(data, _, next) { try { pty.write(data.toString()); next(); } catch(error) { next(error); } }, final(next) { pty.write('\x04'); next(); }});
+    pty.onData(data => { if (!child.stdout.write(Buffer.from(data))) pty.pause(); });
+    child.stdout.on('drain', () => pty.resume());
+    pty.onExit(event => { const code = event.signal ? 128 + event.signal : event.exitCode; child.emit('exit', code, null); child.stdout.end(); child.stderr.end(); child.emit('close', code, null); });
+  } else child = spawn(c.args[0], c.args.slice(1), {cwd: c.cwd, env: process.env, detached: true, stdio: ['pipe', 'pipe', 'pipe']});
   child.once('exit', () => { if (!stopping) { signal('SIGTERM'); killTimer = setTimeout(() => signal('SIGKILL'), 1000); } });
-  child.stdout.on('data', data => emit({type: 'out', data: data.toString('base64')}));
-  child.stderr.on('data', data => emit({type: 'err', data: data.toString('base64')}));
+  for (const [stream, type] of [[child.stdout, 'out'], [child.stderr, 'err']]) stream.on('data', data => {
+    if (emit({type, data: data.toString('base64')}) === false) { child.stdout.pause(); child.stderr.pause(); }
+  });
+  if (!job) process.stdout.on('drain', () => { child.stdout.resume(); child.stderr.resume(); });
   const complete = new Promise((resolve, reject) => {
     child.once('error', reject);
     child.once('close', (code, sig) => resolve(code === null ? 128 + (os.constants.signals[sig || terminalSignal] || 1) : code));
@@ -184,6 +198,7 @@ async function execute(job) {
       } catch (e) { emit({type: 'error', message: e.message}); stop('SIGTERM'); }
     });
     input.on('close', () => stop('SIGTERM'));
+    frame({type:'ready',id:''});
     watchdog = setInterval(() => { if (Date.now() - lastBeat > 5000) stop('SIGTERM'); }, 1000);
     process.stdout.on('error', () => stop('SIGTERM'));
   }
@@ -215,7 +230,8 @@ async function main() {
     const id = crypto.randomUUID();
     const payload = Buffer.from(JSON.stringify({...c, action: 'job', id})).toString('base64');
     const source = process.execArgv[process.execArgv.indexOf('-e') + 1];
-    const daemon = spawn(process.execPath, ['-e', source, '--', payload], {detached: true, stdio: ['ignore','ignore','ignore','ipc']});
+    const launcher = c.runtimeInvocation;
+    const daemon = spawn(launcher ? launcher.command : process.execPath, launcher ? [...(launcher.entrypoint ? [launcher.entrypoint] : []), '__run-worker', payload] : ['-e', source, '--', payload], {detached: true, stdio: ['ignore','ignore','ignore','ipc']});
     await new Promise((resolve, reject) => {
       daemon.once('error', reject); daemon.once('exit', code => reject(Error('Background process failed to start (' + code + ')')));
       daemon.once('message', message => { if (message.ready) resolve(); else reject(Error('Invalid background handshake')); });
@@ -225,7 +241,7 @@ async function main() {
   if (c.action === 'list') {
     const rows = [];
     for (const name of await fsp.readdir(root)) if (/^[a-f0-9-]{36}\.json$/.test(name)) rows.push(await state(name.slice(0, -5)));
-    frame({type:'out', data:Buffer.from(rows.map(row => row.id + '\t' + row.status + '\t' + row.name + '\t' + row.cwd).join('\n') + (rows.length ? '\n' : '')).toString('base64')});
+    frame({type:'out', data:Buffer.from(rows.map(row => row.id + '\t' + row.status + '\t' + row.name + '\t' + row.cwd + '\t' + (row.code === undefined ? '' : row.code) + '\t' + (row.ports || []).join(',')).join('\n') + (rows.length ? '\n' : '')).toString('base64')});
     frame({type:'done',code:0,ignored:[]}); return;
   }
   if (!validId(c.id)) throw Error('Invalid background id');

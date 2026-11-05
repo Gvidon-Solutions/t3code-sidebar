@@ -6,6 +6,7 @@ import * as Option from "effect/Option";
 import * as MeshConfig from "../../../mesh/MeshConfig.ts";
 import * as MeshLayout from "../../../mesh/MeshLayoutService.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
+import * as RunRuntimeInfo from "../../../run/RunRuntimeInfo.ts";
 import { MeshToolkit } from "./tools.ts";
 
 const optional = Effect.serviceOption(MeshConfig.MeshConfig).pipe(
@@ -35,6 +36,7 @@ const snapshot = Effect.gen(function* () {
 });
 
 export const layer = McpToolAccess.toLayer(MeshToolkit, {
+  t3_run_runtime: McpToolAccess.reads(() => RunRuntimeInfo.read()),
   t3_mesh_config_get: McpToolAccess.reads(() => snapshot),
   t3_mesh_config_plan: McpToolAccess.reads(({ doc }) =>
     service.pipe(Effect.flatMap((config) => config.plan(doc))),

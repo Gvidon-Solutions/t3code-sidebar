@@ -95,6 +95,7 @@ import * as PeerCredentials from "./peer/connection/PeerCredentials.ts";
 import * as PeerReceipts from "./peer/connection/PeerReceipts.ts";
 import * as PeerPipeIpc from "./peer/connection/PeerPipeIpc.ts";
 import * as RunIpc from "./run/RunIpc.ts";
+import * as RunManifest from "./run/RunManifest.ts";
 import * as RunEnvironment from "./run/RunEnvironment.ts";
 import { ProviderRuntimeEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
@@ -825,6 +826,7 @@ const layerMakeRoutes = Layer.mergeAll(
     PeerHttp.layer,
     PeerPipeIpc.layer,
     RunIpc.layer,
+    RunManifest.layer,
   ),
   McpHttpServer.layer.pipe(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),

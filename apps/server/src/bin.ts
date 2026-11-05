@@ -17,7 +17,13 @@ if (
   // Guard sockets before either dispatch path can load outbound-capable modules.
   const { ignoreMacosTypeOfServiceEinval } = await import("./outboundHttp.ts");
   ignoreMacosTypeOfServiceEinval();
-  if (command === "run") {
+  if (command === "__run-worker") {
+    const { runWorker } = await import("./run/RunWorkerEntry.ts");
+    runWorker(process.argv[3]!);
+  } else if (command === "__replica-command") {
+    const { runShim } = await import("./run/RunShim.ts");
+    await runShim(process.argv[3]!, process.argv.slice(4));
+  } else if (command === "run") {
     const { runCli } = await import("./run/RunCli.ts");
     await runCli(process.argv.slice(3));
   } else if (command === "__run-guardian") {

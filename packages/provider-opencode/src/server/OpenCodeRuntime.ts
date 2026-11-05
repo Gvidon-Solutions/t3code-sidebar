@@ -55,11 +55,20 @@ function resolveOpenCodeConfigContent(
   inputEnvironment: Readonly<Record<string, string | undefined>> | undefined,
   inheritedEnvironment: Readonly<Record<string, string | undefined>> = process.env,
 ): string {
-  return (
+  const content =
     inputEnvironment?.OPENCODE_CONFIG_CONTENT ??
     inheritedEnvironment.OPENCODE_CONFIG_CONTENT ??
-    OPENCODE_EMPTY_CONFIG_CONTENT
-  );
+    OPENCODE_EMPTY_CONFIG_CONTENT;
+  const plugin = inputEnvironment?.T3CODE_RUN_OPENCODE_PLUGIN;
+  if (!plugin) return content;
+  const config: unknown = JSON.parse(content);
+  if (!config || typeof config !== "object" || Array.isArray(config))
+    throw new Error("OpenCode config must be an object.");
+  const existing: unknown = "plugin" in config ? config.plugin : [];
+  if (!Array.isArray(existing)) throw new Error("OpenCode config plugin must be an array.");
+  const plugins: readonly unknown[] = existing;
+  const url = NodeURL.pathToFileURL(plugin).href;
+  return JSON.stringify({ ...config, plugin: plugins.includes(url) ? plugins : [...plugins, url] });
 }
 
 export function resolveOpenCodeServerPassword(

@@ -97,6 +97,9 @@ it.effect(
       );
       expect(environment.PATH).toBe(`/runtime/bin${NodePath.delimiter}/custom/bin`);
       expect(environment.T3CODE_RUN_SOCKET).toBe("private-socket");
+      expect((yield* mergeProviderInstanceEnvironment(undefined, environment)).PATH).toBe(
+        environment.PATH,
+      );
     }).pipe(
       Effect.provideService(ProviderRuntimeEnvironment, {
         directory: "/runtime/bin",

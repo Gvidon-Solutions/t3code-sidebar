@@ -4,6 +4,7 @@ import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { resolveSelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeRuntime";
+import { awaitForwardingStop } from "./RunGuardianControl.ts";
 import { requestRun } from "./RunClient.ts";
 import { remoteRun } from "./RunTransport.ts";
 import { rewriteRunOutput } from "./RunOutput.ts";
@@ -75,8 +76,11 @@ async function localRun(command: readonly string[]) {
   process.on("SIGINT", interrupt);
   process.on("SIGTERM", terminate);
   try {
-    return await new Promise<number>((resolve, reject) => {
-      child.once("error", reject);
+    return await new Promise<number>((resolve) => {
+      child.once("error", (cause: NodeJS.ErrnoException) => {
+        process.stderr.write(`${cause.message}\n`);
+        resolve(cause.code === "ENOENT" ? 127 : 126);
+      });
       child.once("close", (code, signal) =>
         resolve(code ?? 128 + (NodeOS.constants.signals[signal ?? "SIGTERM"] ?? 1)),
       );
@@ -86,7 +90,13 @@ async function localRun(command: readonly string[]) {
     process.removeListener("SIGTERM", terminate);
   }
 }
-async function startGuardian(plan: RemoteRunPlan, id: string, ports: readonly number[]) {
+async function startGuardian(
+  plan: RemoteRunPlan,
+  id: string,
+  ports: readonly number[],
+  cwd: string,
+  timeoutMs: number,
+) {
   const invocation = await Effect.runPromise(
     resolveSelfInvocation().pipe(Effect.provide(NodeServices.layer)),
   );
@@ -95,7 +105,7 @@ async function startGuardian(plan: RemoteRunPlan, id: string, ports: readonly nu
     [
       ...selfInvocationArgs(invocation, [
         "__run-guardian",
-        Buffer.from(JSON.stringify({ plan, id, ports })).toString("base64"),
+        Buffer.from(JSON.stringify({ plan, id, ports, cwd, timeoutMs })).toString("base64"),
       ]),
     ],
     { detached: true, stdio: ["ignore", "ignore", "ignore", "ipc"], env: process.env },
@@ -130,20 +140,32 @@ export async function runCli(args: readonly string[]) {
     }
     const plan = resolved.plan;
     if (plan.kind === "local") {
-      if (options.bg || options.list || options.logs || options.stop || options.ports.length)
-        throw new Error("Background management and port forwarding require a lite replica.");
+      if (options.list || options.logs || options.stop)
+        throw new Error("Background management requires a lite replica.");
       process.exitCode = await localRun(options.command);
       return;
     }
     const stdout = rewriteRunOutput(plan.primaryRoot, plan.replicaRoot);
     const stderr = rewriteRunOutput(plan.primaryRoot, plan.replicaRoot);
-    const emit = (frame: Parameters<Parameters<typeof remoteRun>[2]["onFrame"]>[0]) => {
+    const emit = async (frame: Parameters<Parameters<typeof remoteRun>[2]["onFrame"]>[0]) => {
       if (frame.type === "out")
-        process.stdout.write(stdout.write(Buffer.from(frame.data, "base64")));
+        await new Promise<void>((resolve, reject) =>
+          process.stdout.write(stdout.write(Buffer.from(frame.data, "base64")), (error) =>
+            error ? reject(error) : resolve(),
+          ),
+        );
       if (frame.type === "err")
-        process.stderr.write(stderr.write(Buffer.from(frame.data, "base64")));
+        await new Promise<void>((resolve, reject) =>
+          process.stderr.write(stderr.write(Buffer.from(frame.data, "base64")), (error) =>
+            error ? reject(error) : resolve(),
+          ),
+        );
     };
-    await remoteRun(plan, { action: "probe" }, { onFrame: () => undefined });
+    const probe = await remoteRun(plan, { action: "probe" }, { onFrame: () => undefined });
+    if (probe.code !== 0) {
+      process.exitCode = probe.code;
+      return;
+    }
     if (options.list || options.logs || options.stop) {
       const result = await remoteRun(
         plan,
@@ -156,7 +178,8 @@ export async function runCli(args: readonly string[]) {
       );
       process.stdout.write(stdout.end());
       process.stderr.write(stderr.end());
-      if (options.stop || (options.logs && options.follow)) {
+      if (options.stop) await awaitForwardingStop(plan.primaryRoot, options.stop);
+      if (options.stop || options.logs) {
         const flushed = await requestRun("finish", cwd, options.timeoutMs);
         if (!flushed.ok) {
           process.stderr.write(`${flushed.message}\n`);
@@ -166,7 +189,7 @@ export async function runCli(args: readonly string[]) {
         if (result.ignored.length)
           process.stderr.write(`${result.ignored.join(", ")} stayed on ${plan.machine}\n`);
       }
-      process.exitCode = result.code;
+      process.exitCode = options.stop ? 0 : result.code;
       return;
     }
     const prepared = await requestRun("prepare", cwd, options.timeoutMs);
@@ -176,6 +199,7 @@ export async function runCli(args: readonly string[]) {
       return;
     }
     let result: Awaited<ReturnType<typeof remoteRun>>;
+    let remoteFailed = false;
     try {
       result = await remoteRun(
         plan,
@@ -183,7 +207,7 @@ export async function runCli(args: readonly string[]) {
           action: options.bg ? "start" : "exec",
           args: options.command,
           ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
-          ports: options.bg ? [] : options.ports,
+          ports: options.ports,
         },
         {
           onFrame: emit,
@@ -192,9 +216,9 @@ export async function runCli(args: readonly string[]) {
       );
       if (options.bg) {
         if (!result.id) throw new Error("The primary did not return a background process id.");
-        if (options.ports.length) {
+        {
           try {
-            await startGuardian(plan, result.id, options.ports);
+            await startGuardian(plan, result.id, options.ports, cwd, options.timeoutMs ?? 30000);
           } catch (cause) {
             await remoteRun(plan, { action: "stop", id: result.id }, { onFrame: emit });
             throw cause;
@@ -202,18 +226,23 @@ export async function runCli(args: readonly string[]) {
         }
         process.stdout.write(`${result.id}\n`);
       }
+    } catch (cause) {
+      remoteFailed = true;
+      throw cause;
     } finally {
       process.stdout.write(stdout.end());
       process.stderr.write(stderr.end());
-      const flushed = await requestRun("finish", cwd, options.timeoutMs);
-      if (!flushed.ok) {
+      const flushed = options.bg
+        ? { ok: true as const }
+        : await requestRun("finish", cwd, remoteFailed ? 1000 : options.timeoutMs);
+      if (!flushed.ok && !remoteFailed) {
         process.stderr.write(`${flushed.message}\n`);
         process.exitCode = flushed.code;
       }
     }
     if (result.ignored.length)
       process.stderr.write(`${result.ignored.join(", ")} stayed on ${plan.machine}\n`);
-    process.exitCode = process.exitCode || result.code;
+    process.exitCode = result.code || process.exitCode || 0;
   } catch (cause) {
     process.stderr.write(
       `${cause instanceof Error ? cause.message.replace(/[\r\n]+/g, " ") : "t3 run failed"}\n`,

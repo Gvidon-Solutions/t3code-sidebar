@@ -106,18 +106,33 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 
 ## Interfaces
 
-R1 preparation code lives in `apps/server/src/run/`: `RunPlan.ts` selects the closest local
-representation and maps a lite replica's relative directory to its bound primary's
-`t3-<name>` host. `RunPreparation.ts` provides the flush/conflicts/problems gate, a bounded
-deadline, and a post-command flush through the `RunSync` port. `RunOutput.ts` rewrites complete
-project-root prefixes across UTF-8 packet boundaries. These modules are not connected to the
-runtime CLI or provider spawning; they do not yet make `t3 run` available. The contracts schema
-accepts `replicas.remoteCommands`; no shims consume that setting yet.
+`t3 run [--bg] [--ports P[,P]] [--timeout D] -- <command…>` runs locally outside a lite
+replica. Inside one, it flushes, refuses conflicting/problem files with exit 75, executes in the
+primary's login environment, streams output and flushes results back. `--list`, `--logs ID
+[--follow]` and `--stop ID` manage detached jobs; ports bind only to the replica's loopback.
+Ignored outputs are named with “stayed on <machine>”. The timeout bounds synchronization and
+remote execution. Plain environment commands explain how to use `t3 run` and exit 127;
+configure their names with `replicas.remoteCommands`.
 
-The preparation tests deliberately keep scan problems blocking a run even though ordinary replica
-status treats them as warnings: a skipped source file must not allow execution on an older copy.
-Each preparation has its own deadline and no shared lock. The output mapper preserves a bounded
-tail, so a long line can stream without waiting for a newline.
+The runtime CLI and private local-server socket live in `apps/server/src/run/Run{Cli,Client,Ipc,Control}.ts`.
+`RunPlan` maps the nearest representation's relative cwd onto its primary. `RunPreparation`
+consumes S1's public `flush/conflicts/problems(replica)` API through `RunSyncLive`. `RunTransport`
+uses managed `t3-<name>` hosts; `RunWorker` owns process groups and the primary's job registry.
+`RunGuardian` keeps background forwards alive and flushes completion; `RunPlatform` owns launch
+quoting and IPC addresses. `RunOutput` maps complete root prefixes across UTF-8 chunks while
+emitting unrelated bytes immediately. Runtime/PTY discovery is restricted to replica-enabled
+peers (`t3_run_runtime`).
+
+`RunEnvironment` and `RunManifest` supply thread runtime launchers, atomic representation data
+and configurable command shims. Provider shell startup overlays, Codex shell policy and the
+OpenCode shell hook apply guards to agent commands while native harness discovery retains real
+Git. Preserve this distinction: adding shims to the harness process's PATH breaks providers.
+Each preparation has an independent deadline; scan problems block execution even when the
+ordinary replica status presents them as warnings.
+
+`pnpm --dir apps/server test:run-integration` exercises the real CLI, sshd and isolated Mutagen
+session (build `testFixtures/sshd.Dockerfile` as `t3-run-sshd-test:local` first). It owns all
+keys, daemon state and containers. The runtime tests use neutral project/machine names.
 
 - **CLI / skill:** `agent-kit/skills/t3` (`SKILL.md`, `scripts/t3ctl.mjs`). Mesh commands:
   `mesh config get|plan|apply|rollback|history`, `mesh status`, `replica adopt <session> --project P`,
