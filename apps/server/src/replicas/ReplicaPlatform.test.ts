@@ -1,3 +1,9 @@
+import {
+  windowsSshWrapperInstall,
+  bootstrapAskpass,
+  bootstrapFacts,
+  bootstrapRemoteRuntime,
+} from "../platform/ServerPlatform.ts";
 import { expect, it } from "@effect/vitest";
 import {
   executableName,
@@ -20,11 +26,10 @@ it("builds the same bounded SSH command on Windows and POSIX with an explicit is
 });
 it("isolates Mutagen's ssh/scp on POSIX and OpenSSH's profile on Windows", () => {
   expect(mutagenSshEnvironment("win32", "C:\\Studio", "C:\\State\\mutagen")).toEqual({
-    HOME: "C:\\Studio",
-    USERPROFILE: "C:\\Studio",
+    MUTAGEN_SSH_PATH: "C:\\State\\mesh\\ssh\\bin",
   });
   expect(mutagenSshEnvironment("linux", "/studio", "/state/mutagen")).toEqual({
-    MUTAGEN_SSH_PATH: "/state/mutagen/../mesh/ssh/bin",
+    MUTAGEN_SSH_PATH: "/state/mesh/ssh/bin",
   });
   expect(mutagenSshEnvironment("darwin", undefined, "/state")).toEqual({});
   for (const program of ["ssh", "scp"] as const) {
@@ -60,4 +65,32 @@ it("selects runtime binary names, Mutagen releases and skill paths across server
   expect(agentSkillDirectories("/Users/studio", "darwin")[0]).toBe(
     "/Users/studio/.agents/skills/t3",
   );
+});
+
+it("uses native Windows executable transports and askpass without putting a password in helper source", () => {
+  const commands = windowsSshWrapperInstall("C:\\State\\bin", "C:\\Studio\\.ssh\\config");
+  expect(commands).toHaveLength(2);
+  for (const command of commands) {
+    const script = Buffer.from(command.args.at(-1)!, "base64").toString("utf16le");
+    const encoded = /FromBase64String\('([^']+)'\)/.exec(script)?.[1];
+    expect(encoded).toBeDefined();
+    const source = Buffer.from(encoded!, "base64").toString();
+    expect(source).toContain("System32\\OpenSSH");
+    expect(source).toContain('new StringBuilder("-F ")');
+    expect(source).toContain("child.ExitCode");
+  }
+  const askpass = bootstrapAskpass("win32", "C:\\Private");
+  expect(askpass.name).toBe("askpass.exe");
+  expect(askpass.command?.command).toBe("powershell.exe");
+  expect(bootstrapFacts("Darwin\narm64\n/Users/studio\n", false)).toEqual({
+    platform: "darwin",
+    arch: "arm64",
+    home: "/Users/studio",
+  });
+  expect(bootstrapFacts("C:\\Users\\studio\nAMD64\n", true)).toEqual({
+    platform: "win32",
+    arch: "x64",
+    home: "C:\\Users\\studio",
+  });
+  expect(() => bootstrapRemoteRuntime("win32", "C:\\Users\\studio", "1.2.3", "relative")).toThrow();
 });

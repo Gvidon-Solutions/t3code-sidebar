@@ -13,7 +13,7 @@ import type { MeshLayoutSnapshot } from "../mesh/MeshLayoutService.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import { ServerConfig } from "../config.ts";
 import { DEFAULT_REMOTE_COMMANDS, encodeManifest } from "./RunProtocol.ts";
-import { shellWord } from "../platform/ServerPlatform.ts";
+import { runCommandFiles } from "../platform/ServerPlatform.ts";
 class RunManifestError extends Schema.TaggedError<RunManifestError>()("RunManifestError", {
   cause: Schema.Defect(),
 }) {
@@ -50,18 +50,11 @@ export const layer = Layer.effectDiscard(
           for (const entry of await NodeFSP.readdir(shims))
             if (!commands.some((name) => entry === name || entry === `${name}.cmd`))
               await NodeFSP.unlink(NodePath.join(shims, entry));
-          for (const name of commands) {
-            await NodeFSP.writeFile(
-              NodePath.join(shims, name),
-              `#!/bin/sh\nexec ${shellWord(NodePath.join(directory, "bin", "t3"))} __replica-command ${shellWord(name)} "$@"\n`,
-              { mode: 0o700 },
-            );
-            if (platform === "win32")
-              await NodeFSP.writeFile(
-                NodePath.join(shims, `${name}.cmd`),
-                `@echo off\r\n"${NodePath.join(directory, "bin", "t3.cmd")}" __replica-command ${name} %*\r\n`,
-              );
-          }
+          for (const name of commands)
+            for (const file of runCommandFiles(platform, directory, name))
+              await NodeFSP.writeFile(NodePath.join(shims, file.name), file.content, {
+                mode: 0o700,
+              });
           const temporary = NodePath.join(directory, `${NodeCrypto.randomUUID()}.json`);
           await NodeFSP.writeFile(temporary, encodeManifest({ representations, commands }), {
             mode: 0o600,

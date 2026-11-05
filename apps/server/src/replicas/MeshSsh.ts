@@ -1,4 +1,9 @@
-import { sshWrapper } from "../platform/ServerPlatform.ts";
+import {
+  sshWrapper,
+  sshDirectory,
+  authorizedKeysLocations,
+  windowsSshWrapperInstall,
+} from "../platform/ServerPlatform.ts";
 import {
   MeshConfigError,
   type MeshConfigDocument,
@@ -52,6 +57,14 @@ export const layer = Layer.effect(
     const identity = path.join(directory, "id_ed25519");
     const knownHosts = path.join(directory, "known_hosts");
     const configFile = path.join(sshDir, "config");
+    const sshdConfigFile = path.join(
+      env.T3_MESH_SSHD_DIR ?? sshDirectory(platform, env),
+      "sshd_config",
+    );
+    const sshdConfig = (yield* fs.exists(sshdConfigFile))
+      ? yield* fs.readFileString(sshdConfigFile)
+      : "";
+    const authorizedFiles = authorizedKeysLocations(platform, sshHome, env, sshdConfig);
     const mapError = (cause: unknown) =>
       new MeshConfigError({
         reason: "storage",
@@ -75,14 +88,24 @@ export const layer = Layer.effect(
       return (yield* fs.readFileString(`${identity}.pub`)).trim();
     });
     const publicKey = yield* prepare.pipe(Effect.mapError(mapError));
-    if (env.T3_MESH_SSH_HOME && platform !== "win32") {
+    if (env.T3_MESH_SSH_HOME || platform === "win32") {
       const bin = path.join(directory, "bin");
       yield* fs.makeDirectory(bin, { recursive: true, mode: 0o700 });
-      for (const program of ["ssh", "scp"] as const) {
-        const wrapper = sshWrapper(platform, process.execPath, configFile, program);
-        yield* fs.writeFileString(path.join(bin, wrapper.name), wrapper.contents);
-        yield* fs.chmod(path.join(bin, wrapper.name), 0o700);
-      }
+      if (platform === "win32") {
+        for (const command of windowsSshWrapperInstall(bin, configFile)) {
+          const output = yield* runner.run({ ...command, timeout: "30 seconds" });
+          if (output.code !== 0)
+            return yield* new MeshConfigError({
+              reason: "storage",
+              message: "Windows managed SSH transport compilation failed",
+            });
+        }
+      } else
+        for (const program of ["ssh", "scp"] as const) {
+          const wrapper = sshWrapper(platform, process.execPath, configFile, program);
+          yield* fs.writeFileString(path.join(bin, wrapper.name), wrapper.contents);
+          yield* fs.chmod(path.join(bin, wrapper.name), 0o700);
+        }
     }
     const write = Effect.fn("MeshSsh.write")(function* (
       filePath: string,
@@ -194,10 +217,8 @@ export const layer = Layer.effect(
                 }),
               );
               yield* write(configFile, mode === "managed" ? files.config : []);
-              yield* write(
-                path.join(sshDir, "authorized_keys"),
-                mode === "managed" ? files.authorized : [],
-              );
+              for (const file of authorizedFiles)
+                yield* write(file, mode === "managed" ? files.authorized : []);
               yield* write(knownHosts, mode === "managed" ? files.known : []);
             }),
           );
@@ -225,7 +246,8 @@ export const layer = Layer.effect(
             const result = yield* runner.run({
               command: "ssh",
               args: [
-                ...(sshHome !== home ? ["-F", configFile] : []),
+                "-F",
+                configFile,
                 "-o",
                 "BatchMode=yes",
                 "-o",

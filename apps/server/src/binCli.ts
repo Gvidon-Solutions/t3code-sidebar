@@ -11,6 +11,7 @@ import packageJson from "../package.json" with { type: "json" };
 import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
 import { environmentCommand } from "./cli/environment.ts";
+import { meshInstallCommand } from "./cli/meshInstall.ts";
 import { meshCommand } from "./cli/mesh.ts";
 import { runCommand } from "./cli/run.ts";
 import { appCommand } from "./cli/app.ts";
@@ -82,6 +83,7 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       authCommand,
       environmentCommand,
       meshCommand,
+      meshInstallCommand,
       runCommand,
       browserCommand,
       projectCommand,

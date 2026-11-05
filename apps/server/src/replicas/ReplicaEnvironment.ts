@@ -1,3 +1,4 @@
+import { virtualEnvironmentPython } from "../platform/ServerPlatform.ts";
 import { ReplicaError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -44,13 +45,7 @@ export function environmentCommands(files: readonly string[], platform: string) 
         { command: "uv", args: ["venv", ".venv"] },
         {
           command: "uv",
-          args: [
-            "pip",
-            "sync",
-            "--python",
-            platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python",
-            requirements,
-          ],
+          args: ["pip", "sync", "--python", virtualEnvironmentPython(platform), requirements],
         },
       );
   }
