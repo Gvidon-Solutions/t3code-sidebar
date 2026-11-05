@@ -332,7 +332,7 @@ export function meshServicePlan(input: MeshServiceInput) {
   const csharpString = (s: string) => '@"' + s.replaceAll('"', '""') + '"';
   const code = `using System; using System.Diagnostics; using System.ServiceProcess;
 public class MeshService : ServiceBase {
-Process child;
+Process child; volatile bool stopping;
 public MeshService() { ServiceName = "t3-mesh"; }
 protected override void OnStart(string[] args) {
 var info = new ProcessStartInfo(${csharpString(executable)}, "__service-launcher");
@@ -341,9 +341,9 @@ info.EnvironmentVariables["T3CODE_HOME"]=${csharpString(baseDir)};
 info.EnvironmentVariables["T3_MESH_AGENT_HOME"]=${csharpString(home)};
 info.EnvironmentVariables["HOME"]=${csharpString(home)};
 info.EnvironmentVariables["USERPROFILE"]=${csharpString(home)};
-child=Process.Start(info); child.EnableRaisingEvents=true; child.Exited += (s,e) => { ExitCode=1; Stop(); };
+child=Process.Start(info); child.Exited += (s,e) => { if(!stopping) { ExitCode=1; Stop(); } }; child.EnableRaisingEvents=true;
 }
-protected override void OnStop() { if(child!=null && !child.HasExited) { var p=Process.Start(new ProcessStartInfo("taskkill.exe", "/PID " + child.Id + " /T /F") { UseShellExecute=false, CreateNoWindow=true }); p.WaitForExit(); } }
+protected override void OnStop() { stopping=true; if(child!=null && !child.HasExited) { var p=Process.Start(new ProcessStartInfo("taskkill.exe", "/PID " + child.Id + " /T /F") { UseShellExecute=false, CreateNoWindow=true }); p.WaitForExit(); } }
 public static void Main() { ServiceBase.Run(new MeshService()); }
 }`;
   const script = `$ErrorActionPreference='Stop'; if (!(Test-Path -LiteralPath '${host.replaceAll("'", "''")}')) { Add-Type -TypeDefinition ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${Buffer.from(code).toString("base64")}'))) -ReferencedAssemblies System,System.ServiceProcess -OutputAssembly '${host.replaceAll("'", "''")}' -OutputType WindowsApplication }; if (!(Get-Service -Name t3-mesh -ErrorAction SilentlyContinue)) { New-Service -Name t3-mesh -BinaryPathName '"${host.replaceAll("'", "''")}"' -StartupType Automatic }; & sc.exe failure t3-mesh reset= 86400 actions= restart/2000; if ($LASTEXITCODE -ne 0) { throw 'Service recovery configuration failed' }; & sc.exe failureflag t3-mesh 1; if ($LASTEXITCODE -ne 0) { throw 'Service failure flag configuration failed' }; Start-Service t3-mesh`;
