@@ -117,6 +117,35 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 
 ## Interfaces
 
+`t3 run [--bg] [--ports P[,P]] [--timeout D] -- <command…>` runs locally outside a lite
+replica. Inside one, it flushes, refuses conflicting/problem files with exit 75, executes in the
+primary's login environment, streams output and flushes results back. `--list`, `--logs ID
+[--follow]` and `--stop ID` manage detached jobs; ports bind only to the replica's loopback.
+Ignored outputs are named with “stayed on <machine>”. The timeout bounds synchronization and
+remote execution. Plain environment commands explain how to use `t3 run` and exit 127;
+configure their names with `replicas.remoteCommands`.
+
+The runtime CLI and private local-server socket live in `apps/server/src/run/Run{Cli,Client,Ipc,Control}.ts`.
+`RunPlan` maps the nearest representation's relative cwd onto its primary. `RunPreparation`
+consumes S1's public `flush/conflicts/problems(replica)` API through `RunSyncLive`. `RunTransport`
+uses managed `t3-<name>` hosts; `RunWorker` owns process groups and the primary's job registry.
+`RunGuardian` keeps background forwards alive and flushes completion; `RunPlatform` owns launch
+quoting and IPC addresses. `RunOutput` maps complete root prefixes across UTF-8 chunks while
+emitting unrelated bytes immediately. Runtime/PTY discovery is restricted to replica-enabled
+peers (`t3_run_runtime`).
+
+`RunEnvironment` and `RunManifest` supply thread runtime launchers, atomic representation data
+and configurable command shims. Provider shell startup overlays, Codex shell policy and the
+OpenCode shell hook apply guards to agent commands while native harness discovery retains real
+Git. Preserve this distinction: adding shims to the harness process's PATH breaks providers.
+Each preparation has an independent deadline; scan problems block execution even when the
+ordinary replica status presents them as warnings. Keep completion metadata chunked as well
+as stdout/stderr: a dependency install can retain more paths than one transport frame.
+
+`pnpm --dir apps/server test:run-integration` exercises the real CLI, sshd and isolated Mutagen
+session (build `testFixtures/sshd.Dockerfile` as `t3-run-sshd-test:local` first). It owns all
+keys, daemon state and containers. The runtime tests use neutral project/machine names.
+
 - **CLI / skill:** `agent-kit/skills/t3` (`SKILL.md`, `scripts/t3ctl.mjs`). Mesh commands:
   `mesh config get|plan|apply|rollback|history`, `mesh status`, `replica adopt <session> --project P`,
   `machines`, `machines alias <M> list|add|remove|clear`, `mesh status|link|unlink`, `place/unplace`, `replicas`, `new --on`, `find --all`,

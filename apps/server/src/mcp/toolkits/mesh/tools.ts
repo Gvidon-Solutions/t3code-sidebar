@@ -12,6 +12,7 @@ import {
 } from "@t3tools/contracts";
 import { Tool, Toolkit } from "effect/ai";
 import * as Schema from "effect/Schema";
+import * as Path from "effect/Path";
 
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -24,6 +25,18 @@ const shared = {
     ThreadManagementService.ThreadManagementService,
   ],
 };
+
+import { RunRuntimeInfo } from "../../../run/RunProtocol.ts";
+const RunRuntimeTool = Tool.make("t3_run_runtime", {
+  ...shared,
+  dependencies: [...shared.dependencies, Path.Path],
+  description:
+    "Read the primary's runtime and terminal module for an authenticated replica connection. Run commands with t3 run.",
+  parameters: Tool.EmptyParams,
+  success: RunRuntimeInfo,
+})
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false);
 
 const GetTool = Tool.make("t3_mesh_config_get", {
   ...shared,
@@ -80,6 +93,7 @@ const StatusTool = Tool.make("t3_mesh_status", {
   .annotate(Tool.Destructive, false);
 
 export const MeshToolkit = Toolkit.make(
+  RunRuntimeTool,
   GetTool,
   PlanTool,
   ApplyTool,

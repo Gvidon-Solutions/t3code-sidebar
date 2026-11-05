@@ -75,6 +75,6 @@ it("names the primary machine in the injected note instead of presenting its id 
   expect(note).toContain("primary: worker (WK)");
   expect(note).toContain("mode: lite");
   expect(note).toContain("sync: pending");
-  expect(note).toContain("build/test/git: t3 run <cmd>");
   expect(note).not.toContain("opaque-primary");
+  expect(note).toContain("t3 run -- <command>");
 });

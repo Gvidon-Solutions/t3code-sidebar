@@ -1,8 +1,25 @@
 import { expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+import { MeshConfigDocument, MeshConfigError } from "./meshConfig.ts";
 import { ReplicaLiveStatus } from "./meshLayout.ts";
 import { SidebarMachineReported } from "./sidebarWorkspaces.ts";
-import { MeshConfigError } from "./meshConfig.ts";
+
+it("validates configurable replica command names while retaining future replica fields", () => {
+  const decode = Schema.decodeUnknownSync(MeshConfigDocument);
+  expect(
+    decode({
+      schema: 1,
+      machines: {},
+      replicas: { remoteCommands: ["git", "my-builder"], future: true },
+    }).replicas,
+  ).toEqual({ remoteCommands: ["git", "my-builder"], future: true });
+  for (const remoteCommands of [["../git"], ["git status"], [""], [42], "git"]) {
+    expect(() => decode({ schema: 1, machines: {}, replicas: { remoteCommands } })).toThrow();
+  }
+  expect(
+    decode({ schema: 1, machines: {}, replicas: { remoteCommands: [] } }).replicas?.remoteCommands,
+  ).toEqual([]);
+});
 
 it("round trips stale revision errors with added, removed and changed config fields over JSON", () => {
   const codec = Schema.fromJsonString(MeshConfigError);

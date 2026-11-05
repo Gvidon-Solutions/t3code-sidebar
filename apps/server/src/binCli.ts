@@ -12,6 +12,7 @@ import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
 import { environmentCommand } from "./cli/environment.ts";
 import { meshCommand } from "./cli/mesh.ts";
+import { runCommand } from "./cli/run.ts";
 import { appCommand } from "./cli/app.ts";
 import { browserCommand } from "./cli/browser.ts";
 import { pairCommand } from "./cli/pair.ts";
@@ -81,6 +82,7 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       authCommand,
       environmentCommand,
       meshCommand,
+      runCommand,
       browserCommand,
       projectCommand,
       threadCommand,
