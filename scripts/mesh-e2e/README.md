@@ -352,3 +352,58 @@ driver, so the automatic conflict policy cannot consume the conflict before the 
 The second driver is restored in a finalizer. Afterward stop the owned units/container,
 restore the previous isolated :3795 unit and release
 the lock. Keep fixture files and conflict copies; never publish `control.json` or auth state.
+
+### B1 bootstrap and rollback
+
+Hold the shared bed lock as `B1`. Build two complete archives from this worktree with
+embedded versions `0.1.5` and `0.1.6` (restore package.json afterwards), using the normal
+CLI build and `build-cli-archive.ts`; put each archive and its `SHA256SUMS` in
+`/tmp/B1-releases/v<VERSION>`. These are private test releases served by the fixture,
+with the same artifact naming and SHA256 verification as production.
+
+Build `b1-sshd.Dockerfile` on the gor bed host, then start the fresh container:
+
+```sh
+docker build -f b1-sshd.Dockerfile -t b1-bootstrap-sshd .
+docker run -d --name B1-bootstrap --label stage=B1 --privileged --cgroupns=host \
+  --network host --tmpfs /run --tmpfs /tmp \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw b1-bootstrap-sshd
+```
+
+It contains systemd and OpenSSH, without Node or T3. The privileged cgroup mount is
+for this isolated Linux service-manager fixture. The test generates its SSH key
+under its private root, supplies it through the one-time credential API, and never
+provisions real user SSH files. Set `B1_LAPTOP_SSH` to the VPS administrator SSH argv
+and `B1_CLOUDBOX_SSH` to the gor administrator SSH argv as JSON arrays, then run:
+
+```sh
+B1_BED_ROOT=/tmp/B1-bed-unique node scripts/mesh-e2e/b1-bed.mjs
+```
+
+The fixture temporarily stops the existing isolated gvidon bed unit on :3795,
+starts private protocol-3 launchers, bootstraps the container from config, checks a
+real replica rule, and applies a three-server rollout with a forced health failure
+on the second machine. It restores the original isolated bed unit and stops its
+own server units and SSH tunnels. Remove its `B1-bootstrap` container afterwards,
+then release the bed lock. Retained private state includes both SQLite backups and
+launcher outcomes for inspection. Never substitute the live :3774 base directory.
+
+`node scripts/mesh-e2e/platform-smoke.mjs` exercises two local servers, config,
+managed SSH and a real replica on the host OS. It uses private homes and daemon
+state. The Windows/macOS workflow runs this same fixture on native runners;
+Linux execution alone cannot prove those operating systems' native behavior.
+
+Observed B1 acceptance output (private 0.1.5 → 0.1.6 fixture releases):
+
+```text
+PASS fresh container: sshd active; no T3 or Node
+PASS config rule places real replica {"machine":"cloudbox","state":"watching","file":"B1-bootstrap-replica"}
+PASS three-server rollout: cloudbox updated, laptop rolled back, studio untouched {"studio":"0.1.5","laptop":"0.1.5","cloudbox":"0.1.6"}
+PASS B1 bootstrap and serial rollout rollback acceptance
+PASS linux/x64: two servers, mesh config, managed SSH, real replica watching and matching file
+```
+
+Every server's final update status reported `Rollout stopped: Injected mesh rollout
+health failure; apply a new config revision to retry`. Both attempted servers had
+pre-download SQLite snapshots; the final server had no rollout marker or launcher
+update record. The fresh container used the actual root systemd service manager.

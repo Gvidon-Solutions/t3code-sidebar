@@ -1,0 +1,218 @@
+/* oxlint-disable t3code/no-global-process-runtime -- Standalone native-platform acceptance fixture. */
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+import * as NodeOS from "node:os";
+import * as NodeChildProcess from "node:child_process";
+import { run, until, rpc, mcp } from "./client.mjs";
+const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "B1-platform-"));
+const bin = NodePath.resolve("apps/server/dist/bin.mjs");
+const children = [];
+const logs = [];
+const sshServices = [];
+const powershell = (script) =>
+  run("powershell.exe", [
+    "-NoLogo",
+    "-NonInteractive",
+    "-EncodedCommand",
+    Buffer.from(script, "utf16le").toString("base64"),
+  ]);
+const windows = process.platform === "win32";
+const sshd = windows
+  ? NodePath.join(process.env.SystemRoot, "System32/OpenSSH/sshd.exe")
+  : "/usr/sbin/sshd";
+const nodes = ["studio", "laptop"].map((name, index) => ({
+  name,
+  home: NodePath.join(root, name, "home"),
+  base: NodePath.join(root, name, "state"),
+  port: 13951 + index,
+  sshPort: 22951 + index,
+  origin: `http://127.0.0.1:${13951 + index}`,
+}));
+const launch = (command, args, env) => {
+  const child = NodeChildProcess.spawn(command, args, {
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  children.push(child);
+  child.on("error", (error) => logs.push(error.message));
+  for (const stream of [child.stdout, child.stderr])
+    stream.on("data", (data) => logs.push(data.toString()));
+  return child;
+};
+try {
+  for (const node of nodes) {
+    const directory = NodePath.join(node.home, "sshd");
+    await NodeFSP.mkdir(directory, { recursive: true });
+    await NodeFSP.mkdir(NodePath.join(node.home, ".ssh"));
+    await NodeFSP.mkdir(NodePath.join(node.base, "userdata"), { recursive: true });
+    const host = NodePath.join(directory, "ssh_host_ed25519_key");
+    await run("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", host]);
+    const unixPath = (path) => path.replaceAll("\\", "/");
+    const conf = `Port ${node.sshPort}\nListenAddress 127.0.0.1\nHostKey "${unixPath(host)}"\nPidFile "${unixPath(NodePath.join(directory, "pid"))}"\nAuthorizedKeysFile "${unixPath(NodePath.join(node.home, ".ssh/authorized_keys"))}"\nStrictModes no\nSetEnv ${JSON.stringify(`PATH=${process.env.PATH ?? ""}`)}\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\n${windows ? "" : "UsePAM no\n"}Subsystem sftp internal-sftp\n`;
+    const confFile = NodePath.join(directory, "sshd_config");
+    await NodeFSP.writeFile(confFile, conf);
+    if (windows) {
+      const service = `B1-sshd-${process.pid}-${node.name}`;
+      const command = `"${sshd}" -f "${confFile}"`;
+      await powershell(
+        `$ErrorActionPreference='Stop'; New-Service -Name '${service}' -BinaryPathName '${command.replaceAll("'", "''")}'; Start-Service '${service}'`,
+      );
+      sshServices.push(service);
+    } else launch(sshd, ["-D", "-e", "-f", confFile], {});
+    await NodeFSP.writeFile(
+      NodePath.join(node.base, "userdata/settings.json"),
+      JSON.stringify({
+        meshEnabled: true,
+        linkedEnvironmentsEnabled: true,
+        replicasEnabled: true,
+        replicaRoot: NodePath.join(node.home, "replicas"),
+      }),
+    );
+    const env = {
+      HOME: node.home,
+      USERPROFILE: node.home,
+      T3_MESH_AGENT_HOME: node.home,
+      T3_MESH_SSH_HOME: node.home,
+      T3_MESH_SSHD_DIR: directory,
+    };
+    node.cli = (args) =>
+      run(process.execPath, [bin, ...args, "--base-dir", node.base], {
+        env: { ...process.env, ...env },
+      });
+    launch(
+      process.execPath,
+      [
+        bin,
+        "serve",
+        "--base-dir",
+        node.base,
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(node.port),
+        "--no-browser",
+      ],
+      env,
+    );
+    node.id = (
+      await until(
+        `${node.name} startup`,
+        async () => (await fetch(`${node.origin}/.well-known/t3/environment`)).json(),
+        (value) => !!value.environmentId,
+      )
+    ).environmentId;
+    node.token = (
+      await node.cli([
+        "auth",
+        "session",
+        "issue",
+        "--ttl",
+        "10m",
+        "--label",
+        "B1-platform",
+        "--token-only",
+      ])
+    ).split("\n")[0];
+  }
+  const [studio, laptop] = nodes;
+  const pair = JSON.parse(
+    await studio.cli([
+      "auth",
+      "pairing",
+      "create",
+      "--ttl",
+      "10m",
+      "--label",
+      "B1-platform",
+      "--json",
+    ]),
+  );
+  await rpc(laptop, "peerLinks.link", {
+    url: studio.origin,
+    pairingCode: pair.credential,
+    access: "full-access",
+  });
+  const current = await until(
+    "paired mesh",
+    () => rpc(studio, "meshConfig.get"),
+    (value) => nodes.every((node) => Object.values(value.bindings).includes(node.id)),
+  );
+  const names = Object.fromEntries(
+    nodes.map((node) => [
+      node.name,
+      Object.keys(current.bindings).find((name) => current.bindings[name] === node.id),
+    ]),
+  );
+  const projectRoot = NodePath.join(studio.home, "B1-project");
+  await NodeFSP.mkdir(projectRoot);
+  await run("git", ["init", "-q", projectRoot]);
+  await NodeFSP.writeFile(NodePath.join(projectRoot, "README.md"), "B1-native-replica\n");
+  const project = await mcp(studio, "t3_project_create", {
+    title: "B1-native",
+    workspaceRoot: projectRoot,
+  });
+  await mcp(studio, "t3_project_place", {
+    project: project.id,
+    machine: studio.id,
+    role: "primary",
+    path: projectRoot,
+  });
+  const latest = await rpc(studio, "meshConfig.get");
+  const doc = {
+    ...latest.current.doc,
+    machines: Object.fromEntries(
+      nodes.map((node) => [
+        names[node.name],
+        {
+          ...latest.current.doc.machines[names[node.name]],
+          ssh: { user: NodeOS.userInfo().username, port: node.sshPort },
+        },
+      ]),
+    ),
+    links: { default: { files: "all", replicas: true, threads: true } },
+    replicas: { rules: [{ project: "B1-native", on: names.laptop, when: "always" }] },
+  };
+  await rpc(studio, "meshConfig.apply", { doc, baseRevision: latest.current.revision });
+  const snapshot = await until(
+    "native replica watching",
+    () => rpc(studio, "meshLayout.get"),
+    (value) => {
+      const key = Object.keys(value.config.projectTitles).find(
+        (key) => value.config.projectTitles[key] === "B1-native",
+      );
+      return value.config.projectMountStatus[key]?.[laptop.id]?.state === "watching";
+    },
+  );
+  const key = Object.keys(snapshot.config.projectTitles).find(
+    (key) => snapshot.config.projectTitles[key] === "B1-native",
+  );
+  const target = snapshot.config.projectMounts[key].find((rep) => rep.environmentId === laptop.id);
+  if (
+    (await NodeFSP.readFile(NodePath.join(target.path, "README.md"), "utf8")) !==
+    "B1-native-replica\n"
+  )
+    throw Error("Replica content mismatch");
+  console.log(
+    `PASS ${process.platform}/${process.arch}: two servers, mesh config, managed SSH, real replica watching and matching file`,
+  );
+} catch (error) {
+  console.error(logs.join("").slice(-20000));
+  throw error;
+} finally {
+  for (const node of nodes) {
+    const mutagen = NodePath.join(node.base, "bin", windows ? "mutagen.exe" : "mutagen");
+    try {
+      await run(mutagen, ["daemon", "stop"], {
+        env: { ...process.env, MUTAGEN_DATA_DIRECTORY: NodePath.join(node.base, "mutagen") },
+      });
+    } catch (error) {
+      if (error.code !== "ENOENT") console.error("Mutagen cleanup:", error.message);
+    }
+  }
+  for (const child of children) child.kill("SIGTERM");
+  for (const service of sshServices)
+    await powershell(
+      `$ErrorActionPreference='Stop'; Stop-Service '${service}'; & sc.exe delete '${service}'; if($LASTEXITCODE -ne 0){throw 'Cannot remove fixture SSH service'}`,
+    );
+  console.log(`B1 fixture: ${root}`);
+}

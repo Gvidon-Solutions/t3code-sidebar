@@ -108,6 +108,10 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-05 — B1 mesh rollout and platform runtime
+
+Config-driven SSH bootstrap installs a verified runtime and native service, establishes mutual trust and binds its configured name. Runtime versions roll in lexical machine order under a replicated, unanimously granted lease, with the protocol-3 DB backup and rollback launcher and mesh health checks. Servers distribute their bundled skill and managed instruction blocks, migrate installed legacy instructions once, and read model aliases from config. The shared ServerPlatform boundary absorbs R1 RunPlatform and S1 PeerPlatform, native service plans and Windows managed SSH transports. CLI/MCP interfaces, fake service-manager tests, native macOS/Windows CI replica smoke and isolated B1 bed scenarios live beside the mesh services and scripts. See docs/mesh/README.md.
+
 ### 2026-11-05 — R1 replica command execution
 
 - **What.** `t3 run` executes lite-replica commands in the primary environment with live output,
