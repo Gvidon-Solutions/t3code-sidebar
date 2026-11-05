@@ -85,6 +85,9 @@ const tools = ["t3_project_place", "t3_project_machines", "t3_pending_request"].
 function call(name, args) {
   log(name, args);
   switch (name) {
+    case "t3_mesh_machine_add": return { ...meshRevision, revision: "2", doc: { ...meshDoc, machines: { ...meshDoc.machines, [args.name]: { bootstrap: { ssh: args.ssh } } } } };
+    case "t3_mesh_update": return args.plan ? { doc: { ...meshDoc, t3: { version: args.version } }, actions: [{ id: "updates/runtime", server: self, description: "Update runtime" }] } : { ...meshRevision, revision: "2", doc: { ...meshDoc, t3: { version: args.version } } };
+    case "t3_mesh_bootstrap_credential": return { accepted: true };
     case "t3_mesh_config_get":
       return { current: meshRevision, bindings: { studio: self } };
     case "t3_mesh_config_plan":

@@ -97,3 +97,10 @@ agents:
 Commands: `mesh config get`, `mesh config plan --file c.yaml`, `mesh config apply --file c.yaml [--base REV]`, `mesh config rollback REV`, `mesh config history`. Apply is optimistic: pass the revision it was based on, or let the CLI read the current one. A stale base is refused with a path diff. `mesh status` shows every action per server as done, in progress or failed with the reason. Files permission defaults to `projects`; `all` lets a linked peer read any file this server's user can read; `none` refuses. A read-only link is always limited to project folders. New machines are bound to their environment id when they join; do not type environment ids in the config.
 
 The mesh requires meshLayout, replicas, files and project placement APIs. Older servers fall back to legacy layout reads; placement and alias edits explain that a mesh build is required. Legacy layout migration is dry-run first, preserves offline keys, and backs up configs before applying. Never create or remove links or representations unless requested.
+
+## Bootstrap and runtime updates
+
+- `t3ctl mesh machines add NAME --ssh user@host[:port]` writes a bootstrap entry through config plan/apply. The mesh installs its runtime version, service, trust and machine binding. Use SSH agent authentication or `--identity-file PATH`. Passwords use a one-time secret reference (`--secret-ref REF --project-id ID`); never put a password in config or command text.
+- `t3ctl mesh update VERSION --plan` previews a version change; omit `--plan` to apply it. Machines update serially, with a DB backup and health-checked rollback. A failure stops that config revision.
+- `t3ctl mesh status` includes bootstrap steps and rollout failures. Resolve the reported reason before applying a new revision.
+- Model shortcuts are config `agents.aliases`. Servers install their bundled skill and manage only marked instruction blocks; personal instructions belong in `agents.instructions`. `agents.manageInstructions: false` disables those instruction writes.

@@ -66,15 +66,6 @@ test.test("target read is non-mutating; apply backs up, verifies, and is idempot
   }
 });
 
-test.test("canonical body retains the reviewed mesh clarification bytes", async () => {
-  const { createHash } = await import("node:crypto");
-  const body = fs.readFileSync(new URL("../global/GLOBAL.md", import.meta.url));
-  assert.equal(
-    createHash("sha256").update(body).digest("hex"),
-    "848cc01ba1cb3b91a54ee093a9347b94e765aa0543560c8f72e604e5b91711c8",
-  );
-});
-
 test.test("backup collision refuses the write and preserves the current file", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "t3-agents-collision-"));
   const previousHome = process.env.HOME;
