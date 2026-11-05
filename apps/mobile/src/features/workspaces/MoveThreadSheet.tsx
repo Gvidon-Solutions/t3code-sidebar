@@ -35,7 +35,7 @@ export function MoveThreadSheet() {
         title={`Move to ${target.isScratch ? "No project" : target.title}?`}
         onClose={() => setTarget(null)}
       >
-        <AppText className="p-4 text-muted-foreground">
+        <AppText className="p-4 text-foreground-muted">
           Stays on{" "}
           {
             machineDisplayOf(config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG, target.environmentId, "")
