@@ -189,6 +189,14 @@ export const layer = Layer.effect(
                   `BatchMode=${secret.kind === "password" ? "no" : "yes"}`,
                   "-o",
                   "NumberOfPasswordPrompts=1",
+                  ...(secret.kind === "password"
+                    ? [
+                        "-o",
+                        "PubkeyAuthentication=no",
+                        "-o",
+                        "PreferredAuthentications=password,keyboard-interactive",
+                      ]
+                    : []),
                   "-o",
                   "ConnectTimeout=10",
                   "-o",

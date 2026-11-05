@@ -56,6 +56,8 @@ it.effect(
             JSON.stringify(entry.v).includes("one-time-private-value"),
           ),
         ).toBe(false);
+        expect(calls[0]?.args).toContain("PubkeyAuthentication=no");
+        expect(calls[0]?.args).toContain("PreferredAuthentications=password,keyboard-interactive");
         const firstCount = calls.length;
         failService = false;
         yield* bootstrap.reconcile("cloudbox", doc);
