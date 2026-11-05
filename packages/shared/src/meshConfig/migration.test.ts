@@ -52,6 +52,7 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
   expect(result?.doc.machines.cloudbox?.ssh).toMatchObject({
     user: "dev",
     port: 2222,
+    host: "cloudbox",
   });
   const config = parseConfig(result?.doc);
   expect(referenceErrors(config)).toEqual([]);
@@ -93,11 +94,16 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
 
 it("keeps migration-only peer identities and SSH routes outside the public config document", () => {
   const migrated = migrateConfig(
-    {},
+    {
+      "machine/a": {
+        h: "0000000000000.00000.studio",
+        v: { title: "Studio", aliases: ["desk"], reach: { b: { ssh: "dev@cloudbox" } } },
+      },
+    },
     {
       ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
       machines: {
-        a: { title: "Studio", aliases: ["desk"], reach: { b: { ssh: "dev@cloudbox" } } },
+        a: { title: "Studio", aliases: ["desk"] },
         b: { title: "Cloudbox" },
       },
     },
@@ -120,12 +126,12 @@ it("keeps migration-only peer identities and SSH routes outside the public confi
         ["title", "label", "color", "reach", "ssh"].includes(key),
       ),
     ).toBe(true);
-    expect(Object.keys(machine.ssh ?? {}).every((key) => ["user", "port"].includes(key))).toBe(
-      true,
-    );
+    expect(
+      Object.keys(machine.ssh ?? {}).every((key) => ["host", "user", "port"].includes(key)),
+    ).toBe(true);
   }
   expect(Object.keys(migrated!.doc.machines.studio!)).toEqual(["title"]);
-  expect(Object.keys(migrated!.doc.machines.cloudbox!.ssh ?? {})).toEqual(["user"]);
+  expect(Object.keys(migrated!.doc.machines.cloudbox!.ssh ?? {})).toEqual(["host", "user"]);
   expect(JSON.stringify(migrated!.doc)).not.toContain("legacyPeerLabels");
   expect(migrated!.migration.studio?.peerLabels).toContain("studio-host");
 });
@@ -152,6 +158,24 @@ it("extracts existing internal data from current and history without dropping fu
     "mesh.config": { v: revision, h: "0000000000001.00000.studio" },
     "mesh.configHistory/r1": { v: revision, h: "0000000000001.00000.studio" },
   };
+  expect(
+    extractConfigMigration(
+      {
+        "mesh.config": {
+          ...document["mesh.config"],
+          v: {
+            ...revision,
+            doc: {
+              schema: 1,
+              machines: { studio: { ssh: { host: "personal-studio" } } },
+              ssh: { mode: "existing" },
+            },
+          },
+        },
+      },
+      "0000000000002.00000.studio",
+    ),
+  ).toEqual({});
   const entries = extractConfigMigration(document, "0000000000002.00000.studio");
   expect(entries["mesh.machineMigration/studio"]?.v).toEqual({
     peerLabels: ["old-host"],
@@ -161,7 +185,9 @@ it("extracts existing internal data from current and history without dropping fu
     ...revision,
     doc: {
       ...revision.doc,
-      machines: { studio: { title: "Studio", future: "kept", ssh: { user: "dev" } } },
+      machines: {
+        studio: { title: "Studio", future: "kept", ssh: { user: "dev", host: "old-host" } },
+      },
     },
   };
   expect(entries["mesh.config"]?.v).toEqual(clean);

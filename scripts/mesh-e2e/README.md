@@ -136,22 +136,13 @@ its HTTP). From gor, gvidon is `192.168.1.17`; mutagen 0.18.1 is in
 `10.0.2.2` is the emulator's host loopback. For an emulator/device elsewhere,
 `adb reverse tcp:1379x tcp:1379x` and use `127.0.0.1`.
 
-## Keys
+## SSH ownership
 
-Test-bed keys are disposable and tagged `t3-mesh-e2e`; the gor→gvidon tunnel key is a permanent fix and is not removed by teardown.
-
-| Key                     | Private half                 | Authorized on                    | Options                                                                                                                                                                         |
-| ----------------------- | ---------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id_mesh_gor`           | `/opt/t3-mesh-e2e/home/.ssh` | gor `~/.ssh/authorized_keys`     | `from="127.0.0.1,::1",restrict`, comment `t3-mesh-e2e-container-gor`                                                                                                            |
-| `id_mesh_gvidon`        | same                         | gvidon `~/.ssh/authorized_keys`  | `from="127.0.0.1,::1",restrict`, comment `t3-mesh-e2e-container-gvidon`                                                                                                         |
-| `id_t3_mesh_e2e_vps`    | gvidon `~/.ssh`              | VPS `/root/.ssh/authorized_keys` | `from="78.17.147.89",restrict,port-forwarding,permitlisten="172.17.0.1:22023"`, `…:13795`, comment `t3-mesh-e2e-reverse-gvidon`                                                 |
-| `id_t3_mesh_e2e_vps`    | gor `~/.ssh`                 | VPS `/root/.ssh/authorized_keys` | `from="91.77.163.152",restrict,port-forwarding,permitlisten="172.17.0.1:22022"`, `…:13797`, comment `t3-mesh-e2e-reverse-gor`                                                   |
-| `id_t3_mesh_e2e_self`   | gvidon `~/.ssh`              | gvidon `~/.ssh/authorized_keys`  | `from="127.0.0.1,::1",restrict,port-forwarding`, comment `t3-mesh-e2e-self`                                                                                                     |
-| `id_t3_mesh_e2e_gvidon` | gor `~/.ssh`                 | gvidon `~/.ssh/authorized_keys`  | `from="192.168.1.10",restrict,port-forwarding,permitopen="127.0.0.1:3774"`, comment `t3-gvidon-tunnel` — permanent fix for the pre-existing gor→gvidon tunnel, kept by teardown |
-
-`MESH_E2E_GVIDON_IP` / `MESH_E2E_GOR_IP` override the two `from=` addresses. gor exits through a different route than gvidon (it is not the home public IP), so deploy.sh probes `api.ipify.org` from each side and falls back to the pinned values above.
-Every append keeps a timestamped `authorized_keys.bak-t3-mesh-e2e-*` backup.
-Teardown removes only lines with the tags above.
+Replica authentication is managed by T3. `deploy.sh` no longer authorizes container
+or loopback keys in the owner's real SSH home. The isolated gvidon unit sets
+`T3_MESH_SSH_HOME` and runs an isolated system sshd prepared by `managed-sshd.mjs`.
+The old network tunnel setup is infrastructure only; the legacy round scripts predate
+managed SSH and must not be used to provision v2 replica routes.
 
 ## Teardown
 
@@ -305,3 +296,27 @@ node scripts/mesh-e2e/f1-web.mjs \
 
 The thread must initially belong to another project. The runner uses `dragTo` and the
 real confirmation button; it does not dispatch synthetic drag events or mutate app stores.
+
+## S1 fresh managed-SSH acceptance
+
+Hold the bed lock with owner `S1`. `s1-bed.mjs` uses a fresh data/home tree for
+studio (isolated :3795), laptop (isolated :3799 on the device host) and cloudbox
+(a disposable VPS container). It never switches the laptop's main server. Pass
+administrator SSH argument arrays in `S1_LAPTOP_SSH` and `S1_CLOUDBOX_SSH`, an
+assembled runtime directory in `S1_BED_RUNTIME`, the test image in `S1_BED_IMAGE`
+and a fresh absolute `S1_BED_ROOT`. Include the verified pinned Mutagen binary
+and agents archive alongside the runtime. The caller owns the physical port and
+must stop any previous **isolated** :3795 bed server first.
+
+The runner prepares isolated system sshd host keys/configuration, but creates no
+client key and writes no authorized_keys line. It links machines, applies a config
+with replica rules, checks all six managed hosts (including a peer with inbound
+`/peer` blocked), root-ignore anchoring, both conflict policies and explicit removal
+with unsynced refusal and retained files. A separate full-mode project executes a fake
+pnpm binary, checks its first install, changes the lock file and checks one refresh
+plus the ready status. It saves private OAuth/control state under
+the owned root with 0600 permissions; never publish that file. `S1_KEEP_BED=1` retains
+its owned administrator forwards while the caller inspects results. Stop those
+forwards through the retained runner session, stop the owned `S1-mesh-*` units and
+container when done, and release the lock. Keep fixture data; do not clean another
+stage's project, session, service or container.

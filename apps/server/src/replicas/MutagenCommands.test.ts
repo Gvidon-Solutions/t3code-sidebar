@@ -66,8 +66,10 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
       });
       const args = calls.at(-1)?.args ?? [];
       const patterns = args.flatMap((arg, index) => (arg === "-i" ? [args[index + 1]] : []));
-      expect(patterns.at(-1)).toBe(".t3-conflicts");
-      expect(patterns.indexOf(".t3-conflicts")).toBeGreaterThan(patterns.indexOf("!.t3-conflicts"));
+      expect(patterns.at(-1)).toBe("/.t3-conflicts");
+      expect(patterns.indexOf("/.t3-conflicts")).toBeGreaterThan(
+        patterns.indexOf("!.t3-conflicts"),
+      );
       expect(args).toContain("--no-global-configuration");
       fail = true;
       expect((yield* runner.reset("session").pipe(Effect.flip)).reason).toBe("mutagen");

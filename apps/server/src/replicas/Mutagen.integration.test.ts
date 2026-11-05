@@ -1,3 +1,7 @@
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { mutagenArchive } from "./MutagenFixture.ts";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { conflictCopyPath } from "./conflictResolution.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, expect } from "@effect/vitest";
@@ -5,7 +9,6 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ProcessRunner from "../processRunner.ts";
@@ -16,6 +19,15 @@ import { sessionStatus } from "./replicaModel.ts";
 it.live("installs verified Mutagen and synchronizes isolated local endpoints bidirectionally", () =>
   Effect.scoped(
     Effect.gen(function* () {
+      const platform = yield* HostProcess.Platform;
+      const architecture = yield* HostProcess.Architecture;
+      const archive = yield* Effect.tryPromise(() => mutagenArchive(platform, architecture));
+      const fixtureHttp = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.succeed(HttpClientResponse.fromWeb(request, new Response(archive))),
+        ),
+      );
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-replica-integration-" });
@@ -32,16 +44,16 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         Layer.provide(ServerConfig.layerTest(root, root)),
         Layer.provide(ServerSettings.layerTest()),
         Layer.provide(ProcessRunner.layer),
-        Layer.provide(FetchHttpClient.layer),
+        Layer.provide(fixtureHttp),
       );
       const run = Effect.gen(function* () {
         const runner = yield* MutagenRunner.MutagenRunner;
-        yield* Effect.addFinalizer(() => runner.daemon("stop").pipe(Effect.orDie));
         yield* runner.daemon("start");
+        yield* Effect.addFinalizer(() => runner.daemon("stop").pipe(Effect.orDie));
         const comparison = {
           source: { environmentId: "alpha", path: alpha },
           destination: { environmentId: "beta", path: beta },
-          ignores: ["node_modules", "*.tmp"],
+          ignores: ["node_modules", "/build", "*.tmp"],
         };
         yield* runner.assertReplicaPath(comparison);
         yield* fs.writeFileString(path.join(beta, "hello"), "different");
@@ -54,6 +66,18 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         yield* runner.assertReplicaPath(comparison);
         yield* fs.remove(path.join(beta, "ignored.tmp"));
         yield* fs.remove(path.join(beta, "hello"));
+        yield* fs.makeDirectory(path.join(alpha, "src", "build"), { recursive: true });
+        yield* fs.writeFileString(
+          path.join(alpha, "src", "build", "source.ts"),
+          "nested build is source",
+        );
+        yield* fs.makeDirectory(path.join(alpha, "build"));
+        yield* fs.writeFileString(path.join(alpha, "build", "output"), "ignored root output");
+        yield* fs.makeDirectory(path.join(alpha, "src", ".t3-conflicts"));
+        yield* fs.writeFileString(
+          path.join(alpha, "src", ".t3-conflicts", "source"),
+          "nested source",
+        );
         yield* fs.symlink(path.join(root, "outside"), path.join(alpha, "absolute-link"));
         yield* fs.symlink("../outside", path.join(alpha, "relative-outside"));
         yield* runner.create({
@@ -68,11 +92,33 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         expect(yield* fs.readFileString(path.join(beta, "hello"))).toBe("alpha");
         expect(yield* fs.exists(path.join(beta, ".git"))).toBe(false);
         expect(yield* fs.exists(path.join(beta, "node_modules"))).toBe(false);
+        expect(yield* fs.exists(path.join(beta, "build"))).toBe(false);
+        expect(yield* fs.readFileString(path.join(beta, "src", "build", "source.ts"))).toBe(
+          "nested build is source",
+        );
         expect(sessionStatus((yield* runner.list())[0]!)).toMatchObject({
           state: "watching",
           skipped: 2,
           problems: [],
         });
+        expect(yield* fs.readFileString(path.join(beta, "src", ".t3-conflicts", "source"))).toBe(
+          "nested source",
+        );
+        yield* fs.writeFileString(
+          path.join(beta, "src", ".t3-conflicts", "source"),
+          "nested change",
+        );
+        expect(
+          yield* runner.changedPaths({
+            source: { path: alpha, environmentId: "alpha" },
+            destination: { path: beta, environmentId: "beta" },
+            ignores: ["node_modules", "/build"],
+          }),
+        ).toEqual(["absolute-link", "relative-outside", "src/.t3-conflicts/source"]);
+        yield* fs.writeFileString(
+          path.join(beta, "src", ".t3-conflicts", "source"),
+          "nested source",
+        );
         expect(yield* fs.exists(path.join(beta, "absolute-link"))).toBe(false);
         expect(yield* fs.exists(path.join(beta, "relative-outside"))).toBe(false);
         yield* fs.writeFileString(path.join(beta, "hello"), "beta edit");

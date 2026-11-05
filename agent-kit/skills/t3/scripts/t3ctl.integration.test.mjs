@@ -102,7 +102,7 @@ test("machine inventory, mesh status, replicas and layout reach transports", () 
   assert.match(text, /via lab/);
   assert.match(text, /offline since 2026-11-04.*Peer heartbeat timed out/);
 });
-test("place, unplace, retry resolve Russian machine and send server contracts", () => {
+test("place and unplace resolve Russian machine and send server contracts", () => {
   const primary = run(["place", "Demo", "--on", "лаборатория", "--primary", "--path", "/checkout"]);
   assert.equal(primary.calls.find((c) => c.name === "t3_project_place").args.role, "primary");
   const placed = run([
@@ -129,11 +129,6 @@ test("place, unplace, retry resolve Russian machine and send server contracts", 
       (c) => c.name === "t3_project_place",
     ).args.action,
     "remove",
-  );
-  assert.deepEqual(
-    run(["replica", "retry", "Demo", "--on", "LB"]).calls.find((c) => c.name === "replicas.retry")
-      .args,
-    { logicalKey: "repo", environmentId: peer },
   );
 });
 test("remote new places before launch and reuses registered representation", () => {
@@ -217,13 +212,14 @@ test("destructive mesh commands require yes before sending mutations", () => {
 });
 
 test("retry follows the remote replica driver over ssh", () => {
-  const r = run(["replica", "retry", "Demo", "--on", "лаборатория"], {
-    T3CTL_TEST_REMOTE_DRIVER: "1",
-  });
+  const r = run(["replica", "retry", "Demo", "--on", "лаборатория"]);
   assert.ok(
     r.calls.some((c) => c.name === "ssh" && c.args.some((a) => a.includes("replicas.retry"))),
   );
   assert.ok(!r.calls.some((c) => c.name === "replicas.retry"));
+  const call = r.calls.find((c) => c.name === "ssh" && c.args.includes("t3-cloudbox"));
+  assert.ok(call);
+  assert.ok(call.args.at(-1).includes(JSON.stringify({ logicalKey: "repo", environmentId: peer })));
 });
 
 test("link discovers an unknown machine over ssh before pairing", () => {

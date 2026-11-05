@@ -67,7 +67,7 @@ it.effect.each([
     ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces,
     projectTitles: role === "renamed" ? { repo: "N-shared project title" } : {},
     machines: {
-      local: { label: "Local", tag: "LO", reach: { source: { ssh: "worker" } } },
+      local: { label: "Local", tag: "LO" },
       source: { label: "Worker", tag: "WK" },
     },
     projectMounts: {
@@ -108,7 +108,7 @@ it.effect.each([
       : role === "descriptor"
         ? {
             ...namedConfig,
-            machines: { ...namedConfig.machines, local: { reach: { source: { ssh: "worker" } } } },
+            machines: { ...namedConfig.machines, local: {} },
           }
         : namedConfig;
   return Effect.gen(function* () {
@@ -141,7 +141,7 @@ it.effect.each([
             tag: role === "unknown machine" ? "UN" : "WK",
           },
           path: "/primary",
-          ssh: expect.stringContaining("ssh 'worker'"),
+          ssh: "t3 run <command>",
         }),
       ]),
     });

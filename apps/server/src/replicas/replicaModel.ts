@@ -1,3 +1,4 @@
+import { projectPolicy } from "@t3tools/shared/meshConfig";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Session names require a synchronous deterministic hash, without a runtime.
 import * as NodeCrypto from "node:crypto";
 import type {
@@ -12,18 +13,14 @@ export function sessionIdentity(logicalKey: string, environmentId: string) {
   const environmentTag = environmentId.slice(0, 8);
   return { name: `t3-${logicalHash}-${environmentTag}`, logicalHash, environmentTag };
 }
-export function replicaDriver(config: SidebarWorkspacesConfig, replica: SidebarProjectMount) {
-  if (!replica.source) return undefined;
-  if (config.machines[replica.environmentId]?.reach?.[replica.source]?.ssh)
-    return replica.environmentId;
-  if (config.machines[replica.source]?.reach?.[replica.environmentId]?.ssh) return replica.source;
-  return undefined;
+export function replicaDriver(_config: SidebarWorkspacesConfig, replica: SidebarProjectMount) {
+  return replica.role === "replica" && replica.source ? replica.environmentId : undefined;
 }
 export function sessionStatus(
   session: MutagenSession,
 ): Pick<
   ReplicaLiveStatus,
-  "state" | "progress" | "conflicts" | "problems" | "message" | "skipped" | "skippedPaths"
+  "state" | "progress" | "lag" | "conflicts" | "problems" | "message" | "skipped" | "skippedPaths"
 > {
   const conflicts = session.conflicts?.map((conflict) => conflict.root) ?? [];
   const problems = [
@@ -68,6 +65,33 @@ export function sessionStatus(
       ? `${skipped} ${skipped === 1 ? "file" : "files"} skipped (${reasons.join(", ") || "scan problems"})`
       : undefined;
   const staging = session.beta.stagingProgress ?? session.alpha.stagingProgress;
+  const transfers = [session.alpha, session.beta].flatMap((endpoint) => {
+    const progress = endpoint.stagingProgress;
+    if (!progress || progress.expectedFiles <= 0) return [];
+    const files = Math.max(0, progress.expectedFiles - progress.receivedFiles);
+    // Mutagen reports the current file's size, not the total size of a multi-file queue.
+    const bytes =
+      files === 0
+        ? 0
+        : files === 1 && progress.expectedSize > 0
+          ? Math.max(0, progress.expectedSize - progress.receivedSize)
+          : undefined;
+    return [{ files, bytes }];
+  });
+  const lag = transfers.length
+    ? {
+        filesBehind: transfers.reduce((total, transfer) => total + transfer.files, 0),
+        ...(transfers.every((transfer) => transfer.bytes !== undefined)
+          ? { bytesBehind: transfers.reduce((total, transfer) => total + transfer.bytes!, 0) }
+          : {}),
+      }
+    : !session.paused &&
+        session.status === "watching" &&
+        !problems.length &&
+        !conflicts.length &&
+        !skipped
+      ? { filesBehind: 0, bytesBehind: 0 }
+      : undefined;
   return {
     state: session.paused
       ? "paused"
@@ -93,20 +117,14 @@ export function sessionStatus(
       : {}),
     conflicts,
     problems,
+    ...(lag ? { lag } : {}),
     ...(message ? { message } : {}),
     ...(skipped ? { skipped, skippedPaths: skippedPaths.slice(0, 10) } : {}),
   };
 }
 
-export function sshEndpoint(
-  route: { readonly ssh: string; readonly identityFile?: string },
-  environmentId: string,
-  root: string,
-) {
-  if (route.identityFile) return `t3-mesh-${environmentId}:${root}`;
-  return /:\d+$/.test(route.ssh)
-    ? `ssh://${route.ssh}${root.startsWith("/") ? "" : "/"}${root}`
-    : `${route.ssh}:${root}`;
+export function sshEndpoint(route: { readonly ssh: string }, _environmentId: string, root: string) {
+  return `${route.ssh}:${root}`;
 }
 
 export function remoteRepresentation(
@@ -131,10 +149,22 @@ export function remoteRepresentation(
   return config.projectMounts[key]?.find((rep) => rep.environmentId === target);
 }
 
-const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", ".t3-conflicts"];
+const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", "/.t3-conflicts"];
 export function replicaIgnorePatterns(configured: readonly string[]): string[] {
+  const defaults = projectPolicy({ schema: 1, machines: {} }, "").ignore;
+  const prefix = defaults.filter((pattern) => !protectedIgnores.includes(pattern));
+  let offset = 0;
+  // User override order and duplicate negations are significant; only generated prefixes are removed.
+  for (;;) {
+    const generated = [defaults, prefix].find((patterns) =>
+      patterns.every((pattern, index) => configured[offset + index] === pattern),
+    );
+    if (!generated) break;
+    offset += generated.length;
+  }
   return [
-    ...configured.filter((pattern) => !protectedIgnores.includes(pattern)),
+    ...prefix,
+    ...configured.slice(offset).filter((pattern) => !protectedIgnores.includes(pattern)),
     ...protectedIgnores,
   ];
 }

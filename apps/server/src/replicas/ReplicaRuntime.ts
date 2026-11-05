@@ -1,3 +1,4 @@
+import * as ReplicaEnvironment from "./ReplicaEnvironment.ts";
 import { ReplicaError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -19,6 +20,7 @@ export class ReplicaRuntime extends Context.Service<
 >()("t3/replicas/ReplicaRuntime") {}
 
 const layerManaged = Replicas.layer.pipe(
+  Layer.provide(ReplicaEnvironment.layer),
   Layer.provide(ReplicaPaths.layer),
   Layer.provide(MutagenRunner.layer.pipe(Layer.provide(MutagenInstaller.layer))),
   Layer.provide(ProcessRunner.layer),

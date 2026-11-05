@@ -27,13 +27,6 @@ export type SidebarWorkspaceRule = typeof SidebarWorkspaceRule.Type;
 
 export const DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS = 5;
 
-/** An ssh route from one machine to another: a destination and an optional private key. */
-export const SidebarMachineReach = Schema.Struct({
-  ssh: Schema.String,
-  identityFile: Schema.optionalKey(Schema.String),
-});
-export type SidebarMachineReach = typeof SidebarMachineReach.Type;
-
 export const PeerConnectionStatus = Schema.Struct({
   sourceEnvironmentId: Schema.optionalKey(Schema.String),
   observedAt: Schema.optionalKey(Schema.String),
@@ -78,6 +71,7 @@ export const SidebarMachineReported = Schema.Struct({
   user: Schema.NullOr(Schema.String),
   /** Absent when the machine has no readable sshd host keys. */
   sshd: Schema.NullOr(SidebarMachineReportedSshd),
+  meshPublicKey: Schema.optionalKey(Schema.String),
   reportedAt: Schema.String,
   connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
 });
@@ -85,7 +79,6 @@ export type SidebarMachineReported = typeof SidebarMachineReported.Type;
 
 /** A machine as the user names it in the sidebar; absent fields fall back to the server's label. */
 export const SidebarMachine = Schema.Struct({
-  reach: Schema.optionalKey(Schema.Record(Schema.String, SidebarMachineReach)),
   label: Schema.optionalKey(Schema.String),
   title: Schema.optionalKey(Schema.String),
   aliases: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),

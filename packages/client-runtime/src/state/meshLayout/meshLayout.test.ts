@@ -161,7 +161,7 @@ describe("materialization and diffs", () => {
       (c) => setProjectFoldMode(c, "b", "p", "quiet"),
       (c) => setProjectFoldMode(c, "b", "p", "active"),
       (c) => setProjectFoldMode(c, "b", "p", "auto"),
-      (c) => ({ ...c, machines: { a: { label: "A", reach: { b: { ssh: "b" } } } } }),
+      (c) => ({ ...c, machines: { a: { label: "A", tag: "AA" } } }),
       (c) => ({ ...c, projectAliases: { p: "logical" } }),
       (c) => logical.addRepresentation(c, "p", rep("a")),
       (c) => ({ ...c, projectMountStatus: { p: { a: { state: "watching", updatedAt: "" } } } }),
@@ -248,7 +248,7 @@ describe("concurrent layout edits", () => {
   });
 });
 describe("collection removals", () => {
-  it("preserves reach through contracts and tombstones machine, alias, mount and status removals", () => {
+  it("tombstones machine, alias, mount and status removals", () => {
     const before = decodeConfig({
       ...config,
       machines: { a: { label: "A", reach: { b: { ssh: "user@b" } } } },
@@ -256,7 +256,7 @@ describe("collection removals", () => {
       projectMounts: { p: [rep("a")] },
       projectMountStatus: { p: { a: { state: "error", updatedAt: "" } } },
     });
-    expect(before.machines.a?.reach?.b?.ssh).toBe("user@b");
+    expect(before.machines.a?.label).toBe("A");
     const doc = importLegacy(before, "a", low);
     const after = {
       ...before,
