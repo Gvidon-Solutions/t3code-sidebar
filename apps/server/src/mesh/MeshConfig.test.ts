@@ -296,7 +296,7 @@ it.effect("records startup identity repair as a revision and moves a renamed bin
     yield* mesh.apply({
       "mesh.machineBinding/studio": { v: "alpha", h },
       "mesh.machineClaim/alpha": { v: { name: "studio", machine: { title: "Studio" } }, h },
-      "mesh.machineClaim/beta": { v: { name: "studio", machine: { title: "Studio" } }, h },
+      "machine/beta": { v: { title: "Studio" }, h },
     });
     yield* config.start;
     const repaired = yield* mesh.changes.pipe(

@@ -1,7 +1,7 @@
 import { expect, it } from "vite-plus/test";
-import { merge, type MeshLayoutDocument } from "../meshLayout/document.ts";
+import { merge, type Json, type MeshLayoutDocument } from "../meshLayout/document.ts";
 import { validateLayoutEntry } from "../meshLayout/registry.ts";
-import { repairMachineIdentity, renameMachineBindings } from "./identity.ts";
+import { repairMachineIdentity, renameMachineBindings, localMachineClaim } from "./identity.ts";
 import { parseConfig } from "./index.ts";
 
 const config = parseConfig({ schema: 1, machines: { studio: { title: "Studio" } } });
@@ -59,4 +59,60 @@ it("keeps explicitly removed machines removed across reconciliation", () => {
     ),
   );
   expect(repairMachineIdentity(document, after).changed).toBe(false);
+});
+
+it("retains older bindings when an independent config wins the document register", () => {
+  const older = parseConfig({
+    schema: 1,
+    machines: { cloudbox: { title: "Cloudbox", color: "blue" } },
+  });
+  const document: MeshLayoutDocument = {
+    ...join("alpha"),
+    "mesh.machineBinding/cloudbox": { v: "cloud", h },
+    "mesh.configHistory/older": {
+      v: { revision: "older", author: "cloud", writtenAt: "", doc: older } as Json,
+      h,
+    },
+  };
+  const result = repairMachineIdentity(document, config);
+  expect(result.updates["mesh.machineBinding/cloudbox"]).toBeUndefined();
+  expect(result.doc.machines.cloudbox).toEqual({ title: "Cloudbox", color: "blue" });
+  expect(result.updates["mesh.machineClaim/cloud"]).toEqual({
+    name: "cloudbox",
+    machine: older.machines.cloudbox,
+  });
+});
+
+it("claims a local identity before replication, including an older bound installation", () => {
+  const current = {
+    v: { revision: "one", author: "alpha", writtenAt: "", doc: config } as Json,
+    h,
+  };
+  const bound = { "mesh.config": current, "mesh.machineBinding/studio": { v: "alpha", h } };
+  expect(
+    localMachineClaim(bound, { environmentId: "alpha", label: "different hostname" }, h)[
+      "mesh.machineClaim/alpha"
+    ]?.v,
+  ).toEqual({ name: "studio", machine: { title: "Studio" } });
+  expect(
+    localMachineClaim(bound, { environmentId: "beta", label: "Studio" }, h)[
+      "mesh.machineClaim/beta"
+    ]?.v,
+  ).toEqual({ name: "studio", machine: { title: "Studio" } });
+  expect(localMachineClaim(join("alpha"), { environmentId: "alpha", label: "Studio" }, h)).toEqual(
+    {},
+  );
+});
+
+it("keeps the configured settings when a machine first binds a reserved config name", () => {
+  const desired = parseConfig({
+    schema: 1,
+    machines: { studio: { title: "Studio", label: "ST", color: "blue" } },
+  });
+  const document: MeshLayoutDocument = {
+    "mesh.machineClaim/alpha": join("alpha")["mesh.machineClaim/alpha"]!,
+  };
+  expect(repairMachineIdentity(document, desired).doc.machines.studio).toEqual(
+    desired.machines.studio,
+  );
 });

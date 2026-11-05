@@ -1,5 +1,5 @@
 import { MeshConfigRevision } from "@t3tools/contracts";
-import { bindingsFromLayout } from "@t3tools/shared/meshConfig";
+import { localMachineClaim } from "@t3tools/shared/meshConfig";
 import { migrateConfig, extractConfigMigration } from "@t3tools/shared/meshConfig/migration";
 import type { Json, MeshLayoutDocument } from "@t3tools/shared/meshLayout";
 import * as Effect from "effect/Effect";
@@ -21,17 +21,7 @@ export const layer = Layer.effectDiscard(
     const self = yield* (yield* ServerEnvironment).getDescriptor;
     if (Object.hasOwn(snapshot.document, "mesh.config")) {
       const entries = extractConfigMigration(snapshot.document, yield* mesh.nextHlc);
-      if (!Object.values(bindingsFromLayout(snapshot.document)).includes(self.environmentId)) {
-        const name =
-          self.label
-            .normalize("NFKD")
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-|-$/g, "") || "machine";
-        const key = `mesh.machineClaim/${encodeURIComponent(self.environmentId)}`;
-        if (!snapshot.document[key])
-          entries[key] = { v: { name, machine: { title: self.label } }, h: yield* mesh.nextHlc };
-      }
+      Object.assign(entries, localMachineClaim(snapshot.document, self, yield* mesh.nextHlc));
       if (Object.keys(entries).length) yield* mesh.apply(entries);
       return;
     }

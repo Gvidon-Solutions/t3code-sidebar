@@ -256,4 +256,4 @@ export const migratedPeerLabelsFromLayout = (
     }),
   );
 
-export { repairMachineIdentity, renameMachineBindings } from "./identity.ts";
+export { repairMachineIdentity, renameMachineBindings, localMachineClaim } from "./identity.ts";

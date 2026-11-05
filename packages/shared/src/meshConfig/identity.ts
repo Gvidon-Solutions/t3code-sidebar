@@ -1,6 +1,6 @@
 import type { MeshConfigDocument } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "../meshLayout/document.ts";
-import { bindingsFromLayout } from "./index.ts";
+import { bindingsFromLayout, configFromLayout } from "./index.ts";
 
 const machineSlug = (title: string) =>
   title
@@ -36,9 +36,26 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
         machine: value.machine as MeshConfigDocument["machines"][string],
       });
   }
-  for (const [name, id] of Object.entries(bindings))
-    if (!claims.has(id) && doc.machines[name])
-      claims.set(id, { name, machine: doc.machines[name] });
+  for (const [name, id] of Object.entries(bindings)) {
+    if (claims.has(id)) continue;
+    const historical = Object.entries(document)
+      .filter(([key]) => key.startsWith("mesh.configHistory/"))
+      .sort(([, a], [, b]) => b.h.localeCompare(a.h))
+      .flatMap(([, entry]) => {
+        const value = entry.v;
+        if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+        const revision = value as Record<string, Json>;
+        const config = revision.doc;
+        if (!config || typeof config !== "object" || Array.isArray(config)) return [];
+        const machines = (config as Record<string, Json>).machines;
+        if (!machines || typeof machines !== "object" || Array.isArray(machines)) return [];
+        const machine = (machines as Record<string, Json>)[name];
+        return machine && typeof machine === "object" && !Array.isArray(machine)
+          ? [machine as MeshConfigDocument["machines"][string]]
+          : [];
+      })[0];
+    claims.set(id, { name, machine: doc.machines[name] ?? historical ?? { title: name } });
+  }
   for (const [key, entry] of Object.entries(document)) {
     if (
       !key.startsWith("machine/") ||
@@ -73,7 +90,12 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
     }
     desired[name] = id;
     const previousName = Object.keys(bindings).find((bound) => bindings[bound] === id);
-    machines[name] = (previousName ? doc.machines[previousName] : undefined) ?? claim.machine;
+    machines[name] =
+      (previousName
+        ? doc.machines[previousName]
+        : !bindings[name]
+          ? doc.machines[name]
+          : undefined) ?? claim.machine;
     const key = `mesh.machineClaim/${encodeURIComponent(id)}`;
     if (!document[key]) updates[key] = claim as unknown as Json;
   }
@@ -127,4 +149,25 @@ export function renameMachineBindings(
     }
   }
   return updates;
+}
+
+export function localMachineClaim(
+  document: MeshLayoutDocument,
+  self: { environmentId: string; label: string },
+  h: string,
+): MeshLayoutDocument {
+  const key = `mesh.machineClaim/${encodeURIComponent(self.environmentId)}`;
+  if (document[key]) return {};
+  const name =
+    Object.entries(bindingsFromLayout(document)).find(([, id]) => id === self.environmentId)?.[0] ??
+    machineSlug(self.label);
+  return {
+    [key]: {
+      v: {
+        name,
+        machine: configFromLayout(document)?.machines[name] ?? { title: self.label },
+      } as Json,
+      h,
+    },
+  };
 }
