@@ -1,7 +1,6 @@
-import { useSyncExternalStore } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { Pressable } from "react-native";
-import { minuteTick } from "@t3tools/client-runtime/clock";
+import { useNowMinuteMs } from "../../lib/clock";
 import {
   deriveMeshFooterStatus,
   meshFooterText,
@@ -21,9 +20,7 @@ export function MeshFooterStatus() {
       e.serverConfig?.settings.meshEnabled && e.serverConfig.settings.linkedEnvironmentsEnabled,
   );
   const { machines } = useMeshOverview({ config });
-  const now = Date.parse(
-    useSyncExternalStore(minuteTick.subscribe, minuteTick.getSnapshot, minuteTick.getSnapshot),
-  );
+  const now = useNowMinuteMs();
   const text = meshFooterText(deriveMeshFooterStatus({ enabled, machines, now }));
   if (text === null) return null;
   return (

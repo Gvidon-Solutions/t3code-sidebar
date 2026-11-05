@@ -1,3 +1,4 @@
+import { MachinePickerGroups } from "../workspaces/MachinePickerGroups";
 import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
 import { NativeScrollView } from "../../native/NativeScrollViewMarker";
 import { SearchField } from "../../components/ui/SearchField";
@@ -205,25 +206,30 @@ export function NewTaskEnvironmentPickerRouteScreen() {
           showsVerticalScrollIndicator={false}
         >
           <PickerSurface>
-            {flow.environments.map((environment, index) => (
-              <EnvironmentPickerRow
-                key={String(environment.environmentId)}
-                environmentId={environment.environmentId}
-                isLast={index === flow.environments.length - 1}
-                disabled={environment.disabled === true}
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  void flow.switchEnvironment(environment.environmentId).then((switched) => {
-                    if (switched) navigation.goBack();
-                  });
-                }}
-                selected={
-                  (flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId) ===
-                  environment.environmentId
-                }
-                title={environment.environmentLabel}
-              />
-            ))}
+            <MachinePickerGroups
+              machines={flow.environments}
+              available={(environment) => !environment.disabled}
+            >
+              {(environment, index, count) => (
+                <EnvironmentPickerRow
+                  key={String(environment.environmentId)}
+                  environmentId={environment.environmentId}
+                  isLast={index === count - 1}
+                  disabled={environment.disabled === true}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    void flow.switchEnvironment(environment.environmentId).then((switched) => {
+                      if (switched) navigation.goBack();
+                    });
+                  }}
+                  selected={
+                    (flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId) ===
+                    environment.environmentId
+                  }
+                  title={environment.environmentLabel}
+                />
+              )}
+            </MachinePickerGroups>
           </PickerSurface>
         </ScrollView>
       </ScreenContent>

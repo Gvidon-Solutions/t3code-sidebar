@@ -1,300 +1,214 @@
-import { useState, useSyncExternalStore, type ReactNode } from "react";
-import { minuteTick } from "@t3tools/client-runtime/clock";
-import { useNavigation } from "@react-navigation/native";
-import {
-  meshMachineLastSync,
-  meshConnectionText,
-} from "@t3tools/client-runtime/state/mesh-machines";
-import { Switch } from "react-native";
-import { useMeshOverview } from "../workspaces/useMeshOverview";
-import { useEnvironments } from "../../state/environments";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { serverEnvironment } from "../../state/server";
-import { MeshLinkForm } from "./MeshLinkForm";
-import { meshSwitchValue, meshTogglePatch } from "./mesh-settings.logic";
-import {
-  machineDisplayOf,
-  machineTagBackground,
-  setMachineDisplay,
-  type MachineDisplay,
-  type MachineDisplayPatch,
-} from "@t3tools/client-runtime/state/machine-display";
-import { WORKSPACE_COLORS } from "@t3tools/client-runtime/state/sidebar-workspaces";
-import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG, type EnvironmentId } from "@t3tools/contracts";
+import { Button } from "../../components/ui/Button";
+import { Sheet } from "../../components/ui/Sheet";
+import { useReplicaStatuses } from "../../state/meshReplicas";
+import { useEnvironmentQuery } from "../../state/query";
+import { meshLayoutAtoms } from "../../state/mesh-layout";
+import { useNowMinuteMs } from "../../lib/clock";
+import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
-import { AppText as Text, AppTextInput } from "../../components/ui/AppText";
-import { cn } from "../../lib/cn";
-import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
+import {
+  meshConnectionText,
+  offlineMachineText,
+  meshMachineDetailRows,
+  meshConfigApplyGroups,
+  meshConfigHistory,
+  partitionMeshMachines,
+  forgetMachineFacts,
+} from "@t3tools/client-runtime/state/mesh-machines";
+import { useMeshOverview } from "../workspaces/useMeshOverview";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { MeshLinkForm } from "./MeshLinkForm";
+import { MeshConfigSheet } from "./MeshConfigSheet";
+import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
+import { AppText } from "../../components/ui/AppText";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
-import { useSidebarWorkspaces } from "../workspaces/useSidebarWorkspaces";
-
-const COLOR_NAMES = ["Blue", "Coral", "Green", "Violet", "Amber", "Teal", "Rose", "Olive"];
-
-function MachineEditor(props: {
-  readonly children: ReactNode;
-  readonly environmentId: string;
-  readonly display: MachineDisplay;
-  readonly configured: {
-    readonly label?: string;
-    readonly tag?: string;
-    readonly color?: string;
-    readonly aliases?: readonly string[];
-  };
-  readonly serverLabel: string;
-  readonly connected: boolean;
-  readonly onChange: (patch: MachineDisplayPatch) => void;
-}) {
-  const selectedColor = props.configured.color ?? props.display.color;
-  return (
-    <SettingsSection
-      title={props.display.label}
-      footer={props.connected ? `Connected · ${props.environmentId}` : props.environmentId}
-    >
-      <View className="px-4 pt-3">
-        <Text
-          accessibilityLabel={`Machine: ${props.display.label}`}
-          className="font-mono text-xs font-t3-bold text-foreground"
-          style={{
-            backgroundColor: machineTagBackground(props.display.color),
-            alignSelf: "flex-start",
-            paddingHorizontal: 6,
-            borderRadius: 4,
-          }}
-        >
-          {props.display.tag}
-        </Text>
-      </View>
-      <View className="gap-2 px-4 py-3">
-        <Text className="text-sm text-foreground-muted">Label</Text>
-        <AppTextInput
-          key={`label:${props.configured.label ?? ""}`}
-          accessibilityLabel="Machine label"
-          defaultValue={props.configured.label ?? ""}
-          placeholder={props.serverLabel}
-          autoCapitalize="words"
-          autoCorrect={false}
-          className="min-h-[45px] rounded-xl px-3 py-2 text-base text-foreground"
-          onEndEditing={(event) => props.onChange({ label: event.nativeEvent.text })}
-        />
-      </View>
-      <View className="gap-2 border-t border-border-subtle px-4 py-3">
-        <Text className="text-sm text-foreground-muted">Tag</Text>
-        <AppTextInput
-          key={`tag:${props.configured.tag ?? ""}`}
-          accessibilityLabel="Machine tag"
-          defaultValue={props.configured.tag ?? ""}
-          placeholder={props.display.tag}
-          maxLength={3}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          className="min-h-[45px] w-24 rounded-xl px-3 py-2 text-base text-foreground"
-          onEndEditing={(event) => props.onChange({ tag: event.nativeEvent.text })}
-        />
-        <Text className="text-xs text-foreground-muted">Up to three characters.</Text>
-      </View>
-      <View className="gap-3 border-t border-border-subtle px-4 py-3">
-        <Text className="text-sm text-foreground-muted">Aliases</Text>
-        <AppTextInput
-          key={`aliases:${props.configured.aliases?.join(",") ?? ""}`}
-          accessibilityLabel="Machine aliases"
-          defaultValue={props.configured.aliases?.join(", ") ?? ""}
-          autoCapitalize="none"
-          autoCorrect={false}
-          className="min-h-[45px] rounded-xl px-3 py-2 text-base text-foreground"
-          onEndEditing={(event) => props.onChange({ aliases: event.nativeEvent.text.split(",") })}
-        />
-        <Text className="text-xs text-foreground-muted">
-          Separate alternative names with commas.
-        </Text>
-      </View>
-      <View className="gap-3 border-t border-border-subtle px-4 py-3">
-        <Text className="text-sm text-foreground-muted">Color</Text>
-        <View className="flex-row flex-wrap items-center gap-1">
-          {WORKSPACE_COLORS.map((color, index) => {
-            const selected = selectedColor === color;
-            return (
-              <Pressable
-                key={color}
-                accessibilityRole="button"
-                accessibilityLabel={`Color ${COLOR_NAMES[index] ?? color}`}
-                accessibilityState={{ selected }}
-                onPress={() => props.onChange({ color })}
-                style={({ pressed }) => ({
-                  width: 45,
-                  height: 45,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    backgroundColor: color,
-                    borderWidth: selected ? 3 : 0,
-                    borderColor: "#ffffff",
-                  }}
-                />
-              </Pressable>
-            );
-          })}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Automatic color"
-            onPress={() => props.onChange({ color: null })}
-            className={cn(
-              "min-h-[45px] justify-center rounded-lg px-2 py-1",
-              props.configured.color === undefined ? "bg-subtle-strong" : "bg-subtle",
-            )}
-          >
-            <Text className="text-xs text-foreground-muted">Automatic</Text>
-          </Pressable>
-        </View>
-      </View>
-      {props.children}
-    </SettingsSection>
-  );
-}
 
 export function SettingsMachinesRouteScreen() {
-  const insets = useSafeAreaInsets();
-  const { config, updateConfig } = useSidebarWorkspaces();
-  const { environments } = useEnvironments();
-  const { machines, links } = useMeshOverview({ config });
-  const navigation = useNavigation();
-  const updateSettings = useAtomCommand(serverEnvironment.updateSettings, {
-    label: "mesh settings",
-    reportFailure: true,
-  });
-  const [linkOpen, setLinkOpen] = useState(false);
-  const now = Date.parse(
-    useSyncExternalStore(minuteTick.subscribe, minuteTick.getSnapshot, minuteTick.getSnapshot),
+  const mesh = useMeshLayout();
+  const { config } = mesh;
+  const { machines: allMachines, links } = useMeshOverview({ config });
+  const now = useNowMinuteMs();
+  const { active: machines, forgotten } = partitionMeshMachines(
+    allMachines,
+    config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    now,
   );
-  const { savedConnectionsById } = useSavedRemoteConnections();
+  const [forgottenOpen, setForgottenOpen] = useState(false);
+  const applyStatus = useEnvironmentQuery(
+    mesh.source ? meshLayoutAtoms.configStatus({ environmentId: mesh.source, input: {} }) : null,
+  );
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [detail, setDetail] = useState<string | null>(null);
+  const live = useReplicaStatuses();
   const base = config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
-
-  const serverLabel = (environmentId: string) =>
-    savedConnectionsById[environmentId as EnvironmentId]?.environmentLabel ?? environmentId;
-
+  const selected = machines.find((machine) => machine.environmentId === detail);
+  const groups = meshConfigApplyGroups(
+    applyStatus.data,
+    meshConfigHistory(mesh.state?.snapshot?.document ?? {}),
+    now,
+  );
+  const online = (machine: (typeof machines)[number]) =>
+    machine.connectedHere ||
+    machine.network?.state === "direct" ||
+    machine.network?.state === "relayed";
   return (
     <SettingsScreen title="Mesh">
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-        className="flex-1"
-        contentContainerClassName="gap-3 px-5 pt-4"
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
-      >
+      <ScreenScrollView contentContainerClassName="gap-3 px-5 py-4">
         <SettingsSection
-          title="Use the mesh on this machine"
-          footer="Shares the workspace layout and enables linked environments for work across machines."
+          title={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter(online).length} online`}
         >
-          {environments
-            .filter((e) => e.connection.phase === "connected")
-            .map((e) => {
-              const label = machineDisplayOf(base, e.environmentId, e.label).label;
-              return (
-                <View key={e.environmentId} className="flex-row items-center justify-between p-4">
-                  <Text numberOfLines={1} className="min-w-0 flex-1">
-                    {label}
-                  </Text>
-                  <Switch
-                    accessibilityLabel={`Use the mesh on ${label}`}
-                    value={meshSwitchValue(e.serverConfig?.settings ?? {})}
-                    onValueChange={(enabled) =>
-                      void updateSettings({
-                        environmentId: e.environmentId,
-                        input: { patch: meshTogglePatch(enabled) },
-                      })
-                    }
-                  />
-                </View>
-              );
-            })}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: linkOpen }}
-            className="min-h-[45px] p-4"
-            onPress={() => setLinkOpen(!linkOpen)}
-          >
-            <Text>Link with…</Text>
-          </Pressable>
+          <View className="flex-row flex-wrap gap-2 p-4">
+            <Button
+              label="Edit config"
+              tone="primary"
+              disabled={mesh.source === null}
+              onPress={() => setEditing(true)}
+            />
+            <Button
+              label="Link a machine"
+              tone="secondary"
+              onPress={() => setLinkOpen(!linkOpen)}
+            />
+          </View>
           {linkOpen ? (
             <MeshLinkForm links={links} machines={machines} onDone={() => setLinkOpen(false)} />
           ) : null}
-        </SettingsSection>
-        {config === null ? (
-          <SettingsSection>
-            <View className="px-4 py-3">
-              <Text className="text-sm text-foreground-muted">
-                Connect to a server with a workspace layout to name its machines.
-              </Text>
+          {machines.map((machine) => (
+            <View key={machine.environmentId}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${machine.label} details`}
+                onPress={() => setDetail(machine.environmentId)}
+                className="min-h-[52px] flex-row items-center gap-2 border-t border-border-subtle px-4 py-3"
+              >
+                <AppText className="font-mono text-xs" style={{ color: machine.color }}>
+                  {machine.tag}
+                </AppText>
+                <AppText numberOfLines={1} className="min-w-0 flex-1 font-t3-medium">
+                  {machine.label}
+                </AppText>
+                <View
+                  accessibilityElementsHidden
+                  className={`size-1.5 shrink-0 rounded-full ${online(machine) ? "bg-adaptive-emerald-600-400" : "bg-foreground-muted"}`}
+                />
+                <AppText
+                  numberOfLines={1}
+                  style={{ maxWidth: 110 }}
+                  className="text-xs text-foreground-muted"
+                >
+                  {online(machine)
+                    ? machine.network?.state === "relayed"
+                      ? meshConnectionText(machine, machines)
+                      : "Online"
+                    : (meshConnectionText(machine, machines) ??
+                      offlineMachineText(machine.lastSeenAt))}
+                </AppText>
+                <AppText numberOfLines={1} className="text-xs text-foreground-muted">
+                  {[machine.version, machine.platform?.os].filter(Boolean).join(" · ")}
+                </AppText>
+                <AppText>›</AppText>
+              </Pressable>
+              {machine.unnamed ? (
+                <View className="px-4 pb-2">
+                  <Button label="Name it in config" tone="text" onPress={() => setEditing(true)} />
+                </View>
+              ) : null}
             </View>
+          ))}
+        </SettingsSection>
+        {selected ? (
+          <Sheet title={selected.label} onClose={() => setDetail(null)}>
+            <ScreenScrollView contentContainerClassName="gap-3 p-5">
+              <AppText>
+                Reach path:{" "}
+                {meshConnectionText(selected, machines) ??
+                  (online(selected) ? "Connected directly" : "Offline")}
+              </AppText>
+              {selected.lastError ? (
+                <AppText accessibilityRole="alert">{selected.lastError}</AppText>
+              ) : null}
+              {meshMachineDetailRows(selected, base, live).map((row) => (
+                <View key={row.label}>
+                  <AppText className="text-xs text-foreground-muted">{row.label}</AppText>
+                  <AppText>{row.value}</AppText>
+                </View>
+              ))}
+              {selected.unnamed ? (
+                <Button
+                  label="Name it in config"
+                  onPress={() => {
+                    setDetail(null);
+                    setEditing(true);
+                  }}
+                />
+              ) : null}
+            </ScreenScrollView>
+          </Sheet>
+        ) : null}
+        {forgotten.length ? (
+          <SettingsSection>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: forgottenOpen }}
+              onPress={() => setForgottenOpen(!forgottenOpen)}
+              className="min-h-[45px] p-4"
+            >
+              <AppText>Forgotten machines ({forgotten.length})</AppText>
+            </Pressable>
+            {forgottenOpen
+              ? forgotten.map((machine) => (
+                  <View
+                    key={machine.environmentId}
+                    className="flex-row items-center justify-between px-4 py-2"
+                  >
+                    <AppText>{machine.label}</AppText>
+                    <Button
+                      label="Forget"
+                      tone="secondary"
+                      onPress={() =>
+                        mesh.edit((config) => forgetMachineFacts(config, machine.environmentId))
+                      }
+                    />
+                  </View>
+                ))
+              : null}
           </SettingsSection>
         ) : null}
-        {machines.map((machine) => {
-          const environmentId = machine.environmentId;
-          const configured = base.machines[environmentId] ?? {};
-          return (
-            <View key={environmentId} className="gap-2">
-              <MachineEditor
-                key={environmentId}
-                environmentId={environmentId}
-                display={machine}
-                configured={configured}
-                serverLabel={serverLabel(environmentId)}
-                connected={machine.connectedHere}
-                onChange={(patch) =>
-                  updateConfig((current) => setMachineDisplay(current, environmentId, patch))
-                }
-              >
-                <View className="gap-2 p-4">
-                  <Text>This device: {machine.connectedHere ? "connected" : "not connected"}</Text>
-                  <Text>
-                    Linked with: {machine.linkedWith.map((e) => e.tag).join(", ") || "None"}
-                  </Text>
-                  {machine.version === null ? null : <Text>Version: {machine.version}</Text>}
-                  {machine.network ? <Text>{meshConnectionText(machine, machines)}</Text> : null}
-                  <Text>{meshMachineLastSync(machine, now)}</Text>
-                  {machine.lastError ? <Text>{machine.lastError}</Text> : null}
-                  <Text>
-                    {machine.replicas} replicas · {machine.conflicts} conflicts
-                  </Text>
-                  {!machine.connectedHere ? (
-                    <>
-                      <Text>{machine.urls.join("\n")}</Text>
-                      <Pressable
-                        accessibilityRole="button"
-                        className="min-h-[45px] justify-center"
-                        onPress={() =>
-                          navigation.navigate("ConnectionsNew", {
-                            initialHost: machine.urls[0] ?? "",
-                          })
-                        }
-                      >
-                        <Text>Connect this device</Text>
-                      </Pressable>
-                    </>
+        {applyStatus.error ? (
+          <AppText accessibilityRole="alert">{applyStatus.error}</AppText>
+        ) : null}
+        {groups.map((group) => (
+          <SettingsSection key={group.revision} title={group.title}>
+            <View className="gap-3 p-4">
+              {group.actions.map((action) => (
+                <View key={`${action.server}:${action.id}`}>
+                  <AppText>
+                    {action.description} ·{" "}
+                    {action.state === "in_progress"
+                      ? "In progress"
+                      : action.state === "done"
+                        ? "Done"
+                        : "Failed"}
+                  </AppText>
+                  {action.reason ? (
+                    <AppText className="text-xs text-foreground-muted">{action.reason}</AppText>
                   ) : null}
                 </View>
-              </MachineEditor>
-            </View>
-          );
-        })}
-        {machines.length === 0 ? (
-          <SettingsSection>
-            <View className="px-4 py-3">
-              <Text className="text-sm text-foreground-muted">No machines yet.</Text>
+              ))}
             </View>
           </SettingsSection>
+        ))}
+        {editing && mesh.source ? (
+          <MeshConfigSheet
+            key={mesh.source}
+            environmentId={mesh.source}
+            onClose={() => setEditing(false)}
+          />
         ) : null}
-      </ScrollView>
+      </ScreenScrollView>
     </SettingsScreen>
   );
 }

@@ -1,6 +1,8 @@
 import { MeshConfigDocument, MeshConfigRevision } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
+
+export const configYaml = (doc: unknown): string => stringify(doc);
 
 export const defaults = (): MeshConfigDocument => ({ schema: 1, machines: {} });
 const decodeConfig = Schema.decodeUnknownSync(MeshConfigDocument, { errors: "all" });
@@ -99,12 +101,14 @@ export const machineByPeerLabel = (
   config: MeshConfigDocument,
   bindings: Readonly<Record<string, string>>,
   peerLabel: string | undefined,
+  migratedLabels: Readonly<Record<string, readonly string[]>> = {},
 ) => {
   if (peerLabel === undefined) return undefined;
   const compact = peerLabel.replace(/^T3 Code\s*·\s*/u, "").trim();
   const matches = Object.entries(bindings).filter(
     ([name]) =>
-      peerLabels(config, name).includes(peerLabel) || peerLabels(config, name).includes(compact),
+      [...peerLabels(config, name), ...(migratedLabels[name] ?? [])].includes(peerLabel) ||
+      [...peerLabels(config, name), ...(migratedLabels[name] ?? [])].includes(compact),
   );
   return matches.length === 1
     ? {
@@ -229,3 +233,27 @@ export const conflictWinner = (
   primaryMtime: number,
   replicaMtime: number,
 ): "alpha" | "beta" => (policy === "newest-wins" && replicaMtime > primaryMtime ? "beta" : "alpha");
+
+export const migratedPeerLabelsFromLayout = (
+  document: Readonly<Record<string, { readonly v: unknown }>>,
+) =>
+  Object.fromEntries(
+    Object.entries(document).flatMap(([key, entry]) => {
+      if (
+        !key.startsWith("mesh.machineMigration/") ||
+        !entry.v ||
+        typeof entry.v !== "object" ||
+        !("peerLabels" in entry.v) ||
+        !Array.isArray(entry.v.peerLabels)
+      )
+        return [];
+      return [
+        [
+          decodeURIComponent(key.slice("mesh.machineMigration/".length)),
+          entry.v.peerLabels.filter((value): value is string => typeof value === "string"),
+        ],
+      ];
+    }),
+  );
+
+export { repairMachineIdentity, renameMachineBindings, localMachineClaim } from "./identity.ts";

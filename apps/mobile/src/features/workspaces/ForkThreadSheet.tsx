@@ -1,3 +1,7 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useEnvironments } from "../../state/environments";
+import { MachinePickerGroups } from "./MachinePickerGroups";
+import { rootNavigationRef } from "../../lib/rootNavigation";
 import { useAtomValue } from "@effect/atom-react";
 import { replicaStatusCopy } from "@t3tools/client-runtime/state/mesh-layout";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
@@ -12,6 +16,7 @@ import * as Cause from "effect/Cause";
 import { useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 
+import { Button } from "../../components/ui/Button";
 import { Sheet } from "../../components/ui/Sheet";
 import { AppText } from "../../components/ui/AppText";
 import * as Dialog from "../../components/ui/Dialog";
@@ -26,9 +31,17 @@ import { useSidebarWorkspaces } from "./useSidebarWorkspaces";
 import { forkingThread } from "./forkThreadState";
 
 export function ForkThreadSheet() {
+  const insets = useSafeAreaInsets();
   const thread = useAtomValue(forkingThread);
+  const [showDetails, setShowDetails] = useState(false);
   const { config } = useSidebarWorkspaces();
   const serverConfigs = useServerConfigs();
+  const { environments } = useEnvironments();
+  const connected = new Set(
+    environments
+      .filter((environment) => environment.connection.phase === "connected")
+      .map((environment) => String(environment.environmentId)),
+  );
   const fork = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
   const loadCatalog = useAtomCommand(threadEnvironment.forkCatalog, { reportFailure: false });
   const catalogRequest = useRef(0);
@@ -50,7 +63,8 @@ export function ForkThreadSheet() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const targetConfig = useEnvironmentServerConfig(target);
+  const cachedConfig = useEnvironmentServerConfig(target);
+  const targetConfig = target && connected.has(target) ? cachedConfig : null;
   const catalog = target === null ? undefined : catalogs[target];
   const sourceConfig = config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
   const models = buildModelOptions(
@@ -81,7 +95,7 @@ export function ForkThreadSheet() {
   const selectTarget = (environmentId: EnvironmentId) => {
     setTarget(environmentId);
     setChosen(null);
-    if (serverConfigs.has(environmentId)) return;
+    if (connected.has(environmentId)) return;
     const request = ++catalogRequest.current;
     setCatalogs((current) => ({ ...current, [environmentId]: { request } }));
     const complete = (value: { value: ThreadForkCatalog } | { error: string }) => {
@@ -115,34 +129,36 @@ export function ForkThreadSheet() {
     return (
       <Sheet title="Fork to machine…" onClose={close}>
         <ScrollView>
-          {[...machineIds].map((environmentId) => (
-            <Pressable
-              key={environmentId}
-              accessibilityRole="button"
-              className="p-4"
-              onPress={() => selectTarget(environmentId as EnvironmentId)}
-            >
-              <AppText>
-                {sourceConfig.machines[environmentId]?.title ?? label(environmentId)} (
-                {label(environmentId)})
-              </AppText>
-              {catalogs[environmentId]?.error ? (
-                <AppText className="text-xs text-muted-foreground">Unavailable</AppText>
-              ) : null}
-            </Pressable>
-          ))}
+          <MachinePickerGroups
+            machines={[...machineIds]}
+            available={(environmentId) => connected.has(environmentId)}
+          >
+            {(environmentId) => (
+              <Pressable
+                key={environmentId}
+                accessibilityRole="button"
+                className="p-4"
+                onPress={() => selectTarget(environmentId as EnvironmentId)}
+              >
+                <AppText>{label(environmentId)}</AppText>
+                {catalogs[environmentId]?.error ? (
+                  <AppText className="text-xs text-foreground-muted">Unavailable</AppText>
+                ) : null}
+              </Pressable>
+            )}
+          </MachinePickerGroups>
         </ScrollView>
       </Sheet>
     );
-  const targetTitle = sourceConfig.machines[target]?.title ?? label(target);
+  const targetTitle = label(target);
   const unavailableDetails =
     (targetConfig ?? catalog?.value)?.providers
       .filter((provider) => provider.enabled && provider.message)
       .slice(0, 2)
       .map((provider) => provider.message) ?? [];
-  const online = serverConfigs.has(target) || catalog?.value !== undefined;
+  const online = connected.has(target) || catalog?.value !== undefined;
   const loadingModels =
-    !serverConfigs.has(target) && catalog !== undefined && !catalog.value && !catalog.error;
+    !connected.has(target) && catalog !== undefined && !catalog.value && !catalog.error;
   const logicalKey = Object.keys(sourceConfig.projectMounts).find((key) =>
     sourceConfig.projectMounts[key]?.some(
       (rep) => rep.environmentId === thread.environmentId && rep.projectId === thread.projectId,
@@ -156,30 +172,68 @@ export function ForkThreadSheet() {
         conflicts: status.conflicts ?? 0,
         message: status.message ?? null,
         targetLabel: targetTitle,
-        sourceLabel:
-          sourceConfig.machines[thread.environmentId]?.title ?? label(thread.environmentId),
+        sourceLabel: label(thread.environmentId),
       })
     : null;
+  const catalogError = !connected.has(target) ? catalog?.error : undefined;
   return (
     <Sheet title={`Fork to ${targetTitle}`} onClose={close}>
-      <View className="gap-4 p-4">
-        <AppText className="text-muted-foreground">
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24, gap: 16 }}
+      >
+        <AppText className="text-foreground-muted">
           Copies the conversation through its last completed turn. The original stays here.
         </AppText>
-        {loadingModels ? <AppText role="status">Loading models on {targetTitle}…</AppText> : null}
-        {!serverConfigs.has(target) && catalog?.error ? (
-          <AppText className="text-destructive">
-            Could not load models on {targetTitle}: {catalog.error}
+        {target ? (
+          <AppText role="status">
+            {progress === "Synced" || (!progress && target === thread.environmentId)
+              ? `Project synced on ${targetTitle}`
+              : (progress ?? `Preparing project on ${targetTitle}`)}
           </AppText>
         ) : null}
-        {online && models.length === 0 ? (
-          <AppText className="text-destructive">
-            {[`No models are available on ${targetTitle}.`, ...unavailableDetails].join(" ")}
-          </AppText>
+        {loadingModels ? <AppText role="status">Loading models on {targetTitle}…</AppText> : null}
+        {catalogError || (online && models.length === 0) ? (
+          <View className="gap-2">
+            <AppText className="text-danger-foreground">
+              {catalogError
+                ? `Could not load models on ${targetTitle}.`
+                : `No models are available on ${targetTitle}.`}
+            </AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showDetails }}
+              onPress={() => setShowDetails(!showDetails)}
+            >
+              <AppText>Details</AppText>
+            </Pressable>
+            {showDetails ? (
+              <AppText>
+                {catalogError ||
+                  unavailableDetails.join("\n") ||
+                  "Enable and authenticate a provider on this machine."}
+              </AppText>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                close();
+                rootNavigationRef.navigate("Settings");
+              }}
+            >
+              <AppText>Open provider settings</AppText>
+            </Pressable>
+          </View>
         ) : online && selection ? (
-          <Pressable accessibilityRole="button" onPress={() => setPicker(true)}>
-            <AppText>
-              Model: {models.find((m) => m.selection.model === selection?.model)?.label ?? "None"}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Fork model"
+            onPress={() => setPicker(true)}
+            className="min-h-[45px] flex-row items-center justify-between gap-3"
+          >
+            <AppText>Model</AppText>
+            <AppText numberOfLines={1} className="min-w-0 shrink">
+              {models.find((m) => m.selection.model === selection?.model)?.label ?? "None"}
             </AppText>
           </Pressable>
         ) : null}
@@ -197,14 +251,11 @@ export function ForkThreadSheet() {
           value={message}
           onChangeText={setMessage}
         />
-        {busy ? (
-          <AppText role="status">
-            {progress ?? "Preparing the project and copying the conversation…"}
-          </AppText>
-        ) : null}
-        {error ? <AppText className="text-destructive">{error}</AppText> : null}
-        <Pressable
-          accessibilityRole="button"
+        {busy ? <AppText role="status">{"Copying the conversation…"}</AppText> : null}
+        {error ? <AppText className="text-danger-foreground">{error}</AppText> : null}
+        <Button
+          tone="primary"
+          label={busy ? "Forking…" : `Fork to ${targetTitle}`}
           accessibilityLabel="Confirm fork"
           disabled={busy || !selection || !online}
           onPress={() => {
@@ -234,10 +285,8 @@ export function ForkThreadSheet() {
                 Dialog.alert("Could not fork thread", String(cause));
               });
           }}
-        >
-          <AppText>{busy ? "Forking…" : `Fork to ${targetTitle}`}</AppText>
-        </Pressable>
-      </View>
+        />
+      </ScrollView>
       <Modal visible={picker} onRequestClose={() => setPicker(false)}>
         <ThreadSettingsInlinePicker
           environmentId={target}

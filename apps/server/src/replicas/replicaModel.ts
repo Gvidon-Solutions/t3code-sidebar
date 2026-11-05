@@ -20,7 +20,7 @@ export function sessionStatus(
   session: MutagenSession,
 ): Pick<
   ReplicaLiveStatus,
-  "state" | "progress" | "conflicts" | "problems" | "message" | "skipped" | "skippedPaths"
+  "state" | "progress" | "lag" | "conflicts" | "problems" | "message" | "skipped" | "skippedPaths"
 > {
   const conflicts = session.conflicts?.map((conflict) => conflict.root) ?? [];
   const problems = [
@@ -65,6 +65,33 @@ export function sessionStatus(
       ? `${skipped} ${skipped === 1 ? "file" : "files"} skipped (${reasons.join(", ") || "scan problems"})`
       : undefined;
   const staging = session.beta.stagingProgress ?? session.alpha.stagingProgress;
+  const transfers = [session.alpha, session.beta].flatMap((endpoint) => {
+    const progress = endpoint.stagingProgress;
+    if (!progress || progress.expectedFiles <= 0) return [];
+    const files = Math.max(0, progress.expectedFiles - progress.receivedFiles);
+    // Mutagen reports the current file's size, not the total size of a multi-file queue.
+    const bytes =
+      files === 0
+        ? 0
+        : files === 1 && progress.expectedSize > 0
+          ? Math.max(0, progress.expectedSize - progress.receivedSize)
+          : undefined;
+    return [{ files, bytes }];
+  });
+  const lag = transfers.length
+    ? {
+        filesBehind: transfers.reduce((total, transfer) => total + transfer.files, 0),
+        ...(transfers.every((transfer) => transfer.bytes !== undefined)
+          ? { bytesBehind: transfers.reduce((total, transfer) => total + transfer.bytes!, 0) }
+          : {}),
+      }
+    : !session.paused &&
+        session.status === "watching" &&
+        !problems.length &&
+        !conflicts.length &&
+        !skipped
+      ? { filesBehind: 0, bytesBehind: 0 }
+      : undefined;
   return {
     state: session.paused
       ? "paused"
@@ -90,6 +117,7 @@ export function sessionStatus(
       : {}),
     conflicts,
     problems,
+    ...(lag ? { lag } : {}),
     ...(message ? { message } : {}),
     ...(skipped ? { skipped, skippedPaths: skippedPaths.slice(0, 10) } : {}),
   };

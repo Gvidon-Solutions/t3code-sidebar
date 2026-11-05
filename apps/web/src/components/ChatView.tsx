@@ -3776,7 +3776,7 @@ export default function ChatView(props: ChatViewProps) {
                         >
                           {showComposerContextStrip && (
                             <div className="pointer-events-auto">
-                              {draftId && activeThread && (
+                              {draftId && activeThread && !mountingStatus && (
                                 <DraftMachineHint
                                   selection={
                                     composerSelectedModelSelection ?? activeThread.modelSelection

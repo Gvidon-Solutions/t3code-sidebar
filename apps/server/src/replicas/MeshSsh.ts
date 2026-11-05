@@ -1,10 +1,15 @@
 import { sshWrapper } from "../peer/connection/PeerPlatform.ts";
-import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
+import {
+  MeshConfigError,
+  type MeshConfigDocument,
+  type SidebarMachineReported,
+} from "@t3tools/contracts";
 import { bindingsFromLayout, effectiveLinkPermissions } from "@t3tools/shared/meshConfig";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -27,6 +32,7 @@ export class MeshSsh extends Context.Service<
 >()("t3/replicas/MeshSsh") {}
 
 const isMeshConfigError = Schema.is(MeshConfigError);
+type SshRoutes = NonNullable<SidebarMachineReported["sshRoutes"]>;
 
 export const layer = Layer.effect(
   MeshSsh,
@@ -94,6 +100,32 @@ export const layer = Layer.effect(
         yield* fs.chmod(filePath, 0o600);
       }
     });
+    const publishRoutes = Effect.fn("MeshSsh.publishRoutes")(function* (
+      update: (routes: SshRoutes, checkedAt: string) => SshRoutes,
+    ) {
+      const checkedAt = DateTime.formatIso(yield* DateTime.now);
+      const result = yield* mesh.edit((current) => {
+        const local = current.machines[mesh.environmentId];
+        if (!local?.reported) return current;
+        const sshRoutes = update(local.reported.sshRoutes ?? {}, checkedAt);
+        if (JSON.stringify(sshRoutes) === JSON.stringify(local.reported.sshRoutes)) return current;
+        return {
+          ...current,
+          machines: {
+            ...current.machines,
+            [mesh.environmentId]: {
+              ...local,
+              reported: { ...local.reported, sshRoutes, reportedAt: checkedAt },
+            },
+          },
+        };
+      });
+      if (!result.config.machines[mesh.environmentId]?.reported)
+        return yield* new MeshConfigError({
+          reason: "storage",
+          message: "Local machine facts are unavailable; cannot publish SSH route checks",
+        });
+    });
     return MeshSsh.of({
       publicKey,
       reconcile: Effect.fn("MeshSsh.reconcile")(
@@ -118,6 +150,35 @@ export const layer = Layer.effect(
               : [];
           });
           const mode = doc.ssh?.mode ?? "managed";
+          const targets = Object.entries(bindings).filter(
+            ([name]) => name !== self && doc.machines[name] !== undefined,
+          );
+          if (targets.length || state.config.machines[mesh.environmentId]?.reported?.sshRoutes)
+            yield* publishRoutes((previous, checkedAt) =>
+              Object.fromEntries(
+                targets.map(([name, environmentId]) => {
+                  const reason =
+                    mode === "off"
+                      ? "SSH is off; cross-machine replicas are disabled"
+                      : !effectiveLinkPermissions(doc, self, name).replicas
+                        ? "Replica permission is disabled"
+                        : !state.config.machines[environmentId]
+                          ? "Peer facts are unavailable"
+                          : "SSH route has not been checked";
+                  const prior = previous[environmentId];
+                  const route =
+                    reason === "SSH route has not been checked" && prior?.status !== "unknown"
+                      ? prior
+                      : prior?.status === "unknown" && prior.reason === reason
+                        ? prior
+                        : undefined;
+                  return [
+                    environmentId,
+                    route ?? { status: "unknown" as const, reason, checkedAt },
+                  ];
+                }),
+              ),
+            );
           yield* blockLock.withPermit(
             Effect.gen(function* () {
               const files = yield* Effect.try(() =>
@@ -152,33 +213,49 @@ export const layer = Layer.effect(
               reason: "validation",
               message: "Replica permission is disabled or peer facts are unavailable",
             });
-          if (mode === "managed" && !peer.facts.reported?.sshd)
-            return yield* new MeshConfigError({ reason: "storage", message: "no sshd" });
-          const host = mode === "existing" ? peer.settings.ssh?.host : `t3-${machine}`;
-          if (!host || host.startsWith("-") || /[\s\0]/.test(host))
-            return yield* new MeshConfigError({
-              reason: "validation",
-              message: "Existing SSH host is missing or invalid",
+          const check = Effect.gen(function* () {
+            if (mode === "managed" && !peer.facts.reported?.sshd)
+              return yield* new MeshConfigError({ reason: "storage", message: "no sshd" });
+            const host = mode === "existing" ? peer.settings.ssh?.host : `t3-${machine}`;
+            if (!host || host.startsWith("-") || /[\s\0]/.test(host))
+              return yield* new MeshConfigError({
+                reason: "validation",
+                message: "Existing SSH host is missing or invalid",
+              });
+            const result = yield* runner.run({
+              command: "ssh",
+              args: [
+                ...(sshHome !== home ? ["-F", configFile] : []),
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=10",
+                host,
+                "true",
+              ],
+              timeout: "15 seconds",
+              timeoutBehavior: "timedOutResult",
             });
-          const result = yield* runner.run({
-            command: "ssh",
-            args: [
-              ...(sshHome !== home ? ["-F", configFile] : []),
-              "-o",
-              "BatchMode=yes",
-              "-o",
-              "ConnectTimeout=10",
-              host,
-              "true",
-            ],
-            timeout: "15 seconds",
-            timeoutBehavior: "timedOutResult",
-          });
-          if (result.code !== 0)
-            return yield* new MeshConfigError({
-              reason: "storage",
-              message: routeFailure(result.stderr, result.timedOut),
-            });
+            if (result.code !== 0)
+              return yield* new MeshConfigError({
+                reason: "storage",
+                message: routeFailure(result.stderr, result.timedOut),
+              });
+          }).pipe(Effect.mapError((cause) => (isMeshConfigError(cause) ? cause : mapError(cause))));
+          yield* check.pipe(
+            Effect.matchEffect({
+              onFailure: (error) =>
+                publishRoutes((previous, checkedAt) => ({
+                  ...previous,
+                  [peer.environmentId]: { status: "failed", reason: error.message, checkedAt },
+                })).pipe(Effect.andThen(Effect.fail(error))),
+              onSuccess: () =>
+                publishRoutes((previous, checkedAt) => ({
+                  ...previous,
+                  [peer.environmentId]: { status: "ok", checkedAt },
+                })),
+            }),
+          );
         },
         Effect.mapError((cause) => (isMeshConfigError(cause) ? cause : mapError(cause))),
       ),

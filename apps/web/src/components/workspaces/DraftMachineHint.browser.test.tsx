@@ -86,9 +86,11 @@ it("keeps an unusable Claude selection and switches to its authenticated machine
   }
   await using screen = await render(<Draft />);
   await expect.element(screen.getByText("at:sonnet")).toBeVisible();
-  await screen.getByRole("button", { name: "Claude works on Boreal. Switch machine" }).click();
+  await screen.getByRole("button", { name: "Switch to Boreal where it works" }).click();
   await expect.element(screen.getByText("bo:sonnet")).toBeVisible();
-  await expect.element(screen.getByRole("button", { name: /works on/ })).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByRole("button", { name: /where it works/ }))
+    .not.toBeInTheDocument();
 });
 it("uses the configured usable default locally rather than the first catalog model", async () => {
   const { at, claude } = setup();

@@ -1,5 +1,6 @@
 import {
   bindingsFromLayout,
+  migratedPeerLabelsFromLayout,
   configFromLayout,
   effectiveLinkPermissions,
   machineByEnvironment,
@@ -38,7 +39,12 @@ export const linkPermissions = Effect.fn("MeshLinkPermissions.read")(function* (
     config && !client.peerEnvironmentId
       ? Object.entries(bindings).flatMap(([name, environmentId]) =>
           environmentId !== scope.environmentId &&
-          machineByPeerLabel(config, { [name]: environmentId }, client.label)
+          machineByPeerLabel(
+            config,
+            { [name]: environmentId },
+            client.label,
+            migratedPeerLabelsFromLayout(document),
+          )
             ? [name]
             : [],
         )

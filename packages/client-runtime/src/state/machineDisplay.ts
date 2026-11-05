@@ -56,12 +56,19 @@ export function machineDisplayOf(
 ): MachineDisplay {
   const machine = config.machines[environmentId];
   const label =
-    machine?.label?.trim() ||
-    (!/^[a-f\d]{8}(?:-[a-f\d-]+)?$/i.test(fallbackLabel.trim()) ? fallbackLabel.trim() : "") ||
-    "Unknown machine";
+    [machine?.title, machine?.label, fallbackLabel === environmentId ? undefined : fallbackLabel]
+      .map((value) => value?.trim())
+      .find(
+        (value) =>
+          value &&
+          !/^(?:[a-f\d]{8,64}|[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12})$/i.test(value) &&
+          !["Unknown machine", "Unidentified machine"].includes(value),
+      ) ?? "Unnamed machine";
   return {
     label,
-    tag: normalizeMachineTag(machine?.tag ?? "") ?? defaultMachineTag(label, environmentId),
+    tag:
+      normalizeMachineTag(machine?.tag ?? "") ??
+      (label === "Unnamed machine" ? "?" : defaultMachineTag(label, environmentId)),
     color: machine?.color?.trim() || workspaceColor({ id: environmentId }),
   };
 }
@@ -154,4 +161,16 @@ export function machineTagBackground(color: string, alpha = 0.14): string {
   if (!/^[0-9a-f]{6}$/i.test(full)) return `rgba(128, 128, 128, ${alpha})`;
   const value = Number.parseInt(full, 16);
   return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}
+
+export function shortMachineHost(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const endpoint = new URL(url);
+    const host = endpoint.hostname;
+    const short = /^[\d.]+$/.test(host) || host.includes(":") ? host : host.split(".")[0]!;
+    return endpoint.port ? `${short}:${endpoint.port}` : short;
+  } catch {
+    return null;
+  }
 }

@@ -60,7 +60,7 @@ it("opens the preserved versions on the losing machine from the last automatic r
     { router: false },
   );
   await expect
-    .element(page.getByText("Resolved 1 conflicts automatically · copies in .t3-conflicts"))
+    .element(page.getByText("1 conflict resolved automatically · copies in .t3-conflicts"))
     .toBeVisible();
   await userEvent.click(page.getByRole("button", { name: "Open copies" }));
   expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -96,8 +96,14 @@ it("confirms the actual primary or replica being removed, with cancellation pres
   const config = { ...empty, projectMounts: { qa: [rep] } };
   await using screen = await render(<MachinesDialog {...props} config={config} />);
   await expect.element(page.getByText("QA machine", { exact: true })).toBeVisible();
+  await expect
+    .element(page.getByRole("button", { name: "Adopt", exact: true }))
+    .not.toBeInTheDocument();
   await userEvent.click(page.getByRole("button", { name: "Remove", exact: true }));
   await expect.element(page.getByText("Remove this primary?", { exact: true })).toBeVisible();
+  await expect
+    .element(page.getByText(/leaves replicas without their git and build machine/))
+    .toBeVisible();
   await userEvent.click(page.getByRole("button", { name: "Cancel", exact: true }));
   await expect
     .element(page.getByText("Remove this primary?", { exact: true }))

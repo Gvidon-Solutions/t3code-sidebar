@@ -125,6 +125,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 - **What.** Mesh-managed keys, pinned `t3-<name>` SSH hosts over persistent pipes,
   per-peer route status and managed/existing/off modes replace the route matrix.
+  U1 receives route checks through reported `sshRoutes` and Mutagen transfer lag through
+  `ReplicaLiveStatus.lag`, including byte counts when the total is known.
   Replicas run star sessions on their own servers. Full replicas install and refresh
   environments from lock files; lite replicas receive explicit `t3 run` guidance.
 - **How.** Marked SSH blocks preserve foreign content and support isolated test homes.
@@ -1599,3 +1601,28 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** Shared `meshLayout/registry.ts` (canonical config contracts), `hlc.ts` and `migration/`; server
   `MeshLayoutServiceLive.ts`, `MeshReplicator.ts` and `mesh/migration/`; client-runtime
   `MeshLayoutStore`, web/mobile `useMeshLayout` providers and application roots.
+
+### 2026-11-05 — Stage U1 mesh state and config editing
+
+- **What.** Settings › Mesh presents machine state and opens a YAML config editor on web and
+  mobile. Plan/apply uses optimistic revision checks; history restoration uses the same flow.
+  Forgotten machine facts can be removed separately from active links. Compact machine rows merge
+  repeated connections by environment ID and keep opaque hostnames out of display names. Apply
+  summaries group human action names by revision; lag and SSH route checks accept S1 reports.
+  Migration metadata lives outside the editable YAML, including existing history revisions.
+- **How.** Both editors share a client-runtime controller. Replica git ownership is shown as
+  `git on <machine> · t3 run`; longer project names collapse the machine strip. Fork machine
+  selection uses the app combobox and model failures expose provider settings.
+- **Where.** Web `workspaces/MeshSettingsPanel`, `MeshConfigDialog`, `ForkThreadDialog`,
+  `BranchToolbar`; mobile `settings/SettingsMachinesRouteScreen`, `MeshConfigSheet`, thread
+  context pickers; shared `meshConfigEditor`, `meshMachines`, `meshLayout/replicas`.
+
+### 2026-11-05 — Stage C2 machine name collision recovery
+
+- **What.** Independently installed servers with equal hostnames keep distinct mesh names;
+  older unbound servers repair their identity on startup. Moving a machine's config key keeps
+  its binding. Equal titles show platform/host hints, and offline ages use compact durations.
+- **How.** Environment-keyed join claims survive replication; deterministic suffix allocation
+  repairs the config with a normal history revision. Forget removes claims along with bindings.
+- **Where.** Shared `meshConfig/identity`, server `MeshConfig`/`MeshConfigMigration`, shared layout
+  registry/diff, client-runtime machine displays, web and mobile Mesh settings.

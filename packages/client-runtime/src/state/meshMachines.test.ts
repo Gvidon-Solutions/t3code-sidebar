@@ -6,6 +6,10 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildMeshMachines,
+  offlineMachineText,
+  meshMachineFactTimes,
+  partitionMeshMachines,
+  forgetMachineFacts,
   deriveMeshFooterStatus,
   meshFooterText,
   meshMachineLastSync,
@@ -388,4 +392,172 @@ it("uses current peer network state ahead of persisted facts after a clock corre
     peerConnections: [offline],
   });
   expect(machines.find((machine) => machine.environmentId === "boreal")?.network).toEqual(offline);
+});
+
+it("excludes unlinked seven-day-old machines and forgets only their layout facts", () => {
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { studio: { label: "Studio" }, cloudbox: { label: "Cloudbox" } },
+  };
+  const machines = buildMeshMachines({
+    config,
+    connections: [{ environmentId: "studio", label: "Studio", connected: true }],
+  });
+  const { active, forgotten } = partitionMeshMachines(
+    machines.map((machine) => ({ ...machine, lastSeenAt: "2026-10-01T00:00:00Z" })),
+    config,
+    Date.parse("2026-11-05T00:00:00Z"),
+  );
+  expect(active.map((machine) => machine.environmentId)).toEqual(["studio"]);
+  expect(forgotten.map((machine) => machine.environmentId)).toEqual(["cloudbox"]);
+  expect(forgetMachineFacts(config, "cloudbox").machines).toEqual({ studio: { label: "Studio" } });
+  expect(config.machines.cloudbox).toBeDefined();
+  expect(
+    deriveMeshFooterStatus({
+      enabled: true,
+      machines: [
+        ...active,
+        ...forgotten.map((machine) => ({ ...machine, lastSeenAt: "2026-10-01T00:00:00Z" })),
+      ],
+      now: Date.parse("2026-11-05T00:00:00Z"),
+    }),
+  ).toEqual({ kind: "synced", count: 1 });
+});
+
+it("does not resurrect a forgotten machine through replica source facts", () => {
+  const config: SidebarWorkspacesConfig = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { studio: { label: "Studio" }, cloudbox: { label: "Cloudbox" } },
+    projectMounts: {
+      demo: [
+        {
+          environmentId: "cloudbox",
+          source: "studio",
+          role: "replica",
+          transport: "mutagen",
+          path: "/copy",
+          createdAt: "2026-10-01T00:00:00Z",
+        },
+      ],
+    },
+  };
+  const next = forgetMachineFacts(config, "studio");
+  expect(buildMeshMachines({ config: next }).map((machine) => machine.environmentId)).toEqual([
+    "cloudbox",
+  ]);
+  expect(next.projectMounts.demo?.[0]?.path).toBe("/copy");
+});
+
+it("merges duplicate phone connections by environment identity and separates unnamed and stale machines", () => {
+  const config: SidebarWorkspacesConfig = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: {
+      studio: { title: "Studio", tag: "GV" },
+      cloudbox: {},
+      stale: { title: "Old laptop" },
+    },
+  };
+  const machines = buildMeshMachines({
+    config,
+    connections: [
+      {
+        environmentId: "studio",
+        label: "Studio",
+        connected: true,
+        version: "1.5",
+        urls: ["https://studio.example"],
+      },
+      {
+        environmentId: "studio",
+        label: "studio",
+        connected: false,
+        version: "0.9",
+        urls: ["http://studio.local"],
+      },
+      { environmentId: "cloudbox", label: "07e7a1a797ee", connected: true, version: "1.4" },
+    ],
+    peerStates: [
+      {
+        environmentId: "stale",
+        lastExchangeAt: "2026-10-01T00:00:00Z",
+        lastError: null,
+        sentSeq: 0,
+        receivedSeq: 0,
+      },
+    ],
+  });
+  expect(machines).toHaveLength(3);
+  expect(machines.find((machine) => machine.environmentId === "studio")).toMatchObject({
+    connectedHere: true,
+    version: "1.5",
+    urls: ["https://studio.example", "http://studio.local"],
+  });
+  expect(machines.find((machine) => machine.environmentId === "cloudbox")?.label).toBe(
+    "Unnamed machine",
+  );
+  const groups = partitionMeshMachines(machines, config, Date.parse("2026-11-05T00:00:00Z"));
+  expect(groups.active).toHaveLength(2);
+  expect(groups.forgotten.map((machine) => machine.environmentId)).toEqual(["stale"]);
+});
+
+it("ages unlinked layout-only machines from their replicated fact clock", () => {
+  const factsObservedAt = meshMachineFactTimes({
+    "machine/old-laptop": { h: "1759276800000.00000.studio" },
+  });
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { "old-laptop": { title: "Laptop" } },
+  };
+  const machines = buildMeshMachines({ config, factsObservedAt });
+  expect(
+    partitionMeshMachines(machines, config, Date.parse("2026-11-05T00:00:00Z")).forgotten,
+  ).toHaveLength(1);
+});
+
+it("keeps forgotten layout facts absent when desired config and an old phone connection remain", () => {
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { cloudbox: { title: "Cloudbox" } },
+  };
+  const factsObservedAt = meshMachineFactTimes({
+    "machine/cloudbox": { v: null, h: "1793836800000.00000.studio" },
+  });
+  const connection = { environmentId: "cloudbox", label: "Cloudbox", connected: false };
+  expect(buildMeshMachines({ config, factsObservedAt, connections: [connection] })).toEqual([]);
+  expect(
+    buildMeshMachines({
+      config,
+      factsObservedAt,
+      connections: [{ ...connection, connected: true }],
+    }),
+  ).toHaveLength(1);
+  expect(config.machines.cloudbox.title).toBe("Cloudbox");
+});
+
+it("formats offline durations without an ISO date", () => {
+  const now = Date.parse("2026-05-10T00:00:00Z");
+  expect(offlineMachineText("2026-05-07T00:00:00Z", now)).toBe("offline 3 d");
+  expect(offlineMachineText("2026-05-09T22:00:00Z", now)).toBe("offline 2 h");
+  expect(offlineMachineText("invalid", now)).toBe("Offline");
+});
+
+it("keeps equal titles distinct even when platform and hostname are identical", () => {
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { a: { title: "Studio" }, b: { title: "Studio" } },
+  };
+  const result = buildMeshMachines({
+    config,
+    connections: ["b", "a"].map((environmentId) => ({
+      environmentId,
+      label: "Studio",
+      connected: true,
+      platform: { os: "linux", arch: "x64" },
+      urls: ["http://studio.example:3795"],
+    })),
+  });
+  expect(result.map((machine) => machine.label).sort()).toEqual([
+    "Studio (linux · studio:3795) · 1",
+    "Studio (linux · studio:3795) · 2",
+  ]);
 });

@@ -14,11 +14,15 @@ const colors = {
 export function ProjectMachineStrip({
   model,
   onOpen,
+  compact = false,
 }: {
   model: ProjectMachineStripModel;
+  compact?: boolean;
   onOpen: () => void;
 }) {
   if (model.chips.length === 0) return null;
+  const chips = compact ? model.chips.slice(0, 1) : model.chips;
+  const overflow = model.overflow + model.chips.length - chips.length;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -35,7 +39,7 @@ export function ProjectMachineStrip({
           />
         }
       >
-        {model.chips.map((chip, index) => (
+        {chips.map((chip, index) => (
           <Fragment key={chip.environmentId}>
             {chip.role === "replica" && model.chips[index - 1]?.role !== "replica" ? (
               <span aria-hidden="true" className="text-3xs text-sidebar-muted-foreground">
@@ -57,7 +61,7 @@ export function ProjectMachineStrip({
             </MachineTag>
           </Fragment>
         ))}
-        {model.overflow > 0 ? <span className="text-3xs">+{model.overflow}</span> : null}
+        {overflow > 0 ? <span className="text-3xs">+{overflow}</span> : null}
       </TooltipTrigger>
       <TooltipPopup>{model.description}</TooltipPopup>
     </Tooltip>

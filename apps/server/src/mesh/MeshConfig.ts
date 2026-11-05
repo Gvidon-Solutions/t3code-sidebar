@@ -8,6 +8,8 @@ import {
 } from "@t3tools/contracts";
 import {
   bindingsFromLayout,
+  repairMachineIdentity,
+  renameMachineBindings,
   configDiff,
   parseConfig,
   referenceErrors,
@@ -149,6 +151,7 @@ export const layer = Layer.effect(
             ),
           );
           const revision: MeshConfigRevision = {
+            sequence: (before?.sequence ?? (yield* history).length) + 1,
             revision: h,
             doc: planned.doc,
             author: mesh.environmentId,
@@ -159,6 +162,10 @@ export const layer = Layer.effect(
             "mesh.config": { v: value, h },
             [`mesh.configHistory/${encodeURIComponent(h)}`]: { v: value, h },
           };
+          for (const [key, v] of Object.entries(
+            renameMachineBindings((yield* mesh.read).document, before?.doc, planned.doc),
+          ))
+            entries[key] = { v, h };
           const retained = [revision, ...(yield* history)];
           for (const old of retained.slice(50))
             entries[`mesh.configHistory/${encodeURIComponent(old.revision)}`] = { v: null, h };
@@ -207,6 +214,9 @@ export const layer = Layer.effect(
           projects: snapshot.config.projectTitles,
           representations: snapshot.config.projectMounts,
           bindings: bindingsFromLayout(snapshot.document),
+          claims: Object.entries(snapshot.document).filter(([key]) =>
+            key.startsWith("mesh.machineClaim/"),
+          ),
           history: Object.entries(snapshot.document)
             .filter(([key, entry]) => key.startsWith("mesh.configHistory/") && entry.v !== null)
             .map(([key]) => key)
@@ -249,6 +259,37 @@ export const layer = Layer.effect(
           Effect.flatMap(current, (revision) =>
             Effect.gen(function* () {
               if (!revision) return;
+              const identity = repairMachineIdentity((yield* mesh.read).document, revision.doc);
+              if (
+                identity.changed &&
+                !identity.docChanged &&
+                !Object.keys(identity.updates).some((key) => key.startsWith("mesh.machineBinding/"))
+              ) {
+                const h = yield* mesh.nextHlc;
+                yield* mesh.apply(
+                  Object.fromEntries(
+                    Object.entries(identity.updates).map(([key, v]) => [key, { v, h }]),
+                  ),
+                );
+              } else if (identity.changed) {
+                const h = yield* mesh.nextHlc;
+                const repaired = {
+                  ...revision,
+                  sequence: (revision.sequence ?? 0) + 1,
+                  revision: h,
+                  doc: identity.doc,
+                  author: mesh.environmentId,
+                  writtenAt: DateTime.formatIso(yield* DateTime.now),
+                };
+                const value = (yield* encodeRevision(repaired).pipe(Effect.orDie)) as Json;
+                const entries: MeshLayoutDocument = {
+                  "mesh.config": { v: value, h },
+                  [`mesh.configHistory/${encodeURIComponent(h)}`]: { v: value, h },
+                };
+                for (const [key, v] of Object.entries(identity.updates)) entries[key] = { v, h };
+                yield* mesh.apply(entries);
+                return;
+              }
               const lastRevision = yield* Ref.get(activeRevision);
               const observed = yield* mesh.read;
               const stored = decodeStatus(

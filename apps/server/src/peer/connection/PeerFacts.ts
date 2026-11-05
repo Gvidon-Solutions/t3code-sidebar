@@ -3,7 +3,7 @@ import { MeshSsh } from "../../replicas/MeshSsh.ts";
 import * as NodeOS from "node:os";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import { PeerConnectionStatus } from "@t3tools/contracts";
+import { PeerConnectionStatus, SidebarMachineReported } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -19,6 +19,7 @@ export const PeerFacts = Schema.Struct({
   user: Schema.NullOr(Schema.String),
   meshPublicKey: Schema.optionalKey(Schema.String),
   connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
+  sshRoutes: SidebarMachineReported.fields.sshRoutes,
   sshd: Schema.NullOr(Schema.Struct({ port: Schema.Int, hostKeys: Schema.Array(Schema.String) })),
 });
 export type PeerFacts = typeof PeerFacts.Type;
