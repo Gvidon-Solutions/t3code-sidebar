@@ -1,3 +1,4 @@
+import { MeshSsh } from "../replicas/MeshSsh.ts";
 import { replicaDriver } from "../replicas/replicaModel.ts";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
 import {
@@ -33,6 +34,7 @@ const titleOf = (titles: Readonly<Record<string, string>>, key: string) => title
 export const layer = Layer.effect(
   MeshConfigPlanners,
   Effect.gen(function* () {
+    const ssh = yield* MeshSsh;
     const mesh = yield* MeshLayoutService;
     const runtime = yield* ReplicaRuntime.ReplicaRuntime;
     const replicaService = runtime.get.pipe(Effect.mapError(failure));
@@ -89,7 +91,7 @@ export const layer = Layer.effect(
         if (value && typeof value === "object" && !Array.isArray(value)) {
           const facts = Object.fromEntries(
             Object.entries(value).filter(
-              ([field]) => !["label", "title", "tag", "color", "aliases"].includes(field),
+              ([field]) => !["label", "title", "tag", "color", "aliases", "reach"].includes(field),
             ),
           );
           yield* write(key, facts);
@@ -137,7 +139,7 @@ export const layer = Layer.effect(
           (rep) => rep.role === "replica" && replicaDriver(state, rep) === mesh.environmentId,
         ),
         (rep) =>
-          service.retry({ logicalKey: key, environmentId: rep.environmentId }).pipe(
+          service.retry({ logicalKey: key, environmentId: rep.environmentId, resume: false }).pipe(
             Effect.mapError(failure),
             Effect.flatMap((status) =>
               status.state === "error"
@@ -244,25 +246,6 @@ export const layer = Layer.effect(
                 description: `Place ${title} on ${rule.on}`,
               });
           }
-          for (const [name, server] of Object.entries(bound)) {
-            if (
-              state.document[marker(key, server)]?.v !== true ||
-              replicaRules(doc, title).some((rule) => rule.on === name)
-            )
-              continue;
-            actions.push({
-              id: `replicas/remove/${key}/${name}`,
-              server: state.config.projectMounts[key]?.some((rep) => rep.environmentId === server)
-                ? (replicaDriver(
-                    state.config,
-                    state.config.projectMounts[key]!.find((rep) => rep.environmentId === server)!,
-                  ) ?? server)
-                : server,
-              machine: name,
-              project: key,
-              description: `Remove managed replica ${title} from ${name}`,
-            });
-          }
         }
         return actions;
       }),
@@ -318,6 +301,30 @@ export const layer = Layer.effect(
         }
       }),
     };
-    return MeshConfigPlanners.of([machines, links, replicas, ignores, conflicts]);
+    const sshPlanner: ConfigPlanner = {
+      name: "ssh",
+      plan: Effect.fn("MeshConfigPlanners.ssh.plan")(function* (doc) {
+        const bound = bindingsFromLayout((yield* snapshot).document);
+        return [
+          {
+            id: "ssh/blocks",
+            server: mesh.environmentId,
+            description: "Reconcile managed SSH blocks",
+          },
+          ...Object.entries(bound)
+            .filter(([, id]) => id !== mesh.environmentId)
+            .map(([machine]) => ({
+              id: `ssh/route/${machine}`,
+              server: mesh.environmentId,
+              machine,
+              description: `Check SSH route to ${machine} (${doc.ssh?.mode ?? "managed"})`,
+            })),
+        ];
+      }),
+      reconcile: Effect.fn("MeshConfigPlanners.ssh.reconcile")((action, doc) =>
+        ssh.reconcile(doc, action.machine),
+      ),
+    };
+    return MeshConfigPlanners.of([machines, links, sshPlanner, replicas, ignores, conflicts]);
   }),
 );

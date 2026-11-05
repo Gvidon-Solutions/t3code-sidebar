@@ -213,8 +213,20 @@ export const layer = Layer.effect(
             .sort(),
           machines: Object.fromEntries(
             Object.entries(snapshot.config.machines).map(([id, machine]) => {
-              const { reported: _reported, ...identity } = machine;
-              return [id, identity];
+              const { reported, ...identity } = machine;
+              return [
+                id,
+                {
+                  ...identity,
+                  sshFacts: reported
+                    ? {
+                        user: reported.user,
+                        sshd: reported.sshd,
+                        meshPublicKey: reported.meshPublicKey,
+                      }
+                    : null,
+                },
+              ];
             }),
           ),
         }),

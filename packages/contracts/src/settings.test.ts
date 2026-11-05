@@ -333,26 +333,14 @@ describe("ServerSettings replica defaults", () => {
     expect(settings.mutagenPath).toBe("");
     expect(settings.replicaRoot).toBe("");
     expect(settings.replicaIgnores).toEqual([
+      "/node_modules",
+      "/.venv",
+      "/dist",
+      "/build",
+      "/target",
+      "/.t3",
+      "/.t3-conflicts",
       "node_modules",
-      ".venv",
-      "venv",
-      "__pycache__",
-      ".pytest_cache",
-      "dist",
-      "build",
-      "target",
-      ".next",
-      ".turbo",
-      "coverage",
-      ".t3",
-      ".t3-conflicts",
-      ".claude/worktrees",
-      ".DS_Store",
-      "SingletonSocket",
-      "SingletonLock",
-      "SingletonCookie",
-      ".codex/tmp",
-      "tmp/arg0",
     ]);
     expect(
       decodeServerSettingsPatch({

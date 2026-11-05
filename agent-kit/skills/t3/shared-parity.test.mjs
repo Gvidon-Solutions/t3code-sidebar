@@ -82,8 +82,10 @@ test("alias writes match bounded shared clocks, including counter overflow", asy
       },
     },
   };
+  const imported = importLegacyEntries(config, "local");
+  assert.deepEqual(imported["machine/remote"].v.reach, config.machines.remote.reach);
   assert.deepEqual(
-    { ...materialize(importLegacyEntries(config, "local")).machines },
-    config.machines,
+    { ...materialize(imported).machines },
+    { remote: { label: "Worker", aliases: ["office", "研究室"] } },
   );
 });

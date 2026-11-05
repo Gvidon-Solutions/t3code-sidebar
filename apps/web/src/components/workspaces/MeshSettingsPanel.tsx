@@ -10,7 +10,6 @@ import {
   meshFooterText,
   meshMachineLastSync,
   meshConnectionText,
-  setMachineReach,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import {
   isAtomCommandInterrupted,
@@ -110,15 +109,10 @@ function MachineEditor(props: {
   }>;
   readonly now: number;
   readonly onEdit: (patch: MachineDisplayPatch) => void;
-  readonly onReach: (
-    target: string,
-    reach: { ssh: string; identityFile?: string | null } | null,
-  ) => void;
   readonly onUnlink: (source: string, target: string) => void;
   readonly onConnect: () => void;
 }) {
   const machine = props.machine;
-  const configured = machine.reach;
   return (
     <SettingsSection
       id={`machine-${machine.environmentId}`}
@@ -226,41 +220,6 @@ function MachineEditor(props: {
           }
         />
       ) : null}
-      {props.otherMachines.map((other) => (
-        <SettingsRow
-          key={`reach:${other.environmentId}`}
-          title={`SSH route to ${other.label} (${other.tag})`}
-          description="Used by replicas and agents that run commands on the other machine."
-          control={
-            <div className="flex w-full flex-col gap-2 @min-[32rem]/settings-row:w-72">
-              <Input
-                key={`reach-ssh:${other.environmentId}:${configured[other.environmentId]?.ssh ?? ""}`}
-                aria-label={`SSH destination for ${other.environmentId}`}
-                defaultValue={configured[other.environmentId]?.ssh ?? ""}
-                placeholder="user@host or an ssh alias"
-                onBlur={(event) =>
-                  props.onReach(other.environmentId, {
-                    ssh: event.currentTarget.value,
-                    identityFile: configured[other.environmentId]?.identityFile ?? null,
-                  })
-                }
-              />
-              <Input
-                key={`reach-key:${other.environmentId}:${configured[other.environmentId]?.identityFile ?? ""}`}
-                aria-label={`Identity file for ${other.environmentId}`}
-                defaultValue={configured[other.environmentId]?.identityFile ?? ""}
-                placeholder="Identity file (optional)"
-                onBlur={(event) =>
-                  props.onReach(other.environmentId, {
-                    ssh: configured[other.environmentId]?.ssh ?? "",
-                    identityFile: event.currentTarget.value,
-                  })
-                }
-              />
-            </div>
-          }
-        />
-      ))}
       {machine.linkedWith.length > 0 ? (
         <SettingsRow
           title="Links"
@@ -600,11 +559,6 @@ export function MeshSettingsPanel() {
               now={now}
               onEdit={(patch) =>
                 updateConfig((current) => setMachineDisplay(current, machine.environmentId, patch))
-              }
-              onReach={(target, reach) =>
-                updateConfig((current) =>
-                  setMachineReach(current, machine.environmentId, target, reach),
-                )
               }
               onUnlink={(source, target) => {
                 if (

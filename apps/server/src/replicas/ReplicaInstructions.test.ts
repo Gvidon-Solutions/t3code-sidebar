@@ -47,8 +47,8 @@ it("names the primary machine in the injected note instead of presenting its id 
   const config = {
     ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces,
     machines: {
-      "opaque-primary": { label: "worker", tag: "WK", reach: {} },
-      replica: { reach: { "opaque-primary": { ssh: "worker" } } },
+      "opaque-primary": { label: "worker", tag: "WK" },
+      replica: {},
     },
     projectMounts: {
       logical: [
@@ -72,9 +72,9 @@ it("names the primary machine in the injected note instead of presenting its id 
     },
   } as const;
   const note = replicaContextNote(config, "replica", "p");
-  expect(note).toContain("on worker (WK)");
+  expect(note).toContain("primary: worker (WK)");
+  expect(note).toContain("mode: lite");
+  expect(note).toContain("sync: pending");
   expect(note).not.toContain("opaque-primary");
-  expect(note).toContain("lite replica");
   expect(note).toContain("t3 run -- <command>");
-  expect(note).toContain("Sync: unknown");
 });

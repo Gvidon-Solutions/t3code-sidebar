@@ -1,3 +1,4 @@
+import { projectPolicy } from "@t3tools/shared/meshConfig";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Session names require a synchronous deterministic hash, without a runtime.
 import * as NodeCrypto from "node:crypto";
 import type {
@@ -12,12 +13,8 @@ export function sessionIdentity(logicalKey: string, environmentId: string) {
   const environmentTag = environmentId.slice(0, 8);
   return { name: `t3-${logicalHash}-${environmentTag}`, logicalHash, environmentTag };
 }
-export function replicaDriver(config: SidebarWorkspacesConfig, replica: SidebarProjectMount) {
-  if (!replica.source) return undefined;
-  if (config.machines[replica.environmentId]?.reach?.[replica.source]?.ssh)
-    return replica.environmentId;
-  if (config.machines[replica.source]?.reach?.[replica.environmentId]?.ssh) return replica.source;
-  return undefined;
+export function replicaDriver(_config: SidebarWorkspacesConfig, replica: SidebarProjectMount) {
+  return replica.role === "replica" && replica.source ? replica.environmentId : undefined;
 }
 export function sessionStatus(
   session: MutagenSession,
@@ -98,15 +95,8 @@ export function sessionStatus(
   };
 }
 
-export function sshEndpoint(
-  route: { readonly ssh: string; readonly identityFile?: string },
-  environmentId: string,
-  root: string,
-) {
-  if (route.identityFile) return `t3-mesh-${environmentId}:${root}`;
-  return /:\d+$/.test(route.ssh)
-    ? `ssh://${route.ssh}${root.startsWith("/") ? "" : "/"}${root}`
-    : `${route.ssh}:${root}`;
+export function sshEndpoint(route: { readonly ssh: string }, _environmentId: string, root: string) {
+  return `${route.ssh}:${root}`;
 }
 
 export function remoteRepresentation(
@@ -131,10 +121,22 @@ export function remoteRepresentation(
   return config.projectMounts[key]?.find((rep) => rep.environmentId === target);
 }
 
-const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", ".t3-conflicts"];
+const protectedIgnores = [".git", ".svn", ".hg", ".bzr", "_darcs", "/.t3-conflicts"];
 export function replicaIgnorePatterns(configured: readonly string[]): string[] {
+  const defaults = projectPolicy({ schema: 1, machines: {} }, "").ignore;
+  const prefix = defaults.filter((pattern) => !protectedIgnores.includes(pattern));
+  let offset = 0;
+  // User override order and duplicate negations are significant; only generated prefixes are removed.
+  for (;;) {
+    const generated = [defaults, prefix].find((patterns) =>
+      patterns.every((pattern, index) => configured[offset + index] === pattern),
+    );
+    if (!generated) break;
+    offset += generated.length;
+  }
   return [
-    ...configured.filter((pattern) => !protectedIgnores.includes(pattern)),
+    ...prefix,
+    ...configured.slice(offset).filter((pattern) => !protectedIgnores.includes(pattern)),
     ...protectedIgnores,
   ];
 }

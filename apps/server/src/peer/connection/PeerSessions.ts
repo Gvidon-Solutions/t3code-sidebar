@@ -246,6 +246,7 @@ const toReported = (facts: PeerFacts.PeerFacts): SidebarMachineReported => ({
   version: facts.version,
   platform: { ...facts.platform },
   user: facts.user,
+  ...(facts.meshPublicKey ? { meshPublicKey: facts.meshPublicKey } : {}),
   sshd: facts.sshd === null ? null : { port: facts.sshd.port, hostKeys: [...facts.sshd.hostKeys] },
   reportedAt: DateTime.formatIso(DateTime.nowUnsafe()),
   ...(facts.connections === undefined ? {} : { connections: [...facts.connections] }),

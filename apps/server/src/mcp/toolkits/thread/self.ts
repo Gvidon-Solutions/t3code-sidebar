@@ -120,6 +120,7 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
     branch: thread.branch,
     representation: {
       role: representation?.role ?? "primary",
+      mode: representation?.mode ?? (representation?.role === "replica" ? "lite" : "full"),
       transport: representation?.transport ?? "git",
       source: representation?.source
         ? {

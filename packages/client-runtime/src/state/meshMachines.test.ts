@@ -7,10 +7,8 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildMeshMachines,
   deriveMeshFooterStatus,
-  machineReachOf,
   meshFooterText,
   meshMachineLastSync,
-  setMachineReach,
 } from "./meshMachines.ts";
 
 const base: SidebarWorkspacesConfig = {
@@ -245,31 +243,6 @@ describe("meshMachineLastSync", () => {
   it("says never when the server has not recorded an exchange", () => {
     const other = { ...machine, lastExchangeAt: null };
     expect(meshMachineLastSync(other, 0)).toBe("Never synced");
-  });
-});
-
-describe("ssh routes", () => {
-  it("saves a destination and identity file under the source machine", () => {
-    const next = setMachineReach(base, "boreal", "atlas", {
-      ssh: "atlas",
-      identityFile: "~/.ssh/id_ed25519",
-    });
-    expect(machineReachOf(next, "boreal", "atlas")).toEqual({
-      ssh: "atlas",
-      identityFile: "~/.ssh/id_ed25519",
-    });
-    expect(machineReachOf(base, "boreal", "atlas")).toBeNull();
-  });
-
-  it("drops the identity file when empty and removes a route with an empty destination", () => {
-    const withFile = setMachineReach(base, "boreal", "atlas", {
-      ssh: " atlas ",
-      identityFile: "  ",
-    });
-    expect(machineReachOf(withFile, "boreal", "atlas")).toEqual({ ssh: "atlas" });
-    const removed = setMachineReach(withFile, "boreal", "atlas", { ssh: "   " });
-    expect(machineReachOf(removed, "boreal", "atlas")).toBeNull();
-    expect(removed.machines.boreal).toEqual(base.machines.boreal);
   });
 });
 

@@ -1,3 +1,4 @@
+import * as MeshSsh from "./replicas/MeshSsh.ts";
 import * as MeshApplicationEvents from "./persistence/OrchestrationEventStore.ts";
 import * as MeshProjects from "./mesh/MeshProjectDirectory.ts";
 import * as ThreadForks from "./mesh/ThreadForkService.ts";
@@ -580,8 +581,14 @@ const layerOrchestrationV2Runtime = RuntimeLayer.layerProduction.pipe(
   ),
 );
 
+const layerMeshSsh = MeshSsh.layer.pipe(Layer.provide(layerMesh));
 const layerMeshConfig = MeshConfig.layer.pipe(
-  Layer.provide(MeshConfigPlanners.layer.pipe(Layer.provide(layerOrchestrationV2Runtime))),
+  Layer.provide(
+    MeshConfigPlanners.layer.pipe(
+      Layer.provide(layerOrchestrationV2Runtime),
+      Layer.provide(layerMeshSsh),
+    ),
+  ),
   Layer.provide(MeshConfigMigration.layer.pipe(Layer.provide(PeerLinks.layer))),
 );
 const layerMeshConfigRuntime = MeshConfig.startedLayer.pipe(Layer.provideMerge(layerMeshConfig));
@@ -784,7 +791,7 @@ const layerPeerDispatcher = PeerCallDispatcherLive.layer.pipe(
 const layerPeerSessions = PeerSessions.layer.pipe(
   Layer.provideMerge(layerMesh),
   Layer.provide(PeerWire.dialerLayer),
-  Layer.provide(PeerFacts.layer()),
+  Layer.provide(PeerFacts.layer().pipe(Layer.provide(layerMeshSsh))),
   Layer.provideMerge(layerPeerDispatcher),
   Layer.provideMerge(PeerTransport.layer),
   Layer.provideMerge(layerPeerMcp),

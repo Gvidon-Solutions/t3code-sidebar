@@ -8557,7 +8557,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
           machines: {
             A: { tag: "AA", title: "Studio" },
-            B: { tag: "BB", title: "Cloudbox", reach: { A: { ssh: "studio" } } },
+            B: { tag: "BB", title: "Cloudbox" },
           },
           projectMounts: {
             logical: [

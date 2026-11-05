@@ -94,7 +94,7 @@ it("saves multilingual machine aliases through the shared layout editor and can 
   await vi.waitFor(() => expect(mocks.edit).toHaveBeenCalledTimes(1));
   const before: SidebarWorkspacesConfig = {
     ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-    machines: { local: { label: "Local", tag: "LOC", reach: { remote: { ssh: "user@worker" } } } },
+    machines: { local: { label: "Local", tag: "LOC" } },
   };
   const saved = mocks.edit.mock.calls[0]![0](before);
   expect(saved.machines.local).toEqual({ ...before.machines.local, aliases: ["office", "研究室"] });

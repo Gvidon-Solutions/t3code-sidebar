@@ -1,3 +1,5 @@
+import * as ReplicaEnvironment from "./ReplicaEnvironment.ts";
+import * as ProcessRunner from "../processRunner.ts";
 import * as ReplicaPaths from "./ReplicaPaths.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -52,9 +54,7 @@ export const makeReplicaHarness = (
         replica,
       ],
     },
-    machines: sourceDrives
-      ? { source: { reach: { replica: { ssh: "replica" } } } }
-      : { replica: { reach: { source: { ssh: "source" } } } },
+    machines: sourceDrives ? { source: {} } : { replica: {} },
   });
   let sessions: ReadonlyArray<Runner.MutagenSession> = [];
   const foreign: { sessions: readonly Runner.MutagenSession[] } = { sessions: [] };
@@ -63,6 +63,7 @@ export const makeReplicaHarness = (
   const preserved: Parameters<Runner.MutagenRunner["Service"]["preserveConflicts"]>[0][] = [];
   const terminated: string[] = [];
   const validation = {
+    pending: [] as readonly string[],
     check: (
       _input: Parameters<Runner.MutagenRunner["Service"]["assertReplicaPath"]>[0],
     ): Effect.Effect<void, ReplicaError> => Effect.void,
@@ -83,13 +84,17 @@ export const makeReplicaHarness = (
                   session.identifier === identifier ? { ...session, paused: true } : session,
                 );
         }),
+      changedPaths: () => Effect.sync(() => validation.pending),
       assertReplicaPath: (input) => validation.check(input),
       preserveConflicts: (input) =>
         Effect.sync(() => {
           preserved.push(input);
         }),
       conflictMtime: (input) => Effect.sync(() => onConflictMtime(input.root, input.paths)),
-      list: () => Effect.sync(() => sessions).pipe(Effect.tap(() => onList)),
+      list: (selector = "t3-logical") =>
+        Effect.sync(() =>
+          sessions.filter((session) => session.labels?.[selector] !== undefined),
+        ).pipe(Effect.tap(() => onList)),
       listExisting: Effect.sync(() => sessions).pipe(Effect.tap(() => onListExisting)),
       create: (input) =>
         onCreate.pipe(
@@ -117,7 +122,10 @@ export const makeReplicaHarness = (
           terminated.push(name);
           sessions = sessions.filter((s) => s.name !== name && s.identifier !== name);
         }),
-      pause: () => Effect.void,
+      pause: () =>
+        Effect.sync(() => {
+          sessions = sessions.map((session) => ({ ...session, paused: true }));
+        }),
       resume: () =>
         Effect.sync(() => {
           sessions = sessions.map((s) => ({ ...s, paused: false }));
@@ -181,12 +189,23 @@ export const makeReplicaHarness = (
   });
   const dependencies = Layer.mergeAll(
     Layer.succeed(HostProcess.HomeDirectory, "/tmp/t3-e-unused-test-home"),
-    MeshTest.layerTest(self, initial),
+    MeshTest.layerTest(self, initial, {
+      "mesh.machineBinding/source": { v: "source", h: "0000000000000-000000-fixture" },
+      "mesh.machineBinding/replica": { v: "replica", h: "0000000000000-000000-fixture" },
+    }),
     ReplicaPaths.layer,
     runner,
     projects,
   ).pipe(Layer.provideMerge(ServerSettings.layerTest()), Layer.provideMerge(NodeServices.layer));
-  const layer = ReplicaService.layer.pipe(Layer.provideMerge(dependencies));
+  const layer = ReplicaService.layer.pipe(
+    Layer.provideMerge(
+      ReplicaEnvironment.layer.pipe(
+        Layer.provide(ProcessRunner.layer),
+        Layer.provide(dependencies),
+      ),
+    ),
+    Layer.provideMerge(dependencies),
+  );
   return {
     layer,
     created,
