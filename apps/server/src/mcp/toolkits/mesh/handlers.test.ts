@@ -1,3 +1,4 @@
+import { MeshConfig } from "../../../mesh/MeshConfig.ts";
 import { MeshBootstrap } from "../../../mesh/MeshBootstrap.ts";
 import { SecretRequests } from "../../../secrets/SecretRequests.ts";
 import { SecretRef, SecretRequestError, ProjectId } from "@t3tools/contracts";
@@ -7,6 +8,7 @@ import { expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
   MeshConfigRevision,
+  MeshConfigPlan,
   MeshConfigHistory,
   MeshConfigStatus,
   EnvironmentId,
@@ -21,6 +23,7 @@ import * as Access from "../../McpToolAccess.ts";
 import * as Handlers from "./handlers.ts";
 import { MeshToolkit } from "./tools.ts";
 
+const decodePlan = Schema.decodeUnknownEffect(MeshConfigPlan);
 const decodeRuntime = Schema.decodeUnknownEffect(RunRuntimeInfo);
 const decodeRevision = Schema.decodeUnknownEffect(MeshConfigRevision);
 const decodeHistory = Schema.decodeUnknownEffect(MeshConfigHistory);
@@ -105,6 +108,23 @@ it.effect(
       expect((yield* decodeStatus(status.at(-1)?.result)).servers).toMatchObject([
         { environmentId: "studio" },
       ]);
+      const added = yield* tools
+        .handle("t3_mesh_machine_add", { name: "cloudbox", ssh: "studio@cloudbox:2222" })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect((yield* decodeRevision(added.at(-1)?.result)).doc.machines.cloudbox).toEqual({
+        bootstrap: { ssh: "studio@cloudbox:2222" },
+      });
+      const preview = yield* tools
+        .handle("t3_mesh_update", { version: "0.1.6", plan: true })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect((yield* decodePlan(preview.at(-1)?.result)).doc.t3?.version).toBe("0.1.6");
+      expect((yield* (yield* MeshConfig).current)?.doc.t3).toBeUndefined();
+      const updated = yield* tools
+        .handle("t3_mesh_update", { version: "0.1.6" })
+        .pipe(Stream.unwrap, Stream.runCollect);
+      const updatedDoc = (yield* decodeRevision(updated.at(-1)?.result)).doc;
+      expect(updatedDoc.t3?.version).toBe("0.1.6");
+      expect(updatedDoc.machines.cloudbox?.bootstrap?.ssh).toBe("studio@cloudbox:2222");
     }).pipe(
       Effect.provide(
         Layer.mergeAll(

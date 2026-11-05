@@ -348,9 +348,19 @@ export const layer = Layer.effect(
         target,
         previousUpdateId: context?.update?.id ?? null,
       });
-      handoffRequested = true;
       yield* backup.create(lease.token).pipe(
-        Effect.andThen(selfUpdate.update({ targetVersion: target })),
+        Effect.andThen(
+          selfUpdate.update({ targetVersion: target }, undefined, () =>
+            Effect.sync(() => {
+              handoffRequested = true;
+            }),
+          ),
+        ),
+        Effect.tap(() =>
+          Effect.sync(() => {
+            handoffRequested = true;
+          }),
+        ),
         Effect.tapError((error) =>
           Effect.gen(function* () {
             handoffRequested = false;

@@ -1,3 +1,5 @@
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
 import { MeshTrialFailureExit } from "../platform/ServerPlatform.ts";
 import { MeshStateBackup } from "./MeshStateBackup.ts";
 import { expect, it } from "@effect/vitest";
@@ -33,6 +35,7 @@ const fixture = Effect.gen(function* () {
   const services = new Map<string, Rollout.MeshRollout["Service"]>();
   const requested: string[] = [];
   const steps: string[] = [];
+  const backupBlocks = new Map<string, Effect.Effect<void>>();
   const h = yield* mesh.nextHlc;
   const doc = {
     schema: 1,
@@ -111,8 +114,9 @@ const fixture = Effect.gen(function* () {
       Layer.mock(ReplicaRuntime)({ get: Effect.die("Unexpected replica startup") }),
       Layer.succeed(MeshStateBackup, {
         create: () =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
             steps.push(`backup/${id}`);
+            yield* backupBlocks.get(id) ?? Effect.void;
           }),
       }),
       Layer.mock(ServerSelfUpdate)({
@@ -143,7 +147,7 @@ const fixture = Effect.gen(function* () {
     return service;
   });
   for (const id of Object.keys(doc.machines)) yield* make(id, "0.1.5");
-  return { mesh, make, services, requested, root, fs };
+  return { mesh, make, services, requested, root, fs, backupBlocks };
 });
 const testLayer = Layout.layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG).pipe(
   Layer.provideMerge(NodeServices.layer),
@@ -221,4 +225,24 @@ it.effect(
       );
       expect(f.requested).toEqual(["cloudbox"]);
     }).pipe(Effect.scoped, Effect.provide(testLayer)),
+);
+
+it.effect("resumes the same lease after interruption before the launcher accepts the handoff", () =>
+  Effect.gen(function* () {
+    const f = yield* fixture;
+    const reached = yield* Deferred.make<void>();
+    const blocked = yield* Deferred.make<void>();
+    f.backupBlocks.set(
+      "cloudbox",
+      Deferred.succeed(reached, undefined).pipe(Effect.andThen(Deferred.await(blocked))),
+    );
+    const first = yield* Effect.forkChild(f.services.get("cloudbox")!.reconcile, {
+      startImmediately: true,
+    });
+    yield* Deferred.await(reached);
+    yield* Fiber.interrupt(first);
+    f.backupBlocks.delete("cloudbox");
+    yield* f.services.get("cloudbox")!.reconcile;
+    expect(f.requested).toEqual(["cloudbox"]);
+  }).pipe(Effect.scoped, Effect.provide(testLayer)),
 );

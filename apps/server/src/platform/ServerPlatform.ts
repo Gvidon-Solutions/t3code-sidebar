@@ -319,7 +319,11 @@ export function meshServicePlan(input: MeshServiceInput) {
         },
       ],
       commands: [
-        { command: "launchctl", args: ["bootstrap", `gui/${uid}`, file] },
+        {
+          command: "launchctl",
+          args: ["bootstrap", `gui/${uid}`, file],
+          skipIfAccepted: { command: "launchctl", args: ["print", `gui/${uid}/${label}`] },
+        },
         { command: "launchctl", args: ["kickstart", `gui/${uid}/${label}`] },
       ],
     };

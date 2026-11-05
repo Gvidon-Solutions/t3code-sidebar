@@ -94,15 +94,15 @@ export const layer = Layer.effect(
           yield* fs.writeFileString(file.path, file.content);
         }
         for (const command of plan.commands) {
-          if (platform === "darwin" && command.args[0] === "bootstrap") {
-            const exists = yield* runner.run({
-              command: "launchctl",
-              args: ["print", `gui/${uid}/com.t3tools.mesh`],
-              timeout: "10 seconds",
-            });
+          if ("skipIfAccepted" in command && command.skipIfAccepted) {
+            const exists = yield* runner.run({ ...command.skipIfAccepted, timeout: "10 seconds" });
             if (exists.code === 0) continue;
           }
-          const result = yield* runner.run({ ...command, timeout: "2 minutes" });
+          const result = yield* runner.run({
+            command: command.command,
+            args: command.args,
+            timeout: "2 minutes",
+          });
           if (result.code !== 0)
             return yield* new MeshConfigError({
               reason: "storage",
