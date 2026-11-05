@@ -23,6 +23,7 @@ else if(mode==='empty') process.exitCode=0;
 else if(mode==='invalid') process.stdout.write('\\x1eT3RUN invalid\\n');
 else { frame({type:'out',data:Buffer.from(process.argv.slice(2).join(' ')).toString('base64')});
 if(mode==='error') frame({type:'error',message:'primary supervisor failed'});
+frame({type:'ignored',paths:['dist/first','dist/second']});
 frame({type:'done',code:mode==='remote255'?255:23,ignored:[]}); }
 `,
         );
@@ -52,11 +53,12 @@ process.stdout.write(JSON.stringify(results));`;
         );
         const rows = JSON.parse(result.stdout) as ReadonlyArray<{
           mode: string;
-          result?: { code: number };
+          result?: { code: number; ignored: string[] };
           args?: string;
           error?: string;
         }>;
         expect(rows[0]?.result?.code).toBe(23);
+        expect(rows[0]?.result?.ignored).toEqual(["dist/first", "dist/second"]);
         expect(rows[0]?.args).toContain(
           "-T -L 127.0.0.1:3000:127.0.0.1:3000 -L 127.0.0.1:8080:127.0.0.1:8080 t3-studio",
         );

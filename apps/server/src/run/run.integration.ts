@@ -672,7 +672,7 @@ try {
     "--",
     "node",
     "-e",
-    "const fs=require('fs');fs.writeFileSync('bg-returned.txt','back');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/bg-output.txt','stays');console.log('BG_COMPLETE')",
+    "const fs=require('fs');fs.writeFileSync('bg-returned.txt','back');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/bg-output.txt','stays');fs.writeFileSync('dist/bg-line\\nbreak.txt','stays');for(let i=0;i<2048;i++)fs.writeFileSync('dist/bg-'+('Ю'.repeat(40))+'-'+i,'stays');console.log('BG_COMPLETE')",
   ]);
   NodeAssert.equal(completed.code, 0);
   const completedId = completed.stdout.trim();
@@ -682,10 +682,38 @@ try {
     await NodeFSP.readFile(NodePath.join(replica, "bg-returned.txt"), "utf8"),
     "back",
   );
-  const completedLogs = await run("background_natural_logs", ["--logs", completedId]);
+  const completedLogs = await launch(["--logs", completedId], env).result;
+  report("background_natural_logs", {
+    code: completedLogs.code,
+    stdout: completedLogs.stdout,
+    unicodeRetainedPaths: 2050,
+    noteLines: completedLogs.stderr.trim().split("\n").length,
+  });
   NodeAssert.equal(completedLogs.code, 0);
   NodeAssert.equal(completedLogs.stdout, "BG_COMPLETE\n");
-  NodeAssert.match(completedLogs.stderr, /dist\/bg-output.txt stayed on cloudbox/);
+  NodeAssert.match(completedLogs.stderr, /stayed on cloudbox/);
+  const loggedPaths = new Set(
+    completedLogs.stderr.trim().split(" stayed on cloudbox")[0]!.split(", "),
+  );
+  NodeAssert.equal(loggedPaths.size, 2050);
+  for (let i = 0; i < 2048; i++) NodeAssert.ok(loggedPaths.has(`dist/bg-${"Ю".repeat(40)}-${i}`));
+  NodeAssert.ok(loggedPaths.has("dist/bg-output.txt"));
+  NodeAssert.ok(loggedPaths.has(JSON.stringify("dist/bg-line\nbreak.txt")));
+  NodeAssert.equal(completedLogs.stderr.trim().split("\n").length, 1);
+  const large = await launch(
+    [
+      "--",
+      "node",
+      "-e",
+      "const fs=require('fs');fs.mkdirSync('dist',{recursive:true});for(let i=0;i<16384;i++)fs.writeFileSync('dist/dependency-'+('x'.repeat(80))+'-'+i,'output')",
+    ],
+    env,
+  ).result;
+  NodeAssert.equal(large.code, 0);
+  NodeAssert.equal(large.stderr.match(/dist\/dependency-/g)?.length, 16384);
+  NodeAssert.equal(large.stderr.trim().split("\n").length, 1);
+  NodeAssert.ok(large.stderr.length > 1048576);
+  report("large_ignored_outputs", { code: large.code, paths: 16384, noteLines: 1 });
   const finalSessions = JSON.parse(await mutagen("sync", "list", "--template", "{{json .}}"));
   NodeAssert.equal(finalSessions.length, 1);
   NodeAssert.equal(

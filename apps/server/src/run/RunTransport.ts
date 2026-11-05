@@ -68,6 +68,7 @@ export async function remoteRun(
   });
   let done: { code: number; ignored: readonly string[] } | undefined;
   let id: string | undefined;
+  const ignored: string[] = [];
   let reason = "";
   let fatal = false;
   let protocolError: Error | undefined;
@@ -117,7 +118,8 @@ export async function remoteRun(
         data: Buffer.from(line.slice(0, marker)).toString("base64"),
       });
     const frame = decodeFrame(line.slice(marker));
-    if (frame.type === "done") done = { code: frame.code, ignored: frame.ignored };
+    if (frame.type === "ignored") ignored.push(...frame.paths);
+    if (frame.type === "done") done = { code: frame.code, ignored: [...ignored, ...frame.ignored] };
     if (frame.type === "ready") {
       if (frame.id) id = frame.id;
       if (!ready) {

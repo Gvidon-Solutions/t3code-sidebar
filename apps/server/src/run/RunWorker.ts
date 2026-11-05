@@ -15,6 +15,18 @@ const journal = id => path.join(root, id + '.ndjson');
 const address = id => process.platform === 'win32' ? '\\\\.\\pipe\\t3-run-' + c.namespace + '-' + id : path.join(root, id + '.sock');
 const validId = id => typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id);
 const frame = value => process.stdout.write(String.fromCharCode(30) + 'T3RUN ' + JSON.stringify(value) + '\n');
+async function completion(code, paths, emit = frame) {
+  async function send(value) { if (emit(value) === false) await require('node:events').once(process.stdout, 'drain'); }
+  if (Buffer.byteLength(JSON.stringify(paths)) <= 32768) { await send({type:'done',code,ignored:paths}); return; }
+  let chunk = [], size = 0;
+  for (const file of paths) {
+    const bytes = Buffer.byteLength(JSON.stringify(file)) + 1;
+    if (chunk.length && size + bytes > 32768) { await send({type:'ignored',paths:chunk}); chunk = []; size = 0; }
+    chunk.push(file); size += bytes;
+  }
+  if (chunk.length) await send({type:'ignored',paths:chunk});
+  await send({type:'done',code,ignored:[]});
+}
 const atomic = async (file, value) => { const temp = file + '.' + crypto.randomUUID(); await fsp.writeFile(temp, JSON.stringify(value), {mode: 0o600}); await fsp.rename(temp, file); };
 const state = async id => JSON.parse(await fsp.readFile(record(id), 'utf8'));
 async function prepareRoot() {
@@ -74,6 +86,7 @@ async function control(id, signal) {
 async function observe(id, logs, follow) {
   let offset = 0;
   let buffer = '';
+  const decoder = new (require('node:string_decoder').StringDecoder)('utf8');
   let watcher;
   let draining = false;
   let again = false;
@@ -93,7 +106,7 @@ async function observe(id, logs, follow) {
               const data = Buffer.alloc(Math.min(65536, size - offset));
               const read = await handle.read(data, 0, data.length, offset);
               offset += read.bytesRead;
-              buffer += data.subarray(0, read.bytesRead).toString();
+              buffer += decoder.write(data.subarray(0, read.bytesRead));
               let end;
               while ((end = buffer.indexOf('\n')) >= 0) {
                 const item = JSON.parse(buffer.slice(0, end)); buffer = buffer.slice(end + 1);
@@ -104,7 +117,7 @@ async function observe(id, logs, follow) {
           } finally { await handle.close(); }
         }
         const current = await state(id);
-        if (!logs && current.status !== 'running') { frame({type: 'done', code: current.code, ignored: current.ignored || []}); completed = true; }
+        if (!logs && current.status !== 'running') { await completion(current.code, current.ignored || []); completed = true; }
         if (completed || !follow) { close(); if (!completed) frame({type: 'done', code: 0, ignored: []}); }
       } while (again && !completed && follow);
     } finally { draining = false; }
@@ -216,7 +229,7 @@ async function execute(job) {
   clearTimeout(killTimer); clearTimeout(commandTimer); clearInterval(watchdog);
   const outputs = await changed(before);
   if (job) await atomic(record(id), {...metadata, status: 'exited', code, ignored: outputs});
-  emit({type: 'done', code, ignored: outputs});
+  await completion(code, outputs, emit);
   if (server) await new Promise(resolve => server.close(resolve));
   process.stdin.destroy();
 }

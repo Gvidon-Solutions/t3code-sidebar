@@ -46,6 +46,7 @@ export const WorkerFrame = Schema.Union([
     code: Schema.Int,
     ignored: Schema.Array(Schema.String),
   }),
+  Schema.Struct({ type: Schema.Literal("ignored"), paths: Schema.Array(Schema.String) }),
   Schema.Struct({ type: Schema.Literal("ready"), id: Schema.String }),
   Schema.Struct({ type: Schema.Literal("error"), message: Schema.String }),
 ]);

@@ -124,6 +124,12 @@ async function startGuardian(
   child.disconnect();
   child.unref();
 }
+const ignoredNotice = (paths: readonly string[], machine: string) => {
+  if (paths.length)
+    process.stderr.write(
+      `${paths.map((path) => (/[\r\n]/.test(path) ? JSON.stringify(path) : path)).join(", ")} stayed on ${machine}\n`,
+    );
+};
 export async function runCli(args: readonly string[]) {
   if (args.includes("--help") && args[0] === "--help") {
     process.stdout.write(
@@ -188,8 +194,7 @@ export async function runCli(args: readonly string[]) {
           process.exitCode = flushed.code;
           return;
         }
-        if (result.ignored.length)
-          process.stderr.write(`${result.ignored.join(", ")} stayed on ${plan.machine}\n`);
+        ignoredNotice(result.ignored, plan.machine);
       }
       process.exitCode = options.stop ? 0 : result.code;
       return;
@@ -255,8 +260,7 @@ export async function runCli(args: readonly string[]) {
         process.exitCode = flushed.code;
       }
     }
-    if (result.ignored.length)
-      process.stderr.write(`${result.ignored.join(", ")} stayed on ${plan.machine}\n`);
+    ignoredNotice(result.ignored, plan.machine);
     process.exitCode = result.code || process.exitCode || 0;
   } catch (cause) {
     process.stderr.write(

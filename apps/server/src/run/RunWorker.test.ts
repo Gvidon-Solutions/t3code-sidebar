@@ -177,3 +177,48 @@ it.live("tracks a detached job through disconnect, live logs, list and process-g
     }
   }),
 );
+
+it.live("keeps a large ignored dependency tree within a bounded completion frame", () =>
+  Effect.promise(async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-run-ignored-tree-"));
+    try {
+      const payload = {
+        action: "exec",
+        namespace: "0123456789abcdef",
+        root,
+        cwd: root,
+        ignores: ["/node_modules"],
+        args: [
+          process.execPath,
+          "-e",
+          "const fs=require('fs');fs.mkdirSync('node_modules');for(let i=0;i<2048;i++)fs.writeFileSync('node_modules/dependency-'+('x'.repeat(40))+'-'+i,'output')",
+        ],
+      };
+      const child = NodeChildProcess.spawn(process.execPath, [
+        "-e",
+        RUN_WORKER_SOURCE,
+        "--",
+        Buffer.from(JSON.stringify(payload)).toString("base64"),
+      ]);
+      const frames: ReturnType<typeof decodeFrame>[] = [];
+      const lines = NodeReadline.createInterface({ input: child.stdout });
+      lines.on("line", (line) => frames.push(decodeFrame(line)));
+      child.stdin.write('{"type":"beat"}\n{"type":"end"}\n');
+      const code = await new Promise<number | null>((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", resolve);
+      });
+      expect(code).toBe(0);
+      const done = frames.at(-1);
+      expect(done?.type).toBe("done");
+      if (done?.type !== "done") throw Error("Missing completion frame");
+      expect(done.ignored).toHaveLength(0);
+      const retained = frames.flatMap((frame) => (frame.type === "ignored" ? frame.paths : []));
+      expect(retained).toHaveLength(2048);
+      expect(new Set(retained).size).toBe(2048);
+      expect(frames.every((frame) => Buffer.byteLength(JSON.stringify(frame)) < 65536)).toBe(true);
+    } finally {
+      await NodeFSP.rm(root, { recursive: true, force: true });
+    }
+  }),
+);
