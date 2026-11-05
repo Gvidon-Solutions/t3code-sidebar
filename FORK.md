@@ -108,6 +108,19 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-05 — R1 replica command execution
+
+- **What.** `t3 run` executes lite-replica commands in the primary environment with live output,
+  exact exit status, conflict refusal, background jobs and loopback port forwarding. Threads
+  receive the runtime command and configurable guards for commands requiring that environment.
+- **How.** Resolve through the local server; flush and inspect S1's public sync APIs; use managed
+  `t3-<name>` SSH under the user's login shell. A supervisor owns each foreground process group;
+  detached primary jobs have list/logs/stop and a replica forwarding guardian. Flush back and
+  name ignored outputs. Shell-only guards preserve native harness Git discovery.
+- **Where.** `apps/server/src/run/`, CLI/bin/server seams, replica instructions and mesh runtime
+  discovery; provider-core environment injection, Codex/OpenCode/ACP shell seams;
+  `packages/contracts/src/meshConfig.ts`, `agent-kit/skills/t3/SKILL.md`.
+
 ### 2026-11-05 — Managed SSH and replicas v2 (Stage S1)
 
 - **What.** Mesh-managed keys, pinned `t3-<name>` SSH hosts over persistent pipes,

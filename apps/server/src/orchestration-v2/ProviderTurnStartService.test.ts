@@ -1784,9 +1784,7 @@ effectIt.effect("injects representation, mode, sync state and t3 run into a repl
       machines: { replica: {}, primary: { label: "primary-host" } },
     });
     yield* harness.start.pipe(Effect.provide(ReplicaMeshTest.layerTest("replica", config)));
-    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain(
-      "build/test/git: t3 run <cmd>",
-    );
+    expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("Use t3 run -- <command>");
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("primary-host");
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("/srv/project with spaces");
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("Build this project");

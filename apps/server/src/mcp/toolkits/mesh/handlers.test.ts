@@ -1,3 +1,5 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { RunRuntimeInfo } from "../../../run/RunProtocol.ts";
 import { expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
@@ -16,6 +18,7 @@ import * as Access from "../../McpToolAccess.ts";
 import * as Handlers from "./handlers.ts";
 import { MeshToolkit } from "./tools.ts";
 
+const decodeRuntime = Schema.decodeUnknownEffect(RunRuntimeInfo);
 const decodeRevision = Schema.decodeUnknownEffect(MeshConfigRevision);
 const decodeHistory = Schema.decodeUnknownEffect(MeshConfigHistory);
 const decodeStatus = Schema.decodeUnknownEffect(MeshConfigStatus);
@@ -30,6 +33,40 @@ it.effect(
         .handle("t3_mesh_config_get", {})
         .pipe(Stream.unwrap, Stream.runCollect);
       expect(get.at(-1)?.result).toEqual({ current: null, bindings: {} });
+      const ownerRuntime = yield* tools
+        .handle("t3_run_runtime", {})
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(ownerRuntime.at(-1)?.isFailure).toBe(true);
+      expect(ownerRuntime.at(-1)?.result).toMatchObject({ code: "capability_denied" });
+      const originalScope = yield* McpInvocationContext;
+      const linkedScope = {
+        ...originalScope,
+        client: {
+          sessionId: "peer",
+          label: "Laptop",
+          linked: true,
+          access: "full-access" as const,
+        },
+      };
+      const deniedRuntime = yield* tools.handle("t3_run_runtime", {}).pipe(
+        Stream.unwrap,
+        Stream.runCollect,
+        Effect.provideService(McpInvocationContext, {
+          ...linkedScope,
+          client: { ...linkedScope.client, replicasLimit: false },
+        }),
+      );
+      expect(deniedRuntime.at(-1)?.result).toMatchObject({ code: "capability_denied" });
+      const allowedRuntime = yield* tools
+        .handle("t3_run_runtime", {})
+        .pipe(
+          Stream.unwrap,
+          Stream.runCollect,
+          Effect.provideService(McpInvocationContext, linkedScope),
+        );
+      const runtime = yield* decodeRuntime(allowedRuntime.at(-1)?.result);
+      expect(runtime.command.length).toBeGreaterThan(0);
+      expect(runtime.ptyModule).toContain("node-pty");
       const planned = yield* tools
         .handle("t3_mesh_config_plan", { doc: "schema: 1\nmachines: {}" })
         .pipe(Stream.unwrap, Stream.runCollect);
@@ -68,6 +105,7 @@ it.effect(
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
+          NodeServices.layer,
           Config.layerTest("studio"),
           Layer.mock(Threads.ThreadManagementService)({}),
           Layer.succeed(McpInvocationContext, {

@@ -223,6 +223,9 @@ export const makeAcpClientTerminals = Effect.fn("makeAcpClientTerminals")(functi
             (request.env?.length ?? 0) === 0
               ? undefined
               : { ...options.environment, ...sessionEnvironment, ...requestEnvironment };
+          if (environment?.T3CODE_RUN_SHIMS) {
+            environment.PATH = `${environment.T3CODE_RUN_SHIMS}${environment.T3CODE_RUN_DELIMITER ?? ":"}${environment.PATH ?? ""}`;
+          }
           const terminalScope = yield* Scope.make();
           const child = yield* restore(
             spawner

@@ -95,6 +95,10 @@ import * as PeerTransport from "./peer/connection/PeerTransport.ts";
 import * as PeerCredentials from "./peer/connection/PeerCredentials.ts";
 import * as PeerReceipts from "./peer/connection/PeerReceipts.ts";
 import * as PeerPipeIpc from "./peer/connection/PeerPipeIpc.ts";
+import * as RunIpc from "./run/RunIpc.ts";
+import * as RunManifest from "./run/RunManifest.ts";
+import * as RunEnvironment from "./run/RunEnvironment.ts";
+import { ProviderRuntimeEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as DeviceService from "./device/DeviceService.ts";
@@ -828,6 +832,8 @@ const layerMakeRoutes = Layer.mergeAll(
     Ws.layer,
     PeerHttp.layer,
     PeerPipeIpc.layer,
+    RunIpc.layer,
+    RunManifest.layer,
   ),
   McpHttpServer.layer.pipe(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
@@ -896,6 +902,7 @@ const layerMakeServer = Layer.unwrap(
     const layerLauncher = ServiceLauncherClient.layer;
 
     yield* fixPath({ shellEnvironmentPrepared: config.shellEnvironmentPrepared });
+    const runEnvironment = yield* RunEnvironment.install();
 
     const layerHttpListening = Layer.effectDiscard(
       Effect.gen(function* () {
@@ -1209,6 +1216,7 @@ const layerMakeServer = Layer.unwrap(
       Layer.provide(VcsProcess.layer),
       Layer.provideMerge(AgentScopeLive.layer),
       Layer.provideMerge(layerPlatformServices),
+      Layer.provideMerge(Layer.succeed(ProviderRuntimeEnvironment, runEnvironment)),
     );
   }),
 ).pipe(Layer.provide(ProcessRunner.layer));

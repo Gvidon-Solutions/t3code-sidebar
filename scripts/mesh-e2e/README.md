@@ -320,3 +320,35 @@ its owned administrator forwards while the caller inspects results. Stop those
 forwards through the retained runner session, stop the owned `S1-mesh-*` units and
 container when done, and release the lock. Keep fixture data; do not clean another
 stage's project, session, service or container.
+
+## R1 command execution acceptance
+
+`apps/server/src/run/run.integration.ts` owns a real local sshd container and a private
+Mutagen daemon/session. Build `apps/server/src/run/testFixtures/sshd.Dockerfile` as
+`t3-run-sshd-test:local`, then run `pnpm --dir apps/server test:run-integration` with Node 26,
+Docker, Mutagen, nvm and uv installed. Set `R1_RUN_BINARY` to an assembled runtime executable
+to exercise the packaged CLI and worker instead of the source entrypoint. No owner SSH files
+or Mutagen sessions are used.
+
+`r1-harness.mjs` tests shell guards in real Codex and OpenCode threads on a temporary server.
+Set `R1_CODEX_BINARY` and `R1_OPENCODE_BINARY` to installed native binaries and choose an
+available Codex model with `R1_CODEX_MODEL`. It uses the existing Codex and DeepSeek credentials
+only to make private copies, removes those copies on exit, disables OpenCode updates and
+saves command evidence under `R1_HARNESS_EVIDENCE`. The login profiles deliberately reset
+PATH; both guarded commands must report 127 while OpenCode's own Git discovery still runs.
+These are paid integration turns, so this runner is explicit rather than part of the unit suite.
+
+Hold the shared lock with owner `R1` before `r1-bed.mjs`. Provide `R1_BED_RUNTIME` (assembled
+runtime plus pinned `mutagen` and `mutagen-agents.tar.gz`), `R1_BED_IMAGE` (an existing bed
+image), a fresh `R1_BED_ROOT`, and administrator SSH argument arrays in `R1_LAPTOP_SSH` and
+`R1_CLOUDBOX_SSH`. Stop the previous isolated :3795 unit first. The runner owns `R1-mesh-*`
+units, a disposable VPS container and private homes, and uses real S1 managed hosts and sync
+APIs. `r1-bed-scenarios.mjs` checks the CONCEPT §12 run scenarios, background forwards and
+converged project layouts/session counts. The connection-cut scenario severs the command’s N1 SSH byte pipe using its captured
+ProxyCommand PID; servers and other sessions stay up. The offline scenario pauses only its
+own VPS container.
+The conflict fixture briefly stops its second replica driver and restarts its own isolated
+driver, so the automatic conflict policy cannot consume the conflict before the run gate sees it.
+The second driver is restored in a finalizer. Afterward stop the owned units/container,
+restore the previous isolated :3795 unit and release
+the lock. Keep fixture files and conflict copies; never publish `control.json` or auth state.
