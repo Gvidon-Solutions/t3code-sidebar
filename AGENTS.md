@@ -14,7 +14,8 @@ upstream `pingdotgg/t3code`. Read [FORK.md](FORK.md) before changing anything. I
 - Every user-visible fork feature gets an entry in FORK.md's feature log: what, how, where.
 - **T3 Mesh** (machines, projects on several machines, replicas, shared layout, thread moves,
   files anywhere, the `t3` skill and agent instructions): read `docs/mesh/README.md` first. Agent
-  tooling lives in `agent-kit/` and is installed with `agent-kit/install.sh`.
+  tooling lives in `agent-kit/` and is installed by each server from mesh config.
+  `agent-kit/install.sh --dest DIR` creates an offline staging copy.
 - Every push to `ws` publishes a desktop release that installed apps update to. Push only
   changes you have verified.
 - **The owner's live server restarts only with the owner's go-ahead (rule of 2026-10-14).** On

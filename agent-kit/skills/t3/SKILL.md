@@ -60,7 +60,7 @@ The runtime `t3` binary is on every thread's PATH. Use `t3 run [--timeout 30s] -
 
 Server connection overrides: `T3CODE_HOME`, `T3CTL_ORIGIN`, `T3CTL_UNIT`, `T3CTL_T3_BIN`; remote pairing uses `T3CTL_REMOTE_T3_BIN` and `T3CTL_REMOTE_HOME`. Discover the server identity with `env` and diagnose APIs/auth with `doctor`. Credentials are cached under the user's XDG configuration directory; never print them.
 
-Customer-specific agent instructions and SSH routes belong in `global/GLOBAL.md` and `global/machines.json`, or a directory selected by `T3CTL_AGENTS_CONFIG`. The registry supplies ids, labels, tags, roles, harness files, per-source SSH destinations/options, optional relay ids (`via`), and an optional remote `nodeCommand`. It is installation data, not the runtime machine-name resolver. `agents sync` previews changes by default; `--apply` backs up and verifies writes. `agent-kit/install.sh --dest DIR` stages a skill only; `--to ID[,ID] [--apply]` installs using registry routes. Never install on a live machine without authorization.
+Agent instructions belong in mesh config `agents.instructions`; machine identities and SSH settings belong in `machines`. Servers install the bundled skill and update only managed instruction blocks. Use `agents status` to inspect reconciliation and `agents sync` to reapply the current config. `agent-kit/install.sh --dest DIR` creates an offline staging copy.
 
 `server install` requires `T3CTL_RELEASE_REPO=organization/repository`. Version installation does not authorize activating or restarting it. Use the printed backup to roll back an authorized activation.
 
