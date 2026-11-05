@@ -4,6 +4,7 @@ import {
   MeshConfigRevision,
   MeshConfigStatus,
   MeshConfigAction,
+  MeshConfigActionStatus,
   MeshConfigServerStatus,
 } from "@t3tools/contracts";
 import {
@@ -15,6 +16,7 @@ import {
   referenceErrors,
 } from "@t3tools/shared/meshConfig";
 import type { Json, MeshLayoutDocument } from "@t3tools/shared/meshLayout";
+import type * as Duration from "effect/Duration";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -31,6 +33,7 @@ import { MeshLayoutService } from "./MeshLayoutService.ts";
 export type ConfigAction = MeshConfigAction;
 export interface ConfigPlanner {
   readonly name: string;
+  readonly timeout?: Duration.Input;
   readonly plan: (
     doc: MeshConfigDocument,
     previous: MeshConfigDocument | undefined,
@@ -55,6 +58,17 @@ export class MeshConfig extends Context.Service<
       { doc: MeshConfigDocument; actions: readonly ConfigAction[] },
       MeshConfigError
     >;
+    readonly addMachine: (
+      name: string,
+      ssh: string,
+    ) => Effect.Effect<MeshConfigRevision, MeshConfigError>;
+    readonly updateVersion: (
+      version: string,
+      planOnly: boolean,
+    ) => Effect.Effect<
+      { doc: MeshConfigDocument; actions: readonly ConfigAction[] } | MeshConfigRevision,
+      MeshConfigError
+    >;
     readonly apply: (
       doc: unknown,
       baseRevision: string | null,
@@ -74,6 +88,7 @@ const startEffect: Effect.Effect<void, never, MeshConfig | Scope.Scope> = Effect
   yield* config.start;
 });
 export const startedLayer = Layer.effectDiscard(startEffect);
+const decodeActionStatus = Schema.decodeUnknownOption(MeshConfigActionStatus);
 const decodeStatus = Schema.decodeUnknownOption(MeshConfigServerStatus);
 const encodeStatus = Schema.encodeEffect(MeshConfigServerStatus);
 const encodeRevision = Schema.encodeEffect(MeshConfigRevision);
@@ -214,6 +229,11 @@ export const layer = Layer.effect(
           projects: snapshot.config.projectTitles,
           representations: snapshot.config.projectMounts,
           bindings: bindingsFromLayout(snapshot.document),
+          rollout: Object.entries(snapshot.document)
+            .filter(
+              ([key]) => key.startsWith("mesh.update") || key.startsWith("mesh.bootstrapWake/"),
+            )
+            .map(([key, entry]) => [key, entry.v]),
           claims: Object.entries(snapshot.document).filter(([key]) =>
             key.startsWith("mesh.machineClaim/"),
           ),
@@ -231,6 +251,7 @@ export const layer = Layer.effect(
                   sshFacts: reported
                     ? {
                         user: reported.user,
+                        version: reported.version,
                         sshd: reported.sshd,
                         meshPublicKey: reported.meshPublicKey,
                       }
@@ -343,7 +364,7 @@ export const layer = Layer.effect(
                 ({ planner, action }, index) =>
                   planner.reconcile(action, revision.doc).pipe(
                     Effect.provideService(MeshLayoutService, mesh),
-                    Effect.timeout("60 seconds"),
+                    Effect.timeout(planner.timeout ?? "60 seconds"),
                     Effect.matchEffect({
                       onSuccess: () =>
                         SubscriptionRef.update(statuses, (items) =>
@@ -410,6 +431,28 @@ export const layer = Layer.effect(
     return MeshConfig.of({
       current,
       changes,
+      addMachine: Effect.fn("MeshConfig.addMachine")(function* (name: string, ssh: string) {
+        const before = yield* current;
+        if (before?.doc.machines[name])
+          return yield* new MeshConfigError({
+            reason: "validation",
+            message: "Machine name already exists",
+          });
+        const doc = before?.doc ?? { schema: 1, machines: {} };
+        const updated = { ...doc, machines: { ...doc.machines, [name]: { bootstrap: { ssh } } } };
+        yield* plan(updated);
+        return yield* apply(updated, before?.revision ?? null);
+      }),
+      updateVersion: Effect.fn("MeshConfig.updateVersion")(function* (
+        version: string,
+        planOnly: boolean,
+      ) {
+        const before = yield* current;
+        const doc = before?.doc ?? { schema: 1, machines: {} };
+        const updated = { ...doc, t3: { ...doc.t3, version } };
+        const planned = yield* plan(updated);
+        return planOnly ? planned : yield* apply(updated, before?.revision ?? null);
+      }),
       plan,
       apply,
       rollback,
@@ -424,6 +467,18 @@ export const layer = Layer.effect(
           revision: localRevision,
           actions: yield* SubscriptionRef.get(statuses),
         };
+        const steps = Object.entries(document)
+          .filter(([key]) => key.startsWith("mesh.bootstrapStatus/"))
+          .flatMap(([, entry]) => {
+            const decoded = decodeActionStatus(entry.v);
+            return decoded._tag === "Some" &&
+              (!decoded.value.machine ||
+                !bindingsFromLayout(document)[decoded.value.machine] ||
+                document[`mesh.bootstrapOwner/${decoded.value.machine}`]?.v ===
+                  decoded.value.server)
+              ? [decoded.value]
+              : [];
+          });
         const remote = Object.entries(document)
           .filter(([key]) => key.startsWith("mesh.configStatus/"))
           .flatMap(([, entry]) => {
@@ -456,7 +511,14 @@ export const layer = Layer.effect(
               environmentId === mesh.environmentId
                 ? local
                 : remote.find((server) => server.environmentId === environmentId);
-            if (report && report.revision === desired?.revision) return report;
+            if (report && report.revision === desired?.revision)
+              return {
+                ...report,
+                actions: [
+                  ...report.actions,
+                  ...steps.filter((step) => step.server === environmentId),
+                ],
+              };
             return {
               environmentId,
               revision: report?.revision ?? null,

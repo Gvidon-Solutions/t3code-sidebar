@@ -116,3 +116,20 @@ it("keeps the configured settings when a machine first binds a reserved config n
     desired.machines.studio,
   );
 });
+
+it("binds a bootstrapped identity to its configured name after provisional peer facts arrive", () => {
+  const machine = { title: "Cloudbox", bootstrap: { ssh: "root@cloudbox" } };
+  const doc = parseConfig({
+    schema: 1,
+    machines: { provisional: { title: "temporary hostname" }, cloudbox: machine },
+  });
+  const document: MeshLayoutDocument = {
+    "mesh.machineBinding/provisional": { h, v: "cloud-id" },
+    "mesh.machineBinding/cloudbox": { h, v: "cloud-id" },
+    "mesh.machineClaim/cloud-id": { h, v: { name: "cloudbox", machine } },
+    "mesh.bootstrapOwner/cloudbox": { h, v: "studio-id" },
+  };
+  const result = repairMachineIdentity(document, doc);
+  expect(result.updates["mesh.machineBinding/provisional"]).toBeNull();
+  expect(result.doc.machines).toEqual({ cloudbox: machine });
+});

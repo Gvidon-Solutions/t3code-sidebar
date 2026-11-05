@@ -1,3 +1,6 @@
+import { MeshBootstrap } from "../../../mesh/MeshBootstrap.ts";
+import { SecretRequests } from "../../../secrets/SecretRequests.ts";
+import { SecretRef, SecretRequestError, ProjectId } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { RunRuntimeInfo } from "../../../run/RunProtocol.ts";
 import { expect, it } from "@effect/vitest";
@@ -119,4 +122,70 @@ it.effect(
         ),
       ),
     ),
+);
+
+it.effect("consumes one-time password references once and never returns the credential", () =>
+  Effect.gen(function* () {
+    const tools = yield* MeshToolkit.pipe(
+      Effect.provide(Access.HandlersLayer.layer(Handlers.layer)),
+    );
+    const args = {
+      name: "cloudbox",
+      kind: "password" as const,
+      secretRef: SecretRef.make("secret-ref"),
+      projectId: ProjectId.make("project"),
+    };
+    const first = yield* tools
+      .handle("t3_mesh_bootstrap_credential", args)
+      .pipe(Stream.unwrap, Stream.runCollect);
+    expect(first.at(-1)?.isFailure).toBe(false);
+    expect(JSON.stringify(first)).not.toContain("private-one-use-password");
+    const second = yield* tools
+      .handle("t3_mesh_bootstrap_credential", args)
+      .pipe(Stream.unwrap, Stream.runCollect);
+    expect(second.at(-1)?.result).toMatchObject({
+      code: "invalid_request",
+      message: "Bootstrap secret reference is invalid, expired or already consumed",
+    });
+  }).pipe(
+    Effect.provide(
+      Layer.unwrap(
+        Effect.sync(() => {
+          let consumed = false;
+          return Layer.mergeAll(
+            NodeServices.layer,
+            Config.layerTest("studio"),
+            Layer.mock(Threads.ThreadManagementService)({}),
+            Layer.mock(SecretRequests)({
+              consume: () =>
+                consumed
+                  ? Effect.fail(new SecretRequestError({ reason: "ref_unavailable" }))
+                  : Effect.sync(() => {
+                      consumed = true;
+                      return "private-one-use-password";
+                    }),
+            }),
+            Layer.mock(MeshBootstrap)({
+              credential: (name, credential) =>
+                Effect.sync(() => {
+                  expect(name).toBe("cloudbox");
+                  expect(credential).toEqual({
+                    kind: "password",
+                    value: "private-one-use-password",
+                  });
+                }),
+            }),
+            Layer.succeed(McpInvocationContext, {
+              environmentId: EnvironmentId.make("studio"),
+              requestNamespace: "client:test",
+              thread: undefined,
+              client: { sessionId: "owner", label: "Owner", access: "full-access" },
+              issuedAt: 0,
+              capabilities: new Set(["orchestration" as const]),
+            }),
+          );
+        }),
+      ),
+    ),
+  ),
 );

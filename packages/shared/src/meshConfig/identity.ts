@@ -90,12 +90,13 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
     }
     desired[name] = id;
     const previousName = Object.keys(bindings).find((bound) => bindings[bound] === id);
-    machines[name] =
-      (previousName
-        ? doc.machines[previousName]
-        : !bindings[name]
-          ? doc.machines[name]
-          : undefined) ?? claim.machine;
+    machines[name] = document[`mesh.bootstrapOwner/${name}`]?.v
+      ? (doc.machines[name] ?? claim.machine)
+      : ((previousName
+          ? doc.machines[previousName]
+          : !bindings[name]
+            ? doc.machines[name]
+            : undefined) ?? claim.machine);
     const key = `mesh.machineClaim/${encodeURIComponent(id)}`;
     if (!document[key]) updates[key] = claim as unknown as Json;
   }

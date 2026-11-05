@@ -1,3 +1,5 @@
+import { MeshBootstrap } from "./MeshBootstrap.ts";
+import { MeshRollout } from "./MeshRollout.ts";
 import { MeshAgentKit } from "./MeshAgentKit.ts";
 import { MeshSsh } from "../replicas/MeshSsh.ts";
 import type { Json } from "@t3tools/shared/meshLayout";
@@ -122,7 +124,28 @@ it.effect(
     }).pipe(
       Effect.provide(
         Planners.layer.pipe(
-          Layer.provide(Layer.succeed(MeshAgentKit, { reconcile: () => Effect.void })),
+          Layer.provide(
+            Layer.succeed(MeshBootstrap, {
+              credential: () => Effect.die("Unexpected credential call"),
+              reconcile: () => Effect.die("Unexpected bootstrap call"),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(MeshRollout, {
+              trial: false,
+              vote: () => Effect.die("Unexpected vote"),
+              health: Effect.die("Unexpected health"),
+              reconcile: Effect.die("Unexpected rollout"),
+              checkTrial: Effect.die("Unexpected trial"),
+              finishTrial: Effect.die("Unexpected finish"),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(MeshAgentKit, {
+              reconcile: () => Effect.void,
+              legacyInstructions: Effect.succeed("legacy fixture"),
+            }),
+          ),
           Layer.provide(
             Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
           ),
@@ -184,7 +207,28 @@ it.effect(
     }).pipe(
       Effect.provide(
         Planners.layer.pipe(
-          Layer.provide(Layer.succeed(MeshAgentKit, { reconcile: () => Effect.void })),
+          Layer.provide(
+            Layer.succeed(MeshBootstrap, {
+              credential: () => Effect.die("Unexpected credential call"),
+              reconcile: () => Effect.die("Unexpected bootstrap call"),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(MeshRollout, {
+              trial: false,
+              vote: () => Effect.die("Unexpected vote"),
+              health: Effect.die("Unexpected health"),
+              reconcile: Effect.die("Unexpected rollout"),
+              checkTrial: Effect.die("Unexpected trial"),
+              finishTrial: Effect.die("Unexpected finish"),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(MeshAgentKit, {
+              reconcile: () => Effect.void,
+              legacyInstructions: Effect.succeed("legacy fixture"),
+            }),
+          ),
           Layer.provide(
             Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
           ),
@@ -237,7 +281,28 @@ it.effect(
     }).pipe(
       Effect.provide(
         Planners.layer.pipe(
-          Layer.provide(Layer.succeed(MeshAgentKit, { reconcile: () => Effect.void })),
+          Layer.provide(
+            Layer.succeed(MeshBootstrap, {
+              credential: () => Effect.die("Unexpected credential call"),
+              reconcile: () => Effect.die("Unexpected bootstrap call"),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(MeshRollout, {
+              trial: false,
+              vote: () => Effect.die("Unexpected vote"),
+              health: Effect.die("Unexpected health"),
+              reconcile: Effect.die("Unexpected rollout"),
+              checkTrial: Effect.die("Unexpected trial"),
+              finishTrial: Effect.die("Unexpected finish"),
+            }),
+          ),
+          Layer.provide(
+            Layer.succeed(MeshAgentKit, {
+              reconcile: () => Effect.void,
+              legacyInstructions: Effect.succeed("legacy fixture"),
+            }),
+          ),
           Layer.provide(
             Layer.succeed(MeshSsh, { publicKey: "ssh-ed25519 AAAA", reconcile: () => Effect.void }),
           ),

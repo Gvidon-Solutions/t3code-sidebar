@@ -46,6 +46,7 @@ function meshInstructions(doc: MeshConfigDocument) {
 export class MeshAgentKit extends Context.Service<
   MeshAgentKit,
   {
+    readonly legacyInstructions: Effect.Effect<string | undefined, MeshConfigError>;
     readonly reconcile: (doc: MeshConfigDocument) => Effect.Effect<void, MeshConfigError>;
   }
 >()("t3/mesh/MeshAgentKit") {}
@@ -126,6 +127,19 @@ export const layer = Layer.effect(
             }),
       ),
     );
-    return MeshAgentKit.of({ reconcile });
+    const legacyFile =
+      env.T3_MESH_LEGACY_GLOBAL ?? path.join(home, ".agents/skills/t3/global/GLOBAL.md");
+    const legacyInstructions = Effect.gen(function* () {
+      return (yield* fs.exists(legacyFile)) ? yield* fs.readFileString(legacyFile) : undefined;
+    }).pipe(
+      Effect.mapError(
+        () =>
+          new MeshConfigError({
+            reason: "storage",
+            message: "Cannot read installed legacy agent instructions",
+          }),
+      ),
+    );
+    return MeshAgentKit.of({ reconcile, legacyInstructions });
   }),
 );

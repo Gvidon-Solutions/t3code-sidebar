@@ -16,7 +16,13 @@ const Policy = {
 };
 export const MeshConfigDocument = open({
   schema: Schema.Number,
-  t3: Schema.optionalKey(open({ version: Schema.optionalKey(Schema.String) })),
+  t3: Schema.optionalKey(
+    open({
+      version: Schema.optionalKey(
+        Schema.String.check(Schema.isPattern(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/)),
+      ),
+    }),
+  ),
   machines: Schema.Record(
     Schema.String,
     open({
@@ -42,7 +48,13 @@ export const MeshConfigDocument = open({
       ),
       bootstrap: Schema.optionalKey(
         open({
-          ssh: Schema.String,
+          ssh: Schema.String.check(
+            Schema.isPattern(/^[a-zA-Z0-9_.-]+@(?:\[[a-fA-F0-9:]+\]|[a-zA-Z0-9_.-]+)(?::[0-9]+)?$/),
+          ),
+          baseDir: Schema.optionalKey(Schema.String),
+          port: Schema.optionalKey(
+            Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
+          ),
           os: Schema.optionalKey(Schema.String),
         }),
       ),
@@ -158,3 +170,24 @@ export const MeshConfigApplyInput = Schema.Struct({
 });
 export const MeshConfigRollbackInput = Schema.Struct({ revision: Schema.String });
 export const MeshConfigHistory = Schema.Struct({ revisions: Schema.Array(MeshConfigRevision) });
+
+export const MeshUpdateVoteInput = Schema.Struct({
+  owner: Schema.String,
+  token: Schema.String,
+  revision: Schema.String,
+  target: Schema.String,
+  expiresAt: Schema.Number,
+  participants: Schema.optionalKey(Schema.Array(Schema.String)),
+  release: Schema.optionalKey(Schema.Boolean),
+});
+export const MeshUpdateHealth = Schema.Struct({
+  version: Schema.String,
+  revision: Schema.NullOr(Schema.String),
+  entries: Schema.Record(Schema.String, Schema.String),
+  replicasReady: Schema.Boolean,
+});
+export const MeshMachineAddInput = Schema.Struct({ name: MachineName, ssh: Schema.String });
+export const MeshVersionUpdateInput = Schema.Struct({
+  version: Schema.String,
+  plan: Schema.optionalKey(Schema.Boolean),
+});
