@@ -2,7 +2,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import { mutagenArchive } from "./MutagenFixture.ts";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import { conflictCopyPath } from "./conflictResolution.ts";
+import { conflictCopyPath } from "../platform/ServerPlatform.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, expect } from "@effect/vitest";
 import * as Effect from "effect/Effect";

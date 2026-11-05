@@ -13,7 +13,7 @@ import type { MeshLayoutSnapshot } from "../mesh/MeshLayoutService.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import { ServerConfig } from "../config.ts";
 import { DEFAULT_REMOTE_COMMANDS, encodeManifest } from "./RunProtocol.ts";
-import { shellWord } from "./RunPlatform.ts";
+import { shellWord } from "../platform/ServerPlatform.ts";
 class RunManifestError extends Schema.TaggedError<RunManifestError>()("RunManifestError", {
   cause: Schema.Defect(),
 }) {

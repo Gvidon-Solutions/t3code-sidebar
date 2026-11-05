@@ -4,7 +4,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeStringDecoder from "node:string_decoder";
 import type { RemoteRunPlan, WorkerFrame } from "./RunProtocol.ts";
 import { decodeFrame, FRAME_PREFIX } from "./RunProtocol.ts";
-import { loginCommand, namespaceOf, nativeInvocation } from "./RunPlatform.ts";
+import { loginCommand, namespaceOf, nativeInvocation } from "../platform/ServerPlatform.ts";
 import { RUN_WORKER_SOURCE } from "./RunWorker.ts";
 
 export interface RemoteRequest {

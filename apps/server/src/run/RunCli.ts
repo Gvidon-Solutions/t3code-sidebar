@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { resolveSelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeRuntime";
-import { nativeInvocation } from "./RunPlatform.ts";
+import { nativeInvocation } from "../platform/ServerPlatform.ts";
 import { awaitForwardingStop } from "./RunGuardianControl.ts";
 import { requestRun } from "./RunClient.ts";
 import { remoteRun } from "./RunTransport.ts";

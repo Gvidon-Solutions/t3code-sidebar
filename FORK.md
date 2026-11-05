@@ -1637,3 +1637,9 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   Test homes and skill sources are overridable. CLI archives include the skill without personal data.
 - **Where.** Server `mesh/MeshAgentKit.ts`, `MeshConfigPlanners.ts`, `MeshConfig.ts`, config
   contracts and `scripts/build-cli-archive.ts`.
+
+### 2026-11-05 — B1 shared server platform boundary
+
+- **What.** Replica SSH and remote command execution use one server platform module.
+- **How.** Consolidates R1 login shells, invocation resolution and worker/guardian IPC with S1 SSH wrappers, private mesh sockets and conflict-copy naming; old module files are removed.
+- **Where.** `apps/server/src/platform/ServerPlatform.ts`; existing run, peer and replica platform tests now import it directly.

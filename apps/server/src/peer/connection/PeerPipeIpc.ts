@@ -10,7 +10,11 @@ import { EnvironmentId } from "@t3tools/contracts";
 import * as ServerConfig from "../../config.ts";
 import * as MeshLayoutService from "../../mesh/MeshLayoutService.ts";
 import * as PeerLinks from "../PeerLinks.ts";
-import { pipeAddress, preparePipeAddress, securePipeAddress } from "./PeerPlatform.ts";
+import {
+  pipeAddress,
+  preparePipeAddress,
+  securePipeAddress,
+} from "../../platform/ServerPlatform.ts";
 import { PeerSessions, PeerConnectionError } from "./PeerSessions.ts";
 
 const Request = Schema.Struct({ machine: Schema.String, target: Schema.Literal("sshd") });

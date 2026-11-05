@@ -1,4 +1,4 @@
-import { proxyCommand } from "../peer/connection/PeerPlatform.ts";
+import { proxyCommand } from "../platform/ServerPlatform.ts";
 import type { MeshConfigDocument, SidebarMachine } from "@t3tools/contracts";
 
 const begin = "# t3-mesh begin";

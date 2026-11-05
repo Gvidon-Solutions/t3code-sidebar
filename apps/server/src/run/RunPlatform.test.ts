@@ -2,7 +2,7 @@ import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { SpawnExecutableResolution } from "@t3tools/shared/shell";
-import { resolveInvocation, loginCommand } from "./RunPlatform.ts";
+import { resolveInvocation, loginCommand } from "../platform/ServerPlatform.ts";
 import { commandShellEnvironment } from "./RunShellEnvironment.ts";
 it("quotes a login-shell invocation and uses encoded PowerShell with the primary's runtime", () => {
   const posix = loginCommand("source '$value'", "payload", "darwin", false);

@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import * as NodeNet from "node:net";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
-import { runAddress } from "./RunPlatform.ts";
+import { runAddress } from "../platform/ServerPlatform.ts";
 import {
   decodeResponse,
   CommandManifest,

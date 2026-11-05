@@ -1,10 +1,13 @@
 import { expect, it } from "@effect/vitest";
 import {
+  executableName,
+  mutagenTarget,
+  agentSkillDirectories,
   mutagenSshEnvironment,
   nodeCommand,
   sshArguments,
   sshWrapper,
-} from "../peer/connection/PeerPlatform.ts";
+} from "../platform/ServerPlatform.ts";
 it("builds the same bounded SSH command on Windows and POSIX with an explicit isolated home", () => {
   for (const home of ["/tmp/studio home", "C:\\Users\\Studio Home"]) {
     const args = sshArguments("t3-studio", home);
@@ -38,4 +41,23 @@ it("encodes remote scripts without interpolating their quotes, paths or shell ex
   const command = nodeCommand(source);
   expect(command).not.toContain("$HOME");
   expect(command).toContain(Buffer.from(source).toString("base64"));
+});
+
+it("selects runtime binary names, Mutagen releases and skill paths across server platforms", () => {
+  for (const [platform, arch, expected] of [
+    ["linux", "x64", "linux_amd64"],
+    ["darwin", "arm64", "darwin_arm64"],
+    ["win32", "x64", "windows_amd64"],
+  ] as const) {
+    expect(mutagenTarget(platform, arch)).toBe(expected);
+    expect(executableName("mutagen", platform)).toBe(
+      platform === "win32" ? "mutagen.exe" : "mutagen",
+    );
+  }
+  expect(agentSkillDirectories("C:\\Users\\studio", "win32")[0]).toBe(
+    "C:\\Users\\studio\\.agents\\skills\\t3",
+  );
+  expect(agentSkillDirectories("/Users/studio", "darwin")[0]).toBe(
+    "/Users/studio/.agents/skills/t3",
+  );
 });

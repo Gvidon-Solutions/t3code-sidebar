@@ -1,4 +1,4 @@
-import { sshWrapper } from "../peer/connection/PeerPlatform.ts";
+import { sshWrapper } from "../platform/ServerPlatform.ts";
 import {
   MeshConfigError,
   type MeshConfigDocument,

@@ -1,3 +1,4 @@
+import { agentSkillDirectories } from "../platform/ServerPlatform.ts";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
@@ -57,6 +58,7 @@ export const layer = Layer.effect(
     const env = yield* HostProcess.Environment;
     const home = env.T3_MESH_AGENT_HOME ?? (yield* HostProcess.HomeDirectory);
     const executable = yield* HostProcess.ExecutablePath;
+    const platform = yield* HostProcess.Platform;
     const packaged = path.join(path.dirname(executable), "agent-kit/skills/t3");
     const source =
       env.T3_MESH_AGENT_SOURCE ??
@@ -84,13 +86,7 @@ export const layer = Layer.effect(
             reason: "storage",
             message: "Bundled t3 skill is missing",
           });
-        for (const target of [
-          ".agents/skills/t3",
-          ".claude/skills/t3",
-          ".codex/skills/t3",
-          ".config/opencode/skills/t3",
-        ]) {
-          const destination = path.join(home, target);
+        for (const destination of agentSkillDirectories(home, platform)) {
           yield* fs.makeDirectory(destination, { recursive: true });
           yield* copySkill(source, destination);
         }

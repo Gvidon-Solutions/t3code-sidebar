@@ -129,7 +129,7 @@ The runtime CLI and private local-server socket live in `apps/server/src/run/Run
 `RunPlan` maps the nearest representation's relative cwd onto its primary. `RunPreparation`
 consumes S1's public `flush/conflicts/problems(replica)` API through `RunSyncLive`. `RunTransport`
 uses managed `t3-<name>` hosts; `RunWorker` owns process groups and the primary's job registry.
-`RunGuardian` keeps background forwards alive and flushes completion; `RunPlatform` owns launch
+`RunGuardian` keeps background forwards alive and flushes completion; `ServerPlatform` owns launch
 quoting and IPC addresses. `RunOutput` maps complete root prefixes across UTF-8 chunks while
 emitting unrelated bytes immediately. Runtime/PTY discovery is restricted to replica-enabled
 peers (`t3_run_runtime`).
@@ -437,7 +437,7 @@ Code boundaries:
   The frame layer does not cache answers: every repeated key reaches current authentication
   and permission checks before the receipt is read.
 - PeerFacts reads system public SSH host keys, global sshd port (including Include files), OS,
-  architecture, version and user; absent keys are reported as absent. PeerPlatform owns system
+  architecture, version and user; absent keys are reported as absent. ServerPlatform owns system
   paths and private local socket permissions. Facts and connection observations are written to
   machine/<env>.reported; labels and reach policy belong to C1's mesh config.
 
@@ -552,7 +552,7 @@ queue); Mutagen reports the current file size, not a total queue size. A clean w
 session reports zero lag. Unmeasured connecting/paused/conflicted states omit lag.
 The primary remains the place for git in either replica mode.
 
-`peer/connection/PeerPlatform.ts` owns SSH process arguments, isolated transport wrappers and
+`platform/ServerPlatform.ts` owns SSH process arguments, isolated transport wrappers and
 portable Node fs conflict preservation. There is no remote `sh` conflict script.
 Both primary-wins and per-path newest-wins archive the loser before resetting sync;
 archive timestamps contain no colons. Scan problems remain warnings with paths.
@@ -588,3 +588,12 @@ installation against that local archive and uses a private daemon/data directory
 The production installer bounds download headers, body and extraction. A stalled
 HTTP fixture proves the deadline. The synchronization phase uses the verified local archive;
 a cold fixture cache performs one bounded download before starting the private daemon.
+
+### Shared server platform boundary
+
+`platform/ServerPlatform.ts` replaces R1 `RunPlatform.ts` and S1 `PeerPlatform.ts`.
+Run launchers and peer/replica transports import it directly, including the shim's lazy native-invocation import. It owns login shell quoting, Windows batch/PTY invocation,
+private IPC paths and modes, SSH wrappers and conflict-copy names. The worker source
+fragment stays in this boundary because it executes on the primary without module imports.
+Existing `run/RunPlatform.test.ts`, `replicas/ReplicaPlatform.test.ts`, peer-facts,
+IPC and conflict-copy tests exercise the shared implementation.

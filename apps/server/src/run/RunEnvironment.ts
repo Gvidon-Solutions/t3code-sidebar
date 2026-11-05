@@ -6,7 +6,7 @@ import * as Schema from "effect/Schema";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { resolveSelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeRuntime";
 import { ServerConfig } from "../config.ts";
-import { shellWord, privateDirectory, runAddress } from "./RunPlatform.ts";
+import { shellWord, privateDirectory, runAddress } from "../platform/ServerPlatform.ts";
 import { bashStartup, zshStartup, commandShellEnvironment } from "./RunShellEnvironment.ts";
 
 export class RunEnvironmentError extends Schema.TaggedError<RunEnvironmentError>()(
