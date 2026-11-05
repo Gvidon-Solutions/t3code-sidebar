@@ -162,3 +162,15 @@ export function machineTagBackground(color: string, alpha = 0.14): string {
   const value = Number.parseInt(full, 16);
   return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
+
+export function shortMachineHost(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const endpoint = new URL(url);
+    const host = endpoint.hostname;
+    const short = /^[\d.]+$/.test(host) || host.includes(":") ? host : host.split(".")[0]!;
+    return endpoint.port ? `${short}:${endpoint.port}` : short;
+  } catch {
+    return null;
+  }
+}

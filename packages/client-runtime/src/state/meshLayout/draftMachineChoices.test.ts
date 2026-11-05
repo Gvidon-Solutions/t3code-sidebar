@@ -72,3 +72,29 @@ it("logs a label collision once without silently merging distinct machines", () 
   expect(warn).toHaveBeenCalledTimes(1);
   expect(warn).toHaveBeenCalledWith("[mesh] Duplicate machine labels disambiguated", collisions);
 });
+
+it("shows platform and short host for identical titles in web and native picker data", () => {
+  const reported = (os: string) => ({
+    version: "1",
+    platform: { os, arch: "x64", release: "test" },
+    user: null,
+    sshd: null,
+    reportedAt: "2026-01-01T00:00:00Z",
+  });
+  const result = draftMachineDisplays(
+    {
+      machines: {
+        a: { title: "Studio", reported: reported("linux") },
+        b: { title: "Studio", reported: reported("darwin") },
+      },
+    },
+    [
+      { environmentId: "a", url: "https://desk.example:3795" },
+      { environmentId: "b", url: "https://laptop.example:3795" },
+    ],
+  );
+  expect(result.rows.map((row) => row.label)).toEqual([
+    "Studio (linux · desk:3795)",
+    "Studio (darwin · laptop:3795)",
+  ]);
+});

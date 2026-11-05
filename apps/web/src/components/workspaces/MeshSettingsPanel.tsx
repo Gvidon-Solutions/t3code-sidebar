@@ -12,6 +12,7 @@ import {
   meshConfigApplyGroups,
   meshMachineDetailRows,
   meshConnectionText,
+  offlineMachineText,
   partitionMeshMachines,
   forgetMachineFacts,
 } from "@t3tools/client-runtime/state/mesh-machines";
@@ -329,7 +330,7 @@ export function MeshSettingsPanel() {
                       ? meshConnectionText(machine, machines)
                       : "Online"
                     : (meshConnectionText(machine, machines) ??
-                      (machine.lastSeenAt ? `Offline since ${machine.lastSeenAt}` : "Offline"))}
+                      offlineMachineText(machine.lastSeenAt))}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {machine.version ?? "Version not reported"}

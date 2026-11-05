@@ -16,6 +16,7 @@ import { MeshSettingsPanel } from "./MeshSettingsPanel";
 
 const mocks = vi.hoisted(() => ({
   review: false,
+  collision: false,
   edit: vi.fn<(update: (config: SidebarWorkspacesConfig) => SidebarWorkspacesConfig) => void>(),
 }));
 
@@ -88,6 +89,7 @@ vi.mock(import("../../state/use-atom-command"), () => ({
 
 it("shows the known server version and omits a version row for a link without one", async () => {
   mocks.review = false;
+  mocks.collision = false;
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
   await expect.element(screen.getByText("Remote", { exact: true }).first()).toBeVisible();
@@ -98,6 +100,7 @@ it("shows the known server version and omits a version row for a link without on
 
 it("keeps configuration fields in the config editor and shows machine state", async () => {
   mocks.review = false;
+  mocks.collision = false;
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
   await expect.element(screen.getByRole("button", { name: "Edit config" })).toBeVisible();
@@ -108,6 +111,32 @@ it("keeps configuration fields in the config editor and shows machine state", as
 });
 
 function reviewConfig(): SidebarWorkspacesConfig {
+  if (mocks.collision)
+    return {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      machines: {
+        local: {
+          title: "Studio",
+          reported: {
+            version: "1",
+            user: null,
+            sshd: null,
+            platform: { os: "linux", arch: "x64", release: "test" },
+            reportedAt: "2026-11-03T00:00:00Z",
+          },
+        },
+        remote: {
+          title: "Studio",
+          reported: {
+            version: "1",
+            user: null,
+            sshd: null,
+            platform: { os: "darwin", arch: "arm64", release: "test" },
+            reportedAt: "2026-11-03T00:00:00Z",
+          },
+        },
+      },
+    };
   return mocks.review
     ? {
         ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
@@ -128,6 +157,7 @@ function reviewConfig(): SidebarWorkspacesConfig {
 }
 it("deduplicates phone-shaped connections, names unknown hosts and excludes forgotten layout facts from the count", async () => {
   mocks.review = true;
+  mocks.collision = false;
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
   await expect.element(screen.getByText("3 machines · 2 online", { exact: true })).toBeVisible();
@@ -141,4 +171,17 @@ it("deduplicates phone-shaped connections, names unknown hosts and excludes forg
   await expect.element(screen.getByText("Old laptop", { exact: true })).toBeVisible();
   await screen.getByRole("button", { name: "Forget", exact: true }).click();
   expect(mocks.edit).toHaveBeenCalledOnce();
+});
+
+it("distinguishes matching machine titles by platform and short host", async () => {
+  mocks.review = false;
+  mocks.collision = true;
+  mocks.edit.mockReset();
+  await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
+  await expect
+    .element(screen.getByText("Studio (darwin · remote)", { exact: true }).first())
+    .toBeVisible();
+  await expect
+    .element(screen.getByText("Studio (linux · ST)", { exact: true }).first())
+    .toBeVisible();
 });
