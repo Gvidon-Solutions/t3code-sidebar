@@ -9,6 +9,9 @@ import {
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   confirm: vi.fn(),
+  overview: false,
+  connections: [] as unknown[],
+  document: {} as Record<string, { h: string; v: unknown }>,
   models: [] as Array<{
     label: string;
     isUnavailable: boolean;
@@ -91,14 +94,17 @@ vi.mock("../../lib/rootNavigation", () => ({
 }));
 vi.mock("./AdoptReplicaAction", () => ({ AdoptReplicaAction: () => <button>Adopt</button> }));
 vi.mock("@effect/atom-react", () => ({
-  useAtomValue: () => ({
-    id: "thread",
-    environmentId: "studio",
-    projectId: "notes",
-    title: "Field notes",
-    modelSelection: { instanceId: "codex", model: "sol" },
-    runtimeMode: "full-access",
-  }),
+  useAtomValue: () =>
+    mocks.overview
+      ? []
+      : {
+          id: "thread",
+          environmentId: "studio",
+          projectId: "notes",
+          title: "Field notes",
+          modelSelection: { instanceId: "codex", model: "sol" },
+          runtimeMode: "full-access",
+        },
 }));
 vi.mock("./moveThreadState", () => ({ movingThread: "moving" }));
 vi.mock("./forkThreadState", () => ({ forkingThread: "forking" }));
@@ -124,8 +130,13 @@ vi.mock("../../state/entities", () => ({
 }));
 vi.mock("../../state/environments", () => ({
   useEnvironments: () => ({
-    environments: [{ environmentId: "studio", connection: { phase: "connected" } }],
+    environments: mocks.connections,
   }),
+}));
+vi.mock("../../state/mesh-layout", () => ({ meshLayoutAtoms: {} }));
+vi.mock("../../state/peerLinks", () => ({ peerLinkEnvironment: {} }));
+vi.mock("./useMeshLayout", () => ({
+  useMeshLayout: () => ({ state: { snapshot: { document: mocks.document } } }),
 }));
 vi.mock("../../lib/modelOptions", () => ({
   buildModelOptions: () => mocks.models,
@@ -161,10 +172,15 @@ import { MachinePickerGroups } from "./MachinePickerGroups";
 import { MachinesSheet } from "./MachinesSheet";
 import { MoveThreadSheet } from "./MoveThreadSheet";
 import { ForkThreadSheet } from "./ForkThreadSheet";
+import { useMeshOverview } from "./useMeshOverview";
+import { partitionMeshMachines } from "@t3tools/client-runtime/state/mesh-machines";
 
 function setup() {
   mocks.navigate.mockReset();
   mocks.confirm.mockReset();
+  mocks.overview = false;
+  mocks.connections = [{ environmentId: "studio", connection: { phase: "connected" } }];
+  mocks.document = {};
   mocks.models = [];
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const container = document.createElement("div");
@@ -184,6 +200,72 @@ function setup() {
     [Symbol.dispose]: () => act(() => root.unmount()),
   };
 }
+
+it("merges raw phone connections by reported environment identity before counting machines", () => {
+  using screen = setup();
+  mocks.overview = true;
+  const connection = (
+    id: string,
+    reportedId: string,
+    label: string,
+    phase: string,
+    version: string,
+  ) => ({
+    environmentId: id,
+    label,
+    displayUrl: `https://${id}.example`,
+    connection: { phase },
+    serverConfig: {
+      environment: {
+        environmentId: reportedId,
+        serverVersion: version,
+        platform: { os: "linux", arch: "x64" },
+        capabilities: { meshLayout: true },
+      },
+      settings: { linkedEnvironmentsEnabled: true },
+    },
+  });
+  mocks.connections = [
+    connection("studio-lan", "studio", "Studio", "connected", "1.5"),
+    connection("studio-old", "studio", "Studio", "disconnected", "0.9"),
+    connection("cloudbox-lan", "cloudbox", "07e7a1a797ee", "connected", "1.5"),
+  ];
+  mocks.document = { "machine/stale": { v: {}, h: "1759276800000.00000.studio" } };
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { stale: { title: "Old laptop" } },
+  };
+  function Overview() {
+    const mesh = useMeshOverview({ config });
+    const groups = partitionMeshMachines(mesh.machines, config, Date.parse("2026-11-05T00:00:00Z"));
+    return (
+      <pre>
+        {JSON.stringify({
+          machines: mesh.machines,
+          active: groups.active.length,
+          forgotten: groups.forgotten.map((machine) => machine.label),
+        })}
+      </pre>
+    );
+  }
+  screen.render(<Overview />);
+  const result = JSON.parse(screen.container.textContent ?? "null") as {
+    machines: Array<{ environmentId: string; label: string; version: string; urls: string[] }>;
+    active: number;
+    forgotten: string[];
+  };
+  expect(result.machines).toHaveLength(3);
+  expect(result.machines.find((machine) => machine.environmentId === "studio")).toMatchObject({
+    label: "Studio",
+    version: "1.5",
+    urls: ["https://studio-lan.example", "https://studio-old.example"],
+  });
+  expect(result.machines.find((machine) => machine.environmentId === "cloudbox")?.label).toBe(
+    "Unnamed machine",
+  );
+  expect(result.active).toBe(2);
+  expect(result.forgotten).toEqual(["Old laptop"]);
+});
 
 it("uses one composer status by priority and offers the authenticated machine with a reason", () => {
   using screen = setup();
