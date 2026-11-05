@@ -98,10 +98,12 @@ export async function runShim(command: string, args: readonly string[]) {
           process.execve(binary, [command, ...args], environment);
           return;
         }
-        const child = NodeChildProcess.spawn(binary, args, {
+        const { nativeInvocation } = await import("./RunPlatform.ts");
+        const resolved = nativeInvocation(binary, args, environment);
+        const child = NodeChildProcess.spawn(resolved.command, resolved.args, {
           env: environment,
           stdio: "inherit",
-          shell: /\.(cmd|bat)$/i.test(binary),
+          shell: resolved.shell,
         });
         process.on("SIGINT", () => child.kill("SIGINT"));
         process.on("SIGTERM", () => child.kill("SIGTERM"));

@@ -38,7 +38,7 @@ frame({type:'done',code:mode==='remote255'?255:23,ignored:[]}); }
           NodePath.resolve(import.meta.dirname, "RunTransport.ts"),
         ).href;
         const program = `import {remoteRun} from ${JSON.stringify(transport)};
-const plan={kind:'remote',logicalKey:'sample',environmentId:'laptop',primaryEnvironmentId:'studio',title:'Sample',machine:'studio',host:'t3-studio',primaryRoot:'/project',replicaRoot:'/copy',cwd:'/project',platform:'posix',ignores:[]};
+const plan={kind:'remote',logicalKey:'sample',environmentId:'laptop',primaryEnvironmentId:'studio',title:'Sample',machine:'studio',host:'t3-studio',primaryRoot:'/project',replicaRoot:'/copy',cwd:'/project',platform:'posix',ignores:[],runtime:{command:process.execPath,ptyModule:'test-terminal'}};
 const results=[];
 for(const mode of ['remote','remote255','transport','empty','invalid','error']) {
 process.env.R1_TRANSPORT_MODE=mode;const frames=[];

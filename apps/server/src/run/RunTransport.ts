@@ -4,7 +4,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeStringDecoder from "node:string_decoder";
 import type { RemoteRunPlan, WorkerFrame } from "./RunProtocol.ts";
 import { decodeFrame, FRAME_PREFIX } from "./RunProtocol.ts";
-import { loginCommand, namespaceOf } from "./RunPlatform.ts";
+import { loginCommand, namespaceOf, nativeInvocation } from "./RunPlatform.ts";
 import { RUN_WORKER_SOURCE } from "./RunWorker.ts";
 
 export interface RemoteRequest {
@@ -63,7 +63,9 @@ export async function remoteRun(
     readonly tty?: boolean;
   },
 ): Promise<{ code: number; ignored: readonly string[]; id?: string }> {
-  const child = NodeChildProcess.spawn("ssh", sshArguments(plan, request, options.tty ?? false), {
+  const resolved = nativeInvocation("ssh", sshArguments(plan, request, options.tty ?? false));
+  const child = NodeChildProcess.spawn(resolved.command, resolved.args, {
+    shell: resolved.shell,
     stdio: ["pipe", "pipe", "pipe"],
   });
   let done: { code: number; ignored: readonly string[] } | undefined;

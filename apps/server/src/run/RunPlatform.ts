@@ -4,6 +4,9 @@ import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeCrypto from "node:crypto";
 import * as NodeFSP from "node:fs/promises";
+import * as Effect from "effect/Effect";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { pipeAddress } from "../peer/connection/PeerPlatform.ts";
 export const runAddress = (
   baseDir: string,
@@ -62,3 +65,42 @@ export const guardianAddress = (root: string, id: string) =>
   process.platform === "win32"
     ? `\\\\.\\pipe\\t3-run-forward-${namespaceOf(root)}-${id}`
     : NodePath.join(workerStateRoot(namespaceOf(root)), `${id}.forward.sock`);
+
+export const resolveInvocation = Effect.fn("RunPlatform.resolveInvocation")(function* (
+  command: string,
+  args: readonly string[],
+  suppliedEnvironment?: NodeJS.ProcessEnv,
+) {
+  const environment = suppliedEnvironment ?? (yield* HostProcess.Environment);
+  const resolved = yield* resolveSpawnCommand(command, args, { env: environment });
+  const platform = yield* HostProcess.Platform;
+  const ptyEof = platform === "win32" ? "\x1a\r" : "\x04";
+  if (platform === "win32" && resolved.shell) {
+    const shell =
+      Object.entries(environment).find(([key]) => key.toUpperCase() === "COMSPEC")?.[1] ??
+      "cmd.exe";
+    return { ...resolved, ptyCommand: shell, ptyArgs: `/d /s /c "${resolved.command}"`, ptyEof };
+  }
+  return { ...resolved, ptyCommand: resolved.command, ptyArgs: resolved.args, ptyEof };
+});
+// Native child and PTY constructors need synchronous resolution after the login profile loads.
+export const nativeInvocation = (
+  command: string,
+  args: readonly string[],
+  environment = process.env,
+) => Effect.runSync(resolveInvocation(command, args, environment));
+
+export const WORKER_PLATFORM_SOURCE = String.raw`
+const root = path.join(os.tmpdir(), 't3-run-' + (process.getuid ? process.getuid() : 'user'), c.namespace);
+const address = id => process.platform === 'win32' ? '\\\\.\\pipe\\t3-run-' + c.namespace + '-' + id : path.join(root, id + '.sock');
+function privateStat(s) { return s.isDirectory() && !(process.platform !== 'win32' && (s.uid !== process.getuid() || (s.mode & 0o077))); }
+async function protectSocket(address) { if (process.platform !== 'win32') await fsp.chmod(address, 0o600); }
+function signalGroup(pid, sig, emit) {
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {stdio:'ignore'});
+    killer.on('error', error => emit({type:'error',message:error.message}));
+  } else {
+    try { process.kill(-pid,sig); } catch(error) { if (error.code !== 'ESRCH') throw error; }
+  }
+}
+`;

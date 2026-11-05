@@ -1,3 +1,4 @@
+import { WORKER_PLATFORM_SOURCE } from "./RunPlatform.ts";
 export const RUN_WORKER_SOURCE = String.raw`
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -6,13 +7,14 @@ const os = require('node:os');
 const net = require('node:net');
 const crypto = require('node:crypto');
 const readline = require('node:readline');
-const { spawn } = require('node:child_process');
+const nativeSpawn = require('node:child_process').spawn;
+const resolveInvocation = typeof __T3_RUN_RESOLVE === 'function' ? __T3_RUN_RESOLVE : (command,args) => ({command,args,shell:false,ptyCommand:command,ptyArgs:args,ptyEof:'\x04'});
+const spawn = (command,args,options) => { const resolved = resolveInvocation(command,args); return nativeSpawn(resolved.command,resolved.args,{...options,shell:resolved.shell}); };
 const c = JSON.parse(Buffer.from(typeof __T3_RUN_PAYLOAD === 'string' ? __T3_RUN_PAYLOAD : process.argv[1], 'base64').toString());
 if (c.tty && process.stdin.isTTY) process.stdin.setRawMode(true);
-const root = path.join(os.tmpdir(), 't3-run-' + (process.getuid ? process.getuid() : 'user'), c.namespace);
+${WORKER_PLATFORM_SOURCE}
 const record = id => path.join(root, id + '.json');
 const journal = id => path.join(root, id + '.ndjson');
-const address = id => process.platform === 'win32' ? '\\\\.\\pipe\\t3-run-' + c.namespace + '-' + id : path.join(root, id + '.sock');
 const validId = id => typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id);
 const frame = value => process.stdout.write(String.fromCharCode(30) + 'T3RUN ' + JSON.stringify(value) + '\n');
 async function completion(code, paths, emit = frame) {
@@ -32,7 +34,7 @@ const state = async id => JSON.parse(await fsp.readFile(record(id), 'utf8'));
 async function prepareRoot() {
   await fsp.mkdir(root, {recursive: true, mode: 0o700});
   const s = await fsp.lstat(root);
-  if (!s.isDirectory() || (process.platform !== 'win32' && (s.uid !== process.getuid() || (s.mode & 0o077)))) throw Error('Run state directory is not private');
+  if (!privateStat(s)) throw Error('Run state directory is not private');
 }
 function ignored(relative) {
   const segments = relative.split('/');
@@ -148,12 +150,7 @@ async function execute(job) {
   const metadata = {id, name: c.args[0], cwd: c.cwd, ports: c.ports || [], startedAt: new Date().toISOString(), status: 'running'};
   function signal(sig) {
     if (!child || !Number.isSafeInteger(child.pid) || child.pid <= 0 || finished) return;
-    if (process.platform === 'win32') {
-      const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {stdio: 'ignore'});
-      killer.on('error', e => emit({type: 'error', message: e.message}));
-    } else {
-      try { process.kill(-child.pid, sig); } catch (e) { if (e.code !== 'ESRCH') throw e; }
-    }
+    signalGroup(child.pid,sig,emit);
   }
   function stop(sig) {
     if (stopping || finished) return;
@@ -166,10 +163,11 @@ async function execute(job) {
     if (!c.ptyModule) throw Error('The primary terminal runtime was not discovered');
     const {EventEmitter} = require('node:events');
     const {PassThrough, Writable} = require('node:stream');
-    const pty = require(c.ptyModule).spawn(c.args[0], c.args.slice(1), {cwd:c.cwd, env:process.env, name:process.env.TERM || 'xterm-256color', cols:c.cols || 80, rows:c.rows || 24, encoding:null});
+    const resolved = resolveInvocation(c.args[0],c.args.slice(1));
+    const pty = require(c.ptyModule).spawn(resolved.ptyCommand, resolved.ptyArgs, {cwd:c.cwd, env:process.env, name:process.env.TERM || 'xterm-256color', cols:c.cols || 80, rows:c.rows || 24, encoding:null});
     child = new EventEmitter(); child.pid = pty.pid;
     child.stdout = new PassThrough(); child.stderr = new PassThrough();
-    child.stdin = new Writable({write(data, _, next) { try { pty.write(data.toString()); next(); } catch(error) { next(error); } }, final(next) { pty.write('\x04'); next(); }});
+    child.stdin = new Writable({write(data, _, next) { try { pty.write(data.toString()); next(); } catch(error) { next(error); } }, final(next) { pty.write(resolved.ptyEof); next(); }});
     pty.onData(data => { if (!child.stdout.write(Buffer.from(data))) pty.pause(); });
     child.stdout.on('drain', () => pty.resume());
     pty.onExit(event => { const code = event.signal ? 128 + event.signal : event.exitCode; child.emit('exit', code, null); child.stdout.end(); child.stderr.end(); child.emit('close', code, null); });
@@ -195,7 +193,7 @@ async function execute(job) {
       });
     });
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(address(id), resolve); });
-    if (process.platform !== 'win32') await fsp.chmod(address(id), 0o600);
+    await protectSocket(address(id));
     await atomic(record(id), metadata);
     if (process.send) { process.send({ready: true}); process.disconnect(); }
     child.stdin.end();

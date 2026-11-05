@@ -4,6 +4,7 @@ import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { resolveSelfInvocation, selfInvocationArgs } from "@t3tools/shared/nodeRuntime";
+import { nativeInvocation } from "./RunPlatform.ts";
 import { awaitForwardingStop } from "./RunGuardianControl.ts";
 import { requestRun } from "./RunClient.ts";
 import { remoteRun } from "./RunTransport.ts";
@@ -69,7 +70,9 @@ export function parseRunArgs(args: readonly string[]) {
   return { bg, follow, list, logs, stop, timeoutMs, ports, command };
 }
 async function localRun(command: readonly string[]) {
-  const child = NodeChildProcess.spawn(command[0]!, command.slice(1), {
+  const resolved = nativeInvocation(command[0]!, command.slice(1));
+  const child = NodeChildProcess.spawn(resolved.command, resolved.args, {
+    shell: resolved.shell,
     stdio: "inherit",
     env: process.env,
   });
@@ -205,7 +208,7 @@ export async function runCli(args: readonly string[]) {
       process.exitCode = prepared.code;
       return;
     }
-    let result: Awaited<ReturnType<typeof remoteRun>>;
+    let result: Awaited<ReturnType<typeof remoteRun>> | undefined;
     let remoteFailed = false;
     let remoteFailure: Error | undefined;
     try {
@@ -237,8 +240,8 @@ export async function runCli(args: readonly string[]) {
     } catch (cause) {
       remoteFailed = true;
       remoteFailure = cause instanceof Error ? cause : new Error(String(cause));
-      throw remoteFailure;
-    } finally {
+    }
+    {
       process.stdout.write(stdout.end());
       process.stderr.write(stderr.end());
       const flushed = options.bg
@@ -251,15 +254,17 @@ export async function runCli(args: readonly string[]) {
             }),
           );
       if (!flushed.ok && remoteFailure)
-        throw new Error(
+        remoteFailure = new Error(
           `${remoteFailure.message}; post-run synchronization failed: ${flushed.message}`,
           { cause: remoteFailure },
         );
-      if (!flushed.ok) {
+      if (!flushed.ok && !remoteFailure) {
         process.stderr.write(`${flushed.message}\n`);
         process.exitCode = flushed.code;
       }
     }
+    if (remoteFailure) throw remoteFailure;
+    if (!result) throw new Error("The primary did not return an exit status.");
     ignoredNotice(result.ignored, plan.machine);
     process.exitCode = result.code || process.exitCode || 0;
   } catch (cause) {
