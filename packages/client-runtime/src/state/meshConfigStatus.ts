@@ -9,6 +9,9 @@ import { machineDisplayOf } from "./machineDisplay.ts";
 import type { MeshMachine } from "./meshMachines.ts";
 
 const isRevision = Schema.is(MeshConfigRevision);
+function readableReason(message: string) {
+  return message.replaceAll("Unknown machine (UN)", "Unnamed machine");
+}
 export function meshConfigHistory(
   document: Readonly<Record<string, { readonly v: unknown }>>,
 ): MeshConfigRevision[] {
@@ -61,10 +64,13 @@ export function meshConfigApplyGroups(
     group.title = `Config${config ? ` r${config.sequence}` : ""}${pending ? " applying" : config ? ` applied ${relativeTime(config.writtenAt, now)}` : ""} · ${done} ${done === 1 ? "change" : "changes"} done${failed ? `, ${failed} failed` : ""}${pending ? `, ${pending} in progress` : ""}`;
     group.actions = group.actions.map((action) => ({
       ...action,
-      description: action.description
-        .replace(/^Apply display for (.+)$/u, "Machine $1")
-        .replace(/^Place (.+) on (.+)$/u, "Replica of $1 on $2")
-        .replace(/^Apply ignores to (.+)$/u, "Sync ignores for $1"),
+      ...(action.reason === undefined ? {} : { reason: readableReason(action.reason) }),
+      description: readableReason(
+        action.description
+          .replace(/^Apply display for (.+)$/u, "Machine $1")
+          .replace(/^Place (.+) on (.+)$/u, "Replica of $1 on $2")
+          .replace(/^Apply ignores to (.+)$/u, "Sync ignores for $1"),
+      ),
     }));
   }
   return [...groups.values()].reverse();
@@ -91,9 +97,11 @@ export function meshMachineDetailRows(
       );
       const stored = config.projectMountStatus[key]?.[machine.environmentId];
       const lag = current?.lag;
-      const reason = [current?.message ?? stored?.message, ...(current?.problems ?? [])]
-        .filter(Boolean)
-        .join(" · ");
+      const reason = readableReason(
+        [current?.message ?? stored?.message, ...(current?.problems ?? [])]
+          .filter(Boolean)
+          .join(" · "),
+      );
       rows.push({
         label: config.projectTitles[key] ?? "Project replica",
         value: `${current?.state ?? stored?.state ?? "Unknown"} · ${lag ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}` : "Lag not reported"}${reason ? ` · ${reason}` : ""}`,

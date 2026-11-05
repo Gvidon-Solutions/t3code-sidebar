@@ -111,4 +111,13 @@ it("shows replica lag and SSH route reasons while keeping absent reports unknown
     ])[1]?.value,
   ).toContain("Permission denied");
   expect(meshMachineDetailRows(machine, config, [])[1]?.value).toContain("Lag not reported");
+  expect(
+    meshMachineDetailRows(machine, config, [
+      {
+        ...live[0]!,
+        state: "error",
+        message: "Cloudbox cannot reach Unknown machine (UN)",
+      },
+    ])[1]?.value,
+  ).toContain("Cloudbox cannot reach Unnamed machine");
 });
