@@ -3,9 +3,9 @@ import { Sheet } from "../../components/ui/Sheet";
 import { useReplicaStatuses } from "../../state/meshReplicas";
 import { useEnvironmentQuery } from "../../state/query";
 import { meshLayoutAtoms } from "../../state/mesh-layout";
-import { minuteTick } from "@t3tools/client-runtime/clock";
+import { useNowMinuteMs } from "../../lib/clock";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 import {
   meshConnectionText,
@@ -28,9 +28,7 @@ export function SettingsMachinesRouteScreen() {
   const mesh = useMeshLayout();
   const { config } = mesh;
   const { machines: allMachines, links } = useMeshOverview({ config });
-  const now = Date.parse(
-    useSyncExternalStore(minuteTick.subscribe, minuteTick.getSnapshot, minuteTick.getSnapshot),
-  );
+  const now = useNowMinuteMs();
   const { active: machines, forgotten } = partitionMeshMachines(
     allMachines,
     config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,

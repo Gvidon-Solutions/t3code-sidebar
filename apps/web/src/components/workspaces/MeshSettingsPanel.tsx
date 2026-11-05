@@ -1,3 +1,4 @@
+import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
 import { useReplicaStatuses } from "../../state/meshReplicas";
 import { useEnvironmentQuery } from "../../state/query";
 import { meshLayoutAtoms } from "../../state/meshLayout";
@@ -263,7 +264,7 @@ function LinkWithDialog(props: {
 export function MeshSettingsPanel() {
   const mesh = useMeshLayout();
   const { machines: allMachines } = useMeshOverview({ config: mesh.config });
-  const now = Date.parse(useNowMinute());
+  const now = minuteTickToEpochMs(useNowMinute());
   const { active: machines, forgotten } = partitionMeshMachines(
     allMachines,
     mesh.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
