@@ -9,6 +9,7 @@ it("opens Machines without toggling its folder, including after a live status ch
   const toggle = vi.fn();
   const config = {
     ...empty,
+    machines: { at: { title: "Studio" }, lab: { title: "Laptop" }, vps: { title: "Cloudbox" } },
     projectMounts: {
       demo: [
         {
@@ -48,7 +49,7 @@ it("opens Machines without toggling its folder, including after a live status ch
     screen.getByRole("button", { name: model.description }).element().textContent?.match(/⇄/g),
   ).toHaveLength(1);
   expect(
-    screen.getByRole("img", { name: "Machine: at" }).element().querySelector("[aria-hidden]"),
+    screen.getByRole("img", { name: "Machine: Studio" }).element().querySelector("[aria-hidden]"),
   ).not.toBeNull();
   expect(toggle).not.toHaveBeenCalled();
   const synced = projectMachineStrip(config, group, [
@@ -68,7 +69,7 @@ it("opens Machines without toggling its folder, including after a live status ch
   );
   await expect.element(screen.getByRole("button", { name: synced.description })).toBeVisible();
   expect(
-    screen.getByRole("img", { name: "Machine: at" }).element().querySelector("[aria-hidden]"),
+    screen.getByRole("img", { name: "Machine: Studio" }).element().querySelector("[aria-hidden]"),
   ).toBeNull();
   const primaries = projectMachineStrip(
     {
@@ -84,4 +85,48 @@ it("opens Machines without toggling its folder, including after a live status ch
   expect(
     screen.getByRole("button", { name: primaries.description }).element().textContent,
   ).not.toContain("⇄");
+});
+
+it("collapses tags for a long project title and retains the complete machine description", async () => {
+  const title = "Research workspace with a deliberately long title";
+  const model = projectMachineStrip(
+    {
+      ...empty,
+      machines: {
+        studio: { label: "Studio" },
+        cloudbox: { label: "Cloudbox" },
+        laptop: { label: "Laptop" },
+      },
+    },
+    {
+      projectKey: "demo",
+      environmentIds: ["studio", "cloudbox", "laptop"],
+      knownEnvironmentIds: ["studio", "cloudbox", "laptop"],
+    },
+    [],
+  );
+  await using screen = await render(
+    <div style={{ display: "flex", width: 280, gap: 8 }}>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {title}
+      </span>
+      <ProjectMachineStrip model={model} compact onOpen={() => undefined} />
+    </div>,
+  );
+  expect(screen.getByText(title).element().getBoundingClientRect().width).toBeGreaterThan(140);
+  await expect.element(screen.getByText("+2")).toBeVisible();
+  expect(
+    screen
+      .getByRole("button", { name: model.description })
+      .element()
+      .querySelectorAll('[role="img"]'),
+  ).toHaveLength(1);
 });

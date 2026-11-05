@@ -1,5 +1,10 @@
 import * as Schema from "effect/Schema";
-import type { MeshConfigDocument, SidebarWorkspacesConfig } from "@t3tools/contracts";
+import type { Json } from "../meshLayout/document.ts";
+import {
+  MeshConfigRevision,
+  type MeshConfigDocument,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
 import type { MeshLayoutDocument } from "../meshLayout/document.ts";
 
 const legacyMachine = Schema.decodeUnknownOption(
@@ -7,7 +12,10 @@ const legacyMachine = Schema.decodeUnknownOption(
     reach: Schema.optionalKey(
       Schema.Record(
         Schema.String,
-        Schema.Struct({ ssh: Schema.String, identityFile: Schema.optionalKey(Schema.String) }),
+        Schema.Struct({
+          ssh: Schema.String,
+          identityFile: Schema.optionalKey(Schema.String),
+        }),
       ),
     ),
   }),
@@ -22,6 +30,7 @@ export function migrateConfig(
 ) {
   if (Object.hasOwn(document, "mesh.config")) return undefined;
   const bindings: Record<string, string> = {};
+  const migration: Record<string, { peerLabels: string[]; ssh?: Record<string, unknown> }> = {};
   const machines: Record<string, MeshConfigDocument["machines"][string]> = {};
   const environments = [
     ...new Set([
@@ -53,26 +62,29 @@ export function migrateConfig(
         [
           title,
           machine?.label,
+          ...(machine?.aliases ?? []),
           environmentId === self.environmentId ? self.label : undefined,
           peers.find((peer) => peer.environmentId === environmentId)?.label,
         ].filter((label): label is string => typeof label === "string"),
       ),
     ];
+    migration[name] = {
+      peerLabels: legacyLabels.flatMap((label) => [`T3 Code · ${label}`, label]),
+    };
     machines[name] = {
       title,
       ...(machine?.tag ? { label: machine.tag } : {}),
       ...(machine?.color ? { color: machine.color } : {}),
-      ...(machine?.aliases ? { aliases: machine.aliases } : {}),
-      legacyPeerLabels: legacyLabels.flatMap((label) => [`T3 Code · ${label}`, label]),
     };
   }
   const names = Object.keys(bindings);
   const routes = names.flatMap((from) =>
     Object.entries(
       (() => {
-        const id = bindings[from]!;
+        const environmentId = bindings[from]!;
         const decoded = legacyMachine(
-          document[`machine/${encodeURIComponent(id)}`]?.v ?? layout.machines[id],
+          document[`machine/${encodeURIComponent(environmentId)}`]?.v ??
+            layout.machines[environmentId],
         );
         return decoded._tag === "Some" ? (decoded.value.reach ?? {}) : {};
       })(),
@@ -81,18 +93,26 @@ export function migrateConfig(
       return to ? [{ from, to, route }] : [];
     }),
   );
-  for (const { to, route } of routes) {
+  for (const { from, to, route } of routes) {
     const target = machines[to]!;
     const previous = target.ssh;
+    const legacy = migration[to]!.ssh;
+    const oldRoutes =
+      typeof legacy?.routes === "object" && legacy.routes !== null ? legacy.routes : {};
     const match = /^(?:([^@]+)@)?(.+?)(?::(\d+))?$/.exec(route.ssh);
+    migration[to]!.ssh = {
+      ...legacy,
+      host: match?.[2] ?? route.ssh,
+      routes: { ...oldRoutes, [from]: route },
+    };
     machines[to] = {
       ...target,
       reach: target.reach ?? "auto",
       ssh: {
         ...previous,
+        host: match?.[2] ?? route.ssh,
         ...(match?.[1] ? { user: match[1] } : {}),
         ...(match?.[3] ? { port: Number(match[3]) } : {}),
-        host: match?.[2] ?? route.ssh,
       },
     };
   }
@@ -126,5 +146,62 @@ export function migrateConfig(
     replicas: { ignore: [...ignores], rules: [] },
     agents: { aliases: {} },
   };
-  return { doc, bindings };
+  return { doc, bindings, migration };
+}
+
+const decodeRevision = Schema.decodeUnknownOption(MeshConfigRevision);
+export function extractConfigMigration(
+  document: MeshLayoutDocument,
+  h: string,
+): MeshLayoutDocument {
+  const entries: MeshLayoutDocument = {};
+  for (const [key, entry] of Object.entries(document)) {
+    if (!(key === "mesh.config" || key.startsWith("mesh.configHistory/"))) continue;
+    const decoded = decodeRevision(entry.v);
+    if (decoded._tag === "None") continue;
+    const revision = decoded.value;
+    const machines: Record<string, MeshConfigDocument["machines"][string]> = {};
+    let changed = false;
+    for (const [name, machine] of Object.entries(revision.doc.machines)) {
+      const { legacyPeerLabels, ...visible } = machine;
+      const { routes, ...ssh } = machine.ssh ?? {};
+      const host = ssh.host;
+      machines[name] = { ...visible, ...(machine.ssh ? { ssh } : {}) };
+      if (legacyPeerLabels === undefined && routes === undefined) continue;
+      changed = true;
+      const metadataKey = `mesh.machineMigration/${encodeURIComponent(name)}`;
+      const old = entries[metadataKey]?.v ?? document[metadataKey]?.v;
+      const prior =
+        old && typeof old === "object" && !Array.isArray(old) ? (old as Record<string, Json>) : {};
+      const labels = Array.isArray(legacyPeerLabels)
+        ? legacyPeerLabels.filter((value): value is string => typeof value === "string")
+        : [];
+      const priorLabels = Array.isArray(prior.peerLabels)
+        ? prior.peerLabels.filter((value): value is string => typeof value === "string")
+        : [];
+      entries[metadataKey] = {
+        h,
+        v: {
+          ...prior,
+          peerLabels: [...new Set([...priorLabels, ...labels])],
+          ...(host !== undefined || routes !== undefined
+            ? {
+                ssh: {
+                  ...(typeof host === "string" ? { host } : {}),
+                  ...(typeof routes === "object" && routes !== null
+                    ? { routes: routes as Json }
+                    : {}),
+                },
+              }
+            : {}),
+        },
+      };
+    }
+    if (changed)
+      entries[key] = {
+        h,
+        v: { ...(entry.v as Record<string, Json>), doc: { ...revision.doc, machines } } as Json,
+      };
+  }
+  return entries;
 }

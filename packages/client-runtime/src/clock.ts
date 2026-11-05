@@ -154,3 +154,7 @@ export function deadlineStore(deadlineMs: number | null): DeadlineStore {
   };
   return store;
 }
+
+export function minuteTickToEpochMs(minute: string): number {
+  return Date.parse(`${minute.slice(0, 16)}:00Z`);
+}

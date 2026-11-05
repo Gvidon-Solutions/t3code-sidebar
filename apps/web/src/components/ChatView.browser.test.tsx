@@ -1,3 +1,4 @@
+import "../index.css";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { ThreadId } from "@t3tools/contracts";
@@ -10,6 +11,7 @@ import { AppRoot } from "~/AppRoot";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { __setClientSettingsForTests } from "~/hooks/useSettings";
 import { getRouter } from "~/router";
+import { readProject } from "~/state/entities";
 import {
   ENVIRONMENT_ID,
   PROJECT_ID,
@@ -35,6 +37,13 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
 
 it("a new draft does not load its reserved thread before the server lists it", async () => {
   using _environment = installFakeEnvironment([]);
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  await page.viewport(240, 640);
+  await using _viewport = {
+    [Symbol.asyncDispose]: async () => {
+      await page.viewport(viewport.width, viewport.height);
+    },
+  };
   using fetchSpy = vi.spyOn(globalThis, "fetch");
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
@@ -53,8 +62,9 @@ it("a new draft does not load its reserved thread before the server lists it", a
     router: false,
   });
   await expect.element(page.getByTestId("composer-editor")).toBeVisible();
-  // The shell snapshot has arrived once the sidebar lists the project, so the connection is up.
-  await expect.element(page.getByText("render", { exact: true }).first()).toBeVisible();
+  await vi.waitFor(() =>
+    expect(readProject(scopeProjectRef(ENVIRONMENT_ID, PROJECT_ID))?.title).toBe("render"),
+  );
 
   const threadRequests = fetchSpy.mock.calls
     .map(([input]) => String(input instanceof Request ? input.url : input))

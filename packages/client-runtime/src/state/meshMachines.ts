@@ -1,3 +1,4 @@
+import * as DateTime from "effect/DateTime";
 import type {
   EnvironmentId,
   PeerLinkCreateInput,
@@ -15,6 +16,7 @@ export interface MeshMachineConnection {
   readonly label: string;
   readonly version?: string | null;
   readonly connected: boolean;
+  readonly platform?: { readonly os: string; readonly arch: string };
   /** Addresses this client knows for the machine, most preferred first. */
   readonly urls?: readonly string[];
 }
@@ -52,10 +54,13 @@ export interface MeshLinkedWith {
 export interface MeshMachine extends MachineDisplay {
   readonly network?: import("@t3tools/contracts").PeerConnectionStatus;
   readonly aliases: readonly string[];
+  readonly unnamed: boolean;
+  readonly platform?: { readonly os: string; readonly arch: string };
   readonly environmentId: string;
   readonly connectedHere: boolean;
   /** Machines connected by an incoming or outgoing peer link. */
   readonly linkedWith: readonly MeshLinkedWith[];
+  readonly lastSeenAt?: string | null;
   readonly version: string | null;
   /** The last successful layout exchange, as the server recorded it. */
   readonly lastExchangeAt: string | null;
@@ -73,6 +78,7 @@ export interface MeshMachineBuildInput {
   readonly connections?: readonly MeshMachineConnection[];
   readonly links?: readonly MeshLinkSource[];
   readonly peerStates?: readonly MeshPeerStateView[];
+  readonly factsObservedAt?: Readonly<Record<string, string | null>>;
   readonly peerConnections?: readonly import("@t3tools/contracts").PeerConnectionStatus[];
 }
 
@@ -137,7 +143,26 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
   }
   const networkStates = [...networkBySource.values()];
   const peerStates = input.peerStates ?? [];
-  const connectionById = new Map(connections.map((entry) => [entry.environmentId, entry]));
+  const connectionById = new Map<string, MeshMachineConnection>();
+  for (const entry of connections) {
+    const previous = connectionById.get(entry.environmentId);
+    const preferred = previous?.connected && !entry.connected ? previous : entry;
+    const other = preferred === entry ? previous : entry;
+    const platform = preferred.platform ?? other?.platform;
+    connectionById.set(entry.environmentId, {
+      ...previous,
+      ...entry,
+      label:
+        machineDisplayOf({ machines: {} }, entry.environmentId, preferred.label).label ===
+        "Unnamed machine"
+          ? (other?.label ?? preferred.label)
+          : preferred.label,
+      connected: entry.connected || previous?.connected === true,
+      version: preferred.version ?? other?.version ?? null,
+      ...(platform ? { platform } : {}),
+      urls: [...new Set([...(previous?.urls ?? []), ...(entry.urls ?? [])])],
+    });
+  }
 
   const ids = new Set<string>();
   for (const connection of connections) ids.add(connection.environmentId);
@@ -239,16 +264,34 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         candidates.find((connection) => connection.state === "direct") ??
         candidates.find((connection) => connection.state === "relayed") ??
         candidates[0];
+      const platform = connection?.platform ?? config.machines[environmentId]?.reported?.platform;
       return {
         environmentId,
         ...(network === undefined ? {} : { network }),
         aliases: config.machines[environmentId]?.aliases ?? [],
+        unnamed: display.label === "Unnamed machine",
+        ...(platform ? { platform } : {}),
         label: display.label,
         tag: display.tag,
         color: display.color,
         connectedHere: connection?.connected === true,
         linkedWith,
         version: connection?.version ?? config.machines[environmentId]?.reported?.version ?? null,
+        lastSeenAt:
+          [
+            peerState?.lastExchangeAt,
+            input.factsObservedAt?.[environmentId],
+            config.machines[environmentId]?.reported?.reportedAt,
+            ...peerLinks.map((link) => link.lastReachedAt),
+            ...Object.values(config.projectMounts).flatMap((mounts) =>
+              mounts
+                .filter((mount) => mount.environmentId === environmentId)
+                .map((mount) => mount.createdAt),
+            ),
+          ]
+            .filter((value): value is string => typeof value === "string")
+            .sort()
+            .at(-1) ?? null,
         lastExchangeAt: peerState?.lastExchangeAt ?? null,
         lastError:
           network?.lastError ??
@@ -263,7 +306,15 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         conflicts,
         urls,
       };
-    });
+    })
+    .filter(
+      (machine) =>
+        input.factsObservedAt?.[machine.environmentId] !== null ||
+        machine.connectedHere ||
+        machine.network?.state === "direct" ||
+        machine.network?.state === "relayed" ||
+        machine.linkedWith.length > 0,
+    );
 }
 
 export type MeshFooterStatus =
@@ -284,21 +335,22 @@ export function deriveMeshFooterStatus(input: {
   readonly machines: readonly MeshMachine[];
   readonly now: number;
 }): MeshFooterStatus {
-  if (!input.enabled || input.machines.length === 0) return { kind: "hidden" };
-  const failing = input.machines.find((machine) => machine.lastError !== null);
+  const { active: machines } = partitionMeshMachines(input.machines, { machines: {} }, input.now);
+  if (!input.enabled || machines.length === 0) return { kind: "hidden" };
+  const failing = machines.find((machine) => machine.lastError !== null);
   if (failing !== undefined) {
     const last = failing.lastExchangeAt === null ? input.now : Date.parse(failing.lastExchangeAt);
     const elapsed = Number.isFinite(last) ? Math.max(0, input.now - last) : 0;
     return {
       kind: "unreachable",
-      count: input.machines.length,
+      count: machines.length,
       environmentId: failing.environmentId,
       label: failing.label,
       tag: failing.tag,
       minutes: Math.floor(elapsed / 60_000),
     };
   }
-  return { kind: "synced", count: input.machines.length };
+  return { kind: "synced", count: machines.length };
 }
 
 /** The sidebar footer text, kept out of the components so both clients say the same thing. */
@@ -363,4 +415,87 @@ export function meshConnectionText(
   if (state.state === "relayed")
     return `Via ${machines.find((item) => item.environmentId === state.via)?.label ?? "linked machine"}`;
   return state.offlineSince ? `Offline since ${state.offlineSince}` : "Offline";
+}
+
+export function partitionMeshMachines(
+  machines: readonly MeshMachine[],
+  config: Pick<SidebarWorkspacesConfig, "machines">,
+  now: number,
+) {
+  const forgotten: MeshMachine[] = [];
+  const active: MeshMachine[] = [];
+  for (const machine of machines) {
+    const seen = [
+      machine.lastSeenAt,
+      machine.lastExchangeAt,
+      config.machines[machine.environmentId]?.reported?.reportedAt,
+    ]
+      .filter((value): value is string => value != null)
+      .map(Date.parse)
+      .filter(Number.isFinite);
+    const online =
+      machine.connectedHere ||
+      machine.network?.state === "direct" ||
+      machine.network?.state === "relayed";
+    if (
+      !online &&
+      machine.linkedWith.length === 0 &&
+      seen.length > 0 &&
+      now - Math.max(...seen) >= 7 * 86_400_000
+    )
+      forgotten.push(machine);
+    else active.push(machine);
+  }
+  return { active, forgotten };
+}
+
+export function forgetMachineFacts(
+  config: SidebarWorkspacesConfig,
+  environmentId: string,
+): SidebarWorkspacesConfig {
+  const machines = { ...config.machines };
+  delete machines[environmentId];
+  return {
+    ...config,
+    machines,
+    projectMounts: Object.fromEntries(
+      Object.entries(config.projectMounts).map(([key, reps]) => [
+        key,
+        reps
+          .filter((rep) => rep.environmentId !== environmentId)
+          .map((rep) => {
+            if (rep.source !== environmentId) return rep;
+            const { source: _source, ...remaining } = rep;
+            return remaining;
+          }),
+      ]),
+    ),
+    projectMountStatus: Object.fromEntries(
+      Object.entries(config.projectMountStatus).map(([key, statuses]) => {
+        const next = { ...statuses };
+        delete next[environmentId];
+        return [key, next];
+      }),
+    ),
+  };
+}
+
+export * from "./meshConfigStatus.ts";
+
+export function meshMachineFactTimes(
+  document: Readonly<Record<string, { readonly h: string; readonly v?: unknown }>>,
+) {
+  const times: Record<string, string | null> = {};
+  for (const [key, entry] of Object.entries(document)) {
+    if (!key.startsWith("machine/")) continue;
+    const environmentId = decodeURIComponent(key.slice("machine/".length));
+    if (entry.v === null) {
+      times[environmentId] = null;
+      continue;
+    }
+    const milliseconds = Number(entry.h.slice(0, 13));
+    if (Number.isFinite(milliseconds))
+      times[environmentId] = DateTime.formatIso(DateTime.makeUnsafe(milliseconds));
+  }
+  return times;
 }

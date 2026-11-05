@@ -1,3 +1,5 @@
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { Combobox, ComboboxInput, ComboboxPopup, ComboboxList, ComboboxItem } from "../ui/combobox";
 import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
@@ -34,11 +36,8 @@ function machineLabel(
   environmentId: string,
   fallback: string,
 ): { label: string; title: string } {
-  const machine = config?.machines[environmentId];
-  return {
-    label: machine?.label ?? machine?.tag ?? fallback,
-    title: machine?.title ?? machine?.label ?? machine?.tag ?? fallback,
-  };
+  const display = machineDisplayOf({ machines: config?.machines ?? {} }, environmentId, fallback);
+  return { label: display.label, title: display.label };
 }
 
 export function ForkThreadDialogHost() {
@@ -73,7 +72,7 @@ export function ForkThreadDialog(props: {
       mesh.config,
       environmentId,
       environments.find((environment) => environment.environmentId === environmentId)?.label ??
-        "Unknown machine",
+        "Unnamed machine",
     );
   const source = {
     shell: readThreadShell(scopeThreadRef(request.environmentId, request.threadId)),
@@ -259,58 +258,85 @@ export function ForkThreadDialog(props: {
           <div className="flex flex-col gap-3">
             <label className="block text-sm">
               Machine
-              <select
-                aria-label="Fork target machine"
-                className="mt-1 w-full rounded border border-border bg-background p-2"
-                value={target ?? ""}
-                onChange={(event) => {
-                  selectTarget(event.currentTarget.value as EnvironmentId);
+              <Combobox
+                items={machines}
+                value={machines.find((machine) => machine.environmentId === target) ?? null}
+                itemToStringLabel={(machine) => machine.title}
+                onValueChange={(machine) => {
+                  if (machine) selectTarget(machine.environmentId);
                 }}
               >
-                {machines.map((machine) => (
-                  <option key={machine.environmentId} value={machine.environmentId}>
-                    {machine.title} {machine.title !== machine.label ? `(${machine.label})` : ""}
-                    {machine.unavailable ? " (unavailable)" : ""}
-                  </option>
-                ))}
-              </select>
+                <ComboboxInput aria-label="Fork target machine" />
+                <ComboboxPopup>
+                  <ComboboxList>
+                    {(machine: (typeof machines)[number]) => (
+                      <ComboboxItem key={machine.environmentId} value={machine}>
+                        {machine.title}
+                        {machine.unavailable ? " (unavailable)" : ""}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxPopup>
+              </Combobox>
             </label>
             <p className="text-sm text-muted-foreground">
               Copies the conversation through its last completed turn. The original stays where it
               is and keeps running.
             </p>
-            {syncCopy ? <p className="text-sm text-muted-foreground">{syncCopy}</p> : null}
+            {target ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                {syncCopy === "Synced" || (!syncCopy && target === source.environmentId)
+                  ? `Project synced on ${displayMachine(target).title}`
+                  : (syncCopy ?? `Preparing project on ${displayMachine(target).title}`)}
+              </p>
+            ) : null}
             {loadingModels ? (
               <p role="status">Loading models on {displayMachine(target).title}…</p>
             ) : null}
             {noModelsReason ? (
-              <p className="text-sm text-destructive">{noModelsReason}</p>
+              <div className="space-y-2 text-sm">
+                <p className="text-destructive">
+                  {choices.length === 0 && online
+                    ? `No models are available on ${displayMachine(target).title}.`
+                    : `Could not load models on ${displayMachine(target).title}.`}
+                </p>
+                <details>
+                  <summary>Details</summary>
+                  <p>{noModelsReason}</p>
+                </details>
+                <a className="underline" href="/settings/providers">
+                  Open provider settings
+                </a>
+              </div>
             ) : initial && selectedEntry ? (
-              <ProviderModelPicker
-                environmentId={target!}
-                activeInstanceId={initial.instanceId}
-                model={initial.model}
-                lockedProvider={null}
-                instanceEntries={entries}
-                modelOptionsByInstance={options}
-                triggerAriaLabel="Fork model"
-                onInstanceModelChange={(instanceId, model) => setChosen({ instanceId, model })}
-                effortColumn={
-                  <ComposerEffortColumn
-                    traits={{
-                      provider: selectedEntry.driverKind,
-                      instanceId: initial.instanceId,
-                      models: selectedEntry.models,
-                      model: initial.model,
-                      modelOptions: initial.options ?? [],
-                      planModeEnabled: false,
-                      allowPromptInjectedEffort: false,
-                      onModelOptionsChange: (options) =>
-                        setChosen({ ...initial, options: options ?? [] }),
-                    }}
-                  />
-                }
-              />
+              <div className="flex min-h-10 items-center justify-between gap-3">
+                <span className="text-sm">Model</span>
+                <ProviderModelPicker
+                  environmentId={target!}
+                  activeInstanceId={initial.instanceId}
+                  model={initial.model}
+                  lockedProvider={null}
+                  instanceEntries={entries}
+                  modelOptionsByInstance={options}
+                  triggerAriaLabel="Fork model"
+                  onInstanceModelChange={(instanceId, model) => setChosen({ instanceId, model })}
+                  effortColumn={
+                    <ComposerEffortColumn
+                      traits={{
+                        provider: selectedEntry.driverKind,
+                        instanceId: initial.instanceId,
+                        models: selectedEntry.models,
+                        model: initial.model,
+                        modelOptions: initial.options ?? [],
+                        planModeEnabled: false,
+                        allowPromptInjectedEffort: false,
+                        onModelOptionsChange: (options) =>
+                          setChosen({ ...initial, options: options ?? [] }),
+                      }}
+                    />
+                  }
+                />
+              </div>
             ) : null}
             <label className="block text-sm">
               Title

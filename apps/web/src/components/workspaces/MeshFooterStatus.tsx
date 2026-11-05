@@ -1,3 +1,4 @@
+import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
 import {
   deriveMeshFooterStatus,
   meshFooterText,
@@ -16,7 +17,7 @@ export function MeshFooterStatus({ config }: { readonly config: SidebarWorkspace
     (settings) => settings.meshEnabled && settings.linkedEnvironmentsEnabled,
   );
   const { machines } = useMeshOverview({ config });
-  const now = Date.parse(useNowMinute());
+  const now = minuteTickToEpochMs(useNowMinute());
   const text = meshFooterText(deriveMeshFooterStatus({ enabled, machines, now }));
   if (text === null) return null;
   return (

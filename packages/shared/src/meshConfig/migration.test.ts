@@ -1,6 +1,6 @@
 import { expect, it } from "@effect/vitest";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
-import { migrateConfig } from "./migration.ts";
+import { migrateConfig, extractConfigMigration } from "./migration.ts";
 import {
   effectiveLinkPermissions,
   machineByPeerLabel,
@@ -47,7 +47,6 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
   expect(result?.doc.machines.studio).toMatchObject({
     title: "Studio",
     label: "ST",
-    aliases: ["desk"],
     color: "blue",
   });
   expect(result?.doc.machines.cloudbox?.ssh).toMatchObject({
@@ -58,10 +57,26 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
   const config = parseConfig(result?.doc);
   expect(referenceErrors(config)).toEqual([]);
   for (const label of ["Studio", "Legacy Studio", "T3 Code · studio-host"])
-    expect(machineByPeerLabel(config, result!.bindings, label)?.name).toBe("studio");
-  expect(machineByPeerLabel(config, result!.bindings, "T3 Code · cloudbox-host")?.name).toBe(
-    "cloudbox",
-  );
+    expect(
+      machineByPeerLabel(
+        config,
+        result!.bindings,
+        label,
+        Object.fromEntries(
+          Object.entries(result!.migration).map(([name, value]) => [name, value.peerLabels]),
+        ),
+      )?.name,
+    ).toBe("studio");
+  expect(
+    machineByPeerLabel(
+      config,
+      result!.bindings,
+      "T3 Code · cloudbox-host",
+      Object.fromEntries(
+        Object.entries(result!.migration).map(([name, value]) => [name, value.peerLabels]),
+      ),
+    )?.name,
+  ).toBe("cloudbox");
   expect(effectiveLinkPermissions(config, "studio", "cloudbox").files).toBe("all");
   expect(effectiveLinkPermissions(config, "studio", "new-machine").files).toBe("projects");
   expect(config.replicas?.ignore).toEqual(["*.log"]);
@@ -75,4 +90,109 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
       [],
     ),
   ).toBeUndefined();
+});
+
+it("keeps migration-only peer identities and SSH routes outside the public config document", () => {
+  const migrated = migrateConfig(
+    {
+      "machine/a": {
+        h: "0000000000000.00000.studio",
+        v: { title: "Studio", aliases: ["desk"], reach: { b: { ssh: "dev@cloudbox" } } },
+      },
+    },
+    {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      machines: {
+        a: { title: "Studio", aliases: ["desk"] },
+        b: { title: "Cloudbox" },
+      },
+    },
+    { environmentId: "a", label: "studio-host" },
+    [],
+    [],
+  );
+  expect(Object.keys(migrated!.doc).sort()).toEqual([
+    "agents",
+    "links",
+    "machines",
+    "projects",
+    "replicas",
+    "schema",
+    "ssh",
+  ]);
+  for (const machine of Object.values(migrated!.doc.machines)) {
+    expect(
+      Object.keys(machine).every((key) =>
+        ["title", "label", "color", "reach", "ssh"].includes(key),
+      ),
+    ).toBe(true);
+    expect(
+      Object.keys(machine.ssh ?? {}).every((key) => ["host", "user", "port"].includes(key)),
+    ).toBe(true);
+  }
+  expect(Object.keys(migrated!.doc.machines.studio!)).toEqual(["title"]);
+  expect(Object.keys(migrated!.doc.machines.cloudbox!.ssh ?? {})).toEqual(["host", "user"]);
+  expect(JSON.stringify(migrated!.doc)).not.toContain("legacyPeerLabels");
+  expect(migrated!.migration.studio?.peerLabels).toContain("studio-host");
+});
+
+it("extracts existing internal data from current and history without dropping future public fields", () => {
+  const revision = {
+    revision: "r1",
+    author: "studio",
+    writtenAt: "",
+    doc: {
+      schema: 1,
+      machines: {
+        studio: {
+          title: "Studio",
+          legacyPeerLabels: ["old-host"],
+          future: "kept",
+          ssh: { user: "dev", host: "old-host", routes: {} },
+        },
+      },
+      future: { enabled: true },
+    },
+  };
+  const document = {
+    "mesh.config": { v: revision, h: "0000000000001.00000.studio" },
+    "mesh.configHistory/r1": { v: revision, h: "0000000000001.00000.studio" },
+  };
+  expect(
+    extractConfigMigration(
+      {
+        "mesh.config": {
+          ...document["mesh.config"],
+          v: {
+            ...revision,
+            doc: {
+              schema: 1,
+              machines: { studio: { ssh: { host: "personal-studio" } } },
+              ssh: { mode: "existing" },
+            },
+          },
+        },
+      },
+      "0000000000002.00000.studio",
+    ),
+  ).toEqual({});
+  const entries = extractConfigMigration(document, "0000000000002.00000.studio");
+  expect(entries["mesh.machineMigration/studio"]?.v).toEqual({
+    peerLabels: ["old-host"],
+    ssh: { host: "old-host", routes: {} },
+  });
+  const clean = {
+    ...revision,
+    doc: {
+      ...revision.doc,
+      machines: {
+        studio: { title: "Studio", future: "kept", ssh: { user: "dev", host: "old-host" } },
+      },
+    },
+  };
+  expect(entries["mesh.config"]?.v).toEqual(clean);
+  expect(entries["mesh.configHistory/r1"]?.v).toEqual(clean);
+  expect(extractConfigMigration({ ...document, ...entries }, "0000000000003.00000.studio")).toEqual(
+    {},
+  );
 });

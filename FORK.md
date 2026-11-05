@@ -1588,3 +1588,18 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** Shared `meshLayout/registry.ts` (canonical config contracts), `hlc.ts` and `migration/`; server
   `MeshLayoutServiceLive.ts`, `MeshReplicator.ts` and `mesh/migration/`; client-runtime
   `MeshLayoutStore`, web/mobile `useMeshLayout` providers and application roots.
+
+### 2026-11-05 — Stage U1 mesh state and config editing
+
+- **What.** Settings › Mesh presents machine state and opens a YAML config editor on web and
+  mobile. Plan/apply uses optimistic revision checks; history restoration uses the same flow.
+  Forgotten machine facts can be removed separately from active links. Compact machine rows merge
+  repeated connections by environment ID and keep opaque hostnames out of display names. Apply
+  summaries group human action names by revision; lag and SSH route checks accept S1 reports.
+  Migration metadata lives outside the editable YAML, including existing history revisions.
+- **How.** Both editors share a client-runtime controller. Replica git ownership is shown as
+  `git on <machine> · t3 run`; longer project names collapse the machine strip. Fork machine
+  selection uses the app combobox and model failures expose provider settings.
+- **Where.** Web `workspaces/MeshSettingsPanel`, `MeshConfigDialog`, `ForkThreadDialog`,
+  `BranchToolbar`; mobile `settings/SettingsMachinesRouteScreen`, `MeshConfigSheet`, thread
+  context pickers; shared `meshConfigEditor`, `meshMachines`, `meshLayout/replicas`.

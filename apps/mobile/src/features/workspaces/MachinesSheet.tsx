@@ -85,7 +85,7 @@ export function MachinesSheet(props: {
           const row = representationRow(props.config, props.liveStatuses, props.projectKey, rep);
           const display =
             props.machines.find((machine) => machine.environmentId === rep.environmentId) ??
-            machineDisplayOf(props.config, rep.environmentId, "Unknown machine");
+            machineDisplayOf(props.config, rep.environmentId, "Unnamed machine");
           const { label, tag, color } = display;
           return (
             <View
@@ -93,7 +93,7 @@ export function MachinesSheet(props: {
               className="gap-2 rounded-2xl border border-border bg-grouped-card p-3"
               testID={`machine-representation-${rep.environmentId}`}
             >
-              {rep.role === "primary" ? (
+              {rep.role === "primary" && row.text !== "Synced" ? (
                 <AdoptReplicaAction
                   environmentId={rep.environmentId}
                   logicalKey={props.projectKey}
@@ -141,6 +141,20 @@ export function MachinesSheet(props: {
               >
                 {row.text}
               </Text>
+              {rep.role === "replica" ? (
+                <Text className="text-xs text-foreground-muted">
+                  {(() => {
+                    const lag = props.liveStatuses.find(
+                      (item) =>
+                        item.environmentId === rep.environmentId &&
+                        item.logicalKey === props.projectKey,
+                    )?.lag;
+                    return lag
+                      ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}`
+                      : "Lag not reported";
+                  })()}
+                </Text>
+              ) : null}
               {row.status.skippedPaths?.length ? (
                 <View accessibilityLabel="Skipped files" className="gap-1">
                   {row.status.skippedPaths.map((problem) => (
@@ -173,7 +187,7 @@ export function MachinesSheet(props: {
                   onPress={() =>
                     Dialog.confirm({
                       title: `Remove this ${rep.role}?`,
-                      message: `${rep.role === "replica" ? "Synchronization stops and the replica is removed from this mesh folder." : "The primary is removed from this mesh folder."} Files already on the machine stay where they are.`,
+                      message: `${rep.role === "replica" ? "Synchronization stops and the replica is removed from this mesh folder." : "Removing the primary leaves replicas without their git and build machine. Choose another primary before continuing."} Files already on the machine stay where they are.`,
                       confirmText: "Remove",
                       destructive: true,
                       onConfirm: () => props.onRemove(rep.environmentId),

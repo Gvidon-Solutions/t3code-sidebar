@@ -1,4 +1,4 @@
-import { userEvent } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 import { expect, it, vi } from "vite-plus/test";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { render } from "../../../test/render";
@@ -101,24 +101,21 @@ it("offers machine titles, explains unavailable models and loads an unconnected 
     { router: false },
   );
   await expect.element(screen.getByRole("heading", { name: "Fork to Studio" })).toBeInTheDocument();
-  const select = screen
-    .getByRole("combobox", {
-      name: "Fork target machine",
-    })
-    .element() as HTMLSelectElement;
-  const options = Array.from(select.options).map((option) => option.textContent);
-  expect(options.some((text) => text?.includes("Cloudbox") && text?.includes("CB"))).toBe(true);
-  expect(options.some((text) => text?.includes("Studio") && text?.includes("ST"))).toBe(true);
-  expect(options).toContain("Travel laptop ");
-  await userEvent.selectOptions(select, "B");
+  const select = screen.getByRole("combobox", { name: "Fork target machine" });
+  await userEvent.fill(select, "Cloudbox");
+  await page.getByRole("option", { name: "Cloudbox", exact: true }).click();
   await expect
     .element(screen.getByText("Could not load models on Cloudbox: Cloudbox is offline."))
     .toBeInTheDocument();
   await expect.element(screen.getByRole("button", { name: "Fork to Cloudbox" })).toBeDisabled();
-  await userEvent.selectOptions(select, "C");
-  await expect.element(screen.getByText("No models are available on Laptop.")).toBeInTheDocument();
+  await userEvent.fill(select, "Laptop");
+  await page.getByRole("option", { name: "Laptop", exact: true }).click();
+  await expect
+    .element(screen.getByText("No models are available on Laptop.").first())
+    .toBeInTheDocument();
   await expect.element(screen.getByRole("button", { name: "Fork to Laptop" })).toBeDisabled();
-  await userEvent.selectOptions(select, "E");
+  await userEvent.fill(select, "Workshop");
+  await page.getByRole("option", { name: "Workshop", exact: true }).click();
   await expect
     .element(screen.getByRole("button", { name: "Fork model" }))
     .toHaveTextContent("Workshop model");

@@ -92,6 +92,7 @@ export const MeshConfigDocument = open({
 });
 export type MeshConfigDocument = typeof MeshConfigDocument.Type;
 export const MeshConfigRevision = Schema.Struct({
+  sequence: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   revision: Schema.String,
   doc: MeshConfigDocument,
   author: Schema.String,

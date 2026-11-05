@@ -76,7 +76,10 @@ export const layer = Layer.effect(
             id: `machines/${name}`,
             machine: name,
             server: bound[name] ?? mesh.environmentId,
-            description: `Apply display for ${name}`,
+            description:
+              previous?.machines[name]?.label !== doc.machines[name]?.label
+                ? `Machine label ${previous?.machines[name]?.label ?? name} → ${doc.machines[name]?.label ?? name}`
+                : `Machine ${doc.machines[name]?.title ?? name}`,
           }));
       }),
       reconcile: Effect.fn("MeshConfigPlanners.machines.reconcile")(function* (action, doc) {
@@ -171,7 +174,7 @@ export const layer = Layer.effect(
                 id: `${kind}/${key}`,
                 server: mesh.environmentId,
                 project: key,
-                description: `Apply ${kind} to ${title}`,
+                description: `${kind === "ignores" ? "Sync ignores" : "Replica policy"} for ${title}`,
               },
             ]
           : [];
@@ -243,7 +246,7 @@ export const layer = Layer.effect(
                 server,
                 machine: rule.on,
                 project: key,
-                description: `Place ${title} on ${rule.on}`,
+                description: `Replica of ${title} on ${doc.machines[rule.on]?.title ?? rule.on}`,
               });
           }
         }

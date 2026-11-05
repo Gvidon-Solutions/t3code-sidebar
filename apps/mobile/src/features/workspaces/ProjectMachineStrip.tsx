@@ -48,11 +48,15 @@ function StatusDot({ pending, color }: { readonly pending: boolean; readonly col
 export function ProjectMachineStrip({
   model,
   onOpen,
+  compact = false,
 }: {
   readonly model: ProjectMachineStripModel;
+  readonly compact?: boolean;
   readonly onOpen: () => void;
 }) {
   if (model.chips.length === 0) return null;
+  const chips = compact ? model.chips.slice(0, 1) : model.chips;
+  const overflow = model.overflow + model.chips.length - chips.length;
   return (
     <Pressable
       accessibilityRole="button"
@@ -61,7 +65,7 @@ export function ProjectMachineStrip({
       onLongPress={onOpen}
       className="flex-row items-center gap-1"
     >
-      {model.chips.map((chip, index) => (
+      {chips.map((chip, index) => (
         <Fragment key={chip.environmentId}>
           {chip.role === "replica" && model.chips[index - 1]?.role !== "replica" ? (
             <Text
@@ -90,9 +94,7 @@ export function ProjectMachineStrip({
           </View>
         </Fragment>
       ))}
-      {model.overflow > 0 ? (
-        <Text className="text-[10px] text-foreground-muted">+{model.overflow}</Text>
-      ) : null}
+      {overflow > 0 ? <Text className="text-[10px] text-foreground-muted">+{overflow}</Text> : null}
     </Pressable>
   );
 }
