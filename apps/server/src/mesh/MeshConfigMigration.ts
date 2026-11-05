@@ -1,4 +1,5 @@
 import { MeshConfigRevision } from "@t3tools/contracts";
+import { bindingsFromLayout } from "@t3tools/shared/meshConfig";
 import { migrateConfig, extractConfigMigration } from "@t3tools/shared/meshConfig/migration";
 import type { Json, MeshLayoutDocument } from "@t3tools/shared/meshLayout";
 import * as Effect from "effect/Effect";
@@ -17,12 +18,23 @@ export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const mesh = yield* MeshLayoutService;
     const snapshot = yield* mesh.read;
+    const self = yield* (yield* ServerEnvironment).getDescriptor;
     if (Object.hasOwn(snapshot.document, "mesh.config")) {
       const entries = extractConfigMigration(snapshot.document, yield* mesh.nextHlc);
+      if (!Object.values(bindingsFromLayout(snapshot.document)).includes(self.environmentId)) {
+        const name =
+          self.label
+            .normalize("NFKD")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "") || "machine";
+        const key = `mesh.machineClaim/${encodeURIComponent(self.environmentId)}`;
+        if (!snapshot.document[key])
+          entries[key] = { v: { name, machine: { title: self.label } }, h: yield* mesh.nextHlc };
+      }
       if (Object.keys(entries).length) yield* mesh.apply(entries);
       return;
     }
-    const self = yield* (yield* ServerEnvironment).getDescriptor;
     const settings = yield* (yield* ServerSettingsService).getSettings;
     const peers = yield* (yield* PeerLinks).list;
     const migration = migrateConfig(
@@ -46,8 +58,13 @@ export const layer = Layer.effectDiscard(
       "mesh.config": { v: value, h },
       [`mesh.configHistory/${encodeURIComponent(h)}`]: { v: value, h },
     };
-    for (const [name, environmentId] of Object.entries(migration.bindings))
+    for (const [name, environmentId] of Object.entries(migration.bindings)) {
       entries[`mesh.machineBinding/${name}`] = { v: environmentId, h };
+      entries[`mesh.machineClaim/${encodeURIComponent(environmentId)}`] = {
+        v: { name, machine: migration.doc.machines[name]! } as Json,
+        h,
+      };
+    }
     for (const [name, metadata] of Object.entries(migration.migration))
       entries[`mesh.machineMigration/${encodeURIComponent(name)}`] = { v: metadata as Json, h };
     yield* mesh.apply(entries);

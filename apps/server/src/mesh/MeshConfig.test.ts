@@ -283,3 +283,39 @@ it.layer(layer)("MeshConfig storage", (it) => {
     }),
   );
 });
+
+it.effect("records startup identity repair as a revision and moves a renamed binding", () =>
+  Effect.gen(function* () {
+    const mesh = yield* MeshLayoutService;
+    const config = yield* Config.MeshConfig;
+    const initial = yield* config.apply(
+      { schema: 1, machines: { studio: { title: "Studio" } } },
+      null,
+    );
+    const h = yield* mesh.nextHlc;
+    yield* mesh.apply({
+      "mesh.machineBinding/studio": { v: "alpha", h },
+      "mesh.machineClaim/alpha": { v: { name: "studio", machine: { title: "Studio" } }, h },
+      "mesh.machineClaim/beta": { v: { name: "studio", machine: { title: "Studio" } }, h },
+    });
+    yield* config.start;
+    const repaired = yield* mesh.changes.pipe(
+      Stream.filter((state) => state.document["mesh.machineBinding/studio-2"]?.v === "beta"),
+      Stream.take(1),
+      Stream.runHead,
+    );
+    expect(Option.isSome(repaired)).toBe(true);
+    const current = (yield* config.current)!;
+    expect(current.revision).not.toBe(initial.revision);
+    expect((yield* config.history).some((revision) => revision.revision === current.revision)).toBe(
+      true,
+    );
+    const { studio, ...others } = current.doc.machines;
+    yield* config.apply(
+      { ...current.doc, machines: { ...others, laptop: studio } },
+      current.revision,
+    );
+    expect((yield* mesh.read).document["mesh.machineBinding/laptop"]?.v).toBe("alpha");
+    expect((yield* mesh.read).document["mesh.machineBinding/studio"]?.v).toBeNull();
+  }).pipe(Effect.scoped, Effect.provide(layer)),
+);

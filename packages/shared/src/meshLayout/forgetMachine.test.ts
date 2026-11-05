@@ -14,6 +14,7 @@ it("forgets the binding as well as reported machine facts without changing desir
       },
     },
     "mesh.machineBinding/cloudbox": { h, v: "old" },
+    "mesh.machineClaim/old": { h, v: { name: "cloudbox", machine: { label: "CB" } } },
     "machine/old": { h, v: { label: "Old" } },
   };
   const before = materialize(doc);
@@ -21,5 +22,6 @@ it("forgets the binding as well as reported machine facts without changing desir
   const next = merge(doc, diff(before, after, doc, "0000000000002.00000.studio"));
   expect(materialize(next).machines).toEqual({});
   expect(next["mesh.machineBinding/cloudbox"]?.v).toBeNull();
+  expect(next["mesh.machineClaim/old"]?.v).toBeNull();
   expect(next["mesh.config"]).toEqual(doc["mesh.config"]);
 });
