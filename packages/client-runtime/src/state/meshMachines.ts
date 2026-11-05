@@ -2,7 +2,6 @@ import * as DateTime from "effect/DateTime";
 import type {
   EnvironmentId,
   PeerLinkCreateInput,
-  SidebarMachineReach,
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
 
@@ -72,7 +71,6 @@ export interface MeshMachine extends MachineDisplay {
   readonly primaries: number;
   readonly conflicts: number;
   readonly urls: readonly string[];
-  readonly reach: Readonly<Record<string, SidebarMachineReach>>;
 }
 
 export interface MeshMachineBuildInput {
@@ -259,9 +257,6 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
       const peerState = mergePeerStates(
         peerStates.filter((state) => state.environmentId === environmentId),
       );
-      const reach: Record<string, SidebarMachineReach> = {
-        ...config.machines[environmentId]?.reach,
-      };
       const candidates = networkStates.filter(
         (connection) => connection.environmentId === environmentId,
       );
@@ -314,7 +309,6 @@ export function buildMeshMachines(input: MeshMachineBuildInput): MeshMachine[] {
         primaries,
         conflicts,
         urls,
-        reach,
       };
     })
     .filter(
@@ -393,44 +387,6 @@ export function meshMachineLastSync(machine: MeshMachine, now: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Synced ${hours} h ago`;
   return `Synced ${Math.floor(hours / 24)} d ago`;
-}
-
-export function machineReachOf(
-  config: SidebarWorkspacesConfig,
-  machineEnvironmentId: string,
-  targetEnvironmentId: string,
-): SidebarMachineReach | null {
-  return config.machines[machineEnvironmentId]?.reach?.[targetEnvironmentId] ?? null;
-}
-
-/** Saves one ssh route, or removes it when the destination is empty. Never mutates `config`. */
-export function setMachineReach(
-  config: SidebarWorkspacesConfig,
-  machineEnvironmentId: string,
-  targetEnvironmentId: string,
-  reach: { readonly ssh: string; readonly identityFile?: string | null } | null,
-): SidebarWorkspacesConfig {
-  const ssh = reach?.ssh.trim() ?? "";
-  const identityFile = reach?.identityFile?.trim() ?? "";
-  const next: {
-    label?: string;
-    tag?: string;
-    color?: string;
-    reach?: Record<string, SidebarMachineReach>;
-  } = { ...config.machines[machineEnvironmentId] };
-  const routes = { ...next.reach };
-  if (ssh.length === 0) delete routes[targetEnvironmentId];
-  else
-    routes[targetEnvironmentId] = {
-      ssh,
-      ...(identityFile.length > 0 ? { identityFile } : {}),
-    };
-  if (Object.keys(routes).length === 0) delete next.reach;
-  else next.reach = routes;
-  const machines = { ...config.machines };
-  if (Object.keys(next).length === 0) delete machines[machineEnvironmentId];
-  else machines[machineEnvironmentId] = next;
-  return { ...config, machines };
 }
 
 export async function linkMeshMachines<A>(input: {

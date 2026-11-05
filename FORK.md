@@ -108,6 +108,23 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-05 — Managed SSH and replicas v2 (Stage S1)
+
+- **What.** Mesh-managed keys, pinned `t3-<name>` SSH hosts over persistent pipes,
+  per-peer route status and managed/existing/off modes replace the route matrix.
+  U1 receives route checks through reported `sshRoutes` and Mutagen transfer lag through
+  `ReplicaLiveStatus.lag`, including byte counts when the total is known.
+  Replicas run star sessions on their own servers. Full replicas install and refresh
+  environments from lock files; lite replicas receive explicit `t3 run` guidance.
+- **How.** Marked SSH blocks preserve foreign content and support isolated test homes.
+  Ordered ignore changes recreate stable session names. Conflict policies preserve either
+  losing endpoint under Windows-safe names. Per-replica locks and bounded steps isolate
+  failures; explicit removal checks unsynced paths and keeps files. A verified archive
+  fixture removes live downloads from the Mutagen sync integration test.
+- **Where.** Server `replicas/`, SSH facts and mesh planners; machine/settings contracts,
+  client driver selection and removal of SSH route editors; standalone `t3ctl` managed-host
+  resolution and retry routing; `scripts/mesh-e2e/` isolated bed.
+
 ### 2026-11-04 — Mesh config core (Stage C1)
 
 - **What.** The mesh is now configured by one desired-state document. Machines, link permissions, replica rules, ignores and conflict policy come from it; a one-time migration writes the first revision from existing settings. Authority is gone from layout, clients, CLI and MCP. Link permissions are enforced on the receiving server, and read-only links cannot read files outside project folders.

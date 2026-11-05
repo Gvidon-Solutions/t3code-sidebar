@@ -12,19 +12,13 @@ function endpointMachine(
   const matches = [
     ...new Set([
       ...Object.keys(config.machines),
-      ...Object.keys(config.machines[origin]?.reach ?? {}),
       ...Object.values(config.projectMounts).flatMap((reps) =>
         reps.map((rep) => rep.environmentId),
       ),
     ]),
   ].filter((id) => {
-    const route = config.machines[origin]?.reach?.[id];
-    const host = route?.ssh.replace(/:\d+$/, "").split("@").at(-1);
-    return (
-      endpoint.host === host ||
-      endpoint.host === `t3-mesh-${id}` ||
-      endpoint.host === config.machines[id]?.label
-    );
+    const host = `t3-${config.machines[id]?.title ?? config.machines[id]?.label ?? ""}`;
+    return endpoint.host === host || endpoint.host === config.machines[id]?.label;
   });
   return matches.length === 1 ? matches[0] : undefined;
 }

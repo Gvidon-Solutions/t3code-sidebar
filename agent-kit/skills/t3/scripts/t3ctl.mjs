@@ -380,6 +380,21 @@ export function meshConfigApplyInput(snapshot, doc, base) {
   };
 }
 
+export function meshSshHost(snapshot, environmentId) {
+  const desired = snapshot.document?.["mesh.config"]?.v?.doc;
+  if (desired?.ssh?.mode === "off") return null;
+  const binding = Object.entries(snapshot.document ?? {}).find(
+    ([key, entry]) => key.startsWith("mesh.machineBinding/") && entry.v === environmentId,
+  );
+  if (!binding) return null;
+  const name = binding[0].slice("mesh.machineBinding/".length);
+  const host =
+    desired?.ssh?.mode === "existing" ? desired.machines?.[name]?.ssh?.host : `t3-${name}`;
+  return typeof host === "string" && host && !host.startsWith("-") && !/[\s\0]/.test(host)
+    ? host
+    : null;
+}
+
 export function waitSeconds(value) {
   if (value === undefined || value === false) return undefined;
   if (value === true) return 600;
@@ -1109,7 +1124,6 @@ async function collectMachines({ probe = false, layout, links } = {}) {
   }
   const linkById = new Map(links.map((link) => [link.environmentId, link]));
   for (const link of links) ensure(link.environmentId);
-  const localReach = config.machines?.[local.environmentId]?.reach ?? {};
   const replicas = new Map();
   const primaries = new Map();
   for (const mounts of Object.values(config.projectMounts ?? {})) {
@@ -1146,7 +1160,7 @@ async function collectMachines({ probe = false, layout, links } = {}) {
       reachable: isLocal ? true : link ? link.status === "reachable" : null,
       lastReachedAt: link?.lastReachedAt ?? null,
       lastError: link?.lastError ?? null,
-      sshAlias: localReach[id]?.ssh ?? null,
+      sshAlias: meshSshHost(layout, id),
       replicas: replicas.get(id) ?? 0,
       primaries: primaries.get(id) ?? 0,
     };
@@ -2498,7 +2512,7 @@ const commands = {
       const ssh = opt.ssh || machine.sshAlias;
       if (!ssh)
         die(
-          `no ssh route to ${machine.label}. Pass --ssh user@host (or save a route in Settings › Machines)`,
+          `no ssh host for ${machine.label}. Pass --ssh user@host or configure managed/existing SSH in the mesh config`,
         );
       const pairingCode = await remotePairingCode(ssh, opt.remoteBase);
       const link = await withWs((c) =>
@@ -2688,12 +2702,7 @@ const commands = {
       (r) => r.environmentId === machine.environmentId,
     );
     if (!rep || !rep.source) die("the selected representation is not a replica");
-    const driverId = layout.config.machines?.[rep.environmentId]?.reach?.[rep.source]?.ssh
-      ? rep.environmentId
-      : layout.config.machines?.[rep.source]?.reach?.[rep.environmentId]?.ssh
-        ? rep.source
-        : null;
-    if (!driverId) die("no ssh route between replica and primary; configure Settings › Machines");
+    const driverId = rep.environmentId;
     const input = { logicalKey, environmentId: machine.environmentId };
     const driver = await getMachine(driverId);
     const r = driver.local
@@ -3971,14 +3980,10 @@ const commands = {
             : known.filter((machine) => machine.linked && !machine.local && machine.sshAlias);
           for (const machine of machines) {
             try {
-              const route =
-                layout.config.machines?.[layout.environmentId]?.reach?.[machine.environmentId];
               const result = installSshRuntime({
                 home: HOME,
                 want,
-                destination:
-                  route?.ssh || machine.sshAlias || die(`No SSH route to ${machine.label}`),
-                ...(route?.identityFile ? { identityFile: route.identityFile } : {}),
+                destination: machine.sshAlias || die(`No SSH host for ${machine.label}`),
                 remoteHome: process.env.T3CTL_REMOTE_HOME,
               });
               console.log(

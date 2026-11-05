@@ -1,3 +1,6 @@
+import * as Deferred from "effect/Deferred";
+import * as TestClock from "effect/testing/TestClock";
+import * as Fiber from "effect/Fiber";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Crypto from "effect/Crypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -156,4 +159,38 @@ it.effect.each(platforms)("installs the pinned $asset executable and agents, onc
       ),
     );
   }).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("times out a stalled download before extraction", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "s1-installer-timeout-" });
+    const entered = yield* Deferred.make<void>();
+    const stalled = Layer.succeed(
+      HttpClient.HttpClient,
+      HttpClient.make(() =>
+        Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
+      ),
+    );
+    yield* Effect.gen(function* () {
+      const installer = yield* Installer.MutagenInstaller;
+      const running = yield* installer.executable.pipe(
+        Effect.flip,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Deferred.await(entered);
+      yield* TestClock.adjust("30 seconds");
+      expect((yield* Fiber.join(running)).reason).toBe("mutagen");
+      expect(yield* fs.exists(`${root}/bin`)).toBe(false);
+    }).pipe(
+      Effect.provide(
+        Installer.layer.pipe(
+          Layer.provide(ServerConfig.layerTest(root, root)),
+          Layer.provide(ServerSettings.layerTest()),
+          Layer.provide(ProcessRunner.layer),
+          Layer.provide(stalled),
+        ),
+      ),
+    );
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

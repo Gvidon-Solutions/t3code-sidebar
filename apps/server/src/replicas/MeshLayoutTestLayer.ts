@@ -14,13 +14,18 @@ import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 
-export const layerTest = (environmentId: string, initial: SidebarWorkspacesConfig) =>
+export const layerTest = (
+  environmentId: string,
+  initial: SidebarWorkspacesConfig,
+  extra: MeshLayoutDocument = {},
+) =>
   Layer.effect(
     MeshLayoutService,
     Effect.gen(function* () {
-      const document = yield* Ref.make<MeshLayoutDocument>(
-        diff(materialize({}), initial, {}, tick(0, null, environmentId)),
-      );
+      const document = yield* Ref.make<MeshLayoutDocument>({
+        ...diff(materialize({}), initial, {}, tick(0, null, environmentId)),
+        ...extra,
+      });
       const clock = yield* Ref.make(tick(0, null, environmentId));
       const changes = yield* PubSub.unbounded<{
         document: MeshLayoutDocument;

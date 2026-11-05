@@ -7,6 +7,20 @@ import {
 } from "@t3tools/contracts";
 import type { MeshLayoutDocument } from "../meshLayout/document.ts";
 
+const legacyMachine = Schema.decodeUnknownOption(
+  Schema.Struct({
+    reach: Schema.optionalKey(
+      Schema.Record(
+        Schema.String,
+        Schema.Struct({
+          ssh: Schema.String,
+          identityFile: Schema.optionalKey(Schema.String),
+        }),
+      ),
+    ),
+  }),
+);
+
 export function migrateConfig(
   document: MeshLayoutDocument,
   layout: SidebarWorkspacesConfig,
@@ -65,7 +79,16 @@ export function migrateConfig(
   }
   const names = Object.keys(bindings);
   const routes = names.flatMap((from) =>
-    Object.entries(layout.machines[bindings[from]!]?.reach ?? {}).flatMap(([target, route]) => {
+    Object.entries(
+      (() => {
+        const environmentId = bindings[from]!;
+        const decoded = legacyMachine(
+          document[`machine/${encodeURIComponent(environmentId)}`]?.v ??
+            layout.machines[environmentId],
+        );
+        return decoded._tag === "Some" ? (decoded.value.reach ?? {}) : {};
+      })(),
+    ).flatMap(([target, route]) => {
       const to = names.find((name) => bindings[name] === target);
       return to ? [{ from, to, route }] : [];
     }),
@@ -87,6 +110,7 @@ export function migrateConfig(
       reach: target.reach ?? "auto",
       ssh: {
         ...previous,
+        host: match?.[2] ?? route.ssh,
         ...(match?.[1] ? { user: match[1] } : {}),
         ...(match?.[3] ? { port: Number(match[3]) } : {}),
       },
@@ -140,9 +164,10 @@ export function extractConfigMigration(
     let changed = false;
     for (const [name, machine] of Object.entries(revision.doc.machines)) {
       const { legacyPeerLabels, ...visible } = machine;
-      const { host, routes, ...ssh } = machine.ssh ?? {};
+      const { routes, ...ssh } = machine.ssh ?? {};
+      const host = ssh.host;
       machines[name] = { ...visible, ...(machine.ssh ? { ssh } : {}) };
-      if (legacyPeerLabels === undefined && host === undefined && routes === undefined) continue;
+      if (legacyPeerLabels === undefined && routes === undefined) continue;
       changed = true;
       const metadataKey = `mesh.machineMigration/${encodeURIComponent(name)}`;
       const old = entries[metadataKey]?.v ?? document[metadataKey]?.v;

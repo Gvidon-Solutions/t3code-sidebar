@@ -14,7 +14,7 @@ const rep = {
 const config = {
   workspaces: [],
   machines: {
-    [self]: { label: "atlas", tag: "AT", aliases: ["офис"], reach: { [peer]: { ssh: "lab" } } },
+    [self]: { label: "atlas", tag: "AT", aliases: ["офис"] },
     [peer]: { label: "lab", tag: "LB", aliases: ["лаборатория", "лаборатории"], color: "#123456" },
   },
   projectMounts: {
@@ -34,8 +34,6 @@ const config = {
 config.projectMounts["lp-remote"] = [
   { ...rep, environmentId: peer, path: "/remote", projectId: "remote-p" },
 ];
-if (process.env.T3CTL_TEST_REMOTE_DRIVER)
-  config.machines[peer].reach = { [self]: { ssh: "atlas" } };
 const meshDoc = {
   schema: 1,
   machines: {

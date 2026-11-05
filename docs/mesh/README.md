@@ -16,7 +16,7 @@ readable from anywhere, and agents that know where they are.
 
 | Entity            | What it is                                                                                                      | Where it lives                                                |
 | ----------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Machine           | one T3 server (`environmentId`), label/tag/color/aliases, SSH routes to other machines                          | config + layout `machine/<env>`                               |
+| Machine           | one T3 server (`environmentId`), label/tag/color/aliases, reported SSH facts                                    | config + layout `machine/<env>`                               |
 | Link              | server-to-server MCP session with config-defined permissions                                                    | each server's PeerLinks table                                 |
 | Mesh              | machines + links; desired state in the mesh config (`mesh.config`), no central authority                        | layout `mesh.config`, bindings                                |
 | Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>.title`, `rep/<id>/<env>`, `alias/*`         |
@@ -56,7 +56,8 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   `MutagenRunner` (CLI wrapper, private `MUTAGEN_DATA_DIRECTORY`), `ProjectReplicaService`
   (reconcile on layout change + every 30 s; deterministic session names; state machine;
   registers the project on the replica machine when watching), `ReplicaPaths` (allocation),
-  `ManagedSshConfig` (only the `# t3-mesh` block), `ReplicaInstructions` (the context note).
+  `MeshSsh` (keys and marked SSH blocks), `ReplicaEnvironment` (full-mode dependencies),
+  `ReplicaInstructions` (the context note).
 - **Project names anywhere.** `replicas/meshProjectLookup.ts` resolves layout titles/aliases and
   complete paginated peer project lists over the existing relay. `mesh/MeshProjectDirectory.ts`
   also caches minimal source-stamped handles gossiped by mesh exchange, so incoming-only peers
@@ -246,7 +247,7 @@ agent's context). Keep SKILL.md under ~26 KB and general — no recipes for spec
   belong to the destination thread. Even a same-machine fork must copy attachments independently.
 - The F1 flush boundary uses the existing replica driver lookup and Mutagen runner. When the
   session is driven elsewhere it routes a link-only flush to that driver; a primary has no session.
-  S1 can replace this boundary when replica ownership changes to replica-side driving.
+  The replica server owns the session; a primary has no session.
 
 - Canonicalizing logical keys only in memory leaves obsolete SQLite rows available to the
   replication sequence reader. Persist removals in the same transaction as canonical inserts;
@@ -310,7 +311,7 @@ Registered planners (`mesh/MeshConfigPlanners.ts`):
 | `ignores`   | per-project ignore changes                  | writes merged ignores and recreates affected sessions                               |
 | `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place`, including `action: remove`                     |
 
-S1 (SSH) and B1 (bootstrap, updates, agent instructions) add planners through the same port; nothing
+S1 registers the `ssh` planner; B1 (bootstrap, updates, agent instructions) adds planners through the same port; nothing
 else should grow a second reconciliation path. Every action has a sixty-second deadline, failures do
 not cancel other actions, and status keeps `done` / `in_progress` / `failed` plus the reason, for
 every server.
@@ -356,9 +357,9 @@ persisted transactions: a thread may use an existing representation while a deni
 create one implicitly. Relay checks the
 origin/destination policy before forwarding and can only narrow the receiving server's own policy.
 Raw client `meshLayout.apply` writes cannot change config, history, bindings or reconciliation facts;
-use `meshConfig.apply` with a base revision. Migration-only identity and route metadata is protected
-alongside config and bindings. Older peer documents remain readable during rollout; startup extracts
-their internal migration fields.
+use `meshConfig.apply` with a base revision. Migration-only identity and per-pair route metadata is
+protected alongside config and bindings. Explicit `machines.<name>.ssh.host` remains public for
+existing SSH mode. Older documents remain readable; startup extracts their internal migration fields.
 
 ## Persistent peer connections and S1 pipes
 
@@ -458,3 +459,84 @@ config/history revision. A unique unchanged machine entry moved to a different c
 moves its binding and claim in the apply transaction. Forget tombstones the claim too.
 Never resolve independent joins by LWW of the binding alone: that loses the displaced identity.
 Web and mobile share duplicate-title hints and compact offline ages in client-runtime.
+
+### Managed SSH and replicas v2 (S1)
+
+`replicas/MeshSsh.ts` owns the server key under `<baseDir>/mesh/ssh` and the
+`ssh` planner in `MeshConfigPlanners.ts`. `peer/connection/PeerFacts.ts` publishes
+its public key in `machine/<env>.reported.meshPublicKey`. `replicas/sshBlocks.ts`
+replaces only marked blocks and classifies route failures. Authorization includes
+bound mesh peers with effective replica permission, including peers reached through
+one linked neighbor: the final sshd authenticates the original peer's SSH key.
+No per-pair SSH route matrix remains in the runtime, clients or contracts; only the
+one-time config migration reads old route values from the stored layout. The standalone
+`t3ctl` resolves the same managed/existing hosts from bindings and directs retry to
+the replica server; its legacy import preserves raw old values only for migration.
+
+Managed hosts are `t3-<config-name>` and use the runtime's absolute `mesh pipe`
+command, explicit base directory and peer-reported pinned host keys. Existing mode
+uses `machines.<name>.ssh.host`. Off mode removes managed access and pauses owned
+sessions. SSH facts participate in config reconciliation so key rotation updates
+the blocks without a config edit; connection counters do not trigger that work.
+Route checks also publish `machine/<self>.reported.sshRoutes[environmentId]` with
+`status: ok|failed|unknown`, an optional reason and ISO `checkedAt`. Off/denied/unprobed
+routes are unknown; completed probes publish ok or failed. Peer hello frames carry
+this map, and connection-state updates preserve the latest locally reported checks.
+
+Set `T3_MESH_SSH_HOME` to an isolated home for test servers. Route checks pass its
+`.ssh/config` explicitly. Mutagen uses isolated ssh/scp wrappers on POSIX and an
+isolated child USERPROFILE on Windows. This does not redirect a system sshd's
+AuthorizedKeysFile. The bed's `managed-sshd.mjs` prepares a separate system OpenSSH
+daemon configuration and host key; `T3_MESH_SSHD_DIR` makes PeerFacts report those
+facts. Its temporary-home fixture disables sshd StrictModes because `/tmp` is
+writable; the SSH directory and files remain 0700/0600. No real user's SSH files
+are provisioned by the bed deploy helper.
+
+`replicas/ProjectReplicaService.ts` drives each local replica only, with remote
+primary alpha and local beta. Ignore changes recreate the deterministic session
+name. Defaults anchor generated outputs at the root while excluding nested
+node_modules. `ReplicaEnvironment.ts` installs full-mode environments after sync,
+persists a lock-content fingerprint under ignored `.t3`, and refreshes on changes;
+replica messages report environment installing/ready/failed with the failure reason.
+`ReplicaLiveStatus.lag` reports remaining staging files in either direction. `bytesBehind`
+is included only when the remaining total is known (the final file in each active
+queue); Mutagen reports the current file size, not a total queue size. A clean watching
+session reports zero lag. Unmeasured connecting/paused/conflicted states omit lag.
+The primary remains the place for git in either replica mode.
+
+`peer/connection/PeerPlatform.ts` owns SSH process arguments, isolated transport wrappers and
+portable Node fs conflict preservation. There is no remote `sh` conflict script.
+Both primary-wins and per-path newest-wins archive the loser before resetting sync;
+archive timestamps contain no colons. Scan problems remain warnings with paths.
+Session operations serialize per replica, not behind a global replica lock. Mutagen
+and SSH subprocesses have deadlines; environment installs are bounded separately.
+Changing placement can invalidate an old check without waiting for that check's lock.
+Atomic directory reservation also avoids an allocator-wide lock. Automatic reconciliation
+preserves a manually paused session; only an explicit retry or reversal of SSH off resumes it.
+
+Removing a config rule leaves existing replicas in place. Explicit removal first
+compares endpoint manifests and refuses with the unsynced paths or scan problems;
+a clean removal terminates only the owned session and retains the files.
+
+`ProjectReplicaService.flush({ logicalKey, environmentId })` flushes an owned
+session; false means no local session is owned and the caller must resolve the
+driver. `conflicts(ref)` returns conflict roots; `problems(ref)` returns transport,
+transition and scan-problem paths. Inspection rejects missing sessions and requests
+sent to a non-driver. R1 inspects after flush; F1 forwards flush to the replica server.
+Mutagen's list argument is a **label selector**, not a session name: list managed
+sessions and then select the name when inspecting/removing a single session.
+
+The context note states representation, lite/full mode, primary and sync state;
+lite replicas say `build/test/git: t3 run <cmd>`. `AgentContextBudget.test.ts`
+measures the unchanged 600-byte dynamic ceiling and the static budgets (8334 Claude,
+10060 Codex, 57478 tool-list bytes). Field bounds reserve room for the command hint.
+
+The former Mutagen integration test downloaded a 102172827-byte release inside the
+test with no HTTP deadline and registered daemon cleanup before successful startup.
+On this host Node fetch aborted at 10 and 30 seconds while curl completed; a failed
+startup could make cleanup enter installation again. `MutagenFixture.ts` now caches
+and verifies the pinned archive with a bounded preparation step; the test exercises
+installation against that local archive and uses a private daemon/data directory.
+The production installer bounds download headers, body and extraction. A stalled
+HTTP fixture proves the deadline. The synchronization phase uses the verified local archive;
+a cold fixture cache performs one bounded download before starting the private daemon.

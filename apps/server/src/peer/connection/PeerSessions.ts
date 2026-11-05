@@ -246,9 +246,11 @@ const toReported = (facts: PeerFacts.PeerFacts): SidebarMachineReported => ({
   version: facts.version,
   platform: { ...facts.platform },
   user: facts.user,
+  ...(facts.meshPublicKey ? { meshPublicKey: facts.meshPublicKey } : {}),
   sshd: facts.sshd === null ? null : { port: facts.sshd.port, hostKeys: [...facts.sshd.hostKeys] },
   reportedAt: DateTime.formatIso(DateTime.nowUnsafe()),
   ...(facts.connections === undefined ? {} : { connections: [...facts.connections] }),
+  ...(facts.sshRoutes === undefined ? {} : { sshRoutes: facts.sshRoutes }),
 });
 
 const messageOf = (error: unknown) =>
@@ -379,7 +381,15 @@ const make = Effect.gen(function* () {
               ...config,
               machines: {
                 ...config.machines,
-                [environmentId]: { ...previous, reported: toReported(facts) },
+                [environmentId]: {
+                  ...previous,
+                  reported: {
+                    ...toReported(facts),
+                    ...(facts.sshRoutes === undefined && previous.reported?.sshRoutes !== undefined
+                      ? { sshRoutes: previous.reported.sshRoutes }
+                      : {}),
+                  },
+                },
               },
             };
           })
@@ -413,8 +423,18 @@ const make = Effect.gen(function* () {
   >();
 
   const routesOf = () => [...live.keys()];
+  const ownFacts = Effect.fn("PeerSessions.ownFacts")(function* () {
+    const sshRoutes = Option.isSome(mesh)
+      ? (yield* mesh.value.read).config.machines[selfId]?.reported?.sshRoutes
+      : undefined;
+    return {
+      ...selfFacts,
+      connections: yield* status,
+      ...(sshRoutes === undefined ? {} : { sshRoutes }),
+    };
+  });
   const reportOwnState = Effect.fn("PeerSessions.reportOwnState")(function* () {
-    yield* rememberFacts(selfId, { ...selfFacts, connections: yield* status });
+    yield* rememberFacts(selfId, yield* ownFacts());
   });
 
   const announce = Effect.fn("PeerSessions.announce")(function* (entry: Live) {
@@ -425,8 +445,7 @@ const make = Effect.gen(function* () {
         ),
       ),
     );
-    const connections = yield* status;
-    const facts = { ...selfFacts, connections };
+    const facts = yield* ownFacts();
     yield* rememberFacts(selfId, facts);
     yield* notify(entry, "peer.hello", { facts, links: known.map(String) });
     yield* notify(entry, "peer.routes", { routes: routesOf() });

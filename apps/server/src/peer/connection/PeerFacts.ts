@@ -1,8 +1,9 @@
+import { MeshSsh } from "../../replicas/MeshSsh.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- os.release reports the operating system build, absent from the platform references.
 import * as NodeOS from "node:os";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import { PeerConnectionStatus } from "@t3tools/contracts";
+import { PeerConnectionStatus, SidebarMachineReported } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -16,7 +17,9 @@ export const PeerFacts = Schema.Struct({
   version: Schema.String,
   platform: Schema.Struct({ os: Schema.String, arch: Schema.String, release: Schema.String }),
   user: Schema.NullOr(Schema.String),
+  meshPublicKey: Schema.optionalKey(Schema.String),
   connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
+  sshRoutes: SidebarMachineReported.fields.sshRoutes,
   sshd: Schema.NullOr(Schema.Struct({ port: Schema.Int, hostKeys: Schema.Array(Schema.String) })),
 });
 export type PeerFacts = typeof PeerFacts.Type;
@@ -36,7 +39,8 @@ export const collectPeerFacts = Effect.fn("PeerFacts.collect")(function* (
   const architecture = yield* HostProcess.Architecture;
   const environment = yield* HostProcess.Environment;
   const user = yield* HostProcess.Username;
-  const directory = options.sshDir ?? sshDirectory(platform, environment);
+  const directory =
+    options.sshDir ?? environment.T3_MESH_SSHD_DIR ?? sshDirectory(platform, environment);
   const read = Effect.fn("PeerFacts.readPublicFile")((path: string) =>
     fs
       .readFileString(path)
@@ -115,7 +119,9 @@ export const layer = () =>
   Layer.effect(
     PeerFactsReporter,
     Effect.gen(function* () {
+      const ssh = yield* MeshSsh;
       const collect = collectPeerFacts().pipe(
+        Effect.map((facts) => ({ ...facts, meshPublicKey: ssh.publicKey })),
         Effect.provideService(FileSystem.FileSystem, yield* FileSystem.FileSystem),
       );
       return { collect };

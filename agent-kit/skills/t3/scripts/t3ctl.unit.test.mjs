@@ -13,6 +13,7 @@ import {
   fileDeepLink,
   importLegacyEntries,
   meshConfigApplyInput,
+  meshSshHost,
   normalizeMachineName,
   parseArgs,
   resolveMachineRef,
@@ -20,6 +21,26 @@ import {
   threadWebUrl,
   waitSeconds,
 } from "./t3ctl.mjs";
+
+NodeTest.test("SSH hosts come from bindings and mesh mode without a per-pair route matrix", () => {
+  const snapshot = {
+    config: { machines: { local: { reach: { peer: { ssh: "obsolete" } } } } },
+    document: {
+      "mesh.machineBinding/cloudbox": { v: "peer" },
+      "mesh.config": { v: { doc: { schema: 1, machines: { cloudbox: {} } } } },
+    },
+  };
+  NodeAssert.equal(meshSshHost(snapshot, "peer"), "t3-cloudbox");
+  NodeAssert.equal(meshSshHost(snapshot, "unknown"), null);
+  const doc = snapshot.document["mesh.config"].v.doc;
+  doc.ssh = { mode: "existing" };
+  doc.machines.cloudbox.ssh = { host: "personal-cloud" };
+  NodeAssert.equal(meshSshHost(snapshot, "peer"), "personal-cloud");
+  doc.machines.cloudbox.ssh.host = "-oProxyCommand=bad";
+  NodeAssert.equal(meshSshHost(snapshot, "peer"), null);
+  doc.ssh.mode = "off";
+  NodeAssert.equal(meshSshHost(snapshot, "peer"), null);
+});
 
 const MACHINES = [
   {

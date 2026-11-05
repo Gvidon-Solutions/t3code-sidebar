@@ -25,6 +25,7 @@ describe("Mutagen 0.18.1", () => {
       expect(sessionStatus(staging!)).toMatchObject({
         state: "mounting",
         progress: expect.any(Number),
+        lag: { filesBehind: 1, bytesBehind: 1073741824 - 4653056 },
       });
       expect(sessionStatus(staging!).progress).toBeCloseTo(4653056 / 1073741824);
       expect(sessions).toHaveLength(2);
@@ -32,6 +33,7 @@ describe("Mutagen 0.18.1", () => {
         state: "watching",
         conflicts: [],
         problems: [],
+        lag: { filesBehind: 0, bytesBehind: 0 },
       });
       expect(yield* decodeSessions("not-json").pipe(Effect.isFailure)).toBe(true);
       expect(yield* decodeSessions('[{"status":"watching"}]').pipe(Effect.isFailure)).toBe(true);
@@ -41,6 +43,8 @@ describe("Mutagen 0.18.1", () => {
     Effect.gen(function* () {
       const [session] = yield* decodeSessions(fixtureJson);
       expect(sessionStatus({ ...session!, paused: true }).state).toBe("paused");
+      expect(sessionStatus({ ...session!, paused: true })).not.toHaveProperty("lag");
+      expect(sessionStatus({ ...session!, status: "connecting-alpha" })).not.toHaveProperty("lag");
       expect(
         sessionStatus({
           ...session!,
@@ -55,7 +59,26 @@ describe("Mutagen 0.18.1", () => {
             },
           },
         }),
-      ).toMatchObject({ state: "mounting", progress: 0.5 });
+      ).toMatchObject({
+        state: "mounting",
+        progress: 0.5,
+        lag: { filesBehind: 1, bytesBehind: 5 },
+      });
+      expect(
+        sessionStatus({
+          ...session!,
+          status: "staging-alpha",
+          alpha: {
+            path: "/alpha",
+            stagingProgress: {
+              receivedSize: 5,
+              expectedSize: 10,
+              receivedFiles: 1,
+              expectedFiles: 3,
+            },
+          },
+        }),
+      ).toHaveProperty("lag", { filesBehind: 2 });
       expect(sessionStatus({ ...session!, conflicts: [{ root: "src/a.ts" }] })).toMatchObject({
         state: "conflict",
         conflicts: ["src/a.ts"],
@@ -98,8 +121,8 @@ describe("Mutagen 0.18.1", () => {
   it("selects exactly one driver, preferring the replica's route", () => {
     const config = decodeConfig({
       machines: {
-        replica: { reach: { source: { ssh: "source" } } },
-        source: { reach: { replica: { ssh: "replica" } } },
+        replica: {},
+        source: {},
       },
     });
     const replica = {
@@ -113,8 +136,8 @@ describe("Mutagen 0.18.1", () => {
     expect(replicaDriver(config, replica)).toBe("replica");
     expect(
       replicaDriver({ ...config, machines: { source: config.machines.source! } }, replica),
-    ).toBe("source");
-    expect(replicaDriver({ ...config, machines: {} }, replica)).toBeUndefined();
+    ).toBe("replica");
+    expect(replicaDriver({ ...config, machines: {} }, replica)).toBe("replica");
     const { source: _source, ...withoutSource } = replica;
     expect(replicaDriver(config, withoutSource)).toBeUndefined();
     expect(sessionIdentity("repo", "environment")).toEqual(sessionIdentity("repo", "environment"));
@@ -124,14 +147,8 @@ describe("Mutagen 0.18.1", () => {
   });
 });
 
-it("formats SSH aliases, ports and managed identity routes for Mutagen", () => {
-  expect(sshEndpoint({ ssh: "peer" }, "env", "/source")).toBe("peer:/source");
-  expect(sshEndpoint({ ssh: "user@peer:2222" }, "env", "/source")).toBe(
-    "ssh://user@peer:2222/source",
-  );
-  expect(sshEndpoint({ ssh: "user@peer:2222", identityFile: "/key" }, "env", "/source")).toBe(
-    "t3-mesh-env:/source",
-  );
+it("uses managed host names for Mutagen endpoints", () => {
+  expect(sshEndpoint({ ssh: "t3-studio" }, "env", "/source")).toBe("t3-studio:/source");
 });
 
 it("keeps user ignore order and duplicate overrides while protecting VCS and conflict copies", () => {
@@ -143,9 +160,13 @@ it("keeps user ignore order and duplicate overrides while protecting VCS and con
     "!.git",
     "!.t3-conflicts",
   ]);
-  expect(patterns.slice(0, 3)).toEqual(["cache", "!cache", "cache"]);
+  expect(patterns.filter((pattern) => pattern.includes("cache"))).toEqual([
+    "cache",
+    "!cache",
+    "cache",
+  ]);
   expect(patterns.indexOf(".git")).toBeGreaterThan(patterns.indexOf("!.git"));
-  expect(patterns.at(-1)).toBe(".t3-conflicts");
+  expect(patterns.at(-1)).toBe("/.t3-conflicts");
   expect(replicaIgnorePatterns(patterns)).toEqual(patterns);
 });
 
