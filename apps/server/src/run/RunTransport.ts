@@ -15,7 +15,7 @@ export interface RemoteRequest {
   readonly ports?: readonly number[];
   readonly timeoutMs?: number;
 }
-export const sshArguments = (plan: RemoteRunPlan, request: RemoteRequest, tty: boolean) => {
+const sshArguments = (plan: RemoteRunPlan, request: RemoteRequest, tty: boolean) => {
   const payload = Buffer.from(
     JSON.stringify({
       ...request,

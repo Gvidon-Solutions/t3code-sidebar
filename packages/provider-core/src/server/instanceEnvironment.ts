@@ -2,7 +2,6 @@ import type { ProviderInstanceEnvironment } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as Context from "effect/Context";
-import * as NodePath from "node:path";
 
 export const ProviderRuntimeEnvironment = Context.Reference<
   | {
@@ -35,13 +34,12 @@ export const mergeProviderInstanceEnvironment = Effect.fn(function* (
         : variable.value;
   }
   if (runtime) {
+    const delimiter = (yield* HostProcess.Platform) === "win32" ? ";" : ":";
     Object.assign(next, runtime.environment);
     next.PATH = [
       runtime.directory,
-      ...(next.PATH ?? "")
-        .split(NodePath.delimiter)
-        .filter((directory) => directory !== runtime.directory),
-    ].join(NodePath.delimiter);
+      ...(next.PATH ?? "").split(delimiter).filter((directory) => directory !== runtime.directory),
+    ].join(delimiter);
   }
   return runtime?.mapEnvironment ? runtime.mapEnvironment(next) : next;
 });

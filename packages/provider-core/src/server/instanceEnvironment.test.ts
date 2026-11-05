@@ -1,4 +1,3 @@
-import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { SecretProviderId } from "@t3tools/contracts";
@@ -95,7 +94,9 @@ it.effect(
         [{ name: "PATH", value: "/custom/bin", sensitive: false }],
         { PATH: "/base/bin" },
       );
-      expect(environment.PATH).toBe(`/runtime/bin${NodePath.delimiter}/custom/bin`);
+      expect(environment.PATH).toBe(
+        `/runtime/bin${(yield* HostProcess.Platform) === "win32" ? ";" : ":"}/custom/bin`,
+      );
       expect(environment.T3CODE_RUN_SOCKET).toBe("private-socket");
       expect((yield* mergeProviderInstanceEnvironment(undefined, environment)).PATH).toBe(
         environment.PATH,

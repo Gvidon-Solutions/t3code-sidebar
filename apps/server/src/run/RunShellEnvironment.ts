@@ -1,4 +1,4 @@
-export const shellPathSetup = `if [ -n "\${T3CODE_RUN_SHIMS:-}" ]; then
+const shellPathSetup = `if [ -n "\${T3CODE_RUN_SHIMS:-}" ]; then
   case "$PATH" in "$T3CODE_RUN_SHIMS:$T3CODE_RUN_BIN":*) ;; *) export PATH="$T3CODE_RUN_SHIMS:$T3CODE_RUN_BIN:$PATH" ;; esac
 fi
 `;

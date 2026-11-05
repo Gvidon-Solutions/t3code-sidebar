@@ -23,6 +23,12 @@ export const install = Effect.fn("RunEnvironment.install")(function* () {
   const platform = yield* HostProcess.Platform;
   const userId = yield* HostProcess.UserId;
   const home = yield* HostProcess.HomeDirectory;
+  const environment = yield* HostProcess.Environment;
+  const sshConfig =
+    environment.T3CODE_RUN_SSH_CONFIG ??
+    (environment.T3_MESH_SSH_HOME
+      ? NodePath.join(environment.T3_MESH_SSH_HOME, ".ssh", "config")
+      : undefined);
   return yield* Effect.tryPromise({
     try: async () => {
       const directory = NodePath.join(config.baseDir, "run", "bin");
@@ -41,6 +47,7 @@ export const install = Effect.fn("RunEnvironment.install")(function* () {
         .map(shellWord)
         .join(" ");
       const launcherEnvironment = {
+        ...(sshConfig ? { T3CODE_RUN_SSH_CONFIG: sshConfig } : {}),
         T3CODE_RUN_SOCKET: runAddress(config.baseDir, platform, userId),
         T3CODE_RUN_MANIFEST: NodePath.join(config.baseDir, "run", "manifest.json"),
         T3CODE_RUN_SHIMS: shims,
@@ -75,6 +82,7 @@ export const install = Effect.fn("RunEnvironment.install")(function* () {
         mapEnvironment: (environment: NodeJS.ProcessEnv) =>
           commandShellEnvironment(environment, bashFile, zshDirectory, home),
         environment: {
+          ...(sshConfig ? { T3CODE_RUN_SSH_CONFIG: sshConfig } : {}),
           T3CODE_RUN_SOCKET: runAddress(config.baseDir, platform, userId),
           T3CODE_RUN_SHIMS: shims,
           T3CODE_RUN_BIN: directory,
