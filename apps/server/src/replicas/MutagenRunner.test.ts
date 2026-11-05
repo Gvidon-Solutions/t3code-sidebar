@@ -25,6 +25,7 @@ describe("Mutagen 0.18.1", () => {
       expect(sessionStatus(staging!)).toMatchObject({
         state: "mounting",
         progress: expect.any(Number),
+        lag: { filesBehind: 1, bytesBehind: 1073741824 - 4653056 },
       });
       expect(sessionStatus(staging!).progress).toBeCloseTo(4653056 / 1073741824);
       expect(sessions).toHaveLength(2);
@@ -32,6 +33,7 @@ describe("Mutagen 0.18.1", () => {
         state: "watching",
         conflicts: [],
         problems: [],
+        lag: { filesBehind: 0, bytesBehind: 0 },
       });
       expect(yield* decodeSessions("not-json").pipe(Effect.isFailure)).toBe(true);
       expect(yield* decodeSessions('[{"status":"watching"}]').pipe(Effect.isFailure)).toBe(true);
@@ -41,6 +43,8 @@ describe("Mutagen 0.18.1", () => {
     Effect.gen(function* () {
       const [session] = yield* decodeSessions(fixtureJson);
       expect(sessionStatus({ ...session!, paused: true }).state).toBe("paused");
+      expect(sessionStatus({ ...session!, paused: true })).not.toHaveProperty("lag");
+      expect(sessionStatus({ ...session!, status: "connecting-alpha" })).not.toHaveProperty("lag");
       expect(
         sessionStatus({
           ...session!,
@@ -55,7 +59,26 @@ describe("Mutagen 0.18.1", () => {
             },
           },
         }),
-      ).toMatchObject({ state: "mounting", progress: 0.5 });
+      ).toMatchObject({
+        state: "mounting",
+        progress: 0.5,
+        lag: { filesBehind: 1, bytesBehind: 5 },
+      });
+      expect(
+        sessionStatus({
+          ...session!,
+          status: "staging-alpha",
+          alpha: {
+            path: "/alpha",
+            stagingProgress: {
+              receivedSize: 5,
+              expectedSize: 10,
+              receivedFiles: 1,
+              expectedFiles: 3,
+            },
+          },
+        }),
+      ).toHaveProperty("lag", { filesBehind: 2 });
       expect(sessionStatus({ ...session!, conflicts: [{ root: "src/a.ts" }] })).toMatchObject({
         state: "conflict",
         conflicts: ["src/a.ts"],

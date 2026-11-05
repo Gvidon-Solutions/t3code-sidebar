@@ -40,6 +40,7 @@ const E = EnvironmentId.make("e");
 const facts: PeerFacts.PeerFacts = {
   version: "1",
   meshPublicKey: "ssh-ed25519 BBBB",
+  sshRoutes: { c: { status: "ok", checkedAt: "2026-01-01T00:00:00.000Z" } },
   platform: { os: "Linux", arch: "x64", release: "test" },
   user: "tester",
   sshd: { port: 22, hostKeys: ["ssh-ed25519 AAAA"] },
@@ -211,6 +212,20 @@ describe("PeerSessions", () => {
           state: "offline",
           lastError: "Waiting for an authenticated peer connection",
         });
+        const ownRoutes = {
+          b: {
+            status: "failed" as const,
+            reason: "pipe unavailable",
+            checkedAt: "2026-01-02T00:00:00.000Z",
+          },
+        };
+        config = {
+          ...config,
+          machines: {
+            ...config.machines,
+            [SELF]: { ...config.machines[SELF], reported: { ...initial!, sshRoutes: ownRoutes } },
+          },
+        };
         const peer = wire();
         yield* sessions.accept({
           environmentId: B,
@@ -221,6 +236,16 @@ describe("PeerSessions", () => {
         expect((yield* Queue.take(updates)).machines[SELF]?.reported?.connections?.[0]?.state).toBe(
           "direct",
         );
+        expect(config.machines[SELF]?.reported?.sshRoutes).toEqual(ownRoutes);
+        expect(peer.sent).toContainEqual(
+          expect.objectContaining({
+            type: "event",
+            name: "peer.hello",
+            body: expect.objectContaining({
+              facts: expect.objectContaining({ sshRoutes: ownRoutes }),
+            }),
+          }),
+        );
         peer.incoming.push(event("peer.hello", { facts, links: [SELF] }));
         const reported = (yield* Queue.take(updates)).machines[B]?.reported;
         expect(reported).toMatchObject({
@@ -229,7 +254,13 @@ describe("PeerSessions", () => {
           user: "tester",
           sshd: facts.sshd,
           meshPublicKey: facts.meshPublicKey,
+          sshRoutes: facts.sshRoutes,
         });
+        const { sshRoutes: _routes, ...legacyFacts } = facts;
+        peer.incoming.push(event("peer.hello", { facts: legacyFacts, links: [SELF] }));
+        expect((yield* Queue.take(updates)).machines[B]?.reported?.sshRoutes).toEqual(
+          facts.sshRoutes,
+        );
         yield* sessions.close(B, "Fixture tunnel disappeared");
         const state = (yield* Queue.take(updates)).machines[SELF]?.reported?.connections?.[0];
         expect(state).toMatchObject({ state: "offline", lastError: "Fixture tunnel disappeared" });

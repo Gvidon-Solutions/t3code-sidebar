@@ -88,10 +88,18 @@ it.live(
           "mesh.machineBinding/studio": { v: "studio-env", h },
           "mesh.machineBinding/laptop": { v: "laptop-env", h },
         });
+        const localFacts = (yield* layout.read).config.machines["laptop-env"]!.reported!;
+        yield* layout.edit((current) => ({
+          ...current,
+          machines: { ...current.machines, "studio-env": { reported: localFacts } },
+        }));
         const ssh = yield* Ssh.MeshSsh;
         expect(ssh.publicKey).toBe("ssh-ed25519 AAAA");
         const doc = { schema: 1, machines: { studio: {}, laptop: {} } };
         yield* ssh.reconcile(doc);
+        expect((yield* layout.read).config.machines["studio-env"]?.reported).toMatchObject({
+          sshRoutes: { "laptop-env": { status: "unknown", checkedAt: expect.any(String) } },
+        });
         const config = path.join(home, ".ssh", "config");
         const peerFacts = (yield* layout.read).config.machines["laptop-env"]!.reported!;
         yield* layout.edit((state) => ({
@@ -104,11 +112,24 @@ it.live(
         yield* layout.apply({
           "mesh.machineBinding/cloudbox": { v: "cloudbox-env", h: yield* layout.nextHlc },
         });
-        yield* ssh.reconcile({ ...doc, machines: { ...doc.machines, cloudbox: {} } });
+        const threeMachines = { ...doc, machines: { ...doc.machines, cloudbox: {} } };
+        yield* ssh.reconcile(threeMachines);
         expect(yield* fs.readFileString(path.join(home, ".ssh", "authorized_keys"))).toContain(
           "DDDD",
         );
+        yield* ssh.reconcile(threeMachines, "cloudbox");
+        stderr = "Permission denied (publickey)";
+        yield* ssh.reconcile(threeMachines, "laptop").pipe(Effect.flip);
+        expect((yield* layout.read).config.machines["studio-env"]?.reported).toMatchObject({
+          sshRoutes: { "cloudbox-env": { status: "ok" }, "laptop-env": { status: "failed" } },
+        });
+        stderr = "";
         yield* ssh.reconcile({ ...doc, links: { default: { replicas: false } } });
+        expect((yield* layout.read).config.machines["studio-env"]?.reported).toMatchObject({
+          sshRoutes: {
+            "laptop-env": { status: "unknown", reason: "Replica permission is disabled" },
+          },
+        });
         expect(yield* fs.readFileString(path.join(home, ".ssh", "authorized_keys"))).not.toContain(
           "BBBB",
         );
@@ -125,6 +146,9 @@ it.live(
         yield* ssh.reconcile(doc, "laptop");
         expect(yield* fs.readFileString(authorized)).toMatch(/^# personal\n/);
         expect(calls.at(-1)?.args).toContain(config);
+        expect((yield* layout.read).config.machines["studio-env"]?.reported).toMatchObject({
+          sshRoutes: { "laptop-env": { status: "ok", checkedAt: expect.any(String) } },
+        });
         yield* ssh.reconcile(
           {
             ...doc,
@@ -139,14 +163,36 @@ it.live(
         expect((yield* ssh.reconcile(doc, "laptop").pipe(Effect.flip)).message).toBe(
           "auth refused",
         );
+        expect((yield* layout.read).config.machines["studio-env"]?.reported).toMatchObject({
+          sshRoutes: {
+            "laptop-env": {
+              status: "failed",
+              reason: "auth refused",
+              checkedAt: expect.any(String),
+            },
+          },
+        });
         stderr = "";
         timedOut = true;
         expect((yield* ssh.reconcile(doc, "laptop").pipe(Effect.flip)).message).toContain(
           "timed out",
         );
         timedOut = false;
+        yield* ssh.reconcile(doc, "laptop");
+        expect(
+          (yield* layout.read).config.machines["studio-env"]?.reported?.sshRoutes?.["laptop-env"],
+        ).toEqual({ status: "ok", checkedAt: expect.any(String) });
         yield* ssh.reconcile({ ...doc, ssh: { mode: "off" } });
         expect(yield* fs.readFileString(authorized)).toBe("# personal\n");
+        expect((yield* layout.read).config.machines["studio-env"]?.reported).toMatchObject({
+          sshRoutes: {
+            "laptop-env": {
+              status: "unknown",
+              reason: expect.stringContaining("SSH is off"),
+              checkedAt: expect.any(String),
+            },
+          },
+        });
         const count = calls.filter((call) => call.command === "ssh-keygen").length;
         yield* Effect.gen(function* () {
           expect((yield* Ssh.MeshSsh).publicKey).toBe(ssh.publicKey);

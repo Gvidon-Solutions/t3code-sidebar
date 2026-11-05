@@ -29,9 +29,24 @@ it.effect(
         expect(h.created).toHaveLength(1);
         expect(h.created[0]).toMatchObject({ alpha: "t3-source:/source", beta: "/replica" });
         expect((yield* service.status)[0]?.state).toBe("mounting");
-        h.setSession({ status: "watching" });
+        h.setSession({
+          status: "staging-beta",
+          beta: {
+            path: "/replica",
+            stagingProgress: {
+              expectedFiles: 3,
+              receivedFiles: 1,
+              expectedSize: 100,
+              receivedSize: 25,
+            },
+          },
+        });
+        yield* service.reconcile;
+        expect((yield* service.status)[0]?.lag).toEqual({ filesBehind: 2 });
+        h.setSession({ status: "watching", beta: { path: "/replica" } });
         yield* service.reconcile;
         expect(h.registrations()).toBe(1);
+        expect((yield* service.status)[0]?.lag).toEqual({ filesBehind: 0, bytesBehind: 0 });
         expect(
           (yield* mesh.read).config.projectMounts.repo?.find(
             (rep) => rep.environmentId === "replica",

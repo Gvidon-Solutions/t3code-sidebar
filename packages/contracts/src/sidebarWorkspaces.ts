@@ -64,6 +64,16 @@ export const SidebarMachineReported = Schema.Struct({
   meshPublicKey: Schema.optionalKey(Schema.String),
   reportedAt: Schema.String,
   connections: Schema.optionalKey(Schema.Array(PeerConnectionStatus)),
+  sshRoutes: Schema.optionalKey(
+    Schema.Record(
+      Schema.String,
+      Schema.Struct({
+        status: Schema.Literals(["ok", "failed", "unknown"]),
+        reason: Schema.optionalKey(Schema.String),
+        checkedAt: Schema.String,
+      }),
+    ),
+  ),
 });
 export type SidebarMachineReported = typeof SidebarMachineReported.Type;
 

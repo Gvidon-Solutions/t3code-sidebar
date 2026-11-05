@@ -61,6 +61,12 @@ export const ReplicaLiveStatus = Schema.Struct({
   state: SidebarProjectMountState,
   /** 0..1 while staging the first sync. */
   progress: Schema.optionalKey(Schema.Number),
+  lag: Schema.optionalKey(
+    Schema.Struct({
+      filesBehind: Schema.Number,
+      bytesBehind: Schema.optionalKey(Schema.Number),
+    }),
+  ),
   conflicts: Schema.Array(Schema.String),
   problems: Schema.Array(Schema.String),
   message: Schema.optionalKey(Schema.String),

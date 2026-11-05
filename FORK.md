@@ -112,6 +112,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 - **What.** Mesh-managed keys, pinned `t3-<name>` SSH hosts over persistent pipes,
   per-peer route status and managed/existing/off modes replace the route matrix.
+  U1 receives route checks through reported `sshRoutes` and Mutagen transfer lag through
+  `ReplicaLiveStatus.lag`, including byte counts when the total is known.
   Replicas run star sessions on their own servers. Full replicas install and refresh
   environments from lock files; lite replicas receive explicit `t3 run` guidance.
 - **How.** Marked SSH blocks preserve foreign content and support isolated test homes.

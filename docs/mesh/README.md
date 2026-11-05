@@ -449,6 +449,10 @@ command, explicit base directory and peer-reported pinned host keys. Existing mo
 uses `machines.<name>.ssh.host`. Off mode removes managed access and pauses owned
 sessions. SSH facts participate in config reconciliation so key rotation updates
 the blocks without a config edit; connection counters do not trigger that work.
+Route checks also publish `machine/<self>.reported.sshRoutes[environmentId]` with
+`status: ok|failed|unknown`, an optional reason and ISO `checkedAt`. Off/denied/unprobed
+routes are unknown; completed probes publish ok or failed. Peer hello frames carry
+this map, and connection-state updates preserve the latest locally reported checks.
 
 Set `T3_MESH_SSH_HOME` to an isolated home for test servers. Route checks pass its
 `.ssh/config` explicitly. Mutagen uses isolated ssh/scp wrappers on POSIX and an
@@ -465,6 +469,10 @@ name. Defaults anchor generated outputs at the root while excluding nested
 node_modules. `ReplicaEnvironment.ts` installs full-mode environments after sync,
 persists a lock-content fingerprint under ignored `.t3`, and refreshes on changes;
 replica messages report environment installing/ready/failed with the failure reason.
+`ReplicaLiveStatus.lag` reports remaining staging files in either direction. `bytesBehind`
+is included only when the remaining total is known (the final file in each active
+queue); Mutagen reports the current file size, not a total queue size. A clean watching
+session reports zero lag. Unmeasured connecting/paused/conflicted states omit lag.
 The primary remains the place for git in either replica mode.
 
 `peer/connection/PeerPlatform.ts` owns SSH process arguments, isolated transport wrappers and
