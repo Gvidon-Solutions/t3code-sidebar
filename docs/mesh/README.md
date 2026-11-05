@@ -168,7 +168,7 @@ writes while skill installation remains enabled. Instruction errors appear in no
 Isolated servers must set `T3_MESH_AGENT_HOME` to their sandbox home; `T3_MESH_AGENT_SOURCE`
 can select a fixture skill. CLI release archives carry `agent-kit/skills/t3` next to the
 executable, excluding the legacy personal `global` directory. Source development resolves the
-checkout kit. Instruction rendering uses config machine names/labels and `agents.instructions`;
+checkout kit. Node builds also stage the kit below `dist/agent-kit`, beside the bundled modules, so npm and desktop server distributions install their own version. Instruction rendering uses config machine names/labels and `agents.instructions`;
 it never reads personal text from the repository. On first startup, `MeshAgentMigration.ts` imports the old installed `~/.agents/skills/t3/global/GLOBAL.md` into config if instructions are absent. The per-server migration marker prevents later explicit edits from being overwritten. `T3_MESH_LEGACY_GLOBAL` selects another installed legacy file for isolated migration.
 
 Replicated future-schema config remains stored and forwarded, but `MeshConfig.start` refuses to

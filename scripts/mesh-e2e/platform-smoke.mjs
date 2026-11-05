@@ -192,6 +192,41 @@ try {
     "B1-native-replica\n"
   )
     throw Error("Replica content mismatch");
+  const kitStatus = await until(
+    "bundled skill reconciliation",
+    () => mcp(studio, "t3_mesh_status"),
+    (value) =>
+      nodes.every((node) =>
+        value.servers
+          .find((server) => server.environmentId === node.id)
+          ?.actions.some(
+            (action) =>
+              action.id === "agents/kit" && (action.state === "done" || action.state === "failed"),
+          ),
+      ),
+  );
+  for (const node of nodes) {
+    const action = kitStatus.servers
+      .find((server) => server.environmentId === node.id)
+      .actions.find((action) => action.id === "agents/kit");
+    if (action.state !== "done") throw Error(node.name + ": " + action.reason);
+    const expected = await NodeFSP.readFile(
+      NodePath.resolve("agent-kit/skills/t3/SKILL.md"),
+      "utf8",
+    );
+    if (
+      (await NodeFSP.readFile(NodePath.join(node.home, ".agents/skills/t3/SKILL.md"), "utf8")) !==
+      expected
+    )
+      throw Error("Installed skill differs from the bundled skill");
+    for (const relative of [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"])
+      if (
+        !(await NodeFSP.readFile(NodePath.join(node.home, relative), "utf8")).includes(
+          "<!-- t3-mesh begin -->",
+        )
+      )
+        throw Error("Missing managed instruction block");
+  }
   console.log(
     `PASS ${process.platform}/${process.arch}: two servers, mesh config, managed SSH, real replica watching and matching file`,
   );

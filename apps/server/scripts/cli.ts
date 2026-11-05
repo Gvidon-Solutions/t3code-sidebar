@@ -88,6 +88,11 @@ const buildCmd = Command.make(
         }),
       );
 
+      const skillTarget = path.join(serverDir, "dist/agent-kit/skills/t3");
+      yield* fs.copy(path.join(repoRoot, "agent-kit/skills/t3"), skillTarget);
+      yield* fs.remove(path.join(skillTarget, "global"), { recursive: true, force: true });
+      yield* Effect.log("[cli] Bundled t3 skill into dist/agent-kit");
+
       const webDist = path.join(repoRoot, "apps/web/dist");
       const clientTarget = path.join(serverDir, "dist/client");
 

@@ -63,9 +63,12 @@ export const layer = Layer.effect(
     const packaged = path.join(path.dirname(executable), "agent-kit/skills/t3");
     const source =
       env.T3_MESH_AGENT_SOURCE ??
-      ((yield* fs.exists(packaged))
-        ? packaged
-        : yield* path.fromFileUrl(new URL("../../../../agent-kit/skills/t3", import.meta.url)));
+      (yield* Effect.gen(function* () {
+        if (yield* fs.exists(packaged)) return packaged;
+        const bundled = yield* path.fromFileUrl(new URL("./agent-kit/skills/t3", import.meta.url));
+        if (yield* fs.exists(bundled)) return bundled;
+        return yield* path.fromFileUrl(new URL("../../../../agent-kit/skills/t3", import.meta.url));
+      }));
     const copySkill = Effect.fn("MeshAgentKit.copySkill")(function* (
       from: string,
       to: string,
