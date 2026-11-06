@@ -1,5 +1,5 @@
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, expect } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -24,6 +24,7 @@ const setup = (root: string, mutagenPath = "") =>
     Layer.provide(ServerSettings.layerTest({ mutagenPath })),
     Layer.provide(ProcessRunner.layer),
     Layer.provide(http),
+    Layer.provide(Digest.layerWebCrypto),
   );
 it.effect(
   "honors an explicit executable and rejects an archive before unpacking when its checksum differs",
@@ -97,16 +98,13 @@ it.effect.each(platforms)("installs the pinned $asset executable and agents, onc
         return Effect.succeed(HttpClientResponse.fromWeb(request, new Response("archive")));
       }),
     );
-    const crypto = Layer.succeed(
-      Crypto.Crypto,
-      Crypto.make({
-        randomBytes: (size) => new Uint8Array(size),
-        digest: () =>
-          Effect.succeed(
-            Uint8Array.from(target.sha.match(/../g)!.map((hex) => Number.parseInt(hex, 16))),
-          ),
-      }),
-    );
+    const crypto = Layer.succeed(Digest.Digest, {
+      digest: () =>
+        Effect.succeed(
+          Uint8Array.from(target.sha.match(/../g)!.map((hex) => Number.parseInt(hex, 16))),
+        ),
+      digestHex: () => Effect.succeed(target.sha),
+    });
     const process = Layer.succeed(ProcessRunner.ProcessRunner, {
       run: (input) =>
         Effect.gen(function* () {

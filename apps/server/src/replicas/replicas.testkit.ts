@@ -1,5 +1,6 @@
 import * as ReplicaPaths from "./ReplicaPaths.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   ProjectId,
@@ -157,7 +158,10 @@ export const makeReplicaHarness = (
     ReplicaPaths.layer,
     runner,
     projects,
-  ).pipe(Layer.provideMerge(ServerSettings.layerTest()), Layer.provideMerge(NodeServices.layer));
+  ).pipe(
+    Layer.provideMerge(ServerSettings.layerTest()),
+    Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+  );
   const layer = ReplicaService.layer.pipe(Layer.provideMerge(dependencies));
   return {
     layer,
