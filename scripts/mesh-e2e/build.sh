@@ -63,7 +63,7 @@ if command -v rustup >/dev/null 2>&1; then
   [ -n "$newest_tc" ] && CARGO=(cargo "+$newest_tc")
 fi
 if (cd "$BUILD_DIR" && "${CARGO[@]}" build --locked --release --manifest-path native/resource-monitor/Cargo.toml); then
-  cp "$BUILD_DIR/native/resource-monitor/target/release/t3-resource-monitor" \
+  cp "${CARGO_TARGET_DIR:-$BUILD_DIR/native/resource-monitor/target}/release/t3-resource-monitor" \
     "$ARTIFACTS_DIR/resource-monitor/linux-x64/t3-resource-monitor"
 else
   warn "cargo build failed; falling back to an already-installed resource monitor"
