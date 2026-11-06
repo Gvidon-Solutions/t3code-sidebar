@@ -8,9 +8,6 @@ import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 
 import { AppRoot } from "~/AppRoot";
-// The route loads ChatView lazily, and its first transform (React Compiler over ~4k lines)
-// takes 6-11s; importing it here keeps that out of the test's timeout.
-import "~/components/ChatView";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { __setClientSettingsForTests } from "~/hooks/useSettings";
 import { getRouter } from "~/router";
@@ -40,6 +37,7 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
 
 it("a new draft does not load its reserved thread before the server lists it", async () => {
   using _environment = installFakeEnvironment([]);
+  await import("~/components/ChatView");
   const viewport = { width: window.innerWidth, height: window.innerHeight };
   await page.viewport(240, 640);
   await using _viewport = {
