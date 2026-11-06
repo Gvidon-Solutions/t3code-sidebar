@@ -17,7 +17,6 @@ import * as FileSystem from "effect/FileSystem";
 import * as Scope from "effect/Scope";
 import * as Exit from "effect/Exit";
 import * as Digest from "effect/crypto/Digest";
-import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Hex from "effect/encoding/Hex";
 import * as ThreadForks from "../mesh/ThreadForkService.ts";
 import * as ForkSecrets from "../auth/ServerSecretStore.ts";

@@ -13,7 +13,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Hex from "effect/encoding/Hex";
 import * as HttpBody from "effect/http/HttpBody";
