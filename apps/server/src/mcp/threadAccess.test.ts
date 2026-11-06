@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -57,5 +58,5 @@ it.effect("reuses command identities when an authenticated peer request is repla
     expect(repeated).toEqual(first);
     expect(first[0]).not.toBe(first[1]);
     expect(another).not.toEqual(first);
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );

@@ -1,3 +1,5 @@
+import legacyMeshLayout from "./Migrations/080_MeshLayout.ts";
+import peerConnections from "./Migrations/081_PeerConnections.ts";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -78,6 +80,44 @@ describe("runMigrations", () => {
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
+  it.effect("drops the unused correlation index and keeps correlation values", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 54 });
+      yield* sql`
+        INSERT INTO orchestration_events (
+          event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at,
+          command_id, causation_event_id, correlation_id, actor_kind, payload_json, metadata_json
+        )
+        VALUES (
+          'event-1', 'thread', 'thread-1', 0, 'thread.created', '2026-01-01T00:00:00.000Z',
+          'command-1', NULL, 'correlation-1', 'client', '{}', '{}'
+        )
+      `;
+
+      yield* runMigrations();
+
+      const indexes = yield* sql<{ readonly name: string }>`
+        SELECT name FROM sqlite_master
+        WHERE type = 'index' AND tbl_name = 'orchestration_events' AND sql IS NOT NULL
+      `;
+      const indexNames = indexes.map((row) => row.name);
+      assert.notInclude(indexNames, "idx_orch_events_correlation_id");
+      for (const kept of [
+        "idx_orch_events_stream_version",
+        "idx_orch_events_stream_sequence",
+        "idx_orch_events_command_id",
+        "idx_orchestration_events_agent_stream_sequence",
+      ]) {
+        assert.include(indexNames, kept);
+      }
+      const events = yield* sql<{ readonly correlation_id: string | null }>`
+        SELECT correlation_id FROM orchestration_events WHERE event_id = 'event-1'
+      `;
+      assert.deepStrictEqual(events, [{ correlation_id: "correlation-1" }]);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
   it.effect.each([30, 54])("still starts with a site-local migration at id %s", (id) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -124,6 +164,48 @@ describe("runMigrations", () => {
 
       assert.deepStrictEqual(yield* runMigrations(), []);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect("upgrades plain upstream v0.1.7 without a migration collision", () =>
+    Effect.gen(function* () {
+      yield* runMigrations({ toMigrationInclusive: 79 });
+      assert.deepStrictEqual(
+        (yield* runMigrations()).map(([id]) => id),
+        [80, 81],
+      );
+      assert.deepStrictEqual(yield* history, migrationManifest);
+      assert.deepStrictEqual(yield* runMigrations(), []);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect.each([false, true])(
+    "upgrades sidebar.60 schema and v2 schema (connections: %s)",
+    (connections) =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* runMigrations({ toMigrationInclusive: 76 });
+        yield* legacyMeshLayout;
+        yield* sql`INSERT INTO mesh_layout_entries VALUES ('future/key', '{"retained":true}', '1:0:studio', 1)`;
+        if (connections) {
+          yield* peerConnections;
+          yield* sql`INSERT INTO effect_sql_migrations (migration_id, name) VALUES (78, 'PeerConnections')`;
+          yield* sql`INSERT INTO peer_call_receipts VALUES ('studio', 'request', '{}', '{}')`;
+        }
+        yield* sql`
+        INSERT INTO effect_sql_migrations (migration_id, name) VALUES (77, 'MeshLayout')
+      `;
+
+        assert.deepStrictEqual(
+          (yield* runMigrations()).map(([id]) => id),
+          [77, 78, 79, 80, 81],
+        );
+        assert.deepStrictEqual(yield* history, migrationManifest);
+        assert.deepStrictEqual(yield* sql`SELECT value FROM mesh_layout_entries`, [
+          { value: '{"retained":true}' },
+        ]);
+        if (connections) assert.equal((yield* sql`SELECT * FROM peer_call_receipts`).length, 1);
+        assert.deepStrictEqual(yield* runMigrations(), []);
+      }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 });
 

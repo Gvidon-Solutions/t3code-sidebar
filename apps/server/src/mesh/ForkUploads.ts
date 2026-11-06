@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as Hex from "effect/encoding/Hex";
 import * as ServerConfig from "../config.ts";
 import {
@@ -33,15 +33,15 @@ const uploadDirectory = Effect.fn("ForkUploads.directory")(function* (
 ) {
   const config = yield* ServerConfig.ServerConfig;
   const path = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const digest = yield* Digest.Digest;
   const forkDir = Hex.encode(
-    yield* crypto
-      .digest("SHA-256", new TextEncoder().encode(forkId))
+    yield* digest
+      .digest(Digest.sha256, new TextEncoder().encode(forkId))
       .pipe(Effect.mapError(failure)),
   );
   const attachmentKey = Hex.encode(
-    yield* crypto
-      .digest("SHA-256", new TextEncoder().encode(attachmentId))
+    yield* digest
+      .digest(Digest.sha256, new TextEncoder().encode(attachmentId))
       .pipe(Effect.mapError(failure)),
   );
   return path.join(config.stateDir, "fork-uploads", forkDir, attachmentKey);
@@ -129,10 +129,10 @@ export const clearForkUploads = Effect.fn("ForkUploads.clear")(function* (forkId
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const config = yield* ServerConfig.ServerConfig;
-  const crypto = yield* Crypto.Crypto;
+  const digest = yield* Digest.Digest;
   const forkDir = Hex.encode(
-    yield* crypto
-      .digest("SHA-256", new TextEncoder().encode(forkId))
+    yield* digest
+      .digest(Digest.sha256, new TextEncoder().encode(forkId))
       .pipe(Effect.mapError(failure)),
   );
   const directory = path.join(config.stateDir, "fork-uploads", forkDir);

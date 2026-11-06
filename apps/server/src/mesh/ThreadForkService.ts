@@ -23,7 +23,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Scope from "effect/Scope";
 import * as Clock from "effect/Clock";
 import * as Schedule from "effect/Schedule";
@@ -87,7 +88,8 @@ export const layer = Layer.effect(
     const uploadContext = yield* Effect.context<
       | FileSystem.FileSystem
       | Path.Path
-      | Crypto.Crypto
+      | Digest.Digest
+      | SecureRandom.SecureRandom
       | ServerSecretStore
       | ServerConfig
       | DocumentText
@@ -101,7 +103,8 @@ export const layer = Layer.effect(
     const projectionStore = yield* ProjectionStoreV2;
     const serverConfig = yield* ServerConfig;
     const fileSystem = yield* FileSystem.FileSystem;
-    const crypto = yield* Crypto.Crypto;
+    const digest = yield* Digest.Digest;
+    const random = yield* SecureRandom.SecureRandom;
     const replicaRuntime = yield* ReplicaRuntime.ReplicaRuntime;
     const locks = yield* KeyedLock.make<string>();
     const journal = yield* ForkTransactions.ForkTransactions;
@@ -170,9 +173,9 @@ export const layer = Layer.effect(
     const threadIdFor = (
       bundle: Pick<ForkBundle, "id" | "sourceEnvironmentId" | "sourceThreadId">,
     ) =>
-      crypto
+      digest
         .digest(
-          "SHA-256",
+          Digest.sha256,
           new TextEncoder().encode(
             `${bundle.sourceEnvironmentId}:${bundle.sourceThreadId}:${bundle.id}`,
           ),
@@ -432,8 +435,8 @@ export const layer = Layer.effect(
             }),
           ),
         );
-        const token = yield* crypto
-          .randomUUIDv4()
+        const token = yield* random
+          .uuidV4()
           .pipe(Effect.mapError(() => invalid("Cannot allocate a fork commit token.")));
         const expiresAt = (yield* Clock.currentTimeMillis) + 10 * 60 * 1000;
         yield* transactions.write(key, {
@@ -563,9 +566,7 @@ export const layer = Layer.effect(
       const commandId =
         input.commandId ??
         CommandId.make(
-          yield* crypto
-            .randomUUIDv4()
-            .pipe(Effect.mapError(() => invalid("Cannot allocate a fork id."))),
+          yield* random.uuidV4().pipe(Effect.mapError(() => invalid("Cannot allocate a fork id."))),
         );
       return yield* locks.withLock(
         input.threadId,

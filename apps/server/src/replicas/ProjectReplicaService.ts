@@ -34,7 +34,7 @@ import {
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -113,7 +113,7 @@ const make = Effect.gen(function* () {
   const localEnvironment = yield* ReplicaEnvironment;
   const projects = yield* ProjectService.ProjectService;
   const settings = yield* ServerSettings.ServerSettingsService;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const path = yield* Path.Path;
 
   const locks = yield* KeyedLock.make<string>();
@@ -237,8 +237,8 @@ const make = Effect.gen(function* () {
     const project = Option.isSome(existing)
       ? existing.value
       : yield* projects.create({
-          commandId: CommandId.make(yield* crypto.randomUUIDv4().pipe(Effect.mapError(mapError))),
-          projectId: ProjectId.make(yield* crypto.randomUUIDv4().pipe(Effect.mapError(mapError))),
+          commandId: CommandId.make(yield* random.uuidV4().pipe(Effect.mapError(mapError))),
+          projectId: ProjectId.make(yield* random.uuidV4().pipe(Effect.mapError(mapError))),
           workspaceRoot: rep.path,
           title: (yield* mesh.read).config.projectTitles[logicalKey] || path.basename(rep.path),
         });
@@ -1346,10 +1346,10 @@ const make = Effect.gen(function* () {
                 projectId = (yield* projects
                   .create({
                     commandId: CommandId.make(
-                      yield* crypto.randomUUIDv4().pipe(Effect.mapError(mapError)),
+                      yield* random.uuidV4().pipe(Effect.mapError(mapError)),
                     ),
                     projectId: ProjectId.make(
-                      yield* crypto.randomUUIDv4().pipe(Effect.mapError(mapError)),
+                      yield* random.uuidV4().pipe(Effect.mapError(mapError)),
                     ),
                     workspaceRoot: root,
                     title: path.basename(root),

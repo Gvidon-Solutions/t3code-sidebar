@@ -36,7 +36,7 @@ it.effect(
         ),
       );
       const settings = Context.get(services, Settings.ServerSettingsService);
-      const transport = Mcp.layerMcpTransport.pipe(
+      const transport = Mcp.layerMcpTransport(Layer.empty).pipe(
         Layer.provide(
           Layer.mergeAll(
             Layer.succeedContext(services),

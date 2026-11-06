@@ -1,3 +1,4 @@
+import * as Digest from "effect/crypto/Digest";
 import type { ProjectionRecordField } from "../orchestration-v2/ProjectionStore.ts";
 import {
   CommandId,
@@ -9,7 +10,7 @@ import {
   ThreadId,
   type OrchestrationV2ThreadShell,
 } from "@t3tools/contracts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Hex from "effect/encoding/Hex";
@@ -49,7 +50,8 @@ export const unavailable = () =>
 export const dispatchFailure = (
   error: OrchestratorV2Error | ThreadManagement.ThreadManagementProviderInstanceDisabledError,
 ) =>
-  error._tag === "ThreadManagementProviderInstanceDisabledError"
+  error._tag === "ThreadManagementProviderInstanceDisabledError" ||
+  error._tag === "OrchestratorRuntimeModeAboveCeilingError"
     ? new OrchestratorMcpFailure({ code: "invalid_request", message: error.message })
     : (error._tag === "OrchestratorDispatchError" ||
           error._tag === "OrchestratorCommandRejectedError") &&
@@ -207,13 +209,14 @@ export const readThread = Effect.fn("mcp.readThread")(function* <
 });
 
 export const newCommandId = Effect.fn("mcp.newCommandId")(function* () {
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
+  const digest = yield* Digest.Digest;
   const invocation = yield* Effect.serviceOption(McpInvocationContext.McpInvocationContext);
   const identity = Option.isSome(invocation) ? invocation.value.peerCommandIdentity : undefined;
   if (identity) {
     const bytes = new TextEncoder().encode(`${identity.namespace}\0${identity.next()}`);
-    const digest = yield* crypto.digest("SHA-256", bytes).pipe(Effect.orDie);
-    return CommandId.make(`mcp:${Hex.encode(digest)}`);
+    const hash = yield* digest.digestHex(Digest.sha256, bytes).pipe(Effect.orDie);
+    return CommandId.make(`mcp:${hash}`);
   }
-  return CommandId.make(`mcp:${yield* crypto.randomUUIDv4().pipe(Effect.orDie)}`);
+  return CommandId.make(`mcp:${yield* random.uuidV4()}`);
 });

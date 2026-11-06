@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -82,5 +83,5 @@ it.effect("installs once, refreshes lock changes and retains failures for a succ
       expect(calls).toHaveLength(3);
     });
     yield* run.pipe(Effect.provide(layer.pipe(Layer.provide(processes))));
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );

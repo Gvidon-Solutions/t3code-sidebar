@@ -8,7 +8,7 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import { threadLinkHref } from "@t3tools/shared/threadLinks";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import { OrchestratorV2 } from "../orchestration-v2/Orchestrator.ts";
@@ -33,7 +33,7 @@ export const layer = Layer.effect(
     const orchestrator = yield* OrchestratorV2;
     const mesh = yield* MeshLayoutService;
     const providers = yield* ProviderRegistry;
-    const crypto = yield* Crypto.Crypto;
+    const random = yield* SecureRandom.SecureRandom;
     const self = EnvironmentId.make(mesh.environmentId);
     const move = Effect.fn("ThreadMoveService.move")(function* (input: ThreadMoveInput) {
       if (input.modelSelection) {
@@ -58,8 +58,8 @@ export const layer = Layer.effect(
           commandId:
             input.commandId ??
             CommandId.make(
-              yield* crypto
-                .randomUUIDv4()
+              yield* random
+                .uuidV4()
                 .pipe(Effect.mapError(() => failure(new Error("Cannot allocate a move id.")))),
             ),
           threadId: input.threadId,

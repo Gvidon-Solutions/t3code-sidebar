@@ -5,6 +5,7 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { conflictCopyPath } from "../platform/ServerPlatform.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, expect } from "@effect/vitest";
+import * as Digest from "effect/crypto/Digest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -45,6 +46,7 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
         Layer.provide(ServerSettings.layerTest()),
         Layer.provide(ProcessRunner.layer),
         Layer.provide(fixtureHttp),
+        Layer.provide(Digest.layerWebCrypto),
       );
       const run = Effect.gen(function* () {
         const runner = yield* MutagenRunner.MutagenRunner;

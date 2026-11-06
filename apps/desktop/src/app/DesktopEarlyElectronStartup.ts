@@ -26,7 +26,6 @@ type EarlyLinuxElectronOptionsInput = EarlyDesktopSettingsInput;
 
 export interface EarlyLinuxElectronOptions {
   readonly isDevelopment: boolean;
-  readonly linuxWmClass: string;
   readonly linuxDesktopEntryName: string;
   readonly passwordStore: LinuxPasswordStoreSwitch | null;
 }
@@ -35,13 +34,6 @@ export const resolveLinuxDesktopEntryName = (isDevelopment: boolean): string =>
   isDevelopment
     ? "com.gvidon.T3CodeSidebar.Development.desktop"
     : "com.gvidon.T3CodeSidebar.desktop";
-
-// Electron names the window after setDesktopName (X11 WM_CLASS, Wayland app_id)
-// and ignores --class, so the class must equal the desktop id. The packaged
-// entry declares it as StartupWMClass to own the window, not the hidden
-// URL-handler entry that shares the id.
-export const resolveLinuxWmClass = (isDevelopment: boolean): string =>
-  resolveLinuxDesktopEntryName(isDevelopment).replace(/\.desktop$/, "");
 
 const trimNonEmpty = (value: string | undefined): string | null => {
   const trimmed = value?.trim();
@@ -155,7 +147,6 @@ export function resolveEarlyLinuxElectronOptions(
   const isDevelopment = isDevelopmentEnvironment(input.env);
   return {
     isDevelopment,
-    linuxWmClass: resolveLinuxWmClass(isDevelopment),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     passwordStore: resolveLinuxPasswordStoreSwitch({
       preference,

@@ -17,7 +17,7 @@ it.effect(
   "accepts mesh exchange only for full-access link sessions and hides it from tool lists",
   () =>
     Effect.gen(function* () {
-      const transport = Mcp.layerMcpTransport.pipe(
+      const transport = Mcp.layerMcpTransport(Layer.empty).pipe(
         Layer.provide(
           Layer.mergeAll(
             Settings.layerTest({ linkedEnvironmentsEnabled: true }),

@@ -38,7 +38,7 @@ import {
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -296,7 +296,7 @@ export const layer = Layer.effect(
   InboxService,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const crypto = yield* Crypto.Crypto;
+    const random = yield* SecureRandom.SecureRandom;
     const threadManagement = yield* ThreadManagementService.ThreadManagementService;
     const folders = yield* ManagedProjectFolders.ManagedProjectFolders;
     const settings = yield* ServerSettings.ServerSettingsService;
@@ -324,7 +324,7 @@ export const layer = Layer.effect(
       fail(`Inbox storage failed: ${cause instanceof Error ? cause.message : String(cause)}`);
 
     const nowIso = DateTime.now.pipe(Effect.map((now) => DateTime.formatIso(now)));
-    const newId = crypto.randomUUIDv4().pipe(Effect.orDie);
+    const newId = random.uuidV4().pipe(Effect.orDie);
 
     const findIssue = (issueId: InboxIssueId) =>
       sql<IssueRow>`SELECT * FROM fork_inbox_issues WHERE issue_id = ${issueId}`.pipe(

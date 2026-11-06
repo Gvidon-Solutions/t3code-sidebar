@@ -1,3 +1,5 @@
+import * as EffectNodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as ManagedPolicy from "../../policy/ManagedPolicy.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- The loopback echo fixture is the sshd byte-pipe boundary.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -107,7 +109,9 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
       Layer.provideMerge(Secrets.layer),
       Layer.provideMerge(Environment.layerIdentity),
       Layer.provideMerge(Config.layerTest(process.cwd(), { prefix: "n1-network-" })),
-      Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(
+        Layer.mergeAll(NodeServices.layer, EffectNodeCrypto.layer, ManagedPolicy.layerTest()),
+      ),
       Layer.fresh,
     ),
   );
@@ -194,7 +198,7 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
         ),
       }),
     ).pipe(
-      Layer.provideMerge(Mcp.layerMcpTransport),
+      Layer.provideMerge(Mcp.layerMcpTransport(Layer.empty)),
       Layer.provide(OAuth.layerMcpClientAuthenticator),
       Layer.provide(
         Layer.mock(Registry.McpSessionRegistry)({

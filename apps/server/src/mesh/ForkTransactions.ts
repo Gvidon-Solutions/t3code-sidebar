@@ -13,7 +13,7 @@ import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as Hex from "effect/encoding/Hex";
 import { ServerConfig } from "../config.ts";
 
@@ -87,7 +87,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const crypto = yield* Crypto.Crypto;
+    const digest = yield* Digest.Digest;
     const config = yield* ServerConfig;
     const root = path.join(config.stateDir, "fork-transactions");
     const decode = Schema.decodeUnknownEffect(
@@ -98,8 +98,8 @@ export const layer = Layer.effect(
     );
     const storageError = (cause: unknown) => new ForkTransactionError({ cause });
     const fileFor = Effect.fn("ForkTransactions.fileFor")(function* (key: string) {
-      const hash = yield* crypto
-        .digest("SHA-256", new TextEncoder().encode(key))
+      const hash = yield* digest
+        .digest(Digest.sha256, new TextEncoder().encode(key))
         .pipe(Effect.mapError(storageError));
       return path.join(root, `${Hex.encode(hash)}.json`);
     });

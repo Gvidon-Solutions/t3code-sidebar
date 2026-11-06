@@ -599,3 +599,18 @@ A failed mesh trial atomically records its reason and exits the trial child, so
 protocol-3 launchers, including N-1 launchers, restore the DB immediately instead
 of waiting for the generic preparation timeout. The runtime startup tests assert
 activation → mesh health → launcher commit → lease release.
+
+## W1 upstream v0.1.7 integration
+
+Upstream migration ids 77–79 are reserved; MeshLayout is 80 and PeerConnections is 81.
+`persistence/Migrations.ts` reconciles legacy fork history before the migrator reads its highest
+id. Both fork migrations are idempotent so existing layout and creation receipts survive;
+`Migrations.test.ts` covers sidebar.60, the v2 connection schema and plain upstream v0.1.7.
+
+`PeerMcpClient` records transport outcomes before decoding tool results on either transport.
+A tool refusal is a healthy answer; missing/malformed responses still mark the link failing.
+`PeerLinks` refreshes labels from identity-checked discovery and retains persistent reachability
+when HTTP discovery cannot reach an incoming-only peer. Effect crypto dependencies are explicit
+Digest/SecureRandom services. MCP toolkit registrations belong inside `layerMcpTransport` so its
+per-request invocation context reaches mesh handlers. Provider catalogs carry managed policy
+alongside provider/settings subsets used by the mobile draft machine picker.

@@ -1,7 +1,6 @@
 import { executableName, mutagenTarget } from "../platform/ServerPlatform.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as Crypto from "effect/Crypto";
-import * as Hex from "effect/encoding/Hex";
+import * as Digest from "effect/crypto/Digest";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
 import * as Path from "effect/Path";
@@ -38,7 +37,7 @@ const make = Effect.gen(function* () {
   const platformName = yield* HostProcess.Platform;
   const architecture = yield* HostProcess.Architecture;
   const { join } = yield* Path.Path;
-  const crypto = yield* Crypto.Crypto;
+  const digest = yield* Digest.Digest;
   const http = yield* HttpClient.HttpClient;
   const { baseDir } = yield* ServerConfig.ServerConfig;
   const settings = yield* ServerSettings.ServerSettingsService;
@@ -66,7 +65,7 @@ const make = Effect.gen(function* () {
     if (response.status !== 200)
       return yield* new ReplicaError({ reason: "mutagen", message: "Mutagen download failed." });
     const bytes = new Uint8Array(yield* response.arrayBuffer.pipe(Effect.timeout("30 seconds")));
-    if (Hex.encode(yield* crypto.digest("SHA-256", bytes)) !== checksum)
+    if ((yield* digest.digestHex(Digest.sha256, bytes)) !== checksum)
       return yield* new ReplicaError({
         reason: "mutagen",
         message: "Mutagen archive checksum mismatch.",

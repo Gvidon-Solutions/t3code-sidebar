@@ -219,7 +219,7 @@ async function releaseOwnedFiles(
  */
 export function sharedDisplayName(name: string): string {
   const base = name
-    .split(/[\/]/)
+    .split(/[/]/)
     .pop()
     ?.replace(/^[^:]*:/, "")
     .trim();

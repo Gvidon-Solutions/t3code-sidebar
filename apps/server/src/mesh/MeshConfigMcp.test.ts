@@ -35,8 +35,7 @@ it.effect(
             }),
         }),
       );
-      const transport = Mcp.layerMcpTransport.pipe(
-        Layer.provide(Mcp.layerMeshToolkit),
+      const transport = Mcp.layerMcpTransport(Mcp.layerMeshToolkit).pipe(
         Layer.provide(dependencies),
       );
       yield* HttpRouter.serve(transport, { disableListenLog: true, disableLogger: true }).pipe(

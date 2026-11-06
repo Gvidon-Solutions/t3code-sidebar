@@ -6,6 +6,7 @@ import {
 } from "@t3tools/contracts";
 
 export type ProviderCatalog = Pick<ServerConfig, "providers"> &
+  Partial<Pick<ServerConfig, "managedPolicy">> &
   Partial<Pick<ServerConfig, "settings">>;
 
 export function draftModelUnavailableReason(

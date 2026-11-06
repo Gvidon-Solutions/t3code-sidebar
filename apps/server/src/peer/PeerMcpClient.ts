@@ -7,11 +7,13 @@ import {
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Hex from "effect/encoding/Hex";
 import * as HttpBody from "effect/http/HttpBody";
@@ -26,6 +28,9 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 
 /** The only MCP protocol version a T3 Code `/mcp` registers. */
 const PROTOCOL_VERSION = "2025-06-18";
+const encodeFailure = Schema.encodeSync(
+  Schema.fromJsonString(Schema.Struct({ code: Schema.String, message: Schema.String })),
+);
 const encodeSeed = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)));
 
 /** The raw tool answer: MCP text the caller decodes, and whether the tool refused. */
@@ -114,7 +119,8 @@ const responseJson = (contentType: string | undefined, text: string) =>
 
 const make = Effect.gen(function* () {
   const links = yield* PeerLinks.PeerLinks;
-  const crypto = yield* Crypto.Crypto;
+  const digest = yield* Digest.Digest;
+  const random = yield* SecureRandom.SecureRandom;
   const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
   const httpClient = yield* HttpClient.HttpClient;
   const environment = yield* Effect.serviceOption(ServerEnvironment.ServerEnvironment);
@@ -251,10 +257,16 @@ const make = Effect.gen(function* () {
             }),
         ),
       );
-      if (body.error !== undefined || body.result === undefined) {
+      if (body.error !== undefined) {
+        return {
+          text: encodeFailure({ code: "invalid_request", message: body.error.message }),
+          isError: true,
+        };
+      }
+      if (body.result === undefined) {
         return yield* new OrchestratorMcpFailure({
           code: "invalid_request",
-          message: body.error?.message ?? "The linked environment returned no result.",
+          message: "The linked environment returned no result.",
         });
       }
       return {
@@ -318,14 +330,14 @@ const make = Effect.gen(function* () {
                 input.tool,
                 typeof input.arguments.clientRequestId === "string"
                   ? input.arguments.clientRequestId
-                  : yield* crypto.randomUUIDv4().pipe(Effect.orDie),
+                  : yield* random.uuidV4().pipe(Effect.orDie),
               ]
             : undefined
           : ["explicit", input.idempotencyKey];
       const key =
         seed === undefined
           ? undefined
-          : `peer:${Hex.encode(yield* crypto.digest("SHA-256", new TextEncoder().encode(encodeSeed(seed))).pipe(Effect.orDie))}`;
+          : `peer:${Hex.encode(yield* digest.digest(Digest.sha256, new TextEncoder().encode(encodeSeed(seed))).pipe(Effect.orDie))}`;
       const argumentsWithIdentity =
         key !== undefined &&
         input.arguments.clientRequestId === undefined &&
@@ -389,8 +401,7 @@ const make = Effect.gen(function* () {
           ...(input.hops === undefined ? {} : { hops: input.hops }),
         });
       }
-      const value: (typeof input.success)["Type"] = yield* decodeAnswer(input.success, answer);
-      return value;
+      return answer;
     },
     (effect, input) =>
       effect.pipe(
@@ -408,6 +419,7 @@ const make = Effect.gen(function* () {
           links.recordOutcome(input.environmentId, { error: error.message }),
         ),
         Effect.tap(() => links.recordOutcome(input.environmentId, { error: null })),
+        Effect.flatMap((answer) => decodeAnswer(input.success, answer)),
       ),
   );
 

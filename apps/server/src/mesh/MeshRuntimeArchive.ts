@@ -9,7 +9,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as Hex from "effect/encoding/Hex";
 import { HttpClient, HttpClientResponse } from "effect/http";
 export class MeshRuntimeArchive extends Context.Service<
@@ -27,7 +27,7 @@ export const layer = Layer.effect(
   MeshRuntimeArchive,
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient;
-    const crypto = yield* Crypto.Crypto;
+    const digest = yield* Digest.Digest;
     const env = yield* HostProcess.Environment;
     const download = Effect.fn("MeshRuntimeArchive.download")(
       function* (
@@ -68,7 +68,7 @@ export const layer = Layer.effect(
           ),
         );
         yield* report("verify");
-        const actual = Hex.encode(yield* crypto.digest("SHA-256", bytes));
+        const actual = Hex.encode(yield* digest.digest(Digest.sha256, bytes));
         if (actual !== expected)
           return yield* new MeshConfigError({
             reason: "storage",

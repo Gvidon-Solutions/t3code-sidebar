@@ -1,6 +1,6 @@
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as NodeUtil from "node:util";
 import {
   MeshProjectDirectory,
@@ -73,7 +73,7 @@ export const layer = Layer.effect(
   MeshReplicator,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const crypto = yield* Crypto.Crypto;
+    const random = yield* SecureRandom.SecureRandom;
     const mesh = yield* MeshLayoutService;
     const peers = yield* PeerMcpClient;
     const links = yield* PeerLinks;
@@ -85,7 +85,7 @@ export const layer = Layer.effect(
       ApplicationEvents.OrchestrationEventStore,
     );
     yield* sql`CREATE TABLE IF NOT EXISTS mesh_layout_generation (id TEXT PRIMARY KEY, generation TEXT NOT NULL)`;
-    yield* sql`INSERT OR IGNORE INTO mesh_layout_generation(id,generation) VALUES ('local',${yield* crypto.randomUUIDv4().pipe(Effect.orDie)})`;
+    yield* sql`INSERT OR IGNORE INTO mesh_layout_generation(id,generation) VALUES ('local',${yield* random.uuidV4().pipe(Effect.orDie)})`;
     const generation = (yield* sql<{
       generation: string;
     }>`SELECT generation FROM mesh_layout_generation WHERE id = 'local'`)[0]!.generation;

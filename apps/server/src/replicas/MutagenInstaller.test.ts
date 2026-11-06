@@ -1,8 +1,9 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as Deferred from "effect/Deferred";
 import * as TestClock from "effect/testing/TestClock";
 import * as Fiber from "effect/Fiber";
 import * as HostProcess from "@t3tools/shared/HostProcess";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, expect } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -27,6 +28,7 @@ const setup = (root: string, mutagenPath = "") =>
     Layer.provide(ServerSettings.layerTest({ mutagenPath })),
     Layer.provide(ProcessRunner.layer),
     Layer.provide(http),
+    Layer.provide(Digest.layerWebCrypto),
   );
 it.effect(
   "honors an explicit executable and rejects an archive before unpacking when its checksum differs",
@@ -46,7 +48,7 @@ it.effect(
         expect(error.message).toBe("Mutagen archive checksum mismatch.");
         expect(yield* fs.exists(`${root}/bin/mutagen`)).toBe(false);
       }).pipe(Effect.provide(setup(root)));
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 const platforms = [
@@ -100,16 +102,13 @@ it.effect.each(platforms)("installs the pinned $asset executable and agents, onc
         return Effect.succeed(HttpClientResponse.fromWeb(request, new Response("archive")));
       }),
     );
-    const crypto = Layer.succeed(
-      Crypto.Crypto,
-      Crypto.make({
-        randomBytes: (size) => new Uint8Array(size),
-        digest: () =>
-          Effect.succeed(
-            Uint8Array.from(target.sha.match(/../g)!.map((hex) => Number.parseInt(hex, 16))),
-          ),
-      }),
-    );
+    const crypto = Layer.succeed(Digest.Digest, {
+      digest: () =>
+        Effect.succeed(
+          Uint8Array.from(target.sha.match(/../g)!.map((hex) => Number.parseInt(hex, 16))),
+        ),
+      digestHex: () => Effect.succeed(target.sha),
+    });
     const process = Layer.succeed(ProcessRunner.ProcessRunner, {
       run: (input) =>
         Effect.gen(function* () {
@@ -158,7 +157,7 @@ it.effect.each(platforms)("installs the pinned $asset executable and agents, onc
         ),
       ),
     );
-  }).pipe(Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.effect("times out a stalled download before extraction", () =>
@@ -192,5 +191,5 @@ it.effect("times out a stalled download before extraction", () =>
         ),
       ),
     );
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );

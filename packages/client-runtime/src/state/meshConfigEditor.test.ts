@@ -44,7 +44,7 @@ it("shows stale diffs, rebases edits onto the current config and restores histor
         reason: "stale_revision",
         message: "Config changed",
         current,
-        diff: [{ path: "$.t3.version", after: "next" }],
+        diff: [{ path: "$.t3.version", after: "1.2.3" }],
       });
     return current;
   });
@@ -55,12 +55,12 @@ it("shows stale diffs, rebases edits onto the current config and restores histor
   });
   await editor.load();
   editor.edit("schema: 1\nmachines: {}\nagents:\n  instructions: hello\n");
-  current = { ...revision("second"), doc: { schema: 1, machines: {}, t3: { version: "next" } } };
+  current = { ...revision("second"), doc: { schema: 1, machines: {}, t3: { version: "1.2.3" } } };
   await editor.plan();
   await editor.apply();
   expect(editor.getSnapshot().stale?.diff?.[0]?.path).toBe("$.t3.version");
   await editor.rebase();
-  expect(editor.getSnapshot().text).toContain("version: next");
+  expect(editor.getSnapshot().text).toContain("version: 1.2.3");
   expect(editor.getSnapshot().text).toContain("instructions: hello");
   expect(editor.getSnapshot().actions).toBeNull();
   await editor.plan();
@@ -73,7 +73,7 @@ it("shows stale diffs, rebases edits onto the current config and restores histor
 
 it("does not enable Apply when the text changes during an outstanding plan", async () => {
   const pending = Promise.withResolvers<{ actions: [] }>();
-  const apply = vi.fn(async () => revision("next"));
+  const apply = vi.fn(async () => revision("1.2.3"));
   const editor = new MeshConfigEditor({
     get: async () => ({ current: revision("base") }),
     plan: () => pending.promise,

@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -12,7 +13,9 @@ import { receiveForkUpload, clearForkUploads } from "./ForkUploads.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
 const dependencies = Secrets.layer.pipe(
   Layer.provideMerge(Config.layerTest(process.cwd(), { prefix: "L-uploads-" })),
-  Layer.provideMerge(Documents.layer.pipe(Layer.provideMerge(NodeServices.layer))),
+  Layer.provideMerge(
+    Documents.layer.pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+  ),
 );
 it.effect(
   "copies an attachment in retryable chunks through the upload store and rejects gaps",

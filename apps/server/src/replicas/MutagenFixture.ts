@@ -49,7 +49,7 @@ export async function mutagenArchive(platform: NodeJS.Platform, architecture: st
       await NodeFSP.rm(temporary, { force: true });
     }
     if (NodeCrypto.createHash("sha256").update(bytes).digest("hex") !== expected)
-      throw new Error("Mutagen fixture checksum mismatch");
+      throw new Error("Mutagen fixture checksum mismatch", { cause: error });
     await NodeFSP.mkdir(directory, { recursive: true });
     await NodeFSP.writeFile(file, bytes);
   }

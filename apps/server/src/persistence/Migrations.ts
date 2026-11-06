@@ -79,9 +79,11 @@ import Migration0073 from "./Migrations/073_ActiveTurnItemIndexes.ts";
 import Migration0074 from "./Migrations/074_ExcludeAttachmentPlaceholdersFromSearch.ts";
 import Migration0075 from "./Migrations/075_SubagentDeliveryState.ts";
 import Migration0076 from "./Migrations/076_ProjectionProjectsPinArchive.ts";
-
-import Migration0077 from "./Migrations/077_MeshLayout.ts";
-import Migration0078 from "./Migrations/078_PeerConnections.ts";
+import Migration0077 from "./Migrations/077_RepairBooleanSettledOverride.ts";
+import Migration0078 from "./Migrations/078_DropOrchestrationEventCorrelationIndex.ts";
+import Migration0079 from "./Migrations/079_DelegatedRecoveryIndexes.ts";
+import Migration0080 from "./Migrations/080_MeshLayout.ts";
+import Migration0081 from "./Migrations/081_PeerConnections.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -161,8 +163,12 @@ const migrationEntries = [
   [74, "ExcludeAttachmentPlaceholdersFromSearch", Migration0074],
   [75, "SubagentDeliveryState", Migration0075],
   [76, "ProjectionProjectsPinArchive", Migration0076],
-  [77, "MeshLayout", Migration0077],
-  [78, "PeerConnections", Migration0078],
+  [77, "RepairBooleanSettledOverride", Migration0077],
+  [78, "DropOrchestrationEventCorrelationIndex", Migration0078],
+  [79, "DelegatedRecoveryIndexes", Migration0079],
+  // Sidebar fork: MeshLayout first shipped as id 77, which upstream v0.1.7 claims.
+  [80, "MeshLayout", Migration0080],
+  [81, "PeerConnections", Migration0081],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -177,6 +183,38 @@ const makeMigrationLoader = (throughId?: number) =>
   );
 
 const FIRST_V2_MIGRATION_ID = 55;
+
+// Sidebar fork: MeshLayout first shipped as id 77, which upstream v0.1.7 claims. Drop the old
+// record so upstream's 77 and the renumbered 80 run; 80 uses CREATE TABLE IF NOT EXISTS.
+const reconcileForkMeshLayoutMigration = Effect.fn("reconcileForkMeshLayoutMigration")(
+  function* () {
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql.withTransaction(
+      Effect.gen(function* () {
+        const tables = yield* sql`
+          SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'
+        `;
+        if (tables.length === 0) return;
+        const legacy = yield* sql<{ readonly migration_id: number; readonly name: string }>`
+          SELECT migration_id, name FROM effect_sql_migrations
+          WHERE migration_id = 77 AND name = 'MeshLayout'
+        `;
+        if (legacy.length === 0) return;
+        const later = yield* sql<{ readonly migration_id: number }>`
+          SELECT migration_id FROM effect_sql_migrations WHERE migration_id > 77 AND NOT (migration_id = 78 AND name = 'PeerConnections')
+        `;
+        if (later.length > 0) {
+          return yield* new Migrator.MigrationError({
+            kind: "BadState",
+            message: "Cannot move the fork's MeshLayout migration with later migrations recorded.",
+          });
+        }
+        yield* sql`DELETE FROM effect_sql_migrations WHERE (migration_id = 77 AND name = 'MeshLayout') OR (migration_id = 78 AND name = 'PeerConnections')`;
+        yield* Effect.logInfo("Moved the sidebar fork's MeshLayout migration from 77 to 80");
+      }),
+    );
+  },
+);
 
 // Migrators skip ids up to the highest recorded; reject collisions that would skip V2 schema.
 const assertV2MigrationsCanRun = Effect.fn("assertV2MigrationsCanRun")(function* (
@@ -224,6 +262,9 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
     toMigrationInclusive === undefined || toMigrationInclusive >= FIRST_V2_MIGRATION_ID;
   const previewMigrations = includesV2 ? yield* reconcileV2PreviewMigration() : [];
   if (includesV2) {
+    if (toMigrationInclusive === undefined || toMigrationInclusive >= 80) {
+      yield* reconcileForkMeshLayoutMigration();
+    }
     yield* assertV2MigrationsCanRun(toMigrationInclusive);
   }
   const executedMigrations = [

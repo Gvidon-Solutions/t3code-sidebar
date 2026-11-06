@@ -80,7 +80,7 @@ import {
 import { updateThreadDraftModelSelection } from "../../state/use-thread-composer-state";
 import { appAtomRegistry } from "../../state/atom-registry";
 import type { ComposerDocumentAttachment } from "../../lib/composerContext";
-import { useProject, useThreadShell, useThreadShells } from "../../state/entities";
+import { useProject, useThreadShell, useVisibleThreadShells } from "../../state/entities";
 import { useMentionableEnvironments } from "../../state/environments";
 import { useLinkedEnvironments } from "../../state/peerLinks";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -136,6 +136,7 @@ import { offersLinkedEnvironments } from "@t3tools/client-runtime/link-request";
 import {
   ComposerDictationCancelAction,
   ComposerDictationDraftContent,
+  ComposerDictationError,
   ComposerDictationPrimaryAction,
   ComposerDictationStartAction,
   ComposerDictationStatus,
@@ -556,7 +557,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     draftMessage: draftMessage,
     ownerKey: composerDraftKey,
     environmentId: props.environmentId,
-    threadShells: useThreadShells(),
+    threadShells: useVisibleThreadShells(),
     environments: offersLinkedEnvironments(props.serverConfig)
       ? mentionableEnvironments
       : NO_MACHINES,
@@ -626,7 +627,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     voiceInput.state,
     voiceInput.elapsedSeconds,
   );
-  const isVoiceInputPresented = voicePresentation.statusLabel !== null;
+  const isVoiceInputPresented = voicePresentation.statusKind === "active";
   // An open draft stays visible; only a collapsed composer becomes a voice strip.
   const isExpanded =
     isFocused || settingsSheetPresentation.keepsComposerExpanded || fullScreenEditor.fullScreen;
@@ -1076,6 +1077,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 }
           }
         >
+          <ComposerDictationError
+            error={voiceInput.state.phase === "error" ? voiceInput.state.error : null}
+            onDismiss={voiceInput.cancel}
+          />
           {isExpanded && !usesCard ? editingAttachments : null}
           <ComposerDictationDraftContent
             className={usesCard ? undefined : "flex-row items-center"}
@@ -1304,7 +1309,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                   />
                 ) : showResumeAction ? (
                   <ComposerActionButton
-                    accessibilityLabel="Resume queue"
+                    accessibilityLabel="Resume thread"
                     icon="play"
                     disabled={!props.canOperateThread || resumingQueue}
                     onPress={() => void handleResumeQueue()}
@@ -1357,7 +1362,6 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     elapsedSeconds={voiceInput.elapsedSeconds}
                     phase={voiceInput.state.phase}
                     presentation={voicePresentation}
-                    onDismissError={voiceInput.cancel}
                   />
                 ) : (
                   <View className="min-w-0 flex-1 flex-row items-center justify-between">
@@ -1403,7 +1407,7 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                     />
                   ) : showResumeAction && voicePresentation.showsSend ? (
                     <ComposerActionButton
-                      accessibilityLabel="Resume queue"
+                      accessibilityLabel="Resume thread"
                       icon="play"
                       disabled={!props.canOperateThread || resumingQueue}
                       onPress={() => void handleResumeQueue()}

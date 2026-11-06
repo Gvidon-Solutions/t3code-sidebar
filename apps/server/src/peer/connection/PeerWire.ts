@@ -172,7 +172,7 @@ export const dialerLayer = Layer.succeed(PeerWireDialer, {
           : { "t3-peer-environment-id": input.callerEnvironmentId }),
       },
     }).pipe(
-      Effect.provide(NodeSocket.layerWebSocketConstructorWS),
+      Effect.provide(NodeSocket.layerWebSocketConstructor),
       Effect.flatMap(makeWire),
       Effect.mapError(
         (cause) =>

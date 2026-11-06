@@ -79,6 +79,7 @@ import {
   isMarkdownPreviewFile,
   isSvgImagePreviewFile,
   isVideoPreviewFile,
+  needsWorkspaceFileContents,
 } from "./filePath";
 import { useWorkspaceFileAssetUrlState } from "./workspaceFileAssetUrl";
 import { OPEN_FILE_POLL_MAX_BYTES, useWorkspaceFileRefresh } from "./useWorkspaceFileRefresh";
@@ -797,15 +798,12 @@ export function ThreadFileView(
   const handleRetryPreview = () => {
     void assetPreview.refresh().finally(() => setPreviewRevision((current) => current + 1));
   };
-  const needsFileContents =
-    !metadataPending &&
-    directoryPath === null &&
-    relativePath !== null &&
-    !isVideoFile &&
-    !isAudioFile &&
-    (resolvedActiveMode === "source" ||
-      isMarkdownPreviewFile(relativePath) ||
-      filePreviewDelimiter({ name: relativePath }) !== null);
+  // Metadata is needed only to distinguish directories; file contents can load concurrently.
+  const needsFileContents = needsWorkspaceFileContents({
+    relativePath,
+    metadataKind: metadata.data?.kind,
+    activeMode: resolvedActiveMode,
+  });
   const fileQuery = useEnvironmentQuery(
     canReadFiles &&
       environmentId !== null &&

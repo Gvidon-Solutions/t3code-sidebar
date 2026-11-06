@@ -22,8 +22,8 @@ Everything else is upstream.
 
 ## Relation to upstream
 
-- **Base.** Last synced with upstream release `v0.1.6` (`2359643cff`, tagged 2026-10-31) on
-  2026-11-01 (merge into `ws`); from now on only stable upstream releases are merged.
+- **Base.** Last synced with upstream release `v0.1.7` (`322f6544df`, tagged 2026-11-03) on
+  2026-11-06 (merge into `ws`); from now on only stable upstream releases are merged.
   Upstream's open PR #14865 (voice conversations) is merged in on top; see the feature log. Fork builds report
   the synced release's version plus `-sidebar.<run>`, so keep the release tag in the backticks
   above: CI reads it from this line.
@@ -195,6 +195,46 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
   instructions through `t3ctl agents sync`. `docs/mesh/README.md` maps the object model, code,
   interfaces, testing, live operations and past lessons; AGENTS.md points to it.
 - **Where.** `agent-kit/`, `docs/mesh/README.md`, `AGENTS.md`, `vite.config.ts` (format exclusions).
+
+### 2026-11-06 — Upstream release v0.1.7
+
+- **What.** Brings in upstream's `v0.1.7` (659 changes from 160 contributors). Kiro joins as an
+  Early Access provider; administrators get managed policies (including Windows Group Policy);
+  one-time scheduled tasks; child approvals answered from the parent conversation; shareable thread
+  links that open outside T3 Code; usage filters by provider and model; and a model/reasoning
+  switch history in conversations. Plus 591 bug fixes and performance improvements across server,
+  providers, desktop, web and mobile.
+- **How.** Effect 4.1.2 moved crypto out of `effect/Crypto`: the fork's mesh and inbox services now
+  use `SecureRandom.SecureRandom` (`uuidV4()`) and `Digest.Digest`, and their test layers provide
+  `NodeCrypto.layer`. The fork's MeshLayout migration first shipped as id 77, which upstream now
+  claims, so it is renumbered to 80 and made idempotent; `reconcileForkMeshLayoutMigration` drops the
+  old history row so upstream's 77–79 run before it. `layerMcpTransport` now takes a registrations
+  layer, so `layerTools` (with the fork's inbox, ui and files toolkits) is passed in, and the mesh MCP
+  test passes `Layer.empty`. Upstream dropped the Linux `--class` switch and its `linuxWmClass`
+  field; Electron names the window from `setDesktopName`, so the fork drops the field and its
+  `StartupWMClass` comment follows the desktop id. The fork still skips xdg-mime registration, and
+  its desktop startup test asserts the handler is never called. On the phone, upstream's floating
+  tab bar, compact/one-row composer and `ScrollComposeButton` are not adopted: the fork keeps the
+  Home-only root, compact FAB with Talk above the dock, and the card composer. The fork does take
+  `ComposerDictationError`, `useVisibleThreadShells`, the "Resume thread" label and the memoized
+  home scopes. Web keeps `PdfDocumentView` (upstream's new `PdfViewer` PDF tests are dropped), the
+  fork's composer menu items (`/voice` beside `workspaceSkillsScanning`), the `progress?.detail`
+  update text and the `managedPolicy` contracts export. The new project-grouping label map gains
+  `title` ("Group by name"). The new `new-task-flow-provider` test mocks the fork's mesh layout
+  because that import chain reaches Expo, which does not load under jsdom. The agent context budget
+  takes the measured merge values: 8358 / 10084 / 55771 bytes.
+- **Where.** `apps/server/src/persistence/{Migrations.ts,Migrations/080_MeshLayout.ts}`,
+  `apps/server/src/{inbox/InboxService,replicas/ProjectReplicaService,replicas/MutagenInstaller,peer/RemoteDelegation}.ts`,
+  `apps/server/src/mcp/McpHttpServer.ts`,
+  `apps/server/src/replicas/{replicas.testkit,MutagenInstaller.test,Mutagen.integration.test}.ts`,
+  `apps/server/src/provider/agentContextBudget.json`,
+  `apps/server/src/orchestration-v2/{ThreadForkService,ThreadSettlementCascade.test,Adapters/ClaudeAdapterV2.test,Adapters/CodexAdapterV2.test}.ts`,
+  `apps/desktop/src/app/{DesktopApp,DesktopEarlyElectronStartup,DesktopEnvironment,DesktopApp.test}.ts`,
+  `scripts/build-desktop-artifact.ts`, `apps/mobile/{app.config.ts,vite.config.ts}`,
+  `apps/mobile/src/{App.tsx,lib/appLinking.ts,features/home/{HomeScreen,AndroidHomeFab.android},features/threads/{ThreadComposer,ThreadDetailScreen,new-task-flow-provider.test},features/terminal/ThreadTerminalRouteScreen,features/workspace/WorkspaceRootScreen.android}.tsx`,
+  `apps/web/src/{routeTree.gen.ts,sidebarProjectGrouping.ts}`,
+  `apps/web/src/components/{chat/{ChatComposer,useComposerMenuItems},files/{BrowserDocumentFrame,AttachmentFilePreview.browser.test},settings/SettingsPanels}.tsx`,
+  `packages/contracts/src/{environment,index}.ts`.
 
 ### 2026-11-03 — T3 Mesh — Stage K project machine strips
 
@@ -1647,3 +1687,15 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **What.** Replica SSH and remote command execution use one server platform module.
 - **How.** Consolidates R1 login shells, invocation resolution and worker/guardian IPC with S1 SSH wrappers, private mesh sockets and conflict-copy naming; old module files are removed.
 - **Where.** `apps/server/src/platform/ServerPlatform.ts`; existing run, peer and replica platform tests now import it directly.
+
+### 2026-11-07 — W1 upstream v0.1.7 integration into Mesh v2
+
+- **What.** Integrates upstream v0.1.7 and managed policy with every Mesh v2 stage.
+- **How.** Peer refusals preserve link health on both persistent and HTTP transports; address
+  discovery refreshes peer names while persistent connections retain incoming-only reachability.
+  Upstream migrations keep ids 77–79, MeshLayout uses 80 and PeerConnections 81. Legacy fork
+  histories reconcile before migration, retaining layout and call receipts. Mesh cryptography
+  uses Effect 4.1.2 Digest/SecureRandom; MCP registrations use the transport-owned request context.
+  The measured tool-list budget grows to 60846 bytes with upstream's expanded tools.
+- **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
+  mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.

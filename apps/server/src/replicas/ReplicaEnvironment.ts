@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
 import * as Hex from "effect/encoding/Hex";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as ProcessRunner from "../processRunner.ts";
@@ -70,7 +70,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const crypto = yield* Crypto.Crypto;
+    const digest = yield* Digest.Digest;
     const platform = yield* HostProcess.Platform;
     const processes = yield* ProcessRunner.ProcessRunner;
     return ReplicaEnvironment.of({
@@ -94,7 +94,7 @@ export const layer = Layer.effect(
             bytes.set(chunk, offset);
             offset += chunk.length;
           }
-          const fingerprint = Hex.encode(yield* crypto.digest("SHA-256", bytes));
+          const fingerprint = Hex.encode(yield* digest.digest(Digest.sha256, bytes));
           const marker = path.join(root, ".t3", "environment.sha256");
           if (yield* fs.exists(marker)) {
             if ((yield* fs.readFileString(marker)) === fingerprint) {
