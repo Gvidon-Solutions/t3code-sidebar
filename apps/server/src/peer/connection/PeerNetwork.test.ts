@@ -1,3 +1,4 @@
+import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as EffectNodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as ManagedPolicy from "../../policy/ManagedPolicy.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- The loopback echo fixture is the sshd byte-pipe boundary.
@@ -69,6 +70,12 @@ const LimitsAnswer = Schema.Struct({
 const isExchange = Schema.is(Replication.ExchangeInput);
 const isRoutes = Schema.is(Schema.Struct({ routes: Schema.Array(Schema.String) }));
 const toolkit = Toolkit.make(
+  Tool.make("t3_refuse_fixture", {
+    description: "Refuses a fixture call.",
+    success: Answer,
+    failure: OrchestratorMcpFailure,
+    failureMode: "return",
+  }),
   Tool.make("t3_limits_fixture", {
     description: "Reports receiving call limits.",
     success: LimitsAnswer,
@@ -175,6 +182,11 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
                 : { replicas: scope.client.replicasLimit }),
             };
           }),
+        ),
+        t3_refuse_fixture: McpAccess.reads(() =>
+          Effect.fail(
+            new OrchestratorMcpFailure({ code: "invalid_request", message: "Fixture refusal" }),
+          ),
         ),
         t3_thread_fixture: McpAccess.reads(() => Effect.succeed({ count: 99 })),
         t3_create_fixture: McpAccess.reads(() => Effect.sync(() => ({ count: ++count }))),
@@ -329,6 +341,13 @@ it.live(
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(cloudbox.count()).toBe(1);
+      yield* studio.links.recordOutcome(cloudbox.id, { error: "Earlier outage" });
+      const refusal = yield* studio.client
+        .call({ ...request, tool: "t3_refuse_fixture", idempotencyKey: "refuse-once" })
+        .pipe(Effect.flip);
+      expect(refusal).toMatchObject({ code: "invalid_request", message: "Fixture refusal" });
+      const healthy = yield* studio.links.get(cloudbox.id);
+      expect(Option.getOrThrow(healthy).lastError).toBeNull();
       expect(cloudbox.externalMcp()).toBe(previousPosts);
       expect(
         yield* studio.client.call({ ...limitedRequest, idempotencyKey: "limited-socket" }),

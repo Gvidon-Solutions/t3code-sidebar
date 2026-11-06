@@ -1,3 +1,4 @@
+import { appAtomRegistry } from "~/rpc/atomRegistry";
 import "../index.css";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -8,6 +9,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
 
 import { AppRoot } from "~/AppRoot";
+import "~/components/ChatView";
 import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { __setClientSettingsForTests } from "~/hooks/useSettings";
 import { getRouter } from "~/router";
@@ -30,14 +32,10 @@ vi.mock("../../../../packages/client-runtime/src/connection/driver.ts", async (i
   return { ...actual, layer: Layer.succeed(actual.ConnectionDriver, fakeDriver) };
 });
 
-vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
-  ...(await original()),
-  trackRpcRequestSent: () => {},
-}));
-
 it("a new draft does not load its reserved thread before the server lists it", async () => {
   using _environment = installFakeEnvironment([]);
-  await import("~/components/ChatView");
+  // Chat preloading may initialize connection atoms before the fake environment exists.
+  appAtomRegistry.reset();
   const viewport = { width: window.innerWidth, height: window.innerHeight };
   await page.viewport(240, 640);
   await using _viewport = {
