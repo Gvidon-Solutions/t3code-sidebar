@@ -1696,6 +1696,8 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   Upstream migrations keep ids 77–79, MeshLayout uses 80 and PeerConnections 81. Legacy fork
   histories reconcile before migration, retaining layout and call receipts. Mesh cryptography
   uses Effect 4.1.2 Digest/SecureRandom; MCP registrations use the transport-owned request context.
-  The measured tool-list budget grows to 60846 bytes with upstream's expanded tools.
+  Portable forks exclude terminal checkpoint bookkeeping, keeping the actual final reply visible
+  when imported assistant rows are grouped. The measured tool-list budget grows to 60846 bytes
+  with upstream's expanded tools.
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.

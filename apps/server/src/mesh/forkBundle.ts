@@ -33,7 +33,9 @@ export function forkEntries(input: {
     } else if (
       item.type !== "reasoning" &&
       item.type !== "secret_request" &&
-      item.type !== "link_request"
+      item.type !== "link_request" &&
+      // Imported assistant rows share a response; trailing bookkeeping would hide the reply.
+      item.type !== "checkpoint"
     ) {
       const {
         id: _id,

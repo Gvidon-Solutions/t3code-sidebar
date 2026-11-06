@@ -614,3 +614,7 @@ when HTTP discovery cannot reach an incoming-only peer. Effect crypto dependenci
 Digest/SecureRandom services. MCP toolkit registrations belong inside `layerMcpTransport` so its
 per-request invocation context reaches mesh handlers. Provider catalogs carry managed policy
 alongside provider/settings subsets used by the mobile draft machine picker.
+
+Portable fork entries omit internal checkpoint rows: importing one after the final reply would
+make it the terminal assistant message in upstream's grouped timeline. `mesh/forkBundle.test.ts`
+retains message attachments and tool outputs while asserting that the actual reply remains last.

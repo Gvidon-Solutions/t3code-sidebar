@@ -1,6 +1,13 @@
 import { expect, it } from "vite-plus/test";
 import { forkEntries, lastForkableRun } from "./forkBundle.ts";
-import { MessageId, ThreadId, TurnItemId, ChatAttachmentId } from "@t3tools/contracts";
+import {
+  MessageId,
+  ThreadId,
+  TurnItemId,
+  ChatAttachmentId,
+  CheckpointId,
+  CheckpointScopeId,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
 const now = DateTime.makeUnsafe("2026-11-03T00:00:00Z");
@@ -75,9 +82,31 @@ it("copies complete messages and tool outputs in order and keeps attachments", (
         text: "private reasoning",
         streaming: false,
       },
+      {
+        ...base,
+        id: TurnItemId.make("assistant-final"),
+        ordinal: 4,
+        type: "assistant_message",
+        messageId: MessageId.make("assistant-final"),
+        text: "The helper and its tests are complete.",
+        streaming: false,
+      },
+      {
+        ...base,
+        id: TurnItemId.make("checkpoint-final"),
+        ordinal: 5,
+        type: "checkpoint",
+        checkpointId: CheckpointId.make("checkpoint-final"),
+        scopeId: CheckpointScopeId.make("scope-final"),
+        files: [],
+      },
     ],
   });
-  expect(entries).toHaveLength(2);
+  expect(entries).toHaveLength(3);
+  expect(entries.at(-1)).toMatchObject({
+    role: "assistant",
+    text: "The helper and its tests are complete.",
+  });
   expect(entries[0]).toMatchObject({
     role: "user",
     text: "Remember the codeword cedar",
