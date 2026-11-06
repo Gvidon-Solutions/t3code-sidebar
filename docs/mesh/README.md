@@ -618,3 +618,7 @@ alongside provider/settings subsets used by the mobile draft machine picker.
 Portable fork entries omit internal checkpoint rows: importing one after the final reply would
 make it the terminal assistant message in upstream's grouped timeline. `mesh/forkBundle.test.ts`
 retains message attachments and tool outputs while asserting that the actual reply remains last.
+
+The local network fixture explicitly grants `files: all` before reading its non-project proof
+file and waits for that revision on every node; the default `projects` permission rejects it.
+Its temporary root honors `TMPDIR` so large SSH transfer artifacts can stay off the root disk.

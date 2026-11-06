@@ -1,12 +1,13 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
+import * as NodeOS from "node:os";
 import * as NodeNet from "node:net";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeEvents from "node:events";
 import * as NodeURL from "node:url";
 const { once } = NodeEvents;
 const repo = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
-const work = await NodeFSP.mkdtemp("/tmp/N1-local-network-");
+const work = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "N1-local-network-"));
 const children = [];
 let container;
 const run = (program, args, options = {}) =>
@@ -250,6 +251,22 @@ try {
     () => rpc(laptop, "meshLayout.status"),
     (value) =>
       value.connections?.some((row) => row.environmentId === studio.id && row.state === "relayed"),
+  );
+  const meshConfig = await rpc(cloudbox, "meshConfig.get");
+  const applied = await rpc(cloudbox, "meshConfig.apply", {
+    baseRevision: meshConfig.current.revision,
+    doc: {
+      ...meshConfig.current.doc,
+      links: {
+        ...meshConfig.current.doc.links,
+        default: { ...meshConfig.current.doc.links?.default, files: "all" },
+      },
+    },
+  });
+  await until(
+    "file permission convergence",
+    () => Promise.all([studio, laptop].map((node) => rpc(node, "meshConfig.get"))),
+    (values) => values.every((value) => value.current.revision === applied.revision),
   );
   console.log("PASS three production servers: incoming-only studio and laptop relay via cloudbox");
   for (const node of [cloudbox, laptop])
