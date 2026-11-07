@@ -1,3 +1,4 @@
+import { DeliveryAdmission } from "./DeliveryAdmission.ts";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import { MeshTrialFailureExit } from "../platform/ServerPlatform.ts";
@@ -91,6 +92,7 @@ const fixture = Effect.gen(function* () {
     version: string,
     update?: ServiceUpdateRecord,
     fail = false,
+    withAdmission = true,
   ) {
     const base = `${root}/${id}`;
     yield* fs.makeDirectory(base, { recursive: true });
@@ -106,7 +108,25 @@ const fixture = Effect.gen(function* () {
         : {}),
       ...(fail ? { T3_MESH_TEST_MODE: "1", T3_MESH_TEST_FAIL_HEALTH_VERSION: "0.1.6" } : {}),
     };
+    const openDrain = {
+      requestId: null,
+      phase: "open" as const,
+      deadlineAt: null,
+      activeRuns: 0,
+      pendingStarts: 0,
+    };
     const dependencies = Layer.mergeAll(
+      withAdmission
+        ? Layer.mock(DeliveryAdmission)({
+            drain: ({ requestId }) =>
+              Effect.sync(() => {
+                steps.push(`drain/${id}`);
+                return { ...openDrain, requestId, phase: "drained" as const };
+              }),
+            cancel: () => Effect.succeed(openDrain),
+            status: Effect.succeed(openDrain),
+          })
+        : Layer.empty,
       Layer.succeed(MeshLayoutService, { ...mesh, environmentId: id }),
       ServerConfig.layerTest(base, base),
       Layer.succeed(PeerMcpClient, client),
@@ -115,6 +135,7 @@ const fixture = Effect.gen(function* () {
       Layer.succeed(MeshStateBackup, {
         create: () =>
           Effect.gen(function* () {
+            expect(steps.at(-1)).toBe(`drain/${id}`);
             steps.push(`backup/${id}`);
             yield* backupBlocks.get(id) ?? Effect.void;
           }),
@@ -147,7 +168,7 @@ const fixture = Effect.gen(function* () {
     return service;
   });
   for (const id of Object.keys(doc.machines)) yield* make(id, "0.1.5");
-  return { mesh, make, services, requested, root, fs, backupBlocks };
+  return { mesh, make, services, requested, root, fs, backupBlocks, steps };
 });
 const testLayer = Layout.layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG).pipe(
   Layer.provideMerge(NodeServices.layer),
@@ -244,5 +265,17 @@ it.effect("resumes the same lease after interruption before the launcher accepts
     f.backupBlocks.delete("cloudbox");
     yield* f.services.get("cloudbox")!.reconcile;
     expect(f.requested).toEqual(["cloudbox"]);
+  }).pipe(Effect.scoped, Effect.provide(testLayer)),
+);
+
+it.effect("refuses runtime handoff before backup when admission is unavailable", () =>
+  Effect.gen(function* () {
+    const f = yield* fixture;
+    const service = yield* f.make("cloudbox", "0.1.5", undefined, false, false);
+    const failure = yield* service.reconcile.pipe(Effect.flip);
+    expect(failure.message).toContain("Delivery admission is unavailable");
+    expect(f.requested).toEqual([]);
+    expect(f.steps).toEqual([]);
+    expect((yield* f.mesh.read).document["mesh.updateLease"]).toBeUndefined();
   }).pipe(Effect.scoped, Effect.provide(testLayer)),
 );

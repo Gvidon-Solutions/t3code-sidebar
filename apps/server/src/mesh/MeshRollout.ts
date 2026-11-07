@@ -264,6 +264,12 @@ export const layer = Layer.effect(
           ]);
         return;
       }
+      if (Option.isNone(admission))
+        return yield* new MeshConfigError({
+          reason: "storage",
+          message: "Delivery admission is unavailable; refusing runtime update",
+        });
+      const drainAdmission = admission.value;
       if (first(state) !== mesh.environmentId)
         return yield* new MeshConfigError({
           reason: "storage",
@@ -352,11 +358,7 @@ export const layer = Layer.effect(
         target,
         previousUpdateId: context?.update?.id ?? null,
       });
-      yield* (
-        Option.isSome(admission)
-          ? admission.value.drain({ requestId: `mesh:${lease.token}`, deadlineMs: 300000 })
-          : Effect.void
-      ).pipe(
+      yield* drainAdmission.drain({ requestId: `mesh:${lease.token}`, deadlineMs: 300000 }).pipe(
         Effect.andThen(backup.create(lease.token)),
         Effect.andThen(
           selfUpdate.update({ targetVersion: target }, undefined, () =>
