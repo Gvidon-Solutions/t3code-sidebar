@@ -152,3 +152,10 @@ not use the shared three-machine bed.
 | F1 pending transaction safety   | `f1-pending-expiry`                              | Real linked-peer receive stages an invisible, unreadable and unrunnable thread. The actual scaled lease timer removes its durable journal; an expired commit is refused.                                                                                                                                                                                                                                  |
 | F1 lost commit response         | `f1-dropped-commit`                              | A protocol-aware proxy drops exactly the first successful commit response and disconnects the peer. Durable source retry commits exactly one thread, with multiple commit calls and one target receipt.                                                                                                                                                                                                   |
 | F1 browser catalog              | `f1-web-journey`                                 | Source-only browser authentication loads the destination model catalog through the mesh. An empty destination catalog displays its reason and disables fork. Drag preserves ID, history, run count and model.                                                                                                                                                                                             |
+
+Crash fixtures install the real pinned Mutagen remote agent into their private
+homes before mounting. The cold-installer scenario separately exercises its
+first installation. During crash cases the proxy forwards peer control traffic
+and holds only pipe data after 512 KiB, so the real Mutagen staging state remains
+observable until the captured server or daemon is killed. Releasing the latch
+allows recovery; no transfer or state transition is mocked.

@@ -10,12 +10,15 @@ for key in client host; do
 done
 cp "$private/client.pub" "$private/authorized_keys"
 chmod 600 "$private/authorized_keys"
+codex_binary="${R1_CODEX_BINARY:-$(command -v codex)}"
+opencode_binary="${R1_OPENCODE_BINARY:-$(command -v opencode)}"
+[ -x "$codex_binary" ] && [ -x "$opencode_binary" ] || die "Native nightly provider binaries are required"
 cat > "$private/entry" <<EOF_ENTRY
 #!/bin/sh
 set -eu
 case "\${SSH_ORIGINAL_COMMAND:-run}" in
  probe) printf 'mesh-nightly-controller-ready\n' ;;
- run) export HOME='$HOME'; export PATH='$HOME/.nvm/versions/node/v26.12.1/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'; exec bash '$REPO_ROOT/scripts/mesh-e2e/acceptance.sh' ;;
+ run) export R1_CODEX_BINARY='$codex_binary' R1_OPENCODE_BINARY='$opencode_binary'; export HOME='$HOME'; export PATH='$HOME/.nvm/versions/node/v26.12.1/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'; exec bash '$REPO_ROOT/scripts/mesh-e2e/acceptance.sh' ;;
  *) exit 64 ;;
 esac
 EOF_ENTRY
