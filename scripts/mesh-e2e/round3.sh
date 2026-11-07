@@ -82,7 +82,7 @@ rexec() {
   esac
 }
 env_of() { case "$1" in gv) echo "$GV_ENV";; gor) echo "$GOR_ENV";; vps) echo "$VPS_ENV";; esac; }
-GOR_REMOTE_BASE=$(gor_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')
+GOR_REMOTE_BASE=${MESH_E2E_GOR_BASE_DIR:-$(gor_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')}
 base_of() { case "$1" in gv) echo "$GV_BASE_DIR";; gor) echo "$GOR_REMOTE_BASE";; vps) echo /home/t3/.t3;; esac; }
 mut_bin() {
   local m=$1 configured cache="$WORK/$N_KEY-mutagen-bin-$1"

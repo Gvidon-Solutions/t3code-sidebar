@@ -711,6 +711,9 @@ before recreation.
 The acceptance runner can place its third container on another administrator SSH host with
 `MESH_E2E_VPS_DIR` and `MESH_E2E_VPS_SUDO`; uploads use the same privileged transport.
 The bed guide records the alternate routing and the single-active-identity constraint.
+Independent acceptance profiles set `MESH_E2E_GV_BASE_DIR` and `MESH_E2E_GOR_BASE_DIR`
+consistently for credentials, CLI runners, SSH and daemon probes; mixing bases can query the
+preserved profile while testing another server.
 Round-two acceptance follows project pagination and budgets the full server readiness window;
 its 128 MiB canary now checks both SHA-256 and replica size.
 

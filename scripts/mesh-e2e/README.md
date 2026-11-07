@@ -67,6 +67,24 @@ addresses excluded through `NO_PROXY`. TLS passes through unchanged. Gvidon’s
 `t3-mesh-X1-provider-egress.service` own this route; keep them running for agent acceptance.
 They add no listeners or configuration to any other VPS stack.
 
+For acceptance, `/tmp/X1-fresh.env` selects independent X1 profiles on the same ports:
+`MESH_E2E_GV_BASE_DIR=/tmp/X1-fresh-studio`,
+`MESH_E2E_GOR_BASE_DIR=/tmp/X1-fresh-laptop`, and container mounts below
+`/tmp/X1-fresh-third-bed`. It also selects the matching compose template and fixture
+state directory. These base-directory options apply to RPC credentials, CLI wrappers,
+SSH checks, fault proxies and round-three daemon inspection; an old CLI base directory
+can silently query the other profile.
+
+The shared profile's data remains in its original directories, its container is stopped
+as `t3-mesh-e2e-X1-shared-preserved`, and native unit backups are in
+`/tmp/X1-shared-profile-backups` on gvidon. Never start both profiles on the same ports.
+X1 observed a 2.3 MiB shared layout, sustained receiver-window backpressure, and a
+256 MiB staging recovery exceeding the 900-second deadline. A fresh three-node profile
+sent a checked 16 MiB through a persistent peer connection in 2.7 seconds, versus
+102 seconds in the shared profile. The later build also disables Nagle, so this is not
+a controlled comparison of layout size alone. Fresh acceptance keeps other stages' data intact; it does not claim
+to fix throughput under that accumulated layout load.
+
 Both `/home/t3` and `/tmp` persist on the VPS host. On the first deployment with
 the `/tmp` mount, `deploy.sh` copies the stopped container's existing temporary
 folders with ownership intact before recreating it, then verifies its canary.

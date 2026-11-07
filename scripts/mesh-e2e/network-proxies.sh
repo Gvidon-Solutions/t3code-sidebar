@@ -3,8 +3,10 @@ set -euo pipefail
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 load_build_env
+GOR_BASE_DIR=${MESH_E2E_GOR_BASE_DIR:-$(gor_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')}
 owner=$(gor_ssh 'cat /tmp/mesh-bed.lock/owner')
-[ "$owner" = N1 ] || die "N1 must hold the shared bed lock"
+BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-N1}
+[ "$owner" = "$BED_LOCK_OWNER" ] || die "$BED_LOCK_OWNER must hold the shared bed lock"
 action=${1:-up}
 name=t3-mesh-N1-proxy.service
 dropin=91-N1-network-proxy.conf
@@ -31,7 +33,7 @@ EOF
 set -euo pipefail
 export PATH=\$HOME/.nvm/versions/node/v26.12.1/bin:\$PATH
 mkdir -p "\$HOME/.config/systemd/user/$GOR_UNIT.d"
-printf '[Service]\nExecStart=\nExecStart=%%h/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 serve --base-dir %%h/.t3-sidebar-server --host 127.0.0.1 --port $((GOR_PORT + 1)) --no-browser\n' > "\$HOME/.config/systemd/user/$GOR_UNIT.d/$dropin"
+printf '[Service]\nExecStart=\nExecStart=%%h/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 serve --base-dir $GOR_BASE_DIR --host 127.0.0.1 --port $((GOR_PORT + 1)) --no-browser\n' > "\$HOME/.config/systemd/user/$GOR_UNIT.d/$dropin"
 cat > "\$HOME/.config/systemd/user/$name" <<UNIT
 [Unit]
 Description=N1 isolated mesh fault proxy

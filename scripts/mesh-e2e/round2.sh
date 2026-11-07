@@ -31,7 +31,7 @@ done
 ctl() {
  local machine=$1; shift
  local base="$GV_BASE_DIR"
- case "$machine" in gor) base=/home/user/.t3-sidebar-server;; vps) base=/home/t3/.t3;; esac
+ case "$machine" in gor) base="$GOR_BASE_DIR";; vps) base=/home/t3/.t3;; esac
  XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" T3CTL_T3_BIN="$WORK/t3-$machine" timeout "$RPC_TIMEOUT" node "$CTL" "$@"
 }
 tool() { local machine=$1 name=$2; shift 2; ctl "$machine" tool "$name" "$@"; }
@@ -80,7 +80,8 @@ wait_converged 'routes converge'
 probe route-gv-gor wait_ssh ssh -F "$GV_BASE_DIR/home/.ssh/config" -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
 probe route-vps-gor wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
 probe route-vps-gv wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GV_NAME" hostname
-probe route-gor-vps wait_ssh gor_ssh "ssh -o BatchMode=yes -o ConnectTimeout=10 t3-$VPS_NAME hostname"
+printf -v gor_ssh_config '%q' "$GOR_BASE_DIR/home/.ssh/config"
+probe route-gor-vps wait_ssh gor_ssh "ssh -F $gor_ssh_config -o BatchMode=yes -o ConnectTimeout=10 t3-$VPS_NAME hostname"
 if ! ws_rpc gor peerLinks.list '{}' | jq -e --arg e "$GV_ENV" '.links[] | select(.environmentId==$e and .access=="full-access")' > "$WORK/gor-gv-link.json"; then
  code=$(pair_code gv)
  probe link-gor-gv ws_rpc gor peerLinks.link "$(jq -nc --arg code "$code" --arg e "$GV_ENV" '{url:"http://127.0.0.1:13795",pairingCode:$code,access:"full-access",expectedEnvironmentId:$e}')"
@@ -137,7 +138,7 @@ wait_edit() {
 }
 probe a-agent-edit wait_edit "$MARK-a"
 probe f-transfer-cleanup gor_ssh 'rm -f /home/user/xdev-e2e/demo/round2-transfer.bin' 
-probe b-cli-launch ctl gor new --project demo --on vps --agent codex --model gpt-6-luna --title "$MARK-b" "Use a local shell command in your current VPS replica directory to append the exact line $MARK-b to README.md. Mutagen syncs the edit to gor. Do not access the primary, request a link, run git, or create other files. Finish after making the local edit."
+probe b-cli-launch ctl gor new --project demo --on "$VPS_ENV" --agent codex --model gpt-6-luna --title "$MARK-b" "Use a local shell command in your current VPS replica directory to append the exact line $MARK-b to README.md. Mutagen syncs the edit to gor. Do not access the primary, request a link, run git, or create other files. Finish after making the local edit."
 probe b-agent-edit wait_edit "$MARK-b"
 # Reverse source endpoint runs through docker exec; no ssh daemon in the container.
 probe c-vps-source vexec sh -c 'mkdir -p /home/t3/round2-primary; cd /home/t3/round2-primary; test -d .git || git init -q; printf "reverse primary\n" > README.md; mkdir -p node_modules; touch node_modules/excluded'

@@ -20,6 +20,7 @@ set -uo pipefail
 set +e
 load_build_env
 require_bins
+GOR_BASE_DIR=${MESH_E2E_GOR_BASE_DIR:-$(gor_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')}
 
 TIMEOUT="${MESH_E2E_ROUND1_TIMEOUT:-60}"
 if [ "${1:-}" = "--timeout" ]; then
@@ -313,12 +314,13 @@ descriptor_version() { # descriptor_version <origin>
 }
 
 mint_token_once() { # mint_token_once gv|gor|vps
-  local ttl=${MESH_E2E_SESSION_TTL:-30m} quoted_ttl
+  local ttl=${MESH_E2E_SESSION_TTL:-30m} quoted_ttl quoted_base
   printf -v quoted_ttl '%q' "$ttl"
+  printf -v quoted_base '%q' "$GOR_BASE_DIR"
   case "$1" in
     gv) "$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" auth session issue --base-dir "$GV_BASE_DIR" \
       --ttl "$ttl" --label mesh-e2e-round1 --token-only 2>/dev/null ;;
-    gor) gor_ssh "$GOR_BIN auth session issue --base-dir ~/.t3-sidebar-server --ttl $quoted_ttl \
+    gor) gor_ssh "$GOR_BIN auth session issue --base-dir $quoted_base --ttl $quoted_ttl \
       --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
     vps) vps_ssh "docker exec t3-mesh-e2e node $VPS_BIN auth session issue \
       --base-dir /home/t3/.t3 --ttl $quoted_ttl --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
@@ -335,11 +337,12 @@ mint_token() { # mint_token gv|gor|vps — a just-restarted server can answer em
 }
 
 pair_code() { # pair_code gv|gor|vps
-  local out
+  local out quoted_base
+  printf -v quoted_base '%q' "$GOR_BASE_DIR"
   case "$1" in
     gv) out="$("$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" auth pairing create --base-dir "$GV_BASE_DIR" \
       --ttl 20m --label mesh-e2e-link --json 2>/dev/null)" ;;
-    gor) out="$(gor_ssh "$GOR_BIN auth pairing create --base-dir ~/.t3-sidebar-server \
+    gor) out="$(gor_ssh "$GOR_BIN auth pairing create --base-dir $quoted_base \
       --ttl 20m --label mesh-e2e-link --json" 2>/dev/null)" ;;
     vps) out="$(vps_ssh "docker exec t3-mesh-e2e node $VPS_BIN auth pairing create \
       --base-dir /home/t3/.t3 --ttl 20m --label mesh-e2e-link --json" 2>/dev/null)" ;;

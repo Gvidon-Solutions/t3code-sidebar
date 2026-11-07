@@ -1718,6 +1718,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   Legacy settings writes preserve concurrent workspace renames while repairing sort collisions
   and keep separate RPC-client baselines advanced from the merged response.
   Bed uploads share the configured SSH/sudo transport when the third node moves hosts.
+  Acceptance profiles isolate state while preserving the shared bed's existing data.
   Local SSH sockets send split records promptly instead of waiting for delayed TCP ACKs.
 - **How.** Canonicalizes cached layout keys, prefers live connectivity, resolves migration titles
   from the project catalog, and keeps representation ignores until config owns every pattern;

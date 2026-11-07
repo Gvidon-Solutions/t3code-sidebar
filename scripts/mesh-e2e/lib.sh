@@ -30,9 +30,9 @@ VPS_BIND=172.17.0.1
 VPS_SSH_GOR=22022
 VPS_SSH_GV=22023
 
-GV_BASE_DIR=/tmp/t3-mesh-e2e-gv
+GV_BASE_DIR="${MESH_E2E_GV_BASE_DIR:-/tmp/t3-mesh-e2e-gv}"
 GV_RUNTIME_ROOT="$HOME/.t3-mesh-e2e-gv-runtime"
-GOR_BASE_DIR="$HOME/.t3-sidebar-server"
+GOR_BASE_DIR="${MESH_E2E_GOR_BASE_DIR:-$HOME/.t3-sidebar-server}"
 GOR_RUNTIME_ROOT="$HOME/.t3-sidebar-server/runtime/versions"
 GOR_LEGACY_BASE_DIR="$HOME/.t3-mesh-e2e"
 VPS_DIR="${MESH_E2E_VPS_DIR:-/opt/t3-mesh-e2e}"
