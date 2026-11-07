@@ -33,6 +33,8 @@ ws_rpc() {
 printf '%s' "$$" > "$WORK/N-round3-runner.pid"
 set -e
 TIMEOUT=${MESH_E2E_ROUND3_TIMEOUT:-900}
+PAUSED_SERVER=
+PAUSED_SERVER_PID=
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
 git -C "$REPO_ROOT" merge-base --is-ancestor "$source_commit" "$COMMIT" || die "Build lacks N: use MESH_E2E_BUILD_CURRENT=1 build.sh xdev-n, then deploy.sh while the bed is free"
 for m in gv gor vps; do
@@ -110,6 +112,12 @@ restart_count() {
     vps) vps_ssh 'docker inspect -f "{{.RestartCount}}" t3-mesh-e2e';;
   esac
 }
+server_process() {
+  require_bed_lock || return 1
+  local machine=$1 signal=$2 expected=$3 base
+  base=$(base_of "$machine")
+  rexec "$machine" node -e 'const fs=require("node:fs"),[base,signal,raw]=process.argv.slice(1),expected=Number(raw),{pid}=JSON.parse(fs.readFileSync(base+"/userdata/server-runtime.json","utf8")); if(!["read","SIGSTOP","SIGCONT"].includes(signal)||!Number.isSafeInteger(expected)||expected<0||!Number.isSafeInteger(pid)||pid<=1||pid===process.pid||(signal!=="read"&&expected<=1)||(expected!==0&&pid!==expected))throw Error("Invalid captured test server PID"); const args=fs.readFileSync(`/proc/${pid}/cmdline`,"utf8").split("\0"),index=args.indexOf("--base-dir"); if(!args.includes("serve")||index<0||args[index+1]!==base||fs.statSync(`/proc/${pid}`).uid!==process.getuid())throw Error("PID does not belong to this isolated server"); if(signal!=="read")process.kill(pid,signal); console.log(pid);' "$base" "$signal" "$expected"
+}
 crash() {
   require_bed_lock || return 1
   local before after
@@ -141,6 +149,9 @@ ws_get gv > "$WORK/N-before.json"
 restore() {
   local rc=$?
   if require_bed_lock; then
+    if [ -n "$PAUSED_SERVER" ]; then
+      server_process "$PAUSED_SERVER" SIGCONT "$PAUSED_SERVER_PID" >/dev/null || rc=1
+    fi
     for m in gv gor vps; do unit "$m" start || rc=1; done
     gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
     wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
@@ -291,16 +302,24 @@ for m in gv vps; do
   base=$(base_of "$m")
   daemon_dir="$base/N-faults/$N_KEY"
   rexec "$m" mkdir -p "$daemon_dir"
+  daemon_binary=$(mut_bin "$m")
+  PAUSED_SERVER_PID=$(server_process "$m" read 0)
+  PAUSED_SERVER=$m
+  # Freeze status readers while establishing ownership of the fault-test daemon.
+  server_process "$m" SIGSTOP "$PAUSED_SERVER_PID" >/dev/null
   if rexec "$m" node -e 'const s=require("node:net").connect(process.argv[1]); s.once("connect",()=>{s.end();process.exit(0)}); s.once("error",()=>process.exit(1)); s.setTimeout(1000,()=>process.exit(1));' "$base/mutagen/daemon/daemon.sock"; then mut "$m" daemon stop; fi
   end=$((SECONDS+TIMEOUT))
   until daemon_lock "$m" 0; do
     [ "$SECONDS" -lt "$end" ] || exit 1
     sleep 0.1
   done
-  rexec "$m" sh -c 'MUTAGEN_DATA_DIRECTORY="$1" nohup "$2" daemon run > "$3/daemon.log" 2>&1 & echo $! > "$3/daemon.pid"' sh "$base/mutagen" "$(mut_bin "$m")" "$daemon_dir"
+  rexec "$m" sh -c 'MUTAGEN_DATA_DIRECTORY="$1" nohup "$2" daemon run > "$3/daemon.log" 2>&1 & echo $! > "$3/daemon.pid"' sh "$base/mutagen" "$daemon_binary" "$daemon_dir"
   wait_daemon "$m"
   captured_pid=$(rexec "$m" cat "$daemon_dir/daemon.pid")
   daemon_lock "$m" "$captured_pid"
+  server_process "$m" SIGCONT "$PAUSED_SERVER_PID" >/dev/null
+  PAUSED_SERVER=
+  PAUSED_SERVER_PID=
   ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-enable-before-kill-$m.json"
   mv "$WORK/N-replicas-enabled-before-$m.json" "$WORK/N-replicas-enabled-restored-$m.json"
   before=$(restart_count "$m")

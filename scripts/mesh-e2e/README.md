@@ -424,3 +424,8 @@ Every server's final update status reported `Rollout stopped: Injected mesh roll
 health failure; apply a new config revision to retry`. Both attempted servers had
 pre-download SQLite snapshots; the final server had no rollout marker or launcher
 update record. The fresh container used the actual root systemd service manager.
+
+The round-three daemon fixture suspends its verified isolated server process only while
+starting the foreground fault-test daemon, then resumes it before the crash. Background
+status readers can otherwise win the private daemon lock even with replicas disabled.
+The EXIT cleanup resumes a suspended server before restoring its settings.
