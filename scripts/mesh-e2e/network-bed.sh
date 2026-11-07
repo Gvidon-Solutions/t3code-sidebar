@@ -64,11 +64,13 @@ case "$action" in
     ws_rpc vps peerLinks.link "$(jq -nc --arg c "$code" --arg e "$GOR_ENV" '{url:"http://127.0.0.1:13797",pairingCode:$c,access:"full-access",expectedEnvironmentId:$e}')" > "$WORK/nat-link.json"
     for attempt in $(seq 1 60); do
       ws_rpc gor meshLayout.status '{}' > "$WORK/nat-gor-status.json"
-      if jq -e --arg e "$VPS_ENV" '.connections[] | select(.environmentId==$e and .state=="direct" and .direction=="inbound")' "$WORK/nat-gor-status.json" >/dev/null; then break; fi
+      ws_rpc gor peerLinks.list '{}' > "$WORK/nat-gor-links.json"
+      # The live connection can precede persistence of its reciprocal grant.
+      if jq -e --arg e "$VPS_ENV" '.connections[] | select(.environmentId==$e and .state=="direct" and .direction=="inbound")' "$WORK/nat-gor-status.json" >/dev/null &&
+        jq -e --arg e "$VPS_ENV" '.links[] | select(.environmentId==$e and (.urls|length)==0 and .status=="reachable")' "$WORK/nat-gor-links.json" >/dev/null; then break; fi
       sleep 1
     done
     jq -e --arg e "$VPS_ENV" '.connections[] | select(.environmentId==$e and .state=="direct" and .direction=="inbound")' "$WORK/nat-gor-status.json" >/dev/null
-    ws_rpc gor peerLinks.list '{}' > "$WORK/nat-gor-links.json"
     jq -e --arg e "$VPS_ENV" '.links[] | select(.environmentId==$e and (.urls|length)==0 and .status=="reachable")' "$WORK/nat-gor-links.json" > "$WORK/nat-reverse-grant.json"
     wait_connection relayed
     vps_ssh "docker exec t3-mesh-e2e sh -c 'printf %s \"N1 persistent relay\" > $proof'"

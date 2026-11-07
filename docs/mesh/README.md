@@ -667,3 +667,7 @@ aborted `runPromiseWith` can still reject after interruption handling; discardin
 can terminate Node when an in-flight pipe closes during connection replacement. Awaited RPC
 calls retain their Promise results. The tie-break test cancels an in-flight connector, and
 round three also verifies that crashing one server leaves the others' restart counters unchanged.
+
+An inbound connection can become visible before its reciprocal grant notification commits
+the link. NAT acceptance waits for both the direct connection and the stored reachable,
+address-free grant before testing the relay.
