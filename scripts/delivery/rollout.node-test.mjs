@@ -10,7 +10,7 @@ import * as NodePath from "node:path";
 const { join } = NodePath;
 import * as NodeChildProcess from "node:child_process";
 const { execFileSync } = NodeChildProcess;
-import { rollout, waitForIdle } from "./rollout.mjs";
+import { rollout } from "./rollout.mjs";
 import { snapshot } from "./builder.mjs";
 
 const health = (version = "1", entries = { "proj/app": "001" }) => ({
@@ -27,25 +27,6 @@ const clock = () => ({
   async sleep(ms) {
     this.value += ms;
   },
-});
-test("idle window waits until all active turns finish and refuses at its deadline", async () => {
-  const time = clock();
-  let reads = 0;
-  await waitForIdle({ busy: async () => ++reads < 3 }, { maxWaitMs: 10, intervalMs: 2 }, time);
-  assert.equal(reads, 3);
-  await assert.rejects(
-    waitForIdle({ busy: async () => true }, { maxWaitMs: 4, intervalMs: 2 }, time),
-    /Idle window deadline/,
-  );
-  await waitForIdle(
-    {
-      busy: async () => {
-        throw new Error("must not inspect");
-      },
-    },
-    { now: true },
-    time,
-  );
 });
 test("failed health restores runtime and stops before the next machine", async () => {
   const calls = [];

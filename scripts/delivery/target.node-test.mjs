@@ -92,31 +92,6 @@ test("isolated target switches its configured unit and restores the exact previo
   }
 });
 
-test("target idle inspection includes projectless and child threads on every page", () => {
-  const root = mkdtempSync(join(tmpdir(), "delivery-idle-"));
-  try {
-    const ctl = join(root, "ctl.mjs");
-    writeFileSync(
-      ctl,
-      `const input=JSON.parse(process.argv[4]); if(!input.allProjects || !input.includeSubagents) throw new Error('scope'); console.log(JSON.stringify(input.cursor === 100 ? {threads:[{status:'running'}],nextCursor:null} : {threads:[{status:'idle'}],nextCursor:100}));`,
-    );
-    const result = execFileSync(
-      process.execPath,
-      [new URL("./target.mjs", import.meta.url).pathname],
-      {
-        encoding: "utf8",
-        input: JSON.stringify({
-          config: { runtimeDir: root, node: process.execPath, ctl, home: root },
-          operation: "busy",
-        }),
-      },
-    );
-    assert.equal(JSON.parse(result), true);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
 test("target requires its matching drained admission fence and releases it only after a healthy commit", () => {
   const root = mkdtempSync(join(tmpdir(), "delivery-fence-"));
   try {

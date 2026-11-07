@@ -32,7 +32,12 @@ import { buildAssets } from "./assets.mjs";
 
 const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 const exec = (command, args, options = {}) =>
-  execFileSync(command, args, { encoding: "utf8", timeout: 900_000, ...options });
+  execFileSync(command, args, {
+    encoding: "utf8",
+    timeout: 900_000,
+    maxBuffer: 64 * 1024 * 1024,
+    ...options,
+  });
 const atomic = (path, value) => {
   writeFileSync(path + ".tmp", JSON.stringify(value, null, 2), { mode: 0o600 });
   renameSync(path + ".tmp", path);
@@ -124,10 +129,10 @@ export function machineAdapter(machine, archive, version, id, now = false, maxWa
   return {
     name: machine.name,
     capabilities: async () => call("capabilities"),
-    busy: async () => call("busy"),
     health: async () => call("health"),
     prepare: async () => call("prepare"),
     drain: async () => call("drain"),
+    drainStatus: async () => call("drainStatus"),
     activate: async () => call("activate"),
     rollback: async () => call("rollback"),
     commit: () => call("commit"),

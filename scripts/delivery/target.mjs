@@ -13,6 +13,7 @@ import * as NodeCrypto from "node:crypto";
 const run = (command, args, env, timeout = 120_000) =>
   execFileSync(command, args, {
     encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
     timeout,
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
@@ -54,31 +55,9 @@ export async function targetOperation(config, operation) {
     }
     return result;
   };
-  if (operation === "busy") {
-    let cursor;
-    do {
-      const page = ctl(
-        "tool",
-        "t3_thread_list",
-        JSON.stringify({
-          allProjects: true,
-          includeSubagents: true,
-          limit: 100,
-          ...(cursor === undefined ? {} : { cursor }),
-        }),
-      );
-      if (
-        page.threads.some((row) =>
-          ["running", "starting", "preparing", "queued", "waiting"].includes(row.status),
-        )
-      )
-        return true;
-      cursor = page.nextCursor;
-    } while (cursor !== null && cursor !== undefined);
-    return false;
-  }
   const desiredVersion = () =>
     ctl("mesh", "config", "get", "--json").current?.doc?.t3?.version ?? null;
+  if (operation === "drainStatus") return ctl("tool", "t3_delivery_drain_status", "{}");
   if (operation === "health")
     return { ...ctl("tool", "t3_mesh_update_health", "{}"), desiredVersion: desiredVersion() };
   if (operation === "prepare") {

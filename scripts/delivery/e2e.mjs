@@ -17,6 +17,7 @@ const { values } = NodeUtil.parseArgs({
     ref: { type: "string", default: "HEAD" },
     out: { type: "string" },
     "force-health-failure": { type: "boolean", default: false },
+    "exercise-idle-wait": { type: "boolean", default: false },
   },
 });
 if (!values.config || !values.out)
@@ -24,6 +25,8 @@ if (!values.config || !values.out)
     "Usage: e2e.mjs --config PRIVATE.json --out PRIVATE-DIR --scenario rollout|lanes [--archive FILE --version VERSION] [--force-health-failure]",
   );
 const config = readConfig(values.config);
+if (config.machines.some((machine) => !/^(D1-|t3-d1-)/.test(machine.unit)))
+  throw new Error("Delivery acceptance only allows D1-prefixed isolated units");
 const output = NodePath.resolve(values.out);
 NodeFS.mkdirSync(output, { recursive: true, mode: 0o700 });
 const events = [];
@@ -36,6 +39,21 @@ const record = async (event) => {
 };
 const exec = (command, args, options = {}) =>
   NodeChildProcess.execFileSync(command, args, { encoding: "utf8", timeout: 900_000, ...options });
+const cli = NodeURL.fileURLToPath(
+  new URL("../../agent-kit/skills/t3/scripts/t3ctl.mjs", import.meta.url),
+);
+const isolatedReplay = (args) => {
+  const environment = config.cleanAgent?.environment;
+  if (
+    config.cleanAgent?.agent !== "devReplay" ||
+    !environment?.T3CTL_ORIGIN ||
+    !config.machines.some((machine) => machine.origin === environment.T3CTL_ORIGIN)
+  )
+    throw new Error("Replay proof requires an explicitly isolated devReplay connection");
+  return JSON.parse(
+    exec(process.execPath, [cli, ...args], { env: { ...process.env, ...environment } }),
+  );
+};
 const started = Date.now();
 if (values.scenario === "rollout") {
   if (!values.archive || !values.version)
@@ -142,11 +160,48 @@ if (values.scenario === "rollout") {
     titleFile,
     before.replace('<SettingsScreen title="About">', `<SettingsScreen title="${marker}">`),
   );
+  if (values["exercise-idle-wait"]) {
+    const drain = adapters[0].drain;
+    adapters[0].drain = async () => {
+      const brief = NodePath.join(output, "D1-drain-wait.md");
+      NodeFS.writeFileSync(
+        brief,
+        "D1 isolated admission-drain fixture. Replay this recorded turn; do not modify any repository.",
+        { mode: 0o600 },
+      );
+      const thread = isolatedReplay([
+        "new",
+        "--project",
+        config.cleanAgent.project,
+        "--agent",
+        "devReplay",
+        "--model",
+        config.cleanAgent.model,
+        "--file",
+        brief,
+        "--json",
+      ]);
+      const status = await adapters[0].drainStatus();
+      NodeAssert.ok(
+        status.activeRuns + status.pendingStarts > 0,
+        "Replay turn must actually be active before drain",
+      );
+      await record({
+        proof: "admission drain observes active Replay work",
+        activeRuns: status.activeRuns,
+        pendingStarts: status.pendingStarts,
+      });
+      const result = await drain();
+      const settled = isolatedReplay(["wait", thread.threadId, "--timeout", "2m", "--json"]);
+      NodeAssert.equal(settled.timedOut, false);
+      const answer = isolatedReplay(["output", thread.threadId, "--json"]);
+      NodeAssert.ok(answer?.text);
+      await record({ proof: "Replay finishes before runtime switch", threadId: thread.threadId });
+      return result;
+    };
+  }
   const dirtyBefore = exec("git", ["-C", source, "status", "--porcelain"]);
   NodeAssert.match(dirtyBefore, /SettingsAboutRouteScreen/);
-  const cli = NodeURL.fileURLToPath(
-    new URL("../../agent-kit/skills/t3/scripts/t3ctl.mjs", import.meta.url),
-  );
   const cliCall = (args, environment = {}) =>
     JSON.parse(
       exec(process.execPath, [cli, ...args], {

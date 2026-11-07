@@ -1,19 +1,6 @@
 import * as NodeTimersPromises from "node:timers/promises";
 const { setTimeout } = NodeTimersPromises;
 
-export async function waitForIdle(
-  adapter,
-  { now = false, maxWaitMs, intervalMs = 1000 },
-  clock = { now: Date.now, sleep: setTimeout },
-) {
-  if (now) return;
-  const deadline = clock.now() + maxWaitMs;
-  while (await adapter.busy()) {
-    if (clock.now() >= deadline) throw new Error("Idle window deadline exceeded; nothing switched");
-    await clock.sleep(Math.min(intervalMs, deadline - clock.now()));
-  }
-}
-
 export function assertHealth(actual, expectedVersion, baseline) {
   if (actual.version !== expectedVersion) throw new Error(`Version mismatch: ${actual.version}`);
   if (!actual.replicasReady) throw new Error("Replicas have not resumed");

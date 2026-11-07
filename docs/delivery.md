@@ -122,7 +122,7 @@ apps/desktop/scripts/delivery-ui-proof.mjs` to exercise two connected servers, a
 version update, secure IPC, stable storage/preload and offline fallback in an isolated profile.
 It prints the temporary capture directory. Xvfb is unnecessary on a graphical desktop.
 
-`node --test scripts/delivery/rollout.node-test.mjs` proves bounded idle waiting, health failure
+`node --test scripts/delivery/rollout.node-test.mjs` proves drain failure recovery, health failure
 rollback, missing layout watermark refusal and a real Git snapshot preserving the user's index.
 The delivery journal records actual build durations rather than predicted estimates.
 A real multi-machine rollout, APK installation, desktop visual pass and two OTA transitions
