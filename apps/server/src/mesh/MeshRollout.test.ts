@@ -315,15 +315,13 @@ it.effect(
         "cloudbox",
         Deferred.succeed(reached, undefined).pipe(Effect.andThen(Deferred.await(release))),
       );
-      const pending = yield* f.services
-        .get("cloudbox")!
-        .reconcile.pipe(
-          Effect.match({
-            onFailure: (error) => error.message,
-            onSuccess: () => "Runtime switched",
-          }),
-          Effect.forkChild,
-        );
+      const pending = yield* f.services.get("cloudbox")!.reconcile.pipe(
+        Effect.match({
+          onFailure: (error) => error.message,
+          onSuccess: () => "Runtime switched",
+        }),
+        Effect.forkChild,
+      );
       yield* Deferred.await(reached);
       yield* TestClock.adjust("19 minutes");
       yield* Deferred.succeed(release, undefined);
