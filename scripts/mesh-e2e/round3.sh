@@ -35,6 +35,8 @@ set -e
 TIMEOUT=${MESH_E2E_ROUND3_TIMEOUT:-900}
 PAUSED_SERVER=
 PAUSED_SERVER_PID=
+CRASH_TARGET=
+declare -A CRASH_PEERS=()
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
 git -C "$REPO_ROOT" merge-base --is-ancestor "$source_commit" "$COMMIT" || die "Build lacks N: use MESH_E2E_BUILD_CURRENT=1 build.sh xdev-n, then deploy.sh while the bed is free"
 for m in gv gor vps; do
@@ -120,7 +122,12 @@ server_process() {
 }
 crash() {
   require_bed_lock || return 1
-  local before after
+  local before after peer
+  CRASH_TARGET=$1
+  CRASH_PEERS=()
+  for peer in gv gor vps; do
+    if [ "$peer" != "$CRASH_TARGET" ]; then CRASH_PEERS[$peer]=$(restart_count "$peer"); fi
+  done
   before=$(restart_count "$1")
   case "$1" in
     gv) systemctl --user kill --signal=SIGKILL --kill-whom=main "$GV_UNIT";;
@@ -259,6 +266,15 @@ assert_converged() {
       sleep 1
     done
   done
+  for m in "${!CRASH_PEERS[@]}"; do
+    actual=$(restart_count "$m")
+    [ "$actual" = "${CRASH_PEERS[$m]}" ] || die "Unexpected restart of $m during $CRASH_TARGET crash (${CRASH_PEERS[$m]} -> $actual)"
+  done
+  if [ -n "$CRASH_TARGET" ]; then
+    printf 'PASS N only %s restarted; other server counters unchanged\n' "$CRASH_TARGET"
+  fi
+  CRASH_TARGET=
+  CRASH_PEERS=()
 }
 . "$MESH_DIR/round3-features.sh"
 # Crash each server while its own representation is first mounting, then mid-sync.

@@ -1705,5 +1705,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   round one retains strict full-document equality.
   Round two uses the v2 config API and managed SSH aliases instead of the legacy key installer.
   Explicit-folder validation uses the configured project ignores, matching the replica session.
+  Cancelled peer-pipe callbacks run as scope-owned background fibers with error reporting,
+  so replacing a connection cannot terminate the server with an unhandled Promise rejection.
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.

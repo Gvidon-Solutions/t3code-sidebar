@@ -312,14 +312,20 @@ const defaultPipeConnector = Layer.succeed(
   }),
 );
 
-const make = Effect.gen(function* () {
+export const make = Effect.gen(function* () {
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const self = yield* environment.getEnvironmentId;
   const descriptor = yield* environment.getDescriptor;
   const clock = yield* Clock.Clock;
   const nowMs = () => Number(clock.currentTimeNanosUnsafe() / 1_000_000n);
   const callbackContext = yield* Effect.context<Scope.Scope>();
+  const callbackScope = yield* Effect.scope;
   const run = Effect.runPromiseWith(callbackContext);
+  const fork = Effect.runForkWith(callbackContext);
+  const runBackground = <A, E>(
+    effect: Effect.Effect<A, E, Scope.Scope>,
+    options?: Effect.RunOptions,
+  ) => fork(effect.pipe(Effect.withErrorReporting), options).pipe(Fiber.runIn(callbackScope));
   const links = yield* PeerLinks.PeerLinks;
   const dialer = yield* PeerWireDialer;
   const connector = yield* PeerPipeConnector;
@@ -704,7 +710,7 @@ const make = Effect.gen(function* () {
         return run(dispatchCall(decoded, env, signal), { signal });
       },
       event: (name, body) => {
-        void run(
+        runBackground(
           handleEvent(env, name, body).pipe(
             Effect.catchCause((cause) =>
               Effect.logWarning("Peer event failed", { env, name, cause }),
@@ -716,9 +722,9 @@ const make = Effect.gen(function* () {
         const controller = new AbortController();
         stream.once("close", () => controller.abort());
         stream.on("error", (error) => {
-          void run(Effect.logDebug("Peer pipe closed", { env, error }));
+          runBackground(Effect.logDebug("Peer pipe closed", { env, error }));
         });
-        void run(
+        runBackground(
           handlePipe(env, target, stream).pipe(
             Effect.catch((error) =>
               Effect.sync(() => stream.destroy(new Error(messageOf(error), { cause: error }))),
@@ -735,7 +741,7 @@ const make = Effect.gen(function* () {
           live.delete(env);
           updateRelayState(reason.message);
           for (const other of live.values()) {
-            void run(notify(other, "peer.routes", { routes: routesOf() }));
+            runBackground(notify(other, "peer.routes", { routes: routesOf() }));
           }
           offlineSince.set(env, DateTime.formatIso(DateTime.nowUnsafe()));
           attempt.set(env, {
@@ -743,7 +749,7 @@ const make = Effect.gen(function* () {
             nextAt: nowMs(),
             lastError: reason.message,
           });
-          void run(reportOwnState());
+          runBackground(reportOwnState());
         }
       },
     });

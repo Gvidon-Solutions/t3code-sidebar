@@ -661,3 +661,9 @@ The partition fixture releases its artificial setup pauses while the network rem
 cut, before the timed outage window. A real user pause is persistent; leaving one in
 place would test manual pause semantics instead of automatic reconnection. No Mutagen
 retry/resume command runs after network restoration.
+
+Peer callback bridges use scope-owned `runForkWith` fibers and error reporting. An externally
+aborted `runPromiseWith` can still reject after interruption handling; discarding that Promise
+can terminate Node when an in-flight pipe closes during connection replacement. Awaited RPC
+calls retain their Promise results. The tie-break test cancels an in-flight connector, and
+round three also verifies that crashing one server leaves the others' restart counters unchanged.

@@ -270,39 +270,61 @@ describe("PeerSessions", () => {
 
   it.effect("keeps the deterministic side of two simultaneous connections", () =>
     Effect.gen(function* () {
-      const sessions = yield* PeerSessions;
-      const inbound = wire();
-      const outbound = wire();
-      yield* sessions.accept({
-        environmentId: B,
-        direction: "inbound",
-        wire: inbound.wire,
-        call: async () => ({ text: "{}", isError: false }),
-      });
-      yield* sessions.accept({
-        environmentId: B,
-        direction: "outbound",
-        wire: outbound.wire,
-        call: async () => ({ text: "{}", isError: false }),
-      });
-      expect(inbound.closed).toBeDefined();
-      expect(outbound.closed).toBeUndefined();
-      expect((yield* sessions.status).find((s) => s.environmentId === String(B))?.direction).toBe(
-        "outbound",
+      const connecting = yield* Deferred.make<void>();
+      const cancelled = yield* Deferred.make<void>();
+      yield* Effect.gen(function* () {
+        const sessions = yield* PeerSessions;
+        const inbound = wire();
+        const outbound = wire();
+        yield* sessions.accept({
+          environmentId: B,
+          direction: "inbound",
+          wire: inbound.wire,
+          call: async () => ({ text: "{}", isError: false }),
+        });
+        inbound.incoming.push(JSON.stringify({ type: "open", id: "connecting", target: "sshd" }));
+        yield* Deferred.await(connecting);
+        yield* sessions.accept({
+          environmentId: B,
+          direction: "outbound",
+          wire: outbound.wire,
+          call: async () => ({ text: "{}", isError: false }),
+        });
+        yield* Deferred.await(cancelled);
+        expect(inbound.closed).toBeDefined();
+        expect(outbound.closed).toBeUndefined();
+        expect((yield* sessions.status).find((s) => s.environmentId === String(B))?.direction).toBe(
+          "outbound",
+        );
+        const secondInbound = wire();
+        yield* sessions.accept({
+          environmentId: B,
+          direction: "inbound",
+          wire: secondInbound.wire,
+          call: async () => ({ text: "{}", isError: false }),
+        });
+        expect(secondInbound.closed).toBeDefined();
+        expect(outbound.closed).toBeUndefined();
+        expect(
+          (yield* sessions.status).find((s) => s.environmentId === String(B))?.lastError,
+        ).toBeNull();
+      }).pipe(
+        Effect.provide(
+          Layer.effect(PeerSessions, PeerSessionsModule.make).pipe(
+            Layer.provide(dependencies([B])),
+            Layer.provide(
+              Layer.succeed(PeerSessionsModule.PeerPipeConnector, {
+                connect: () =>
+                  Deferred.succeed(connecting, undefined).pipe(
+                    Effect.andThen(Effect.never),
+                    Effect.onInterrupt(() => Deferred.succeed(cancelled, undefined)),
+                  ),
+              }),
+            ),
+          ),
+        ),
       );
-      const secondInbound = wire();
-      yield* sessions.accept({
-        environmentId: B,
-        direction: "inbound",
-        wire: secondInbound.wire,
-        call: async () => ({ text: "{}", isError: false }),
-      });
-      expect(secondInbound.closed).toBeDefined();
-      expect(outbound.closed).toBeUndefined();
-      expect(
-        (yield* sessions.status).find((s) => s.environmentId === String(B))?.lastError,
-      ).toBeNull();
-    }).pipe(Effect.provide(testLayer([B])), Effect.scoped),
+    }).pipe(Effect.scoped),
   );
 
   it.effect("sends calls and events over a direct connection", () =>
