@@ -163,6 +163,8 @@ remain valid across those transfers and the six restart orders.
 Its fixture parent defaults to `/var/tmp/t3-mesh-round3` to retain evidence across
 host reboots. `MESH_E2E_ROUND3_FIXTURES` selects the same absolute parent on all nodes;
 that parent's local path can link to a larger artifact disk.
+The VPS persists both `/tmp` and `/var/tmp`; deployment copies existing contents before
+adding either mount so proxy reconfiguration retains the folders behind durable DB records.
 Round 3 requires `MESH_E2E_LOCK_OWNER` (default `N1`) to match the shared lock before
 operations; after a lost lock it leaves shared services and settings untouched.
 
@@ -439,7 +441,8 @@ The N1 test sshd accepts the normal managed authorized_keys as well as its separ
 ephemeral-key file. Replacing the managed file would break replica and run access
 while the independent pinned-key transfer scenario is active.
 
-The partition fixture releases its artificial setup pauses while the network remains
-cut, before the timed outage window. A real user pause is persistent; leaving one in
-place would test manual pause semantics instead of automatic reconnection. No Mutagen
-retry/resume command runs after network restoration.
+Round 3 requires `network-proxies.sh up` for its partition case. It saves and cuts the
+primary's inbound proxy state and stops its outbound tunnels, then waits for both
+replica endpoints to disconnect before writing divergent versions. The engine stays
+enabled and sessions stay running; no pause/retry/resume command runs during the outage
+or recovery. Normal completion and EXIT cleanup restore the captured proxy state.

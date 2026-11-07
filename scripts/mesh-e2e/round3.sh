@@ -35,6 +35,7 @@ set -e
 TIMEOUT=${MESH_E2E_ROUND3_TIMEOUT:-900}
 PAUSED_SERVER=
 PAUSED_SERVER_PID=
+PARTITION_ACTIVE=0
 CRASH_TARGET=
 declare -A CRASH_PEERS=()
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
@@ -48,6 +49,7 @@ expected_hash=$(sha256sum "$RUNTIME_DIR/t3" | cut -d' ' -f1)
 test "$(sha256sum "$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" | cut -d' ' -f1)" = "$expected_hash" || die 'GV binary differs from build'
 test "$(gor_ssh "sha256sum ~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3" | cut -d' ' -f1)" = "$expected_hash" || die 'gor binary differs from build'
 test "$(vps_ssh 'docker inspect -f "{{.Image}}" t3-mesh-e2e')" = "$(docker image inspect -f '{{.Id}}' "$IMAGE")" || die 'Wrong VPS image'
+gor_ssh 'cat /tmp/N1-network-state.json' | jq -e '.cut==false' > "$WORK/N-proxy-ready.json" || die 'Round three requires network-proxies.sh up'
 for m in gv gor vps; do
   cat > "$WORK/N-t3-$m" <<RUNNER
 #!/usr/bin/env bash
@@ -160,6 +162,9 @@ restore() {
       server_process "$PAUSED_SERVER" SIGCONT "$PAUSED_SERVER_PID" >/dev/null || rc=1
     fi
     for m in gv gor vps; do unit "$m" start || rc=1; done
+    if [ "$PARTITION_ACTIVE" = 1 ]; then
+      gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json" || rc=1
+    fi
     gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
     wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
     for m in gv vps; do
@@ -353,30 +358,32 @@ for m in gv vps; do
   test "$(restart_count "$m")" = "$before"
   printf 'PASS N daemon recovered without server restart %s\n' "$m"
 done
-# Pause syncing while partitioned to make both divergent versions deterministic.
+# Cut both peer directions before writing divergent versions, without user pauses.
+gor_ssh 'cat /tmp/N1-network-state.json' > "$WORK/N-partition-proxy-before.json"
+jq -e '.cut==false' "$WORK/N-partition-proxy-before.json" >/dev/null
 for m in gv vps; do
-  ws_rpc "$m" server.getConfig '{}' | jq '.settings.replicasEnabled' > "$WORK/N-replicas-enabled-before-$m.json"
-  ws_rpc "$m" server.updateSettings '{"patch":{"replicasEnabled":false}}' > "$WORK/N-partition-quiesce-$m.json"
-  unit "$m" stop
-  unit "$m" start
-  wait_health "$(origin_of "$m")" "$TIMEOUT"
   mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-before-partition-$m.json"
-  while IFS= read -r name; do mut "$m" sync pause "$name"; done < <(jq -r --arg p "$N_ROOT" '.[] | select(.beta.path==$p) | .name' "$WORK/N-before-partition-$m.json")
+  jq -e --arg p "$N_ROOT" 'any(.[]; .beta.path==$p and .paused==false and .alpha.connected==true)' "$WORK/N-before-partition-$m.json" >/dev/null
 done
+PARTITION_ACTIVE=1
+jq '.cut=true' "$WORK/N-partition-proxy-before.json" | gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json'
 gor_ssh "systemctl --user stop $GOR_TUNNEL_UNIT"
+for m in gv vps; do
+  end=$((SECONDS+TIMEOUT))
+  while :; do
+    mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-partition-disconnected-$m.json"
+    if jq -e --arg p "$N_ROOT" 'any(.[]; .beta.path==$p and .alpha.connected==false)' "$WORK/N-partition-disconnected-$m.json" >/dev/null; then break; fi
+    [ "$SECONDS" -lt "$end" ] || die "Primary endpoint on $m did not disconnect"
+    sleep 1
+  done
+done
 rexec gor sh -c "printf 'N-authority-wins' > '$N_FILE'"
 rexec gv sh -c "printf 'N-gv-loses' > '$N_FILE'"
 rexec vps sh -c "printf 'N-vps-loses' > '$N_FILE'"
-for m in gv vps; do
-  # Release setup-only pauses before observing recovery from the network outage.
-  while IFS= read -r name; do mut "$m" sync resume "$name"; done < <(jq -r --arg p "$N_ROOT" '.[] | select(.beta.path==$p) | .name' "$WORK/N-before-partition-$m.json")
-  mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-partition-running-$m.json"
-  jq -e --arg p "$N_ROOT" 'any(.[]; .beta.path==$p and .paused==false)' "$WORK/N-partition-running-$m.json" >/dev/null
-  ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-partition-enable-$m.json"
-  mv "$WORK/N-replicas-enabled-before-$m.json" "$WORK/N-replicas-enabled-restored-$m.json"
-done
 for _ in $(seq 1 180); do sleep 1; done
+gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json"
 gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT"
+PARTITION_ACTIVE=0
 # The reconciler must resume and resolve automatically; no retry/resume command here.
 assert_converged 'N three-minute partition and conflicting edits'
 for m in gv vps; do

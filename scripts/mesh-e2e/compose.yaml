@@ -11,6 +11,7 @@ services:
     volumes:
       - /opt/t3-mesh-e2e/home:/home/t3
       - /opt/t3-mesh-e2e/tmp:/tmp
+      - /opt/t3-mesh-e2e/var-tmp:/var/tmp
     environment:
       TZ: Europe/Moscow
       MUTAGEN_DATA_DIRECTORY: /home/t3/.mutagen

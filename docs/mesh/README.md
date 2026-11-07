@@ -657,10 +657,10 @@ before requesting SSHFS on the same representation key. Otherwise a concurrent i
 enrichment can legitimately win the whole-entry LWW race; config revision delivery alone
 does not prove that the per-representation policy action has completed.
 
-The partition fixture releases its artificial setup pauses while the network remains
-cut, before the timed outage window. A real user pause is persistent; leaving one in
-place would test manual pause semantics instead of automatic reconnection. No Mutagen
-retry/resume command runs after network restoration.
+The partition fixture cuts the primary's inbound proxy and outbound tunnels, then waits
+for both replica endpoints to disconnect before writing divergent versions. It leaves
+the engine and sessions running: a user pause is persistent, and Mutagen resume requires
+a reachable endpoint. No pause/retry/resume command runs during this outage or recovery.
 
 Peer callback bridges use scope-owned `runForkWith` fibers and error reporting. An externally
 aborted `runPromiseWith` can still reject after interruption handling; discarding that Promise
