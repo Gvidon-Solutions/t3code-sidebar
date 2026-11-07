@@ -1,13 +1,8 @@
 name: Isolated mesh scenarios
 on:
   workflow_dispatch:
+  push:
   pull_request:
-    paths:
-      - "apps/server/src/mesh/**"
-      - "apps/server/src/peer/**"
-      - "apps/server/src/replicas/**"
-      - "scripts/mesh-fast/**"
-      - ".github/workflows/mesh-fast.yml"
 jobs:
   mesh-fast:
     runs-on: ubuntu-latest
