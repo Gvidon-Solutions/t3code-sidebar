@@ -30,6 +30,8 @@
         "knip-schemas.ts",
         "delivery/builder.mjs",
         "delivery/e2e.mjs",
+        "delivery/bed-setup.mjs",
+        "delivery/bed-target.mjs",
         "delivery/fixture-gate.mjs",
         "delivery/target.mjs",
         "delivery/mobile-ota.mjs",

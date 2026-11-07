@@ -170,3 +170,32 @@ test("system target diagnostics prove execution without a GitHub CLI", () => {
   );
   assert.deepEqual(result, { hasGh: false, scope: "system" });
 });
+
+test("bed bootstrap refuses unrelated units and pre-existing non-fixture databases", () => {
+  const root = mkdtempSync(join(tmpdir(), "delivery-bootstrap-"));
+  try {
+    const script = new URL("./bed-target.mjs", import.meta.url).pathname;
+    const machine = {
+      home: root,
+      unit: "application.service",
+      unitPath: join(root, "application.service"),
+      sshdPort: 22222,
+    };
+    const invoke = (value) =>
+      execFileSync(process.execPath, [script], {
+        encoding: "utf8",
+        input: JSON.stringify({ machine: value, archive: "unused" }),
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    assert.throws(() => invoke(machine), /only manages D1-prefixed/);
+    mkdirSync(join(root, "userdata"));
+    writeFileSync(join(root, "userdata/statev2.sqlite"), "foreign database");
+    assert.throws(
+      () => invoke({ ...machine, unit: "D1-app.service", unitPath: join(root, "D1-app.service") }),
+      /pre-existing non-fixture/,
+    );
+    assert.equal(readFileSync(join(root, "userdata/statev2.sqlite"), "utf8"), "foreign database");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

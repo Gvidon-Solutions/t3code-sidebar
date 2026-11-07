@@ -68,28 +68,42 @@ export async function buildAssets({
         env: { ...process.env, ...mobileEnv },
       });
     const mobileDir = join(config.buildDir, "apps/mobile");
-    const fingerprint = JSON.parse(
-      exec("pnpm", ["exec", "expo-updates", "runtimeversion:resolve", "--platform", "android"], {
-        cwd: mobileDir,
-      }),
-    ).runtimeVersion;
-    if (typeof fingerprint !== "string" || !fingerprint)
-      throw new Error("Native fingerprint missing");
-    nativeFingerprint = fingerprint;
+    const resolveFingerprint = () => {
+      const fingerprint = JSON.parse(
+        exec(
+          "pnpm",
+          ["--silent", "exec", "expo-updates", "runtimeversion:resolve", "--platform", "android"],
+          { cwd: mobileDir },
+        ),
+      ).runtimeVersion;
+      if (typeof fingerprint !== "string" || !fingerprint)
+        throw new Error("Native fingerprint missing");
+      return fingerprint;
+    };
+    let fingerprint = resolveFingerprint();
     if (fingerprint !== previousFingerprint) {
-      await run(process.execPath, ["scripts/mobile-android-apk.mjs"], config.buildDir, mobileEnv);
+      await run(
+        process.execPath,
+        ["scripts/mobile-android-apk.mjs", "--clean"],
+        config.buildDir,
+        mobileEnv,
+      );
       artifacts.push(
         ...readdirSync(join(config.buildDir, "dist/mobile"))
           .filter((file) => file.endsWith(".apk"))
           .map((file) => join(config.buildDir, "dist/mobile", file)),
       );
+      fingerprint = resolveFingerprint();
     }
+    nativeFingerprint = fingerprint;
     if (config.ota) {
       const output = join(logDir, "ota-export");
       const publicConfig = join(logDir, "expo-public.json");
       writeFileSync(
         publicConfig,
-        exec("pnpm", ["exec", "expo", "config", "--type", "public", "--json"], { cwd: mobileDir }),
+        exec("pnpm", ["--silent", "exec", "expo", "config", "--type", "public", "--json"], {
+          cwd: mobileDir,
+        }),
         { mode: 0o600 },
       );
       await run(

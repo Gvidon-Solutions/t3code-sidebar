@@ -26,9 +26,10 @@ The local `gate` command must run T1 acceptance; absent or failing gates stop a 
 Set the command to the T1 entry point supplied by that stage rather than bypassing it.
 
 Before stopping a unit, the default lane obtains the authenticated server delivery drain.
-The server closes admission to new turns, waits for active turns and queued starts to finish
-up to `maxWaitMs`, and persists the request token across restart. The target verifies the same
-drained token immediately before stopping. Healthy activation or restored health releases it.
+The server closes admission to new turns and waits for active work up to `maxWaitMs`.
+Dormant accepted starts remain persisted and resume after healthy activation and cancellation.
+The request token survives restart; the target verifies the same drained token immediately
+before stopping. Healthy activation or restored health releases it.
 A deadline failure cancels the drain and leaves the existing runtime running. Older servers
 without the drain API fail before stopping; upgrade those through an explicitly authorized
 `--now` operation first. `--now` deliberately permits interruption of active work.
@@ -162,3 +163,11 @@ For an isolated Android acceptance app, set `T3_MOBILE_ANDROID_PACKAGE` in the p
 update URL, certificate and public environment for the APK and subsequent exports. The mobile
 major-version fingerprint input comes from `apps/mobile/mobile-version.json`, so a private
 builder clone does not depend on the developer checkout's `.env` or app-config source formatting.
+
+`node scripts/delivery/bed-setup.mjs --config <private-config> --archive <baseline-runtime>
+--bed-lock-file /tmp/mesh-bed.lock/owner` prepares only D1-prefixed fixture units. Each machine
+needs a private `sshdPort`; the helper installs its daemon with private keys and authorized-key
+file, copies Node and the agent CLI over configured SSH, and installs a user or root system
+unit. A fixture ownership marker prevents adopting another server's existing database. The
+root Node launcher uses a private tool PATH that omits `gh`; `requireNoGh` makes the rollout
+runner assert that fact. Record the baseline source ref and build before running this helper.
