@@ -1,3 +1,4 @@
+import * as DesktopUi from "./DesktopUi.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as Deferred from "effect/Deferred";
@@ -147,6 +148,22 @@ it.effect(
           }),
         )
         .pipe(
+          Effect.provideService(
+            DesktopUi.DesktopUi,
+            DesktopUi.DesktopUi.of({
+              selection: Effect.succeed(null),
+              select: () => Effect.succeed(false),
+              recordSource: () => Effect.void,
+              getInfo: Effect.succeed({
+                source: "bundled",
+                origin: null,
+                environmentId: null,
+                version: "1",
+                shellVersion: "1",
+                reason: null,
+              }),
+            }),
+          ),
           Effect.provideService(ElectronProtocol.ElectronProtocol, {
             registerDesktopProtocol: () => Effect.void,
           } as unknown as ElectronProtocol.ElectronProtocol["Service"]),

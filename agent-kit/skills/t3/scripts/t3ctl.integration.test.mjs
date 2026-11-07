@@ -484,4 +484,6 @@ test("bootstrap add and rolling update use their config services and credentials
   assert.deepEqual(planned.calls.find(call => call.name === "t3_mesh_update").args, { version: "0.1.6", plan: true });
   const applied = run(["mesh", "update", "0.1.6"]);
   assert.deepEqual(applied.calls.find(call => call.name === "t3_mesh_update").args, { version: "0.1.6", plan: false });
+  const forced = run(["mesh", "update", "0.1.6", "--now", "--max-wait", "2m"]);
+  assert.deepEqual(forced.calls.find(call => call.name === "t3_mesh_update").args, { version: "0.1.6", plan: false, now: true, maxWaitMs: 120000 });
 });

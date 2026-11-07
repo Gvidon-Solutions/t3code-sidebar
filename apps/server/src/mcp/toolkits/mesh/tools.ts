@@ -1,4 +1,10 @@
 import {
+  DeliveryDrainInput,
+  DeliveryDrainStatus,
+  DeliveryDrainToken,
+  DeliveryDrainError,
+} from "@t3tools/contracts";
+import {
   MeshMachineAddInput,
   MeshVersionUpdateInput,
   MeshUpdateVoteInput,
@@ -139,7 +145,33 @@ const BootstrapCredential = Tool.make("t3_mesh_bootstrap_credential", {
   }),
   success: Schema.Struct({ accepted: Schema.Boolean }),
 }).annotate(Tool.Destructive, true);
+const DeliveryDrain = Tool.make("t3_delivery_drain", {
+  ...shared,
+  parameters: DeliveryDrainInput,
+  success: DeliveryDrainStatus,
+  failure: Schema.Union([OrchestratorMcpFailure, DeliveryDrainError]),
+  description:
+    "Close new run admission and await active runs finishing within deadlineMs. The matching requestId owns the fence across restart until cancelled.",
+}).annotate(Tool.Destructive, true);
+const DeliveryStatus = Tool.make("t3_delivery_drain_status", {
+  ...shared,
+  parameters: Tool.EmptyParams,
+  success: DeliveryDrainStatus,
+  failure: Schema.Union([OrchestratorMcpFailure, DeliveryDrainError]),
+  description: "Read delivery admission state and drain progress.",
+}).annotate(Tool.Readonly, true);
+const DeliveryCancel = Tool.make("t3_delivery_cancel_drain", {
+  ...shared,
+  parameters: DeliveryDrainToken,
+  success: DeliveryDrainStatus,
+  failure: Schema.Union([OrchestratorMcpFailure, DeliveryDrainError]),
+  description:
+    "Release the matching delivery fence and resume queued sends. Idempotent once admission is open.",
+}).annotate(Tool.Destructive, true);
 export const MeshToolkit = Toolkit.make(
+  DeliveryDrain,
+  DeliveryStatus,
+  DeliveryCancel,
   MachineAdd,
   VersionUpdate,
   UpdateVote,

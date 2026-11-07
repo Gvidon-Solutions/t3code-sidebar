@@ -1,21 +1,19 @@
 name: Sidebar fork desktop build
 
-# Desktop installers of the sidebar fork ("T3 Code Sidebar"), which installs
-# next to upstream T3 Code with its own app id and ~/.t3-sidebar data. Every
-# push to `ws` publishes a GitHub release with the installers and the
-# electron-updater manifests, so installed apps offer the build as an update.
-# Windows embeds the Linux CLI archive as its WSL runtime; that backend keeps
-# its data in ~/.t3-sidebar inside the distro. Builds are unsigned.
-# The release also carries the Android app (sidebar variant), signed with the
-# fork's own key; every APK shares one version code so any of them installs
-# over another (Settings › About › Version history on the phone).
-
 on:
   push:
-    branches: [ws]
+    branches: [ws, delivery-ci/**]
     paths-ignore: ["deploy/**", "docs/**", "**/*.md", ".github/workflows/sidebar-ios.yml"]
   workflow_dispatch:
     inputs:
+      dry_run:
+        description: "Build and collect timings without publishing a release"
+        type: boolean
+        default: true
+      base_ref:
+        description: "Compare source paths against this ref (empty builds all)"
+        type: string
+        default: ""
       android_arch:
         description: "Android ABI(s) to build"
         type: choice
@@ -41,13 +39,17 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
+      desktop: ${{ steps.paths.outputs.desktop }}
+      android: ${{ steps.paths.outputs.android }}
     steps:
       - uses: actions/checkout@v6
         with:
-          sparse-checkout: |
-            FORK.md
-            apps/server/package.json
-          sparse-checkout-cone-mode: false
+          fetch-depth: 0
+
+      - id: paths
+        env:
+          BASE_SHA: ${{ github.event.before || inputs.base_ref }}
+        run: node scripts/delivery/release-plan.ts
 
       # Upstream's version plus the run number: semver-ordered so electron-updater
       # sees each build as newer, while the core version stays upstream's so
@@ -92,12 +94,34 @@ jobs:
 
       - run: vp install --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
 
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            .vite-plus
+            apps/*/.vite-plus
+            packages/*/.vite-plus
+            node_modules/.vite
+            .turbo
+            native/resource-monitor/target
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
       - run: node scripts/update-release-package-versions.ts "$VERSION"
 
       # @t3tools/desktop#build compiles the Linux browser secret helper.
       - run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
 
-      - run: vp run build:desktop
+      - name: Build server and web
+        run: vp run --filter t3 build
+
+      - name: Build desktop shell
+        if: needs.version.outputs.desktop == 'true'
+        run: vp run --filter @t3tools/desktop build
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -109,8 +133,9 @@ jobs:
           retention-days: 1
 
   linux:
-    name: Build Linux x64 (and WSL runtime)
-    needs: bundle
+    name: Build Linux installer
+    needs: [version, bundle]
+    if: needs.version.outputs.desktop == 'true'
     runs-on: ubuntu-24.04
     env:
       VERSION: ${{ needs.bundle.outputs.version }}
@@ -130,6 +155,22 @@ jobs:
           run-install: false
 
       - run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            .vite-plus
+            apps/*/.vite-plus
+            packages/*/.vite-plus
+            node_modules/.vite
+            .turbo
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
@@ -151,8 +192,68 @@ jobs:
           vp run dist:desktop:artifact --platform linux --target AppImage --arch x64 \
             --build-version "$VERSION" --skip-build --verbose
 
-      # The Linux CLI archive is what the Windows build embeds as its WSL runtime.
-      # Setup Vite+ selects engines.node, which native CLI executables must be built with.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: desktop-linux-x64
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/latest-linux.yml
+          if-no-files-found: error
+
+  runtime:
+    name: Build server runtime and WSL archive
+    needs: [version, bundle]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - run: vp install --filter=t3... --filter=@t3tools/scripts...
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            .vite-plus
+            apps/*/.vite-plus
+            packages/*/.vite-plus
+            node_modules/.vite
+            .turbo
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-gnu
+
+      - run: node scripts/update-release-package-versions.ts "$VERSION"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: js-bundle
+          path: apps
+
+      - run: cargo build --locked --release --target x86_64-unknown-linux-gnu --manifest-path native/resource-monitor/Cargo.toml
+
       - name: Build CLI single-executable
         run: node apps/server/scripts/cli.ts build-exe --verbose
 
@@ -165,24 +266,21 @@ jobs:
           node scripts/build-cli-archive.ts --platform linux --arch x64 --version "$VERSION" \
             --resource-monitor-dir "$RUNNER_TEMP/cli-resource-monitor" --output-dir release-cli
 
+      - name: Runtime checksums
+        run: |
+          cd release-cli
+          sha256sum *.tar.gz > SHA256SUMS
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: cli-linux-x64
           path: release-cli/*
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: desktop-linux-x64
-          path: |
-            release/*.AppImage
-            release/*.deb
-            release/latest-linux.yml
-          if-no-files-found: error
-
   windows:
     name: Build Windows x64
-    needs: [bundle, linux]
+    needs: [version, bundle, runtime]
+    if: needs.version.outputs.desktop == 'true'
     runs-on: windows-latest
     env:
       VERSION: ${{ needs.bundle.outputs.version }}
@@ -204,10 +302,26 @@ jobs:
       - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
         with:
           node-version-file: package.json
-          cache: false
+          cache: true
           run-install: false
 
       - run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            .vite-plus
+            apps/*/.vite-plus
+            packages/*/.vite-plus
+            node_modules/.vite
+            .turbo
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
@@ -263,6 +377,7 @@ jobs:
   android:
     name: Build Android APK
     needs: version
+    if: needs.version.outputs.android == 'true'
     runs-on: ubuntu-24.04
     env:
       VERSION: ${{ needs.version.outputs.version }}
@@ -287,6 +402,22 @@ jobs:
           run-install: false
 
       - run: vp install --filter=@t3tools/mobile...
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            .vite-plus
+            apps/*/.vite-plus
+            packages/*/.vite-plus
+            node_modules/.vite
+            .turbo
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - uses: actions/setup-java@v5
         with:
@@ -371,30 +502,122 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Publish release
-    needs: [bundle, linux, windows, android]
-    env:
-      VERSION: ${{ needs.bundle.outputs.version }}
-    if: github.event_name == 'push'
+    name: Publish server runtime first
+    needs: [version, runtime]
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/ws') || (github.event_name == 'workflow_dispatch' && !inputs.dry_run && github.ref == 'refs/heads/ws')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      DESKTOP_CHANGED: ${{ needs.version.outputs.desktop }}
+      ANDROID_CHANGED: ${{ needs.version.outputs.android }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: desktop-*
+          name: cli-linux-x64
           path: dist
-          merge-multiple: true
-
-      # A full (non-pre) release marked latest: that is the one electron-updater's
-      # GitHub provider reads latest.yml / latest-linux.yml from.
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Create release with runtime
         run: |
-          gh release create "sidebar-v$VERSION" dist/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --latest \
-            --title "T3 Code Sidebar $VERSION" \
-            --notes "Build of the sidebar fork ($GITHUB_SHA). Desktop installers are unsigned and install next to upstream T3 Code: own app id, data in ~/.t3-sidebar; installed apps pick this up as an update. The APK is the Android app (com.gvidon.t3codesidebar)."
+          set -euo pipefail
+          previous="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')"
+          {
+            printf 'Server runtime for commit %s. Installers are attached as their builds finish.\n\n' "$GITHUB_SHA"
+            printf 'Desktop build requested: %s. Android build requested: %s.\n' "$DESKTOP_CHANGED" "$ANDROID_CHANGED"
+            if [ -n "$previous" ]; then
+              printf 'Unchanged artifacts remain available in the [previous release](https://github.com/%s/releases/tag/%s).\n' "$GITHUB_REPOSITORY" "$previous"
+            else
+              printf 'No previous release exists; skipped artifacts are unavailable.\n'
+            fi
+          } > notes.md
+          gh release create "sidebar-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --latest --title "T3 Code Sidebar $VERSION" --notes-file notes.md
+
+  publish-linux:
+    name: Attach linux artifacts
+    needs: [version, release, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-linux-x64
+          path: dist
+      - run: gh release upload "sidebar-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
+  publish-windows:
+    name: Attach windows artifacts
+    needs: [version, release, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-win-x64
+          path: dist
+      - run: gh release upload "sidebar-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
+  publish-android:
+    name: Attach android artifacts
+    needs: [version, release, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-android
+          path: dist
+      - run: gh release upload "sidebar-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
+  timings:
+    name: Record delivery timings
+    needs:
+      [
+        version,
+        bundle,
+        runtime,
+        linux,
+        windows,
+        android,
+        release,
+        publish-linux,
+        publish-windows,
+        publish-android,
+      ]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Collect job timestamps
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | {name, conclusion, started_at, completed_at}' > delivery-timings.jsonl
+          {
+            echo '### Delivery job timestamps'
+            echo 'Times below are measured by GitHub, including dry-run builds.'
+            echo '```json'
+            cat delivery-timings.jsonl
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: delivery-timings
+          path: delivery-timings.jsonl
+          if-no-files-found: error

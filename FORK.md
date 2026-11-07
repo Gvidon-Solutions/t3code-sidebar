@@ -83,8 +83,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 ## Releases and deployment
 
 - **Desktop.** `.github/workflows/sidebar-desktop.yml` runs on every push to `ws` (docs and
-  `deploy/` excluded): JS bundle → Linux AppImage/deb + Linux CLI archive → Windows NSIS with
-  the CLI archive embedded as the WSL runtime → GitHub release `sidebar-v<version>` marked
+  `deploy/` excluded): JS bundle → independent Linux runtime archive and Linux installers;
+  Windows NSIS consumes the runtime archive without waiting for the Linux installer.
+  Runtime publishes first and platform jobs attach their artifacts to `sidebar-v<version>` marked
   latest, with `latest.yml` / `latest-linux.yml`. Version is `<upstream version>-sidebar.<run>`;
   the core stays upstream's so version-skew checks against servers hold. The core is the higher
   of `apps/server/package.json` and the release tag in "Last synced with upstream release" above,
@@ -107,6 +108,24 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   owner's VPS behind an SSH tunnel (`deploy.sh`, `open.sh` → `t3-ws` command). Codex only.
 
 ## Feature log
+
+### 2026-11-07 — D1 private delivery and independent release artifacts
+
+- **What.** Private clean/hot builder lanes, serial idle-window delivery with stopped-DB backup
+  and rollback, self-hosted signed mobile updates, and server-served desktop UI with bundled
+  offline fallback. Public CI publishes runtime before independently attaching installers.
+- **How.** Machine names/services/paths stay in untracked local configuration. Hot snapshots
+  use a temporary Git index and separate branch. Mobile bundles match the native fingerprint;
+  changed native configuration requires an APK. Delivery rejects conflicting managed versions.
+  Desktop follows its active connected thread/draft server through validated main-frame IPC,
+  preserves the stable storage/preload origin and displays UI/shell versions and source in About.
+  Server drain atomically fences run admission, preserves dormant sends across restarts and
+  lets active turns finish until a deadline. B1 and private delivery share it; clients retry
+  transient updating refusals with stable IDs. B1 stores the idle deadline in mesh config and
+  binds `--now` to one target version; the next normal update clears that permission.
+- **Where.** `scripts/delivery/`, `docs/delivery.md`, t3ctl delivery client, server `delivery/`,
+  mobile update lifecycle/settings, desktop `app/DesktopUi`, protocol/bootstrap and IPC, web
+  `DesktopUiCoordinator`/About source row, and `sidebar-desktop.yml`.
 
 ### 2026-11-05 — B1 mesh rollout and platform runtime
 

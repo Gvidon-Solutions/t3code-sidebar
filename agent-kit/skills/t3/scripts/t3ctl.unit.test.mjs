@@ -4,6 +4,8 @@ import * as NodeAssert from "node:assert/strict";
 import * as NodeTest from "node:test";
 
 import {
+  unitRuntimeExecutable,
+  retryUpdatingCall,
   buildMeshLinkInput,
   buildPlaceInput,
   meshProjectTitle,
@@ -314,4 +316,25 @@ NodeTest.test("place retains repeated ignore patterns and the requested transpor
     }),
     { project: "p", machine: "op", ignores: ["*.tmp", "cache"], transport: "manual" },
   );
+});
+
+NodeTest.test("runtime lookup accepts delivery runtimes and quoted unit paths", () => {
+  NodeAssert.equal(unitRuntimeExecutable('ExecStart=/srv/app/runtime/delivery/build-1/t3 serve --port 3795'), '/srv/app/runtime/delivery/build-1/t3');
+  NodeAssert.equal(unitRuntimeExecutable('ExecStart="/srv/private app/runtime/delivery/build-1/t3" serve'), '/srv/private app/runtime/delivery/build-1/t3');
+  NodeAssert.equal(unitRuntimeExecutable('ExecStart=/usr/bin/node /srv/source/server.ts serve'), null);
+});
+NodeTest.test("explicit updating refusals retry the same call and stop on success or another failure", async () => {
+  const sent = [];
+  const input = { commandId: 'stable', messageId: 'stable-message', text: 'Run once' };
+  let calls = 0;
+  const result = await retryUpdatingCall(async () => {
+    sent.push(input);
+    calls += 1;
+    return calls === 1 ? { isError: true, content: [{ type: 'text', text: 'T3_UPDATING: retry' }] } : { content: [{ type: 'text', text: 'accepted' }] };
+  }, async () => {});
+  NodeAssert.equal(result.isError, undefined);
+  NodeAssert.equal(sent.length, 2);
+  NodeAssert.equal(sent[0], sent[1]);
+  const denied = { isError: true, content: [{ type: 'text', text: 'capability_denied' }] };
+  NodeAssert.equal(await retryUpdatingCall(async () => denied, async () => {}), denied);
 });

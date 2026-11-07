@@ -1,3 +1,4 @@
+import * as DesktopUi from "./app/DesktopUi.ts";
 import * as MacPermissions from "./permissions/MacPermissions.ts";
 for (const stream of [process.stdout, process.stderr]) {
   stream.on("error", (err: NodeJS.ErrnoException) => {
@@ -206,6 +207,7 @@ const layerDesktopLocalEnvironmentAuth = DesktopLocalEnvironmentAuth.layer.pipe(
 );
 
 const layerDesktopApplication = Layer.mergeAll(
+  DesktopUi.layer,
   DesktopLifecycle.layer,
   layerDesktopAppActivation,
   DesktopWebLinks.layer,
@@ -214,6 +216,7 @@ const layerDesktopApplication = Layer.mergeAll(
   DesktopCliCommand.layer,
   layerDesktopSsh,
 ).pipe(
+  Layer.provideMerge(layerDesktopServerExposure),
   Layer.provideMerge(layerDesktopSnapShot),
   Layer.provideMerge(
     DesktopUpdates.layer.pipe(

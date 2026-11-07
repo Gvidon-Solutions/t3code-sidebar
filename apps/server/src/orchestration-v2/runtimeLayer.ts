@@ -1,3 +1,4 @@
+import * as DeliveryAdmission from "../mesh/DeliveryAdmission.ts";
 import * as ReplicaRuntime from "../replicas/ReplicaRuntime.ts";
 import * as GuestShareService from "../guest/GuestShareService.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
@@ -87,7 +88,10 @@ const layerStores = Layer.mergeAll(
   TurnItemPositionStore.layer,
 );
 
-export const layerEventSink = EventSink.layerFromStores.pipe(Layer.provide(layerStores));
+export const layerEventSink = EventSink.layerFromStores.pipe(
+  Layer.provide(layerStores),
+  Layer.provideMerge(DeliveryAdmission.layer),
+);
 const layerProjectionMaintenanceProvided = ProjectionMaintenance.layer.pipe(
   Layer.provide(layerStores),
 );
@@ -426,5 +430,6 @@ export const layerProduction = Layer.mergeAll(
   Layer.provide(ResourceCleanupService.layer.pipe(Layer.provide(layerScheduledTaskProvided))),
   Layer.provide(Scheduler.layer),
   Layer.provideMerge(layerEventInfrastructure),
+  Layer.provideMerge(DeliveryAdmission.layer),
   ReplicaRuntime.withRuntime,
 );

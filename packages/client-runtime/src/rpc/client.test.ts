@@ -1,3 +1,5 @@
+import { DeliveryDrainError } from "@t3tools/contracts";
+import * as TestClock from "effect/testing/TestClock";
 import {
   EnvironmentId,
   type RelayClientInstallProgressEvent,
@@ -26,7 +28,13 @@ import {
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
-import { runStream, subscribe, subscribeDynamicWithSession } from "./client.ts";
+import {
+  RpcPermissionGuard,
+  requestGuarded,
+  runStream,
+  subscribe,
+  subscribeDynamicWithSession,
+} from "./client.ts";
 
 const TARGET = new PrimaryConnectionTarget({
   environmentId: EnvironmentId.make("environment-1"),
@@ -399,3 +407,50 @@ describe("environment RPC", () => {
       }),
   );
 });
+
+it.effect(
+  "retries an explicit updating refusal on the replacement session with the original payload",
+  () =>
+    Effect.gen(function* () {
+      const { activeSession, supervisor } = yield* makeHarness();
+      const refused = yield* Deferred.make<void>();
+      const inputs: unknown[] = [];
+      const input = { requestId: "stable-delivery-request", deadlineMs: 1000 };
+      const status = {
+        requestId: input.requestId,
+        phase: "drained" as const,
+        deadlineAt: 1000,
+        activeRuns: 0,
+        pendingStarts: 0,
+      };
+      const first = {
+        "delivery.drain": (payload: unknown) => {
+          inputs.push(payload);
+          return Deferred.succeed(refused, undefined).pipe(
+            Effect.andThen(
+              Effect.fail(new DeliveryDrainError({ message: "T3_UPDATING: draining" })),
+            ),
+          );
+        },
+      } as unknown as WsRpcProtocolClient;
+      const second = {
+        "delivery.drain": (payload: unknown) => {
+          inputs.push(payload);
+          return Effect.succeed(status);
+        },
+      } as unknown as WsRpcProtocolClient;
+      yield* SubscriptionRef.set(activeSession, Option.some(session(first)));
+      const pending = yield* requestGuarded("delivery.drain", input).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.provideService(RpcPermissionGuard, { authorize: () => Effect.void }),
+        Effect.forkChild,
+      );
+      yield* Deferred.await(refused);
+      yield* SubscriptionRef.set(activeSession, Option.some(session(second)));
+      yield* TestClock.adjust("1 second");
+      expect(yield* Fiber.join(pending)).toEqual(status);
+      expect(inputs).toEqual([input, input]);
+      expect(inputs[0]).toBe(input);
+      expect(inputs[1]).toBe(input);
+    }),
+);
