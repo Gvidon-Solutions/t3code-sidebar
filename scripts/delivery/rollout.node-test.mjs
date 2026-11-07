@@ -170,3 +170,33 @@ test("artifact selection skips native installers for a server or web only change
   });
   assert.deepEqual(changedArtifacts(["apps/mobile/src/App.tsx"]), { desktop: false, mobile: true });
 });
+
+test("default delivery version preserves the ref's compatibility core and newer upstream sync core", async () => {
+  const { versionForDelivery } = await import("./builder.mjs");
+  assert.equal(
+    versionForDelivery(
+      "1.6.2-sidebar.8",
+      "Last synced with upstream release `v1.7.0`",
+      true,
+      "20300102T030405Z",
+    ),
+    "1.7.0-hot.20300102030405",
+  );
+  assert.equal(
+    versionForDelivery(
+      "2.0.1",
+      "Last synced with upstream release `v1.9.9`",
+      false,
+      "20300102T030405Z",
+    ),
+    "2.0.1-delivery.20300102030405",
+  );
+  assert.equal(
+    versionForDelivery("1.6.2", "No upstream marker", true, "20300102T030405Z"),
+    "1.6.2-hot.20300102030405",
+  );
+  assert.throws(
+    () => versionForDelivery("invalid", "", true, "20300102T030405Z"),
+    /Invalid server package version/,
+  );
+});

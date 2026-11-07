@@ -37,6 +37,19 @@ const atomic = (path, value) => {
 };
 export const defaultConfigPath = () =>
   join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "t3-delivery/config.json");
+export function versionForDelivery(packageVersion, forkText, hot, stamp) {
+  const core = /^(\d+\.\d+\.\d+)(?:[-+].*)?$/.exec(packageVersion)?.[1];
+  if (!core) throw new Error("Invalid server package version");
+  const synced = /Last synced with upstream release `v(\d+\.\d+\.\d+)`/.exec(forkText)?.[1];
+  const newer = (left, right) => {
+    const a = left.split(".").map(BigInt);
+    const b = right.split(".").map(BigInt);
+    for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+    return false;
+  };
+  return `${synced && newer(synced, core) ? synced : core}-${hot ? "hot" : "delivery"}.${stamp.replaceAll(/\D/g, "")}`;
+}
+
 export function readConfig(path = defaultConfigPath()) {
   const config = JSON.parse(readFileSync(path, "utf8"));
   for (const key of ["repository", "buildDir", "stateDir", "socket"]) {
@@ -127,6 +140,7 @@ export async function deliver(config, request) {
         throw new Error(`Machine is not in delivery allowlist: ${name}`);
       })(),
   );
+
   if (new Set(selected).size !== selected.length) throw new Error("Duplicate target machines");
   if (request.action === "rollback") {
     for (const machine of [...machines].reverse()) {
@@ -167,7 +181,13 @@ export async function deliver(config, request) {
     ? exec("git", ["-C", source, "diff", "--name-only", previous, commit]).split("\n")
     : ["apps/desktop/", "apps/mobile/"];
   const version =
-    request.version || `0.0.0-${request.hot ? "hot" : "delivery"}.${id.replaceAll(/\D/g, "")}`;
+    request.version ||
+    versionForDelivery(
+      JSON.parse(exec("git", ["-C", source, "show", `${commit}:apps/server/package.json`])).version,
+      exec("git", ["-C", source, "show", `${commit}:FORK.md`]),
+      request.hot,
+      id,
+    );
   if (!/^[0-9A-Za-z.+-]+$/.test(version)) throw new Error("Invalid delivery version");
   if (!existsSync(join(config.buildDir, ".git")))
     exec("git", ["clone", "--shared", "--no-checkout", source, config.buildDir]);
