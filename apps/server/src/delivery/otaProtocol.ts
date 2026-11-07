@@ -34,11 +34,14 @@ export type OtaCatalog = typeof OtaCatalog.Type;
 
 export function verifyOtaRelease(release: OtaRelease, certificate: string) {
   const manifest = decodeManifest(release.manifest);
+  const signer = new X509Certificate(certificate);
+  if (!signer.keyUsage?.includes("1.3.6.1.5.5.7.3.3"))
+    throw new Error("Mobile update certificate must have Code Signing usage");
   if (
     !verify(
       "RSA-SHA256",
       Buffer.from(release.manifest),
-      new X509Certificate(certificate).publicKey,
+      signer.publicKey,
       Buffer.from(release.signature, "base64"),
     )
   ) {

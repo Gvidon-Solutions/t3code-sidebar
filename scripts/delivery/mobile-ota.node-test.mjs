@@ -5,6 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
+import * as NodeURL from "node:url";
 import { publishMobileUpdate } from "./mobile-ota.mjs";
 const { test } = NodeTest;
 const { mkdtemp, writeFile, mkdir, readFile, rm } = NodeFSP;
@@ -29,26 +30,20 @@ test("publishes real Expo exports, keeps two signed updates and refuses mismatch
     );
     await writeFile(join(source, "bundle.js"), "first");
     await writeFile(join(source, "image.png"), "image");
-    const key = join(root, "key.pem"),
-      certificate = join(root, "certificate.pem");
+    const key = join(root, "signing/key.pem"),
+      certificate = join(root, "signing/certificate.pem");
     execFileSync(
-      "openssl",
+      process.execPath,
       [
-        "req",
-        "-x509",
-        "-newkey",
-        "rsa:2048",
-        "-nodes",
-        "-subj",
-        "/CN=OTA Test",
-        "-days",
-        "1",
-        "-keyout",
-        key,
-        "-out",
-        certificate,
+        NodeURL.fileURLToPath(new URL("./mobile-ota.mjs", import.meta.url)),
+        "keygen",
+        "--dir",
+        join(root, "signing"),
       ],
       { stdio: "ignore" },
+    );
+    NodeAssert.ok(
+      new X509Certificate(await readFile(certificate)).keyUsage.includes("1.3.6.1.5.5.7.3.3"),
     );
     await writeFile(
       join(root, "expo-config.json"),
@@ -85,6 +80,27 @@ test("publishes real Expo exports, keeps two signed updates and refuses mismatch
       NodeAssert.ok(await readFile(join(store, "assets", manifest.launchAsset.hash)));
     }
     await NodeAssert.rejects(publishMobileUpdate({ ...options, runtime: "" }), /fingerprint/);
+    const invalidCertificate = join(root, "invalid-certificate.pem");
+    execFileSync(
+      "openssl",
+      [
+        "req",
+        "-x509",
+        "-key",
+        key,
+        "-subj",
+        "/CN=Invalid OTA Test",
+        "-days",
+        "1",
+        "-out",
+        invalidCertificate,
+      ],
+      { stdio: "ignore" },
+    );
+    await NodeAssert.rejects(
+      publishMobileUpdate({ ...options, certificate: invalidCertificate }),
+      /Code Signing/,
+    );
     const otherKey = join(root, "other-key.pem");
     execFileSync("openssl", ["genrsa", "-out", otherKey, "2048"], { stdio: "ignore" });
     await NodeAssert.rejects(publishMobileUpdate({ ...options, key: otherKey }), /does not match/);

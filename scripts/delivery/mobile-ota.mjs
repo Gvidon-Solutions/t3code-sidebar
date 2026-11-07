@@ -79,6 +79,8 @@ export async function publishMobileUpdate(options) {
     "base64",
   );
   const cert = await readFile(certificate, "utf8");
+  if (!new X509Certificate(cert).keyUsage?.includes("1.3.6.1.5.5.7.3.3"))
+    throw new Error("Certificate must have the Code Signing extended key usage");
   if (
     !verify(
       "RSA-SHA256",
@@ -152,6 +154,10 @@ async function main() {
         "-nodes",
         "-days",
         "3650",
+        "-addext",
+        "keyUsage=critical,digitalSignature",
+        "-addext",
+        "extendedKeyUsage=codeSigning",
         "-subj",
         "/CN=T3 Mobile Updates",
         "-keyout",
