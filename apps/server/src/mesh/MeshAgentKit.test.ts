@@ -33,11 +33,12 @@ it.effect(
         machines: { laptop: { label: "LT" }, studio: { label: "ST" } },
         agents: { instructions: "Shared instructions" },
       };
-      yield* kit.reconcile(doc);
+      yield* kit.reconcile(doc, { title: "Studio", label: "ST" });
       expect(yield* fs.exists(`${home}/.agents/skills/t3/global`)).toBe(false);
       expect(yield* fs.exists(`${home}/.agents/skills/t3/scripts/tool.test.mjs`)).toBe(false);
       const first = yield* fs.readFileString(`${home}/.codex/AGENTS.md`);
       expect(first.startsWith(original)).toBe(true);
+      expect(first).toContain("<!-- t3-mesh begin -->\nThis machine: Studio (ST).");
       expect(first).toContain("laptop (LT), studio (ST)");
       expect(first).toContain("Shared instructions");
       for (const directory of [".agents", ".claude", ".codex", ".config/opencode"]) {
@@ -47,7 +48,7 @@ it.effect(
       }
       expect(yield* fs.exists(`${home}/.claude/CLAUDE.md`)).toBe(true);
       expect(yield* fs.exists(`${home}/.config/opencode/AGENTS.md`)).toBe(true);
-      yield* kit.reconcile(doc);
+      yield* kit.reconcile(doc, { title: "Studio", label: "ST" });
       expect(yield* fs.readFileString(`${home}/.codex/AGENTS.md`)).toBe(first);
       yield* fs.writeFileString(`${home}/.codex/AGENTS.md`, `${first}After block\n`);
       yield* fs.writeFileString(`${source}/SKILL.md`, "skill v2");
