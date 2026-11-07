@@ -33,7 +33,7 @@ Before raising a container limit, check the VPS with `free -g`. X1 observed only
 The third server therefore moved to a separate gor container, preserving its
 identity and mounted home, temporary projects and conflict copies. The original
 VPS container stays stopped; never run both copies of the same identity.
-The alternative uses 4 GiB RAM, 2 CPUs and the same unprivileged/container security
+The alternative uses 4 GiB RAM, 4 CPUs and the same unprivileged/container security
 settings. It changes no other VPS stack and requires no gor kernel change.
 
 The X1 alternative is `/tmp/X1-third-bed/compose.yaml` on gor, container
@@ -477,3 +477,9 @@ primary's inbound proxy state and stops its outbound tunnels, then waits for bot
 replica endpoints to disconnect before writing divergent versions. The engine stays
 enabled and sessions stay running; no pause/retry/resume command runs during the outage
 or recovery. Normal completion and EXIT cleanup restore the captured proxy state.
+
+Round two follows project-list cursors when reusing a populated bed. Its command and
+sync deadlines default to 900 seconds, matching the server’s 15-minute replica readiness
+budget rather than cutting off a slow 128 MiB transfer after 180 seconds.
+`MESH_E2E_ROUND2_RPC_TIMEOUT` and `MESH_E2E_ROUND2_TIMEOUT` override those bounds.
+The transfer check compares both SHA-256 hashes and requires exactly 128 MiB on the replica.

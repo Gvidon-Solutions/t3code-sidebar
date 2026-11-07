@@ -707,3 +707,5 @@ before recreation.
 The acceptance runner can place its third container on another administrator SSH host with
 `MESH_E2E_VPS_DIR` and `MESH_E2E_VPS_SUDO`; uploads use the same privileged transport.
 The bed guide records the alternate routing and the single-active-identity constraint.
+Round-two acceptance follows project pagination and budgets the full server readiness window;
+its 128 MiB canary now checks both SHA-256 and replica size.

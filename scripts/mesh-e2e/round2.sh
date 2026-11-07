@@ -10,7 +10,8 @@ unset MESH_E2E_HELPERS_ONLY
 export MESH_E2E_SSH_CONTROL_DIR="${MESH_E2E_SSH_CONTROL_DIR:-$WORK/round2-ssh}"
 mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
 chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
-TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-120}
+TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-900}
+RPC_TIMEOUT=${MESH_E2E_ROUND2_RPC_TIMEOUT:-900}
 PASS=0; FAIL=0; FAILED=()
 CTL="$HOME/.agents/skills/t3-next/scripts/t3ctl.mjs"
 for m in gv gor vps; do
@@ -31,7 +32,7 @@ ctl() {
  local machine=$1; shift
  local base="$GV_BASE_DIR"
  case "$machine" in gor) base=/home/user/.t3-sidebar-server;; vps) base=/home/t3/.t3;; esac
- XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" T3CTL_T3_BIN="$WORK/t3-$machine" timeout 180 node "$CTL" "$@"
+ XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" T3CTL_T3_BIN="$WORK/t3-$machine" timeout "$RPC_TIMEOUT" node "$CTL" "$@"
 }
 tool() { local machine=$1 name=$2; shift 2; ctl "$machine" tool "$name" "$@"; }
 probe() {
@@ -75,6 +76,14 @@ fi
 
 probe projects tool gor t3_project_list '{"limit":100}'
 DEMO=$(jq -r '.. | objects | select(.workspaceRoot? == "/home/user/xdev-e2e/demo") | .id' "$WORK/projects.out" | head -1)
+next_cursor=$(jq -r '.nextCursor // empty' "$WORK/projects.out")
+page=0
+while [ -z "$DEMO" ] && [ -n "$next_cursor" ]; do
+ page=$((page+1))
+ probe "projects-page-$page" tool gor t3_project_list "$(jq -nc --argjson cursor "$next_cursor" '{limit:100,cursor:$cursor}')"
+ DEMO=$(jq -r '.. | objects | select(.workspaceRoot? == "/home/user/xdev-e2e/demo") | .id' "$WORK/projects-page-$page.out" | head -1)
+ next_cursor=$(jq -r '.nextCursor // empty' "$WORK/projects-page-$page.out")
+done
 if [ -z "$DEMO" ]; then
  probe register-demo tool gor t3_project_create '{"title":"demo","workspaceRoot":"/home/user/xdev-e2e/demo"}'
  DEMO=$(jq -r '.id // empty' "$WORK/register-demo.out")
@@ -102,6 +111,16 @@ if wait "$launch_pid"; then record_pass a-mcp-launch "$(elapsed_ms "$launch_star
 probe a-machines tool gor t3_project_machines "$(jq -nc --arg p "$KEY" '{project:$p}')"
 VPATH=$(jq -r --arg e "$VPS_ENV" '.representations[]? | select(.environmentId==$e) | .path' "$WORK/a-machines.out")
 probe a-watching wait_replica vps "$KEY" "$VPS_ENV" watching
+transfer_checksum() {
+ local source_file quoted_source expected actual
+ source_file=$(jq -r --arg e "$GOR_ENV" '.representations[] | select(.environmentId==$e) | .path' "$WORK/a-machines.out")/round2-transfer.bin
+ printf -v quoted_source '%q' "$source_file"
+ expected=$(gor_ssh "sha256sum $quoted_source" | cut -d' ' -f1) || return
+ actual=$(vexec sha256sum "$VPATH/round2-transfer.bin" | cut -d' ' -f1) || return
+ printf '128 MiB primary=%s replica=%s\n' "$expected" "$actual"
+ [ "$expected" = "$actual" ] && [ "$(vexec stat -c %s "$VPATH/round2-transfer.bin")" = 134217728 ]
+}
+probe a-transfer-checksum transfer_checksum
 probe a-installer vexec sh -c 'test "$(/home/t3/.t3/bin/mutagen version)" = 0.18.1 && sha256sum /home/t3/.t3/bin/mutagen' 
 probe a-excludes vexec sh -c "test -f '$VPATH/README.md' && test ! -e '$VPATH/.git' && test ! -e '$VPATH/node_modules'"
 wait_edit() {
