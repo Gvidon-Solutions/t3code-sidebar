@@ -48,6 +48,28 @@ it("release source filters keep unrelated platform builds out of the hot path", 
   for (const path of ["pnpm-lock.yaml", "packages/client-runtime/src/index.ts"]) {
     NodeAssert.deepEqual(releasePlan([path]), { desktop: true, android: true });
   }
+  const ios = Schema.decodeSync(
+    fromYaml(
+      Schema.Struct({
+        on: Schema.Struct({
+          push: Schema.Struct({ paths: Schema.Array(Schema.String) }),
+        }),
+      }),
+    ),
+  )(
+    NodeFS.readFileSync(
+      new URL("../../.github/workflows/sidebar-ios.yml", import.meta.url),
+      "utf8",
+    ),
+  );
+  NodeAssert.ok(
+    ios.on.push.paths.some((pattern) => NodePath.matchesGlob("apps/mobile/src/App.tsx", pattern)),
+  );
+  for (const path of ["apps/web/src/App.tsx", "apps/server/src/bin.ts", "docs/delivery.md"])
+    NodeAssert.equal(
+      ios.on.push.paths.some((pattern) => NodePath.matchesGlob(path, pattern)),
+      false,
+    );
   NodeAssert.deepEqual(changedPaths("000000000000", "HEAD"), ["pnpm-lock.yaml"]);
 });
 
