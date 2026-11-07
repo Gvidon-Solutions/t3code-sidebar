@@ -2,16 +2,20 @@
 # Sourced by round3.sh: every folder, project, thread and session belongs to this N run.
 set -euo pipefail
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
-# The machine owning the folder wins over a newer peer's duplicate path claim.
-rexec vps mkdir -p "$N_ROOT-authority-claim"
-auth_claim=$(jq -nc --arg env "$VPS_ENV" --arg path "$N_ROOT-authority-claim" '{environmentId:$env,path:$path,role:"primary",transport:"git",createdAt:""}')
-auth_entries=$(entry "rep/$N_KEY-authority/$VPS_ENV" "$auth_claim" | jq --arg node "browser-$RUN_TS" '.entries |= with_entries(.value.h = (.value.h | sub("[^.]+$"; $node)))')
-ws_rpc vps meshLayout.apply "$auth_entries" > "$WORK/N-browser-authority.json"
-ws_rpc gv meshLayout.apply "$(entry "rep/$N_KEY-peer/$VPS_ENV" "$auth_claim")" > "$WORK/N-peer-claim.json"
-wait_converged 'N browser authority path claim'
-ws_get gv > "$WORK/N-authority-claims.json"
-jq -e --arg win "$N_KEY-authority" --arg lose "$N_KEY-peer" '.config.projectMounts[$win]|length==1' "$WORK/N-authority-claims.json" >/dev/null
-jq -e --arg lose "$N_KEY-peer" '(.config.projectMounts[$lose] // [])|length==0' "$WORK/N-authority-claims.json" >/dev/null
+# Duplicate path claims use LWW, independently of the receiver or old authority.
+rexec vps mkdir -p "$N_ROOT-duplicate-claim"
+ctl vps tool t3_project_create "$(jq -nc --arg title "N-duplicate claim $RUN_TS" --arg path "$N_ROOT-duplicate-claim" '{title:$title,workspaceRoot:$path}')" > "$WORK/N-claim-project.json"
+claim_project=$(jq -er '.id' "$WORK/N-claim-project.json")
+first_claim=$(jq -nc --arg env "$VPS_ENV" --arg path "$N_ROOT-duplicate-claim" --arg id "$claim_project" '{environmentId:$env,path:$path,projectId:$id,role:"primary",transport:"git",createdAt:""}')
+first_entries=$(entry "rep/$N_KEY-first/$VPS_ENV" "$first_claim" | jq --arg node "browser-$RUN_TS" '.entries |= with_entries(.value.h = (.value.h | sub("[^.]+$"; $node)))')
+ws_rpc vps meshLayout.apply "$first_entries" > "$WORK/N-first-claim.json"
+wait_converged 'N first duplicate path claim'
+first_claim=$(ws_get vps | jq -c --arg key "rep/$N_KEY-first/$VPS_ENV" '.document[$key].v')
+ws_rpc gv meshLayout.apply "$(entry "rep/$N_KEY-peer/$VPS_ENV" "$first_claim")" > "$WORK/N-peer-claim.json"
+wait_converged 'N duplicate path claim uses latest clock'
+ws_get gv > "$WORK/N-duplicate-claims.json"
+jq -e --arg win "$N_KEY-peer" --arg lose "$N_KEY-first" --arg env "$VPS_ENV" '.config.projectMounts[$win]|length==1' "$WORK/N-duplicate-claims.json" >/dev/null
+jq -e --arg lose "$N_KEY-first" '(.config.projectMounts[$lose] // [])|length==0' "$WORK/N-duplicate-claims.json" >/dev/null
 feature_root="$N_ROOT-features"
 feature_title="N-project title $RUN_TS"
 feature_legacy="title:${feature_title,,}"
