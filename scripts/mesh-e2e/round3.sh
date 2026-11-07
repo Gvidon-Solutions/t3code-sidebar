@@ -55,7 +55,7 @@ ctl() {
 }
 T_GV=$(mint_token gv); T_GOR=$(mint_token gor); T_VPS=$(mint_token vps)
 GV_ENV=$(descriptor_env "$GV_ORIGIN"); GOR_ENV=$(descriptor_env "$GOR_ORIGIN"); VPS_ENV=$(descriptor_env "$VPS_ORIGIN")
-N_KEY="N-$RUN_TS"; N_ROOT="/tmp/$N_KEY"; N_FILE="$N_ROOT/conflict"
+N_KEY="N-$RUN_TS"; N_ROOT="${MESH_E2E_ROUND3_FIXTURES:-/var/tmp/t3-mesh-round3}/$N_KEY"; N_FILE="$N_ROOT/conflict"
 rexec() {
   local m=$1; shift
   case "$m" in

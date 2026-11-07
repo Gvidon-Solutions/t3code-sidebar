@@ -135,6 +135,7 @@ try {
     );
     const variables = {
       HOME: node.home,
+      ...(node.name === "studio" && process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}),
       T3CODE_HOME: node.base,
       T3_MESH_AGENT_HOME: node.home,
       T3_MESH_SSH_HOME: node.home,

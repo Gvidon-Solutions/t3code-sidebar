@@ -311,6 +311,7 @@ try {
       else await remote(node.name, prepare);
       const environment = {
         HOME: node.home,
+        ...(node.name === "studio" && process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}),
         T3_MESH_SSH_HOME: node.home,
         T3_MESH_SSHD_DIR: `${node.home}/sshd`,
       };
