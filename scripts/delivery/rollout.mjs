@@ -17,12 +17,23 @@ export async function waitForHealthy(
   baselines,
   maxWaitMs,
   clock = { now: Date.now, sleep: setTimeout },
+  observers = [],
 ) {
   const deadline = clock.now() + maxWaitMs;
   for (;;) {
     try {
       const actual = await adapter.health();
       for (const baseline of baselines) assertHealth(actual, version, baseline);
+      for (const other of await Promise.all(
+        observers.filter((observer) => observer !== adapter).map((observer) => observer.health()),
+      )) {
+        if (!other.replicasReady) throw new Error("Peer replicas have not resumed");
+        assertHealth(actual, version, other);
+        for (const [key, value] of Object.entries(actual.entries)) {
+          if ((other.entries[key] ?? "") < value)
+            throw new Error(`Peer layout has not converged: ${key}`);
+        }
+      }
       return;
     } catch (error) {
       if (clock.now() >= deadline) throw error;
@@ -54,7 +65,7 @@ export async function rollout(
       await adapter.drain();
       await journal({ machine: adapter.name, phase: "switch" });
       await adapter.activate();
-      await waitForHealthy(adapter, version, baselines, options.healthWaitMs, clock);
+      await waitForHealthy(adapter, version, baselines, options.healthWaitMs, clock, adapters);
       await journal({ machine: adapter.name, phase: "healthy" });
       if (adapter.commit) await adapter.commit();
     } catch (error) {
@@ -67,6 +78,7 @@ export async function rollout(
           [baselines[i]],
           options.healthWaitMs,
           clock,
+          adapters,
         );
         if (adapter.release) await adapter.release();
       } catch (rollbackError) {

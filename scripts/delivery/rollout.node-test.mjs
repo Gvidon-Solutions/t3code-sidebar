@@ -342,3 +342,38 @@ test("failed runtime health leaves phone catalogs unchanged; only healthy rollou
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a stable layout key created during startup must reach fresh peer health before the next switch", async () => {
+  let active = false,
+    nextPrepared = false;
+  const studio = {
+    name: "studio",
+    health: async () =>
+      health(
+        active ? "2" : "1",
+        active ? { "proj/app": "001", "new/key": "002" } : { "proj/app": "001" },
+      ),
+    prepare: async () => {},
+    drain: async () => {},
+    activate: async () => {
+      active = true;
+    },
+    rollback: async () => {
+      active = false;
+    },
+  };
+  const cloudbox = {
+    ...studio,
+    name: "cloudbox",
+    health: async () => health(),
+    prepare: async () => {
+      nextPrepared = true;
+    },
+  };
+  await assert.rejects(
+    rollout([studio, cloudbox], "2", { healthWaitMs: 0 }, async () => {}),
+    /Peer layout has not converged: new\/key/,
+  );
+  assert.equal(nextPrepared, false);
+  assert.equal(active, false);
+});
