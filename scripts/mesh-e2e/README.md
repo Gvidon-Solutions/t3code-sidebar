@@ -152,6 +152,15 @@ checks `config = materialize(document)`; newer reports may advance during the wa
 Local fixture services and their CLI processes must share `TMPDIR` because private
 peer-pipe sockets are rooted there.
 
+Round 3 uses project conflict policies and ignores from `meshConfig.apply`, rather
+than a global authority or legacy per-representation flags. Its reversed-endpoint
+adoption fixture uses `newest-wins` with explicit file mtimes. Foreign sessions
+live in the isolated server HOME; the runner verifies that HOME before creating one.
+Each recovery deadline defaults to 900 seconds because the staging-crash scenarios
+transfer 256 MiB through the relay. Set `MESH_E2E_ROUND3_TIMEOUT` to override it.
+Round 3 requests four-hour test sessions (`MESH_E2E_SESSION_TTL`) so credentials
+remain valid across those transfers and the six restart orders.
+
 ## Teardown
 
 ```bash

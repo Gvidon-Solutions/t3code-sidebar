@@ -31,7 +31,8 @@ rexec gv test ! -e "$warning_root-copy/private"
 warning_hash=$(node --input-type=module -e 'import {createHash} from "node:crypto"; console.log(createHash("sha256").update(process.argv[1]).digest("hex").slice(0,8))' "$warning_key")
 mut gv sync list --label-selector "t3-logical=$warning_hash" --template '{{json .}}' > "$WORK/N-live-before-ignores.json"
 rexec gor chmod 600 "$warning_root/private"
-ctl vps place "$warning_title" --on "$GV_ENV" --ignore absolute-link --ignore relative-outside --ignore private --wait 120 --json > "$WORK/N-live-ignore-place.json"
+project_options "$warning_title" '{"ignore":["absolute-link","relative-outside","private"]}' > "$WORK/N-live-ignore-policy.json"
+ctl vps place "$warning_title" --on "$GV_ENV" --wait 120 --json > "$WORK/N-live-ignore-place.json"
 previous_session=$(jq -r '.[0].identifier' "$WORK/N-live-before-ignores.json")
 ignore_deadline=$((SECONDS+TIMEOUT))
 while :; do

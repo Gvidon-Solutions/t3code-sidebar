@@ -40,6 +40,15 @@ probe() {
  if "$@" > "$WORK/$name.out" 2>&1; then record_pass "$name" "$(elapsed_ms "$start")ms"; else record_fail "$name" "$(elapsed_ms "$start")ms; $WORK/$name.out: $(tail -c 450 "$WORK/$name.out")"; fi
 }
 vexec() { local args; printf -v args '%q ' "$@"; vps_ssh "docker exec t3-mesh-e2e $args"; }
+wait_ssh() {
+ local deadline=$((SECONDS+TIMEOUT)) ssh_result=1
+ while [ "$SECONDS" -lt "$deadline" ]; do
+  "$@" && return 0
+  ssh_result=$?
+  sleep 1
+ done
+ return "$ssh_result"
+}
 mut() { vexec env MUTAGEN_DATA_DIRECTORY=/home/t3/.t3/mutagen /home/t3/.t3/bin/mutagen "$@"; }
 T_GV=$(mint_token gv); T_GOR=$(mint_token gor); T_VPS=$(mint_token vps)
 GV_ENV=$(descriptor_env "$GV_ORIGIN"); GOR_ENV=$(descriptor_env "$GOR_ORIGIN"); VPS_ENV=$(descriptor_env "$VPS_ORIGIN")
@@ -55,10 +64,10 @@ jq --arg gv "$GV_NAME" --arg gor "$GOR_NAME" --arg vps "$VPS_NAME" '.current.doc
 BASE=$(jq -er '.current.revision' "$WORK/routes-config.json")
 probe routes ws_rpc gor meshConfig.apply "$(jq -nc --slurpfile doc "$WORK/routes-doc.json" --arg base "$BASE" '{doc:$doc[0],baseRevision:$base}')"
 wait_converged 'routes converge'
-probe route-gv-gor ssh -F "$GV_BASE_DIR/home/.ssh/config" -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
-probe route-vps-gor vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
-probe route-vps-gv vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GV_NAME" hostname
-probe route-gor-vps gor_ssh "ssh -o BatchMode=yes -o ConnectTimeout=10 t3-$VPS_NAME hostname"
+probe route-gv-gor wait_ssh ssh -F "$GV_BASE_DIR/home/.ssh/config" -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
+probe route-vps-gor wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
+probe route-vps-gv wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GV_NAME" hostname
+probe route-gor-vps wait_ssh gor_ssh "ssh -o BatchMode=yes -o ConnectTimeout=10 t3-$VPS_NAME hostname"
 if ! ws_rpc gor peerLinks.list '{}' | jq -e --arg e "$GV_ENV" '.links[] | select(.environmentId==$e and .access=="full-access")' > "$WORK/gor-gv-link.json"; then
  code=$(pair_code gv)
  probe link-gor-gv ws_rpc gor peerLinks.link "$(jq -nc --arg code "$code" --arg e "$GV_ENV" '{url:"http://127.0.0.1:13795",pairingCode:$code,access:"full-access",expectedEnvironmentId:$e}')"
@@ -197,6 +206,7 @@ SESSION=$(jq -r --arg path "$VPATH" '.[] | select(.beta.path==$path) | .name' "$
 probe e-quiesce ws_rpc vps server.updateSettings '{"patch":{"replicasEnabled":false}}'
 probe e-drain vps_ssh 'docker restart t3-mesh-e2e'
 probe e-health wait_health "$VPS_ORIGIN" 60
+probe e-ssh-ready wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" true
 probe e-pause mut sync pause "$SESSION"
 probe e-alpha gor_ssh "printf 'alpha-$MARK\n' > /home/user/xdev-e2e/demo/round2-conflict.txt"
 probe e-beta vexec sh -c "printf 'beta-$MARK\n' > '$VPATH/round2-conflict.txt'"

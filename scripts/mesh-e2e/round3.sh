@@ -9,6 +9,7 @@ if jq -e 'any(.[]; .title | test("xdev (QA|L |M )"))' <<<"$running" >/dev/null; 
   exit 75
 fi
 export MESH_E2E_HELPERS_ONLY=1
+export MESH_E2E_SESSION_TTL=${MESH_E2E_SESSION_TTL:-4h}
 export MESH_E2E_ROUND1_WORK="${MESH_E2E_ROUND3_WORK:-/tmp/t3-mesh-e2e-N-round3}"
 . "$(dirname "$0")/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
@@ -22,7 +23,7 @@ ws_rpc() {
 }
 printf '%s' "$$" > "$WORK/N-round3-runner.pid"
 set -e
-TIMEOUT=240
+TIMEOUT=${MESH_E2E_ROUND3_TIMEOUT:-900}
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
 git -C "$REPO_ROOT" merge-base --is-ancestor "$source_commit" "$COMMIT" || die "Build lacks N: use MESH_E2E_BUILD_CURRENT=1 build.sh xdev-n, then deploy.sh while the bed is free"
 for m in gv gor vps; do
@@ -58,7 +59,7 @@ N_KEY="N-$RUN_TS"; N_ROOT="/tmp/$N_KEY"; N_FILE="$N_ROOT/conflict"
 rexec() {
   local m=$1; shift
   case "$m" in
-    gv) "$@";;
+    gv) env HOME="$GV_BASE_DIR/home" MUTAGEN_SSH_PATH="$GV_BASE_DIR/mesh/ssh/bin" "$@";;
     gor) local args; printf -v args '%q ' "$@"; gor_ssh "$args";;
     vps) local args; printf -v args '%q ' "$@"; vps_ssh "docker exec t3-mesh-e2e $args";;
     *) return 2;;
@@ -118,6 +119,11 @@ entry() {
   if [ "$maximum" -ge "$now" ]; then now=$((maximum+1)); fi
   jq -nc --arg k "$key" --argjson v "$value" --arg h "$now.00000.$GV_ENV" '{entries:{($k):{v:$v,h:$h}}}'
 }
+project_options() {
+  local project=$1 options=$2 config
+  config=$(ws_rpc gv meshConfig.get '{}')
+  ws_rpc gv meshConfig.apply "$(jq -nc --argjson config "$config" --arg project "$project" --argjson options "$options" '{baseRevision:$config.current.revision,doc:($config.current.doc | .projects.overrides = ((.projects.overrides // []) + [($options + {project:$project})]))}')"
+}
 ws_get gv > "$WORK/N-before.json"
 restore() {
   local rc=$?
@@ -129,8 +135,6 @@ restore() {
       ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-restore-engine-$m.json" || rc=1
     fi
   done
-  local old; old=$(jq -c '.document["mesh.authority"].v // null' "$WORK/N-before.json")
-  ws_rpc gv meshLayout.apply "$(entry mesh.authority "$old")" > "$WORK/N-restore.json" || rc=1
   if [ -S "$MESH_E2E_SSH_CONTROL_DIR/gor" ]; then ssh -F "$GOR_SSH_CONFIG" -S "$MESH_E2E_SSH_CONTROL_DIR/gor" -O exit "$GOR_HOST" || rc=1; fi
   if [ -S "$MESH_E2E_SSH_CONTROL_DIR/vps" ]; then ssh -F "$VPS_SSH_CONFIG" -S "$MESH_E2E_SSH_CONTROL_DIR/vps" -O exit "$VPS_HOST" || rc=1; fi
   exit "$rc"
@@ -139,7 +143,7 @@ trap restore EXIT
 for m in gv gor vps; do rexec "$m" mkdir -p "$N_ROOT"; done
 rexec gor git init -q "$N_ROOT"
 rexec gor sh -c "printf 'baseline' > '$N_FILE'; dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=32 status=none"
-ws_rpc gv meshLayout.apply "$(entry mesh.authority "\"$GOR_ENV\"")" > "$WORK/N-authority.json"
+project_options "$N_KEY" '{"conflicts":"primary-wins"}' > "$WORK/N-primary-policy.json"
 add_rep() {
   local m=$1 role=$2 env source
   env=$(env_of "$m"); source=null; [ "$role" = primary ] || source="\"$GOR_ENV\""

@@ -2,11 +2,11 @@
 # Sourced by round3.sh: every folder, project, thread and session belongs to this N run.
 set -euo pipefail
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
-# A browser clock written on the authority must beat a newer peer's duplicate path claim.
+# The machine owning the folder wins over a newer peer's duplicate path claim.
 rexec vps mkdir -p "$N_ROOT-authority-claim"
 auth_claim=$(jq -nc --arg env "$VPS_ENV" --arg path "$N_ROOT-authority-claim" '{environmentId:$env,path:$path,role:"primary",transport:"git",createdAt:""}')
 auth_entries=$(entry "rep/$N_KEY-authority/$VPS_ENV" "$auth_claim" | jq --arg node "browser-$RUN_TS" '.entries |= with_entries(.value.h = (.value.h | sub("[^.]+$"; $node)))')
-ws_rpc gor meshLayout.apply "$auth_entries" > "$WORK/N-browser-authority.json"
+ws_rpc vps meshLayout.apply "$auth_entries" > "$WORK/N-browser-authority.json"
 ws_rpc gv meshLayout.apply "$(entry "rep/$N_KEY-peer/$VPS_ENV" "$auth_claim")" > "$WORK/N-peer-claim.json"
 wait_converged 'N browser authority path claim'
 ws_get gv > "$WORK/N-authority-claims.json"
@@ -28,7 +28,8 @@ feature_id=$(ws_get gor | jq -r --arg alias "$feature_legacy" '.config.projectAl
 ctl gor place "$feature_project" --on "$GOR_ENV" --primary --path "$feature_root-primary" --json > "$WORK/N-feature-first-placement.json"
 jq -e --arg id "$feature_id" '.logicalKey==$id' "$WORK/N-feature-first-placement.json" >/dev/null
 wait_converged 'N first placement preserves migrated identity'
-ctl gor place "$feature_title" --on "$GV_ENV" --path "$feature_root-explicit" --ignore '*.cache' --transport mutagen --wait 120 --json > "$WORK/N-explicit-place.json"
+project_options "$feature_title" '{"ignore":["*.cache"]}' > "$WORK/N-ignore-policy.json"
+ctl gor place "$feature_title" --on "$GV_ENV" --path "$feature_root-explicit" --transport mutagen --wait 120 --json > "$WORK/N-explicit-place.json"
 jq -e --arg path "$feature_root-explicit" '.ready and .representation.path==$path' "$WORK/N-explicit-place.json" >/dev/null
 rexec gv test -f "$feature_root-explicit/both"
 rexec gv test ! -e "$feature_root-explicit/local.cache"
@@ -40,8 +41,9 @@ test "$(rexec gv cat "$feature_root-rejected/only-loser")" = N-keep-this
 ctl gor place "$feature_title" --on "$GV_ENV" --path "$feature_root-explicit" --wait 120 --json > "$WORK/N-explicit-restored.json"
 ctl gv projects --json > "$WORK/N-explicit-projects.json"
 jq -e --arg path "$feature_root-explicit" '[.[] | select(.workspaceRoot==$path)] | length==1' "$WORK/N-explicit-projects.json" >/dev/null
-ctl gor place "$feature_title" --on "$VPS_ENV" --path "$feature_root-external" --transport manual --ignore '*.cache' --wait 120 --json > "$WORK/N-manual-place.json"
-jq -e '.ready and .representation.transport=="manual" and .representation.ignores==["*.cache"]' "$WORK/N-manual-place.json" >/dev/null
+ctl gor place "$feature_title" --on "$VPS_ENV" --path "$feature_root-external" --transport manual --wait 120 --json > "$WORK/N-manual-place.json"
+jq -e '.ready and .representation.transport=="manual"' "$WORK/N-manual-place.json" >/dev/null
+ws_rpc vps meshConfig.get '{}' | jq -e --arg project "$feature_title" '.current.doc.projects.overrides[] | select(.project==$project) | .ignore | index("*.cache")!=null' >/dev/null
 ctl gor place "$feature_title" --on "$VPS_ENV" --path "$feature_root-external" --transport sshfs --wait 120 --json > "$WORK/N-sshfs-place.json"
 jq -e '.ready and .representation.transport=="sshfs"' "$WORK/N-sshfs-place.json" >/dev/null
 renamed_title="N-renamed project $RUN_TS"
@@ -74,11 +76,13 @@ rexec gv mkdir -p "$feature_root-thread-source"
 ctl gv tool t3_project_create "$(jq -nc --arg title "N-move source $RUN_TS" --arg path "$feature_root-thread-source" '{title:$title,workspaceRoot:$path}')" > "$WORK/N-move-source.json"
 thread_project=$(jq -r '.id' "$WORK/N-move-source.json")
 ctl gv tool orchestrator_capabilities > "$WORK/N-idle-capabilities.json"
-idle_model=$(jq -c '(.providers | map(select(.driverKind=="codex")) | .[0]) as $p | {instanceId:$p.providerInstanceId,model:([$p.models[].id | select(.=="gpt-6-luna")][0] // $p.models[0].id)}' "$WORK/N-idle-capabilities.json")
+idle_model=$(jq -ec '.providers[] | select(.driverKind=="codex") | {instanceId:.providerInstanceId,model:"gpt-6-luna"}' "$WORK/N-idle-capabilities.json")
 ctl gv tool t3_thread_launch "$(jq -nc --arg p "$thread_project" --arg t "N-local move $RUN_TS" --argjson model "$idle_model" '{projectId:$p,title:$t,modelSelection:$model}')" > "$WORK/N-thread.json"
 feature_thread=$(jq -r '.threadId' "$WORK/N-thread.json")
-ws_rpc gv threads.move "$(jq -nc --arg t "$feature_thread" --arg p "$feature_project" --arg env "$GOR_ENV" '{threadId:$t,projectId:$p,targetEnvironmentId:$env}')" > "$WORK/N-local-move.json"
+local_project=$(jq -er '.representation.projectId' "$WORK/N-explicit-restored.json")
+ws_rpc gv threads.move "$(jq -nc --arg t "$feature_thread" --arg p "$local_project" '{threadId:$t,projectId:$p}')" > "$WORK/N-local-move.json"
 jq -e --arg env "$GV_ENV" '.environmentId==$env and .handoffId==null' "$WORK/N-local-move.json" >/dev/null
+ctl gv tool t3_thread_read "$(jq -nc --arg t "$feature_thread" '{threadId:$t,limit:1}')" | jq -e --arg p "$local_project" '.thread.projectId==$p' >/dev/null
 # Another project has no GV representation: create a copy, wait, then move locally.
 rexec gor mkdir -p "$feature_root-copy"
 rexec gor git init -q "$feature_root-copy"
@@ -86,8 +90,11 @@ ctl gor tool t3_project_create "$(jq -nc --arg title "N-copy before move $RUN_TS
 copy_project=$(jq -r '.id' "$WORK/N-copy-project.json")
 ctl gor place "N-copy before move $RUN_TS" --on "$GOR_ENV" --primary --path "$feature_root-copy" --json > "$WORK/N-copy-primary.json"
 wait_converged 'N project before creating its local copy'
-ws_rpc gv threads.move "$(jq -nc --arg t "$feature_thread" --arg p "$copy_project" --arg env "$GOR_ENV" '{threadId:$t,projectId:$p,targetEnvironmentId:$env,createCopy:true}')" > "$WORK/N-copy-move.json"
+ctl gor place "$copy_project" --on "$GV_ENV" --path "$feature_root-copy-local" --wait 120 --json > "$WORK/N-copy-local.json"
+copy_local=$(jq -er '.representation.projectId' "$WORK/N-copy-local.json")
+ws_rpc gv threads.move "$(jq -nc --arg t "$feature_thread" --arg p "$copy_local" '{threadId:$t,projectId:$p}')" > "$WORK/N-copy-move.json"
 jq -e --arg env "$GV_ENV" '.environmentId==$env and .handoffId==null' "$WORK/N-copy-move.json" >/dev/null
+ctl gv tool t3_thread_read "$(jq -nc --arg t "$feature_thread" '{threadId:$t,limit:1}')" | jq -e --arg p "$copy_local" '.thread.projectId==$p' >/dev/null
 # Adopt only our own foreign-daemon session. Keep it until private sync watches.
 rexec gor mkdir -p "$feature_root-adopt"
 rexec gor git init -q "$feature_root-adopt"
@@ -98,13 +105,23 @@ ctl gor place "N-adoption $RUN_TS" --on "$GOR_ENV" --primary --path "$feature_ro
 wait_converged 'N project before adoption'
 # Reversed endpoints exercise adoption from GV's daemon with its existing SSH route.
 foreign_name="N-adopt-$RUN_TS"
-foreign_mut() { rexec gv env -u MUTAGEN_DATA_DIRECTORY "$(mut_bin gv)" "$@"; }
-foreign_mut sync create --name "$foreign_name" --mode two-way-safe --ignore-vcs --ignore .t3-conflicts "$feature_root-adopt-target" "t3-mesh-$GOR_ENV:$feature_root-adopt" > "$WORK/N-foreign-created.log"
+foreign_home="$GV_BASE_DIR/home"
+test "$foreign_home" != "$HOME" || die 'Adoption requires an isolated server HOME'
+node - "$(systemctl --user show -p MainPID --value "$GV_UNIT")" "$foreign_home" <<'JS'
+const fs=require('node:fs');
+const [pid,home]=process.argv.slice(2);
+if(!fs.readFileSync(`/proc/${pid}/environ`,'utf8').split('\0').includes(`HOME=${home}`)) throw Error('Foreign daemon HOME must match the isolated server');
+JS
+foreign_mut() { rexec gv env -u MUTAGEN_DATA_DIRECTORY HOME="$foreign_home" MUTAGEN_SSH_PATH="$GV_BASE_DIR/mesh/ssh/bin" "$(mut_bin gv)" "$@"; }
+gor_name=$(ws_rpc gv meshConfig.get '{}' | jq -er --arg env "$GOR_ENV" '.bindings|to_entries[]|select(.value==$env)|.key')
+foreign_mut sync create --name "$foreign_name" --mode two-way-safe --ignore-vcs --ignore .t3-conflicts "$feature_root-adopt-target" "t3-$gor_name:$feature_root-adopt" > "$WORK/N-foreign-created.log"
 foreign_mut sync flush "$foreign_name" > "$WORK/N-foreign-flushed.log"
 foreign_mut sync pause "$foreign_name" > "$WORK/N-foreign-paused.log"
 rexec gor sh -c "printf 'N-adopt-loser' > '$feature_root-adopt/both'"
 rexec gv sh -c "printf 'N-authority-wins' > '$feature_root-adopt-target/both'"
-ws_rpc gv meshLayout.apply "$(entry mesh.authority "\"$GV_ENV\"")" > "$WORK/N-adopt-authority.json"
+project_options "N-adoption $RUN_TS" '{"conflicts":"newest-wins"}' > "$WORK/N-adopt-policy.json"
+rexec gor node -e 'require("node:fs").utimesSync(process.argv[1],1000000,1000000)' "$feature_root-adopt/both"
+rexec gv node -e 'require("node:fs").utimesSync(process.argv[1],2000000,2000000)' "$feature_root-adopt-target/both"
 ctl gv replica adopt "$foreign_name" --project "N-adoption $RUN_TS" --json > "$WORK/N-adopt-result.json"
 adopt_key=$(jq -r '.logicalKey' "$WORK/N-adopt-result.json")
 for _ in $(seq 1 180); do
@@ -118,8 +135,7 @@ jq -e --arg n "$foreign_name" 'all(.[]; .name!=$n)' "$WORK/N-foreign-after.json"
 test "$(rexec gv cat "$feature_root-adopt-target/both")" = N-authority-wins
 rexec gor sh -c "rg -l 'N-adopt-loser' '$feature_root-adopt/.t3-conflicts'" > "$WORK/N-adopt-copies.log"
 test "$(rexec gor cat "$feature_root-adopt/both")" = N-authority-wins
-ws_rpc gv meshLayout.apply "$(entry mesh.authority "\"$GOR_ENV\"")" > "$WORK/N-adopt-restore-authority.json"
-wait_converged 'N feature acceptance after adoption' 
+wait_converged 'N feature acceptance after adoption'
 . "$MESH_DIR/round3-live-regressions.sh"
 printf 'PASS N features: explicit/refused paths, display titles, local/copy moves, ignores/transports, adopted conflict copies; evidence %s\n' "$WORK"
 

@@ -296,13 +296,15 @@ descriptor_version() { # descriptor_version <origin>
 }
 
 mint_token_once() { # mint_token_once gv|gor|vps
+  local ttl=${MESH_E2E_SESSION_TTL:-30m} quoted_ttl
+  printf -v quoted_ttl '%q' "$ttl"
   case "$1" in
     gv) "$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" auth session issue --base-dir "$GV_BASE_DIR" \
-      --ttl 30m --label mesh-e2e-round1 --token-only 2>/dev/null ;;
-    gor) gor_ssh "$GOR_BIN auth session issue --base-dir ~/.t3-sidebar-server --ttl 30m \
+      --ttl "$ttl" --label mesh-e2e-round1 --token-only 2>/dev/null ;;
+    gor) gor_ssh "$GOR_BIN auth session issue --base-dir ~/.t3-sidebar-server --ttl $quoted_ttl \
       --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
     vps) vps_ssh "docker exec t3-mesh-e2e node $VPS_BIN auth session issue \
-      --base-dir /home/t3/.t3 --ttl 30m --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
+      --base-dir /home/t3/.t3 --ttl $quoted_ttl --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
   esac
 }
 mint_token() { # mint_token gv|gor|vps — a just-restarted server can answer empty once
