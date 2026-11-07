@@ -182,12 +182,18 @@ export class MiniMesh {
   }
 
   launch(program, args, env, log) {
+    if (this.stopping) throw Error("Fixture is closing");
     const child = NodeChildProcess.spawn(program, args, {
       env,
       cwd: this.directory,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const writes = [];
+    const writes = [
+      NodeFSP.appendFile(
+        NodePath.join(this.directory, "children.jsonl"),
+        JSON.stringify({ pid: child.pid, program, args }) + "\n",
+      ),
+    ];
     for (const stream of [child.stdout, child.stderr])
       stream.on("data", (data) => writes.push(NodeFSP.appendFile(log, data)));
     const closed = NodeEvents.once(child, "close").then(async () => {
@@ -198,6 +204,7 @@ export class MiniMesh {
   }
 
   async startNode(name) {
+    if (this.stopping) throw Error("Fixture is closing");
     const inContainer =
       this.containerMode && (this.containerNames ?? [this.firstName]).includes(name);
     const nodeBinary = this.previousEntry && name === "laptop" ? this.previousEntry : binary;
@@ -601,6 +608,7 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
   }
 
   close() {
+    this.stopping = true;
     this.closing ??= this.shutdown().finally(() => MiniMesh.active.delete(this));
     return this.closing;
   }
@@ -618,7 +626,14 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
     } finally {
       clearTimeout(timer);
     }
-    if (this.network) await run("docker", ["network", "rm", this.network]);
+    if (this.network) {
+      await until(
+        "private container network released",
+        async () => JSON.parse(await run("docker", ["network", "inspect", this.network]))[0],
+        (value) => Object.keys(value.Containers ?? {}).length === 0,
+      );
+      await run("docker", ["network", "rm", this.network]);
+    }
     for (const node of this.nodes) {
       const executable = NodePath.join(node.base, "bin", "mutagen");
       const data = NodePath.join(node.base, "mutagen");
