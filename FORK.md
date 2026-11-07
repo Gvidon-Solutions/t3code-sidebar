@@ -1726,3 +1726,9 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   representations untouched when no legacy ignore field exists.
 - **Where.** Client-runtime mesh state, mobile fixtures, server run/mesh/replica services,
   contracts defaults, shared config migration and mesh acceptance scripts.
+
+### 2026-11-08 — X1 bound SSH routes during adoption
+
+- **What:** Existing sync sessions remain adoptable after machine display titles change.
+- **How:** Resolve their endpoints through the stable machine bindings and managed or existing SSH hosts; ambiguous hosts remain rejected.
+- **Where:** `apps/server/src/replicas/adoptionModel.ts`, `ProjectReplicaService.ts` and their tests.

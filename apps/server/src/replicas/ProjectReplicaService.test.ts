@@ -943,3 +943,53 @@ it.effect("retains a representation's own ignores while config migration is inco
     }).pipe(Effect.provide(h.layer));
   }),
 );
+
+it.effect.each(["managed", "existing"] as const)(
+  "adopts a reversed session using its bound SSH host rather than its display title (%s)",
+  (mode) => {
+    const h = harness();
+    const host = mode === "managed" ? "t3-source" : "studio-ssh";
+    h.foreign.sessions = [
+      {
+        identifier: "manual-copy",
+        paused: true,
+        status: "watching",
+        alpha: { protocol: "local", path: "/chosen-copy" },
+        beta: { protocol: "ssh", host, path: "/source" },
+        ignore: { paths: ["/private-data"] },
+      },
+    ];
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const mesh = yield* MeshLayoutService;
+      const clock = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.config": {
+          h: clock,
+          v: {
+            revision: clock,
+            doc: {
+              schema: 1,
+              machines: {
+                source: { title: "Studio display", label: "ST", ssh: { host: "studio-ssh" } },
+                replica: { title: "Laptop display", label: "LT" },
+              },
+              ssh: { mode },
+            },
+            author: "replica",
+            writtenAt: "",
+          },
+        },
+      });
+      const adopted = yield* service.adopt({ project: "repo", session: "manual-copy" });
+      expect(adopted.representation).toMatchObject({
+        environmentId: "replica",
+        source: "source",
+        path: "/chosen-copy",
+        ignores: ["/private-data"],
+        adoption: { environmentId: "replica", sessionIdentifier: "manual-copy" },
+      });
+      expect((yield* mesh.read).config.projectMounts.repo).toContainEqual(adopted.representation);
+    }).pipe(Effect.provide(h.layer));
+  },
+);

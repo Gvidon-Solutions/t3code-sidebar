@@ -1517,7 +1517,20 @@ const make = Effect.gen(function* () {
               : undefined;
             const allReps = reps.length ? reps : primary ? [primary] : [];
             const target = input.machine ? yield* resolveMachine(config, input.machine) : undefined;
-            const sides = adoptionSides(config, mesh.environmentId, allReps, session, target);
+            const { document } = yield* mesh.read;
+            const desired = configFromLayout(document);
+            const routes = Object.fromEntries(
+              Object.entries(bindingsFromLayout(document)).flatMap(([name, id]) => {
+                const host =
+                  desired?.ssh?.mode === "existing"
+                    ? desired.machines[name]?.ssh?.host
+                    : desired?.ssh?.mode === "off"
+                      ? undefined
+                      : `t3-${name}`;
+                return host ? [[id, host]] : [];
+              }),
+            );
+            const sides = adoptionSides(routes, mesh.environmentId, allReps, session, target);
             if (!sides)
               return yield* new ReplicaError({
                 reason: "unreachable",

@@ -719,3 +719,5 @@ its 128 MiB canary now checks both SHA-256 and replica size.
 
 Local SSH pipe sockets disable Nagle: separate small SSH records otherwise wait for TCP delayed
 ACKs even on loopback. The real relay/IPC test exercises split records before its 200 MiB canary.
+
+Existing-session adoption resolves SSH endpoints from machine bindings and the configured SSH mode, just like replica creation. Display titles and labels can change independently of a managed `t3-<name>` alias or an existing SSH host; using them to identify endpoints rejects valid reversed sessions.
