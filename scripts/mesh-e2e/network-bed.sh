@@ -92,7 +92,7 @@ Port 22
 ListenAddress 127.0.0.1
 HostKey /etc/ssh/ssh_host_ed25519_key
 PidFile /tmp/N1-sshd.pid
-AuthorizedKeysFile /home/t3/.ssh/N1_authorized_keys
+AuthorizedKeysFile /home/t3/.ssh/authorized_keys /home/t3/.ssh/N1_authorized_keys
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 UsePAM no

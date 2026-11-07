@@ -434,3 +434,7 @@ Sequential transport acceptance waits for manual-folder policy metadata and its 
 before requesting SSHFS on the same representation key. Otherwise a concurrent ignores
 enrichment can legitimately win the whole-entry LWW race; config revision delivery alone
 does not prove that the per-representation policy action has completed.
+
+The N1 test sshd accepts the normal managed authorized_keys as well as its separate
+ephemeral-key file. Replacing the managed file would break replica and run access
+while the independent pinned-key transfer scenario is active.
