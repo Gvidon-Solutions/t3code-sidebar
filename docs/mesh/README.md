@@ -695,6 +695,8 @@ listeners from spawn. Config migration resolves missing layout titles through th
 catalog; replica reconciliation retains representation-specific ignores until the config contains
 every pattern. It then clears the legacy copy so later config removals take effect.
 Bed transport checks verify ignores in config; migrated representations no longer duplicate them.
+Ignore reconciliation preserves a native representation’s clock when it has no legacy ignores;
+adding an empty legacy field can otherwise race with an operator’s new placement.
 New settings and mesh configs seed `DEFAULT_REPLICA_IGNORES` (code-only); existing explicit lists
 are preserved. Agent-kit reconciliation receives the local identity from the server binding.
 

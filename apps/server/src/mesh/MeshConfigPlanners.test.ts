@@ -159,6 +159,22 @@ it.effect(
           (yield* mesh.read).config.projectMounts.repo?.find((rep) => rep.role === "replica")
             ?.ignores,
         ).toEqual([]);
+        if (!migrated) {
+          yield* mesh.edit((config) => ({
+            ...config,
+            projectMounts: {
+              ...config.projectMounts,
+              repo: config.projectMounts.repo!.map((rep) => {
+                if (rep.role !== "replica") return rep;
+                const { ignores: _legacy, ...native } = rep;
+                return native;
+              }),
+            },
+          }));
+          const placement = (yield* mesh.read).document["rep/repo/replica"];
+          yield* plan("ignores").reconcile(ignore, next);
+          expect((yield* mesh.read).document["rep/repo/replica"]).toEqual(placement);
+        }
       }
       expect(h.created.at(-1)?.ignores).not.toContain("/legacy-only");
       expect(h.created.at(-1)?.ignores).not.toContain("/data");

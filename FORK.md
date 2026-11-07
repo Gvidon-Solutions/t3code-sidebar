@@ -1719,6 +1719,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   Bed uploads share the configured SSH/sudo transport when the third node moves hosts.
 - **How.** Canonicalizes cached layout keys, prefers live connectivity, resolves migration titles
   from the project catalog, and keeps representation ignores until config owns every pattern;
-  clearing that legacy copy allows later ignore removals.
+  clearing that legacy copy allows later ignore removals. Ignore plans leave native
+  representations untouched when no legacy ignore field exists.
 - **Where.** Client-runtime mesh state, mobile fixtures, server run/mesh/replica services,
   contracts defaults, shared config migration and mesh acceptance scripts.

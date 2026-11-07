@@ -208,11 +208,9 @@ export const layer = Layer.effect(
                 rep.environmentId === mesh.environmentId && rep.role === "replica"
                   ? {
                       ...rep,
-                      ignores: (rep.ignores ?? []).every((pattern) =>
-                        policy.ignore.includes(pattern),
-                      )
-                        ? []
-                        : (rep.ignores ?? []),
+                      ...(rep.ignores?.every((pattern) => policy.ignore.includes(pattern))
+                        ? { ignores: [] }
+                        : {}),
                       mode: policy.replica,
                     }
                   : rep,
