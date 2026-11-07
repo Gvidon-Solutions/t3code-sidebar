@@ -1,3 +1,4 @@
+import mobileVersion from "./mobile-version.json" with { type: "json" };
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import type { ExpoConfig } from "expo/config";
@@ -14,6 +15,13 @@ const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
+const androidPackageOverride = repoEnv.T3_MOBILE_ANDROID_PACKAGE?.trim();
+if (
+  androidPackageOverride &&
+  !/^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/.test(androidPackageOverride)
+) {
+  throw new Error("T3_MOBILE_ANDROID_PACKAGE must be a valid Android application ID");
+}
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
   (APP_VARIANT === "sidebar" ? "fingerprint" : process.env.MOBILE_VERSION_POLICY) ??
@@ -253,7 +261,7 @@ const config: ExpoConfig = {
   version:
     APP_VARIANT === "sidebar"
       ? (process.env.T3_SIDEBAR_VERSION ?? "0.0.0-sidebar.local")
-      : (repoEnv.T3CODE_MOBILE_VERSION ?? "2.2.0"),
+      : (repoEnv.T3CODE_MOBILE_VERSION ?? mobileVersion.version),
   runtimeVersion: {
     // Skip costly fingerprinting on dev launches; preview and production OTAs require matching native projects.
     policy: runtimeVersionPolicy,
@@ -333,7 +341,7 @@ const config: ExpoConfig = {
   },
   android: {
     icon: variant.assets.appIcon,
-    package: variant.androidPackage,
+    package: androidPackageOverride ?? variant.androidPackage,
     // Sidebar builds share one version code so any fork APK, older ones included,
     // installs over another and keeps its data (Settings › About › Version history).
     ...(APP_VARIANT === "sidebar"

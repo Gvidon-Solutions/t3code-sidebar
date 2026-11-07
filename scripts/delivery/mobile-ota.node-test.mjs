@@ -45,6 +45,25 @@ test("publishes real Expo exports, keeps two signed updates and refuses mismatch
     NodeAssert.ok(
       new X509Certificate(await readFile(certificate)).keyUsage.includes("1.3.6.1.5.5.7.3.3"),
     );
+    const fingerprintEnv = { ...process.env };
+    delete fingerprintEnv.T3CODE_MOBILE_VERSION;
+    const fingerprintConfig = NodeURL.fileURLToPath(
+      new URL("../../apps/mobile/fingerprint.config.js", import.meta.url),
+    );
+    const readMajor = (env) =>
+      JSON.parse(
+        execFileSync(
+          process.execPath,
+          [
+            "-e",
+            "console.log(JSON.stringify(require(process.argv[1]).extraSources))",
+            fingerprintConfig,
+          ],
+          { cwd: root, env, encoding: "utf8" },
+        ),
+      )[0].contents;
+    NodeAssert.equal(readMajor(fingerprintEnv), "2");
+    NodeAssert.equal(readMajor({ ...fingerprintEnv, T3CODE_MOBILE_VERSION: "4.0.0" }), "4");
     const nativeConfig = JSON.parse(
       execFileSync(
         process.execPath,
@@ -64,6 +83,7 @@ test("publishes real Expo exports, keeps two signed updates and refuses mismatch
             APP_VARIANT: "sidebar",
             T3_MOBILE_UPDATE_URL: "https://studio.example/api/mobile-updates/manifest",
             T3_MOBILE_UPDATE_CERTIFICATE: certificate,
+            T3_MOBILE_ANDROID_PACKAGE: "com.example.delivery.fixture",
           },
           encoding: "utf8",
           stdio: ["ignore", "pipe", "ignore"],
@@ -75,6 +95,7 @@ test("publishes real Expo exports, keeps two signed updates and refuses mismatch
       "t3-rollback-from": "none",
     });
     NodeAssert.deepEqual(nativeConfig.runtimeVersion, { policy: "fingerprint" });
+    NodeAssert.equal(nativeConfig.android.package, "com.example.delivery.fixture");
     await writeFile(
       join(root, "expo-config.json"),
       JSON.stringify({ extra: { appVariant: "sidebar" } }),

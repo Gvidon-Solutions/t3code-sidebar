@@ -156,3 +156,9 @@ Warm-lane measurement may begin from an actually installed baseline runtime and 
 Record that baseline ref, artifact and resolved native fingerprint before initializing the
 private `last-build.json`; do not modify that history between the timed hot and clean commands.
 The first native build, toolchain preparation and cache warming are reported separately.
+
+For an isolated Android acceptance app, set `T3_MOBILE_ANDROID_PACKAGE` in the private
+`ota.environment` object before the untimed first APK build. Use the same application ID,
+update URL, certificate and public environment for the APK and subsequent exports. The mobile
+major-version fingerprint input comes from `apps/mobile/mobile-version.json`, so a private
+builder clone does not depend on the developer checkout's `.env` or app-config source formatting.
