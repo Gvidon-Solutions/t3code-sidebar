@@ -55,7 +55,7 @@ export async function buildAssets({
         "Mobile delivery requires signing key, certificate and update origin in local ota config",
       );
     const mobileEnv = {
-      ...(config.ota.environment ?? {}),
+      ...config.ota.environment,
       APP_VARIANT: "sidebar",
       T3_MOBILE_UPDATE_URL: new URL("/api/mobile-updates/manifest", config.ota.origin).href,
       T3_MOBILE_UPDATE_CERTIFICATE: config.ota.certificate,
