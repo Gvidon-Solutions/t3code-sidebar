@@ -698,3 +698,5 @@ are preserved. Agent-kit reconciliation receives the local identity from the ser
 Bed command fixtures set their own run socket and manifest as well as the home directory.
 An agent thread already has run variables; inheriting its socket makes a raw fixture CLI resolve
 against the caller’s server instead of the isolated bed.
+Deployment also resumes a stopped test VPS container, preserving its mounted temporary folders
+before recreation.
