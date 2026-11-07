@@ -711,3 +711,6 @@ The acceptance runner can place its third container on another administrator SSH
 The bed guide records the alternate routing and the single-active-identity constraint.
 Round-two acceptance follows project pagination and budgets the full server readiness window;
 its 128 MiB canary now checks both SHA-256 and replica size.
+
+Local SSH pipe sockets disable Nagle: separate small SSH records otherwise wait for TCP delayed
+ACKs even on loopback. The real relay/IPC test exercises split records before its 200 MiB canary.

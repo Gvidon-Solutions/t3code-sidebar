@@ -1717,6 +1717,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   seeds code-only defaults for new meshes. Managed instructions identify their own machine.
   Legacy settings writes preserve concurrent workspace renames while repairing sort collisions.
   Bed uploads share the configured SSH/sudo transport when the third node moves hosts.
+  Local SSH sockets send split records promptly instead of waiting for delayed TCP ACKs.
 - **How.** Canonicalizes cached layout keys, prefers live connectivity, resolves migration titles
   from the project catalog, and keeps representation ignores until config owns every pattern;
   clearing that legacy copy allows later ignore removals. Ignore plans leave native
