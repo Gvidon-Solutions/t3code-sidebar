@@ -1,3 +1,4 @@
+import type { MeshVersionUpdateInput } from "@t3tools/contracts";
 import {
   MeshConfigDocument,
   MeshConfigError,
@@ -65,6 +66,7 @@ export class MeshConfig extends Context.Service<
     readonly updateVersion: (
       version: string,
       planOnly: boolean,
+      options?: Pick<typeof MeshVersionUpdateInput.Type, "now" | "maxWaitMs">,
     ) => Effect.Effect<
       { doc: MeshConfigDocument; actions: readonly ConfigAction[] } | MeshConfigRevision,
       MeshConfigError
@@ -448,10 +450,19 @@ export const layer = Layer.effect(
       updateVersion: Effect.fn("MeshConfig.updateVersion")(function* (
         version: string,
         planOnly: boolean,
+        options: Pick<typeof MeshVersionUpdateInput.Type, "now" | "maxWaitMs"> = {},
       ) {
         const before = yield* current;
         const doc = before?.doc ?? { schema: 1, machines: {} };
-        const updated = { ...doc, t3: { ...doc.t3, version } };
+        const { drain: previousDrain, ...previousT3 } = doc.t3 ?? {};
+        const drain = { ...previousDrain };
+        delete drain.skipForVersion;
+        if (options.maxWaitMs !== undefined) drain.maxWaitMs = options.maxWaitMs;
+        if (options.now === true) drain.skipForVersion = version;
+        const updated = {
+          ...doc,
+          t3: { ...previousT3, version, ...(Object.keys(drain).length > 0 ? { drain } : {}) },
+        };
         const planned = yield* plan(updated);
         return planOnly ? planned : yield* apply(updated, before?.revision ?? null);
       }),

@@ -358,34 +358,40 @@ export const layer = Layer.effect(
         target,
         previousUpdateId: context?.update?.id ?? null,
       });
-      yield* drainAdmission.drain({ requestId: `mesh:${lease.token}`, deadlineMs: 300000 }).pipe(
-        Effect.andThen(backup.create(lease.token)),
-        Effect.andThen(
-          selfUpdate.update({ targetVersion: target }, undefined, () =>
+      yield* drainAdmission
+        .drain({
+          requestId: `mesh:${lease.token}`,
+          deadlineMs: revision.doc.t3?.drain?.maxWaitMs ?? 300000,
+          now: revision.doc.t3?.drain?.skipForVersion === target,
+        })
+        .pipe(
+          Effect.andThen(backup.create(lease.token)),
+          Effect.andThen(
+            selfUpdate.update({ targetVersion: target }, undefined, () =>
+              Effect.sync(() => {
+                handoffRequested = true;
+              }),
+            ),
+          ),
+          Effect.tap(() =>
             Effect.sync(() => {
               handoffRequested = true;
             }),
           ),
-        ),
-        Effect.tap(() =>
-          Effect.sync(() => {
-            handoffRequested = true;
-          }),
-        ),
-        Effect.tapError((error) =>
-          Effect.gen(function* () {
-            handoffRequested = false;
-            if (Option.isSome(admission))
-              yield* admission.value.cancel(`mesh:${lease.token}`).pipe(Effect.orDie);
-            yield* write(failedKey(revision.revision), {
-              environmentId: mesh.environmentId,
-              target,
-              reason: error.message,
-            });
-            yield* release(lease, ids);
-          }),
-        ),
-      );
+          Effect.tapError((error) =>
+            Effect.gen(function* () {
+              handoffRequested = false;
+              if (Option.isSome(admission))
+                yield* admission.value.cancel(`mesh:${lease.token}`).pipe(Effect.orDie);
+              yield* write(failedKey(revision.revision), {
+                environmentId: mesh.environmentId,
+                target,
+                reason: error.message,
+              });
+              yield* release(lease, ids);
+            }),
+          ),
+        );
     }).pipe(
       reconcileLock.withPermits(1),
       Effect.mapError((error) =>

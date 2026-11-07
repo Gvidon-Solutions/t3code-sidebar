@@ -25,6 +25,7 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [MESH_WS_METHODS.replicasAdopt]: AuthOrchestrationOperateScope,
   [MESH_WS_METHODS.replicasUnmanaged]: AuthOrchestrationOperateScope,
   [MESH_WS_METHODS.configApply]: AuthSettingsWriteScope,
+  [MESH_WS_METHODS.updateVersion]: AuthSettingsWriteScope,
   "delivery.drain": AuthSettingsWriteScope,
   "delivery.drainStatus": AuthSettingsWriteScope,
   "delivery.cancelDrain": AuthSettingsWriteScope,

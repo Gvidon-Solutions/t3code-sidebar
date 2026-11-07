@@ -2334,8 +2334,8 @@ const commands = {
       return json(revision);
     }
     if (sub === "update") {
-      if (!pos[1]) die("use: mesh update <exact-version> [--plan]");
-      return json(await (await mcp()).call("t3_mesh_update", { version: pos[1], plan: Boolean(opt.plan) }));
+      if (!pos[1]) die("use: mesh update <exact-version> [--plan] [--max-wait 5m] [--now]");
+      return json(await (await mcp()).call("t3_mesh_update", { version: pos[1], plan: Boolean(opt.plan), ...(opt.now ? { now: true } : {}), ...(opt.maxWait !== undefined ? { maxWaitMs: parseDuration(opt.maxWait) } : {}) }));
     }
     if (sub === "config") {
       const action = pos[1] || "get";
@@ -3843,7 +3843,7 @@ const commands = {
     const requestId = String(opt["request-id"] || opt.requestId || "");
     if (!requestId) die("drain requires --request-id ID");
     if (pos[0] === "cancel") return json(await client.call("t3_delivery_cancel_drain", { requestId }));
-    return json(await client.call("t3_delivery_drain", { requestId, deadlineMs: Number(opt["deadline-ms"] || opt.deadlineMs || 300000) }));
+    return json(await client.call("t3_delivery_drain", { requestId, deadlineMs: Number(opt["deadline-ms"] || opt.deadlineMs || 300000), ...(opt.now ? { now: true } : {}) }));
   },
 
   async deploy(pos, opt) {

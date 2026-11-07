@@ -148,6 +148,7 @@ export const layer = Layer.effect(
           )
           .pipe(Effect.mapError(mapError));
         yield* notify;
+        if (input.now === true) return yield* status;
         const loop: Effect.Effect<typeof DeliveryDrainStatus.Type, DeliveryDrainError> =
           Effect.suspend(() =>
             Effect.gen(function* () {

@@ -2366,6 +2366,10 @@ export const layerWsRpc = (
               ),
             ),
           ),
+        [MESH_WS_METHODS.updateVersion]: ({ version, plan, ...options }) =>
+          meshConfigService.pipe(
+            Effect.flatMap((config) => config.updateVersion(version, plan === true, options)),
+          ),
         [MESH_WS_METHODS.configPlan]: ({ doc }) =>
           meshConfigService.pipe(Effect.flatMap((config) => config.plan(doc))),
         [MESH_WS_METHODS.configApply]: ({ doc, baseRevision }) =>

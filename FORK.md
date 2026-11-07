@@ -121,7 +121,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   preserves the stable storage/preload origin and displays UI/shell versions and source in About.
   Server drain atomically fences run admission, preserves dormant sends across restarts and
   lets active turns finish until a deadline. B1 and private delivery share it; clients retry
-  transient updating refusals with stable IDs. Explicit `--now` skips waiting.
+  transient updating refusals with stable IDs. B1 stores the idle deadline in mesh config and
+  binds `--now` to one target version; the next normal update clears that permission.
 - **Where.** `scripts/delivery/`, `docs/delivery.md`, t3ctl delivery client, server `delivery/`,
   mobile update lifecycle/settings, desktop `app/DesktopUi`, protocol/bootstrap and IPC, web
   `DesktopUiCoordinator`/About source row, and `sidebar-desktop.yml`.

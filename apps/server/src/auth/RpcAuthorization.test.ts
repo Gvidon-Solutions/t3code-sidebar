@@ -15,6 +15,7 @@ import {
   AuthTerminalReadScope,
   AuthTerminalOperateScope,
   WS_METHODS,
+  MESH_WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
@@ -40,6 +41,7 @@ describe("RPC authorization scopes", () => {
       "delivery.drain",
       "delivery.drainStatus",
       "delivery.cancelDrain",
+      MESH_WS_METHODS.updateVersion,
     ] as const)
       expect(requiredScopeForRpcMethod(method)).toBe(AuthSettingsWriteScope);
   });

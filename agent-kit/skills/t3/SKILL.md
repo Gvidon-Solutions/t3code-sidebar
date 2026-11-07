@@ -101,7 +101,7 @@ The mesh requires meshLayout, replicas, files and project placement APIs. Older 
 ## Bootstrap and runtime updates
 
 - `t3ctl mesh machines add NAME --ssh user@host[:port]` writes a bootstrap entry through config plan/apply. The mesh installs its runtime version, service, trust and machine binding. Use SSH agent authentication or `--identity-file PATH`. Passwords use a one-time secret reference (`--secret-ref REF --project-id ID`); never put a password in config or command text.
-- `t3ctl mesh update VERSION --plan` previews a version change; omit `--plan` to apply it. Machines update serially, with a DB backup and health-checked rollback. A failure stops that config revision.
+- `t3ctl mesh update VERSION --plan` previews a version change; omit `--plan` to apply it. `--max-wait 5m` sets the idle deadline in mesh config. `--now` permits interruption for that exact target version only; the next normal update clears it. Machines update serially, with a DB backup and health-checked rollback. A failure stops that config revision.
 - `t3ctl mesh status` includes bootstrap steps and rollout failures. Resolve the reported reason before applying a new revision.
 - Model shortcuts are config `agents.aliases`. Servers install their bundled skill and manage only marked instruction blocks; personal instructions belong in `agents.instructions`. `agents.manageInstructions: false` disables those instruction writes.
 

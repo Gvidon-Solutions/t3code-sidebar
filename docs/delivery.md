@@ -34,6 +34,16 @@ A deadline failure cancels the drain and leaves the existing runtime running. Ol
 without the drain API fail before stopping; upgrade those through an explicitly authorized
 `--now` operation first. `--now` deliberately permits interruption of active work.
 
+Config-driven B1 rollouts use `t3ctl mesh update VERSION [--plan] [--max-wait 5m] [--now]`.
+The maximum idle wait is stored as `t3.drain.maxWaitMs` in mesh config (milliseconds,
+default 300000; range 1–3600000). `--now` records `t3.drain.skipForVersion` equal to
+that exact target, so another version cannot inherit permission to interrupt work.
+Both forced and normal rollouts close admission; force only skips waiting for active work.
+A normal update command, including a retry of the same version, removes that skip flag;
+the configured deadline and unknown policy fields remain. Config plan/apply also exposes
+these typed fields. WebSocket `meshConfig.updateVersion` and MCP `t3_mesh_update` accept
+`maxWaitMs` and `now` through the same config service.
+
 Builds run in one persistent, private clone in `buildDir`, preserving pnpm, Vite task, Rust and
 Gradle caches across refs. The source checkout stays on its branch. Server/web, the executable
 and runtime archive build first. Native desktop changes build Linux installers. Mobile changes

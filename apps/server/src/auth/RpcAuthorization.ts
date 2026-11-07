@@ -76,6 +76,7 @@ export const RPC_REQUIRED_SCOPES = {
   [MESH_WS_METHODS.configGet]: AuthOrchestrationReadScope,
   [MESH_WS_METHODS.configPlan]: AuthOrchestrationReadScope,
   [MESH_WS_METHODS.configApply]: AuthSettingsWriteScope,
+  [MESH_WS_METHODS.updateVersion]: AuthSettingsWriteScope,
   "delivery.drain": AuthSettingsWriteScope,
   "delivery.drainStatus": AuthSettingsWriteScope,
   "delivery.cancelDrain": AuthSettingsWriteScope,

@@ -160,6 +160,7 @@ describe("command permissions", () => {
   it.effect.each([
     WS_METHODS.serverCheckOtlpEndpoint,
     MESH_WS_METHODS.configApply,
+    MESH_WS_METHODS.updateVersion,
     "delivery.drain",
     "delivery.drainStatus",
     "delivery.cancelDrain",

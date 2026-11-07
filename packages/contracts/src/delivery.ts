@@ -5,6 +5,7 @@ import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 export const DELIVERY_UPDATING = "T3_UPDATING";
 export const DeliveryDrainInput = Schema.Struct({
   requestId: TrimmedNonEmptyString,
+  now: Schema.optionalKey(Schema.Boolean),
   deadlineMs: Schema.Number.check(
     Schema.isInt(),
     Schema.isBetween({ minimum: 1, maximum: 3600000 }),

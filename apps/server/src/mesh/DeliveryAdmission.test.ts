@@ -306,3 +306,22 @@ it.effect(
       assert.equal(yield* Ref.get(delivered), 1);
     }).pipe(Effect.scoped, Effect.provide(layer)),
 );
+
+it.effect(
+  "forced delivery still fences new starts while allowing interruption of the active run",
+  () =>
+    Effect.gen(function* () {
+      const admission = yield* Admission.DeliveryAdmission;
+      const projections = yield* Projections.ProjectionStoreV2;
+      yield* projections.apply(yield* event("forced-active", "running"));
+      const status = yield* admission.drain({ requestId: "forced", deadlineMs: 1000, now: true });
+      assert.equal(status.phase, "draining");
+      assert.equal(status.activeRuns, 1);
+      const sink = yield* EventSink.EventSinkV2;
+      const refused = yield* sink
+        .write({ events: [yield* event("forced-next", "starting")] })
+        .pipe(Effect.flip);
+      assert.isTrue(isDeliveryUpdating(refused));
+      yield* admission.cancel("forced");
+    }).pipe(Effect.provide(layer)),
+);

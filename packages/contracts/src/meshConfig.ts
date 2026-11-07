@@ -9,6 +9,10 @@ export const LinkPermissions = open({
   replicas: Schema.optionalKey(Schema.Boolean),
   threads: Schema.optionalKey(Schema.Boolean),
 });
+const DrainDeadline = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 3600000 }));
+const ExactVersion = Schema.String.check(
+  Schema.isPattern(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/),
+);
 const Policy = {
   conflicts: Schema.optionalKey(Schema.Literals(["primary-wins", "newest-wins"])),
   replica: Schema.optionalKey(Schema.Literals(["lite", "full"])),
@@ -18,8 +22,12 @@ export const MeshConfigDocument = open({
   schema: Schema.Number,
   t3: Schema.optionalKey(
     open({
-      version: Schema.optionalKey(
-        Schema.String.check(Schema.isPattern(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/)),
+      version: Schema.optionalKey(ExactVersion),
+      drain: Schema.optionalKey(
+        open({
+          maxWaitMs: Schema.optionalKey(DrainDeadline),
+          skipForVersion: Schema.optionalKey(ExactVersion),
+        }),
       ),
     }),
   ),
@@ -190,4 +198,6 @@ export const MeshMachineAddInput = Schema.Struct({ name: MachineName, ssh: Schem
 export const MeshVersionUpdateInput = Schema.Struct({
   version: Schema.String,
   plan: Schema.optionalKey(Schema.Boolean),
+  now: Schema.optionalKey(Schema.Boolean),
+  maxWaitMs: Schema.optionalKey(DrainDeadline),
 });

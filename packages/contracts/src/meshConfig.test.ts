@@ -71,3 +71,15 @@ it("preserves optional replica lag and SSH route checks and accepts older report
   };
   expect(decodeReported({ ...reported, sshRoutes }).sshRoutes).toEqual(sshRoutes);
 });
+
+it("validates rollout drain controls and forwards unknown policy fields", () => {
+  const decode = Schema.decodeUnknownSync(MeshConfigDocument);
+  const t3 = {
+    version: "0.1.6",
+    future: true,
+    drain: { maxWaitMs: 120000, skipForVersion: "0.1.6", newerPolicy: { enabled: true } },
+  };
+  expect(decode({ schema: 1, machines: {}, t3 }).t3).toEqual(t3);
+  for (const maxWaitMs of [0, -1, 0.5, 3600001, "1000"])
+    expect(() => decode({ schema: 1, machines: {}, t3: { drain: { maxWaitMs } } })).toThrow();
+});

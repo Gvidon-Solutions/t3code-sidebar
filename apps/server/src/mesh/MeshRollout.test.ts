@@ -35,6 +35,8 @@ const fixture = Effect.gen(function* () {
   const mesh = yield* MeshLayoutService;
   const services = new Map<string, Rollout.MeshRollout["Service"]>();
   const requested: string[] = [];
+  const deadlines: number[] = [];
+  const forced: boolean[] = [];
   const steps: string[] = [];
   const backupBlocks = new Map<string, Effect.Effect<void>>();
   const h = yield* mesh.nextHlc;
@@ -118,9 +120,11 @@ const fixture = Effect.gen(function* () {
     const dependencies = Layer.mergeAll(
       withAdmission
         ? Layer.mock(DeliveryAdmission)({
-            drain: ({ requestId }) =>
+            drain: ({ requestId, deadlineMs, now }) =>
               Effect.sync(() => {
                 steps.push(`drain/${id}`);
+                deadlines.push(deadlineMs);
+                forced.push(now === true);
                 return { ...openDrain, requestId, phase: "drained" as const };
               }),
             cancel: () => Effect.succeed(openDrain),
@@ -145,7 +149,7 @@ const fixture = Effect.gen(function* () {
           Effect.gen(function* () {
             expect((yield* mesh.read).document["mesh.updateLease"]?.v).toMatchObject({
               owner: id,
-              target: "0.1.6",
+              target: input.targetVersion,
             });
             expect(steps.at(-1)).toBe(`backup/${id}`);
             steps.push(`download/${id}`);
@@ -168,7 +172,7 @@ const fixture = Effect.gen(function* () {
     return service;
   });
   for (const id of Object.keys(doc.machines)) yield* make(id, "0.1.5");
-  return { mesh, make, services, requested, root, fs, backupBlocks, steps };
+  return { mesh, make, services, requested, root, fs, backupBlocks, steps, deadlines, forced };
 });
 const testLayer = Layout.layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG).pipe(
   Layer.provideMerge(NodeServices.layer),
@@ -277,5 +281,41 @@ it.effect("refuses runtime handoff before backup when admission is unavailable",
     expect(f.requested).toEqual([]);
     expect(f.steps).toEqual([]);
     expect((yield* f.mesh.read).document["mesh.updateLease"]).toBeUndefined();
+  }).pipe(Effect.scoped, Effect.provide(testLayer)),
+);
+
+it.effect.each([
+  { maxWaitMs: 1234, skipForVersion: undefined, expected: [1234] },
+  { maxWaitMs: 1234, skipForVersion: "0.1.6", expected: [1234] },
+  { maxWaitMs: 1234, skipForVersion: "0.1.5", expected: [1234] },
+])("uses the configured drain deadline and honors skip only for the exact target: %j", (policy) =>
+  Effect.gen(function* () {
+    const f = yield* fixture;
+    const h = yield* f.mesh.nextHlc;
+    yield* f.mesh.apply({
+      "mesh.config": {
+        h,
+        v: {
+          revision: "r1",
+          author: "studio",
+          writtenAt: "",
+          doc: {
+            schema: 1,
+            machines: { studio: {}, cloudbox: {}, laptop: {} },
+            t3: {
+              version: "0.1.6",
+              drain: {
+                maxWaitMs: policy.maxWaitMs,
+                ...(policy.skipForVersion ? { skipForVersion: policy.skipForVersion } : {}),
+              },
+            },
+          },
+        },
+      },
+    });
+    yield* f.services.get("cloudbox")!.reconcile;
+    expect(f.deadlines).toEqual(policy.expected);
+    expect(f.forced).toEqual([policy.skipForVersion === "0.1.6"]);
+    expect(f.requested).toEqual(["cloudbox"]);
   }).pipe(Effect.scoped, Effect.provide(testLayer)),
 );

@@ -86,8 +86,8 @@ export const layer = McpToolAccess.toLayer(MeshToolkit, {
   t3_mesh_machine_add: McpToolAccess.writes(({ name, ssh }) =>
     service.pipe(Effect.flatMap((config) => config.addMachine(name, ssh))),
   ),
-  t3_mesh_update: McpToolAccess.writes(({ version, plan }) =>
-    service.pipe(Effect.flatMap((config) => config.updateVersion(version, plan === true))),
+  t3_mesh_update: McpToolAccess.writes(({ version, plan, ...options }) =>
+    service.pipe(Effect.flatMap((config) => config.updateVersion(version, plan === true, options))),
   ),
   t3_mesh_update_health: McpToolAccess.reads(() =>
     rollout.pipe(Effect.flatMap((service) => service.health)),
