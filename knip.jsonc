@@ -31,6 +31,7 @@
         "delivery/builder.mjs",
         "delivery/target.mjs",
         "delivery/mobile-ota.mjs",
+        "delivery/*.node-test.mjs",
         "mesh-e2e/f1-web.mjs",
         "linux-after-pack.ts",
         "mobile-behavior/run.ts",

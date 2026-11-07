@@ -6,6 +6,8 @@
 serial rollout and stopped-DB/unit rollback. The t3ctl `delivery-client.mjs` forwards requests
 to a private socket; customer paths never enter public workflow configuration. Targets read
 B1 health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
+The direct systemd transport refuses default idle delivery until an admission gate exists;
+only explicit `--now` is enabled for isolated verification.
 See [delivery.md](../delivery.md) for configuration, commands and limitations.
 
 The public release workflow publishes runtime first; Windows consumes its archive without

@@ -24,6 +24,11 @@ an isolated delivery with no GitHub publication. `--now` skips the configurable 
 The local `gate` command must run T1 acceptance; absent or failing gates stop a clean delivery.
 Set the command to the T1 entry point supplied by that stage rather than bypassing it.
 
+The direct systemd transport currently requires explicit `--now`. Its idle-window policy is
+tested, but the server lacks a delivery admission gate that can atomically prevent a new turn
+between observing idle and stopping. The default command refuses before building or stopping;
+it does not claim safe idle delivery. Use `--now` only on isolated targets in this stage.
+
 Builds run in one persistent, private clone in `buildDir`, preserving pnpm, Vite task, Rust and
 Gradle caches across refs. The source checkout stays on its branch. Server/web, the executable
 and runtime archive build first. Native desktop changes build Linux installers. Mobile changes
@@ -33,8 +38,8 @@ The builder uses the tool environment of its service; configure Android SDK, sig
 native build dependencies there (Rust 1.95 or newer; `rustToolchain` selects an installed rustup toolchain). Each target needs Node 26 and the matching t3ctl agent kit;
 it does not need `gh` or a build toolchain.
 
-Targets are selected only from the private allowlist. Rollout inspects active thread states,
-waits up to `maxWaitMs`, copies the archive over SSH when required, and updates one configured
+Targets are selected only from the private allowlist. Rollout copies the archive over SSH
+when required, and updates one configured
 unit at a time. Both systemd user and system units are supported; the account must be allowed
 to manage the selected unit. The unit must use an absolute `t3` executable in `ExecStart`.
 Before switching, the target stops its unit and backs up `userdata/statev2.sqlite`, retains
@@ -56,7 +61,8 @@ An interrupted target with an unfinished journal refuses another switch until ro
 `t3ctl deploy --hot` snapshots the current working tree, including uncommitted files, with a
 temporary Git index and `commit-tree`. It creates `hot/<timestamp>` without changing HEAD,
 the user's index or `ws`. Hot deliveries never publish release assets. They use the same
-idle, backup, health and rollback flow. Ignored files are not included in the snapshot.
+backup, health and rollback flow, with the same explicit `--now` requirement above.
+Ignored files are not included in the snapshot.
 
 Configure `cleanAgent.project`, and optionally `ctl`, `agent` and `model` (defaults: Codex Sol).
 After delivery the builder starts a thread in that project with the source branch, commit and
