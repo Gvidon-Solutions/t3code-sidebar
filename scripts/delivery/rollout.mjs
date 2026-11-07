@@ -50,10 +50,8 @@ export async function rollout(
     await journal({ machine: adapter.name, phase: "prepare" });
     await adapter.prepare();
     try {
-      if (!options.now) {
-        await journal({ machine: adapter.name, phase: "drain" });
-        await adapter.drain();
-      }
+      await journal({ machine: adapter.name, phase: "drain" });
+      await adapter.drain();
       await journal({ machine: adapter.name, phase: "switch" });
       await adapter.activate();
       await waitForHealthy(adapter, version, baselines, options.healthWaitMs, clock);

@@ -165,6 +165,13 @@ test("artifact selection skips native installers for a server or web only change
     mobile: false,
   });
   assert.deepEqual(changedArtifacts(["apps/mobile/src/App.tsx"]), { desktop: false, mobile: true });
+  assert.deepEqual(
+    changedArtifacts([
+      "apps/desktop/src/app/DesktopApp.test.ts",
+      "apps/desktop/scripts/delivery-ui-proof.mjs",
+    ]),
+    { desktop: false, mobile: false },
+  );
 });
 
 test("default delivery version preserves the ref's compatibility core and newer upstream sync core", async () => {
@@ -290,23 +297,28 @@ test("failed runtime health leaves phone catalogs unchanged; only healthy rollou
     }
     writeFileSync(join(candidate, "assets/new-hash"), "new bundle");
     let active = false,
-      healthy = false;
+      healthy = false,
+      fenced = false;
     const adapter = {
       name: "studio",
       health: async () => ({ ...health(active ? "2" : "1"), replicasReady: !active || healthy }),
       prepare: async () => {},
-      drain: async () => {},
+      drain: async () => {
+        fenced = true;
+      },
       activate: async () => {
+        assert.equal(fenced, true, "--now must still fence new submissions");
         active = true;
       },
       rollback: async () => {
         active = false;
+        fenced = false;
       },
     };
     const input = {
       adapters: [adapter],
       version: "2",
-      options: { healthWaitMs: 0 },
+      options: { now: true, healthWaitMs: 0 },
       journal: async () => {},
       mobileUpdate: { store: candidate },
       config: { ota: { store: committed } },

@@ -3,6 +3,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
+import * as NodeTimersPromises from "node:timers/promises";
 const run = (command, args, options = {}) =>
   NodeChildProcess.execFileSync(command, args, {
     encoding: "utf8",
@@ -40,6 +41,7 @@ NodeFS.writeFileSync(marker, JSON.stringify({ fixture: "D1 delivery", unit: mach
 });
 const agentHome = NodePath.join(machine.home, "agent-home");
 const sshDir = NodePath.join(agentHome, "sshd");
+const tools = NodePath.join(machine.home, "tools");
 NodeFS.mkdirSync(sshDir, { recursive: true, mode: 0o700 });
 NodeFS.mkdirSync(NodePath.join(agentHome, ".ssh"), { recursive: true, mode: 0o700 });
 const key = NodePath.join(sshDir, "ssh_host_ed25519_key");
@@ -47,7 +49,7 @@ if (!NodeFS.existsSync(key)) run("ssh-keygen", ["-q", "-t", "ed25519", "-N", "",
 const sshConfig = NodePath.join(sshDir, "sshd_config");
 NodeFS.writeFileSync(
   sshConfig,
-  `Port ${machine.sshdPort}\nListenAddress 127.0.0.1\nHostKey ${key}\nPidFile ${sshDir}/sshd.pid\nAuthorizedKeysFile ${agentHome}/.ssh/authorized_keys\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nUsePAM no\nAllowUsers ${NodeOS.userInfo().username}\nSubsystem sftp internal-sftp\n`,
+  `Port ${machine.sshdPort}\nListenAddress 127.0.0.1\nHostKey ${key}\nPidFile ${sshDir}/sshd.pid\nAuthorizedKeysFile ${agentHome}/.ssh/authorized_keys\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nUsePAM no\nSetEnv PATH=${tools}\nAllowUsers ${NodeOS.userInfo().username}\nSubsystem sftp internal-sftp\n`,
   { mode: 0o600 },
 );
 const prefix = machine.scope === "user" ? ["--user"] : [];
@@ -55,7 +57,6 @@ const control = (...args) => {
   checkLock();
   return run("systemctl", [...prefix, ...args]);
 };
-const tools = NodePath.join(machine.home, "tools");
 NodeFS.mkdirSync(tools, { recursive: true, mode: 0o755 });
 for (const binary of [
   "systemctl",
@@ -91,6 +92,8 @@ for (const binary of [
     target = NodePath.join(tools, binary);
   if (NodeFS.existsSync(source) && !NodeFS.existsSync(target)) NodeFS.symlinkSync(source, target);
 }
+const nodeTool = NodePath.join(tools, "node");
+if (!NodeFS.existsSync(nodeTool)) NodeFS.symlinkSync(process.execPath, nodeTool);
 if (machine.scope === "system") {
   const node = NodePath.join(machine.home, "bin/node26");
   NodeFS.writeFileSync(
@@ -126,6 +129,20 @@ NodeFS.writeFileSync(
 control("daemon-reload");
 control("start", sshUnit);
 control("start", machine.unit);
+const deadline = Date.now() + 60_000;
+for (;;) {
+  try {
+    const response = await fetch(new URL("/.well-known/t3/environment", machine.origin), {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw new Error(`Fixture HTTP readiness returned ${response.status}`);
+    await response.json();
+    break;
+  } catch (error) {
+    if (Date.now() >= deadline) throw error;
+    await NodeTimersPromises.setTimeout(200);
+  }
+}
 console.log(
   JSON.stringify({ fixture: machine.name, scope: machine.scope, port, sshdPort: machine.sshdPort }),
 );

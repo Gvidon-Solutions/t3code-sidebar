@@ -107,26 +107,37 @@ export async function targetOperation(config, operation) {
     if (current.requestId && current.requestId !== state.requestId)
       throw new Error("Another delivery owns the server admission fence");
     state.requestId ??= NodeCrypto.randomUUID();
+    state.now = Boolean(config.now);
     state.phase = "draining";
     atomic(statePath, state);
     const drained = ctl(
       "tool",
       "t3_delivery_drain",
-      JSON.stringify({ requestId: state.requestId, deadlineMs: config.maxWaitMs ?? 300_000 }),
+      JSON.stringify({
+        requestId: state.requestId,
+        deadlineMs: config.maxWaitMs ?? 300_000,
+        ...(state.now ? { now: true } : {}),
+      }),
     );
-    if (drained.requestId !== state.requestId || drained.phase !== "drained")
+    if (
+      drained.requestId !== state.requestId ||
+      (drained.phase !== "drained" && !(state.now && drained.phase === "draining"))
+    )
       throw new Error("Server did not grant the delivery admission fence");
-    state.phase = "drained";
+    state.phase = "fenced";
     atomic(statePath, state);
     return drained;
   }
   if (operation === "activate") {
-    if (!config.now) {
-      if (state.phase !== "drained") throw new Error("Delivery admission fence has not drained");
-      const status = ctl("tool", "t3_delivery_drain_status", "{}");
-      if (status.requestId !== state.requestId || status.phase !== "drained")
-        throw new Error("Delivery admission fence was lost; no runtime switched");
-    } else if (state.phase !== "prepared") throw new Error("Delivery is not prepared");
+    if (state.phase !== "fenced") throw new Error("Delivery admission fence has not been acquired");
+    if (state.now !== Boolean(config.now))
+      throw new Error("Delivery force authorization changed after fencing");
+    const status = ctl("tool", "t3_delivery_drain_status", "{}");
+    if (
+      status.requestId !== state.requestId ||
+      (status.phase !== "drained" && !(state.now && status.phase === "draining"))
+    )
+      throw new Error("Delivery admission fence was lost; no runtime switched");
     state.phase = "stopping";
     atomic(statePath, state);
     systemctl("stop", config.unit);
@@ -159,7 +170,7 @@ export async function targetOperation(config, operation) {
   }
   if (operation === "rollback") {
     if (state.phase === "rolledBack") return state.previousHealth;
-    if (["prepared", "draining", "drained"].includes(state.phase)) {
+    if (["prepared", "draining", "fenced"].includes(state.phase)) {
       cancelDrain();
       state.phase = "rolledBack";
       atomic(statePath, state);

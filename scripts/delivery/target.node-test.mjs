@@ -35,7 +35,10 @@ test("isolated target switches its configured unit and restores the exact previo
       mkdirSync(join(root, "stage"));
       writeFileSync(join(root, "stage/t3"), "new-runtime");
       execFileSync("tar", ["czf", archive, "-C", root, "stage"]);
-      writeFileSync(join(root, "ctl.mjs"), "console.log(JSON.stringify({current:{doc:{}}}));");
+      writeFileSync(
+        join(root, "ctl.mjs"),
+        `import fs from "node:fs"; const file=${JSON.stringify(join(root, "gate.json"))}; const tool=process.argv[3]; let state=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,"utf8")):{requestId:null,phase:"open"}; if(tool==="t3_delivery_drain"){const input=JSON.parse(process.argv[4]);state={requestId:input.requestId,phase:input.now?"draining":"drained",activeRuns:input.now?1:0};fs.writeFileSync(file,JSON.stringify(state));} if(tool==="t3_delivery_cancel_drain"){state={requestId:null,phase:"open"};fs.writeFileSync(file,JSON.stringify(state));} console.log(JSON.stringify(tool?.startsWith("t3_delivery_")?state:tool==="t3_mesh_update_health"?{version:"1",revision:"r1",entries:{},replicasReady:true}:{current:{doc:{}}}));`,
+      );
       const config = {
         runtimeDir: join(root, "versions"),
         home,
@@ -55,15 +58,20 @@ test("isolated target switches its configured unit and restores the exact previo
             encoding: "utf8",
             input: JSON.stringify({ config, operation: name }),
             env: { ...process.env, PATH: `${binaryDir}:${process.env.PATH}` },
+            stdio: ["pipe", "pipe", "pipe"],
           }),
         );
       operation("prepare");
+      assert.throws(() => operation("activate"), /admission fence has not been acquired/);
+      operation("drain");
+      assert.equal(JSON.parse(readFileSync(join(root, "gate.json"), "utf8")).phase, "draining");
       operation("activate");
       assert.match(readFileSync(unit, "utf8"), /versions\/delivery\/2\/t3 serve --port 3795/);
       const migrated = new NodeSqlite.DatabaseSync(db);
       migrated.exec("UPDATE proof SET value='migrated-db'");
       migrated.close();
       operation("rollback");
+      operation("cancelDrain");
       const restored = new NodeSqlite.DatabaseSync(db, { readOnly: true });
       assert.equal(restored.prepare("SELECT value FROM proof").get().value, "previous-db");
       restored.close();
@@ -109,7 +117,8 @@ test("target requires its matching drained admission fence and releases it only 
     );
     const statePath = join(runtimeDir, "delivery-state.json");
     const state = {
-      phase: "drained",
+      phase: "fenced",
+      now: false,
       requestId,
       unit: "ExecStart=/old/t3 serve\n",
       next: "ExecStart=/new/t3 serve\n",
@@ -133,7 +142,7 @@ test("target requires its matching drained admission fence and releases it only 
       });
     writeFileSync(statusPath, JSON.stringify({ requestId: "other-request", phase: "drained" }));
     assert.throws(() => operation("activate"), /admission fence was lost/);
-    assert.equal(JSON.parse(readFileSync(statePath, "utf8")).phase, "drained");
+    assert.equal(JSON.parse(readFileSync(statePath, "utf8")).phase, "fenced");
     writeFileSync(statusPath, JSON.stringify({ requestId, phase: "drained" }));
     assert.throws(() => operation("commit"), /Only a runtime trial/);
     writeFileSync(statePath, JSON.stringify({ ...state, phase: "trial" }));

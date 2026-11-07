@@ -7,6 +7,11 @@ import * as NodePath from "node:path";
 const { join, resolve } = NodePath;
 const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 export function changedArtifacts(paths) {
+  paths = paths.filter(
+    (path) =>
+      !/\.(?:test|spec)\.[cm]?[jt]sx?$|\.node-test\.mjs$/.test(path) &&
+      path !== "apps/desktop/scripts/delivery-ui-proof.mjs",
+  );
   return {
     desktop: paths.some((path) =>
       /^(apps\/desktop\/|native\/|patches\/|pnpm-lock.yaml$)/.test(path),

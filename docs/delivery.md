@@ -31,8 +31,9 @@ Dormant accepted starts remain persisted and resume after healthy activation and
 The request token survives restart; the target verifies the same drained token immediately
 before stopping. Healthy activation or restored health releases it.
 A deadline failure cancels the drain and leaves the existing runtime running. Older servers
-without the drain API fail before stopping; upgrade those through an explicitly authorized
-`--now` operation first. `--now` deliberately permits interruption of active work.
+without the drain API need an initial approved maintenance installation outside this lane.
+`--now` still closes and verifies the admission fence, but skips waiting for existing work and
+permits interruption. New submissions continue retrying until health and cancellation.
 
 Config-driven B1 rollouts use `t3ctl mesh update VERSION [--plan] [--max-wait 5m] [--now]`.
 The maximum idle wait is stored as `t3.drain.maxWaitMs` in mesh config (milliseconds,

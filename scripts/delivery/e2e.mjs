@@ -69,6 +69,47 @@ if (values.scenario === "rollout") {
       config.maxWaitMs,
     ),
   );
+  if (values["exercise-idle-wait"]) {
+    const drain = adapters[0].drain;
+    adapters[0].drain = async () => {
+      const brief = NodePath.join(output, "D1-drain-wait.md");
+      NodeFS.writeFileSync(
+        brief,
+        "D1 isolated admission-drain fixture. Replay this recorded turn; do not modify any repository.",
+        { mode: 0o600 },
+      );
+      const thread = isolatedReplay([
+        "new",
+        "--project",
+        config.cleanAgent.project,
+        "--agent",
+        "devReplay",
+        "--model",
+        config.cleanAgent.model,
+        "--file",
+        brief,
+        "--json",
+      ]);
+      const observed = isolatedReplay(["show", thread.threadId, "--json"]);
+      NodeAssert.equal(
+        observed.thread.status,
+        "running",
+        "Replay must be running immediately before drain",
+      );
+      await record({
+        proof: "Replay is running immediately before admission drain",
+        threadId: thread.threadId,
+        threadStatus: observed.thread.status,
+      });
+      const result = await drain();
+      const settled = isolatedReplay(["wait", thread.threadId, "--timeout", "2m", "--json"]);
+      NodeAssert.equal(settled.timedOut, false);
+      const answer = isolatedReplay(["output", thread.threadId, "--json"]);
+      NodeAssert.ok(answer?.text);
+      await record({ proof: "Replay finishes before runtime switch", threadId: thread.threadId });
+      return result;
+    };
+  }
   const baseline = await Promise.all(adapters.map((adapter) => adapter.health()));
   for (let index = 0; index < adapters.length; index++) {
     const capabilities = await adapters[index].capabilities();
@@ -160,46 +201,6 @@ if (values.scenario === "rollout") {
     titleFile,
     before.replace('<SettingsScreen title="About">', `<SettingsScreen title="${marker}">`),
   );
-  if (values["exercise-idle-wait"]) {
-    const drain = adapters[0].drain;
-    adapters[0].drain = async () => {
-      const brief = NodePath.join(output, "D1-drain-wait.md");
-      NodeFS.writeFileSync(
-        brief,
-        "D1 isolated admission-drain fixture. Replay this recorded turn; do not modify any repository.",
-        { mode: 0o600 },
-      );
-      const thread = isolatedReplay([
-        "new",
-        "--project",
-        config.cleanAgent.project,
-        "--agent",
-        "devReplay",
-        "--model",
-        config.cleanAgent.model,
-        "--file",
-        brief,
-        "--json",
-      ]);
-      const status = await adapters[0].drainStatus();
-      NodeAssert.ok(
-        status.activeRuns + status.pendingStarts > 0,
-        "Replay turn must actually be active before drain",
-      );
-      await record({
-        proof: "admission drain observes active Replay work",
-        activeRuns: status.activeRuns,
-        pendingStarts: status.pendingStarts,
-      });
-      const result = await drain();
-      const settled = isolatedReplay(["wait", thread.threadId, "--timeout", "2m", "--json"]);
-      NodeAssert.equal(settled.timedOut, false);
-      const answer = isolatedReplay(["output", thread.threadId, "--json"]);
-      NodeAssert.ok(answer?.text);
-      await record({ proof: "Replay finishes before runtime switch", threadId: thread.threadId });
-      return result;
-    };
-  }
   const dirtyBefore = exec("git", ["-C", source, "status", "--porcelain"]);
   NodeAssert.match(dirtyBefore, /SettingsAboutRouteScreen/);
   const cliCall = (args, environment = {}) =>
@@ -213,11 +214,18 @@ if (values.scenario === "rollout") {
       }),
     );
   const hotStarted = Date.now();
+  await record({
+    proof: "hot command started",
+    startedEpochMs: hotStarted,
+    startedAt: new Date(hotStarted).toISOString(),
+    marker,
+    source,
+  });
   const hot = cliCall(["hot", "--worktree", source, "--json"]);
   NodeFS.writeFileSync(NodePath.join(output, "hot.json"), JSON.stringify(hot, null, 2), {
     mode: 0o600,
   });
-  const hotMs = Date.now() - hotStarted;
+  const hotCommandMs = Date.now() - hotStarted;
   NodeAssert.equal(
     exec("git", ["-C", source, "branch", "--show-current"]).trim(),
     "D1-delivery-fixture",
@@ -249,9 +257,12 @@ if (values.scenario === "rollout") {
     JSON.stringify({ thread, settled, answer }, null, 2),
     { mode: 0o600 },
   );
+  const hotFirstTurnMs = Date.now() - hotStarted;
   await record({
     proof: "uncommitted hot snapshot→runtime→drain rollout→signed OTA→Replay first turn",
-    durationMs: hotMs,
+    durationMs: hotFirstTurnMs,
+    commandDurationMs: hotCommandMs,
+    startedEpochMs: hotStarted,
     marker,
     source,
     version: hot.version,
@@ -303,7 +314,7 @@ if (values.scenario === "rollout") {
     version: clean.version,
     commit: clean.commit,
   });
-  NodeAssert.ok(hotMs <= 300_000, `Hot lane target exceeded: ${hotMs}ms`);
+  NodeAssert.ok(hotFirstTurnMs <= 300_000, `Hot lane target exceeded: ${hotFirstTurnMs}ms`);
   NodeAssert.ok(cleanMs <= 300_000, `Clean lane target exceeded: ${cleanMs}ms`);
 } else throw new Error("Unknown E2E scenario");
 await record({ proof: "complete", durationMs: Date.now() - started });
