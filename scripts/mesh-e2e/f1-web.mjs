@@ -70,7 +70,30 @@ try {
     path: NodePath.join(values.shots, "web-drag-before.png"),
     fullPage: true,
   });
-  await row.dragTo(folder);
+  await row.scrollIntoViewIfNeeded();
+  const sourceBox = await row.boundingBox();
+  NodeAssert.ok(sourceBox);
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    sourceBox.x + sourceBox.width / 2 + 8,
+    sourceBox.y + sourceBox.height / 2 + 8,
+    {
+      steps: 3,
+    },
+  );
+  // Start dragging before scrolling the destination, which can move the source row.
+  await folder.scrollIntoViewIfNeeded();
+  const targetBox = await folder.boundingBox();
+  NodeAssert.ok(targetBox);
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
+    steps: 10,
+  });
+  await page.mouse.move(
+    targetBox.x + targetBox.width / 2 + 1,
+    targetBox.y + targetBox.height / 2 + 1,
+  );
+  await page.mouse.up();
   const dialog = page.getByRole("dialog");
   await dialog
     .getByRole("heading", { name: `Move to ${values["target-title"]}?`, exact: true })
@@ -101,7 +124,7 @@ try {
     fullPage: true,
   });
   console.log(
-    "PASS real Chromium dragTo -> model-free confirmation -> backend project changed; original identity/history retained",
+    "PASS real Chromium drag -> model-free confirmation -> backend project changed; original identity/history retained",
   );
   await row.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Fork to machine…", exact: true }).click();
