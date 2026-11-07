@@ -692,6 +692,7 @@ The footer uses current direct client or peer connectivity before historical rou
 listeners from spawn. Config migration resolves missing layout titles through the local project
 catalog; replica reconciliation retains representation-specific ignores until the config contains
 every pattern. It then clears the legacy copy so later config removals take effect.
+Bed transport checks verify ignores in config; migrated representations no longer duplicate them.
 New settings and mesh configs seed `DEFAULT_REPLICA_IGNORES` (code-only); existing explicit lists
 are preserved. Agent-kit reconciliation receives the local identity from the server binding.
 
