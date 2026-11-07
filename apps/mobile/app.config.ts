@@ -282,6 +282,9 @@ const config: ExpoConfig = {
           codeSigningMetadata: { keyid: "main", alg: "rsa-v1_5-sha256" },
         }
       : {}),
+    ...(APP_VARIANT === "sidebar"
+      ? { requestHeaders: { "t3-update-selection": "latest", "t3-rollback-from": "none" } }
+      : {}),
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },

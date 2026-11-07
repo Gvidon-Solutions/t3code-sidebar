@@ -1,4 +1,8 @@
-import { installAppUpdateChecks, flushPendingAppUpdateWrites } from "./app-updates";
+import {
+  installAppUpdateChecks,
+  flushPendingAppUpdateWrites,
+  runAppUpdateCheck,
+} from "./app-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
@@ -52,6 +56,7 @@ export function installSelfHostedUpdateStatus() {
   if (!url || !Updates.isEnabled) return installAppUpdateChecks();
   let disposeUpdateChecks: () => void = () => undefined;
   let disposed = false;
+  let initialized = false;
   let checking = false;
   let notified = false;
   const check = async () => {
@@ -113,6 +118,7 @@ export function installSelfHostedUpdateStatus() {
           "t3-update-selection": "previous",
           "t3-rollback-from": from,
         });
+      initialized = true;
       disposeUpdateChecks = installAppUpdateChecks();
       void check();
     })
@@ -120,7 +126,10 @@ export function installSelfHostedUpdateStatus() {
       console.warn("[mobile-updates] rollback selection could not be restored", error),
     );
   const subscription = AppState.addEventListener("change", (state) => {
-    if (state === "active") void check();
+    if (state === "active") {
+      void check();
+      if (initialized) void runAppUpdateCheck();
+    }
   });
   return () => {
     disposed = true;

@@ -1,8 +1,17 @@
-import { flushPendingAppUpdateWrites } from "./app-updates";
+import { AppState } from "react-native";
+import {
+  flushPendingAppUpdateWrites,
+  installAppUpdateChecks,
+  runAppUpdateCheck,
+} from "./app-updates";
 import { expect, it, vi } from "vite-plus/test";
 import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { rollbackMobileBundle, resumeLatestMobileBundle } from "./self-hosted-updates";
+import {
+  rollbackMobileBundle,
+  resumeLatestMobileBundle,
+  installSelfHostedUpdateStatus,
+} from "./self-hosted-updates";
 
 vi.mock("expo-constants", () => ({
   default: {
@@ -21,11 +30,16 @@ vi.mock("expo-updates", () => ({
 vi.mock("@react-native-async-storage/async-storage", () => ({
   default: { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() },
 }));
-vi.mock("react-native", () => ({ AppState: {}, Linking: {}, Platform: { OS: "android" } }));
+vi.mock("react-native", () => ({
+  AppState: { addEventListener: vi.fn(() => ({ remove: vi.fn() })) },
+  Linking: {},
+  Platform: { OS: "android" },
+}));
 vi.mock("../../components/ui/Dialog", () => ({ alert: vi.fn() }));
 vi.mock("./app-updates", () => ({
   installAppUpdateChecks: vi.fn(),
   flushPendingAppUpdateWrites: vi.fn(),
+  runAppUpdateCheck: vi.fn(),
 }));
 
 it("pins rollback to the bundle being replaced and restores latest selection after a failed rollback", async () => {
@@ -60,4 +74,22 @@ it("pins rollback to the bundle being replaced and restores latest selection aft
   vi.mocked(flushPendingAppUpdateWrites).mockRejectedValueOnce(new Error("Storage unavailable"));
   await expect(rollbackMobileBundle()).rejects.toThrow("Storage unavailable");
   expect(Updates.reloadAsync).toHaveBeenCalledTimes(2);
+});
+
+it("checks a private OTA server on a short foreground transition after restoring bundle selection", async () => {
+  vi.clearAllMocks();
+  vi.mocked(AsyncStorage.getItem).mockResolvedValue(null);
+  vi.mocked(installAppUpdateChecks).mockReturnValue(() => undefined);
+  using _fetch = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(new Response(JSON.stringify({ requiresNativeUpdate: false })));
+  const dispose = installSelfHostedUpdateStatus();
+  try {
+    await vi.waitFor(() => expect(installAppUpdateChecks).toHaveBeenCalledOnce());
+    const listener = vi.mocked(AppState.addEventListener).mock.calls[0]![1];
+    listener("active");
+    expect(runAppUpdateCheck).toHaveBeenCalledOnce();
+  } finally {
+    dispose();
+  }
 });

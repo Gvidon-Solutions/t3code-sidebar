@@ -45,6 +45,36 @@ test("publishes real Expo exports, keeps two signed updates and refuses mismatch
     NodeAssert.ok(
       new X509Certificate(await readFile(certificate)).keyUsage.includes("1.3.6.1.5.5.7.3.3"),
     );
+    const nativeConfig = JSON.parse(
+      execFileSync(
+        process.execPath,
+        [
+          NodeURL.fileURLToPath(
+            new URL("../../apps/mobile/node_modules/expo/bin/cli", import.meta.url),
+          ),
+          "config",
+          "--type",
+          "public",
+          "--json",
+        ],
+        {
+          cwd: NodeURL.fileURLToPath(new URL("../../apps/mobile", import.meta.url)),
+          env: {
+            ...process.env,
+            APP_VARIANT: "sidebar",
+            T3_MOBILE_UPDATE_URL: "https://studio.example/api/mobile-updates/manifest",
+            T3_MOBILE_UPDATE_CERTIFICATE: certificate,
+          },
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      ),
+    );
+    NodeAssert.deepEqual(nativeConfig.updates.requestHeaders, {
+      "t3-update-selection": "latest",
+      "t3-rollback-from": "none",
+    });
+    NodeAssert.deepEqual(nativeConfig.runtimeVersion, { policy: "fingerprint" });
     await writeFile(
       join(root, "expo-config.json"),
       JSON.stringify({ extra: { appVariant: "sidebar" } }),
