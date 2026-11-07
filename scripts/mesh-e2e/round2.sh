@@ -35,6 +35,18 @@ ctl() {
  XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" T3CTL_T3_BIN="$WORK/t3-$machine" timeout "$RPC_TIMEOUT" node "$CTL" "$@"
 }
 tool() { local machine=$1 name=$2; shift 2; ctl "$machine" tool "$name" "$@"; }
+all_projects() {
+ local machine=$1 cursor merged="$WORK/all-projects-$1.json" next="$WORK/next-projects-$1.json"
+ tool "$machine" t3_project_list '{"limit":100}' > "$merged" || return
+ cursor=$(jq -r '.nextCursor // empty' "$merged") || return
+ while [ -n "$cursor" ]; do
+  tool "$machine" t3_project_list "$(jq -nc --argjson cursor "$cursor" '{limit:100,cursor:$cursor}')" > "$next" || return
+  jq -s '{projects:(.[0].projects+.[1].projects),nextCursor:.[1].nextCursor}' "$merged" "$next" > "$merged.tmp" || return
+  mv "$merged.tmp" "$merged" || return
+  cursor=$(jq -r '.nextCursor // empty' "$merged") || return
+ done
+ cat "$merged"
+}
 probe() {
  local name=$1; shift
  local start; start=$(now_ms)
@@ -74,16 +86,8 @@ if ! ws_rpc gor peerLinks.list '{}' | jq -e --arg e "$GV_ENV" '.links[] | select
  probe link-gor-gv ws_rpc gor peerLinks.link "$(jq -nc --arg code "$code" --arg e "$GV_ENV" '{url:"http://127.0.0.1:13795",pairingCode:$code,access:"full-access",expectedEnvironmentId:$e}')"
 fi
 
-probe projects tool gor t3_project_list '{"limit":100}'
+probe projects all_projects gor
 DEMO=$(jq -r '.. | objects | select(.workspaceRoot? == "/home/user/xdev-e2e/demo") | .id' "$WORK/projects.out" | head -1)
-next_cursor=$(jq -r '.nextCursor // empty' "$WORK/projects.out")
-page=0
-while [ -z "$DEMO" ] && [ -n "$next_cursor" ]; do
- page=$((page+1))
- probe "projects-page-$page" tool gor t3_project_list "$(jq -nc --argjson cursor "$next_cursor" '{limit:100,cursor:$cursor}')"
- DEMO=$(jq -r '.. | objects | select(.workspaceRoot? == "/home/user/xdev-e2e/demo") | .id' "$WORK/projects-page-$page.out" | head -1)
- next_cursor=$(jq -r '.nextCursor // empty' "$WORK/projects-page-$page.out")
-done
 if [ -z "$DEMO" ]; then
  probe register-demo tool gor t3_project_create '{"title":"demo","workspaceRoot":"/home/user/xdev-e2e/demo"}'
  DEMO=$(jq -r '.id // empty' "$WORK/register-demo.out")
@@ -137,7 +141,7 @@ probe b-cli-launch ctl gor new --project demo --on vps --agent codex --model gpt
 probe b-agent-edit wait_edit "$MARK-b"
 # Reverse source endpoint runs through docker exec; no ssh daemon in the container.
 probe c-vps-source vexec sh -c 'mkdir -p /home/t3/round2-primary; cd /home/t3/round2-primary; test -d .git || git init -q; printf "reverse primary\n" > README.md; mkdir -p node_modules; touch node_modules/excluded'
-probe c-projects tool vps t3_project_list '{"limit":100}'
+probe c-projects all_projects vps
 cp "$WORK/c-projects.out" "$WORK/vps-projects.json"
 REV=$(jq -r '.. | objects | select(.workspaceRoot?=="/home/t3/round2-primary") | .id' "$WORK/vps-projects.json" | head -1)
 if [ -z "$REV" ]; then
@@ -242,7 +246,7 @@ probe f-restart vps_ssh 'docker restart t3-mesh-e2e'
 probe f-health wait_health "$VPS_ORIGIN" 60
 probe f-recovered wait_replica vps "$KEY" "$VPS_ENV" watching
 probe f-sessions mut sync list --label-selector t3-logical --template '{{json .}}'
-probe f-projects tool vps t3_project_list '{"limit":100}'
+probe f-projects all_projects vps
 probe f-one-project jq -e --arg path "$VPATH" '[.. | objects | select(.workspaceRoot?==$path)] | length==1' "$WORK/f-projects.out"
 probe f-one-session jq -e --arg s "$SESSION" '[.[]|select(.name==$s)]|length==1' "$WORK/f-sessions.out"
 GV_PROJECT=$(jq -r --arg e "$GV_ENV" --arg k "$KEY" '.config.projectMounts[$k][] | select(.environmentId==$e) | .projectId' "$WORK/grouping.json")
@@ -277,7 +281,7 @@ wait_gone() {
 }
 probe g-terminated wait_gone
 probe g-files-kept vexec test -f "$VPATH/README.md"
-probe g-project-list tool vps t3_project_list '{"limit":100}'
+probe g-project-list all_projects vps
 probe g-project-kept jq -e --arg path "$VPATH" '.. | objects | select(.workspaceRoot?==$path)' "$WORK/g-project-list.out"
 probe g-orphan-create vexec sh -c 'mkdir -p /home/t3/round2-orphan-a /home/t3/round2-orphan-b; export MUTAGEN_DATA_DIRECTORY=/home/t3/.t3/mutagen; if /home/t3/.t3/bin/mutagen sync list --label-selector t3-env=orphan --template "{{json .}}" | jq -e "length > 0"; then exit 0; fi; /home/t3/.t3/bin/mutagen sync create --name round2-orphan -l t3-logical=deadbeef -l t3-env=orphan /home/t3/round2-orphan-a /home/t3/round2-orphan-b'
 wait_orphan() {
