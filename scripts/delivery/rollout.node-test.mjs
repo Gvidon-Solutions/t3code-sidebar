@@ -117,6 +117,7 @@ test("hot snapshot includes staged, unstaged and untracked files without changin
     const before = git("rev-parse", "HEAD");
     mkdirSync(join(dir, "nested"));
     const result = snapshot(join(dir, "nested"), "test");
+    assert.equal(result.worktree, dir);
     assert.equal(git("branch", "--show-current"), "work");
     assert.equal(git("rev-parse", "HEAD"), before);
     assert.deepEqual(readFileSync(join(dir, ".git/index")), index);

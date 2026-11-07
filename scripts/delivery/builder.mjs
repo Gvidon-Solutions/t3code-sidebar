@@ -83,7 +83,7 @@ export function snapshot(worktree, id = new Date().toISOString().replaceAll(/[-:
     const commit = git("commit-tree", tree, "-p", parent, "-m", `hot: ${id}`);
     const branch = `hot/${id}`;
     git("update-ref", `refs/heads/${branch}`, commit, "0000000000000000000000000000000000000000");
-    return { commit, branch, parent };
+    return { commit, branch, parent, worktree };
   } finally {
     rmSync(index, { force: true });
     rmSync(index + ".lock", { force: true });
@@ -162,8 +162,8 @@ export async function deliver(config, request) {
     throw new Error("Configure cleanAgent.project before a hot deployment");
   if (!request.hot && (!Array.isArray(config.gate) || !config.gate.length))
     throw new Error("Clean delivery requires the T1 gate command in local config");
-  const source = request.hot ? resolve(request.worktree || config.repository) : config.repository;
-  const hot = request.hot ? snapshot(source, id) : null;
+  const hot = request.hot ? snapshot(resolve(request.worktree || config.repository), id) : null;
+  const source = hot?.worktree ?? config.repository;
   const commit =
     hot?.commit ||
     exec("git", [
