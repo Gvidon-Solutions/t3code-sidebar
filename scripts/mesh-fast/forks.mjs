@@ -68,6 +68,15 @@ export const forkScenarios = {
         async () => (await fetch(target.origin + "/__N1_network")).json(),
         (v) => v.state.observeCommit && v.sockets === 0,
       );
+      await mesh.fault(target, { observeCommit: true });
+      await until(
+        "instrumented native peer reconnected",
+        () => rpc(studio, "meshLayout.status"),
+        (value) =>
+          value.connections.some(
+            (row) => row.environmentId === target.id && row.state === "direct",
+          ),
+      );
       await mesh.fault(target, { observeCommit: true, denyMcp: true, peerOnlyMcp: true });
       const commandId = NodeCrypto.randomUUID();
       const result = await rpc(studio, "threads.fork", {

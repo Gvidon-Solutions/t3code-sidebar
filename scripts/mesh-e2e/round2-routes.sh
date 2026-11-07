@@ -10,7 +10,7 @@ key="$STATE_DIR/round2-container"
 ensure_local_key "$key" t3-mesh-e2e-round2-container
 known=$(ssh-keygen -F "$CLOUDBOX_HOST" -f "$HOME/.local/share/vpn-ops/known_hosts")
 if ! ssh-keygen -F "$CLOUDBOX_HOST" >/dev/null; then printf '%s\n' "$known" >> "$HOME/.ssh/known_hosts"; fi
-printf '%s\n' "$known" | worker_ssh 'if ! ssh-keygen -F 152.89.244.57 >/dev/null; then cat >> ~/.ssh/known_hosts; fi'
+printf '%s\n' "$known" | worker_ssh "if ! ssh-keygen -F '$CLOUDBOX_HOST' >/dev/null; then cat >> ~/.ssh/known_hosts; fi"
 pub=$(key_body "$(cat "$key.pub")")
 cloudbox_ssh 'cat > /opt/t3-mesh-e2e/round2-ssh; chmod 700 /opt/t3-mesh-e2e/round2-ssh' <<'EOF'
 #!/bin/sh

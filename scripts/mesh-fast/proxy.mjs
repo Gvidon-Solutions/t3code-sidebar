@@ -8,6 +8,7 @@ const [listen, backend, stateFile, host = "127.0.0.1", backendHost = "127.0.0.1"
 if (!listen || !backend || !stateFile)
   throw new Error("Usage: network-proxy.mjs LISTEN_PORT BACKEND_PORT STATE_FILE");
 const sockets = new Set();
+const held = new Set();
 const messageServer = new WebSocketServer({ noServer: true });
 let commitDropped = false;
 const counts = {
@@ -15,6 +16,7 @@ const counts = {
   droppedCommitResponses: 0,
   commitCalls: 0,
   bytes: 0,
+  pipeBytes: 0,
   idleDrops: 0,
   mcp: 0,
   refusedMcp: 0,
@@ -34,6 +36,11 @@ function refresh() {
     for (const socket of sockets) {
       counts.resets++;
       socket.resetAndDestroy();
+    }
+  if (!state.pauseAfterBytes && !state.pausePipeAfterBytes)
+    for (const release of held) {
+      held.delete(release);
+      release();
     }
   for (const socket of sockets)
     socket.setTimeout(state.idleMs ?? 0, () => {
@@ -93,7 +100,7 @@ server.on("upgrade", (request, socket, head) => {
     socket.end("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
     return;
   }
-  if (state.observeCommit && request.url?.split("?")[0] === "/peer") {
+  if ((state.observeCommit || state.inspectPipe) && request.url?.split("?")[0] === "/peer") {
     messageServer.handleUpgrade(request, socket, head, (incoming) => {
       const headers = Object.fromEntries(
         Object.entries(request.headers).filter(
@@ -117,6 +124,19 @@ server.on("upgrade", (request, socket, head) => {
       const commits = new Set();
       counts.upgrades++;
       sockets.add(socket);
+      const send = (to, bytes, binary, frame) => {
+        const deliver = () => {
+          if (to.readyState === WebSocket.OPEN) to.send(bytes, { binary });
+        };
+        if (frame?.type === "data") {
+          counts.pipeBytes += Buffer.from(frame.data, "base64").length;
+          if (state.pausePipeAfterBytes && counts.pipeBytes >= state.pausePipeAfterBytes) {
+            held.add(deliver);
+            return;
+          }
+        }
+        deliver();
+      };
       incoming.on("message", (bytes, binary) => {
         const frame = binary ? undefined : JSON.parse(bytes.toString());
         if (
@@ -127,7 +147,7 @@ server.on("upgrade", (request, socket, head) => {
           commits.add(frame.id);
           counts.commitCalls++;
         }
-        if (remote.readyState === WebSocket.OPEN) remote.send(bytes, { binary });
+        if (remote.readyState === WebSocket.OPEN) send(remote, bytes, binary, frame);
         else pending.push([bytes, binary]);
       });
       remote.on("open", () => {
@@ -143,7 +163,7 @@ server.on("upgrade", (request, socket, head) => {
           remote.terminate();
           return;
         }
-        if (incoming.readyState === WebSocket.OPEN) incoming.send(bytes, { binary });
+        if (incoming.readyState === WebSocket.OPEN) send(incoming, bytes, binary, frame);
       });
       incoming.on("close", () => {
         sockets.delete(socket);
@@ -199,9 +219,12 @@ server.on("upgrade", (request, socket, head) => {
           remote.resetAndDestroy();
           return;
         }
-        setTimeout(() => {
-          if (!to.destroyed) to.write(bytes, () => from.resume());
-        }, state.delayMs ?? 0);
+        const release = () =>
+          setTimeout(() => {
+            if (!to.destroyed) to.write(bytes, () => from.resume());
+          }, state.delayMs ?? 0);
+        if (state.pauseAfterBytes && counts.bytes >= state.pauseAfterBytes) held.add(release);
+        else release();
       });
     forward(socket, remote);
     forward(remote, socket);

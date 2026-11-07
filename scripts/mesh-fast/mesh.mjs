@@ -231,6 +231,22 @@ export class MiniMesh {
         );
       await NodeFSP.chmod(NodePath.join(base, "bin/mutagen"), 0o755);
     }
+    if (this.warmAgents) {
+      const agentHome = NodePath.join(home, ".mutagen/agents/0.18.1");
+      await NodeFSP.mkdir(agentHome, { recursive: true });
+      await run("tar", [
+        "-xzf",
+        NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "mutagen-agents.tar.gz"),
+        "-C",
+        agentHome,
+        "linux_amd64",
+      ]);
+      await NodeFSP.rename(
+        NodePath.join(agentHome, "linux_amd64"),
+        NodePath.join(agentHome, "mutagen-agent"),
+      );
+      await NodeFSP.chmod(NodePath.join(agentHome, "mutagen-agent"), 0o700);
+    }
     if (this.legacySeed) {
       await NodeFSP.mkdir(NodePath.join(base, "userdata"), { recursive: true });
       await NodeFSP.writeFile(
@@ -312,7 +328,11 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
     const state = NodePath.join(root, "proxy.json");
     await NodeFSP.writeFile(
       state,
-      JSON.stringify({ cut: false, denyPeer: name === this.firstName }),
+      JSON.stringify({
+        cut: false,
+        denyPeer: name === this.firstName,
+        inspectPipe: this.messageProxy && name === "cloudbox",
+      }),
     );
     if (!inContainer)
       this.launch(
@@ -519,7 +539,10 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
   }
 
   async fault(node, state) {
-    await NodeFSP.writeFile(node.state, JSON.stringify(state));
+    await NodeFSP.writeFile(
+      node.state,
+      JSON.stringify({ inspectPipe: this.messageProxy && node.name === "cloudbox", ...state }),
+    );
   }
 
   async signal(node, signal) {

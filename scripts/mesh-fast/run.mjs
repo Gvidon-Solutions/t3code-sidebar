@@ -37,7 +37,7 @@ if (![repeat, jobs, budgetSeconds].every((n) => Number.isInteger(n) && n > 0))
 const priority = [
   "bootstrap-rollout",
   "f1-pending-expiry",
-  "f1-offline-atomic",
+  "network-sleep",
   "run-concept",
   "crash-restart-orders",
   "fork-matrix",

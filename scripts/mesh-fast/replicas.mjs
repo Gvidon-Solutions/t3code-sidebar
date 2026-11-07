@@ -245,143 +245,155 @@ export const replicaScenarios = {
 for (const target of ["studio", "cloudbox", "laptop"])
   for (const phase of ["mount", "sync"])
     replicaScenarios[`crash-${target}-${phase}`] = (directory) =>
-      fixture(directory, async (mesh) => {
-        const p = await project(mesh, "crash"),
-          driver = mesh.nodes[2],
-          victim = mesh.nodes.find((node) => node.name === target);
-        const payload = NodeCrypto.randomBytes(
-            (process.env.MESH_FAST_REALISTIC === "1" ? 256 : 2) * 1024 * 1024,
-          ),
-          file = "transfer.bin";
-        if (phase === "mount") await write(p.root, file, payload);
-        else await place(driver, p);
-        await mesh.fault(mesh.nodes[1], { delayMs: 100 });
-        const placing = (phase === "mount" ? place(driver, p) : Promise.resolve()).then(
-          (value) => ({ value }),
-          (error) => ({ error }),
-        );
-        if (phase === "sync") await write(p.root, file, payload);
-        await until(
-          "active Mutagen staging before crash",
-          async () => JSON.parse(await mutagen(driver, "sync", "list", "--template", "{{json .}}")),
-          (rows) => rows.some((row) => ["staging-alpha", "staging-beta"].includes(row.status)),
-        );
-        await mesh.restart(victim);
-        await mesh.fault(mesh.nodes[1], {});
-        const interrupted = await placing;
-        if (interrupted.error)
-          NodeAssert.match(
-            interrupted.error.message,
-            /peer|socket|closed|connect|offline|unreachable|deadline|mount|Ticket/i,
+      fixture(
+        directory,
+        async (mesh) => {
+          const p = await project(mesh, "crash"),
+            driver = mesh.nodes[2],
+            victim = mesh.nodes.find((node) => node.name === target);
+          const payload = NodeCrypto.randomBytes(
+              (process.env.MESH_FAST_REALISTIC === "1" ? 256 : 2) * 1024 * 1024,
+            ),
+            file = "transfer.bin";
+          if (phase === "mount") await write(p.root, file, payload);
+          else await place(driver, p);
+          const traffic = await (await fetch(mesh.nodes[1].origin + "/__N1_network")).json();
+          await mesh.fault(mesh.nodes[1], { pausePipeAfterBytes: traffic.pipeBytes + 512 * 1024 });
+          const placing = (phase === "mount" ? place(driver, p) : Promise.resolve()).then(
+            (value) => ({ value }),
+            (error) => ({ error }),
           );
-        const rep = await place(driver, p);
-        await until(
-          "payload hash after crash",
-          () => NodeFSP.readFile(NodePath.join(rep.path, file)),
-          (value) => value.equals(payload),
-        );
-        const sessions = JSON.parse(
-          await mutagen(driver, "sync", "list", "--template", "{{json .}}"),
-        );
-        NodeAssert.equal(sessions.length, 1);
-      });
-replicaScenarios["crash-mutagen"] = (directory) =>
-  fixture(directory, async (mesh) => {
-    const p = await project(mesh, "daemon"),
-      driver = mesh.nodes[2],
-      rep = await place(driver, p);
-    await mesh.signal(driver, "SIGSTOP");
-    let daemon;
-    try {
-      const server = JSON.parse(await NodeFSP.readFile(driver.receipt, "utf8"));
-      await until(
-        "in-flight daemon clients drained",
-        async () => {
-          const children = (
-            await NodeFSP.readFile(`/proc/${server.pid}/task/${server.pid}/children`, "utf8")
-          )
-            .trim()
-            .split(/\s+/)
-            .filter(Boolean);
-          for (const pid of children) {
-            try {
-              if (
-                (await NodeFSP.readlink("/proc/" + pid + "/exe")) ===
-                NodePath.join(driver.base, "bin/mutagen")
-              )
-                return false;
-            } catch (error) {
-              if (error.code !== "ENOENT") throw error;
-            }
-          }
-          return true;
+          if (phase === "sync") await write(p.root, file, payload);
+          await until(
+            "active Mutagen staging before crash",
+            async () =>
+              JSON.parse(await mutagen(driver, "sync", "list", "--template", "{{json .}}")),
+            (rows) => rows.some((row) => ["staging-alpha", "staging-beta"].includes(row.status)),
+          );
+          await mesh.restart(victim);
+          await mesh.fault(mesh.nodes[1], {});
+          const interrupted = await placing;
+          if (interrupted.error)
+            NodeAssert.match(
+              interrupted.error.message,
+              /peer|socket|closed|connect|offline|unreachable|deadline|mount|Ticket/i,
+            );
+          const rep = await place(driver, p);
+          await until(
+            "payload hash after crash",
+            () => NodeFSP.readFile(NodePath.join(rep.path, file)),
+            (value) => value.equals(payload),
+          );
+          const sessions = JSON.parse(
+            await mutagen(driver, "sync", "list", "--template", "{{json .}}"),
+          );
+          NodeAssert.equal(sessions.length, 1);
         },
-        Boolean,
+        { messageProxy: true, warmAgents: true },
       );
-      await mutagen(driver, "daemon", "stop");
-      const lockInode = String(
+replicaScenarios["crash-mutagen"] = (directory) =>
+  fixture(
+    directory,
+    async (mesh) => {
+      const p = await project(mesh, "daemon"),
+        driver = mesh.nodes[2],
+        rep = await place(driver, p);
+      await mesh.signal(driver, "SIGSTOP");
+      let daemon;
+      try {
+        const server = JSON.parse(await NodeFSP.readFile(driver.receipt, "utf8"));
+        await until(
+          "in-flight daemon clients drained",
+          async () => {
+            const children = (
+              await NodeFSP.readFile(`/proc/${server.pid}/task/${server.pid}/children`, "utf8")
+            )
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean);
+            for (const pid of children) {
+              try {
+                if (
+                  (await NodeFSP.readlink("/proc/" + pid + "/exe")) ===
+                  NodePath.join(driver.base, "bin/mutagen")
+                )
+                  return false;
+              } catch (error) {
+                if (error.code !== "ENOENT") throw error;
+              }
+            }
+            return true;
+          },
+          Boolean,
+        );
+        await mutagen(driver, "daemon", "stop");
+        const lockInode = String(
+          (await NodeFSP.stat(NodePath.join(driver.base, "mutagen/daemon/daemon.lock"))).ino,
+        );
+        await until(
+          "private daemon lock released",
+          () => NodeFSP.readFile("/proc/locks", "utf8"),
+          (value) => !value.split("\n").some((line) => line.includes(":" + lockInode + " ")),
+        );
+        daemon = mesh.launch(
+          NodePath.join(driver.base, "bin/mutagen"),
+          ["daemon", "run"],
+          {
+            ...driver.env,
+            MUTAGEN_DATA_DIRECTORY: NodePath.join(driver.base, "mutagen"),
+            MUTAGEN_SSH_PATH: NodePath.join(driver.base, "mesh/ssh/bin"),
+          },
+          NodePath.join(driver.root, "captured-daemon.log"),
+        );
+        await until(
+          "private daemon socket",
+          () =>
+            new Promise((resolve, reject) => {
+              const socket = NodeNet.connect(
+                NodePath.join(driver.base, "mutagen/daemon/daemon.sock"),
+              );
+              socket.on("connect", () => {
+                socket.end();
+                resolve(true);
+              });
+              socket.on("error", reject);
+            }),
+          Boolean,
+        );
+      } finally {
+        await mesh.signal(driver, "SIGCONT");
+      }
+      const traffic = await (await fetch(mesh.nodes[1].origin + "/__N1_network")).json();
+      await mesh.fault(mesh.nodes[1], { pausePipeAfterBytes: traffic.pipeBytes + 512 * 1024 });
+      const bytes = NodeCrypto.randomBytes(
+        (process.env.MESH_FAST_REALISTIC === "1" ? 256 : 2) * 1024 * 1024,
+      );
+      await write(p.root, "daemon.bin", bytes);
+      await until(
+        "daemon staging",
+        async () => JSON.parse(await mutagen(driver, "sync", "list", "--template", "{{json .}}")),
+        (rows) => rows.some((row) => ["staging-alpha", "staging-beta"].includes(row.status)),
+      );
+      const inode = String(
         (await NodeFSP.stat(NodePath.join(driver.base, "mutagen/daemon/daemon.lock"))).ino,
       );
+      const locks = await NodeFSP.readFile("/proc/locks", "utf8");
+      NodeAssert.ok(
+        locks
+          .split("\n")
+          .some(
+            (line) =>
+              line.includes(":" + inode + " ") &&
+              line.trim().split(/\s+/)[4] === String(daemon.pid),
+          ),
+      );
+      daemon.kill("SIGKILL");
+      await mesh.fault(mesh.nodes[1], {});
       await until(
-        "private daemon lock released",
-        () => NodeFSP.readFile("/proc/locks", "utf8"),
-        (value) => !value.split("\n").some((line) => line.includes(":" + lockInode + " ")),
+        "daemon recovered",
+        () => NodeFSP.readFile(NodePath.join(rep.path, "daemon.bin")),
+        (value) => value.equals(bytes),
       );
-      daemon = mesh.launch(
-        NodePath.join(driver.base, "bin/mutagen"),
-        ["daemon", "run"],
-        {
-          ...driver.env,
-          MUTAGEN_DATA_DIRECTORY: NodePath.join(driver.base, "mutagen"),
-          MUTAGEN_SSH_PATH: NodePath.join(driver.base, "mesh/ssh/bin"),
-        },
-        NodePath.join(driver.root, "captured-daemon.log"),
-      );
-      await until(
-        "private daemon socket",
-        () =>
-          new Promise((resolve, reject) => {
-            const socket = NodeNet.connect(
-              NodePath.join(driver.base, "mutagen/daemon/daemon.sock"),
-            );
-            socket.on("connect", () => {
-              socket.end();
-              resolve(true);
-            });
-            socket.on("error", reject);
-          }),
-        Boolean,
-      );
-    } finally {
-      await mesh.signal(driver, "SIGCONT");
-    }
-    await mesh.fault(mesh.nodes[1], { delayMs: 100 });
-    const bytes = NodeCrypto.randomBytes(
-      (process.env.MESH_FAST_REALISTIC === "1" ? 256 : 2) * 1024 * 1024,
-    );
-    await write(p.root, "daemon.bin", bytes);
-    await until(
-      "daemon staging",
-      async () => JSON.parse(await mutagen(driver, "sync", "list", "--template", "{{json .}}")),
-      (rows) => rows.some((row) => ["staging-alpha", "staging-beta"].includes(row.status)),
-    );
-    const inode = String(
-      (await NodeFSP.stat(NodePath.join(driver.base, "mutagen/daemon/daemon.lock"))).ino,
-    );
-    const locks = await NodeFSP.readFile("/proc/locks", "utf8");
-    NodeAssert.ok(
-      locks
-        .split("\n")
-        .some(
-          (line) =>
-            line.includes(":" + inode + " ") && line.trim().split(/\s+/)[4] === String(daemon.pid),
-        ),
-    );
-    daemon.kill("SIGKILL");
-    await mesh.fault(mesh.nodes[1], {});
-    await until(
-      "daemon recovered",
-      () => NodeFSP.readFile(NodePath.join(rep.path, "daemon.bin")),
-      (value) => value.equals(bytes),
-    );
-  });
+    },
+    { messageProxy: true, warmAgents: true },
+  );
