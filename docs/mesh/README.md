@@ -651,6 +651,8 @@ R1 accepts a run only after automatic conflict resolution, or exit 75 while conf
 both paths must converge to the primary and preserve the actual losing file without fixture repair.
 Round-one diagnostics refresh every node even when earlier snapshots differ, so failure output
 cannot accidentally show an older snapshot for a later node.
+Its legacy-mirror assertion brackets the settings read with two equal materializations on one
+connection; ongoing status reports cannot invalidate an older, separately captured snapshot.
 
 The round-three daemon fixture suspends its verified isolated server process only while
 starting the foreground fault-test daemon, then resumes it before the crash. Background

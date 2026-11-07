@@ -255,6 +255,19 @@ try {
     const value = await snapshot();
     if (canonical(materialize(value.document)) !== canonical(value.config)) fail("server config differs from materialize(document)");
     console.log(JSON.stringify(value, null, 2));
+  } else if (command === "mirror") {
+    for (;;) {
+      const before = await snapshot();
+      const legacy = (await call("server.getConfig", {})).settings.sidebarWorkspaces;
+      const after = await snapshot();
+      if (canonical(before.config) === canonical(after.config) &&
+          canonical(legacy) === canonical(after.config)) {
+        if (canonical(materialize(after.document)) !== canonical(after.config)) fail("server config differs from materialize(document)");
+        console.log(JSON.stringify({ legacy, snapshot: after }, null, 2));
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
   } else if (command === "edit") {
     const op = parseJson(argv[1]);
     const current = await snapshot();
@@ -277,7 +290,7 @@ try {
     const result = await call("server.updateSettings", { patch: { sidebarWorkspaces: after } });
     console.log(JSON.stringify({ ok: true, workspaces: result.sidebarWorkspaces?.workspaces?.length }));
   } else {
-    fail("usage: ws.mjs {get|rpc <method> [payload]|edit <op>|oldclient ...}");
+    fail("usage: ws.mjs {get|mirror|rpc <method> [payload]|edit <op>|oldclient ...}");
   }
 } finally {
   clearTimeout(overallTimer);
@@ -589,9 +602,8 @@ fi
 
 legacy_matches=1
 for machine in gv gor vps; do
-  ws_rpc "$machine" server.getConfig '{}' 2>/dev/null | jq -S -c '.settings.sidebarWorkspaces' >"$WORK/legacy-$machine.json"
-  jq -S -c '.config' "$WORK/snap-$machine.json" >"$WORK/materialized-$machine.json"
-  cmp -s "$WORK/legacy-$machine.json" "$WORK/materialized-$machine.json" || legacy_matches=0
+  node "$WS" mirror --origin "$(origin_of "$machine")" --token "$(token_of "$machine")" \
+    >"$WORK/mirror-$machine.json" 2>"$WORK/mirror-$machine.err" || legacy_matches=0
 done
 check "legacy settings.sidebarWorkspaces equals materialize(doc) on every server" test "$legacy_matches" = 1
 
