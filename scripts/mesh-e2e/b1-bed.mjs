@@ -10,7 +10,9 @@ const admin = {
   cloudbox: JSON.parse(process.env.B1_CLOUDBOX_SSH ?? "null"),
 };
 if (!admin.laptop || !admin.cloudbox)
-  throw Error("B1_LAPTOP_SSH and B1_CLOUDBOX_SSH must be SSH argument arrays (VPS and gor)");
+  throw Error(
+    "B1_LAPTOP_SSH and B1_CLOUDBOX_SSH must be SSH argument arrays for the two remote bed roles",
+  );
 for (const name of ["laptop", "cloudbox"]) {
   const args = admin[name];
   admin[name] = [

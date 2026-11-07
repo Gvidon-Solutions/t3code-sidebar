@@ -15,6 +15,8 @@ const { values } = NodeUtil.parseArgs({
     "thread-id": { type: "string" },
     "target-title": { type: "string" },
     "target-project-id": { type: "string" },
+    "remote-machine": { type: "string" },
+    "empty-machine": { type: "string" },
     shots: { type: "string", default: "/tmp/t3-f1-shots" },
   },
 });
@@ -48,6 +50,8 @@ NodeAssert.notEqual(
 );
 await NodeFSP.mkdir(values.shots, { recursive: true });
 const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+let page;
+const browserLogs = [];
 try {
   const context = await browser.newContext({
     storageState: values["storage-state"],
@@ -55,7 +59,22 @@ try {
     viewport: { width: 1440, height: 1000 },
     recordVideo: { dir: values.shots, size: { width: 1440, height: 1000 } },
   });
-  const page = await context.newPage();
+  const requests = [];
+  await context.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (["http:", "https:"].includes(url.protocol)) {
+      requests.push(url.origin);
+      NodeAssert.equal(
+        url.origin,
+        new URL(values.origin).origin,
+        "Browser must load remote catalogs through the source server",
+      );
+    }
+    await route.continue();
+  });
+  page = await context.newPage();
+  page.on("console", (message) => browserLogs.push(message.type() + ": " + message.text()));
+  page.on("pageerror", (error) => browserLogs.push(error.stack ?? error.message));
   const video = page.video();
   await page.goto(values.origin);
   const row = page
@@ -134,12 +153,48 @@ try {
     fullPage: true,
   });
   console.log("PASS real thread menu -> Fork to machine dialog");
+  if (values["remote-machine"]) {
+    const picker = dialog.getByRole("combobox", { name: "Fork target machine" });
+    await picker.fill(values["remote-machine"]);
+    await page.getByRole("option", { name: values["remote-machine"], exact: true }).click();
+    await dialog.getByRole("button", { name: "Fork model", exact: true }).waitFor();
+    await dialog.getByRole("button", { name: "Fork model", exact: true }).click();
+    await page.getByText("Deterministic mesh fixture", { exact: false }).first().waitFor();
+    await page.keyboard.press("Escape");
+    await page.screenshot({
+      path: NodePath.join(values.shots, "remote-models.png"),
+      fullPage: true,
+    });
+    await picker.fill(values["empty-machine"]);
+    await page.getByRole("option", { name: values["empty-machine"], exact: true }).click();
+    await dialog
+      .getByText("No models are available on " + values["empty-machine"] + ".", { exact: true })
+      .waitFor();
+    NodeAssert.equal(
+      await dialog
+        .getByRole("button", { name: "Fork to " + values["empty-machine"], exact: true })
+        .isDisabled(),
+      true,
+    );
+    await dialog.getByText("Details", { exact: true }).click();
+    await page.screenshot({
+      path: NodePath.join(values.shots, "no-models-disabled.png"),
+      fullPage: true,
+    });
+    NodeAssert.deepEqual([...new Set(requests)], [new URL(values.origin).origin]);
+    console.log("PASS source-only remote model catalog and disabled fork with reason");
+  }
   await page.keyboard.press("Escape");
   await context.close();
   const recorded = await video.path();
   const destination = NodePath.join(values.shots, "web-drag.webm");
   await NodeFSP.rename(recorded, destination);
   console.log(`Evidence: ${values.shots}`);
+} catch (error) {
+  if (page && !page.isClosed())
+    await page.screenshot({ path: NodePath.join(values.shots, "failure.png"), fullPage: true });
+  throw error;
 } finally {
+  await NodeFSP.writeFile(NodePath.join(values.shots, "browser.log"), browserLogs.join("\n"));
   await browser.close();
 }

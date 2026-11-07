@@ -77,7 +77,7 @@ scripts/mesh-e2e/teardown.sh --purge    # also delete test data, demo, artifacts
 worktree, never `/tmp`), installs, builds web + server + resource monitor, packs
 the `cli-linux-x64` archive, and builds `t3-mesh-e2e:dev`. Artifacts and
 `build.env` live in `~/.cache/t3-mesh-e2e/artifacts`. Override with
-`MESH_E2E_BUILD_DIR` / `MESH_E2E_ARTIFACTS` / `MESH_E2E_GVIDON_IP` / `MESH_E2E_GOR_IP`.
+`MESH_E2E_BUILD_DIR` / `MESH_E2E_ARTIFACTS` / `MESH_E2E_STUDIO_IP` / `MESH_E2E_WORKER_IP`.
 
 For an isolated stage worktree, set `MESH_E2E_BUILD_CURRENT=1` and use your own
 `MESH_E2E_ARTIFACTS` directory to build that checkout. `round3.sh` refuses a
@@ -451,3 +451,53 @@ primary's inbound proxy state and stops its outbound tunnels, then waits for bot
 replica endpoints to disconnect before writing divergent versions. The engine stays
 enabled and sessions stay running; no pause/retry/resume command runs during the outage
 or recovery. Normal completion and EXIT cleanup restore the captured proxy state.
+
+## Inventory and nightly scheduling
+
+The physical bed is defined once in [bed-config.sh](bed-config.sh). Shell scripts
+use the roles `studio`, `worker`, and `cloudbox`; SSH hosts/keys, ports, units,
+legacy seed names and runtime roots come from that file. Override its environment
+variables when using another bed. Fast tests have their own entirely private
+inventory and do not source this configuration.
+
+Run `scripts/mesh-e2e/install-nightly.sh` on the controller to install the nightly
+user timer on the configured worker (gor). It also creates a separate controller
+sshd service using generated private keys and a forced probe/run command; it does
+not change the owner's SSH files or T3 service. No nightly timer is installed on
+the controller or Operalia. The default calendar is 03:30 local time with up to
+five minutes of jitter, persistent across reboots.
+
+The worker runs `nightly.mjs`, which SSHes to the controller to run
+`acceptance.sh`. The wrapper leases the existing bed, builds xdev, runs the real
+rounds/provider guards and then the full isolated matrix with realistic timers and
+payloads. It waits five minutes when another stage holds the bed. It copies the
+existing legacy seed into its own state directory and uses its own nightly demo.
+It neither takes over an active lease nor sends success notifications.
+
+Results are in `~/.local/share/t3-mesh-nightly/results/<UTC>-<pid>/` on the
+worker: `summary.json`, `summary.md`, `suite.log`. Only failure invokes
+`t3ctl inbox post attention ... --key mesh-nightly`. Full bed artifacts remain
+in the controller's nightly runs/artifacts directories. The policy test exercises
+both outcomes with real subprocesses and verifies the exact failure-only argv.
+
+On the worker:
+
+```sh
+systemctl --user enable --now mesh-nightly.timer
+systemctl --user disable --now mesh-nightly.timer
+systemctl --user list-timers mesh-nightly.timer
+journalctl --user -u mesh-nightly.service
+```
+
+To remove the controller endpoint after disabling the worker timer, run
+`systemctl --user disable --now mesh-nightly-controller.service` on the controller.
+Re-run the installer from a permanent checkout if this worktree is removed; the
+forced command intentionally names the checkout that owns the wrapper.
+
+C2/F1 assertions are committed in `../mesh-fast/bindings.mjs`, `forks.mjs` and
+this directory's `f1-web.mjs`. Run `c2-bed.sh` or `f1-bed.sh` for their realistic
+scale-1 variants; both read `bed-config.sh` for their private artifact root.
+`f1-bed.sh` requires `R1_CODEX_BINARY`, `R1_OPENCODE_BINARY` and the same optional
+credential/model settings as `r1-harness.mjs`. It adds actual native provider
+file-reading forks after the deterministic transaction/UI cases. No `/tmp`
+ad-hoc source is required.

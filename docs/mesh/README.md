@@ -696,3 +696,25 @@ A runner launched from a T3 thread must remove inherited `T3CODE_RUN_*` paths an
 shell hooks before starting fixtures. Otherwise even fixture Git invokes the installed
 server CLI shim, coupling the test environment to the owner’s runtime and adding a
 process launch to every Git call.
+
+### Fast and nightly acceptance (T1)
+
+[`scripts/mesh-fast/README.md`](../../scripts/mesh-fast/README.md) maps the realistic
+bed scenarios and CONCEPT §12 to isolated mini-meshes. `pnpm mesh:fast` owns all
+server state, SSH identities, daemons, private bridges and fault proxies; it never
+uses the shared bed. `MeshTiming.ts` scales test timers while normal production
+bundles ignore the knob. Native fixture builds are explicitly marked test builds.
+The runner reports wall time and JUnit, retains failure artifacts, and bounds
+concurrent startup separately from scenario concurrency.
+
+The realistic inventory lives in `scripts/mesh-e2e/bed-config.sh`; shell bed
+helpers use neutral roles and resolve physical destinations through that file.
+`acceptance.sh` holds the shared bed lease for a realistic nightly run.
+`install-nightly.sh` installs the worker timer plus a separate controller SSH
+endpoint; `nightly.mjs` stores summaries and posts the stable `mesh-nightly` inbox
+issue only for failures. The installer never restarts an owner's T3 server.
+
+Two fixture constraints matter: settle private machine claims before pairing,
+otherwise automatic collision reconciliation can supersede a test's config
+revision; reserve ports for the whole command, since releasing a port-zero socket
+can otherwise hand the same port to another concurrently starting fixture.

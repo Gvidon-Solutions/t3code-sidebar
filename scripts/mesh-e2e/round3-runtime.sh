@@ -81,9 +81,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 const root=process.argv[2];
 const { installSshRuntime }=await import(pathToFileURL(root+'/scripts/server-runtime.mjs'));
-const run=(command,args,options)=>execFileSync(command,command==='ssh' ? ['-o','UserKnownHostsFile=/opt/t3-mesh-e2e/home/.ssh/known_hosts',...args] : args,options);
-const result=installSshRuntime({home:root+'/ssh-copy',want:'0.0.4-N',destination:'user@172.17.0.1:22022',identityFile:'/opt/t3-mesh-e2e/home/.ssh/id_mesh_gor',remoteHome:root+'-source',run});
+const run=(command,args,options)=>execFileSync(command,command==='ssh' ? ['-o','UserKnownHostsFile='+process.env.MESH_RUNTIME_KNOWN_HOSTS+'',...args] : args,options);
+const result=installSshRuntime({home:root+'/ssh-copy',want:'0.0.4-N',destination:process.env.MESH_RUNTIME_COPY_DEST,identityFile:process.env.MESH_RUNTIME_COPY_KEY,remoteHome:root+'-source',run});
 if(!fs.existsSync(result.path+'/t3')) throw Error('SSH runtime missing');
-console.log('PASS N runtime copied from linked gor over SSH without gh');
+console.log('PASS N runtime copied from linked worker over SSH without gh');
 JS
 printf 'PASS N system unit status/logs/versions/use/restart; evidence %s\n' "$ROOT"

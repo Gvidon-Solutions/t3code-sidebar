@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Shared configuration for the T3 Mesh E2E test bed. Source, do not execute.
+set -euo pipefail
+
+MESH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$MESH_DIR/../.." && pwd)"
+
+STATE_DIR="${MESH_E2E_STATE_DIR:-$HOME/.local/share/t3-mesh-e2e}"
+ARTIFACTS_DIR="${MESH_E2E_ARTIFACTS:-$HOME/.cache/t3-mesh-e2e/artifacts}"
+BUILD_DIR="${MESH_E2E_BUILD_DIR:-$HOME/.cache/t3-mesh-e2e/build}"
+BUILD_ENV="$ARTIFACTS_DIR/build.env"
+
+WORKER_SSH_CONFIG="${WORKER_SSH_CONFIG:-$HOME/.local/share/gor-transfer/ssh_config}"
+WORKER_SSH_KEY="${WORKER_SSH_KEY:-$HOME/.ssh/id_malaniya_25519}"
+CLOUDBOX_SSH_CONFIG="${CLOUDBOX_SSH_CONFIG:-$HOME/.local/share/vpn-ops/ssh_config}"
+CLOUDBOX_HOST="${CLOUDBOX_HOST:-152.89.244.57}"
+WORKER_HOST="${WORKER_HOST:-gor}"
+# Egress IPs as seen by the VPS. gor exits through its own route, which is not
+# the home IP gvidon uses.
+STUDIO_PUBLIC_IP="${MESH_E2E_STUDIO_IP:-78.17.147.89}"
+WORKER_PUBLIC_IP="${MESH_E2E_WORKER_IP:-91.77.163.152}"
+
+STUDIO_PORT=3795
+WORKER_PORT=3774
+CLOUDBOX_PORT=3791
+STUDIO_LOCAL=13795
+WORKER_LOCAL=13797
+CLOUDBOX_LOCAL=13791
+CLOUDBOX_BIND=172.17.0.1
+CLOUDBOX_SSH_GOR=22022
+CLOUDBOX_SSH_GV=22023
+
+STUDIO_BASE_DIR=/tmp/t3-mesh-e2e-gv
+STUDIO_RUNTIME_ROOT="$HOME/.t3-mesh-e2e-gv-runtime"
+WORKER_BASE_DIR="$HOME/.t3-sidebar-server"
+WORKER_RUNTIME_ROOT="$HOME/.t3-sidebar-server/runtime/versions"
+WORKER_LEGACY_BASE_DIR="$HOME/.t3-mesh-e2e"
+CLOUDBOX_DIR=/opt/t3-mesh-e2e
+CLOUDBOX_DATA="$CLOUDBOX_DIR/home"
+
+STUDIO_UNIT=t3-mesh-e2e-gv.service
+WORKER_UNIT=t3code-sidebar.service
+WORKER_LEGACY_UNIT=t3-mesh-e2e.service
+STUDIO_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
+WORKER_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
+IMAGE="${MESH_E2E_IMAGE:-t3-mesh-e2e:dev}"
+MUTAGEN_VERSION=0.18.1
+MUTAGEN_SHA256=7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f
+
+KEY_TAG=t3-mesh-e2e
+CONTAINER_KEY_GOR="$CLOUDBOX_DATA/.ssh/id_mesh_gor"
+CONTAINER_KEY_GV="$CLOUDBOX_DATA/.ssh/id_mesh_gvidon"
+REVERSE_KEY_GV="$HOME/.ssh/id_t3_mesh_e2e_vps"
+REVERSE_KEY_GOR='$HOME/.ssh/id_t3_mesh_e2e_vps'
+SELF_KEY="$HOME/.ssh/id_t3_mesh_e2e_self"
+
+BED_MACHINES=(studio worker cloudbox)
+BED_NIGHTLY_HOST=gor
+BED_CONTROLLER=gvidon
+LEGACY_STUDIO_FILE=gvidon.json
+LEGACY_REMOTE_FILE=operalia.json
+BED_CONTROLLER_ADDRESS="${MESH_E2E_CONTROLLER_ADDRESS:-192.168.1.17}"
+BED_CONTROLLER_PORT="${MESH_E2E_CONTROLLER_PORT:-23955}"
+BED_NIGHTLY_CALENDAR="${MESH_E2E_NIGHTLY_CALENDAR:-*-*-* 03:30:00}"
+BED_NIGHTLY_ROOT="${MESH_E2E_NIGHTLY_ROOT:-$HOME/.local/share/t3-mesh-nightly}"
+STUDIO_SSHD_UNIT=t3-mesh-e2e-gv-sshd.service
+STUDIO_SSH_USER="${MESH_E2E_STUDIO_SSH_USER:-$(id -un)}"
+CLOUDBOX_BASE_DIR=/home/t3/.t3
+WORKER_HOME="${MESH_E2E_WORKER_HOME:-$HOME}"
+BED_DEMO_ROOT="${MESH_E2E_DEMO_ROOT:-$WORKER_HOME/xdev-e2e/demo}"
+BED_DEMO_TITLE="${MESH_E2E_DEMO_TITLE:-demo}"
+BED_REVERSE_ROOT="${MESH_E2E_REVERSE_ROOT:-/home/t3/round2-primary}"
+BED_LOCAL_PRIMARY_ROOT="${MESH_E2E_LOCAL_PRIMARY_ROOT:-/tmp/t3-mesh-round2-primary}"
+BED_REVERSE_TITLE="${MESH_E2E_REVERSE_TITLE:-round2-primary}"
+BED_RUNTIME_COPY_DESTINATION="$STUDIO_SSH_USER@$CLOUDBOX_BIND:$CLOUDBOX_SSH_GOR"

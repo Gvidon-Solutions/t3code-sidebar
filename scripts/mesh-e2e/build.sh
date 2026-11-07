@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build one ref of the fork into the artifacts the three test servers use:
-#   * a linux-x64 T3 runtime archive (gor, isolated gvidon server)
+#   * a linux-x64 T3 runtime archive (worker, isolated studio server)
 #   * the t3-mesh-e2e Docker image (VPS)
 #
 # Usage: build.sh [ref]        (default: xdev)

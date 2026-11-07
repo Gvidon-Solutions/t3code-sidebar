@@ -2,7 +2,7 @@
 # T3 Mesh E2E — round 1, stages 3–8 on the three-machine bed.
 #
 # Re-runs, against the already seeded bed from `scripts/mesh-e2e/README.md`:
-#   3. mesh settings on every server, gv↔gor and gor↔vps links (not gv↔vps)
+#   3. mesh settings on every server, studio↔worker and worker↔cloudbox links (not studio↔cloudbox)
 #   4. convergence, one "main", no lost project keys, legacy settings = materialize(doc)
 #   5. concurrent, offline and mid-sync edits
 #   6. layout RPC regression and the replicas.status stream
@@ -26,14 +26,14 @@ if [ "${1:-}" = "--timeout" ]; then
   TIMEOUT="${2:-60}"
 fi
 
-GV_ORIGIN="http://127.0.0.1:$GV_PORT"
-GOR_ORIGIN="http://127.0.0.1:$GOR_LOCAL"
-VPS_ORIGIN="http://127.0.0.1:$VPS_LOCAL"
+STUDIO_ORIGIN="http://127.0.0.1:$STUDIO_PORT"
+WORKER_ORIGIN="http://127.0.0.1:$WORKER_LOCAL"
+CLOUDBOX_ORIGIN="http://127.0.0.1:$CLOUDBOX_LOCAL"
 LEGACY_DIR="$STATE_DIR/legacy"
 WORK="${MESH_E2E_ROUND1_WORK:-/tmp/t3-mesh-e2e-round1}"
 WS="$WORK/ws.mjs"
-GOR_BIN="~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3"
-VPS_BIN="/opt/t3/dist/bin.mjs"
+WORKER_BIN="~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3"
+CLOUDBOX_BIN="/opt/t3/dist/bin.mjs"
 
 RUN_TS="$(date -u +%Y%m%dT%H%M%SZ)"
 SCRATCH="round1-$RUN_TS"
@@ -47,8 +47,8 @@ OLD_B="round1-oldb-$RUN_TS"
 PASS=0
 FAIL=0
 FAILED=()
-GOR_STOPPED=0
-VPS_KILLED=0
+WORKER_STOPPED=0
+CLOUDBOX_KILLED=0
 
 record_pass() { PASS=$((PASS + 1)); printf 'PASS  %s%s\n' "$1" "${2:+  ($2)}"; }
 record_fail() {
@@ -65,13 +65,13 @@ now_ms() { date +%s%3N; }
 elapsed_ms() { echo $(( $(now_ms) - $1 )); }
 
 cleanup_bed() {
-  if [ "$GOR_STOPPED" = 1 ]; then
-    gor_ssh 'systemctl --user start t3code-sidebar.service' >/dev/null 2>&1 || true
-    GOR_STOPPED=0
+  if [ "$WORKER_STOPPED" = 1 ]; then
+    worker_ssh 'systemctl --user start t3code-sidebar.service' >/dev/null 2>&1 || true
+    WORKER_STOPPED=0
   fi
-  if [ "$VPS_KILLED" = 1 ]; then
-    vps_ssh 'docker start t3-mesh-e2e' >/dev/null 2>&1 || true
-    VPS_KILLED=0
+  if [ "$CLOUDBOX_KILLED" = 1 ]; then
+    cloudbox_ssh 'docker start t3-mesh-e2e' >/dev/null 2>&1 || true
+    CLOUDBOX_KILLED=0
   fi
 }
 trap cleanup_bed EXIT
@@ -312,19 +312,19 @@ descriptor_version() { # descriptor_version <origin>
   curl -fsS --max-time 5 "$1/.well-known/t3/environment" | jq -r '.serverVersion'
 }
 
-mint_token_once() { # mint_token_once gv|gor|vps
+mint_token_once() { # mint_token_once studio|worker|cloudbox
   local ttl=${MESH_E2E_SESSION_TTL:-30m} quoted_ttl
   printf -v quoted_ttl '%q' "$ttl"
   case "$1" in
-    gv) "$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" auth session issue --base-dir "$GV_BASE_DIR" \
+    studio) "$STUDIO_RUNTIME_ROOT/$BUILD_VERSION/t3" auth session issue --base-dir "$STUDIO_BASE_DIR" \
       --ttl "$ttl" --label mesh-e2e-round1 --token-only 2>/dev/null ;;
-    gor) gor_ssh "$GOR_BIN auth session issue --base-dir ~/.t3-sidebar-server --ttl $quoted_ttl \
+    worker) worker_ssh "$WORKER_BIN auth session issue --base-dir ~/.t3-sidebar-server --ttl $quoted_ttl \
       --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
-    vps) vps_ssh "docker exec t3-mesh-e2e node $VPS_BIN auth session issue \
+    cloudbox) cloudbox_ssh "docker exec t3-mesh-e2e node $CLOUDBOX_BIN auth session issue \
       --base-dir /home/t3/.t3 --ttl $quoted_ttl --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
   esac
 }
-mint_token() { # mint_token gv|gor|vps — a just-restarted server can answer empty once
+mint_token() { # mint_token studio|worker|cloudbox — a just-restarted server can answer empty once
   local i output
   for i in 1 2 3 4 5; do
     output="$(mint_token_once "$1" | head -1)"
@@ -334,14 +334,14 @@ mint_token() { # mint_token gv|gor|vps — a just-restarted server can answer em
   return 1
 }
 
-pair_code() { # pair_code gv|gor|vps
+pair_code() { # pair_code studio|worker|cloudbox
   local out
   case "$1" in
-    gv) out="$("$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" auth pairing create --base-dir "$GV_BASE_DIR" \
+    studio) out="$("$STUDIO_RUNTIME_ROOT/$BUILD_VERSION/t3" auth pairing create --base-dir "$STUDIO_BASE_DIR" \
       --ttl 20m --label mesh-e2e-link --json 2>/dev/null)" ;;
-    gor) out="$(gor_ssh "$GOR_BIN auth pairing create --base-dir ~/.t3-sidebar-server \
+    worker) out="$(worker_ssh "$WORKER_BIN auth pairing create --base-dir ~/.t3-sidebar-server \
       --ttl 20m --label mesh-e2e-link --json" 2>/dev/null)" ;;
-    vps) out="$(vps_ssh "docker exec t3-mesh-e2e node $VPS_BIN auth pairing create \
+    cloudbox) out="$(cloudbox_ssh "docker exec t3-mesh-e2e node $CLOUDBOX_BIN auth pairing create \
       --base-dir /home/t3/.t3 --ttl 20m --label mesh-e2e-link --json" 2>/dev/null)" ;;
   esac
   printf '%s\n' "$out" | sed -n '/^{/,$p' | jq -r '.credential // empty'
@@ -352,16 +352,16 @@ T_GOR=""
 T_VPS=""
 token_of() {
   case "$1" in
-    gv) [ -n "$T_GV" ] || T_GV="$(mint_token gv)"; printf '%s' "$T_GV" ;;
-    gor) [ -n "$T_GOR" ] || T_GOR="$(mint_token gor)"; printf '%s' "$T_GOR" ;;
-    vps) [ -n "$T_VPS" ] || T_VPS="$(mint_token vps)"; printf '%s' "$T_VPS" ;;
+    studio) [ -n "$T_GV" ] || T_GV="$(mint_token studio)"; printf '%s' "$T_GV" ;;
+    worker) [ -n "$T_GOR" ] || T_GOR="$(mint_token worker)"; printf '%s' "$T_GOR" ;;
+    cloudbox) [ -n "$T_VPS" ] || T_VPS="$(mint_token cloudbox)"; printf '%s' "$T_VPS" ;;
   esac
 }
 origin_of() {
   case "$1" in
-    gv) printf '%s' "$GV_ORIGIN" ;;
-    gor) printf '%s' "$GOR_ORIGIN" ;;
-    vps) printf '%s' "$VPS_ORIGIN" ;;
+    studio) printf '%s' "$STUDIO_ORIGIN" ;;
+    worker) printf '%s' "$WORKER_ORIGIN" ;;
+    cloudbox) printf '%s' "$CLOUDBOX_ORIGIN" ;;
   esac
 }
 
@@ -386,7 +386,7 @@ ws_edit() { # ws_edit <machine> <op-json>
 
 snapshot_all() { # snapshot_all -> writes $WORK/snap-<machine>.json, fails if any call failed
   local machine ok=0
-  for machine in gv gor vps; do
+  for machine in "${BED_MACHINES[@]}"; do
     if ws_get "$machine" >"$WORK/snap-$machine.json" 2>"$WORK/snap-$machine.err"; then :; else ok=1; fi
   done
   return "$ok"
@@ -399,7 +399,7 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
   local label=$1
   shift
   local machines=("$@")
-  [ "${#machines[@]}" -gt 0 ] || machines=(gv gor vps)
+  [ "${#machines[@]}" -gt 0 ] || machines=("${BED_MACHINES[@]}")
   local start deadline first_doc="" first_cfg="" machine doc_hash_value cfg_hash_value converged=1
   start="$(now_ms)"
   deadline=$((start + TIMEOUT * 1000))
@@ -456,7 +456,7 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
 
 assert_all() { # assert_all <label> <jq filter> -> passes when filter is true on every snapshot
   local label=$1 filter=$2 machine ok=1
-  for machine in gv gor vps; do
+  for machine in "${BED_MACHINES[@]}"; do
     if ! jq -e "$filter" "$WORK/snap-$machine.json" >/dev/null 2>&1; then
       ok=0
       printf '  %s: %s\n' "$machine" "$(jq -c "$filter" "$WORK/snap-$machine.json" 2>/dev/null || echo 'missing')"
@@ -481,27 +481,27 @@ if [ "${MESH_E2E_HELPERS_ONLY:-0}" = 1 ]; then return 0; fi
 # ---------------------------------------------------------------------------
 echo "== step 3: settings and links =="
 
-check "build $BUILD_VERSION deployed on gv" \
-  grep -q "$BUILD_VERSION/t3" ~/.config/systemd/user/"$GV_UNIT"
-check "build $BUILD_VERSION deployed on gor" \
-  gor_ssh "grep -q 'runtime/versions/$BUILD_VERSION/t3' ~/.config/systemd/user/$GOR_UNIT"
-check "build $BUILD_VERSION image deployed on vps" \
-  test "$(docker image inspect "$IMAGE" -f '{{.Id}}')" = "$(vps_ssh "docker image inspect '$IMAGE' -f '{{.Id}}'")"
+check "build $BUILD_VERSION deployed on studio" \
+  grep -q "$BUILD_VERSION/t3" ~/.config/systemd/user/"$STUDIO_UNIT"
+check "build $BUILD_VERSION deployed on worker" \
+  worker_ssh "grep -q 'runtime/versions/$BUILD_VERSION/t3' ~/.config/systemd/user/$WORKER_UNIT"
+check "build $BUILD_VERSION image deployed on cloudbox" \
+  test "$(docker image inspect "$IMAGE" -f '{{.Id}}')" = "$(cloudbox_ssh "docker image inspect '$IMAGE' -f '{{.Id}}'")"
 
-T_GV="$(mint_token gv)"
-T_GOR="$(mint_token gor)"
-T_VPS="$(mint_token vps)"
+T_GV="$(mint_token studio)"
+T_GOR="$(mint_token worker)"
+T_VPS="$(mint_token cloudbox)"
 
-GV_ENV="$(descriptor_env "$GV_ORIGIN")"
-GOR_ENV="$(descriptor_env "$GOR_ORIGIN")"
-VPS_ENV="$(descriptor_env "$VPS_ORIGIN")"
-printf 'environments: gv=%s gor=%s vps=%s\n' "$GV_ENV" "$GOR_ENV" "$VPS_ENV"
+STUDIO_ENV="$(descriptor_env "$STUDIO_ORIGIN")"
+WORKER_ENV="$(descriptor_env "$WORKER_ORIGIN")"
+CLOUDBOX_ENV="$(descriptor_env "$CLOUDBOX_ORIGIN")"
+printf 'environments: studio=%s worker=%s cloudbox=%s\n' "$STUDIO_ENV" "$WORKER_ENV" "$CLOUDBOX_ENV"
 
-for machine in gv gor vps; do
+for machine in "${BED_MACHINES[@]}"; do
   ws_rpc "$machine" server.updateSettings \
     '{"patch":{"meshEnabled":true,"linkedEnvironmentsEnabled":true}}' >/dev/null 2>&1
 done
-for machine in gv gor vps; do
+for machine in "${BED_MACHINES[@]}"; do
   enabled="$(ws_rpc "$machine" server.getConfig '{}' 2>/dev/null | jq -r '.settings.linkedEnvironmentsEnabled // false')"
   check "$machine has linkedEnvironmentsEnabled" test "$enabled" = true
 done
@@ -537,35 +537,35 @@ ensure_link() { # ensure_link <from> <to> <url> <to-env>
   fi
 }
 
-ensure_link gv gor "$GOR_ORIGIN" "$GOR_ENV"
-ensure_link gor vps "$VPS_ORIGIN" "$VPS_ENV"
+ensure_link studio worker "$WORKER_ORIGIN" "$WORKER_ENV"
+ensure_link worker cloudbox "$CLOUDBOX_ORIGIN" "$CLOUDBOX_ENV"
 
-# gv↔vps must stay unlinked so traffic has to go through gor.
-gv_has_vps="$(link_exists gv "$VPS_ENV" && echo yes || echo no)"
-vps_has_gv="$(link_exists vps "$GV_ENV" && echo yes || echo no)"
+# studio↔cloudbox must stay unlinked so traffic has to go through worker.
+gv_has_vps="$(link_exists studio "$CLOUDBOX_ENV" && echo yes || echo no)"
+vps_has_gv="$(link_exists cloudbox "$STUDIO_ENV" && echo yes || echo no)"
 if [ "$gv_has_vps" = yes ]; then
-  ws_rpc gv peerLinks.unlink "{\"environmentId\":\"$VPS_ENV\"}" >/dev/null 2>&1
+  ws_rpc studio peerLinks.unlink "{\"environmentId\":\"$CLOUDBOX_ENV\"}" >/dev/null 2>&1
   gv_has_vps=no
 fi
 if [ "$vps_has_gv" = yes ]; then
-  ws_rpc vps peerLinks.unlink "{\"environmentId\":\"$GV_ENV\"}" >/dev/null 2>&1
+  ws_rpc cloudbox peerLinks.unlink "{\"environmentId\":\"$STUDIO_ENV\"}" >/dev/null 2>&1
   vps_has_gv=no
 fi
-check "no gv↔vps link" test "$gv_has_vps$vps_has_gv" = nono
+check "no studio↔cloudbox link" test "$gv_has_vps$vps_has_gv" = nono
 
 # Wait until both links answer; the mesh exchange then starts on its own.
 link_start="$(now_ms)"
 links_ok=0
 for _ in $(seq 1 "$TIMEOUT"); do
-  gv_ok="$(ws_rpc gv peerLinks.list '{}' 2>/dev/null | jq -r --arg id "$GOR_ENV" '.links[] | select(.environmentId == $id) | .status' || true)"
-  gor_ok="$(ws_rpc gor peerLinks.list '{}' 2>/dev/null | jq -r --arg id "$VPS_ENV" '.links[] | select(.environmentId == $id) | .status' || true)"
+  gv_ok="$(ws_rpc studio peerLinks.list '{}' 2>/dev/null | jq -r --arg id "$WORKER_ENV" '.links[] | select(.environmentId == $id) | .status' || true)"
+  gor_ok="$(ws_rpc worker peerLinks.list '{}' 2>/dev/null | jq -r --arg id "$CLOUDBOX_ENV" '.links[] | select(.environmentId == $id) | .status' || true)"
   if [ "$gv_ok" = reachable ] && [ "$gor_ok" = reachable ]; then links_ok=1; break; fi
   sleep 1
 done
 if [ "$links_ok" = 1 ]; then
-  record_pass "links reachable" "gv→gor and gor→vps in $(elapsed_ms "$link_start")ms"
+  record_pass "links reachable" "studio→worker and worker→cloudbox in $(elapsed_ms "$link_start")ms"
 else
-  record_fail "links reachable" "gv→gor=$gv_ok gor→vps=$gor_ok"
+  record_fail "links reachable" "studio→worker=$gv_ok worker→cloudbox=$gor_ok"
 fi
 
 # ---------------------------------------------------------------------------
@@ -575,25 +575,25 @@ echo "== step 4: convergence and legacy adoption =="
 wait_converged "three documents and materialized configs converge"
 
 main_count_ok=1
-for machine in gv gor vps; do
+for machine in "${BED_MACHINES[@]}"; do
   count="$(jq -r '[.config.workspaces[] | select((.name | ascii_downcase) == "main")] | length' "$WORK/snap-$machine.json")"
   [ "$count" = 1 ] || main_count_ok=0
 done
 check "exactly one \"main\" workspace on every server" test "$main_count_ok" = 1
 
-main_ids="$(for machine in gv gor vps; do jq -r '[.config.workspaces[] | select((.name | ascii_downcase) == "main")][0].id' "$WORK/snap-$machine.json"; done | sort -u | wc -l)"
+main_ids="$(for machine in "${BED_MACHINES[@]}"; do jq -r '[.config.workspaces[] | select((.name | ascii_downcase) == "main")][0].id' "$WORK/snap-$machine.json"; done | sort -u | wc -l)"
 check "the same \"main\" workspace id everywhere" test "$main_ids" = 1
 
-if [ -f "$LEGACY_DIR/gvidon.json" ] && [ -f "$LEGACY_DIR/operalia.json" ]; then
+if [ -f "$LEGACY_DIR/$LEGACY_STUDIO_FILE" ] && [ -f "$LEGACY_DIR/$LEGACY_REMOTE_FILE" ]; then
   project_keys() { # project_keys <config-json-file-or-stdin>
     jq -r '[(.placements | keys[]), (.assignments | keys[]), (.projectOrder[]),
             (.workspaceProjectOrder | to_entries[] | .value[]),
             (.workspaceFold | to_entries[] | .value | keys[])] | unique[]' "$@"
   }
-  project_keys "$LEGACY_DIR/gvidon.json" "$LEGACY_DIR/operalia.json" | sort -u >"$WORK/source-keys.txt"
-  jq -r '.config' "$WORK/snap-gv.json" >"$WORK/config-gv.json"
-  project_keys "$WORK/config-gv.json" | sort -u >"$WORK/materialized-keys.txt"
-  jq -r --rawfile keys "$WORK/source-keys.txt" '($keys | split("\n") | map(select(length > 0)))[] as $key | .config.projectAliases[$key] // $key' "$WORK/snap-gv.json" | sort -u > "$WORK/canonical-source-keys.txt"
+  project_keys "$LEGACY_DIR/$LEGACY_STUDIO_FILE" "$LEGACY_DIR/$LEGACY_REMOTE_FILE" | sort -u >"$WORK/source-keys.txt"
+  jq -r '.config' "$WORK/snap-studio.json" >"$WORK/config-studio.json"
+  project_keys "$WORK/config-studio.json" | sort -u >"$WORK/materialized-keys.txt"
+  jq -r --rawfile keys "$WORK/source-keys.txt" '($keys | split("\n") | map(select(length > 0)))[] as $key | .config.projectAliases[$key] // $key' "$WORK/snap-studio.json" | sort -u > "$WORK/canonical-source-keys.txt"
   missing="$(comm -23 "$WORK/canonical-source-keys.txt" "$WORK/materialized-keys.txt")"
   if [ -z "$missing" ]; then
     record_pass "no project key from either legacy config was lost" "$(wc -l <"$WORK/source-keys.txt") keys"
@@ -605,7 +605,7 @@ else
 fi
 
 legacy_matches=1
-for machine in gv gor vps; do
+for machine in "${BED_MACHINES[@]}"; do
   node "$WS" mirror --origin "$(origin_of "$machine")" --token "$(token_of "$machine")" \
     >"$WORK/mirror-$machine.json" 2>"$WORK/mirror-$machine.err" || legacy_matches=0
 done
@@ -616,16 +616,16 @@ check "legacy settings.sidebarWorkspaces equals materialize(doc) on every server
 # ---------------------------------------------------------------------------
 echo "== step 5: edits =="
 
-TEST_PROJECT="$(jq -r '.config.projectOrder[0] // (.config.placements | keys[0])' "$WORK/snap-gv.json")"
-SECOND_PROJECT="$(jq -r '[(.config.placements | keys[]), (.config.projectOrder[])] | unique | map(select(. != "'"$TEST_PROJECT"'")) | .[0]' "$WORK/snap-gv.json")"
+TEST_PROJECT="$(jq -r '.config.projectOrder[0] // (.config.placements | keys[0])' "$WORK/snap-studio.json")"
+SECOND_PROJECT="$(jq -r '[(.config.placements | keys[]), (.config.projectOrder[])] | unique | map(select(. != "'"$TEST_PROJECT"'")) | .[0]' "$WORK/snap-studio.json")"
 printf 'test projects: %s / %s\n' "$TEST_PROJECT" "$SECOND_PROJECT"
 
 jq -nc --arg id "$SCRATCH" --arg name "$SCRATCH_NAME" \
   '{kind:"addWorkspace", id:$id, name:$name}' >"$WORK/op-add.json"
-if ws_edit gv "$(cat "$WORK/op-add.json")" >/dev/null 2>"$WORK/edit-add.err"; then
-  record_pass "gv created scratch workspace $SCRATCH"
+if ws_edit studio "$(cat "$WORK/op-add.json")" >/dev/null 2>"$WORK/edit-add.err"; then
+  record_pass "studio created scratch workspace $SCRATCH"
 else
-  record_fail "gv created scratch workspace $SCRATCH" "$(head -c 300 "$WORK/edit-add.err")"
+  record_fail "studio created scratch workspace $SCRATCH" "$(head -c 300 "$WORK/edit-add.err")"
 fi
 wait_converged "scratch workspace replicated to all three"
 
@@ -634,80 +634,80 @@ jq -nc --arg id "$SCRATCH" --arg name "$SCRATCH_NAME_A" \
   '{kind:"renameWorkspace", id:$id, name:$name}' >"$WORK/op-rename.json"
 jq -nc --arg project "$TEST_PROJECT" --arg ws "$SCRATCH" \
   '{kind:"place", project:$project, workspace:$ws}' >"$WORK/op-place.json"
-REORDER_ID="$(jq -r --arg id "$SCRATCH" '[.config.workspaces[].id | select(. != $id and . != "main")][-1]' "$WORK/snap-gor.json")"
+REORDER_ID="$(jq -r --arg id "$SCRATCH" '[.config.workspaces[].id | select(. != $id and . != "main")][-1]' "$WORK/snap-worker.json")"
 ORDER="$(jq -nc --arg id "$REORDER_ID" '[$id]')"
 jq -nc --argjson order "$ORDER" '{kind:"reorder", order:$order}' >"$WORK/op-reorder.json"
 
 concurrent_start="$(now_ms)"
-ws_edit gv "$(cat "$WORK/op-rename.json")" >"$WORK/cc-gv.json" 2>"$WORK/cc-gv.err" &
+ws_edit studio "$(cat "$WORK/op-rename.json")" >"$WORK/cc-studio.json" 2>"$WORK/cc-studio.err" &
 pid_gv=$!
-ws_edit vps "$(cat "$WORK/op-place.json")" >"$WORK/cc-vps.json" 2>"$WORK/cc-vps.err" &
+ws_edit cloudbox "$(cat "$WORK/op-place.json")" >"$WORK/cc-cloudbox.json" 2>"$WORK/cc-cloudbox.err" &
 pid_vps=$!
-ws_edit gor "$(cat "$WORK/op-reorder.json")" >"$WORK/cc-gor.json" 2>"$WORK/cc-gor.err" &
+ws_edit worker "$(cat "$WORK/op-reorder.json")" >"$WORK/cc-worker.json" 2>"$WORK/cc-worker.err" &
 pid_gor=$!
 cc_ok=1
 wait "$pid_gv" || cc_ok=0
 wait "$pid_vps" || cc_ok=0
 wait "$pid_gor" || cc_ok=0
-check "concurrent edits on gv, vps and gor applied" test "$cc_ok" = 1
+check "concurrent edits on studio, cloudbox and worker applied" test "$cc_ok" = 1
 wait_converged "concurrent edits converged"
-assert_all "concurrent gv rename kept" \
+assert_all "concurrent studio rename kept" \
   '(.config.workspaces[] | select(.id == "'"$SCRATCH"'") | .name) == "'"$SCRATCH_NAME_A"'"'
-assert_all "concurrent vps placement kept" \
+assert_all "concurrent cloudbox placement kept" \
   '(.config.placements["'"$TEST_PROJECT"'"] // []) | index("'"$SCRATCH"'") != null'
-assert_all "concurrent gor reorder kept (independent workspace first)" \
+assert_all "concurrent worker reorder kept (independent workspace first)" \
   '.config.workspaces[0].id == "'"$REORDER_ID"'"'
 
-# gor offline: edit on gv and vps, then bring gor back.
-gor_ssh 'systemctl --user stop t3code-sidebar.service'
-GOR_STOPPED=1
+# worker offline: edit on studio and cloudbox, then bring worker back.
+worker_ssh 'systemctl --user stop t3code-sidebar.service'
+WORKER_STOPPED=1
 took_start="$(now_ms)"
 jq -nc --arg id "$SCRATCH" --arg name "$SCRATCH_NAME_B" \
   '{kind:"renameWorkspace", id:$id, name:$name}' >"$WORK/op-rename-b.json"
 jq -nc --arg project "$SECOND_PROJECT" --arg ws "$SCRATCH" \
   '{kind:"place", project:$project, workspace:$ws}' >"$WORK/op-place-b.json"
 offline_ok=1
-ws_edit gv "$(cat "$WORK/op-rename-b.json")" >/dev/null 2>&1 || offline_ok=0
-ws_edit vps "$(cat "$WORK/op-place-b.json")" >/dev/null 2>&1 || offline_ok=0
+ws_edit studio "$(cat "$WORK/op-rename-b.json")" >/dev/null 2>&1 || offline_ok=0
+ws_edit cloudbox "$(cat "$WORK/op-place-b.json")" >/dev/null 2>&1 || offline_ok=0
 
-check "edits applied while gor was down" test "$offline_ok" = 1
-gor_ssh 'systemctl --user start t3code-sidebar.service'
-GOR_STOPPED=0
-wait_health "$GOR_ORIGIN" "$TIMEOUT" || true
-if wait_converged "gor rejoins and catches up" ; then
-  printf '  gor catch-up: %sms\n' "$(elapsed_ms "$took_start")"
+check "edits applied while worker was down" test "$offline_ok" = 1
+worker_ssh 'systemctl --user start t3code-sidebar.service'
+WORKER_STOPPED=0
+wait_health "$WORKER_ORIGIN" "$TIMEOUT" || true
+if wait_converged "worker rejoins and catches up" ; then
+  printf '  worker catch-up: %sms\n' "$(elapsed_ms "$took_start")"
 fi
-assert_all "offline gv rename reached gor" \
+assert_all "offline studio rename reached worker" \
   '(.config.workspaces[] | select(.id == "'"$SCRATCH"'") | .name) == "'"$SCRATCH_NAME_B"'"'
-assert_all "offline vps placement reached gor" \
+assert_all "offline cloudbox placement reached worker" \
   '(.config.placements["'"$SECOND_PROJECT"'"] // []) | index("'"$SCRATCH"'") != null'
 
 # Kill the VPS container in the middle of a sync.
 jq -nc --arg id "$SCRATCH" --arg name "$SCRATCH_NAME_C" \
   '{kind:"renameWorkspace", id:$id, name:$name}' >"$WORK/op-rename-c.json"
-ws_edit gv "$(cat "$WORK/op-rename-c.json")" >/dev/null 2>&1 &
+ws_edit studio "$(cat "$WORK/op-rename-c.json")" >/dev/null 2>&1 &
 kill_pid=$!
 sleep 0.2
-vps_ssh 'docker kill t3-mesh-e2e' >/dev/null 2>&1
-VPS_KILLED=1
+cloudbox_ssh 'docker kill t3-mesh-e2e' >/dev/null 2>&1
+CLOUDBOX_KILLED=1
 wait "$kill_pid" || true
-vps_ssh 'docker start t3-mesh-e2e' >/dev/null 2>&1
+cloudbox_ssh 'docker start t3-mesh-e2e' >/dev/null 2>&1
 sleep 1
-VPS_KILLED=0
-wait_health "$VPS_ORIGIN" "$TIMEOUT" || true
-if wait_converged "vps restarts after a mid-sync kill and catches up"; then :; fi
-assert_all "mid-sync rename reached the restarted vps" \
+CLOUDBOX_KILLED=0
+wait_health "$CLOUDBOX_ORIGIN" "$TIMEOUT" || true
+if wait_converged "cloudbox restarts after a mid-sync kill and catches up"; then :; fi
+assert_all "mid-sync rename reached the restarted cloudbox" \
   '(.config.workspaces[] | select(.id == "'"$SCRATCH"'") | .name) == "'"$SCRATCH_NAME_C"'"'
 
 # Cleanup: the scratch workspace and its placements.
 jq -nc --arg id "$SCRATCH" '{kind:"removeWorkspace", id:$id}' >"$WORK/op-remove.json"
-ws_edit gv "$(cat "$WORK/op-remove.json")" >/dev/null 2>&1
+ws_edit studio "$(cat "$WORK/op-remove.json")" >/dev/null 2>&1
 jq -nc --arg project "$TEST_PROJECT" --arg ws "$SCRATCH" \
   '{kind:"unplace", project:$project, workspace:$ws}' >"$WORK/op-unplace.json"
-ws_edit vps "$(cat "$WORK/op-unplace.json")" >/dev/null 2>&1
+ws_edit cloudbox "$(cat "$WORK/op-unplace.json")" >/dev/null 2>&1
 jq -nc --arg project "$SECOND_PROJECT" --arg ws "$SCRATCH" \
   '{kind:"unplace", project:$project, workspace:$ws}' >"$WORK/op-unplace-b.json"
-ws_edit vps "$(cat "$WORK/op-unplace-b.json")" >/dev/null 2>&1
+ws_edit cloudbox "$(cat "$WORK/op-unplace-b.json")" >/dev/null 2>&1
 wait_converged "scratch workspace removed everywhere"
 assert_all "no scratch workspace left" '.config.workspaces | map(.id) | index("'"$SCRATCH"'") == null'
 
@@ -716,14 +716,14 @@ assert_all "no scratch workspace left" '.config.workspaces | map(.id) | index("'
 # ---------------------------------------------------------------------------
 echo "== step 6: RPC regression =="
 layout_ok=1
-for machine in gv gor vps; do
+for machine in "${BED_MACHINES[@]}"; do
   if jq -e '(.document | type) == "object" and (.config.workspaces | type) == "array"' \
     "$WORK/snap-$machine.json" >/dev/null 2>&1; then :; else layout_ok=0; fi
 done
 check "every meshLayout.get returns the real document and config" test "$layout_ok" = 1
 
 replicas_available=1
-for machine in gv gor vps; do
+for machine in "${BED_MACHINES[@]}"; do
   out="$(ws_rpc "$machine" replicas.status '{}' --first 2>&1)"
   printf '%s' "$out" | jq -e '.[0].replicas | type == "array"' >/dev/null || replicas_available=0
 done
@@ -733,66 +733,66 @@ check "replicas.status returns the live replica stream on every server" test "$r
 # Step 7 — files across the mesh
 # ---------------------------------------------------------------------------
 echo "== step 7: files =="
-GOR_HOME="$(gor_ssh 'printf %s "$HOME"')"
-GOR_README="$GOR_HOME/xdev-e2e/demo/README.md"
-VPS_README="/home/t3/round1-e2e.txt"
-gor_ssh "printf 'a\\000b\\n' > '$GOR_HOME/xdev-e2e/demo/binary.bin'; truncate -s 70M '$GOR_HOME/xdev-e2e/demo/large.bin'" >/dev/null 2>&1
-vps_ssh "docker exec t3-mesh-e2e sh -c 'printf \"round1 file from vps\\n\" > $VPS_README'" >/dev/null 2>&1
+WORKER_HOME="$(worker_ssh 'printf %s "$HOME"')"
+WORKER_README="$WORKER_HOME/xdev-e2e/demo/README.md"
+CLOUDBOX_README="/home/t3/round1-e2e.txt"
+worker_ssh "printf 'a\\000b\\n' > '$WORKER_HOME/xdev-e2e/demo/binary.bin'; truncate -s 70M '$WORKER_HOME/xdev-e2e/demo/large.bin'" >/dev/null 2>&1
+cloudbox_ssh "docker exec t3-mesh-e2e sh -c 'printf \"round1 file from cloudbox\\n\" > $CLOUDBOX_README'" >/dev/null 2>&1
 
 read_file() { # read_file <environment-id> <path>
-  ws_rpc gv files.read "{\"environmentId\":\"$1\",\"absolutePath\":\"$2\"}"
+  ws_rpc studio files.read "{\"environmentId\":\"$1\",\"absolutePath\":\"$2\"}"
 }
-read_result="$(read_file "$GOR_ENV" "$GOR_README" 2>"$WORK/file-gor.err" || true)"
+read_result="$(read_file "$WORKER_ENV" "$WORKER_README" 2>"$WORK/file-worker.err" || true)"
 if printf '%s' "$read_result" | jq -e '.contents | contains("mesh e2e demo")' >/dev/null 2>&1; then
-  record_pass "files.read on gor through gv"
+  record_pass "files.read on worker through studio"
 else
-  record_fail "files.read on gor through gv" "$(printf '%s' "$read_result" | head -c 300)"
+  record_fail "files.read on worker through studio" "$(printf '%s' "$read_result" | head -c 300)"
 fi
 if printf '%s' "$read_result" | jq -e '.contents | contains("mesh e2e demo")' >/dev/null 2>&1; then :; fi
 
-read_vps="$(read_file "$VPS_ENV" "$VPS_README" 2>"$WORK/file-vps.err" || true)"
-if printf '%s' "$read_vps" | jq -e '.contents | contains("round1 file from vps")' >/dev/null 2>&1; then
-  record_pass "files.read on vps through gv (relayed via gor)"
+read_vps="$(read_file "$CLOUDBOX_ENV" "$CLOUDBOX_README" 2>"$WORK/file-cloudbox.err" || true)"
+if printf '%s' "$read_vps" | jq -e '.contents | contains("round1 file from cloudbox")' >/dev/null 2>&1; then
+  record_pass "files.read on cloudbox through studio (relayed via worker)"
 else
-  record_fail "files.read on vps through gv (relayed via gor)" "$(printf '%s' "$read_vps" | head -c 400)"
+  record_fail "files.read on cloudbox through studio (relayed via worker)" "$(printf '%s' "$read_vps" | head -c 400)"
 fi
 
-missing="$(read_file "$GOR_ENV" "$GOR_HOME/xdev-e2e/demo/definitely-missing-round1" 2>&1 || true)"
+missing="$(read_file "$WORKER_ENV" "$WORKER_HOME/xdev-e2e/demo/definitely-missing-round1" 2>&1 || true)"
 if printf '%s' "$missing" | jq -e '.message | fromjson | .[] | select(.error.reason == "not_found")' >/dev/null; then
   record_pass "files.read missing file is an error"
 else
   record_fail "files.read missing file is an error" "$(printf '%s' "$missing" | head -c 300)"
 fi
 
-binary="$(read_file "$GOR_ENV" "$GOR_HOME/xdev-e2e/demo/binary.bin" 2>&1 || true)"
+binary="$(read_file "$WORKER_ENV" "$WORKER_HOME/xdev-e2e/demo/binary.bin" 2>&1 || true)"
 if printf '%s' "$binary" | jq -e '.message | fromjson | .[] | select(.error.reason == "binary")' >/dev/null; then
   record_pass "files.read binary file is an error"
 else
   record_fail "files.read binary file is an error" "$(printf '%s' "$binary" | head -c 300)"
 fi
 
-large="$(read_file "$GOR_ENV" "$GOR_HOME/xdev-e2e/demo/large.bin" 2>&1 || true)"
+large="$(read_file "$WORKER_ENV" "$WORKER_HOME/xdev-e2e/demo/large.bin" 2>&1 || true)"
 if printf '%s' "$large" | jq -e '.message | fromjson | .[] | select(.error.reason == "too_large")' >/dev/null; then
   record_pass "files.read too-large file is an error"
 else
   record_fail "files.read too-large file is an error" "$(printf '%s' "$large" | head -c 300)"
 fi
 
-list_gor="$(ws_rpc gv files.list "{\"environmentId\":\"$GOR_ENV\",\"partialPath\":\"$GOR_HOME/xdev-e2e/demo/\",\"limit\":100}" 2>&1 || true)"
+list_gor="$(ws_rpc studio files.list "{\"environmentId\":\"$WORKER_ENV\",\"partialPath\":\"$WORKER_HOME/xdev-e2e/demo/\",\"limit\":100}" 2>&1 || true)"
 if printf '%s' "$list_gor" | jq -e '.entries | map(.name) | index("README.md") != null' >/dev/null 2>&1; then
-  record_pass "files.list completes on gor"
+  record_pass "files.list completes on worker"
 else
-  record_fail "files.list completes on gor" "$(printf '%s' "$list_gor" | head -c 300)"
+  record_fail "files.list completes on worker" "$(printf '%s' "$list_gor" | head -c 300)"
 fi
-list_vps="$(ws_rpc gv files.list "{\"environmentId\":\"$VPS_ENV\",\"partialPath\":\"/home/t3/\",\"limit\":200}" 2>&1 || true)"
+list_vps="$(ws_rpc studio files.list "{\"environmentId\":\"$CLOUDBOX_ENV\",\"partialPath\":\"/home/t3/\",\"limit\":200}" 2>&1 || true)"
 if printf '%s' "$list_vps" | jq -e '.entries | map(.name) | index("round1-e2e.txt") != null' >/dev/null 2>&1; then
-  record_pass "files.list completes on vps through gv"
+  record_pass "files.list completes on cloudbox through studio"
 else
-  record_fail "files.list completes on vps through gv" "$(printf '%s' "$list_vps" | head -c 300)"
+  record_fail "files.list completes on cloudbox through studio" "$(printf '%s' "$list_vps" | head -c 300)"
 fi
 
-gor_ssh "rm -f '$GOR_HOME/xdev-e2e/demo/binary.bin' '$GOR_HOME/xdev-e2e/demo/large.bin'" >/dev/null 2>&1
-vps_ssh "docker exec t3-mesh-e2e rm -f $VPS_README" >/dev/null 2>&1
+worker_ssh "rm -f '$WORKER_HOME/xdev-e2e/demo/binary.bin' '$WORKER_HOME/xdev-e2e/demo/large.bin'" >/dev/null 2>&1
+cloudbox_ssh "docker exec t3-mesh-e2e rm -f $CLOUDBOX_README" >/dev/null 2>&1
 
 # ---------------------------------------------------------------------------
 # Step 8 — old client whole-object settings write
@@ -800,26 +800,26 @@ vps_ssh "docker exec t3-mesh-e2e rm -f $VPS_README" >/dev/null 2>&1
 echo "== step 8: old client compatibility =="
 jq -nc --arg id "$OLD_A" --arg name "old-a-$RUN_TS" '{kind:"addWorkspace", id:$id, name:$name}' >"$WORK/op-old-a.json"
 jq -nc --arg id "$OLD_B" --arg name "old-b-$RUN_TS" '{kind:"addWorkspace", id:$id, name:$name}' >"$WORK/op-old-b.json"
-ws_edit gv "$(cat "$WORK/op-old-a.json")" >/dev/null 2>&1
-ws_edit gv "$(cat "$WORK/op-old-b.json")" >/dev/null 2>&1
+ws_edit studio "$(cat "$WORK/op-old-a.json")" >/dev/null 2>&1
+ws_edit studio "$(cat "$WORK/op-old-b.json")" >/dev/null 2>&1
 wait_converged "old-client scratch workspaces replicated"
 
 BEFORE="$WORK/old-before.json"
 AFTER="$WORK/old-after.json"
 GO="$WORK/old-go"
 rm -f "$BEFORE" "$AFTER" "$GO"
-TOKEN_OLD="$(token_of gv)"
-node "$WS" oldclient --origin "$GV_ORIGIN" --token "$TOKEN_OLD" \
+TOKEN_OLD="$(token_of studio)"
+node "$WS" oldclient --origin "$STUDIO_ORIGIN" --token "$TOKEN_OLD" \
   --before "$BEFORE" --after "$AFTER" --go "$GO" --timeout 60000 >"$WORK/old.out" 2>"$WORK/old.err" &
 old_pid=$!
 for _ in $(seq 1 200); do [ -s "$BEFORE" ] && break; sleep 0.05; done
 if [ ! -s "$BEFORE" ]; then
   record_fail "old client captured its baseline" "$(head -c 300 "$WORK/old.err")"
 else
-  # A concurrent edit on gor renames A while the old client's snapshot still has the old name.
+  # A concurrent edit on worker renames A while the old client's snapshot still has the old name.
   jq -nc --arg id "$OLD_A" --arg name "old-a-renamed-$RUN_TS" \
     '{kind:"renameWorkspace", id:$id, name:$name}' >"$WORK/op-old-concurrent.json"
-  ws_edit gor "$(cat "$WORK/op-old-concurrent.json")" >/dev/null 2>&1
+  ws_edit worker "$(cat "$WORK/op-old-concurrent.json")" >/dev/null 2>&1
   # The old client writes the whole object back, changing only B.
   jq --arg id "$OLD_B" --arg name "old-b-renamed-$RUN_TS" \
     '.workspaces = [.workspaces[] | if .id == $id then . + {name: $name} else . end]' \
@@ -827,7 +827,7 @@ else
   touch "$GO"
   check "old client whole-object write accepted" wait "$old_pid"
   wait_converged "old-client write merged"
-  assert_all "concurrent gor edit survived the old client's whole-object write" \
+  assert_all "concurrent worker edit survived the old client's whole-object write" \
     '(.config.workspaces[] | select(.id == "'"$OLD_A"'") | .name) == "old-a-renamed-'"$RUN_TS"'"'
   assert_all "old client's changed workspace propagated" \
     '(.config.workspaces[] | select(.id == "'"$OLD_B"'") | .name) == "old-b-renamed-'"$RUN_TS"'"'
@@ -835,8 +835,8 @@ fi
 
 jq -nc --arg id "$OLD_A" '{kind:"removeWorkspace", id:$id}' >"$WORK/op-old-rm-a.json"
 jq -nc --arg id "$OLD_B" '{kind:"removeWorkspace", id:$id}' >"$WORK/op-old-rm-b.json"
-ws_edit gv "$(cat "$WORK/op-old-rm-a.json")" >/dev/null 2>&1
-ws_edit gv "$(cat "$WORK/op-old-rm-b.json")" >/dev/null 2>&1
+ws_edit studio "$(cat "$WORK/op-old-rm-a.json")" >/dev/null 2>&1
+ws_edit studio "$(cat "$WORK/op-old-rm-b.json")" >/dev/null 2>&1
 wait_converged "old-client scratch workspaces removed"
 
 # ---------------------------------------------------------------------------
