@@ -79,7 +79,16 @@ test("isolated target switches its configured unit and restores the exact previo
       config.now = false;
       operation("prepareRollback");
       assert.equal(JSON.parse(readFileSync(join(root, "gate.json"), "utf8")).phase, "drained");
+      const fencedDb = new NodeSqlite.DatabaseSync(db);
+      fencedDb.exec("CREATE TABLE delivery_admission (id INTEGER PRIMARY KEY, request_id TEXT)");
+      fencedDb
+        .prepare("INSERT INTO delivery_admission VALUES (1, ?)")
+        .run(JSON.parse(readFileSync(join(root, "gate.json"), "utf8")).requestId);
+      fencedDb.close();
+      const workingCtl = readFileSync(config.ctl, "utf8");
+      writeFileSync(config.ctl, "throw new Error('trial HTTP unavailable');");
       operation("rollback");
+      writeFileSync(config.ctl, workingCtl);
       operation("cancelDrain");
       const restored = new NodeSqlite.DatabaseSync(db, { readOnly: true });
       assert.equal(restored.prepare("SELECT value FROM proof").get().value, "previous-db");

@@ -208,14 +208,16 @@ export async function targetOperation(config, operation) {
       )
         throw new Error("Rollback admission fence was lost; no runtime switched");
     } catch (cause) {
-      const active = NodeChildProcess.spawnSync("systemctl", [
-        ...prefix,
-        "is-active",
-        "--quiet",
-        config.unit,
-      ]);
-      if (active.error) throw active.error;
-      if (active.status !== 3) throw new Error("Cannot verify rollback admission fence", { cause });
+      const database = new NodeSqlite.DatabaseSync(db, { readOnly: true });
+      try {
+        const persisted = database
+          .prepare("SELECT request_id FROM delivery_admission WHERE id = 1")
+          .get();
+        if (persisted?.request_id !== state.requestId)
+          throw new Error("Cannot verify rollback admission fence", { cause });
+      } finally {
+        database.close();
+      }
     }
     state.phase = "rollingBack";
     atomic(statePath, state);
