@@ -4369,6 +4369,10 @@ SESSIONS, SETTINGS, SERVER
   server status | logs [--n 80] | versions
   server install <N|latest>               download fork build sidebar.N's server runtime (no restart)
   server restart --yes | server use <version> --yes    ONLY with the owner's explicit go-ahead
+  drain --request-id ID [--deadline-ms N]   stop new runs and wait for active work to finish
+  drain status | drain cancel --request-id ID
+  deploy --ref REF --version VERSION [--machines N,N] | deploy rollback
+  hot [--worktree PATH] [--machines N,N] [--now]   private build and drain-aware rollout
   login                                   re-issue the MCP client token (automatic otherwise)
 
 ANYTHING ELSE
