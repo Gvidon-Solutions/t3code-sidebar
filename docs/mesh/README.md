@@ -19,11 +19,15 @@ of overridable update headers. Those inputs must be baked into the first APK; Ja
 cannot repair them through OTA. Publish manifests after building that APK: older manifests
 are correctly ignored in favor of the embedded bundle.
 
-Desktop's production custom protocol prefers its local server's UI, or the explicit
-`T3CODE_DESKTOP_UI_URL`, retaining the stable storage/preload origin and bundled offline UI.
-Never substitute bundled assets after loading a server document: mixing generations can break
-imports. `apps/desktop/scripts/delivery-ui-proof.mjs` exercises v1 → v2 → offline in real
-Electron and captures both server versions.
+Desktop's stable custom protocol follows the active connected thread/draft server. The
+`app/DesktopUi.ts` service validates saved origins and persists the choice; `ipc/methods/ui.ts`
+accepts only the main application frame. Web's `DesktopUiCoordinator` flushes drafts before
+reloading for a source/version change; About shows UI/shell versions and actual source.
+`ElectronProtocol.ts` pins assets to their document's server, strips local credentials and
+compressed-response transport headers, and loads the bundled copy when the document is offline.
+Relay-only connections without a direct UI route explicitly use the bundled UI. Never mix
+bundled assets into a server document. `apps/desktop/scripts/delivery-ui-proof.mjs` verifies
+server switch, server-only UI update, storage/preload preservation and fallback in real Electron.
 
 Read this before changing anything that touches machines, projects across machines, replicas,
 the shared sidebar layout, thread moves, files on other machines, the `t3` skill or the agent

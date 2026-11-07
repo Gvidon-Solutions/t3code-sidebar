@@ -117,10 +117,13 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How.** Machine names/services/paths stay in untracked local configuration. Hot snapshots
   use a temporary Git index and separate branch. Mobile bundles match the native fingerprint;
   changed native configuration requires an APK. Delivery rejects conflicting managed versions.
+  Desktop follows its active connected thread/draft server through validated main-frame IPC,
+  preserves the stable storage/preload origin and displays UI/shell versions and source in About.
   Direct systemd delivery currently requires explicit `--now`; its default refuses because an
   atomic turn-admission gate has not been implemented. It is not ready for live idle rollout.
 - **Where.** `scripts/delivery/`, `docs/delivery.md`, t3ctl delivery client, server `delivery/`,
-  mobile update lifecycle/settings, desktop protocol/bootstrap, and `sidebar-desktop.yml`.
+  mobile update lifecycle/settings, desktop `app/DesktopUi`, protocol/bootstrap and IPC, web
+  `DesktopUiCoordinator`/About source row, and `sidebar-desktop.yml`.
 
 ### 2026-11-05 — B1 mesh rollout and platform runtime
 

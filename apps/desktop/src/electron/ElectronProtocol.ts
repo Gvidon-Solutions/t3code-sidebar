@@ -57,7 +57,11 @@ export type DesktopProtocolRegistrationInput = {
   readonly clerkFrontendApiHostname: string | undefined;
 } & (
   | { readonly targetOrigin: URL }
-  | { readonly assetDirectory: string; readonly serverOrigin?: () => Promise<URL | null> }
+  | {
+      readonly assetDirectory: string;
+      readonly serverOrigin?: () => Promise<URL | null>;
+      readonly onSource?: (origin: URL | null, reason?: string) => Promise<void>;
+    }
 );
 
 export class ElectronProtocol extends Context.Service<
@@ -164,6 +168,7 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   request: Request,
   targetOrigin: URL,
   contentSecurityPolicy: string,
+  publicUi = false,
 ) {
   const requestUrl = new URL(request.url);
   if (requestUrl.host !== DESKTOP_HOST) {
@@ -172,12 +177,16 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
 
   // Assign the path so leading slashes cannot replace the configured host.
   const targetUrl = new URL(targetOrigin);
-  targetUrl.pathname = requestUrl.pathname;
+  targetUrl.pathname =
+    (targetOrigin.pathname.endsWith("/")
+      ? targetOrigin.pathname.slice(0, -1)
+      : targetOrigin.pathname) + requestUrl.pathname;
   targetUrl.search = requestUrl.search;
   const headers = new Headers(request.headers);
   const headersToRemove: string[] = [];
   for (const name of headers.keys()) {
     if (
+      (publicUi && (name === "cookie" || name === "authorization")) ||
       name === "host" ||
       name === "origin" ||
       name === "referer" ||
@@ -209,6 +218,20 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
     request.method === "GET" || request.method === "HEAD"
       ? yield* fetchWithTransientRetry(targetUrl.toString(), init)
       : yield* netFetch(targetUrl.toString(), init);
+  if (publicUi) {
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.delete("set-cookie");
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("content-length");
+    return withContentSecurityPolicy(
+      new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+      }),
+      contentSecurityPolicy,
+    );
+  }
   return withContentSecurityPolicy(response, contentSecurityPolicy);
 });
 
@@ -273,7 +296,7 @@ export const make = Effect.gen(function* () {
                   const origin = await input.serverOrigin();
                   if (origin) {
                     const response = await runPromise(
-                      proxyRequest(request, origin, contentSecurityPolicy).pipe(
+                      proxyRequest(request, origin, contentSecurityPolicy, true).pipe(
                         Effect.catchTags({
                           ElectronProtocolFetchError: (error) =>
                             Effect.logWarning(
@@ -288,13 +311,18 @@ export const make = Effect.gen(function* () {
                       response.headers.get("content-type")?.includes("text/html")
                     ) {
                       pageOrigin = origin;
+                      await input.onSource?.(origin);
                       return response;
                     }
                   }
                   pageOrigin = null;
+                  await input.onSource?.(
+                    null,
+                    origin ? "Connected server UI is unavailable; using bundled client" : undefined,
+                  );
                 }
                 if (!isDocument && pageOrigin) {
-                  return runPromise(proxyRequest(request, pageOrigin, contentSecurityPolicy));
+                  return runPromise(proxyRequest(request, pageOrigin, contentSecurityPolicy, true));
                 }
                 return withContentSecurityPolicy(
                   await runPromise(serveDesktopAsset(request, input.assetDirectory)),

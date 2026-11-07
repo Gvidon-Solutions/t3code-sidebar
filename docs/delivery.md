@@ -104,15 +104,23 @@ dispatch with `dry_run=true`, or a `delivery-ci/**` test branch, to build withou
 The `delivery-timings` artifact records actual job start/end times. Test-branch pushes still
 require authorization when the task prohibits pushing.
 
-Desktop currently bundles its fallback UI. After installing the new shell once, normal
-production navigation fetches UI from its local server through the stable `t3code://app/`
-origin. Set `T3CODE_DESKTOP_UI_URL` when launching the shell to use a specific remote server.
-This setting does not follow the renderer's active environment selection. HTML bypasses the
-HTTP cache, Vite resources carry content hashes, and a failed document fetch falls back to
-the bundled client. A failed server asset fetch never substitutes a bundled asset.
-Run `apps/desktop/node_modules/.bin/electron --no-sandbox --user-data-dir=<isolated-profile>
-apps/desktop/scripts/delivery-ui-proof.mjs` to exercise server v1, server v2 and offline fallback;
-the command prints the temporary screenshot directory. Linux environments may need Xvfb.
+Desktop keeps a bundled offline UI. After installing the new shell once, it follows the server
+of the active thread or draft and retains that choice while visiting Settings. A connected
+server version change reloads its UI after flushing pending composer writes. Settings › About
+shows the UI version, shell version, serving origin and any offline fallback reason.
+
+The main process validates the paired connection and the main application frame before changing
+sources. The renderer stays on the stable `t3code://app/` origin, preserving storage and preload.
+HTML bypasses the HTTP cache; Vite resources have content hashes and remain pinned to the server
+that supplied that document. A failed document fetch loads the bundled client. Relay-only
+connections without a direct UI route use that same bundled copy. Local cookies and bearer
+headers are never forwarded to a server UI. `T3CODE_DESKTOP_UI_URL` is only an initial source
+override before a connected source has been selected.
+
+Run `xvfb-run -a apps/desktop/node_modules/electron/dist/electron --no-sandbox
+apps/desktop/scripts/delivery-ui-proof.mjs` to exercise two connected servers, a server-only
+version update, secure IPC, stable storage/preload and offline fallback in an isolated profile.
+It prints the temporary capture directory. Xvfb is unnecessary on a graphical desktop.
 
 `node --test scripts/delivery/rollout.node-test.mjs` proves bounded idle waiting, health failure
 rollback, missing layout watermark refusal and a real Git snapshot preserving the user's index.
@@ -123,7 +131,7 @@ unit test alone does not establish the five-minute delivery target.
 
 ## Isolated delivery acceptance
 
-`scripts/delivery/e2e.mjs --config <private-config> --out <private-evidence> --scenario rollout
+`node scripts/delivery/e2e.mjs --config <private-config> --out <private-evidence> --scenario rollout
 --archive <built-runtime> --version <runtime-version> --force-health-failure` drives the real
 user and system units in the allowlist, then deliberately requests a version the archive does
 not provide. The failed first trial must restore the previous runtime and stop before the next
