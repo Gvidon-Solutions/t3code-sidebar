@@ -211,6 +211,13 @@ it("carries all nine replica ignore lists even when only two layout titles were 
         i === 1 ? "legacy-1" : `lp-${i}`,
         [
           {
+            environmentId: "studio",
+            path: `/work/app-${i}`,
+            role: "primary" as const,
+            transport: "git" as const,
+            createdAt: "",
+          },
+          {
             environmentId: project.environmentId,
             path: project.path,
             role: "replica" as const,
@@ -241,6 +248,21 @@ it("carries all nine replica ignore lists even when only two layout titles were 
     expect(override.ignore).toHaveLength(41);
     expect(override.ignore).toContain(`/generated-${i}-39`);
   }
+  const sharedTitle = migrateConfig(
+    {},
+    { ...layout, projectTitles: { ...layout.projectTitles, "lp-8": "Application 0" } },
+    { environmentId: "cloudbox", label: "Cloudbox" },
+    [],
+    [],
+    projects,
+  )!;
+  expect(sharedTitle.doc.projects?.overrides).toHaveLength(8);
+  expect(
+    sharedTitle.doc.projects?.overrides?.find((rule) => rule.project === "Application 0"),
+  ).toMatchObject({
+    ignore: expect.arrayContaining(["/data", "/generated-0-39", "/generated-8-39"]),
+  });
+  expect(sharedTitle.doc.projects?.overrides?.[0]?.ignore).toHaveLength(81);
   expect(
     migrateConfig(
       { "mesh.config": { v: null, h: "0000000000000.00000.studio" } },
