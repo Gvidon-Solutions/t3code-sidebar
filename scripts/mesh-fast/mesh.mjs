@@ -97,6 +97,7 @@ export class MiniMesh {
         String(sshPort),
       ])
     ).trim();
+    await NodeFSP.appendFile(sshConfig, `SetEnv ${JSON.stringify("HOME=" + home)}\n`);
     env.T3_MESH_SSHD_DIR = NodePath.dirname(sshConfig);
     this.launch(
       "/usr/sbin/sshd",

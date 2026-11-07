@@ -64,6 +64,22 @@ export const scenarios = {
           ),
       );
       const replica = mounted.representations.find((rep) => rep.environmentId === laptop.id);
+      const config = await rpc(laptop, "meshConfig.get");
+      const sourceName = Object.entries(config.bindings).find(([, id]) => id === studio.id)?.[0];
+      NodeAssert.ok(sourceName);
+      NodeAssert.equal(
+        await run(
+          "ssh",
+          [
+            "-F",
+            NodePath.join(laptop.home, ".ssh", "config"),
+            "t3-" + sourceName,
+            "printf '%s' \"$HOME\"",
+          ],
+          { env: laptop.env },
+        ),
+        studio.home,
+      );
       NodeAssert.deepEqual(
         await NodeFSP.readFile(NodePath.join(replica.path, "payload.bin")),
         payload,

@@ -16,7 +16,9 @@ or server is reused. Inherited T3 command shims and shell startup hooks are remo
 before launching fixtures. The system OpenSSH server must be installed at
 `/usr/sbin/sshd`; the runner runs it as the current user. Studio refuses inbound
 peer upgrades; it dials cloudbox, and laptop reaches it through the one-hop relay.
-The replica scenario installs the pinned Mutagen through the production installer.
+The private sshd sets HOME explicitly; the replica scenario asserts the remote
+value before accepting the result. Mutagen remote agents therefore install in the
+sandbox home. The replica scenario installs the pinned Mutagen through the production installer.
 The installer needs network access on a cold run.
 
 Scenarios run concurrently (two by default). `--jobs` controls concurrency;
