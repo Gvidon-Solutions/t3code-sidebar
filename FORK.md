@@ -1715,6 +1715,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **What.** Preserves project machine chips through legacy cache upgrades, avoids false offline
   footer reports, uses existing SSH hosts for remote commands, preserves replica ignores and
   seeds code-only defaults for new meshes. Managed instructions identify their own machine.
+  Legacy settings writes preserve concurrent workspace renames while repairing sort collisions.
 - **How.** Canonicalizes cached layout keys, prefers live connectivity, resolves migration titles
   from the project catalog, and keeps representation ignores until config owns every pattern;
   clearing that legacy copy allows later ignore removals.

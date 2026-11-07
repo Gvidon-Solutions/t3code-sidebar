@@ -687,6 +687,8 @@ Client layout snapshot merges canonicalize legacy project keys before materializ
 offline caches; otherwise competing legacy representations can take the primary path away from
 an opaque logical project. `meshLayout/fixtures/upgrade.json` exercises that mixed shape.
 The footer uses current direct client or peer connectivity before historical route failures.
+Legacy whole-object edits repair sort collisions without copying stale fields over concurrent
+workspace renames; the shared layout diff preserves the current row when only its sort is repaired.
 
 `RunPlan` selects configured SSH hosts in existing mode. `RunTransport` owns SSH completion
 listeners from spawn. Config migration resolves missing layout titles through the local project
