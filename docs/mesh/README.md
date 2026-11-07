@@ -680,3 +680,16 @@ round three also verifies that crashing one server leaves the others' restart co
 An inbound connection can become visible before its reciprocal grant notification commits
 the link. NAT acceptance waits for both the direct connection and the stored reachable,
 address-free grant before testing the relay.
+
+## X1 upgrade regressions
+
+Client layout snapshot merges canonicalize legacy project keys before materialization, including
+offline caches; otherwise competing legacy representations can take the primary path away from
+an opaque logical project. `meshLayout/fixtures/upgrade.json` exercises that mixed shape.
+The footer uses current direct client or peer connectivity before historical route failures.
+
+`RunPlan` selects configured SSH hosts in existing mode. `RunTransport` owns SSH completion
+listeners from spawn. Config migration resolves missing layout titles through the local project
+catalog; replica reconciliation retains representation-specific ignores when config is present.
+New settings and mesh configs seed `DEFAULT_REPLICA_IGNORES` (code-only); existing explicit lists
+are preserved. Agent-kit reconciliation receives the local identity from the server binding.

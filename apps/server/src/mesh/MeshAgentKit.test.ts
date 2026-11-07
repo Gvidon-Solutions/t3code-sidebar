@@ -102,3 +102,19 @@ it("replaces the retired installer's copy of the shared instructions instead of 
   expect(adopted.split("Правила.").length - 1).toBe(1);
   expect(adopted.startsWith("<!-- t3-mesh begin -->")).toBe(true);
 });
+
+it("starts the managed body with the server's own bound identity", () => {
+  const doc = {
+    schema: 1,
+    machines: {
+      cloudbox: { title: "Cloudbox", label: "CB" },
+      studio: { title: "Studio", label: "ST" },
+    },
+  };
+  expect(Kit.meshInstructions(doc, { title: "Studio", label: "ST" })).toMatch(
+    /^This machine: Studio \(ST\)\./,
+  );
+  expect(Kit.meshInstructions(doc, { title: "Cloudbox", label: "CB" })).toMatch(
+    /^This machine: Cloudbox \(CB\)\./,
+  );
+});

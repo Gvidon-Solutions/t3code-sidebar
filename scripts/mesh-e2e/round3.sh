@@ -367,7 +367,7 @@ for m in gv vps; do
     sleep 1
   done
 done
-rexec gor sh -c "printf 'N-authority-wins' > '$N_FILE'"
+rexec gor sh -c "printf 'N-primary-wins' > '$N_FILE'"
 rexec gv sh -c "printf 'N-gv-loses' > '$N_FILE'"
 rexec vps sh -c "printf 'N-vps-loses' > '$N_FILE'"
 for _ in $(seq 1 180); do sleep 1; done
@@ -382,7 +382,7 @@ for m in gv vps; do
   rg "N-$m-loses" "$WORK/N-copies-$m.txt"
 done
 crash gor
-assert_converged 'N authority restart'
+assert_converged 'N primary restart'
 for order in 'gv gor vps' 'gv vps gor' 'gor gv vps' 'gor vps gv' 'vps gv gor' 'vps gor gv'; do
   for m in gv gor vps; do unit "$m" stop; done
   for m in $order; do unit "$m" start; wait_health "$(origin_of "$m")" "$TIMEOUT"; done
@@ -395,4 +395,4 @@ vps_ssh "mkdir -p '$runtime_root'"
 tar -czf "$WORK/N-runtime-scripts.tar.gz" -C "$REPO_ROOT/agent-kit/skills/t3" scripts
 scp -q -F "$VPS_SSH_CONFIG" "$WORK/N-runtime-scripts.tar.gz" "$MESH_DIR/round3-runtime.sh" "$VPS_HOST:$runtime_root/"
 vps_ssh "tar -xzf '$runtime_root/N-runtime-scripts.tar.gz' -C '$runtime_root'; bash '$runtime_root/round3-runtime.sh' '$runtime_root'" | tee "$WORK/N-system-services.log"
-printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, authority, 6 restart orders; evidence %s\n' "$WORK"
+printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, primary, 6 restart orders; evidence %s\n' "$WORK"

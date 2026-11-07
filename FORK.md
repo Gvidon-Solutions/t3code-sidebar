@@ -1709,3 +1709,13 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   so replacing a connection cannot terminate the server with an unhandled Promise rejection.
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.
+
+### 2026-11-07 — X1 post-release upgrade fixes
+
+- **What.** Preserves project machine chips through legacy cache upgrades, avoids false offline
+  footer reports, uses existing SSH hosts for remote commands, preserves replica ignores and
+  seeds code-only defaults for new meshes. Managed instructions identify their own machine.
+- **How.** Canonicalizes cached layout keys, prefers live connectivity, resolves migration titles
+  from the project catalog, and keeps representation ignores during config reconciliation.
+- **Where.** Client-runtime mesh state, mobile fixtures, server run/mesh/replica services,
+  contracts defaults, shared config migration and mesh acceptance scripts.

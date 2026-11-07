@@ -111,9 +111,19 @@ authority.
   builds, tests, git, docker run there via `t3 run`. **Mode `full`** (per project in config): the
   replica server also installs the environment locally (detected from lock files: pnpm/npm/yarn/
   bun, uv/pip, cargo, go) and refreshes it when lock files change; git still only on the primary.
-- **Ignores:** VCS + defaults anchored to the project root (`/node_modules`, `/.venv`, `/dist`,
-  `/build`, `/target`, `/.t3`, `/.t3-conflicts`, plus `node_modules` at any depth) + config ignores
-  - per-project ignores. Changing ignores recreates the session with the same name.
+- **Ignores:** VCS + root-anchored defaults (`/node_modules`, `/.venv`, `/dist`,
+  `/build`, `/target`, `/.t3`, `/.t3-conflicts`) + config and per-project ignores.
+  New meshes seed code-only defaults at every depth: dependency environments and caches
+  (node_modules, .venv, venv, **pycache**, *.pyc, .pytest_cache, .ruff_cache, .mypy_cache,
+  .ty_cache, .tox, .nox, .gradle, .cache, .parcel-cache, .turbo, .next, .nuxt, .svelte-kit,
+  .expo, .dart_tool); outputs (dist, out, coverage, htmlcov, .coverage, test-results,
+  playwright-report, .playwright-mcp, _.tsbuildinfo); logs and local databases (_.log,
+  *.sqlite, *.sqlite3, *.db, *.db-wal, *.db-shm); archives (zip, tar, tar.gz, tgz, 7z,
+  rar, iso, dmg), media (mp4, webm, mov, mkv, avi, mp3, wav, flac, ogg), documents
+  (pdf, doc, docx, xls, xlsx, ppt, pptx), model weights and data (safetensors, pt, pth,
+  ckpt, onnx, gguf, h5, npy, npz, parquet, pkl, pickle, feather, arrow), each extension
+  matched as `*.<extension>`. Existing explicit lists are retained on upgrade.
+  Changing ignores recreates the session with the same name.
 - **Conflicts:** resolved automatically. Policy per project from config, default `primary-wins`
   (alternative `newest-wins`). The losing version is copied to
   `<loser>/.t3-conflicts/<ISO-time-with-dashes>/<relative path>` before being replaced. Status note,
