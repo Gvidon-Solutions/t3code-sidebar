@@ -31,6 +31,22 @@ export function instructionBlock(original: string, body: string) {
     : original.slice(0, start) + block + original.slice(stop + end.length);
 }
 
+/**
+ * The retired installer wrote a "> ..." header plus the shared instructions verbatim; on first
+ * adoption that copy is dropped so agents do not read it twice. Owner text outside it stays.
+ */
+export function withoutLegacyInstructions(original: string, instructions: string | undefined) {
+  const text = instructions?.trim();
+  if (!text || original.includes(begin) || original.includes(end)) return original;
+  const at = original.indexOf(text);
+  if (at < 0) return original;
+  const head = original.slice(0, at).replace(/(^|\n)> [^\n]*\n[ \t]*\n?[ \t\r]*$/, "$1");
+  const rest = original.slice(at + text.length).replace(/^[\r\n]+/, "");
+  const kept =
+    head.trim() === "" ? rest : rest === "" ? head : `${head.replace(/\s*$/, "\n\n")}${rest}`;
+  return kept.trim() === "" ? "" : kept;
+}
+
 function meshInstructions(doc: MeshConfigDocument) {
   const machines = Object.entries(doc.machines)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -102,7 +118,11 @@ export const layer = Layer.effect(
             const filePath = path.join(home, file);
             const original = (yield* fs.exists(filePath)) ? yield* fs.readFileString(filePath) : "";
             const contents = yield* Effect.try({
-              try: () => instructionBlock(original, body),
+              try: () =>
+                instructionBlock(
+                  withoutLegacyInstructions(original, doc.agents?.instructions),
+                  body,
+                ),
               catch: () =>
                 new MeshConfigError({
                   reason: "validation",

@@ -83,3 +83,18 @@ it("rejects ambiguous managed blocks without truncating user content", () => {
     Kit.instructionBlock("prefix<!-- t3-mesh begin -->old<!-- t3-mesh end -->suffix", "new"),
   ).toBe("prefix<!-- t3-mesh begin -->\nnew\n<!-- t3-mesh end -->suffix");
 });
+
+it("replaces the retired installer's copy of the shared instructions instead of duplicating it", () => {
+  const shared = "# Как мы работаем\n\nПравила.\n";
+  const installed = `> Эта машина — **Studio** (ST): соседние: laptop (LT).\n\n${shared}`;
+  expect(Kit.withoutLegacyInstructions(installed, shared)).toBe("");
+  const withOwnText = `My own note\n\n${installed}\nAfter\n`;
+  expect(Kit.withoutLegacyInstructions(withOwnText, shared)).toBe("My own note\n\nAfter\n");
+  expect(Kit.withoutLegacyInstructions("Unrelated text\n", shared)).toBe("Unrelated text\n");
+  const managed = Kit.instructionBlock("", "body");
+  expect(Kit.withoutLegacyInstructions(managed + shared, shared)).toBe(managed + shared);
+  expect(Kit.withoutLegacyInstructions(installed, undefined)).toBe(installed);
+  const adopted = Kit.instructionBlock(Kit.withoutLegacyInstructions(installed, shared), shared);
+  expect(adopted.split("Правила.").length - 1).toBe(1);
+  expect(adopted.startsWith("<!-- t3-mesh begin -->")).toBe(true);
+});
