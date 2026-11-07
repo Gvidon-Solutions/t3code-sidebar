@@ -48,6 +48,14 @@ jq -e --arg path "$feature_root-explicit" '[.[] | select(.workspaceRoot==$path)]
 ctl gor place "$feature_title" --on "$VPS_ENV" --path "$feature_root-external" --transport manual --wait 120 --json > "$WORK/N-manual-place.json"
 jq -e '.ready and .representation.transport=="manual"' "$WORK/N-manual-place.json" >/dev/null
 ws_rpc vps meshConfig.get '{}' | jq -e --arg project "$feature_title" '.current.doc.projects.overrides[] | select(.project==$project) | .ignore | index("*.cache")!=null' >/dev/null
+end=$((SECONDS+TIMEOUT))
+while :; do
+  ws_get vps > "$WORK/N-manual-metadata.json"
+  if jq -e --arg key "$feature_id" --arg env "$VPS_ENV" 'any((.config.projectMounts[$key] // [])[]; .environmentId==$env and .transport=="manual" and .projectId!=null and ((.ignores // []) | index("*.cache")!=null))' "$WORK/N-manual-metadata.json" >/dev/null; then break; fi
+  [ "$SECONDS" -lt "$end" ] || die 'Manual representation metadata did not finish'
+  sleep 1
+done
+wait_converged 'N manual representation metadata before transport change'
 ctl gor place "$feature_title" --on "$VPS_ENV" --path "$feature_root-external" --transport sshfs --wait 120 --json > "$WORK/N-sshfs-place.json"
 jq -e '.ready and .representation.transport=="sshfs"' "$WORK/N-sshfs-place.json" >/dev/null
 renamed_title="N-renamed project $RUN_TS"

@@ -651,3 +651,8 @@ The round-three daemon fixture suspends its verified isolated server process onl
 starting the foreground fault-test daemon, then resumes it before the crash. Background
 status readers can otherwise win the private daemon lock even with replicas disabled.
 The EXIT cleanup resumes a suspended server before restoring its settings.
+
+Sequential transport acceptance waits for manual-folder policy metadata and its delivery
+before requesting SSHFS on the same representation key. Otherwise a concurrent ignores
+enrichment can legitimately win the whole-entry LWW race; config revision delivery alone
+does not prove that the per-representation policy action has completed.
