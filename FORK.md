@@ -119,8 +119,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   changed native configuration requires an APK. Delivery rejects conflicting managed versions.
   Desktop follows its active connected thread/draft server through validated main-frame IPC,
   preserves the stable storage/preload origin and displays UI/shell versions and source in About.
-  Direct systemd delivery currently requires explicit `--now`; its default refuses because an
-  atomic turn-admission gate has not been implemented. It is not ready for live idle rollout.
+  Server drain atomically fences run admission, preserves dormant sends across restarts and
+  lets active turns finish until a deadline. B1 and private delivery share it; clients retry
+  transient updating refusals with stable IDs. Explicit `--now` skips waiting.
 - **Where.** `scripts/delivery/`, `docs/delivery.md`, t3ctl delivery client, server `delivery/`,
   mobile update lifecycle/settings, desktop `app/DesktopUi`, protocol/bootstrap and IPC, web
   `DesktopUiCoordinator`/About source row, and `sidebar-desktop.yml`.

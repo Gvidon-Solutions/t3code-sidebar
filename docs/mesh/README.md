@@ -6,8 +6,16 @@
 serial rollout and stopped-DB/unit rollback. The t3ctl `delivery-client.mjs` forwards requests
 to a private socket; customer paths never enter public workflow configuration. Targets read
 B1 health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
-The direct systemd transport refuses default idle delivery until an admission gate exists;
-only explicit `--now` is enabled for isolated verification.
+`mesh/DeliveryAdmission.ts` fences run creation inside EventSink write transactions and
+serializes provider starts with closing admission. Its operational journal survives restart;
+already accepted dormant starts remain in the outbox without occupying worker slots or spending
+retry attempts. Cancellation wakes the worker and queue promotions. Checking provider-session
+inactivity alone misses accepted start effects and internal queue promotions.
+WS, MCP and `t3ctl server drain|drain-status|cancel-drain` expose the same service. B1 and the
+private systemd transport drain before backup/switch and reopen only after health or rollback.
+Transient updating refusals are never stored as rejected command receipts; client and CLI retries
+retain their command/message IDs. Old targets without drain support fail before being stopped;
+explicit `--now` remains available to skip waiting.
 See [delivery.md](../delivery.md) for configuration, commands and limitations.
 
 The public release workflow publishes runtime first; Windows consumes its archive without
