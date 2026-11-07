@@ -16,7 +16,7 @@ if [ "$action" = up ]; then
   printf '{"denyMcp":true,"peerOnlyMcp":true,"cut":false}\n' > "$state"
   gor_scp "$proxy" "$GOR_HOST:$proxy"
   gor_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$state'"
-  scp -F "$VPS_SSH_CONFIG" -o StrictHostKeyChecking=yes -o UpdateHostKeys=no "$proxy" "$VPS_HOST:$VPS_DIR/tmp/N1-network-proxy.mjs"
+  vps_put "$proxy" "$VPS_DIR/tmp/N1-network-proxy.mjs"
   vps_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$VPS_DIR/tmp/N1-network-state.json'; printf '{\"denyMcp\":false,\"cut\":false}\\n' > '$VPS_DIR/tmp/N1-outbound-state.json'; chmod 644 '$VPS_DIR/tmp/N1-network-proxy.mjs' '$VPS_DIR/tmp/N1-network-state.json' '$VPS_DIR/tmp/N1-outbound-state.json'"
   install -d "$HOME/.config/systemd/user/$GV_UNIT.d"
   printf '[Service]\nExecStart=\nExecStart=%s/%s/t3 serve --base-dir %s --host 127.0.0.1 --port %s --no-browser\n' "$GV_RUNTIME_ROOT" "$BUILD_VERSION" "$GV_BASE_DIR" "$((GV_PORT + 1))" > "$HOME/.config/systemd/user/$GV_UNIT.d/$dropin"

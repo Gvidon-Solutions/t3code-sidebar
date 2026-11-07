@@ -703,3 +703,7 @@ An agent thread already has run variables; inheriting its socket makes a raw fix
 against the caller’s server instead of the isolated bed.
 Deployment also resumes a stopped test VPS container, preserving its mounted temporary folders
 before recreation.
+
+The acceptance runner can place its third container on another administrator SSH host with
+`MESH_E2E_VPS_DIR` and `MESH_E2E_VPS_SUDO`; uploads use the same privileged transport.
+The bed guide records the alternate routing and the single-active-identity constraint.

@@ -393,6 +393,7 @@ runtime_root="/tmp/N-runtime-$RUN_TS"
 gor_ssh "mkdir -p '$runtime_root-source/runtime/versions/0.0.4-N'; printf '#!/bin/sh\nexit 0\n' > '$runtime_root-source/runtime/versions/0.0.4-N/t3'; chmod 700 '$runtime_root-source/runtime/versions/0.0.4-N/t3'"
 vps_ssh "mkdir -p '$runtime_root'"
 tar -czf "$WORK/N-runtime-scripts.tar.gz" -C "$REPO_ROOT/agent-kit/skills/t3" scripts
-scp -q -F "$VPS_SSH_CONFIG" "$WORK/N-runtime-scripts.tar.gz" "$MESH_DIR/round3-runtime.sh" "$VPS_HOST:$runtime_root/"
+vps_put "$WORK/N-runtime-scripts.tar.gz" "$runtime_root/N-runtime-scripts.tar.gz"
+vps_put "$MESH_DIR/round3-runtime.sh" "$runtime_root/round3-runtime.sh"
 vps_ssh "tar -xzf '$runtime_root/N-runtime-scripts.tar.gz' -C '$runtime_root'; bash '$runtime_root/round3-runtime.sh' '$runtime_root'" | tee "$WORK/N-system-services.log"
 printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, primary, 6 restart orders; evidence %s\n' "$WORK"

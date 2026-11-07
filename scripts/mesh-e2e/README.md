@@ -26,6 +26,32 @@ RAM, 2 CPUs, no `docker.sock`, loopback-only port. Its image is built from
 `scripts/mesh-e2e/Dockerfile` (a copy of `deploy/t3-ws/Dockerfile` plus Mutagen
 0.18.1 with a pinned SHA-256 and OpenSSH).
 
+### Alternate third node after a VPS memory failure
+
+Before raising a container limit, check the VPS with `free -g`. X1 observed only
+1 GiB free (2 GiB available), with repeated cgroup OOM kills at the 2 GiB limit.
+The third server therefore moved to a separate gor container, preserving its
+identity and mounted home, temporary projects and conflict copies. The original
+VPS container stays stopped; never run both copies of the same identity.
+The alternative uses 4 GiB RAM, 2 CPUs and the same unprivileged/container security
+settings. It changes no other VPS stack and requires no gor kernel change.
+
+The X1 alternative is `/tmp/X1-third-bed/compose.yaml` on gor, container
+`t3-mesh-e2e`, loopback port 3791. The native gor server remains a separate node.
+The preset `/tmp/X1-third.env` exports `VPS_HOST`, `VPS_SSH_CONFIG`,
+`MESH_E2E_VPS_DIR` and `MESH_E2E_VPS_SUDO=1`; source it before the round scripts.
+`vps_ssh` then runs the third-node commands with passwordless sudo, and
+`vps_put` streams files through that same connection instead of bypassing it
+with scp. The artifact directory in the preset selects the tested build.
+
+The gvidon test-tunnel override `99-X1-third.conf` forwards ports 13797/13791
+through gor and reverses 13795/22023 to the isolated gvidon server/SSH.
+On gor, `t3-mesh-X1-third-ports.service` forwards the container bridge routes
+13797, 13795, 22022 and 22023, plus the runner's loopback 13791 to port 3791.
+The former gor-to-VPS test-tunnel unit is stopped to avoid a port collision.
+These are bed-only units. The original stopped VPS data remains available at
+`/opt/t3-mesh-e2e`; the gor copy preserves file ownership.
+
 Both `/home/t3` and `/tmp` persist on the VPS host. On the first deployment with
 the `/tmp` mount, `deploy.sh` copies the stopped container's existing temporary
 folders with ownership intact before recreating it, then verifies its canary.
