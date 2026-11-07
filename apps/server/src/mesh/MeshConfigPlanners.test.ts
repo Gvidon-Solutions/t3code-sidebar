@@ -121,6 +121,47 @@ it.effect(
       ).toBe("full");
       yield* plan("conflicts").reconcile((yield* plan("conflicts").plan(doc, undefined))[0]!, doc);
       expect(h.created).toHaveLength(2);
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMounts: {
+          ...config.projectMounts,
+          repo: config.projectMounts.repo!.map((rep) =>
+            rep.role === "replica" ? { ...rep, ignores: ["/data", "/legacy-only"] } : rep,
+          ),
+        },
+      }));
+      yield* plan("ignores").reconcile(ignore, updated);
+      expect(
+        (yield* mesh.read).config.projectMounts.repo?.find((rep) => rep.role === "replica")
+          ?.ignores,
+      ).toEqual(["/data", "/legacy-only"]);
+      for (const migrated of [true, false]) {
+        const next = {
+          ...updated,
+          projects: {
+            ...updated.projects,
+            overrides: migrated ? [{ project: "App", ignore: ["/data"] }] : [],
+          },
+          replicas: {
+            ...updated.replicas,
+            ignore: migrated ? ["*.new.log", "/legacy-only"] : ["*.new.log"],
+          },
+        };
+        const h = yield* mesh.nextHlc;
+        yield* mesh.apply({
+          "mesh.config": {
+            h,
+            v: { revision: h, doc: next as Json, author: "replica", writtenAt: "" },
+          },
+        });
+        yield* plan("ignores").reconcile(ignore, next);
+        expect(
+          (yield* mesh.read).config.projectMounts.repo?.find((rep) => rep.role === "replica")
+            ?.ignores,
+        ).toEqual([]);
+      }
+      expect(h.created.at(-1)?.ignores).not.toContain("/legacy-only");
+      expect(h.created.at(-1)?.ignores).not.toContain("/data");
     }).pipe(
       Effect.provide(
         Planners.layer.pipe(

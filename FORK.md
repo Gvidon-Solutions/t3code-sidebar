@@ -1716,6 +1716,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   footer reports, uses existing SSH hosts for remote commands, preserves replica ignores and
   seeds code-only defaults for new meshes. Managed instructions identify their own machine.
 - **How.** Canonicalizes cached layout keys, prefers live connectivity, resolves migration titles
-  from the project catalog, and keeps representation ignores during config reconciliation.
+  from the project catalog, and keeps representation ignores until config owns every pattern;
+  clearing that legacy copy allows later ignore removals.
 - **Where.** Client-runtime mesh state, mobile fixtures, server run/mesh/replica services,
   contracts defaults, shared config migration and mesh acceptance scripts.
