@@ -24,7 +24,7 @@ export class DesktopUiError extends Schema.TaggedError<DesktopUiError>()("Deskto
   cause: Schema.optionalKey(Schema.Defect()),
 }) {}
 
-export function desktopUiOrigin(value: string): string {
+function desktopUiOrigin(value: string): string {
   const url = new URL(value);
   if (
     !["http:", "https:"].includes(url.protocol) ||
