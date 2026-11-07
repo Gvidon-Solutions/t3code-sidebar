@@ -376,7 +376,11 @@ const make = Effect.gen(function* () {
       ...identity,
       ignores: replicaIgnorePatterns(
         desiredConfig
-          ? projectPolicy(desiredConfig, config.projectTitles[logicalKey] ?? logicalKey).ignore
+          ? [
+              ...projectPolicy(desiredConfig, config.projectTitles[logicalKey] ?? logicalKey)
+                .ignore,
+              ...(rep.ignores ?? []),
+            ]
           : [...defaults.replicaIgnores, ...(rep.ignores ?? [])],
       ),
       alpha: sshEndpoint(route, source.environmentId, source.path),

@@ -28,6 +28,7 @@ export function migrateConfig(
   self: { environmentId: string; label: string },
   peers: readonly { environmentId: string; label: string }[],
   ignores: readonly string[],
+  projects: readonly { environmentId: string; path: string; title: string }[] = [],
 ) {
   if (Object.hasOwn(document, "mesh.config")) return undefined;
   const bindings: Record<string, string> = {};
@@ -119,7 +120,16 @@ export function migrateConfig(
   }
   const projectIgnores = new Map<string, Set<string>>();
   for (const [key, reps] of Object.entries(layout.projectMounts)) {
-    const title = layout.projectTitles[key];
+    const title =
+      layout.projectTitles[key] ??
+      projects.find((project) =>
+        reps.some(
+          (rep) => rep.environmentId === project.environmentId && rep.path === project.path,
+        ),
+      )?.title ??
+      Object.entries(layout.projectTitles).find(
+        ([alias]) => layout.projectAliases[alias] === key,
+      )?.[1];
     if (!title) continue;
     for (const ignore of reps.flatMap((rep) => rep.ignores ?? [])) {
       const set = projectIgnores.get(title) ?? new Set<string>();

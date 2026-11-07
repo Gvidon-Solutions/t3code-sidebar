@@ -117,6 +117,9 @@ it.effect(
           },
         });
         yield* service.reconcile;
+        expect((yield* service.status)[0]?.state).toBe("mounting");
+        h.setSession({ status: "watching" });
+        yield* service.reconcile;
         expect((yield* service.status)[0]?.state).toBe("watching");
         h.setSession({ lastError: "offline" });
         yield* service.reconcile;
@@ -133,7 +136,10 @@ it.effect(
           },
         }));
         yield* service.reconcile;
-        expect(h.terminated).toEqual([sessionIdentity("repo", "replica").name]);
+        expect(h.terminated).toEqual([
+          sessionIdentity("repo", "replica").name,
+          sessionIdentity("repo", "replica").name,
+        ]);
         expect(
           (yield* service.status).some(
             (row) => row.sessionName === sessionIdentity("repo", "replica").name,
@@ -898,4 +904,42 @@ it.effect(
       expect(h.terminated).toHaveLength(1);
     }).pipe(Effect.provide(h.layer));
   },
+);
+
+it.effect("retains a representation's own ignores while config migration is incomplete", () =>
+  Effect.gen(function* () {
+    const h = harness();
+    yield* Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMounts: {
+          ...config.projectMounts,
+          repo: config.projectMounts.repo!.map((rep) =>
+            rep.role === "replica" ? { ...rep, ignores: ["/large-data", "*.weights"] } : rep,
+          ),
+        },
+      }));
+      const clock = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.config": {
+          h: clock,
+          v: {
+            revision: clock,
+            doc: {
+              schema: 1,
+              machines: { source: {}, replica: {} },
+              replicas: { ignore: ["*.cache"] },
+            },
+            author: "replica",
+            writtenAt: "",
+          },
+        },
+      });
+      yield* (yield* ReplicaService.ProjectReplicaService).reconcile;
+      expect(h.created[0]?.ignores).toEqual(
+        expect.arrayContaining(["/large-data", "*.weights", "*.cache"]),
+      );
+    }).pipe(Effect.provide(h.layer));
+  }),
 );

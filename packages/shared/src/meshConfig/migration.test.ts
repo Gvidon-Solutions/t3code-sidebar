@@ -196,3 +196,59 @@ it("extracts existing internal data from current and history without dropping fu
     {},
   );
 });
+
+it("carries all nine replica ignore lists even when only two layout titles were persisted", () => {
+  const projects = Array.from({ length: 9 }, (_, i) => ({
+    environmentId: "cloudbox",
+    path: `/copies/app-${i}`,
+    title: `Application ${i}`,
+  }));
+  const layout = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    projectTitles: { "lp-0": "Application 0", "legacy-1": "Application 1" },
+    projectMounts: Object.fromEntries(
+      projects.map((project, i) => [
+        i === 1 ? "legacy-1" : `lp-${i}`,
+        [
+          {
+            environmentId: project.environmentId,
+            path: project.path,
+            role: "replica" as const,
+            transport: "mutagen" as const,
+            source: "studio",
+            ignores: [
+              "/data",
+              ...Array.from({ length: 40 }, (_, n) => `/generated-${i}-${n}`),
+              "/data",
+            ],
+            createdAt: "",
+          },
+        ],
+      ]),
+    ),
+  };
+  const result = migrateConfig(
+    {},
+    layout,
+    { environmentId: "cloudbox", label: "Cloudbox" },
+    [],
+    [],
+    projects,
+  )!;
+  expect(result.doc.projects?.overrides).toHaveLength(9);
+  for (const [i, override] of result.doc.projects!.overrides!.entries()) {
+    expect(override.project).toBe(`Application ${i}`);
+    expect(override.ignore).toHaveLength(41);
+    expect(override.ignore).toContain(`/generated-${i}-39`);
+  }
+  expect(
+    migrateConfig(
+      { "mesh.config": { v: null, h: "0000000000000.00000.studio" } },
+      layout,
+      { environmentId: "cloudbox", label: "Cloudbox" },
+      [],
+      [],
+      projects,
+    ),
+  ).toBeUndefined();
+});
