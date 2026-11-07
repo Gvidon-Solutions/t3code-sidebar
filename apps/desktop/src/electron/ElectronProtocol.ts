@@ -197,6 +197,10 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
     method: request.method,
     headers,
   };
+  if (request.headers.get("accept")?.includes("text/html")) {
+    init.cache = "no-store";
+    init.signal = AbortSignal.timeout(5_000);
+  }
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = request.body;
     (init as RequestInit & { duplex: "half" }).duplex = "half";
