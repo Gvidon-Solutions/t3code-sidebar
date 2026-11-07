@@ -1493,7 +1493,8 @@ export const layerWsRpc = (
       const storageCleanup = yield* StorageCleanup.StorageCleanup;
       const databaseStorage = yield* DatabaseStorage.DatabaseStorage;
       const serverSettings = yield* ServerSettings.ServerSettingsService;
-      let legacyLayout = (yield* serverSettings.getSettings).sidebarWorkspaces;
+      const initialLegacyLayout = (yield* serverSettings.getSettings).sidebarWorkspaces;
+      const legacyLayouts = new Map<number, typeof initialLegacyLayout>();
       const secretResolver = yield* SecretResolver.SecretResolver;
       const peerLinks = yield* PeerLinks.PeerLinks;
       const peerSessions = yield* PeerSessions.PeerSessions;
@@ -1898,7 +1899,6 @@ export const layerWsRpc = (
           yield* serverSettings.getSettings,
           settingsClient,
         );
-        legacyLayout = settings.sidebarWorkspaces;
         const environment = yield* serverEnvironment.getDescriptor;
         const auth = yield* serverAuth.getDescriptor();
         const scratchWorkspaceRoot = yield* managedFolders.scratchRoot;
@@ -2414,12 +2414,18 @@ export const layerWsRpc = (
             Effect.andThen(scheduledTasks.getWebhookDelivery(input)),
           ),
         [WS_METHODS.serverProbe]: (_input) => Effect.succeed({}),
-        [WS_METHODS.serverGetConfig]: (_input) =>
+        [WS_METHODS.serverGetConfig]: (_input, metadata) =>
           loadServerConfig({
             usageLimitsCommand: false,
             workspaceSnapshotsOnDemand: false,
             deferNetworkDiscovery: false,
-          }),
+          }).pipe(
+            Effect.tap((config) =>
+              Effect.sync(() => {
+                legacyLayouts.set(metadata.client.id, config.settings.sidebarWorkspaces);
+              }),
+            ),
+          ),
         [WS_METHODS.serverSearchAcpRegistry]: (input) =>
           acpRegistryCatalog
             .search(input)
@@ -2734,31 +2740,37 @@ export const layerWsRpc = (
           ),
         [WS_METHODS.serverUpdateSettings]:
           /* Request instrumentation already owns the span; keep this helper in that context. */
-          Effect.fnUntraced(function* ({ patch, providerInstanceMutation }) {
+          Effect.fnUntraced(function* ({ patch, providerInstanceMutation }, metadata) {
             const deviceHosts = patch.deviceHosts
               ? yield* remoteSshDeviceHosts(patch.deviceHosts).pipe(
                   Effect.provide(deviceHostContext),
                 )
               : undefined;
             if (patch.sidebarWorkspaces !== undefined) {
-              yield* mesh.editLegacy(legacyLayout, patch.sidebarWorkspaces!).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new ServerSettingsError({
-                      settingsPath: "<mesh>",
-                      operation: "write-file",
-                      cause,
-                    }),
-                ),
-              );
+              yield* mesh
+                .editLegacy(
+                  legacyLayouts.get(metadata.client.id) ?? initialLegacyLayout,
+                  patch.sidebarWorkspaces!,
+                )
+                .pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new ServerSettingsError({
+                        settingsPath: "<mesh>",
+                        operation: "write-file",
+                        cause,
+                      }),
+                  ),
+                );
             }
-            if (patch.sidebarWorkspaces !== undefined) legacyLayout = patch.sidebarWorkspaces;
             const { sidebarWorkspaces: _layout, ...restPatch } = patch;
             const nextPatch = { ...restPatch, ...(deviceHosts ? { deviceHosts } : {}) };
             const settings = yield* providerInstanceMutation === undefined
               ? serverSettings.updateSettings(nextPatch)
               : serverSettings.updateProviderInstance(providerInstanceMutation, nextPatch);
-            return ServerSettings.redactServerSettingsForClient(settings, settingsClient);
+            const response = ServerSettings.redactServerSettingsForClient(settings, settingsClient);
+            legacyLayouts.set(metadata.client.id, response.sidebarWorkspaces);
+            return response;
           }),
         [WS_METHODS.serverDiscoverSourceControl]: (_input) => sourceControlDiscovery.discover,
         [WS_METHODS.serverGetTraceDiagnostics]: (_input) =>
@@ -3331,7 +3343,7 @@ export const layerWsRpc = (
               );
             }),
           ),
-        [WS_METHODS.subscribeServerConfig]: (input) =>
+        [WS_METHODS.subscribeServerConfig]: (input, metadata) =>
           Stream.unwrap(
             Effect.gen(function* () {
               const usageLimitsCommand = input.usageLimitsCommand === true;
@@ -3353,6 +3365,7 @@ export const layerWsRpc = (
                 workspaceSnapshotsOnDemand,
                 deferNetworkDiscovery: true,
               });
+              legacyLayouts.set(metadata.client.id, config.settings.sidebarWorkspaces);
               const keybindingsUpdates = keybindingsChanges.pipe(
                 Stream.map((event) => ({
                   version: 1 as const,

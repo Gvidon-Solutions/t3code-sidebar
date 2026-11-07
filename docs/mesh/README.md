@@ -689,6 +689,8 @@ an opaque logical project. `meshLayout/fixtures/upgrade.json` exercises that mix
 The footer uses current direct client or peer connectivity before historical route failures.
 Legacy whole-object edits repair sort collisions without copying stale fields over concurrent
 workspace renames; the shared layout diff preserves the current row when only its sort is repaired.
+The legacy settings RPC keeps each client’s last returned layout separately and advances it to
+the merged response, so another client’s read and a later whole-object write cannot reset that base.
 
 `RunPlan` selects configured SSH hosts in existing mode. `RunTransport` owns SSH completion
 listeners from spawn. Config migration resolves missing layout titles through the local project
