@@ -638,3 +638,11 @@ as reconciliation. Otherwise a populated replica that correctly excludes an igno
 rejected when selected again. The existing in-flight-placement test covers that policy boundary.
 Round-three fixtures configure ignores and conflict policies through `meshConfig.apply`; their
 adoption daemon uses the isolated server HOME, with a guard against the owner's HOME.
+
+Bed conflict scenarios await the resolver’s preserved copy and converged contents; a forced Mutagen flush
+can race its intentional pause. R1 canonicalizes local fixture paths before publishing mappings,
+because a process reports its physical cwd beneath a symlinked temp root. Its login fixture writes
+the profile in both the SSH account’s passwd home and the isolated runtime HOME.
+Round three checks lock ownership before destructive operations and leaves shared services untouched
+if a host reboot removes the lock. Crash workloads remain 128/256 MiB with mandatory
+active-staging and file-hash assertions.

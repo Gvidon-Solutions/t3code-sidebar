@@ -3,20 +3,29 @@
 set -Eeuo pipefail
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 trap 'printf "FAIL N round3 line %s, stack %s, exit %s\n" "$LINENO" "${BASH_LINENO[*]}" "$?" >&2' ERR
-running=$(t3ctl threads --project 66f7ed98 --status running --json)
-if jq -e 'any(.[]; .title | test("xdev (QA|L |M )"))' <<<"$running" >/dev/null; then
-  printf 'Bed busy: QA/L/M is running. No deployment or fault injection performed.\n' >&2
-  exit 75
-fi
 export MESH_E2E_HELPERS_ONLY=1
 export MESH_E2E_SESSION_TTL=${MESH_E2E_SESSION_TTL:-4h}
 export MESH_E2E_ROUND1_WORK="${MESH_E2E_ROUND3_WORK:-/tmp/t3-mesh-e2e-N-round3}"
 . "$(dirname "$0")/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
+BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-N1}
+require_bed_lock() {
+  local bed_owner
+  if ! bed_owner=$(gor_ssh 'cat /tmp/mesh-bed.lock/owner'); then
+    printf 'Bed lock is unavailable.\n' >&2
+    return 1
+  fi
+  if [ "$bed_owner" != "$BED_LOCK_OWNER" ]; then
+    printf 'Bed belongs to %s, expected %s.\n' "$bed_owner" "$BED_LOCK_OWNER" >&2
+    return 1
+  fi
+}
+require_bed_lock || die 'Acquire the shared bed lock before round three'
 export MESH_E2E_SSH_CONTROL_DIR="$WORK/N-ssh"
 mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
 chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
 ws_rpc() {
+  require_bed_lock || return 1
   local machine=$1 method=$2 payload=${3:-'{}'} first=${4:-} token
   token=$(token_of "$machine")
   node "$WS" rpc "$method" "$payload" ${first:+"$first"} --origin "$(origin_of "$machine")" --token "$token" --timeout 240000
@@ -50,6 +59,7 @@ RUNNER
   chmod 700 "$WORK/N-t3-$m"
 done
 ctl() {
+  require_bed_lock || return 1
   local m=$1; shift
   XDG_CONFIG_HOME="$WORK/N-auth-$m" T3CODE_HOME="$(base_of "$m")" T3CTL_ORIGIN="$(origin_of "$m")" T3CTL_T3_BIN="$WORK/N-t3-$m" node "$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs" "$@"
 }
@@ -83,8 +93,9 @@ mut_bin() {
   fi
   cat "$cache"
 }
-mut() { local m=$1; shift; local base; base=$(base_of "$m"); rexec "$m" env "MUTAGEN_DATA_DIRECTORY=$base/mutagen" "$(mut_bin "$m")" "$@"; }
+mut() { require_bed_lock || return 1; local m=$1; shift; local base; base=$(base_of "$m"); rexec "$m" env "MUTAGEN_DATA_DIRECTORY=$base/mutagen" "$(mut_bin "$m")" "$@"; }
 unit() {
+  require_bed_lock || return 1
   local m=$1 verb=$2
   case "$m" in
     gv) systemctl --user "$verb" "$GV_UNIT";;
@@ -100,6 +111,7 @@ restart_count() {
   esac
 }
 crash() {
+  require_bed_lock || return 1
   local before after
   before=$(restart_count "$1")
   case "$1" in
@@ -108,6 +120,7 @@ crash() {
     vps) rexec vps node -e 'const fs = require("node:fs"); const {pid} = JSON.parse(fs.readFileSync("/home/t3/.t3/userdata/server-runtime.json", "utf8")); if (!Number.isSafeInteger(pid) || pid <= 1 || !fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("/opt/t3/dist/bin.mjs")) throw Error("Invalid captured test server PID"); process.kill(pid, "SIGKILL");';;
   esac
   wait_health "$(origin_of "$1")" "$TIMEOUT"
+  require_bed_lock || return 1
   after=$(restart_count "$1")
   test "$after" -gt "$before"
   printf 'PASS N automatic restart %s: %s -> %s\n' "$1" "$before" "$after" | tee -a "$WORK/N-auto-restart-$1.log"
@@ -127,14 +140,19 @@ project_options() {
 ws_get gv > "$WORK/N-before.json"
 restore() {
   local rc=$?
-  for m in gv gor vps; do unit "$m" start || rc=1; done
-  gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
-  wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
-  for m in gv vps; do
-    if [ -f "$WORK/N-replicas-enabled-before-$m.json" ]; then
-      ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-restore-engine-$m.json" || rc=1
-    fi
-  done
+  if require_bed_lock; then
+    for m in gv gor vps; do unit "$m" start || rc=1; done
+    gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
+    wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
+    for m in gv vps; do
+      if [ -f "$WORK/N-replicas-enabled-before-$m.json" ]; then
+        ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-restore-engine-$m.json" || rc=1
+      fi
+    done
+  else
+    printf 'Bed lock lost; leaving shared services and settings untouched.\n' >&2
+    rc=1
+  fi
   if [ -S "$MESH_E2E_SSH_CONTROL_DIR/gor" ]; then ssh -F "$GOR_SSH_CONFIG" -S "$MESH_E2E_SSH_CONTROL_DIR/gor" -O exit "$GOR_HOST" || rc=1; fi
   if [ -S "$MESH_E2E_SSH_CONTROL_DIR/vps" ]; then ssh -F "$VPS_SSH_CONFIG" -S "$MESH_E2E_SSH_CONTROL_DIR/vps" -O exit "$VPS_HOST" || rc=1; fi
   exit "$rc"

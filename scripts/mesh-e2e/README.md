@@ -81,7 +81,7 @@ the `cli-linux-x64` archive, and builds `t3-mesh-e2e:dev`. Artifacts and
 
 For an isolated stage worktree, set `MESH_E2E_BUILD_CURRENT=1` and use your own
 `MESH_E2E_ARTIFACTS` directory to build that checkout. `round3.sh` refuses a
-different runtime/image or a running QA/L/M task and creates only `N-` fixtures.
+different runtime/image or a missing/mismatched bed lock and creates only `N-` fixtures.
 Bed units disable systemd's start limit so repeated intentional crashes do not
 require a manual reset. Crash acceptance requires an increased systemd/Docker automatic restart counter, without a start command after SIGKILL. Daemon recovery uses a raw socket probe and verifies the captured PID owns the private POSIX lock; its PID/log files stay outside synchronized folders. Round3 owns an SSH control directory to avoid exhausting connection slots.
 
@@ -163,6 +163,8 @@ remain valid across those transfers and the six restart orders.
 Its fixture parent defaults to `/var/tmp/t3-mesh-round3` to retain evidence across
 host reboots. `MESH_E2E_ROUND3_FIXTURES` selects the same absolute parent on all nodes;
 that parent's local path can link to a larger artifact disk.
+Round 3 requires `MESH_E2E_LOCK_OWNER` (default `N1`) to match the shared lock before
+operations; after a lost lock it leaves shared services and settings untouched.
 
 ## Teardown
 

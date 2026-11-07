@@ -116,7 +116,7 @@ const fs=require('node:fs');
 const [pid,home]=process.argv.slice(2);
 if(!fs.readFileSync(`/proc/${pid}/environ`,'utf8').split('\0').includes(`HOME=${home}`)) throw Error('Foreign daemon HOME must match the isolated server');
 JS
-foreign_mut() { rexec gv env -u MUTAGEN_DATA_DIRECTORY HOME="$foreign_home" MUTAGEN_SSH_PATH="$GV_BASE_DIR/mesh/ssh/bin" "$(mut_bin gv)" "$@"; }
+foreign_mut() { require_bed_lock || return 1; rexec gv env -u MUTAGEN_DATA_DIRECTORY HOME="$foreign_home" MUTAGEN_SSH_PATH="$GV_BASE_DIR/mesh/ssh/bin" "$(mut_bin gv)" "$@"; }
 gor_name=$(ws_rpc gv meshConfig.get '{}' | jq -er --arg env "$GOR_ENV" '.bindings|to_entries[]|select(.value==$env)|.key')
 foreign_mut sync create --name "$foreign_name" --mode two-way-safe --ignore-vcs --ignore .t3-conflicts "$feature_root-adopt-target" "t3-$gor_name:$feature_root-adopt" > "$WORK/N-foreign-created.log"
 foreign_mut sync flush "$foreign_name" > "$WORK/N-foreign-flushed.log"
