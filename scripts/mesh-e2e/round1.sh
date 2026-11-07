@@ -384,6 +384,14 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
   local start deadline first_doc="" first_cfg="" machine doc_hash_value cfg_hash_value converged=1
   start="$(now_ms)"
   deadline=$((start + TIMEOUT * 1000))
+  local barrier="$WORK/convergence-barrier.json" snapshots=()
+  if [ "${MESH_E2E_LIVE_REPORTS:-0}" = 1 ]; then
+    for machine in "${machines[@]}"; do
+      ws_get "$machine" > "$WORK/snap-$machine.json" || return 1
+      snapshots+=("$WORK/snap-$machine.json")
+    done
+    node "$MESH_DIR/convergence.mjs" capture "$barrier" "${snapshots[@]}" || return 1
+  fi
   while :; do
     converged=1
     first_doc=""
@@ -395,6 +403,7 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
       fi
       doc_hash_value="$(doc_hash "$WORK/snap-$machine.json")"
       cfg_hash_value="$(config_hash "$WORK/snap-$machine.json")"
+      if [ "${MESH_E2E_LIVE_REPORTS:-0}" = 1 ]; then continue; fi
       if [ -z "$first_doc" ]; then
         first_doc="$doc_hash_value"
         first_cfg="$cfg_hash_value"
@@ -403,6 +412,10 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
         break
       fi
     done
+    if [ "$converged" = 1 ] && [ "${MESH_E2E_LIVE_REPORTS:-0}" = 1 ]; then
+      node "$MESH_DIR/convergence.mjs" check "$barrier" "${snapshots[@]}" || converged=0
+      first_doc="captured all-entry HLC barrier"
+    fi
     if [ "$converged" = 1 ]; then
       local took
       took="$(elapsed_ms "$start")"

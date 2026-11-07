@@ -626,3 +626,7 @@ Its temporary root honors `TMPDIR` so large SSH transfer artifacts can stay off 
 `MeshConfig.publishStatus` compares the persisted value before advancing its HLC. Repeated
 reconciliation and service restarts must not generate new layout entries for an unchanged
 status; otherwise background reports prevent the mesh from becoming quiescent.
+
+The bed's `convergence.mjs` captures an all-entry HLC barrier for rounds with live
+reports; the default round-one check still requires complete document equality.
+This avoids comparing sequential reads as if they were an atomic distributed snapshot.

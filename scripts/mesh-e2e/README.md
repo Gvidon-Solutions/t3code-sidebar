@@ -144,6 +144,14 @@ or loopback keys in the owner's real SSH home. The isolated gvidon unit sets
 The old network tunnel setup is infrastructure only; the legacy round scripts predate
 managed SSH and must not be used to provision v2 replica routes.
 
+Round 1 requires identical full documents and materialized configs. With active SSH
+probes or replica reports, use `MESH_E2E_LIVE_REPORTS=1` for later rounds: each wait
+captures the merged per-key HLC watermark and requires every observer to reach it,
+including tombstones. Equal clocks must contain equal values. Every snapshot still
+checks `config = materialize(document)`; newer reports may advance during the wait.
+Local fixture services and their CLI processes must share `TMPDIR` because private
+peer-pipe sockets are rooted there.
+
 ## Teardown
 
 ```bash

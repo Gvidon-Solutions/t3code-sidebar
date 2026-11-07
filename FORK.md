@@ -1701,5 +1701,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   with upstream's expanded tools.
   Config reconciliation preserves the HLC of an unchanged status, allowing layout replication
   to become quiescent after a completed action and across server restarts.
+  Bed rounds with live status reports verify delivery through a captured all-entry HLC barrier;
+  round one retains strict full-document equality.
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.
