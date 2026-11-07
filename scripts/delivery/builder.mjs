@@ -98,12 +98,13 @@ export function snapshot(worktree, id = new Date().toISOString().replaceAll(/[-:
 }
 export function machineAdapter(machine, archive, version, id, now = false, maxWaitMs = 300_000) {
   const target = fileURLToPath(new URL("./target.mjs", import.meta.url));
-  const remoteScript = join(machine.runtimeDir, "delivery-target.mjs");
-  const remoteArchive = join(machine.runtimeDir, `${id}.tar.gz`);
+  const uploadDir = machine.uploadDir ?? machine.runtimeDir;
+  const remoteScript = join(uploadDir, "delivery-target.mjs");
+  const remoteArchive = join(uploadDir, `${id}.tar.gz`);
   const ssh = (args, options) =>
     exec("ssh", ["-o", "BatchMode=yes", ...(machine.sshArgs ?? []), machine.ssh, ...args], options);
   if (machine.ssh && archive) {
-    ssh([`mkdir -p ${quote(machine.runtimeDir)}`]);
+    ssh([`mkdir -p ${quote(uploadDir)}`]);
     exec("scp", [...(machine.scpArgs ?? []), target, `${machine.ssh}:${remoteScript}`]);
     exec("scp", [...(machine.scpArgs ?? []), archive, `${machine.ssh}:${remoteArchive}`]);
   }

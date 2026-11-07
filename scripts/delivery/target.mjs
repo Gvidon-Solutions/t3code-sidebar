@@ -26,6 +26,17 @@ export async function targetOperation(config, operation) {
   const prefix = config.scope === "user" ? ["--user"] : [];
   const systemctl = (...args) => run("systemctl", [...prefix, ...args]);
   const statePath = join(config.runtimeDir, "delivery-state.json");
+  if (operation === "publishMobile") {
+    const destination = join(config.home, "mobile-updates");
+    mkdirSync(destination, { recursive: true, mode: 0o700 });
+    NodeFS.cpSync(join(config.mobileStore, "assets"), join(destination, "assets"), {
+      recursive: true,
+    });
+    copyFileSync(join(config.mobileStore, "certificate.pem"), join(destination, "certificate.pem"));
+    copyFileSync(join(config.mobileStore, "catalog.json"), join(destination, "catalog.json.tmp"));
+    renameSync(join(destination, "catalog.json.tmp"), join(destination, "catalog.json"));
+    return true;
+  }
   if (operation === "capabilities") {
     const result = NodeChildProcess.spawnSync("gh", ["--version"], { encoding: "utf8" });
     if (result.error && result.error.code !== "ENOENT") throw result.error;
@@ -172,6 +183,13 @@ export async function targetOperation(config, operation) {
     if (state.phase === "rolledBack") return state.previousHealth;
     if (["prepared", "draining", "fenced"].includes(state.phase)) {
       cancelDrain();
+      if (state.directory) {
+        if (readFileSync(config.unitPath, "utf8").includes(join(state.directory, "t3")))
+          throw new Error(
+            "Prepared runtime was activated outside this delivery; refusing to remove it",
+          );
+        rmSync(state.directory, { recursive: true, force: true });
+      }
       state.phase = "rolledBack";
       atomic(statePath, state);
       return state.previousHealth;

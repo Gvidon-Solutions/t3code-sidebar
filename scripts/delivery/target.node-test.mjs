@@ -63,6 +63,9 @@ test("isolated target switches its configured unit and restores the exact previo
         );
       operation("prepare");
       assert.throws(() => operation("activate"), /admission fence has not been acquired/);
+      operation("rollback");
+      assert.equal(NodeFS.existsSync(join(config.runtimeDir, "delivery", "2")), false);
+      operation("prepare");
       operation("drain");
       assert.equal(JSON.parse(readFileSync(join(root, "gate.json"), "utf8")).phase, "draining");
       operation("activate");

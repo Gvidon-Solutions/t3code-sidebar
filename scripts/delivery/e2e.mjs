@@ -54,6 +54,103 @@ const isolatedReplay = (args) => {
     exec(process.execPath, [cli, ...args], { env: { ...process.env, ...environment } }),
   );
 };
+async function waitForRunningReplay(threadId) {
+  const machine = config.machines.find(
+    (machine) => machine.origin === config.cleanAgent.environment.T3CTL_ORIGIN,
+  );
+  const unit = NodeFS.readFileSync(machine.unitPath, "utf8");
+  const executable = /^ExecStart=(?:"([^"]+)"|(\S+))\s/m.exec(unit);
+  const token = exec(executable[1] ?? executable[2], [
+    "auth",
+    "session",
+    "issue",
+    "--ttl",
+    "2m",
+    "--label",
+    "D1-events",
+    "--token-only",
+    "--base-dir",
+    machine.home,
+  ])
+    .trim()
+    .split("\n")
+    .at(-1);
+  const response = await fetch(new URL("/api/auth/websocket-ticket", machine.origin), {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`D1 event ticket returned ${response.status}`);
+  const { ticket } = await response.json();
+  const socket = new WebSocket(
+    `${machine.origin.replace(/^http/, "ws")}/ws?wsTicket=${encodeURIComponent(ticket)}&orchestrationProtocol=2&clientSurface=cli`,
+  );
+  await new Promise((resolveRunning, rejectRunning) => {
+    let settled = false;
+    const deadline = setTimeout(() => finish(new Error("D1 Replay never reached running")), 60_000);
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      if (socket.readyState === WebSocket.OPEN)
+        socket.send(JSON.stringify({ _tag: "Interrupt", requestId: "D1-running" }));
+      socket.close();
+      if (error) rejectRunning(error);
+      else resolveRunning();
+    };
+    socket.addEventListener("open", () =>
+      socket.send(
+        JSON.stringify({
+          _tag: "Request",
+          id: "D1-running",
+          tag: "orchestration.subscribeThread",
+          payload: { threadId },
+          headers: [],
+        }),
+      ),
+    );
+    socket.addEventListener("error", (event) =>
+      finish(new Error("D1 Replay event connection failed", { cause: event.error })),
+    );
+    socket.addEventListener("close", () => {
+      if (!settled) finish(new Error("D1 Replay event stream closed before running"));
+    });
+    socket.addEventListener("message", (event) => {
+      for (const line of String(event.data).split("\n")) {
+        if (!line.trim()) continue;
+        const message = JSON.parse(line);
+        if (message._tag === "Ping") {
+          socket.send(JSON.stringify({ _tag: "Pong" }));
+          continue;
+        }
+        if (message.requestId !== "D1-running") continue;
+        if (message._tag === "Chunk") {
+          for (const item of message.values) {
+            const runs =
+              item.kind === "snapshot"
+                ? item.projection.runs
+                : item.kind === "event" && ["run.created", "run.updated"].includes(item.event.type)
+                  ? [item.event.payload]
+                  : [];
+            if (runs.some((run) => run.status === "running")) {
+              finish();
+              return;
+            }
+            if (runs.some((run) => ["completed", "failed", "interrupted"].includes(run.status))) {
+              finish(new Error("D1 Replay finished before the admission wait could be observed"));
+              return;
+            }
+          }
+          socket.send(JSON.stringify({ _tag: "Ack", requestId: "D1-running" }));
+        } else if (message._tag === "Exit" || message._tag === "Defect")
+          finish(
+            new Error(
+              `D1 Replay event subscription ended: ${JSON.stringify(message.exit ?? message.defect)}`,
+            ),
+          );
+      }
+    });
+  });
+}
 const started = Date.now();
 if (values.scenario === "rollout") {
   if (!values.archive || !values.version)
@@ -90,16 +187,11 @@ if (values.scenario === "rollout") {
         brief,
         "--json",
       ]);
-      const observed = isolatedReplay(["show", thread.threadId, "--json"]);
-      NodeAssert.equal(
-        observed.thread.status,
-        "running",
-        "Replay must be running immediately before drain",
-      );
+      await waitForRunningReplay(thread.threadId);
       await record({
         proof: "Replay is running immediately before admission drain",
         threadId: thread.threadId,
-        threadStatus: observed.thread.status,
+        threadStatus: "running",
       });
       const result = await drain();
       const settled = isolatedReplay(["wait", thread.threadId, "--timeout", "2m", "--json"]);

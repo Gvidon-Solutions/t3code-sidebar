@@ -4,6 +4,7 @@ import * as NodeFS from "node:fs";
 const { cpSync, copyFileSync, mkdirSync, readdirSync, renameSync, writeFileSync, existsSync } =
   NodeFS;
 import * as NodePath from "node:path";
+import * as NodeCrypto from "node:crypto";
 const { join, resolve } = NodePath;
 const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 export function changedArtifacts(paths) {
@@ -157,42 +158,55 @@ function copyMobileStore(store, destination) {
 }
 
 export async function publishMobileUpdate(store, config, machines) {
-  const exec = (command, args) =>
-    execFileSync(command, args, { encoding: "utf8", timeout: 900_000 });
+  const exec = (command, args, options = {}) =>
+    execFileSync(command, args, { encoding: "utf8", timeout: 900_000, ...options });
   copyMobileStore(store, config.ota.store);
   for (const machine of machines) {
     const destination = join(machine.home, "mobile-updates");
     if (machine.ssh) {
+      const staged = join(
+        machine.uploadDir ?? machine.runtimeDir,
+        `mobile-${NodeCrypto.randomUUID()}`,
+      );
       exec("ssh", [
         "-o",
         "BatchMode=yes",
         ...(machine.sshArgs ?? []),
         machine.ssh,
-        `mkdir -p ${quote(destination)}`,
+        `mkdir -p ${quote(staged)}`,
       ]);
       exec("scp", [
         ...(machine.scpArgs ?? []),
         "-r",
         join(store, "assets"),
-        `${machine.ssh}:${destination}/`,
+        `${machine.ssh}:${staged}/`,
       ]);
       exec("scp", [
         ...(machine.scpArgs ?? []),
         join(store, "certificate.pem"),
-        `${machine.ssh}:${destination}/certificate.pem`,
+        `${machine.ssh}:${staged}/certificate.pem`,
       ]);
       exec("scp", [
         ...(machine.scpArgs ?? []),
         join(store, "catalog.json"),
-        `${machine.ssh}:${destination}/catalog.json.tmp`,
+        `${machine.ssh}:${staged}/catalog.json`,
       ]);
-      exec("ssh", [
-        "-o",
-        "BatchMode=yes",
-        ...(machine.sshArgs ?? []),
-        machine.ssh,
-        `mv ${quote(join(destination, "catalog.json.tmp"))} ${quote(join(destination, "catalog.json"))}`,
-      ]);
+      exec(
+        "ssh",
+        [
+          "-o",
+          "BatchMode=yes",
+          ...(machine.sshArgs ?? []),
+          machine.ssh,
+          `${quote(machine.node)} ${quote(join(machine.uploadDir ?? machine.runtimeDir, "delivery-target.mjs"))}`,
+        ],
+        {
+          input: JSON.stringify({
+            operation: "publishMobile",
+            config: { ...machine, mobileStore: staged },
+          }),
+        },
+      );
     } else copyMobileStore(store, destination);
   }
 }
