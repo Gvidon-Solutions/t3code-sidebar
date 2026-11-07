@@ -25,11 +25,14 @@ export async function targetOperation(config, operation) {
   const systemctl = (...args) => run("systemctl", [...prefix, ...args]);
   const statePath = join(config.runtimeDir, "delivery-state.json");
   const ctl = (...args) => {
+    const unit = config.unitPath ? readFileSync(config.unitPath, "utf8") : "";
+    const executable = /^ExecStart=(?:"([^"]+)"|(\S+))\s/m.exec(unit);
     const result = JSON.parse(
       run(config.node, [config.ctl, ...args], {
         T3CODE_HOME: config.home,
         T3CTL_ORIGIN: config.origin,
         T3CTL_UNIT: config.unit,
+        T3CTL_T3_BIN: executable?.[1] ?? executable?.[2] ?? "",
         XDG_CONFIG_HOME: join(config.home, "delivery-client-config"),
       }),
     );
@@ -77,10 +80,10 @@ export async function targetOperation(config, operation) {
       if (previous.phase !== "healthy" && previous.phase !== "rolledBack")
         throw new Error("Unfinished delivery journal; run deploy rollback first");
     }
-    const directory = join(config.runtimeDir, config.version);
+    const directory = join(config.runtimeDir, "delivery", config.version);
     if (existsSync(directory))
       throw new Error("Runtime version already exists; use a fresh delivery version");
-    mkdirSync(directory, { mode: 0o700 });
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
     run("tar", ["xzf", config.archive, "-C", directory, "--strip-components=1"]);
     if (!existsSync(join(directory, "t3"))) throw new Error("Runtime archive has no executable");
     const unit = readFileSync(config.unitPath, "utf8");

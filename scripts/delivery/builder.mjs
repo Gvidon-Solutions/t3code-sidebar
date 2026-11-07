@@ -25,7 +25,7 @@ import * as NodeCrypto from "node:crypto";
 const { randomUUID } = NodeCrypto;
 import * as Effect from "effect/Effect";
 import * as HostProcess from "../../packages/shared/src/HostProcess.ts";
-import { rollout, assertHealth } from "./rollout.mjs";
+import { rollout, waitForHealthy } from "./rollout.mjs";
 import { buildAssets } from "./assets.mjs";
 
 const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
@@ -132,7 +132,7 @@ export async function deliver(config, request) {
     for (const machine of [...machines].reverse()) {
       const adapter = machineAdapter(machine, null, "rollback", id);
       const previous = await adapter.rollback();
-      assertHealth(await adapter.health(), previous.version, previous);
+      await waitForHealthy(adapter, previous.version, [previous], config.healthWaitMs ?? 120_000);
       await journal({ machine: machine.name, phase: "rolledBack" });
     }
     return { id, logDir };

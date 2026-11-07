@@ -59,7 +59,7 @@ test("isolated target switches its configured unit and restores the exact previo
         );
       operation("prepare");
       operation("activate");
-      assert.match(readFileSync(unit, "utf8"), /versions\/2\/t3 serve --port 3795/);
+      assert.match(readFileSync(unit, "utf8"), /versions\/delivery\/2\/t3 serve --port 3795/);
       const migrated = new NodeSqlite.DatabaseSync(db);
       migrated.exec("UPDATE proof SET value='migrated-db'");
       migrated.close();

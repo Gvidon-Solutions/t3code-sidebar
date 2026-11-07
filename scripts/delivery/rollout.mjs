@@ -24,6 +24,26 @@ export function assertHealth(actual, expectedVersion, baseline) {
   }
 }
 
+export async function waitForHealthy(
+  adapter,
+  version,
+  baselines,
+  maxWaitMs,
+  clock = { now: Date.now, sleep: setTimeout },
+) {
+  const deadline = clock.now() + maxWaitMs;
+  for (;;) {
+    try {
+      const actual = await adapter.health();
+      for (const baseline of baselines) assertHealth(actual, version, baseline);
+      return;
+    } catch (error) {
+      if (clock.now() >= deadline) throw error;
+      await clock.sleep(Math.min(1000, deadline - clock.now()));
+    }
+  }
+}
+
 export async function rollout(
   adapters,
   version,
@@ -46,23 +66,19 @@ export async function rollout(
     try {
       await journal({ machine: adapter.name, phase: "switch" });
       await adapter.activate();
-      const deadline = clock.now() + options.healthWaitMs;
-      for (;;) {
-        try {
-          const actual = await adapter.health();
-          for (const baseline of baselines) assertHealth(actual, version, baseline);
-          break;
-        } catch (error) {
-          if (clock.now() >= deadline) throw error;
-          await clock.sleep(Math.min(1000, options.healthWaitMs));
-        }
-      }
+      await waitForHealthy(adapter, version, baselines, options.healthWaitMs, clock);
       await journal({ machine: adapter.name, phase: "healthy" });
     } catch (error) {
       await journal({ machine: adapter.name, phase: "rollback", reason: error.message });
       try {
         await adapter.rollback();
-        assertHealth(await adapter.health(), baselines[i].version, baselines[i]);
+        await waitForHealthy(
+          adapter,
+          baselines[i].version,
+          [baselines[i]],
+          options.healthWaitMs,
+          clock,
+        );
       } catch (rollbackError) {
         throw new Error(
           `${adapter.name}: rollout failed (${error.message}); rollback failed (${rollbackError.message})`,

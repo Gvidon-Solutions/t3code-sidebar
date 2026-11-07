@@ -50,6 +50,8 @@ test("idle window waits until all active turns finish and refuses at its deadlin
 test("failed health restores runtime and stops before the next machine", async () => {
   const calls = [];
   let active = false;
+  let recovering = false;
+  let recoveryReads = 0;
   const studio = {
     name: "studio",
     busy: async () => false,
@@ -60,13 +62,17 @@ test("failed health restores runtime and stops before the next machine", async (
     },
     rollback: async () => {
       active = false;
+      recovering = true;
       calls.push("rollback");
     },
-    health: async () => (active ? { ...health("2"), replicasReady: false } : health()),
+    health: async () => {
+      if (recovering && recoveryReads++ === 0) throw new Error("Old runtime still starting");
+      return active ? { ...health("2"), replicasReady: false } : health();
+    },
   };
   const cloudbox = { ...studio, name: "cloudbox", prepare: async () => calls.push("cloudbox") };
   await assert.rejects(
-    rollout([studio, cloudbox], "2", { maxWaitMs: 0, healthWaitMs: 0 }, async () => {}, clock()),
+    rollout([studio, cloudbox], "2", { maxWaitMs: 0, healthWaitMs: 2 }, async () => {}, clock()),
     /rolled back; rollout stopped: Replicas/,
   );
   assert.deepEqual(calls, ["backup", "activate", "rollback"]);
