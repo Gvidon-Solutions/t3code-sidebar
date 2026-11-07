@@ -1,3 +1,5 @@
+import * as DeliveryAdmission from "../mesh/DeliveryAdmission.ts";
+import { isDeliveryUpdating } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -60,7 +62,7 @@ const layerTest = Layer.mergeAll(
     ProviderAdapterRegistry.layerFromAdapters([adapter]),
     { databaseLayer: layerDatabase, runEffectWorker: false },
   ),
-);
+).pipe(Layer.provideMerge(DeliveryAdmission.layer.pipe(Layer.provide(layerDatabase))));
 
 it.effect(
   "records approval feedback and targets only its runtime request without dispatching a parent turn",
@@ -1570,4 +1572,58 @@ it.effect("dispatch records the command outcome and its duration", () =>
     assert.strictEqual((yield* successes).count - successesBefore, 1);
     assert.strictEqual((yield* durations).count - durationsBefore, 1);
   }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect(
+  "a delivery refusal can retry the identical command and message ids after reopening",
+  () =>
+    Effect.gen(function* () {
+      const admission = yield* DeliveryAdmission.DeliveryAdmission;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const threadId = ThreadId.make("delivery-command-retry");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("delivery-create"),
+        threadId,
+        projectId: ProjectId.make("delivery-project"),
+        title: "Delivery retry",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdBy: "user",
+        creationSource: "web",
+      });
+      const command = {
+        type: "message.dispatch",
+        commandId: CommandId.make("delivery-message"),
+        threadId,
+        messageId: MessageId.make("delivery-message"),
+        text: "Deliver once",
+        attachments: [],
+        dispatchMode: { type: "start_immediately" },
+        createdBy: "user",
+        creationSource: "web",
+      } as const;
+      yield* admission.drain({ requestId: "command-retry", deadlineMs: 1000 });
+      const refused = yield* orchestrator.dispatch(command).pipe(Effect.flip);
+      assert.isTrue(isDeliveryUpdating(refused));
+      const sql = yield* SqlClient.SqlClient;
+      assert.deepEqual(
+        yield* sql`SELECT command_id FROM orchestration_v2_command_receipts WHERE command_id = ${command.commandId}`,
+        [],
+      );
+      yield* admission.cancel("command-retry");
+      yield* orchestrator.dispatch(command);
+      yield* orchestrator.dispatch(command);
+      const projection = yield* (yield* ProjectionStore.ProjectionStoreV2).getThreadProjection(
+        threadId,
+      );
+      assert.equal(projection.runs.length, 1);
+      assert.equal(
+        projection.messages.filter((message) => message.id === command.messageId).length,
+        1,
+      );
+    }).pipe(Effect.provide(layerTest)),
 );

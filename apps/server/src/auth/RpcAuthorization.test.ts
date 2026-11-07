@@ -35,6 +35,15 @@ describe("RPC authorization scopes", () => {
     expect(new Set(Object.keys(RPC_REQUIRED_SCOPES))).toEqual(new Set(WsRpcGroup.requests.keys()));
   });
 
+  it("requires settings authorization for drain control and progress", () => {
+    for (const method of [
+      "delivery.drain",
+      "delivery.drainStatus",
+      "delivery.cancelDrain",
+    ] as const)
+      expect(requiredScopeForRpcMethod(method)).toBe(AuthSettingsWriteScope);
+  });
+
   it("keeps webhook delivery logs, which hold request bodies, behind operate scope", () => {
     for (const method of [
       WS_METHODS.scheduledTasksListWebhookDeliveries,

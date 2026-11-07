@@ -1,3 +1,5 @@
+import * as Option from "effect/Option";
+import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
@@ -181,6 +183,7 @@ function latestStartedRun(
 
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
+  const admission = yield* Effect.serviceOption(DeliveryAdmission);
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const eventSink = yield* EventSink.EventSinkV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
@@ -211,7 +214,11 @@ export const make = Effect.gen(function* () {
     ) {
       const now = yield* DateTime.now;
       const runs = [] as Array<OrchestrationV2ThreadProjection["runs"][number]>;
+      const deferred = Option.isSome(admission)
+        ? yield* admission.value.deferredRunIds.pipe(Effect.orDie)
+        : new Set<string>();
       for (const run of nonterminalRuns(projection)) {
+        if (deferred.has(run.id)) continue;
         if (run.status === "waiting") {
           const checkpointEffects = yield* outbox
             .listByCommandId(CommandId.make(`command:effect:checkpoint.capture:${run.id}`))
@@ -757,6 +764,10 @@ export const make = Effect.gen(function* () {
             }),
         ),
       );
+      const deferred = Option.isSome(admission)
+        ? yield* admission.value.deferredRunIds.pipe(Effect.orDie)
+        : new Set<string>();
+      if (projection.runs.some((run) => deferred.has(run.id))) continue;
       const enabled =
         continueAfterRestart !== null &&
         resolveProjectSettings(continueAfterRestart, projection.thread.projectId).settings
@@ -800,6 +811,11 @@ export const make = Effect.gen(function* () {
           return;
         const run = restartContinuationRun(projection, yield* DateTime.now);
         if (!run) return;
+        if (
+          Option.isSome(admission) &&
+          (yield* admission.value.deferredRunIds.pipe(Effect.orDie)).has(run.id)
+        )
+          return;
         const commandId = CommandId.make(`command:restart-prepare:${run.id}`);
         yield* eventSink.writeWithEffects({
           commandId,

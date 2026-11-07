@@ -1,3 +1,4 @@
+import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 import {
   CheckpointId,
   CheckpointScopeId,
@@ -291,6 +292,7 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
   EffectOutboxV2,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const admission = yield* Effect.serviceOption(DeliveryAdmission);
     const available = yield* Queue.dropping<void>(64);
     const cancellationSignals = new Map<string, Deferred.Deferred<void>>();
     const settledSignals = new Map<string, Deferred.Deferred<void>>();
@@ -486,6 +488,9 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
       }),
       reconcileAfterProcessLoss: Effect.gen(function* () {
         const now = DateTime.formatIso(yield* DateTime.now);
+        const deferred = Option.isSome(admission)
+          ? [...(yield* admission.value.deferredRunIds.pipe(Effect.orDie))]
+          : [];
         const cancelledRows = yield* sql<{ readonly effect_id: string }>`
           UPDATE orchestration_v2_effect_outbox
           SET
@@ -496,6 +501,7 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
             last_error = 'Cancelled because the server process ended before the effect completed.'
           WHERE status IN ('pending', 'running')
             AND effect_type IN ${sql.in(PROCESS_BOUND_EFFECT_TYPES)}
+            AND COALESCE(json_extract(payload_json, '$.runId'), '') NOT IN ${sql.in(deferred)}
           RETURNING effect_id
         `;
         const requeuedRows = yield* sql<{ readonly effect_id: string }>`
@@ -507,7 +513,7 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
             updated_at = ${now},
             last_error = 'Requeued after the previous server process ended.'
           WHERE status = 'running'
-            AND effect_type IN ${sql.in(REPLAY_SAFE_EFFECT_TYPES_AFTER_PROCESS_LOSS)}
+            AND (effect_type IN ${sql.in(REPLAY_SAFE_EFFECT_TYPES_AFTER_PROCESS_LOSS)} OR json_extract(payload_json, '$.runId') IN ${sql.in(deferred)})
           RETURNING effect_id
         `;
         if (requeuedRows.length > 0) yield* notifyAvailable(requeuedRows.length);

@@ -157,27 +157,31 @@ describe("command permissions", () => {
     ),
   );
 
-  it.effect.each([WS_METHODS.serverCheckOtlpEndpoint, MESH_WS_METHODS.configApply])(
-    "requires the destination settings grant for %s",
-    (method) =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const registry = yield* setup;
-          const check = createCommandPermissions(runtime, method);
-          registry.set(sessions(env), AsyncResult.success(grant(true)));
-          expect(registry.get(check.permissionAtom(env))).toBe(false);
-          registry.set(
-            sessions(env),
-            AsyncResult.success({
-              ...grant(false),
-              scopes: [AuthSettingsWriteScope],
-              permissions: [AuthSettingsWriteScope],
-            }),
-          );
-          expect(registry.get(check.permissionAtom(env))).toBe(true);
-          yield* check.authorize(registry, env);
-        }),
-      ),
+  it.effect.each([
+    WS_METHODS.serverCheckOtlpEndpoint,
+    MESH_WS_METHODS.configApply,
+    "delivery.drain",
+    "delivery.drainStatus",
+    "delivery.cancelDrain",
+  ] as const)("requires the destination settings grant for %s", (method) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* setup;
+        const check = createCommandPermissions(runtime, method);
+        registry.set(sessions(env), AsyncResult.success(grant(true)));
+        expect(registry.get(check.permissionAtom(env))).toBe(false);
+        registry.set(
+          sessions(env),
+          AsyncResult.success({
+            ...grant(false),
+            scopes: [AuthSettingsWriteScope],
+            permissions: [AuthSettingsWriteScope],
+          }),
+        );
+        expect(registry.get(check.permissionAtom(env))).toBe(true);
+        yield* check.authorize(registry, env);
+      }),
+    ),
   );
 
   it.effect.each([

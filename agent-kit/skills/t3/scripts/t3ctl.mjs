@@ -727,16 +727,26 @@ function serverInfo() {
   return info;
 }
 
+export function unitRuntimeExecutable(unit) {
+  const match = /^ExecStart=\s*(?:"([^"\r\n]+\/t3)"|((?:\/|%h\/)[^\s"\r\n]*\/t3))(?=\s|$)/m.exec(unit);
+  return match ? (match[1] || match[2]).replace(/^%h/, homedir()) : null;
+}
+
+export async function retryUpdatingCall(call, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
+  for (;;) {
+    const result = await call();
+    if (!result.isError || !(result.content || []).some((item) => item.type === "text" && item.text.includes("T3_UPDATING:"))) return result;
+    await wait(1000);
+  }
+}
+
 // The t3 CLI of the runtime the server unit runs (never a newer one: it could migrate the live DB).
 function t3bin() {
   if (process.env.T3CTL_T3_BIN) return process.env.T3CTL_T3_BIN;
   try {
     const unit = detectServerUnit(UNIT)?.text ?? "";
-    const m = /^ExecStart=(\S+\/runtime\/versions\/[^/]+\/t3)\s/m.exec(unit);
-    if (m) {
-      const bin = m[1].replace(/^%h/, homedir());
-      if (existsSync(bin)) return bin;
-    }
+    const bin = unitRuntimeExecutable(unit);
+    if (bin && existsSync(bin)) return bin;
   } catch {
     /* no unit: fall back to PATH */
   }
@@ -902,12 +912,8 @@ class Mcp {
       .tools;
   }
   async callRaw(name, args = {}) {
-    return this.post({
-      jsonrpc: "2.0",
-      id: ++this.seq,
-      method: "tools/call",
-      params: { name, arguments: args },
-    });
+    const request = { jsonrpc: "2.0", id: ++this.seq, method: "tools/call", params: { name, arguments: args } };
+    return retryUpdatingCall(() => this.post(request));
   }
   async call(name, args = {}) {
     const res = await this.callRaw(name, args);
@@ -3829,6 +3835,15 @@ const commands = {
       }
       die("usage: t3ctl settings [get [dot.path]] | set '{\"key\": value}'");
     });
+  },
+
+  async drain(pos, opt) {
+    const client = await mcp();
+    if (pos[0] === "status") return json(await client.call("t3_delivery_drain_status", {}));
+    const requestId = String(opt["request-id"] || opt.requestId || "");
+    if (!requestId) die("drain requires --request-id ID");
+    if (pos[0] === "cancel") return json(await client.call("t3_delivery_cancel_drain", { requestId }));
+    return json(await client.call("t3_delivery_drain", { requestId, deadlineMs: Number(opt["deadline-ms"] || opt.deadlineMs || 300000) }));
   },
 
   async deploy(pos, opt) {
