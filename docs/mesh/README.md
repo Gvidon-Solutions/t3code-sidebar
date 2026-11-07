@@ -11,7 +11,7 @@ serializes provider starts with closing admission. Its operational journal survi
 already accepted dormant starts remain in the outbox without occupying worker slots or spending
 retry attempts. Cancellation wakes the worker and queue promotions. Checking provider-session
 inactivity alone misses accepted start effects and internal queue promotions.
-WS, MCP and `t3ctl server drain|drain-status|cancel-drain` expose the same service. B1 and the
+WS, MCP and `t3ctl drain`, `t3ctl drain status`, `t3ctl drain cancel` expose the same service. B1 and the
 private systemd transport drain before backup/switch and reopen only after health or rollback.
 Transient updating refusals are never stored as rejected command receipts; client and CLI retries
 retain their command/message IDs. Old targets without drain support fail before being stopped;
