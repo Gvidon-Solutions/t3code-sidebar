@@ -2,6 +2,20 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { scenarios } from "./scenarios.mjs";
+const inheritedPaths = new Set([process.env.T3CODE_RUN_SHIMS, process.env.T3CODE_RUN_BIN]);
+process.env.PATH = (process.env.PATH ?? "")
+  .split(NodePath.delimiter)
+  .filter((entry) => !inheritedPaths.has(entry))
+  .join(NodePath.delimiter);
+for (const key of Object.keys(process.env))
+  if (
+    key.startsWith("T3CODE_RUN_") ||
+    key.startsWith("T3_MESH_") ||
+    key === "BASH_ENV" ||
+    key === "ZDOTDIR"
+  )
+    delete process.env[key];
+
 const args = process.argv.slice(2);
 let repeat = 1,
   jobs = 2,

@@ -12,7 +12,8 @@ scripts/mesh-fast/run.sh --jobs 2
 Each scenario starts three fresh source servers (studio, cloudbox, laptop), each
 with its own HOME, XDG configuration, state, agent instruction home, managed SSH
 home, sshd host key and high loopback ports. No existing mesh, daemon, SSH identity
-or server is reused. The system OpenSSH server must be installed at
+or server is reused. Inherited T3 command shims and shell startup hooks are removed
+before launching fixtures. The system OpenSSH server must be installed at
 `/usr/sbin/sshd`; the runner runs it as the current user. Studio refuses inbound
 peer upgrades; it dials cloudbox, and laptop reaches it through the one-hop relay.
 The replica scenario installs the pinned Mutagen through the production installer.

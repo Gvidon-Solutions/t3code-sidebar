@@ -691,3 +691,8 @@ startup identity reconciliation can supersede the revision being asserted.
 `mesh/MeshTiming.ts` scales source-only mesh scheduling; the server pack definition
 unconditionally disables scaling in production artifacts. Default-duration service
 and peer tests continue to run at scale one.
+
+A runner launched from a T3 thread must remove inherited `T3CODE_RUN_*` paths and
+shell hooks before starting fixtures. Otherwise even fixture Git invokes the installed
+server CLI shim, coupling the test environment to the owner’s runtime and adding a
+process launch to every Git call.
