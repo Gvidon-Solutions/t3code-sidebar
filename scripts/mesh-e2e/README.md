@@ -160,6 +160,9 @@ Each recovery deadline defaults to 900 seconds because the staging-crash scenari
 transfer 256 MiB through the relay. Set `MESH_E2E_ROUND3_TIMEOUT` to override it.
 Round 3 requests four-hour test sessions (`MESH_E2E_SESSION_TTL`) so credentials
 remain valid across those transfers and the six restart orders.
+Use `MESH_E2E_LIVE_REPORTS=1` for round one on a populated bed with ongoing status writers;
+it checks delivery of every captured entry and tombstone plus each node's materialization.
+The default whole-document equality mode requires quiescent writers.
 Its fixture parent defaults to `/var/tmp/t3-mesh-round3` to retain evidence across
 host reboots. `MESH_E2E_ROUND3_FIXTURES` selects the same absolute parent on all nodes;
 that parent's local path can link to a larger artifact disk.

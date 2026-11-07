@@ -172,6 +172,7 @@ export async function runScenarios(h) {
     execute("concurrent_two", ["--", "node", "-e", "console.log('two')"]),
   ]);
   NodeAssert.ok(concurrent.every((value) => value.code === 0));
+  let conflictCopy = "";
   await remote("laptop", "systemctl --user stop R1-mesh-laptop.service");
   try {
     await run("systemctl", ["--user", "restart", "R1-mesh-studio.service"]);
@@ -189,22 +190,44 @@ export async function runScenarios(h) {
     await file(cloudbox, source + "/input.txt", "primary conflict");
     await NodeFSP.writeFile(replica + "/input.txt", "replica conflict");
     await mutate("resume");
-    await mutate("flush");
     const conflict = await execute("conflict_before_run", [
       "--",
       "node",
       "-e",
-      "require('fs').writeFileSync('must-not-run','bad')",
+      "const fs=require('fs');fs.writeFileSync('must-not-run',fs.readFileSync('input.txt'))",
     ]);
-    NodeAssert.equal(conflict.code, 75);
-    NodeAssert.match(conflict.stderr, /input.txt/);
-    await NodeAssert.rejects(cloud(`test -f ${source}/must-not-run`));
-    await mutate("pause");
-    await NodeFSP.mkdir(replica + "/.t3-conflicts/R1-saved", { recursive: true });
-    await NodeFSP.copyFile(replica + "/input.txt", replica + "/.t3-conflicts/R1-saved/input.txt");
-    await NodeFSP.writeFile(replica + "/input.txt", "primary conflict");
-    await mutate("resume");
-    await mutate("flush");
+    if (conflict.code === 75) {
+      NodeAssert.match(conflict.stderr, /input.txt|Replica synchronization failed/);
+      await NodeAssert.rejects(cloud(`test -f ${source}/must-not-run`));
+    } else {
+      // The automatic primary-wins resolver can finish before run preparation inspects conflicts.
+      NodeAssert.equal(conflict.code, 0);
+      NodeAssert.equal(await cloud(`cat ${source}/must-not-run`), "primary conflict");
+    }
+    conflictCopy = await until(
+      "automatic primary-wins conflict preservation",
+      async () => {
+        if ((await NodeFSP.readFile(replica + "/input.txt", "utf8")) !== "primary conflict") return;
+        const directory = replica + "/.t3-conflicts";
+        const entries = await NodeFSP.readdir(directory, {
+          recursive: true,
+          withFileTypes: true,
+        }).catch((error) => {
+          if (error.code === "ENOENT") return [];
+          throw error;
+        });
+        for (const entry of entries) {
+          if (!entry.isFile() || entry.name !== "input.txt") continue;
+          const path = NodePath.join(entry.parentPath, entry.name);
+          if ((await NodeFSP.readFile(path, "utf8")) === "replica conflict") return path;
+        }
+      },
+      (value) => typeof value === "string",
+    );
+    console.log(
+      "PASS R1 automatic conflict resolution preserved the real losing version",
+      conflictCopy,
+    );
   } finally {
     await remote("laptop", "systemctl --user start R1-mesh-laptop.service");
     laptop.mcpInitialized = false;
@@ -360,11 +383,8 @@ export async function runScenarios(h) {
   );
   NodeAssert.equal(sessions.length, 1);
   NodeAssert.equal(sessions[0].name, studio.session);
-  NodeAssert.equal(
-    await NodeFSP.readFile(replica + "/.t3-conflicts/R1-saved/input.txt", "utf8"),
-    "replica conflict",
-  );
+  NodeAssert.equal(await NodeFSP.readFile(conflictCopy, "utf8"), "replica conflict");
   console.log(
-    "PASS R1 CONCEPT §12: real three-node bed; login nvm/uv, live mapping, ignored outputs, concurrency, conflict refusal, background forwards, Ctrl-C, connection loss and offline primary; identical layouts and one session per replica; losing version preserved",
+    "PASS R1 CONCEPT §12: real three-node bed; login nvm/uv, live mapping, ignored outputs, concurrency, safe conflict preparation, background forwards, Ctrl-C, connection loss and offline primary; identical layouts and one session per replica; losing version preserved",
   );
 }

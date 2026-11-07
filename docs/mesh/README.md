@@ -647,11 +647,15 @@ Round three checks lock ownership before destructive operations and leaves share
 if a host reboot removes the lock. Crash workloads remain 128/256 MiB with mandatory
 active-staging and file-hash assertions.
 Network acceptance also fences RPC operations and tunnel cleanup after a lost lock.
+R1 accepts a run only after automatic conflict resolution, or exit 75 while conflicts remain;
+both paths must converge to the primary and preserve the actual losing file without fixture repair.
+Round-one diagnostics refresh every node even when earlier snapshots differ, so failure output
+cannot accidentally show an older snapshot for a later node.
 
 The round-three daemon fixture suspends its verified isolated server process only while
 starting the foreground fault-test daemon, then resumes it before the crash. Background
-status readers can otherwise win the private daemon lock even with replicas disabled.
-The EXIT cleanup resumes a suspended server before restoring its settings.
+status readers can otherwise win the private daemon lock. The legacy replicasEnabled setting
+does not disable reconciliation when v2 config is active. EXIT cleanup resumes a suspended server.
 
 Sequential transport acceptance waits for manual-folder policy metadata and its delivery
 before requesting SSHFS on the same representation key. Otherwise a concurrent ignores

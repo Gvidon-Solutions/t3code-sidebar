@@ -401,7 +401,7 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
     for machine in "${machines[@]}"; do
       if ! ws_get "$machine" >"$WORK/snap-$machine.json" 2>"$WORK/snap-$machine.err"; then
         converged=0
-        break
+        continue
       fi
       doc_hash_value="$(doc_hash "$WORK/snap-$machine.json")"
       cfg_hash_value="$(config_hash "$WORK/snap-$machine.json")"
@@ -411,7 +411,7 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
         first_cfg="$cfg_hash_value"
       elif [ "$doc_hash_value" != "$first_doc" ] || [ "$cfg_hash_value" != "$first_cfg" ]; then
         converged=0
-        break
+        continue
       fi
     done
     if [ "$converged" = 1 ] && [ "${MESH_E2E_LIVE_REPORTS:-0}" = 1 ]; then

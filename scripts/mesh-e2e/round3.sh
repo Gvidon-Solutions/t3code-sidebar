@@ -167,11 +167,6 @@ restore() {
     fi
     gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
     wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
-    for m in gv vps; do
-      if [ -f "$WORK/N-replicas-enabled-before-$m.json" ]; then
-        ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-restore-engine-$m.json" || rc=1
-      fi
-    done
   else
     printf 'Bed lock lost; leaving shared services and settings untouched.\n' >&2
     rc=1
@@ -313,13 +308,10 @@ for m in gv gor vps; do
 done
 # Kill only a private daemon PID captured when this script launched it.
 for m in gv vps; do
-  ws_rpc "$m" server.getConfig '{}' | jq '.settings.replicasEnabled' > "$WORK/N-replicas-enabled-before-$m.json"
-  # Restart disabled to drain in-flight commands before capturing our daemon.
-  ws_rpc "$m" server.updateSettings '{"patch":{"replicasEnabled":false}}' > "$WORK/N-quiesce-$m.json"
+  # Restart to drain in-flight commands before capturing our daemon.
   unit "$m" stop
   unit "$m" start
   wait_health "$(origin_of "$m")" "$TIMEOUT"
-  ws_rpc "$m" server.getConfig '{}' | jq -e '.settings.replicasEnabled==false' >/dev/null
   base=$(base_of "$m")
   daemon_dir="$base/N-faults/$N_KEY"
   rexec "$m" mkdir -p "$daemon_dir"
@@ -341,8 +333,6 @@ for m in gv vps; do
   server_process "$m" SIGCONT "$PAUSED_SERVER_PID" >/dev/null
   PAUSED_SERVER=
   PAUSED_SERVER_PID=
-  ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-enable-before-kill-$m.json"
-  mv "$WORK/N-replicas-enabled-before-$m.json" "$WORK/N-replicas-enabled-restored-$m.json"
   before=$(restart_count "$m")
   daemon_lock "$m" "$captured_pid"
   printf 'PASS N captured daemon owns private lock %s\n' "$m"
