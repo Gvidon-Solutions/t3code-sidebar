@@ -1709,3 +1709,14 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   so replacing a connection cannot terminate the server with an unhandled Promise rejection.
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.
+
+### 2026-11-07 — T1 isolated acceptance foundation
+
+- **What.** Adds independently runnable layout partition, config/clock and real
+  managed-SSH/Mutagen replica scenarios with JUnit, logs and repeat controls.
+  This is a subset of the full T1 acceptance matrix; its README states the boundary.
+- **How.** Fresh source processes, private homes/sshd/state, incoming-only peer
+  proxy, and a source-only timer multiplier compiled out of production bundles.
+  Product tests use neutral machine fixtures; branding assertions use identity constants.
+- **Where.** `scripts/mesh-fast/`, `mesh/MeshTiming.ts`, mesh timer consumers,
+  server pack config and the independent `mesh-fast.yml` CI workflow.

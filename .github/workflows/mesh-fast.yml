@@ -1,0 +1,32 @@
+name: Isolated mesh scenarios
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/server/src/mesh/**"
+      - "apps/server/src/peer/**"
+      - "apps/server/src/replicas/**"
+      - "scripts/mesh-fast/**"
+      - ".github/workflows/mesh-fast.yml"
+jobs:
+  mesh-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26.12.1"
+      - run: sudo apt-get update && sudo apt-get install -y openssh-server
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm mesh:fast
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: mesh-fast-failure
+          path: |
+            /tmp/mesh-fast-*/summary.json
+            /tmp/mesh-fast-*/junit.xml
+            /tmp/mesh-fast-*/**/*.log
+            /tmp/mesh-fast-*/**/failure.txt

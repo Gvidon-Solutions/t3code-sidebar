@@ -680,3 +680,14 @@ round three also verifies that crashing one server leaves the others' restart co
 An inbound connection can become visible before its reciprocal grant notification commits
 the link. NAT acceptance waits for both the direct connection and the stored reachable,
 address-free grant before testing the relay.
+
+## Isolated fast scenarios (T1)
+
+`scripts/mesh-fast/run.sh` owns independent three-server process meshes, private
+homes and OpenSSH servers, and a private Mutagen daemon per replica driver.
+Its scenario registry and coverage boundary are in `scripts/mesh-fast/README.md`.
+The initial config/bindings must converge before applying a test edit; otherwise
+startup identity reconciliation can supersede the revision being asserted.
+`mesh/MeshTiming.ts` scales source-only mesh scheduling; the server pack definition
+unconditionally disables scaling in production artifacts. Default-duration service
+and peer tests continue to run at scale one.

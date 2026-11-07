@@ -29,6 +29,7 @@
         "fixtures/*/*.js",
         "knip-schemas.ts",
         "mesh-e2e/f1-web.mjs",
+        "mesh-fast/run.mjs",
         "linux-after-pack.ts",
         "mobile-behavior/run.ts",
         "mobile-native-client.ts",
