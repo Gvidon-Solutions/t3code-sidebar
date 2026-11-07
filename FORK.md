@@ -83,8 +83,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 ## Releases and deployment
 
 - **Desktop.** `.github/workflows/sidebar-desktop.yml` runs on every push to `ws` (docs and
-  `deploy/` excluded): JS bundle → Linux AppImage/deb + Linux CLI archive → Windows NSIS with
-  the CLI archive embedded as the WSL runtime → GitHub release `sidebar-v<version>` marked
+  `deploy/` excluded): JS bundle → independent Linux runtime archive and Linux installers;
+  Windows NSIS consumes the runtime archive without waiting for the Linux installer.
+  Runtime publishes first and platform jobs attach their artifacts to `sidebar-v<version>` marked
   latest, with `latest.yml` / `latest-linux.yml`. Version is `<upstream version>-sidebar.<run>`;
   the core stays upstream's so version-skew checks against servers hold. The core is the higher
   of `apps/server/package.json` and the release tag in "Last synced with upstream release" above,
@@ -116,6 +117,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **How.** Machine names/services/paths stay in untracked local configuration. Hot snapshots
   use a temporary Git index and separate branch. Mobile bundles match the native fingerprint;
   changed native configuration requires an APK. Delivery rejects conflicting managed versions.
+  Direct systemd delivery currently requires explicit `--now`; its default refuses because an
+  atomic turn-admission gate has not been implemented. It is not ready for live idle rollout.
 - **Where.** `scripts/delivery/`, `docs/delivery.md`, t3ctl delivery client, server `delivery/`,
   mobile update lifecycle/settings, desktop protocol/bootstrap, and `sidebar-desktop.yml`.
 
