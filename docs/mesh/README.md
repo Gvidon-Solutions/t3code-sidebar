@@ -653,6 +653,8 @@ Round-one diagnostics refresh every node even when earlier snapshots differ, so 
 cannot accidentally show an older snapshot for a later node.
 Its legacy-mirror assertion brackets the settings read with two equal materializations on one
 connection; ongoing status reports cannot invalidate an older, separately captured snapshot.
+Raw workspace fixtures allocate fractional ranks instead of reusing `zzzz`; otherwise a routine
+config diff can repair tied ranks and legitimately compete with the concurrent reorder under test.
 
 The round-three daemon fixture suspends its verified isolated server process only while
 starting the foreground fault-test daemon, then resumes it before the crash. Background

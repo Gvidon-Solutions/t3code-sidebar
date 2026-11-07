@@ -217,8 +217,12 @@ const editOp = async (op, doc, environmentId) => {
   const entry = (v) => ({ v, h });
   const workspaceValue = (id) => doc[`ws/${id}`]?.v;
   switch (op.kind) {
-    case "addWorkspace":
-      return { [`ws/${op.id}`]: entry({ name: op.name, ...(op.color ? { color: op.color } : {}), sort: op.sort ?? "zzzz" }) };
+    case "addWorkspace": {
+      const last = Object.entries(doc).flatMap(([key, e]) =>
+        key.startsWith("ws/") && e.v && typeof e.v === "object" && typeof e.v.sort === "string"
+          ? [e.v.sort] : []).sort().at(-1) ?? null;
+      return { [`ws/${op.id}`]: entry({ name: op.name, ...(op.color ? { color: op.color } : {}), sort: op.sort ?? between(last, null) }) };
+    }
     case "renameWorkspace": {
       const value = workspaceValue(op.id);
       if (!value) throw new Error(`no workspace ${op.id}`);
