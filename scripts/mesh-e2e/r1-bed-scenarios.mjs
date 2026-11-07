@@ -1,3 +1,4 @@
+import { runAddress } from "../../apps/server/src/platform/ServerPlatform.ts";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
@@ -86,6 +87,8 @@ export async function runScenarios(h) {
     ...process.env,
     HOME: studio.home,
     T3CODE_HOME: studio.base,
+    T3CODE_RUN_SOCKET: runAddress(studio.base),
+    T3CODE_RUN_MANIFEST: NodePath.join(studio.base, "run", "manifest.json"),
     T3CODE_RUN_SSH_CONFIG: studio.home + "/.ssh/config",
   };
   const cli = studio.base + "/run/bin/t3";

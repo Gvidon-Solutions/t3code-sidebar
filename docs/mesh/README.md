@@ -694,3 +694,7 @@ catalog; replica reconciliation retains representation-specific ignores until th
 every pattern. It then clears the legacy copy so later config removals take effect.
 New settings and mesh configs seed `DEFAULT_REPLICA_IGNORES` (code-only); existing explicit lists
 are preserved. Agent-kit reconciliation receives the local identity from the server binding.
+
+Bed command fixtures set their own run socket and manifest as well as the home directory.
+An agent thread already has run variables; inheriting its socket makes a raw fixture CLI resolve
+against the caller’s server instead of the isolated bed.
