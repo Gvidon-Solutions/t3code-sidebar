@@ -632,3 +632,9 @@ reports; the default round-one check still requires complete document equality.
 This avoids comparing sequential reads as if they were an atomic distributed snapshot.
 Round 2 provisions SSH through `meshConfig.apply` and probes bound `t3-<name>` aliases;
 the legacy raw-route/key installer is no longer part of that acceptance path.
+
+Explicit folder comparison in `ProjectReplicaService.place` must use the same v2 ignore policy
+as reconciliation. Otherwise a populated replica that correctly excludes an ignored file is
+rejected when selected again. The existing in-flight-placement test covers that policy boundary.
+Round-three fixtures configure ignores and conflict policies through `meshConfig.apply`; their
+adoption daemon uses the isolated server HOME, with a guard against the owner's HOME.

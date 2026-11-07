@@ -1322,6 +1322,7 @@ const make = Effect.gen(function* () {
             if (role === "replica" && explicitPath && !validated) {
               const sourceRoute = yield* routeFor(source.environmentId);
               if (sourceRoute) {
+                const desired = configFromLayout((yield* mesh.read).document);
                 yield* runner.assertReplicaPath({
                   source: {
                     path: source.path,
@@ -1329,10 +1330,9 @@ const make = Effect.gen(function* () {
                     route: sourceRoute,
                   },
                   destination: { path: destination, environmentId },
-                  ignores: [
-                    ...replicaSettings.replicaIgnores,
-                    ...(input.ignores ?? rep?.ignores ?? []),
-                  ],
+                  ignores: desired
+                    ? projectPolicy(desired, config.projectTitles[logicalKey] ?? logicalKey).ignore
+                    : [...replicaSettings.replicaIgnores, ...(input.ignores ?? rep?.ignores ?? [])],
                 });
                 validated = true;
               }

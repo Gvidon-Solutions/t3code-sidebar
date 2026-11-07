@@ -1704,5 +1704,6 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   Bed rounds with live status reports verify delivery through a captured all-entry HLC barrier;
   round one retains strict full-document equality.
   Round two uses the v2 config API and managed SSH aliases instead of the legacy key installer.
+  Explicit-folder validation uses the configured project ignores, matching the replica session.
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.

@@ -610,9 +610,20 @@ it.effect.each(["failure", "success"] as const)(
                   : Effect.void,
               ),
             )
-          : Effect.void;
+          : Effect.sync(() => expect(input.ignores).toContain("*.cache"));
       const service = yield* ReplicaService.ProjectReplicaService;
       const mesh = yield* MeshLayoutService;
+      yield* mesh.apply({
+        "mesh.config": {
+          h: "0000000000001.00000.studio",
+          v: {
+            revision: "one",
+            author: "studio",
+            writtenAt: "",
+            doc: { schema: 1, machines: {}, projects: { defaults: { ignore: ["*.cache"] } } },
+          },
+        },
+      });
       yield* mesh.edit((current) => ({
         ...current,
         projectMounts: {
