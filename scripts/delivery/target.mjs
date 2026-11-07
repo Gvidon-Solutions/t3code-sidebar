@@ -224,8 +224,33 @@ export async function targetOperation(config, operation) {
     systemctl("stop", config.unit);
     writeFileSync(config.unitPath, state.unit);
     if (existsSync(state.backup)) {
-      copyFileSync(state.backup, db);
+      const currentDatabase = new NodeSqlite.DatabaseSync(db, { readOnly: true });
+      let fence;
+      try {
+        fence = currentDatabase
+          .prepare(
+            "SELECT request_id, deadline_at, deferred_json FROM delivery_admission WHERE id = 1",
+          )
+          .get();
+        if (fence?.request_id !== state.requestId)
+          throw new Error("Persistent rollback fence changed before database restore");
+      } finally {
+        currentDatabase.close();
+      }
+      const restoredPath = db + ".delivery-restore";
+      copyFileSync(state.backup, restoredPath);
+      const restoredDatabase = new NodeSqlite.DatabaseSync(restoredPath);
+      try {
+        restoredDatabase
+          .prepare(
+            "INSERT INTO delivery_admission (id, request_id, deadline_at, deferred_json) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET request_id=excluded.request_id, deadline_at=excluded.deadline_at, deferred_json=excluded.deferred_json",
+          )
+          .run(fence.request_id, fence.deadline_at, fence.deferred_json);
+      } finally {
+        restoredDatabase.close();
+      }
       for (const suffix of ["-wal", "-shm"]) rmSync(db + suffix, { force: true });
+      renameSync(restoredPath, db);
     }
     systemctl("daemon-reload");
     systemctl("start", config.unit);

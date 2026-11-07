@@ -26,7 +26,9 @@ test("isolated target switches its configured unit and restores the exact previo
       mkdirSync(join(home, "userdata"), { recursive: true });
       const db = join(home, "userdata/statev2.sqlite");
       const database = new NodeSqlite.DatabaseSync(db);
-      database.exec("CREATE TABLE proof(value TEXT); INSERT INTO proof VALUES ('previous-db')");
+      database.exec(
+        "CREATE TABLE proof(value TEXT); INSERT INTO proof VALUES ('previous-db'); CREATE TABLE delivery_admission (id INTEGER PRIMARY KEY, request_id TEXT, deadline_at INTEGER, deferred_json TEXT)",
+      );
       database.close();
       const unit = join(root, "test.service");
       const original = "[Service]\nExecStart=/old/runtime/t3 serve --port 3795\n";
@@ -80,10 +82,10 @@ test("isolated target switches its configured unit and restores the exact previo
       operation("prepareRollback");
       assert.equal(JSON.parse(readFileSync(join(root, "gate.json"), "utf8")).phase, "drained");
       const fencedDb = new NodeSqlite.DatabaseSync(db);
-      fencedDb.exec("CREATE TABLE delivery_admission (id INTEGER PRIMARY KEY, request_id TEXT)");
+      const rollbackRequestId = JSON.parse(readFileSync(join(root, "gate.json"), "utf8")).requestId;
       fencedDb
-        .prepare("INSERT INTO delivery_admission VALUES (1, ?)")
-        .run(JSON.parse(readFileSync(join(root, "gate.json"), "utf8")).requestId);
+        .prepare("INSERT INTO delivery_admission VALUES (1, ?, 12345, '[]')")
+        .run(rollbackRequestId);
       fencedDb.close();
       const workingCtl = readFileSync(config.ctl, "utf8");
       writeFileSync(config.ctl, "throw new Error('trial HTTP unavailable');");
@@ -92,6 +94,10 @@ test("isolated target switches its configured unit and restores the exact previo
       operation("cancelDrain");
       const restored = new NodeSqlite.DatabaseSync(db, { readOnly: true });
       assert.equal(restored.prepare("SELECT value FROM proof").get().value, "previous-db");
+      assert.equal(
+        restored.prepare("SELECT request_id FROM delivery_admission WHERE id = 1").get().request_id,
+        rollbackRequestId,
+      );
       restored.close();
       assert.equal(readFileSync(unit, "utf8"), original);
       const intervening = new NodeSqlite.DatabaseSync(db);
