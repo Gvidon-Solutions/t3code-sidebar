@@ -35,9 +35,22 @@ export function instructionBlock(original: string, body: string) {
  * The retired installer wrote a "> ..." header plus the shared instructions verbatim; on first
  * adoption that copy is dropped so agents do not read it twice. Owner text outside it stays.
  */
-export function withoutLegacyInstructions(original: string, instructions: string | undefined) {
+export function withoutLegacyInstructions(
+  original: string,
+  instructions: string | undefined,
+): string {
+  const start = original.indexOf(begin);
+  const stop = original.indexOf(end);
+  if (start >= 0 && stop > start) {
+    const after = stop + end.length;
+    const before = withoutLegacyInstructions(original.slice(0, start), instructions);
+    const rest = withoutLegacyInstructions(original.slice(after), instructions);
+    return (
+      before + original.slice(start, after) + (rest && !rest.startsWith("\n") ? `\n${rest}` : rest)
+    );
+  }
   const text = instructions?.trim();
-  if (!text || original.includes(begin) || original.includes(end)) return original;
+  if (!text || start >= 0 || stop >= 0) return original;
   const at = original.indexOf(text);
   if (at < 0) return original;
   const head = original.slice(0, at).replace(/(^|\n)> [^\n]*\n[ \t]*\n?[ \t\r]*$/, "$1");

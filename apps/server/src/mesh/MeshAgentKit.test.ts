@@ -91,8 +91,12 @@ it("replaces the retired installer's copy of the shared instructions instead of 
   const withOwnText = `My own note\n\n${installed}\nAfter\n`;
   expect(Kit.withoutLegacyInstructions(withOwnText, shared)).toBe("My own note\n\nAfter\n");
   expect(Kit.withoutLegacyInstructions("Unrelated text\n", shared)).toBe("Unrelated text\n");
-  const managed = Kit.instructionBlock("", "body");
-  expect(Kit.withoutLegacyInstructions(managed + shared, shared)).toBe(managed + shared);
+  const blockFirst = Kit.instructionBlock(installed, "Mesh machines: studio (ST).");
+  const cleaned = Kit.withoutLegacyInstructions(blockFirst, shared);
+  expect(cleaned.startsWith("<!-- t3-mesh begin -->")).toBe(true);
+  expect(Kit.instructionBlock(cleaned, `Mesh\n\n${shared}`).split("Правила.").length - 1).toBe(1);
+  const managedWithCopy = Kit.instructionBlock("", shared);
+  expect(Kit.withoutLegacyInstructions(managedWithCopy, shared)).toBe(managedWithCopy);
   expect(Kit.withoutLegacyInstructions(installed, undefined)).toBe(installed);
   const adopted = Kit.instructionBlock(Kit.withoutLegacyInstructions(installed, shared), shared);
   expect(adopted.split("Правила.").length - 1).toBe(1);
