@@ -1,3 +1,5 @@
+import upgradeFixture from "./meshLayout/fixtures/upgrade.json" with { type: "json" };
+import { projectMachineStrip } from "./meshLayout/projectMachineStrip.ts";
 import type {
   EnvironmentId,
   MeshLayoutSnapshot as RpcMeshLayoutSnapshot,
@@ -427,4 +429,41 @@ it("merges a native cache that opens after the live subscription without losing 
   await mesh.replayOutbox();
   expect(materialize(rpc.documents.get("studio")!).quietAfterDays).toBe(23);
   mesh.dispose();
+});
+
+it("merges the upgrade snapshot with a legacy offline cache without stealing the primary chip", () => {
+  const legacyKey = "studio:/work/application";
+  const document: MeshLayoutDocument = {
+    [`rep/${encodeURIComponent(legacyKey)}/studio`]: {
+      v: {
+        environmentId: "studio",
+        path: "/work/application",
+        projectId: "studio-Application",
+        transport: "git",
+        role: "primary",
+        createdAt: "",
+      },
+      h: "0000000000002.00000.phone",
+    },
+  };
+  const cached = {
+    ...emptyMeshLayoutState(),
+    snapshot: { environmentId: "studio", document, config: materialize(document) },
+  };
+  const state = mergeMeshLayoutSnapshot(cached, {
+    ...upgradeFixture,
+    config: materialize(upgradeFixture.document),
+  });
+  const config = state.snapshot!.config;
+  for (const projectKey of ["lp-application", "github-neutral/docs"]) {
+    const strip = projectMachineStrip(
+      config,
+      { projectKey, environmentIds: ["cloudbox"], knownEnvironmentIds: ["cloudbox"] },
+      [],
+    );
+    expect(strip.chips.map((chip) => [chip.environmentId, chip.role])).toEqual([
+      ["studio", "primary"],
+      ["cloudbox", "replica"],
+    ]);
+  }
 });
