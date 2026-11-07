@@ -50,6 +50,8 @@ const harnessName = value => String(value).replace(/Agent$/i, "").toLowerCase();
 // flags that never take a value, so `--queue "text"` keeps "text" as the message
 const DURATION_ARG = /^\d+(?:\.\d+)?(?:s|m|h|d|w)?$/;
 const BOOL_FLAGS = new Set([
+  "hot",
+  "now",
   "all",
   "primary",
   "dryRun",
@@ -3827,6 +3829,15 @@ const commands = {
       }
       die("usage: t3ctl settings [get [dot.path]] | set '{\"key\": value}'");
     });
+  },
+
+  async deploy(pos, opt) {
+    const { requestDelivery } = await import("./delivery-client.mjs");
+    json(await requestDelivery({ action: pos[0] === "rollback" ? "rollback" : "deploy", hot: Boolean(opt.hot), now: Boolean(opt.now), machines: opt.machines, ref: opt.ref, version: opt.version, release: opt.release, worktree: opt.worktree || process.cwd() }));
+  },
+
+  async hot(pos, opt) {
+    return commands.deploy(pos, { ...opt, hot: true });
   },
 
   async server(pos, opt) {

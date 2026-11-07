@@ -1,0 +1,40 @@
+{
+  "repository": "/srv/source/app",
+  "buildDir": "/srv/cache/app-build",
+  "stateDir": "/srv/state/t3-delivery",
+  "socket": "/run/user/1000/t3-delivery.sock",
+  "maxWaitMs": 300000,
+  "healthWaitMs": 120000,
+  "gate": ["bash", "scripts/mesh-fast/run.sh"],
+  "releaseRepository": "organization/repository",
+  "cleanAgent": {
+    "project": "App",
+    "agent": "codex",
+    "model": "gpt-6.1-sol"
+  },
+  "machines": [
+    {
+      "name": "studio",
+      "scope": "user",
+      "unit": "app-test.service",
+      "unitPath": "/srv/test-home/.config/systemd/user/app-test.service",
+      "runtimeDir": "/srv/test-home/app/runtime/versions",
+      "home": "/srv/test-home/app",
+      "node": "/usr/bin/node",
+      "ctl": "/srv/tools/t3ctl.mjs",
+      "origin": "http://127.0.0.1:3795"
+    },
+    {
+      "name": "cloudbox",
+      "ssh": "test-cloudbox",
+      "scope": "system",
+      "unit": "app-test.service",
+      "unitPath": "/etc/systemd/system/app-test.service",
+      "runtimeDir": "/srv/app/runtime/versions",
+      "home": "/srv/app",
+      "node": "/usr/bin/node",
+      "ctl": "/srv/tools/t3ctl.mjs",
+      "origin": "http://127.0.0.1:3791"
+    }
+  ]
+}
