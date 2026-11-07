@@ -44,6 +44,7 @@ export class MiniMesh {
     MiniMesh.active.add(this);
     this.directory = directory;
     this.containerMode = true;
+    this.warmAgents = true;
   }
 
   async start(names = ["studio", "cloudbox", "laptop"]) {
@@ -231,18 +232,11 @@ export class MiniMesh {
         );
       await NodeFSP.chmod(NodePath.join(base, "bin/mutagen"), 0o755);
     }
-    if (this.warmAgents) {
+    if (this.warmAgents && !this.coldInstall) {
       const agentHome = NodePath.join(home, ".mutagen/agents/0.18.1");
       await NodeFSP.mkdir(agentHome, { recursive: true });
-      await run("tar", [
-        "-xzf",
-        NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "mutagen-agents.tar.gz"),
-        "-C",
-        agentHome,
-        "linux_amd64",
-      ]);
-      await NodeFSP.rename(
-        NodePath.join(agentHome, "linux_amd64"),
+      await NodeFSP.copyFile(
+        NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "mutagen-agent-linux-amd64"),
         NodePath.join(agentHome, "mutagen-agent"),
       );
       await NodeFSP.chmod(NodePath.join(agentHome, "mutagen-agent"), 0o700);

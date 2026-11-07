@@ -40,5 +40,20 @@ export async function prepare() {
       new URL(".", import.meta.url).pathname,
     ]);
   }
+  const agent = NodePath.join(root, "mutagen-agent-linux-amd64");
+  try {
+    await NodeFSP.stat(agent);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    await run("tar", [
+      "-xzf",
+      NodePath.join(root, "mutagen-agents.tar.gz"),
+      "-C",
+      root,
+      "linux_amd64",
+    ]);
+    await NodeFSP.rename(NodePath.join(root, "linux_amd64"), agent);
+    await NodeFSP.chmod(agent, 0o755);
+  }
   return root;
 }
