@@ -33,8 +33,6 @@ ws_rpc() {
 printf '%s' "$$" > "$WORK/N-round3-runner.pid"
 set -e
 TIMEOUT=${MESH_E2E_ROUND3_TIMEOUT:-900}
-PAUSED_SERVER=
-PAUSED_SERVER_PID=
 PARTITION_ACTIVE=0
 CRASH_TARGET=
 declare -A CRASH_PEERS=()
@@ -116,12 +114,6 @@ restart_count() {
     vps) vps_ssh 'docker inspect -f "{{.RestartCount}}" t3-mesh-e2e';;
   esac
 }
-server_process() {
-  require_bed_lock || return 1
-  local machine=$1 signal=$2 expected=$3 base
-  base=$(base_of "$machine")
-  rexec "$machine" node -e 'const fs=require("node:fs"),[base,signal,raw]=process.argv.slice(1),expected=Number(raw),{pid}=JSON.parse(fs.readFileSync(base+"/userdata/server-runtime.json","utf8")); if(!["read","SIGSTOP","SIGCONT"].includes(signal)||!Number.isSafeInteger(expected)||expected<0||!Number.isSafeInteger(pid)||pid<=1||pid===process.pid||(signal!=="read"&&expected<=1)||(expected!==0&&pid!==expected))throw Error("Invalid captured test server PID"); const args=fs.readFileSync(`/proc/${pid}/cmdline`,"utf8").split("\0"),index=args.indexOf("--base-dir"); if(!args.includes("serve")||index<0||args[index+1]!==base||fs.statSync(`/proc/${pid}`).uid!==process.getuid())throw Error("PID does not belong to this isolated server"); if(signal!=="read")process.kill(pid,signal); console.log(pid);' "$base" "$signal" "$expected"
-}
 crash() {
   require_bed_lock || return 1
   local before after peer
@@ -158,9 +150,6 @@ ws_get gv > "$WORK/N-before.json"
 restore() {
   local rc=$?
   if require_bed_lock; then
-    if [ -n "$PAUSED_SERVER" ]; then
-      server_process "$PAUSED_SERVER" SIGCONT "$PAUSED_SERVER_PID" >/dev/null || rc=1
-    fi
     for m in gv gor vps; do unit "$m" start || rc=1; done
     if [ "$PARTITION_ACTIVE" = 1 ]; then
       gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json" || rc=1
@@ -308,19 +297,15 @@ for m in gv gor vps; do
 done
 # Kill only a private daemon PID captured when this script launched it.
 for m in gv vps; do
-  # Restart to drain in-flight commands before capturing our daemon.
-  unit "$m" stop
-  unit "$m" start
-  wait_health "$(origin_of "$m")" "$TIMEOUT"
   base=$(base_of "$m")
   daemon_dir="$base/N-faults/$N_KEY"
   rexec "$m" mkdir -p "$daemon_dir"
   daemon_binary=$(mut_bin "$m")
-  PAUSED_SERVER_PID=$(server_process "$m" read 0)
-  PAUSED_SERVER=$m
-  # Freeze status readers while establishing ownership of the fault-test daemon.
-  server_process "$m" SIGSTOP "$PAUSED_SERVER_PID" >/dev/null
-  if rexec "$m" node -e 'const s=require("node:net").connect(process.argv[1]); s.once("connect",()=>{s.end();process.exit(0)}); s.once("error",()=>process.exit(1)); s.setTimeout(1000,()=>process.exit(1));' "$base/mutagen/daemon/daemon.sock"; then mut "$m" daemon stop; fi
+  unit "$m" stop
+  if ! daemon_lock "$m" 0; then
+    wait_daemon "$m"
+    mut "$m" daemon stop
+  fi
   end=$((SECONDS+TIMEOUT))
   until daemon_lock "$m" 0; do
     [ "$SECONDS" -lt "$end" ] || exit 1
@@ -330,9 +315,8 @@ for m in gv vps; do
   wait_daemon "$m"
   captured_pid=$(rexec "$m" cat "$daemon_dir/daemon.pid")
   daemon_lock "$m" "$captured_pid"
-  server_process "$m" SIGCONT "$PAUSED_SERVER_PID" >/dev/null
-  PAUSED_SERVER=
-  PAUSED_SERVER_PID=
+  unit "$m" start
+  wait_health "$(origin_of "$m")" "$TIMEOUT"
   before=$(restart_count "$m")
   daemon_lock "$m" "$captured_pid"
   printf 'PASS N captured daemon owns private lock %s\n' "$m"

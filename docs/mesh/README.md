@@ -656,10 +656,11 @@ connection; ongoing status reports cannot invalidate an older, separately captur
 Raw workspace fixtures allocate fractional ranks instead of reusing `zzzz`; otherwise a routine
 config diff can repair tied ranks and legitimately compete with the concurrent reorder under test.
 
-The round-three daemon fixture suspends its verified isolated server process only while
-starting the foreground fault-test daemon, then resumes it before the crash. Background
-status readers can otherwise win the private daemon lock. The legacy replicasEnabled setting
-does not disable reconciliation when v2 config is active. EXIT cleanup resumes a suspended server.
+The round-three daemon fixture keeps its isolated server stopped until the foreground
+fault-test daemon owns the private lock, then starts the server before killing the captured daemon.
+A socket can still be opening while its daemon already holds the lock; lock ownership is the
+readiness boundary for deciding whether an old daemon needs stopping. The legacy
+replicasEnabled setting does not disable reconciliation when v2 config is active.
 
 Sequential transport acceptance waits for manual-folder policy metadata and its delivery
 before requesting SSHFS on the same representation key. Otherwise a concurrent ignores
