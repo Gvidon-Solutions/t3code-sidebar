@@ -186,4 +186,44 @@ describe("ElectronProtocol", () => {
       assert.equal(netFetchMock.mock.calls.length, 0);
     }).pipe(Effect.provide(layerProtocol)),
   );
+  it.effect("loads changed server UI on navigation and retains the bundled offline client", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.writeFileString(directory + "/index.html", "bundled");
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerDesktopProtocol({
+        scheme: "t3code",
+        assetDirectory: directory,
+        serverOrigin: async () => new URL("https://studio.example"),
+        clerkFrontendApiHostname: undefined,
+      });
+      const page = () =>
+        Effect.promise(() =>
+          handler!(new Request("t3code://app/", { headers: { accept: "text/html" } })),
+        );
+      netFetchMock.mockImplementation(
+        async () => new Response("server-v1", { headers: { "content-type": "text/html" } }),
+      );
+      const first = yield* page();
+      assert.equal(yield* Effect.promise(() => first.text()), "server-v1");
+      netFetchMock.mockImplementation(
+        async () => new Response("server-v2", { headers: { "content-type": "text/html" } }),
+      );
+      const second = yield* page();
+      assert.equal(yield* Effect.promise(() => second.text()), "server-v2");
+      netFetchMock.mockImplementation(async () => new Response("unavailable", { status: 503 }));
+      const offline = yield* page();
+      assert.equal(yield* Effect.promise(() => offline.text()), "bundled");
+      netFetchMock.mockImplementation(
+        async () => new Response("server-v3", { headers: { "content-type": "text/html" } }),
+      );
+      const recovered = yield* page();
+      assert.equal(yield* Effect.promise(() => recovered.text()), "server-v3");
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
+  );
 });

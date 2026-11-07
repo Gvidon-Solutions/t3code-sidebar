@@ -1,4 +1,5 @@
 import * as Cause from "effect/Cause";
+import * as Config from "effect/Config";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -169,12 +170,25 @@ const bootstrap = Effect.gen(function* () {
   yield* logBootstrapInfo("bootstrap start");
 
   const settings = yield* desktopSettings.get;
+  const uiOrigin = yield* Config.URL("T3CODE_DESKTOP_UI_URL").pipe(Config.option);
+  const uiExposure = yield* DesktopServerExposure.DesktopServerExposure;
+  const resolveUiOrigin = Effect.runPromiseWith(yield* Effect.context<never>());
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
     ...(environment.isDevelopment
       ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
-      : { assetDirectory: environment.clientAssetsDir }),
+      : {
+          assetDirectory: environment.clientAssetsDir,
+          serverOrigin: () =>
+            resolveUiOrigin(
+              uiExposure.backendConfig.pipe(
+                Effect.map((backend) =>
+                  Option.getOrElse(uiOrigin, () => (backend.port > 0 ? backend.httpBaseUrl : null)),
+                ),
+              ),
+            ),
+        }),
     clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
   });
   yield* installDesktopIpcHandlers();

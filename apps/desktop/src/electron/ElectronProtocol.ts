@@ -55,7 +55,10 @@ export class ElectronProtocolUnregistrationError extends Schema.TaggedError<Elec
 export type DesktopProtocolRegistrationInput = {
   readonly scheme: string;
   readonly clerkFrontendApiHostname: string | undefined;
-} & ({ readonly targetOrigin: URL } | { readonly assetDirectory: string });
+} & (
+  | { readonly targetOrigin: URL }
+  | { readonly assetDirectory: string; readonly serverOrigin?: () => Promise<URL | null> }
+);
 
 export class ElectronProtocol extends Context.Service<
   ElectronProtocol,
@@ -254,12 +257,41 @@ export const make = Effect.gen(function* () {
       if (yield* Ref.get(registered)) return;
 
       const contentSecurityPolicy = makeDesktopContentSecurityPolicy(input);
+      let pageOrigin: URL | null = null;
 
       yield* Effect.acquireRelease(
         Effect.try({
           try: () => {
             Electron.protocol.handle(input.scheme, async (request) => {
               if ("assetDirectory" in input) {
+                const isDocument = request.headers.get("accept")?.includes("text/html") ?? false;
+                if (isDocument && input.serverOrigin) {
+                  const origin = await input.serverOrigin();
+                  if (origin) {
+                    const response = await runPromise(
+                      proxyRequest(request, origin, contentSecurityPolicy).pipe(
+                        Effect.catchTags({
+                          ElectronProtocolFetchError: (error) =>
+                            Effect.logWarning(
+                              "Server UI unavailable; loading bundled client",
+                              error,
+                            ).pipe(Effect.as(null)),
+                        }),
+                      ),
+                    );
+                    if (
+                      response?.ok &&
+                      response.headers.get("content-type")?.includes("text/html")
+                    ) {
+                      pageOrigin = origin;
+                      return response;
+                    }
+                  }
+                  pageOrigin = null;
+                }
+                if (!isDocument && pageOrigin) {
+                  return runPromise(proxyRequest(request, pageOrigin, contentSecurityPolicy));
+                }
                 return withContentSecurityPolicy(
                   await runPromise(serveDesktopAsset(request, input.assetDirectory)),
                   contentSecurityPolicy,
