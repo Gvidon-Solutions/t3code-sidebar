@@ -30,7 +30,7 @@ and runtime archive build first. Native desktop changes build Linux installers. 
 compute Expo's native runtime fingerprint: only a changed fingerprint builds a new APK; a
 compatible JS change exports and signs an OTA bundle. First delivery builds both baselines.
 The builder uses the tool environment of its service; configure Android SDK, signing and
-native build dependencies there. Each target needs Node 26 and the matching t3ctl agent kit;
+native build dependencies there (Rust 1.95 or newer; `rustToolchain` selects an installed rustup toolchain). Each target needs Node 26 and the matching t3ctl agent kit;
 it does not need `gh` or a build toolchain.
 
 Targets are selected only from the private allowlist. Rollout inspects active thread states,
@@ -70,13 +70,30 @@ An app built with the OTA certificate is required once. Configure the builder en
 `APP_VARIANT=sidebar`, `T3_MOBILE_UPDATE_URL` and `T3_MOBILE_UPDATE_CERTIFICATE`; preserve the
 same values for fingerprint resolution, APK build and OTA export. Generate keys using
 `node scripts/delivery/mobile-ota.mjs keygen --dir /private/keys`. Keep the private key outside
-source control. An optional private `ota` config contains `origin`, `store`, `key`, `certificate`
+source control. The private `ota` config contains `origin`, `store`, `key`, `certificate`
 and `apkUrl`; `store` is a private staging directory. Signed exports are copied into each
 selected server's `<baseDir>/mobile-updates`. Immutable assets arrive before their index.
 See the mobile update settings for checking, applying and rolling back compatible bundles.
 Native fingerprint changes require the APK; they must not be sent to an incompatible client.
 
 ## Verification and limits
+
+The release workflow starts Windows as soon as its Linux WSL runtime archive is ready,
+independently of the Linux installer. Runtime publishes before platform assets; skipped
+platforms are marked in the release notes with a link to the previous release. Use manual
+dispatch with `dry_run=true`, or a `delivery-ci/**` test branch, to build without publishing.
+The `delivery-timings` artifact records actual job start/end times. Test-branch pushes still
+require authorization when the task prohibits pushing.
+
+Desktop currently bundles its fallback UI. After installing the new shell once, normal
+production navigation fetches UI from its local server through the stable `t3code://app/`
+origin. Set `T3CODE_DESKTOP_UI_URL` when launching the shell to use a specific remote server.
+This setting does not follow the renderer's active environment selection. HTML bypasses the
+HTTP cache, Vite resources carry content hashes, and a failed document fetch falls back to
+the bundled client. A failed server asset fetch never substitutes a bundled asset.
+Run `apps/desktop/node_modules/.bin/electron --no-sandbox --user-data-dir=<isolated-profile>
+apps/desktop/scripts/delivery-ui-proof.mjs` to exercise server v1, server v2 and offline fallback;
+the command prints the temporary screenshot directory. Linux environments may need Xvfb.
 
 `node --test scripts/delivery/rollout.node-test.mjs` proves bounded idle waiting, health failure
 rollback, missing layout watermark refusal and a real Git snapshot preserving the user's index.

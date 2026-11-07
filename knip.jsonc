@@ -28,6 +28,9 @@
         // These fixture scripts are injected into a browser page by path.
         "fixtures/*/*.js",
         "knip-schemas.ts",
+        "delivery/builder.mjs",
+        "delivery/target.mjs",
+        "delivery/mobile-ota.mjs",
         "mesh-e2e/f1-web.mjs",
         "linux-after-pack.ts",
         "mobile-behavior/run.ts",
@@ -92,6 +95,7 @@
         "src/compileCache.ts!",
         "src/serverCompileCache.ts!",
         "src/main.ts!",
+        "scripts/delivery-ui-proof.mjs",
         "src/preload.ts!",
         "src/preview-pick-preload.ts!",
         "src/preview-pip-preload.ts!",

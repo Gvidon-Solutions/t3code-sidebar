@@ -1,5 +1,24 @@
 # T3 Mesh — guide for agents
 
+## Private delivery (D1)
+
+`scripts/delivery/` owns the private builder queue, warm build clone, target allowlist,
+serial rollout and stopped-DB/unit rollback. The t3ctl `delivery-client.mjs` forwards requests
+to a private socket; customer paths never enter public workflow configuration. Targets read
+B1 health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
+See [delivery.md](../delivery.md) for configuration, commands and limitations.
+
+The public release workflow publishes runtime first; Windows consumes its archive without
+waiting for the Linux installer. Each platform attaches its artifacts independently.
+Server `delivery/` serves signed Expo manifests and immutable assets. Mobile clients match
+native fingerprints, check on launch/foreground and can request a previous compatible bundle.
+
+Desktop's production custom protocol prefers its local server's UI, or the explicit
+`T3CODE_DESKTOP_UI_URL`, retaining the stable storage/preload origin and bundled offline UI.
+Never substitute bundled assets after loading a server document: mixing generations can break
+imports. `apps/desktop/scripts/delivery-ui-proof.mjs` exercises v1 → v2 → offline in real
+Electron and captures both server versions.
+
 Read this before changing anything that touches machines, projects across machines, replicas,
 the shared sidebar layout, thread moves, files on other machines, the `t3` skill or the agent
 instructions. It is the map; the law is `docs/mesh/CONCEPT.md` (v2, wins on conflict) and `docs/sidebar-cross-device.md` §0 (object model,

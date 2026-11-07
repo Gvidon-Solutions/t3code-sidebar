@@ -108,6 +108,17 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-07 — D1 private delivery and independent release artifacts
+
+- **What.** Private clean/hot builder lanes, serial idle-window delivery with stopped-DB backup
+  and rollback, self-hosted signed mobile updates, and server-served desktop UI with bundled
+  offline fallback. Public CI publishes runtime before independently attaching installers.
+- **How.** Machine names/services/paths stay in untracked local configuration. Hot snapshots
+  use a temporary Git index and separate branch. Mobile bundles match the native fingerprint;
+  changed native configuration requires an APK. Delivery rejects conflicting managed versions.
+- **Where.** `scripts/delivery/`, `docs/delivery.md`, t3ctl delivery client, server `delivery/`,
+  mobile update lifecycle/settings, desktop protocol/bootstrap, and `sidebar-desktop.yml`.
+
 ### 2026-11-05 — B1 mesh rollout and platform runtime
 
 Config-driven SSH bootstrap installs a verified runtime and native service, establishes mutual trust and binds its configured name. Runtime versions roll in lexical machine order under a replicated, unanimously granted lease, with the protocol-3 DB backup and rollback launcher and mesh health checks. Servers distribute their bundled skill and managed instruction blocks, migrate installed legacy instructions once, and read model aliases from config. The shared ServerPlatform boundary absorbs R1 RunPlatform and S1 PeerPlatform, native service plans and Windows managed SSH transports. CLI/MCP interfaces, fake service-manager tests, native macOS/Windows CI replica smoke and isolated B1 bed scenarios live beside the mesh services and scripts. See docs/mesh/README.md.
