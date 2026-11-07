@@ -1,3 +1,4 @@
+import { meshMillis } from "../mesh/MeshTiming.ts";
 import { ReplicaEnvironment } from "./ReplicaEnvironment.ts";
 import { EnvironmentId, ProjectPlaceResult } from "@t3tools/contracts";
 import { callRouted } from "../mesh/MeshRouting.ts";
@@ -1660,7 +1661,7 @@ const make = Effect.gen(function* () {
             Stream.changesWith(NodeUtil.isDeepStrictEqual),
             Stream.map(() => undefined),
           ),
-          Stream.tick("30 seconds").pipe(Stream.drop(1)),
+          Stream.tick(meshMillis(30_000)).pipe(Stream.drop(1)),
         ).pipe(
           Stream.runForEach(() =>
             reconcileSafely.pipe(

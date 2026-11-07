@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -382,7 +383,8 @@ export const layer = Layer.effect(
                     const failures = (retries.get(peer.environmentId)?.failures ?? 0) + 1;
                     const now = yield* Clock.currentTimeMillis;
                     const after =
-                      now + Math.min(MAX_RETRY_MS, 1000 * 2 ** Math.min(failures - 1, 4));
+                      now +
+                      Math.min(MAX_RETRY_MS, meshMillis(1000) * 2 ** Math.min(failures - 1, 4));
                     retries.set(peer.environmentId, { failures, after });
                     yield* sql`INSERT INTO mesh_peer_state(environment_id, last_error) VALUES (${peer.environmentId}, ${String(cause)}) ON CONFLICT(environment_id) DO UPDATE SET last_error = excluded.last_error`;
                     yield* Effect.logWarning("Mesh peer exchange failed", cause);
@@ -504,7 +506,7 @@ export const layer = Layer.effect(
             filter: (event) => "aggregateKind" in event && event.aggregateKind === "project",
           }),
           1000,
-          "200 millis",
+          Duration.millis(meshMillis(200)),
         ),
         () => push,
       ).pipe(
@@ -515,12 +517,16 @@ export const layer = Layer.effect(
     const changes = Option.isSome(directory)
       ? Stream.merge(mesh.changes, directory.value.changes)
       : mesh.changes;
-    yield* Stream.runForEach(Stream.groupedWithin(changes, 1000, "200 millis"), () =>
-      push.pipe(Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause))),
+    yield* Stream.runForEach(
+      Stream.groupedWithin(changes, 1000, Duration.millis(meshMillis(200))),
+      () =>
+        push.pipe(
+          Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause)),
+        ),
     ).pipe(Effect.forkScoped);
     yield* runSync().pipe(
       Effect.catch((cause) => Effect.logError("Mesh periodic replication failed", cause)),
-      Effect.repeat(Schedule.spaced(Duration.seconds(60))),
+      Effect.repeat(Schedule.spaced(Duration.millis(meshMillis(60_000)))),
       Effect.forkScoped,
     );
     return MeshReplicator.of({ exchange, sync, status });
@@ -528,7 +534,7 @@ export const layer = Layer.effect(
 );
 
 /** Longest pause before retrying an unreachable peer; a peer that calls in resets it. */
-export const MAX_RETRY_MS = 15_000;
+export const MAX_RETRY_MS = meshMillis(15_000);
 
 const decodeJson = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
 const isMeshError = Schema.is(MeshLayoutError);

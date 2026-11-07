@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import { exceededDispatchModeLimit } from "../orchestration-v2/DispatchModeLimit.ts";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -383,9 +384,9 @@ export const layer = Layer.effect(
       operation.pipe(
         Effect.retry({
           while: (error) => error.code === "orchestration_error",
-          schedule: Schedule.exponential("1 second").pipe(
+          schedule: Schedule.exponential(meshMillis(1000)).pipe(
             Schedule.modifyDelay(({ duration }) =>
-              Effect.succeed(Duration.min(duration, Duration.seconds(15))),
+              Effect.succeed(Duration.min(duration, Duration.millis(meshMillis(15_000)))),
             ),
           ),
         }),
@@ -438,7 +439,7 @@ export const layer = Layer.effect(
         const token = yield* random
           .uuidV4()
           .pipe(Effect.mapError(() => invalid("Cannot allocate a fork commit token.")));
-        const expiresAt = (yield* Clock.currentTimeMillis) + 10 * 60 * 1000;
+        const expiresAt = (yield* Clock.currentTimeMillis) + meshMillis(10 * 60 * 1000);
         yield* transactions.write(key, {
           phase: "pending",
           token,
@@ -536,7 +537,7 @@ export const layer = Layer.effect(
             if (previous && previous.phase !== "uploading")
               return yield* invalid("The fork attachments have already been staged.");
             if (!previous) {
-              const expiresAt = (yield* Clock.currentTimeMillis) + 10 * 60 * 1000;
+              const expiresAt = (yield* Clock.currentTimeMillis) + meshMillis(10 * 60 * 1000);
               yield* transactions.write(key, {
                 phase: "uploading",
                 forkId: input.forkId,

@@ -1,3 +1,4 @@
+import { meshMillis } from "../../mesh/MeshTiming.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalErrorInEffectCatch:off globalErrorInEffectFailure:off effectFnOpportunity:off runEffectInsideEffect:off -- The peer manager owns Node Duplex pipes, synchronous wire callbacks and its own retry clock; transport failures are intentionally plain Errors.
 import * as NodeNet from "node:net";
 import * as NodeStream from "node:stream";
@@ -1012,7 +1013,7 @@ export const make = Effect.gen(function* () {
       }
       const fiber = yield* reconcilePeer(id).pipe(
         Effect.catchCause((cause) => Effect.logWarning("Peer dial worker failed", { id, cause })),
-        Effect.repeat(Schedule.spaced("1 second")),
+        Effect.repeat(Schedule.spaced(meshMillis(1000))),
         Effect.forkScoped,
       );
       dialWorkers.set(id, fiber);
@@ -1027,7 +1028,7 @@ export const make = Effect.gen(function* () {
     stopped = false;
     worker = yield* reconcile.pipe(
       Effect.catchCause((cause) => Effect.logWarning("Peer reconciliation failed", cause)),
-      Effect.repeat(Schedule.spaced("1 second")),
+      Effect.repeat(Schedule.spaced(meshMillis(1000))),
       Effect.forkScoped,
     );
   }).pipe(Effect.provide(callbackContext));

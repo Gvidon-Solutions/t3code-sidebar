@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import { MeshLayoutError } from "@t3tools/contracts";
 import { validateEntries } from "./validateEntries.ts";
 import * as Schema from "effect/Schema";
@@ -175,7 +176,8 @@ export const layer = Layer.effect(
           lock
             .withPermit(
               Effect.gen(function* () {
-                const cutoff = (yield* Clock.currentTimeMillis) - 30 * 24 * 60 * 60 * 1000;
+                const cutoff =
+                  (yield* Clock.currentTimeMillis) - meshMillis(30 * 24 * 60 * 60 * 1000);
                 const expired = (yield* readRows).filter(
                   (row) =>
                     row.value === null &&

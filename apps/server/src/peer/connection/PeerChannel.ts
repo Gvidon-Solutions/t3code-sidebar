@@ -1,3 +1,4 @@
+import { meshMillis } from "../../mesh/MeshTiming.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off -- This wire adapter exposes Node Duplex streams and owns cancellable JavaScript request deadlines.
 import * as NodeCrypto from "node:crypto";
 import * as NodeStream from "node:stream";
@@ -28,7 +29,7 @@ export const preferConnection = (self: string, peer: string, outbound: boolean) 
   outbound === self < peer;
 
 export const reconnectDelay = (attempt: number, random: number) =>
-  Math.min(15_000, 1000 * 2 ** Math.min(4, Math.max(0, attempt))) *
+  meshMillis(Math.min(15_000, 1000 * 2 ** Math.min(4, Math.max(0, attempt)))) *
   (0.8 + Math.min(1, Math.max(0, random)) * 0.2);
 
 interface PipeState {
@@ -320,11 +321,11 @@ export class PeerChannel {
   tick() {
     const now = this.options.now();
     if (
-      now - this.lastReceived >= 45_000 ||
-      (this.ping !== undefined && now - this.lastPing >= 45_000)
+      now - this.lastReceived >= meshMillis(45_000) ||
+      (this.ping !== undefined && now - this.lastPing >= meshMillis(45_000))
     ) {
       this.close(new Error("Peer heartbeat timed out"));
-    } else if (now - this.lastPing >= 15_000 && this.ping === undefined) {
+    } else if (now - this.lastPing >= meshMillis(15_000) && this.ping === undefined) {
       this.ping = NodeCrypto.randomUUID();
       this.lastPing = now;
       this.trySend({ type: "ping", nonce: this.ping });

@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import { MeshTrialFailureExit } from "../platform/ServerPlatform.ts";
 import { MeshStateBackup } from "./MeshStateBackup.ts";
 import * as FileSystem from "effect/FileSystem";
@@ -447,8 +448,8 @@ export const layer = Layer.effect(
         }
       });
       yield* check.pipe(
-        Effect.retry({ schedule: Schedule.spaced("500 millis"), times: 180 }),
-        Effect.timeout("2 minutes"),
+        Effect.retry({ schedule: Schedule.spaced(meshMillis(500)), times: 180 }),
+        Effect.timeout(meshMillis(120_000)),
       );
     }).pipe(
       Effect.mapError((error) =>
