@@ -73,6 +73,12 @@ test("isolated target switches its configured unit and restores the exact previo
       const migrated = new NodeSqlite.DatabaseSync(db);
       migrated.exec("UPDATE proof SET value='migrated-db'");
       migrated.close();
+      operation("commit");
+      assert.throws(() => operation("rollback"), /Rollback admission fence has not been acquired/);
+      assert.match(readFileSync(unit, "utf8"), /versions\/delivery\/2\/t3 serve/);
+      config.now = false;
+      operation("prepareRollback");
+      assert.equal(JSON.parse(readFileSync(join(root, "gate.json"), "utf8")).phase, "drained");
       operation("rollback");
       operation("cancelDrain");
       const restored = new NodeSqlite.DatabaseSync(db, { readOnly: true });

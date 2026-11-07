@@ -103,10 +103,11 @@ export function machineAdapter(machine, archive, version, id, now = false, maxWa
   const remoteArchive = join(uploadDir, `${id}.tar.gz`);
   const ssh = (args, options) =>
     exec("ssh", ["-o", "BatchMode=yes", ...(machine.sshArgs ?? []), machine.ssh, ...args], options);
-  if (machine.ssh && archive) {
+  if (machine.ssh) {
     ssh([`mkdir -p ${quote(uploadDir)}`]);
     exec("scp", [...(machine.scpArgs ?? []), target, `${machine.ssh}:${remoteScript}`]);
-    exec("scp", [...(machine.scpArgs ?? []), archive, `${machine.ssh}:${remoteArchive}`]);
+    if (archive)
+      exec("scp", [...(machine.scpArgs ?? []), archive, `${machine.ssh}:${remoteArchive}`]);
   }
   const call = (operation) => {
     const input = JSON.stringify({
@@ -135,6 +136,7 @@ export function machineAdapter(machine, archive, version, id, now = false, maxWa
     drain: async () => call("drain"),
     drainStatus: async () => call("drainStatus"),
     activate: async () => call("activate"),
+    prepareRollback: async () => call("prepareRollback"),
     rollback: async () => call("rollback"),
     commit: () => call("commit"),
     release: async () => call("cancelDrain"),
@@ -182,7 +184,8 @@ export async function deliver(config, request) {
   if (new Set(selected).size !== selected.length) throw new Error("Duplicate target machines");
   if (request.action === "rollback") {
     for (const machine of [...machines].reverse()) {
-      const adapter = machineAdapter(machine, null, "rollback", id);
+      const adapter = machineAdapter(machine, null, "rollback", id, request.now, config.maxWaitMs);
+      await adapter.prepareRollback();
       const previous = await adapter.rollback();
       await waitForHealthy(adapter, previous.version, [previous], config.healthWaitMs ?? 120_000);
       await adapter.release();

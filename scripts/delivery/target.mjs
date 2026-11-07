@@ -111,15 +111,19 @@ export async function targetOperation(config, operation) {
     if (state.requestId)
       ctl("tool", "t3_delivery_cancel_drain", JSON.stringify({ requestId: state.requestId }));
   };
-  if (operation === "drain") {
-    if (state.phase !== "prepared" && state.phase !== "draining")
+  if (operation === "drain" || operation === "prepareRollback") {
+    const manual = operation === "prepareRollback";
+    if (manual && state.phase === "rolledBack") return state.previousHealth;
+    if (manual && !["healthy", "rollbackDraining", "rollbackFenced"].includes(state.phase))
+      return state.previousHealth;
+    if (!manual && state.phase !== "prepared" && state.phase !== "draining")
       throw new Error("Runtime must be prepared before draining");
     const current = ctl("tool", "t3_delivery_drain_status", "{}");
     if (current.requestId && current.requestId !== state.requestId)
       throw new Error("Another delivery owns the server admission fence");
     state.requestId ??= NodeCrypto.randomUUID();
     state.now = Boolean(config.now);
-    state.phase = "draining";
+    state.phase = manual ? "rollbackDraining" : "draining";
     atomic(statePath, state);
     const drained = ctl(
       "tool",
@@ -135,7 +139,7 @@ export async function targetOperation(config, operation) {
       (drained.phase !== "drained" && !(state.now && drained.phase === "draining"))
     )
       throw new Error("Server did not grant the delivery admission fence");
-    state.phase = "fenced";
+    state.phase = manual ? "rollbackFenced" : "fenced";
     atomic(statePath, state);
     return drained;
   }
@@ -194,6 +198,27 @@ export async function targetOperation(config, operation) {
       atomic(statePath, state);
       return state.previousHealth;
     }
+    if (!state.requestId || state.phase === "healthy" || state.phase === "rollbackDraining")
+      throw new Error("Rollback admission fence has not been acquired");
+    try {
+      const status = ctl("tool", "t3_delivery_drain_status", "{}");
+      if (
+        status.requestId !== state.requestId ||
+        (status.phase !== "drained" && !(state.now && status.phase === "draining"))
+      )
+        throw new Error("Rollback admission fence was lost; no runtime switched");
+    } catch (cause) {
+      const active = NodeChildProcess.spawnSync("systemctl", [
+        ...prefix,
+        "is-active",
+        "--quiet",
+        config.unit,
+      ]);
+      if (active.error) throw active.error;
+      if (active.status !== 3) throw new Error("Cannot verify rollback admission fence", { cause });
+    }
+    state.phase = "rollingBack";
+    atomic(statePath, state);
     systemctl("stop", config.unit);
     writeFileSync(config.unitPath, state.unit);
     if (existsSync(state.backup)) {

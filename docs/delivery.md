@@ -68,7 +68,9 @@ from the delivered version, preventing a competing B1 reconciliation from downgr
 An unmanaged desired version (absent `t3.version`) is allowed for isolated hot trials.
 
 `t3ctl deploy rollback [--machines studio]` restores each selected target's journaled previous
-unit and database, in reverse target order. Previous runtime trees and backups remain available.
+unit and database, in reverse target order. A healthy target first acquires a new admission fence
+and waits for active work; `--now` closes admission but skips that wait. The fence remains
+closed through restored health checks. Previous runtime trees and backups remain available.
 An interrupted target with an unfinished journal refuses another switch until rollback.
 
 ## Hot lane
@@ -182,5 +184,7 @@ builder clone does not depend on the developer checkout's `.env` or app-config s
 needs a private `sshdPort`; the helper installs its daemon with private keys and authorized-key
 file, copies Node and the agent CLI over configured SSH, and installs a user or root system
 unit. A fixture ownership marker prevents adopting another server's existing database. The
+For SSH accounts without permission to write the root runtime directory, configure a private
+`uploadDir` writable by that SSH account; the privileged target helper extracts from staging. The
 root Node launcher uses a private tool PATH that omits `gh`; `requireNoGh` makes the rollout
 runner assert that fact. Record the baseline source ref and build before running this helper.
