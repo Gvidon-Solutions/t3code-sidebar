@@ -1,3 +1,5 @@
+import { DeliveryAdmission } from "../../../mesh/DeliveryAdmission.ts";
+import { DeliveryDrainError } from "@t3tools/contracts";
 import { MeshBootstrap } from "../../../mesh/MeshBootstrap.ts";
 import { MeshRollout } from "../../../mesh/MeshRollout.ts";
 import { SecretRequests } from "../../../secrets/SecretRequests.ts";
@@ -63,12 +65,29 @@ const bootstrap = Effect.serviceOption(MeshBootstrap).pipe(
     ),
   ),
 );
+const admission = Effect.serviceOption(DeliveryAdmission).pipe(
+  Effect.flatMap((value) =>
+    Effect.fromOption(
+      value,
+      () => new DeliveryDrainError({ message: "Delivery drain unavailable" }),
+    ),
+  ),
+);
 export const layer = McpToolAccess.toLayer(MeshToolkit, {
+  t3_delivery_drain: McpToolAccess.writes((input) =>
+    admission.pipe(Effect.flatMap((service) => service.drain(input))),
+  ),
+  t3_delivery_drain_status: McpToolAccess.writes(() =>
+    admission.pipe(Effect.flatMap((service) => service.status)),
+  ),
+  t3_delivery_cancel_drain: McpToolAccess.writes(({ requestId }) =>
+    admission.pipe(Effect.flatMap((service) => service.cancel(requestId))),
+  ),
   t3_mesh_machine_add: McpToolAccess.writes(({ name, ssh }) =>
     service.pipe(Effect.flatMap((config) => config.addMachine(name, ssh))),
   ),
-  t3_mesh_update: McpToolAccess.writes(({ version, plan }) =>
-    service.pipe(Effect.flatMap((config) => config.updateVersion(version, plan === true))),
+  t3_mesh_update: McpToolAccess.writes(({ version, plan, ...options }) =>
+    service.pipe(Effect.flatMap((config) => config.updateVersion(version, plan === true, options))),
   ),
   t3_mesh_update_health: McpToolAccess.reads(() =>
     rollout.pipe(Effect.flatMap((service) => service.health)),

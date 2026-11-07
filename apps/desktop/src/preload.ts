@@ -73,6 +73,10 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  ui: {
+    select: (selection) => ipcRenderer.invoke(IpcChannels.UI_SELECT_CHANNEL, selection),
+    getInfo: () => ipcRenderer.invoke(IpcChannels.UI_INFO_CHANNEL),
+  },
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {

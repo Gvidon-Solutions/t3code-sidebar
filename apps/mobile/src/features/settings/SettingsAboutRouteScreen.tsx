@@ -1,3 +1,8 @@
+import {
+  hasSelfHostedUpdates,
+  rollbackMobileBundle,
+  resumeLatestMobileBundle,
+} from "../updates/self-hosted-updates";
 import * as Dialog from "../../components/ui/Dialog";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import Constants from "expo-constants";
@@ -132,6 +137,28 @@ function AppSettingsSection() {
         target="SettingsOpenSourceLicenses"
       />
       <SettingsRow icon="doc.text" label="Legal" fullScreenTarget="SettingsLegal" />
+      {hasSelfHostedUpdates() ? (
+        <>
+          <SettingsRow
+            icon="arrow.uturn.backward"
+            label="Roll back to previous bundle"
+            onPress={() => {
+              void rollbackMobileBundle().catch((error) =>
+                Dialog.alert("Rollback failed", String(error)),
+              );
+            }}
+          />
+          <SettingsRow
+            icon="arrow.clockwise"
+            label="Resume latest bundle"
+            onPress={() => {
+              void resumeLatestMobileBundle().catch((error) =>
+                Dialog.alert("Update failed", String(error)),
+              );
+            }}
+          />
+        </>
+      ) : null}
       {updateCheckAvailable ? (
         <Pressable
           accessibilityLabel={`Version ${versionLabel}`}

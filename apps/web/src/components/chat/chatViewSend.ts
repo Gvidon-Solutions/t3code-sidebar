@@ -51,21 +51,7 @@ import { recallableComposerPrompt } from "./composerPromptHistory";
 export const draftFanoutSelectionsAtom = Atom.family((_routeKey: string) =>
   Atom.make<ReadonlyArray<ModelSelection> | null>(null).pipe(Atom.keepAlive),
 );
-const draftSendStateByRouteKey = new Map<
-  string,
-  {
-    readonly sendInFlight: { current: boolean };
-    readonly uncertainSubmissions: { current: Map<string, ThreadId> };
-  }
->();
-export function draftSendState(routeKey: string) {
-  let state = draftSendStateByRouteKey.get(routeKey);
-  if (!state) {
-    state = { sendInFlight: { current: false }, uncertainSubmissions: { current: new Map() } };
-    draftSendStateByRouteKey.set(routeKey, state);
-  }
-  return state;
-}
+export { draftSendState } from "./draftSendState";
 
 /**
  * Starts one thread of a multiple-model send. A request that may have

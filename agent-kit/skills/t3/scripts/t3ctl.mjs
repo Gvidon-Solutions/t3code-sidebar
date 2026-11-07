@@ -50,6 +50,8 @@ const harnessName = value => String(value).replace(/Agent$/i, "").toLowerCase();
 // flags that never take a value, so `--queue "text"` keeps "text" as the message
 const DURATION_ARG = /^\d+(?:\.\d+)?(?:s|m|h|d|w)?$/;
 const BOOL_FLAGS = new Set([
+  "hot",
+  "now",
   "all",
   "primary",
   "dryRun",
@@ -725,16 +727,26 @@ function serverInfo() {
   return info;
 }
 
+export function unitRuntimeExecutable(unit) {
+  const match = /^ExecStart=\s*(?:"([^"\r\n]+\/t3)"|((?:\/|%h\/)[^\s"\r\n]*\/t3))(?=\s|$)/m.exec(unit);
+  return match ? (match[1] || match[2]).replace(/^%h/, homedir()) : null;
+}
+
+export async function retryUpdatingCall(call, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
+  for (;;) {
+    const result = await call();
+    if (!result.isError || !(result.content || []).some((item) => item.type === "text" && item.text.includes("T3_UPDATING:"))) return result;
+    await wait(1000);
+  }
+}
+
 // The t3 CLI of the runtime the server unit runs (never a newer one: it could migrate the live DB).
 function t3bin() {
   if (process.env.T3CTL_T3_BIN) return process.env.T3CTL_T3_BIN;
   try {
     const unit = detectServerUnit(UNIT)?.text ?? "";
-    const m = /^ExecStart=(\S+\/runtime\/versions\/[^/]+\/t3)\s/m.exec(unit);
-    if (m) {
-      const bin = m[1].replace(/^%h/, homedir());
-      if (existsSync(bin)) return bin;
-    }
+    const bin = unitRuntimeExecutable(unit);
+    if (bin && existsSync(bin)) return bin;
   } catch {
     /* no unit: fall back to PATH */
   }
@@ -900,12 +912,8 @@ class Mcp {
       .tools;
   }
   async callRaw(name, args = {}) {
-    return this.post({
-      jsonrpc: "2.0",
-      id: ++this.seq,
-      method: "tools/call",
-      params: { name, arguments: args },
-    });
+    const request = { jsonrpc: "2.0", id: ++this.seq, method: "tools/call", params: { name, arguments: args } };
+    return retryUpdatingCall(() => this.post(request));
   }
   async call(name, args = {}) {
     const res = await this.callRaw(name, args);
@@ -2326,8 +2334,8 @@ const commands = {
       return json(revision);
     }
     if (sub === "update") {
-      if (!pos[1]) die("use: mesh update <exact-version> [--plan]");
-      return json(await (await mcp()).call("t3_mesh_update", { version: pos[1], plan: Boolean(opt.plan) }));
+      if (!pos[1]) die("use: mesh update <exact-version> [--plan] [--max-wait 5m] [--now]");
+      return json(await (await mcp()).call("t3_mesh_update", { version: pos[1], plan: Boolean(opt.plan), ...(opt.now ? { now: true } : {}), ...(opt.maxWait !== undefined ? { maxWaitMs: parseDuration(opt.maxWait) } : {}) }));
     }
     if (sub === "config") {
       const action = pos[1] || "get";
@@ -3829,6 +3837,24 @@ const commands = {
     });
   },
 
+  async drain(pos, opt) {
+    const client = await mcp();
+    if (pos[0] === "status") return json(await client.call("t3_delivery_drain_status", {}));
+    const requestId = String(opt["request-id"] || opt.requestId || "");
+    if (!requestId) die("drain requires --request-id ID");
+    if (pos[0] === "cancel") return json(await client.call("t3_delivery_cancel_drain", { requestId }));
+    return json(await client.call("t3_delivery_drain", { requestId, deadlineMs: Number(opt["deadline-ms"] || opt.deadlineMs || 300000), ...(opt.now ? { now: true } : {}) }));
+  },
+
+  async deploy(pos, opt) {
+    const { requestDelivery } = await import("./delivery-client.mjs");
+    json(await requestDelivery({ action: pos[0] === "rollback" ? "rollback" : "deploy", hot: Boolean(opt.hot), now: Boolean(opt.now), machines: opt.machines, ref: opt.ref, version: opt.version, release: opt.release, worktree: opt.worktree || process.cwd() }));
+  },
+
+  async hot(pos, opt) {
+    return commands.deploy(pos, { ...opt, hot: true });
+  },
+
   async server(pos, opt) {
     const sub = pos[0] || "status";
     const service = detectServerUnit(UNIT);
@@ -4343,6 +4369,10 @@ SESSIONS, SETTINGS, SERVER
   server status | logs [--n 80] | versions
   server install <N|latest>               download fork build sidebar.N's server runtime (no restart)
   server restart --yes | server use <version> --yes    ONLY with the owner's explicit go-ahead
+  drain --request-id ID [--deadline-ms N]   stop new runs and wait for active work to finish
+  drain status | drain cancel --request-id ID
+  deploy --ref REF --version VERSION [--machines N,N] | deploy rollback
+  hot [--worktree PATH] [--machines N,N] [--now]   private build and drain-aware rollout
   login                                   re-issue the MCP client token (automatic otherwise)
 
 ANYTHING ELSE

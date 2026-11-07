@@ -3,6 +3,7 @@ import * as Rpc from "effect/rpc/Rpc";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
 import {
+  MeshVersionUpdateInput,
   MeshConfigApplyInput,
   MeshConfigError,
   MeshConfigPlan,
@@ -125,6 +126,7 @@ export const MESH_WS_METHODS = {
   configGet: "meshConfig.get",
   configPlan: "meshConfig.plan",
   configApply: "meshConfig.apply",
+  updateVersion: "meshConfig.updateVersion",
   configStatus: "meshConfig.status",
 } as const;
 
@@ -253,6 +255,11 @@ const WsMeshConfigStatusRpc = Rpc.make(MESH_WS_METHODS.configStatus, {
   success: MeshConfigStatus,
   error: ConfigRpcError,
 });
+const WsMeshVersionUpdateRpc = Rpc.make(MESH_WS_METHODS.updateVersion, {
+  payload: MeshVersionUpdateInput,
+  success: Schema.Union([MeshConfigPlan, MeshConfigRevision]),
+  error: ConfigRpcError,
+});
 export const MeshRpcs = [
   WsMeshLayoutGetRpc,
   WsMeshLayoutApplyRpc,
@@ -266,4 +273,5 @@ export const MeshRpcs = [
   WsMeshConfigPlanRpc,
   WsMeshConfigApplyRpc,
   WsMeshConfigStatusRpc,
+  WsMeshVersionUpdateRpc,
 ] as const;

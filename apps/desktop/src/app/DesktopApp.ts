@@ -1,4 +1,6 @@
+import * as DesktopUi from "./DesktopUi.ts";
 import * as Cause from "effect/Cause";
+import * as Config from "effect/Config";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -169,12 +171,30 @@ const bootstrap = Effect.gen(function* () {
   yield* logBootstrapInfo("bootstrap start");
 
   const settings = yield* desktopSettings.get;
+  const uiOrigin = yield* Config.URL("T3CODE_DESKTOP_UI_URL").pipe(Config.option);
+  const uiExposure = yield* DesktopServerExposure.DesktopServerExposure;
+  const resolveUiOrigin = Effect.runPromiseWith(yield* Effect.context<never>());
+  const desktopUi = yield* DesktopUi.DesktopUi;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
     ...(environment.isDevelopment
       ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
-      : { assetDirectory: environment.clientAssetsDir }),
+      : {
+          assetDirectory: environment.clientAssetsDir,
+          onSource: (origin, reason) => resolveUiOrigin(desktopUi.recordSource(origin, reason)),
+          serverOrigin: () =>
+            resolveUiOrigin(
+              Effect.gen(function* () {
+                const selected = yield* desktopUi.selection;
+                if (selected) return selected.httpBaseUrl ? new URL(selected.httpBaseUrl) : null;
+                const backend = yield* uiExposure.backendConfig;
+                return Option.getOrElse(uiOrigin, () =>
+                  backend.port > 0 ? backend.httpBaseUrl : null,
+                );
+              }),
+            ),
+        }),
     clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
   });
   yield* installDesktopIpcHandlers();

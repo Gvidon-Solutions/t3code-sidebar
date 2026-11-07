@@ -1,0 +1,14 @@
+[Unit]
+Description=Private T3 delivery builder
+
+[Service]
+Type=simple
+# Replace these neutral example paths in a private user-unit copy.
+ExecStart=/usr/bin/node /srv/source/app/scripts/delivery/builder.mjs serve /srv/private/t3-delivery/config.json
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+UMask=0077
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

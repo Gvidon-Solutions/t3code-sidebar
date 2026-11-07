@@ -1,3 +1,5 @@
+import * as Schedule from "effect/Schedule";
+import { isDeliveryUpdating } from "@t3tools/contracts";
 import {
   EnvironmentAuthorizationError,
   clientRpcRequiredScopes,
@@ -186,6 +188,8 @@ export class RpcPermissionGuard extends Context.Reference<{
   }),
 }) {}
 
+const isUnavailable = Schema.is(EnvironmentRpcUnavailableError);
+
 const authorizeRequest = Effect.fn("EnvironmentRpc.authorize")(function* (
   method: string,
   input: unknown,
@@ -215,7 +219,22 @@ export const requestGuarded = Effect.fn("EnvironmentRpc.request")(function* <
     environmentLabel: supervisor.target.label,
     method: tag,
   });
-  return yield* method(input).pipe(Effect.ensuring(completeObservation));
+  let updating = false;
+  return yield* Effect.suspend(() =>
+    currentSession().pipe(Effect.flatMap((active) => (active.client[tag] as typeof method)(input))),
+  ).pipe(
+    Effect.retry({
+      while: (error) => {
+        if (isDeliveryUpdating(error)) updating = true;
+        return (
+          isDeliveryUpdating(error) ||
+          (updating && (isUnavailable(error) || isRpcClientError(error)))
+        );
+      },
+      schedule: Schedule.spaced("1 second"),
+    }),
+    Effect.ensuring(completeObservation),
+  );
 });
 
 export function runStreamGuarded<TTag extends EnvironmentStreamCommandRpcTag>(

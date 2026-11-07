@@ -1,3 +1,4 @@
+import * as MobileOta from "./delivery/MobileOta.ts";
 import * as MeshStartupAccess from "./mesh/MeshStartupAccess.ts";
 import * as MeshStateBackup from "./mesh/MeshStateBackup.ts";
 import * as MeshBootstrap from "./mesh/MeshBootstrap.ts";
@@ -897,6 +898,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ),
     ServerHttp.layerOtlpTracesProxyRoute,
     ServerHttp.layerAssetRoute,
+    MobileOta.routeLayer,
     ServerHttp.layerAttachmentUploadRoute,
     GuestHttp.layer,
     DeviceHubProxy.layer,

@@ -55,7 +55,14 @@ export class ElectronProtocolUnregistrationError extends Schema.TaggedError<Elec
 export type DesktopProtocolRegistrationInput = {
   readonly scheme: string;
   readonly clerkFrontendApiHostname: string | undefined;
-} & ({ readonly targetOrigin: URL } | { readonly assetDirectory: string });
+} & (
+  | { readonly targetOrigin: URL }
+  | {
+      readonly assetDirectory: string;
+      readonly serverOrigin?: () => Promise<URL | null>;
+      readonly onSource?: (origin: URL | null, reason?: string) => Promise<void>;
+    }
+);
 
 export class ElectronProtocol extends Context.Service<
   ElectronProtocol,
@@ -161,6 +168,7 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   request: Request,
   targetOrigin: URL,
   contentSecurityPolicy: string,
+  publicUi = false,
 ) {
   const requestUrl = new URL(request.url);
   if (requestUrl.host !== DESKTOP_HOST) {
@@ -169,12 +177,16 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
 
   // Assign the path so leading slashes cannot replace the configured host.
   const targetUrl = new URL(targetOrigin);
-  targetUrl.pathname = requestUrl.pathname;
+  targetUrl.pathname =
+    (targetOrigin.pathname.endsWith("/")
+      ? targetOrigin.pathname.slice(0, -1)
+      : targetOrigin.pathname) + requestUrl.pathname;
   targetUrl.search = requestUrl.search;
   const headers = new Headers(request.headers);
   const headersToRemove: string[] = [];
   for (const name of headers.keys()) {
     if (
+      (publicUi && (name === "cookie" || name === "authorization")) ||
       name === "host" ||
       name === "origin" ||
       name === "referer" ||
@@ -194,6 +206,10 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
     method: request.method,
     headers,
   };
+  if (request.headers.get("accept")?.includes("text/html")) {
+    init.cache = "no-store";
+    init.signal = AbortSignal.timeout(5_000);
+  }
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = request.body;
     (init as RequestInit & { duplex: "half" }).duplex = "half";
@@ -202,6 +218,20 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
     request.method === "GET" || request.method === "HEAD"
       ? yield* fetchWithTransientRetry(targetUrl.toString(), init)
       : yield* netFetch(targetUrl.toString(), init);
+  if (publicUi) {
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.delete("set-cookie");
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("content-length");
+    return withContentSecurityPolicy(
+      new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+      }),
+      contentSecurityPolicy,
+    );
+  }
   return withContentSecurityPolicy(response, contentSecurityPolicy);
 });
 
@@ -254,12 +284,46 @@ export const make = Effect.gen(function* () {
       if (yield* Ref.get(registered)) return;
 
       const contentSecurityPolicy = makeDesktopContentSecurityPolicy(input);
+      let pageOrigin: URL | null = null;
 
       yield* Effect.acquireRelease(
         Effect.try({
           try: () => {
             Electron.protocol.handle(input.scheme, async (request) => {
               if ("assetDirectory" in input) {
+                const isDocument = request.headers.get("accept")?.includes("text/html") ?? false;
+                if (isDocument && input.serverOrigin) {
+                  const origin = await input.serverOrigin();
+                  if (origin) {
+                    const response = await runPromise(
+                      proxyRequest(request, origin, contentSecurityPolicy, true).pipe(
+                        Effect.catchTags({
+                          ElectronProtocolFetchError: (error) =>
+                            Effect.logWarning(
+                              "Server UI unavailable; loading bundled client",
+                              error,
+                            ).pipe(Effect.as(null)),
+                        }),
+                      ),
+                    );
+                    if (
+                      response?.ok &&
+                      response.headers.get("content-type")?.includes("text/html")
+                    ) {
+                      pageOrigin = origin;
+                      await input.onSource?.(origin);
+                      return response;
+                    }
+                  }
+                  pageOrigin = null;
+                  await input.onSource?.(
+                    null,
+                    origin ? "Connected server UI is unavailable; using bundled client" : undefined,
+                  );
+                }
+                if (!isDocument && pageOrigin) {
+                  return runPromise(proxyRequest(request, pageOrigin, contentSecurityPolicy, true));
+                }
                 return withContentSecurityPolicy(
                   await runPromise(serveDesktopAsset(request, input.assetDirectory)),
                   contentSecurityPolicy,

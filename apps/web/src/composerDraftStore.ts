@@ -149,10 +149,12 @@ const composerPersistStorage: PersistStorage<ComposerPersistState> = {
   removeItem: (name) => composerDebouncedStorage.removeItem(name),
 };
 
+export function flushComposerDrafts(): void {
+  composerDebouncedStorage.flush();
+}
+
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-  window.addEventListener("beforeunload", () => {
-    composerDebouncedStorage.flush();
-  });
+  window.addEventListener("beforeunload", flushComposerDrafts);
 }
 
 export const PersistedComposerImageAttachment = Schema.Struct({

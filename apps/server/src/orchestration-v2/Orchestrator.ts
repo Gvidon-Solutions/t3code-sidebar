@@ -1,3 +1,5 @@
+import { isDeliveryUpdating, DELIVERY_UPDATING } from "@t3tools/contracts";
+import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 import { planForkLinked, planForkRecord } from "../mesh/forkRecord.ts";
 import type {
   GuestShareId,
@@ -207,6 +209,8 @@ export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDi
   },
 ) {
   override get message(): string {
+    if (isDeliveryUpdating(this.cause))
+      return `${DELIVERY_UPDATING}: server is updating; retry this command`;
     return `Failed to dispatch orchestration command ${this.commandType} (${this.commandId}).`;
   }
 }
@@ -1060,6 +1064,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const runtimePolicy = yield* RuntimePolicyV2;
   const threadForkService = yield* ThreadForkServiceV2;
   const threadDispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
+  const deliveryAdmission = yield* Effect.serviceOption(DeliveryAdmission);
   // Read once: the policy is fixed for the server's life, and dispatch takes it as an input.
   const { managedPolicy } = serverSettings;
   const runtimeModeCeiling: RuntimeModeCeiling | undefined =
@@ -1646,6 +1651,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         readonly queuedRunId?: RunId;
       },
     ) {
+      if (
+        Option.isSome(deliveryAdmission) &&
+        (yield* deliveryAdmission.value.status.pipe(Effect.orDie)).phase !== "open"
+      )
+        return;
       if (!(yield* projectionStore.canStartQueuedRun(threadId))) return;
       const projection = yield* readCommandProjection(threadId);
       if (
@@ -2391,7 +2401,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     },
     (effect, threadId, options?) =>
       effect.pipe(
-        Effect.catch((cause) => failQueuedRunStart(threadId, cause, options?.queuedRunId)),
+        Effect.catch((cause) =>
+          isDeliveryUpdating(cause)
+            ? Effect.void
+            : failQueuedRunStart(threadId, cause, options?.queuedRunId),
+        ),
       ),
   );
 
@@ -13763,6 +13777,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ),
       Effect.catch((cause) =>
         Effect.gen(function* () {
+          if (isDeliveryUpdating(cause)) return yield* cause;
           // Refusals depend on modes the user can change; a recorded rejection would block the retry.
           if (
             cause._tag === "OrchestratorThreadAboveModeLimitError" ||
@@ -14236,6 +14251,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const shellProjectionError = (cause: unknown) =>
     new OrchestratorProjectionError({ threadId: ThreadId.make("thread:shell"), cause });
 
+  if (Option.isSome(deliveryAdmission))
+    yield* deliveryAdmission.value.onOpen(resumeQueuedRuns.pipe(Effect.asVoid, Effect.orDie));
   return OrchestratorV2.of({
     resumeQueuedRuns,
     recoverDelegatedTasks,
