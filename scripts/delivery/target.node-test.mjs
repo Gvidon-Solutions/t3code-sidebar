@@ -47,6 +47,7 @@ test("isolated target switches its configured unit and restores the exact previo
         origin: "http://127.0.0.1:3795",
         archive,
         version: "2",
+        now: true,
       };
       const operation = (name) =>
         JSON.parse(
@@ -67,6 +68,16 @@ test("isolated target switches its configured unit and restores the exact previo
       assert.equal(restored.prepare("SELECT value FROM proof").get().value, "previous-db");
       restored.close();
       assert.equal(readFileSync(unit, "utf8"), original);
+      const intervening = new NodeSqlite.DatabaseSync(db);
+      intervening.exec("UPDATE proof SET value='new-turn-after-rollback'");
+      intervening.close();
+      operation("rollback");
+      const afterRetry = new NodeSqlite.DatabaseSync(db, { readOnly: true });
+      assert.equal(
+        afterRetry.prepare("SELECT value FROM proof").get().value,
+        "new-turn-after-rollback",
+      );
+      afterRetry.close();
       assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), [
         `${scope === "user" ? "--user " : ""}stop app-test.service`,
         `${scope === "user" ? "--user " : ""}daemon-reload`,
@@ -78,5 +89,30 @@ test("isolated target switches its configured unit and restores the exact previo
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  }
+});
+
+test("target idle inspection includes projectless and child threads on every page", () => {
+  const root = mkdtempSync(join(tmpdir(), "delivery-idle-"));
+  try {
+    const ctl = join(root, "ctl.mjs");
+    writeFileSync(
+      ctl,
+      `const input=JSON.parse(process.argv[4]); if(!input.allProjects || !input.includeSubagents) throw new Error('scope'); console.log(JSON.stringify(input.cursor === 100 ? {threads:[{status:'running'}],nextCursor:null} : {threads:[{status:'idle'}],nextCursor:100}));`,
+    );
+    const result = execFileSync(
+      process.execPath,
+      [new URL("./target.mjs", import.meta.url).pathname],
+      {
+        encoding: "utf8",
+        input: JSON.stringify({
+          config: { runtimeDir: root, node: process.execPath, ctl, home: root },
+          operation: "busy",
+        }),
+      },
+    );
+    assert.equal(JSON.parse(result), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

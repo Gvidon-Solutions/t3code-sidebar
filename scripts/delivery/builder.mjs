@@ -18,7 +18,7 @@ const {
 import * as NodeOS from "node:os";
 const { homedir } = NodeOS;
 import * as NodePath from "node:path";
-const { dirname, join, resolve } = NodePath;
+const { dirname, join, resolve, delimiter } = NodePath;
 import * as NodeURL from "node:url";
 const { fileURLToPath } = NodeURL;
 import * as NodeCrypto from "node:crypto";
@@ -75,7 +75,7 @@ export function snapshot(worktree, id = new Date().toISOString().replaceAll(/[-:
     rmSync(index + ".lock", { force: true });
   }
 }
-function machineAdapter(machine, archive, version, id) {
+function machineAdapter(machine, archive, version, id, now = false) {
   const target = fileURLToPath(new URL("./target.mjs", import.meta.url));
   const remoteScript = join(machine.runtimeDir, "delivery-target.mjs");
   const remoteArchive = join(machine.runtimeDir, `${id}.tar.gz`);
@@ -89,7 +89,7 @@ function machineAdapter(machine, archive, version, id) {
   const call = (operation) => {
     const input = JSON.stringify({
       operation,
-      config: { ...machine, archive: machine.ssh ? remoteArchive : archive, version },
+      config: { ...machine, archive: machine.ssh ? remoteArchive : archive, version, now },
     });
     const text = machine.ssh
       ? ssh([`${quote(machine.node)} ${quote(remoteScript)}`], { input })
@@ -137,6 +137,10 @@ export async function deliver(config, request) {
     }
     return { id, logDir };
   }
+  if (!request.now)
+    throw new Error(
+      "Idle delivery is unavailable: this direct-unit adapter has no server admission guard. No runtime switched. --now explicitly skips the idle window.",
+    );
   if (request.hot && request.release)
     throw new Error("Hot deliveries never publish release assets");
   if (request.hot && !config.cleanAgent?.project)
@@ -169,9 +173,16 @@ export async function deliver(config, request) {
     exec("git", ["clone", "--shared", "--no-checkout", source, config.buildDir]);
   exec("git", ["-C", config.buildDir, "fetch", source, commit]);
   exec("git", ["-C", config.buildDir, "checkout", "--detach", "--force", commit]);
-  const run = (command, args, cwd = config.buildDir) => {
+  const run = (command, args, cwd = config.buildDir, extraEnv = {}) => {
     const start = Date.now();
-    const output = exec(command, args, { cwd });
+    const output = exec(command, args, {
+      cwd,
+      env: {
+        ...process.env,
+        ...extraEnv,
+        PATH: join(config.buildDir, "node_modules/.bin") + delimiter + process.env.PATH,
+      },
+    });
     writeFileSync(join(logDir, `${events.length}.log`), output, { mode: 0o600 });
     return journal({
       phase: "command",
@@ -186,6 +197,7 @@ export async function deliver(config, request) {
     await run("vp", ["run", "--filter", "t3", "build"]);
     await run(process.execPath, ["apps/server/scripts/cli.ts", "build-exe"]);
     await run("cargo", [
+      ...(config.rustToolchain ? [`+${config.rustToolchain}`] : []),
       "build",
       "--locked",
       "--release",
@@ -227,7 +239,9 @@ export async function deliver(config, request) {
       arch,
       run,
     });
-    const adapters = machines.map((machine) => machineAdapter(machine, archive, version, id));
+    const adapters = machines.map((machine) =>
+      machineAdapter(machine, archive, version, id, request.now),
+    );
     await rollout(
       adapters,
       version,

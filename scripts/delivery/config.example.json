@@ -36,5 +36,13 @@
       "ctl": "/srv/tools/t3ctl.mjs",
       "origin": "http://127.0.0.1:3791"
     }
-  ]
+  ],
+  "rustToolchain": "1.96.0",
+  "ota": {
+    "origin": "https://app.example.invalid",
+    "store": "/srv/state/t3-delivery/mobile-updates",
+    "key": "/srv/private/ota/key.pem",
+    "certificate": "/srv/private/ota/certificate.pem",
+    "apkUrl": "https://downloads.example.invalid/app.apk"
+  }
 }

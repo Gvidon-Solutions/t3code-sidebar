@@ -50,8 +50,22 @@ export async function buildAssets({
   }
   let nativeFingerprint = previousFingerprint;
   if (changes.mobile) {
+    if (!config.ota)
+      throw new Error(
+        "Mobile delivery requires signing key, certificate and update origin in local ota config",
+      );
+    const mobileEnv = {
+      APP_VARIANT: "sidebar",
+      T3_MOBILE_UPDATE_URL: new URL("/api/mobile-updates/manifest", config.ota.origin).href,
+      T3_MOBILE_UPDATE_CERTIFICATE: config.ota.certificate,
+    };
     const exec = (command, args, options) =>
-      execFileSync(command, args, { encoding: "utf8", timeout: 900_000, ...options });
+      execFileSync(command, args, {
+        encoding: "utf8",
+        timeout: 900_000,
+        ...options,
+        env: { ...process.env, ...mobileEnv },
+      });
     const mobileDir = join(config.buildDir, "apps/mobile");
     const fingerprint = JSON.parse(
       exec("pnpm", ["exec", "expo-updates", "runtimeversion:resolve", "--platform", "android"], {
@@ -62,7 +76,7 @@ export async function buildAssets({
       throw new Error("Native fingerprint missing");
     nativeFingerprint = fingerprint;
     if (fingerprint !== previousFingerprint) {
-      await run(process.execPath, ["scripts/mobile-android-apk.mjs"]);
+      await run(process.execPath, ["scripts/mobile-android-apk.mjs"], config.buildDir, mobileEnv);
       artifacts.push(
         ...readdirSync(join(config.buildDir, "dist/mobile"))
           .filter((file) => file.endsWith(".apk"))
@@ -81,6 +95,7 @@ export async function buildAssets({
         "pnpm",
         ["exec", "expo", "export", "--platform", "android", "--output-dir", output],
         mobileDir,
+        mobileEnv,
       );
       await run(process.execPath, [
         "scripts/delivery/mobile-ota.mjs",

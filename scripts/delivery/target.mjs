@@ -29,6 +29,8 @@ export async function targetOperation(config, operation) {
       run(config.node, [config.ctl, ...args], {
         T3CODE_HOME: config.home,
         T3CTL_ORIGIN: config.origin,
+        T3CTL_UNIT: config.unit,
+        XDG_CONFIG_HOME: join(config.home, "delivery-client-config"),
       }),
     );
     if (Array.isArray(result)) {
@@ -39,10 +41,27 @@ export async function targetOperation(config, operation) {
     return result;
   };
   if (operation === "busy") {
-    const rows = ctl("threads", "--json", "--subagents", "--limit", "1000000");
-    return rows.some((row) =>
-      ["running", "starting", "preparing", "queued", "waiting"].includes(row.status),
-    );
+    let cursor;
+    do {
+      const page = ctl(
+        "tool",
+        "t3_thread_list",
+        JSON.stringify({
+          allProjects: true,
+          includeSubagents: true,
+          limit: 100,
+          ...(cursor === undefined ? {} : { cursor }),
+        }),
+      );
+      if (
+        page.threads.some((row) =>
+          ["running", "starting", "preparing", "queued", "waiting"].includes(row.status),
+        )
+      )
+        return true;
+      cursor = page.nextCursor;
+    } while (cursor !== null && cursor !== undefined);
+    return false;
   }
   const desiredVersion = () =>
     ctl("mesh", "config", "get", "--json").current?.doc?.t3?.version ?? null;
@@ -83,6 +102,10 @@ export async function targetOperation(config, operation) {
   const state = JSON.parse(readFileSync(statePath, "utf8"));
   const db = join(config.home, "userdata", "statev2.sqlite");
   if (operation === "activate") {
+    if (!config.now)
+      throw new Error(
+        "Idle delivery requires a server admission guard; no runtime switched. --now explicitly skips the idle window.",
+      );
     if (state.phase !== "prepared") throw new Error("Delivery is not prepared");
     systemctl("stop", config.unit);
     state.phase = "stopped";
@@ -108,6 +131,7 @@ export async function targetOperation(config, operation) {
     return true;
   }
   if (operation === "rollback") {
+    if (state.phase === "rolledBack") return state.previousHealth;
     systemctl("stop", config.unit);
     writeFileSync(config.unitPath, state.unit);
     if (existsSync(state.backup)) {
