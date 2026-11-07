@@ -52,6 +52,14 @@ The former gor-to-VPS test-tunnel unit is stopped to avoid a port collision.
 These are bed-only units. The original stopped VPS data remains available at
 `/opt/t3-mesh-e2e`; the gor copy preserves file ownership.
 
+Provider traffic from the relocated container uses the original VPS egress: direct gor
+egress returned HTTP 403 from the provider. The container sets `HTTP_PROXY`, `HTTPS_PROXY`
+and `ALL_PROXY` to the isolated CONNECT bridge on `172.17.0.1:14444`, with private mesh
+addresses excluded through `NO_PROXY`. TLS passes through unchanged. Gvidon’s
+`t3-mesh-X1-provider-{socks,connect,forward}.service` units and gor’s
+`t3-mesh-X1-provider-egress.service` own this route; keep them running for agent acceptance.
+They add no listeners or configuration to any other VPS stack.
+
 Both `/home/t3` and `/tmp` persist on the VPS host. On the first deployment with
 the `/tmp` mount, `deploy.sh` copies the stopped container's existing temporary
 folders with ownership intact before recreating it, then verifies its canary.
