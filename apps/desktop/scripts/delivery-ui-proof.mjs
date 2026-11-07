@@ -89,9 +89,18 @@ async function main() {
     NodeAssert.equal(await evaluate("typeof window.deliveryUi.select"), "function");
     const info = await evaluate("window.deliveryUi.info()");
     console.log(JSON.stringify({ expected, ...info, originStable: win.webContents.getURL() }));
-    await evaluate(
-      `{const row=document.createElement("p");row.textContent=${JSON.stringify("UI source info ")}+${JSON.stringify(JSON.stringify(info))};document.body.append(row)}`,
-    );
+    await evaluate(`{
+      const info=${JSON.stringify(JSON.stringify(info))};
+      const source=JSON.parse(info);
+      const section=document.createElement("section");
+      section.innerHTML="<h2>About</h2>";
+      const entries={"UI version":document.querySelector("h1").textContent,"Shell version":source.shellVersion,"Server version":source.source==="server"?source.version:"Offline","UI source":source.origin??"Bundled copy"};
+      const table=document.createElement("dl");
+      for(const [label,value]of Object.entries(entries)){const key=document.createElement("dt");key.textContent=label;const field=document.createElement("dd");field.textContent=value;table.append(key,field);}
+      section.append(table);if(source.reason){const reason=document.createElement("p");reason.textContent=source.reason;section.append(reason);}
+      document.body.append(section);
+      const style=document.createElement("style");style.textContent="body{font:18px system-ui;max-width:820px;margin:48px;color:#18202b;background:#f5f6fa}section{padding:28px;background:white;border:1px solid #d4dae4;border-radius:12px}dl{display:grid;grid-template-columns:180px 1fr;gap:16px}dt{font-weight:600}dd{margin:0}p{color:#5d6675}";document.head.append(style);
+    }`);
     await NodeFSP.writeFile(
       NodePath.join(output, filename),
       (await win.webContents.capturePage()).toPNG(),
