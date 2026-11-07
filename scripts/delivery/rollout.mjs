@@ -60,14 +60,18 @@ export async function rollout(
   }
   for (let i = 0; i < adapters.length; i++) {
     const adapter = adapters[i];
-    await waitForIdle(adapter, options, clock);
     await journal({ machine: adapter.name, phase: "prepare" });
     await adapter.prepare();
     try {
+      if (!options.now) {
+        await journal({ machine: adapter.name, phase: "drain" });
+        await adapter.drain();
+      }
       await journal({ machine: adapter.name, phase: "switch" });
       await adapter.activate();
       await waitForHealthy(adapter, version, baselines, options.healthWaitMs, clock);
       await journal({ machine: adapter.name, phase: "healthy" });
+      if (adapter.commit) await adapter.commit();
     } catch (error) {
       await journal({ machine: adapter.name, phase: "rollback", reason: error.message });
       try {
@@ -79,6 +83,7 @@ export async function rollout(
           options.healthWaitMs,
           clock,
         );
+        if (adapter.release) await adapter.release();
       } catch (rollbackError) {
         throw new Error(
           `${adapter.name}: rollout failed (${error.message}); rollback failed (${rollbackError.message})`,

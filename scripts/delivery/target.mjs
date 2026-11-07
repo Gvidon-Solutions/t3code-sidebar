@@ -8,11 +8,12 @@ const { join } = NodePath;
 import * as NodeURL from "node:url";
 const { fileURLToPath } = NodeURL;
 import * as NodeSqlite from "node:sqlite";
+import * as NodeCrypto from "node:crypto";
 
-const run = (command, args, env) =>
+const run = (command, args, env, timeout = 120_000) =>
   execFileSync(command, args, {
     encoding: "utf8",
-    timeout: 120_000,
+    timeout,
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
@@ -28,13 +29,18 @@ export async function targetOperation(config, operation) {
     const unit = config.unitPath ? readFileSync(config.unitPath, "utf8") : "";
     const executable = /^ExecStart=(?:"([^"]+)"|(\S+))\s/m.exec(unit);
     const result = JSON.parse(
-      run(config.node, [config.ctl, ...args], {
-        T3CODE_HOME: config.home,
-        T3CTL_ORIGIN: config.origin,
-        T3CTL_UNIT: config.unit,
-        T3CTL_T3_BIN: executable?.[1] ?? executable?.[2] ?? "",
-        XDG_CONFIG_HOME: join(config.home, "delivery-client-config"),
-      }),
+      run(
+        config.node,
+        [config.ctl, ...args],
+        {
+          T3CODE_HOME: config.home,
+          T3CTL_ORIGIN: config.origin,
+          T3CTL_UNIT: config.unit,
+          T3CTL_T3_BIN: executable?.[1] ?? executable?.[2] ?? "",
+          XDG_CONFIG_HOME: join(config.home, "delivery-client-config"),
+        },
+        args[1] === "t3_delivery_drain" ? (config.maxWaitMs ?? 300_000) + 30_000 : 120_000,
+      ),
     );
     if (Array.isArray(result)) {
       const text = result.find((item) => item.type === "text")?.text;
@@ -79,6 +85,8 @@ export async function targetOperation(config, operation) {
       const previous = JSON.parse(readFileSync(statePath, "utf8"));
       if (previous.phase !== "healthy" && previous.phase !== "rolledBack")
         throw new Error("Unfinished delivery journal; run deploy rollback first");
+      if (previous.requestId)
+        ctl("tool", "t3_delivery_cancel_drain", JSON.stringify({ requestId: previous.requestId }));
     }
     const directory = join(config.runtimeDir, "delivery", config.version);
     if (existsSync(directory))
@@ -104,12 +112,36 @@ export async function targetOperation(config, operation) {
   }
   const state = JSON.parse(readFileSync(statePath, "utf8"));
   const db = join(config.home, "userdata", "statev2.sqlite");
+  const cancelDrain = () => {
+    if (state.requestId)
+      ctl("tool", "t3_delivery_cancel_drain", JSON.stringify({ requestId: state.requestId }));
+  };
+  if (operation === "drain") {
+    if (state.phase !== "prepared" && state.phase !== "draining")
+      throw new Error("Runtime must be prepared before draining");
+    state.requestId ??= NodeCrypto.randomUUID();
+    state.phase = "draining";
+    atomic(statePath, state);
+    const drained = ctl(
+      "tool",
+      "t3_delivery_drain",
+      JSON.stringify({ requestId: state.requestId, deadlineMs: config.maxWaitMs ?? 300_000 }),
+    );
+    if (drained.requestId !== state.requestId || drained.phase !== "drained")
+      throw new Error("Server did not grant the delivery admission fence");
+    state.phase = "drained";
+    atomic(statePath, state);
+    return drained;
+  }
   if (operation === "activate") {
-    if (!config.now)
-      throw new Error(
-        "Idle delivery requires a server admission guard; no runtime switched. --now explicitly skips the idle window.",
-      );
-    if (state.phase !== "prepared") throw new Error("Delivery is not prepared");
+    if (!config.now) {
+      if (state.phase !== "drained") throw new Error("Delivery admission fence has not drained");
+      const status = ctl("tool", "t3_delivery_drain_status", "{}");
+      if (status.requestId !== state.requestId || status.phase !== "drained")
+        throw new Error("Delivery admission fence was lost; no runtime switched");
+    } else if (state.phase !== "prepared") throw new Error("Delivery is not prepared");
+    state.phase = "stopping";
+    atomic(statePath, state);
     systemctl("stop", config.unit);
     state.phase = "stopped";
     atomic(statePath, state);
@@ -131,10 +163,19 @@ export async function targetOperation(config, operation) {
   if (operation === "commit") {
     state.phase = "healthy";
     atomic(statePath, state);
+    cancelDrain();
+    delete state.requestId;
+    atomic(statePath, state);
     return true;
   }
   if (operation === "rollback") {
     if (state.phase === "rolledBack") return state.previousHealth;
+    if (["prepared", "draining", "drained"].includes(state.phase)) {
+      cancelDrain();
+      state.phase = "rolledBack";
+      atomic(statePath, state);
+      return state.previousHealth;
+    }
     systemctl("stop", config.unit);
     writeFileSync(config.unitPath, state.unit);
     if (existsSync(state.backup)) {
@@ -146,6 +187,12 @@ export async function targetOperation(config, operation) {
     state.phase = "rolledBack";
     atomic(statePath, state);
     return state.previousHealth;
+  }
+  if (operation === "cancelDrain") {
+    cancelDrain();
+    delete state.requestId;
+    atomic(statePath, state);
+    return true;
   }
   throw new Error(`Unknown target operation ${operation}`);
 }

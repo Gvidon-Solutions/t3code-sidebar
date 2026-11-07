@@ -55,7 +55,8 @@ test("failed health restores runtime and stops before the next machine", async (
   const studio = {
     name: "studio",
     busy: async () => false,
-    prepare: async () => calls.push("backup"),
+    prepare: async () => calls.push("prepare"),
+    drain: async () => calls.push("drain"),
     activate: async () => {
       active = true;
       calls.push("activate");
@@ -75,7 +76,7 @@ test("failed health restores runtime and stops before the next machine", async (
     rollout([studio, cloudbox], "2", { maxWaitMs: 0, healthWaitMs: 2 }, async () => {}, clock()),
     /rolled back; rollout stopped: Replicas/,
   );
-  assert.deepEqual(calls, ["backup", "activate", "rollback"]);
+  assert.deepEqual(calls, ["prepare", "drain", "activate", "rollback"]);
 });
 test("missing peer layout watermark rolls back even when version is correct", async () => {
   let active = false;
@@ -84,6 +85,7 @@ test("missing peer layout watermark rolls back even when version is correct", as
     name: "studio",
     busy: async () => false,
     prepare: async () => {},
+    drain: async () => {},
     activate: async () => {
       active = true;
     },
@@ -157,7 +159,7 @@ test("delivery rejects unsafe requests before building", async () => {
     );
     await assert.rejects(
       deliver({ stateDir: dir, machines: [{ name: "studio" }] }, { hot: true }),
-      /admission|quiesc/i,
+      /Configure cleanAgent.project/,
     );
     await assert.rejects(
       deliver(
@@ -212,4 +214,80 @@ test("default delivery version preserves the ref's compatibility core and newer 
     () => versionForDelivery("invalid", "", true, "20300102T030405Z"),
     /Invalid server package version/,
   );
+});
+
+test("a failed admission drain never activates a runtime and releases its preparation", async () => {
+  const calls = [];
+  const adapter = {
+    name: "studio",
+    health: async () => health(),
+    prepare: async () => calls.push("prepare"),
+    drain: async () => {
+      calls.push("drain");
+      throw new Error("Drain deadline exceeded");
+    },
+    activate: async () => calls.push("activate"),
+    rollback: async () => calls.push("rollback-preparation"),
+    release: async () => calls.push("release"),
+  };
+  await assert.rejects(
+    rollout([adapter], "2", { maxWaitMs: 0, healthWaitMs: 0 }, async () => {}),
+    /Drain deadline exceeded/,
+  );
+  assert.deepEqual(calls, ["prepare", "drain", "rollback-preparation", "release"]);
+});
+
+test("private builder reports idle state and refuses another listener or a non-socket path", async () => {
+  const { serve } = await import("./builder.mjs");
+  const NodeHttp = await import("node:http");
+  const root = mkdtempSync(join(tmpdir(), "delivery-service-"));
+  const socket = join(root, "builder.sock");
+  let server;
+  try {
+    server = await serve({ socket });
+    await assert.rejects(serve({ socket }), /already listening/);
+    const status = await new Promise((resolve, reject) => {
+      const req = NodeHttp.get({ socketPath: socket, path: "/status" }, (res) => {
+        let body = "";
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => resolve(JSON.parse(body)));
+        res.on("error", reject);
+      });
+      req.on("error", reject);
+    });
+    assert.deepEqual(status, { state: "idle", queued: 0, active: null });
+    await new Promise((resolve) => server.close(resolve));
+    server = null;
+    writeFileSync(socket, "do not replace");
+    await assert.rejects(serve({ socket }), /non-socket/);
+    assert.equal(readFileSync(socket, "utf8"), "do not replace");
+  } finally {
+    if (server) await new Promise((resolve) => server.close(resolve));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the isolated fixture gate refuses production use and records an explicit authorized invocation", () => {
+  const root = mkdtempSync(join(tmpdir(), "delivery-gate-"));
+  try {
+    const script = new URL("./fixture-gate.mjs", import.meta.url).pathname;
+    assert.throws(
+      () =>
+        execFileSync(process.execPath, [script], {
+          env: { ...process.env, T3_DELIVERY_FIXTURE_GATE: "" },
+          stdio: ["ignore", "pipe", "pipe"],
+        }),
+      /coordinator-authorized D1/,
+    );
+    const path = join(root, "gate.jsonl");
+    execFileSync(process.execPath, [script], {
+      env: { ...process.env, T3_DELIVERY_FIXTURE_GATE: "1", T3_DELIVERY_FIXTURE_GATE_LOG: path },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    assert.equal(JSON.parse(readFileSync(path, "utf8")).fixture, "D1 delivery gate");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

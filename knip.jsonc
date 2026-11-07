@@ -29,6 +29,8 @@
         "fixtures/*/*.js",
         "knip-schemas.ts",
         "delivery/builder.mjs",
+        "delivery/e2e.mjs",
+        "delivery/fixture-gate.mjs",
         "delivery/target.mjs",
         "delivery/mobile-ota.mjs",
         "delivery/*.node-test.mjs",

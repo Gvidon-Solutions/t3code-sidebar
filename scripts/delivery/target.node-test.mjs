@@ -116,3 +116,57 @@ test("target idle inspection includes projectless and child threads on every pag
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("target requires its matching drained admission fence and releases it only after a healthy commit", () => {
+  const root = mkdtempSync(join(tmpdir(), "delivery-fence-"));
+  try {
+    const runtimeDir = join(root, "versions");
+    mkdirSync(runtimeDir);
+    const unitPath = join(root, "app.service");
+    writeFileSync(unitPath, "ExecStart=/old/t3 serve\n");
+    const ctl = join(root, "ctl.mjs");
+    const statusPath = join(root, "status.json");
+    const requestId = "fence-request";
+    writeFileSync(statusPath, JSON.stringify({ requestId, phase: "drained" }));
+    writeFileSync(
+      ctl,
+      `import fs from 'node:fs'; const file=${JSON.stringify(statusPath)}; const tool=process.argv[3]; const input=JSON.parse(process.argv[4]||'{}'); let status=JSON.parse(fs.readFileSync(file,'utf8')); if(tool==='t3_delivery_cancel_drain'){if(status.requestId!==input.requestId) throw new Error('mismatch'); status={requestId:null,phase:'open'}; fs.writeFileSync(file,JSON.stringify(status));} console.log(JSON.stringify(status));`,
+    );
+    const statePath = join(runtimeDir, "delivery-state.json");
+    const state = {
+      phase: "drained",
+      requestId,
+      unit: "ExecStart=/old/t3 serve\n",
+      next: "ExecStart=/new/t3 serve\n",
+      previousHealth: { version: "1", revision: "r1", entries: {}, replicasReady: true },
+    };
+    writeFileSync(statePath, JSON.stringify(state));
+    const config = {
+      runtimeDir,
+      home: root,
+      node: process.execPath,
+      ctl,
+      unitPath,
+      scope: "user",
+      unit: "app.service",
+    };
+    const operation = (name) =>
+      execFileSync(process.execPath, [new URL("./target.mjs", import.meta.url).pathname], {
+        encoding: "utf8",
+        input: JSON.stringify({ config, operation: name }),
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    writeFileSync(statusPath, JSON.stringify({ requestId: "other-request", phase: "drained" }));
+    assert.throws(() => operation("activate"), /admission fence was lost/);
+    assert.equal(JSON.parse(readFileSync(statePath, "utf8")).phase, "drained");
+    writeFileSync(statusPath, JSON.stringify({ requestId, phase: "drained" }));
+    operation("commit");
+    assert.deepEqual(JSON.parse(readFileSync(statusPath, "utf8")), {
+      requestId: null,
+      phase: "open",
+    });
+    assert.equal(JSON.parse(readFileSync(statePath, "utf8")).phase, "healthy");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

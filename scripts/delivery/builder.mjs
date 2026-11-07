@@ -14,6 +14,7 @@ const {
   renameSync,
   rmSync,
   writeFileSync,
+  lstatSync,
 } = NodeFS;
 import * as NodeOS from "node:os";
 const { homedir } = NodeOS;
@@ -23,6 +24,7 @@ import * as NodeURL from "node:url";
 const { fileURLToPath } = NodeURL;
 import * as NodeCrypto from "node:crypto";
 const { randomUUID } = NodeCrypto;
+import * as NodeNet from "node:net";
 import * as Effect from "effect/Effect";
 import * as HostProcess from "../../packages/shared/src/HostProcess.ts";
 import { rollout, waitForHealthy } from "./rollout.mjs";
@@ -89,25 +91,34 @@ export function snapshot(worktree, id = new Date().toISOString().replaceAll(/[-:
     rmSync(index + ".lock", { force: true });
   }
 }
-function machineAdapter(machine, archive, version, id, now = false) {
+export function machineAdapter(machine, archive, version, id, now = false, maxWaitMs = 300_000) {
   const target = fileURLToPath(new URL("./target.mjs", import.meta.url));
   const remoteScript = join(machine.runtimeDir, "delivery-target.mjs");
   const remoteArchive = join(machine.runtimeDir, `${id}.tar.gz`);
   const ssh = (args, options) =>
-    exec("ssh", ["-o", "BatchMode=yes", machine.ssh, ...args], options);
+    exec("ssh", ["-o", "BatchMode=yes", ...(machine.sshArgs ?? []), machine.ssh, ...args], options);
   if (machine.ssh && archive) {
     ssh([`mkdir -p ${quote(machine.runtimeDir)}`]);
-    exec("scp", [target, `${machine.ssh}:${remoteScript}`]);
-    exec("scp", [archive, `${machine.ssh}:${remoteArchive}`]);
+    exec("scp", [...(machine.scpArgs ?? []), target, `${machine.ssh}:${remoteScript}`]);
+    exec("scp", [...(machine.scpArgs ?? []), archive, `${machine.ssh}:${remoteArchive}`]);
   }
   const call = (operation) => {
     const input = JSON.stringify({
       operation,
-      config: { ...machine, archive: machine.ssh ? remoteArchive : archive, version, now },
+      config: {
+        ...machine,
+        archive: machine.ssh ? remoteArchive : archive,
+        version,
+        now,
+        maxWaitMs,
+      },
     });
     const text = machine.ssh
-      ? ssh([`${quote(machine.node)} ${quote(remoteScript)}`], { input })
-      : exec(machine.node, [target], { input });
+      ? ssh([`${quote(machine.node)} ${quote(remoteScript)}`], {
+          input,
+          timeout: Math.max(900_000, maxWaitMs + 120_000),
+        })
+      : exec(machine.node, [target], { input, timeout: Math.max(900_000, maxWaitMs + 120_000) });
     return JSON.parse(text);
   };
   return {
@@ -115,9 +126,11 @@ function machineAdapter(machine, archive, version, id, now = false) {
     busy: async () => call("busy"),
     health: async () => call("health"),
     prepare: async () => call("prepare"),
+    drain: async () => call("drain"),
     activate: async () => call("activate"),
     rollback: async () => call("rollback"),
     commit: () => call("commit"),
+    release: async () => call("cancelDrain"),
   };
 }
 export async function deliver(config, request) {
@@ -148,14 +161,11 @@ export async function deliver(config, request) {
       const adapter = machineAdapter(machine, null, "rollback", id);
       const previous = await adapter.rollback();
       await waitForHealthy(adapter, previous.version, [previous], config.healthWaitMs ?? 120_000);
+      await adapter.release();
       await journal({ machine: machine.name, phase: "rolledBack" });
     }
     return { id, logDir };
   }
-  if (!request.now)
-    throw new Error(
-      "Idle delivery is unavailable: this direct-unit adapter has no server admission guard. No runtime switched. --now explicitly skips the idle window.",
-    );
   if (request.hot && request.release)
     throw new Error("Hot deliveries never publish release assets");
   if (request.hot && !config.cleanAgent?.project)
@@ -173,13 +183,17 @@ export async function deliver(config, request) {
       "--verify",
       `${request.ref || "HEAD"}^{commit}`,
     ]).trim();
+  if (!existsSync(join(config.buildDir, ".git")))
+    exec("git", ["clone", "--shared", "--no-checkout", config.repository, config.buildDir]);
+  exec("git", ["-C", config.buildDir, "fetch", source, commit]);
+  exec("git", ["-C", config.buildDir, "checkout", "--detach", "--force", commit]);
   const historyPath = join(config.stateDir, "last-build.json");
   const previousBuild = existsSync(historyPath)
     ? JSON.parse(readFileSync(historyPath, "utf8"))
     : null;
   const previous = previousBuild?.commit;
   const paths = previous
-    ? exec("git", ["-C", source, "diff", "--name-only", previous, commit]).split("\n")
+    ? exec("git", ["-C", config.buildDir, "diff", "--name-only", previous, commit]).split("\n")
     : ["apps/desktop/", "apps/mobile/"];
   const version =
     request.version ||
@@ -190,11 +204,7 @@ export async function deliver(config, request) {
       id,
     );
   if (!/^[0-9A-Za-z.+-]+$/.test(version)) throw new Error("Invalid delivery version");
-  if (!existsSync(join(config.buildDir, ".git")))
-    exec("git", ["clone", "--shared", "--no-checkout", source, config.buildDir]);
-  exec("git", ["-C", config.buildDir, "fetch", source, commit]);
-  exec("git", ["-C", config.buildDir, "checkout", "--detach", "--force", commit]);
-  const run = (command, args, cwd = config.buildDir, extraEnv = {}) => {
+  const run = async (command, args, cwd = config.buildDir, extraEnv = {}) => {
     const start = Date.now();
     const output = exec(command, args, {
       cwd,
@@ -205,11 +215,12 @@ export async function deliver(config, request) {
       },
     });
     writeFileSync(join(logDir, `${events.length}.log`), output, { mode: 0o600 });
-    return journal({
+    await journal({
       phase: "command",
       command: [command, ...args],
       durationMs: Date.now() - start,
     });
+    return output;
   };
   try {
     await run("pnpm", ["install", "--frozen-lockfile"]);
@@ -261,7 +272,7 @@ export async function deliver(config, request) {
       run,
     });
     const adapters = machines.map((machine) =>
-      machineAdapter(machine, archive, version, id, request.now),
+      machineAdapter(machine, archive, version, id, request.now, config.maxWaitMs),
     );
     await rollout(
       adapters,
@@ -273,7 +284,6 @@ export async function deliver(config, request) {
       },
       journal,
     );
-    for (const adapter of adapters) adapter.commit();
     if (!request.hot && request.release) {
       if (!config.releaseRepository) throw new Error("Configure releaseRepository before upload");
       await run("gh", [
@@ -293,17 +303,26 @@ export async function deliver(config, request) {
       const brief = `Turn this hot change into a clean change: proper code, tests, T1 gate, merge to ws, release; if the change is wrong, do not merge it, explain in the inbox.\nSource: ${source}\nBranch: ${hot.branch}\nCommit: ${commit}\n\n${diff}`;
       const briefPath = join(logDir, "clean-brief.md");
       writeFileSync(briefPath, brief, { mode: 0o600 });
-      await run(config.cleanAgent.ctl || "t3ctl", [
-        "new",
-        "--project",
-        config.cleanAgent.project,
-        "--agent",
-        config.cleanAgent.agent || "codex",
-        "--model",
-        config.cleanAgent.model || "gpt-6.1-sol",
-        "--file",
-        briefPath,
-      ]);
+      const cleanThread = JSON.parse(
+        await run(
+          config.cleanAgent.ctl || "t3ctl",
+          [
+            "new",
+            "--project",
+            config.cleanAgent.project,
+            "--agent",
+            config.cleanAgent.agent || "codex",
+            "--model",
+            config.cleanAgent.model || "gpt-6.1-sol",
+            "--file",
+            briefPath,
+            "--json",
+          ],
+          config.buildDir,
+          config.cleanAgent.environment ?? {},
+        ),
+      );
+      atomic(join(logDir, "clean-thread.json"), cleanThread);
     }
     atomic(historyPath, {
       commit,
@@ -319,14 +338,36 @@ export async function deliver(config, request) {
   }
 }
 
-export function serve(config) {
+export async function serve(config) {
   mkdirSync(dirname(config.socket), { recursive: true, mode: 0o700 });
-  if (existsSync(config.socket))
-    throw new Error(
-      "Builder socket already exists; verify no builder runs before removing a stale socket",
-    );
+  if (existsSync(config.socket)) {
+    if (!lstatSync(config.socket).isSocket())
+      throw new Error("Builder socket path is occupied by a non-socket file");
+    await new Promise((resolveSocket, rejectSocket) => {
+      const probe = NodeNet.createConnection(config.socket);
+      probe.once("connect", () => {
+        probe.end();
+        rejectSocket(new Error("A builder is already listening on this socket"));
+      });
+      probe.once("error", (error) => {
+        if (error.code !== "ECONNREFUSED" && error.code !== "ENOENT") {
+          rejectSocket(error);
+          return;
+        }
+        rmSync(config.socket, { force: true });
+        resolveSocket();
+      });
+    });
+  }
   let queue = Promise.resolve();
+  let pending = 0;
+  let active = null;
   const server = createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/status") {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ state: active ? "running" : "idle", queued: pending, active }));
+      return;
+    }
     if (req.method !== "POST" || req.url !== "/deliver") {
       res.writeHead(404);
       res.end();
@@ -338,7 +379,10 @@ export function serve(config) {
       if (body.length > 65536) req.destroy(new Error("Request too large"));
     });
     req.on("end", () => {
+      pending++;
       queue = queue.then(async () => {
+        pending--;
+        active = randomUUID();
         try {
           const result = await deliver(config, JSON.parse(body));
           res.writeHead(200);
@@ -346,17 +390,30 @@ export function serve(config) {
         } catch (error) {
           res.writeHead(500);
           res.end(JSON.stringify({ error: error.message }));
+        } finally {
+          active = null;
         }
       });
     });
   });
-  server.listen(config.socket, () => chmodSync(config.socket, 0o600));
-  server.on("close", () => rmSync(config.socket, { force: true }));
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(config.socket, () => {
+      chmodSync(config.socket, 0o600);
+      resolveListen();
+    });
+  });
+  const stop = () => server.close(() => process.exit(0));
+  server.on("close", () => {
+    rmSync(config.socket, { force: true });
+    process.off("SIGTERM", stop);
+  });
+  process.once("SIGTERM", stop);
   return server;
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const config = readConfig(process.argv[3]);
-  if (process.argv[2] === "serve") serve(config);
+  if (process.argv[2] === "serve") await serve(config);
   else if (process.argv[2] === "run")
     console.log(JSON.stringify(await deliver(config, JSON.parse(process.argv[4] || "{}"))));
   else throw new Error("Usage: builder.mjs serve|run [config.json] [request.json]");

@@ -11,8 +11,9 @@ The builder runs outside the T3 server it updates. Copy and edit
 `scripts/delivery/t3-delivery.service.example` to the builder account's systemd user directory,
 set its absolute Node 26 executable, source path, private config path and tool PATH, then run
 `systemctl --user daemon-reload` and `systemctl --user enable --now t3-delivery.service`.
-The socket directory must be private to that account; the socket is mode 0600. If a process
-crashes, check the service status before deleting its stale socket and restarting it. Never
+The socket directory must be private to that account; the socket is mode 0600. On restart the
+builder probes an existing socket, refuses an active builder, and removes only a stale socket.
+`curl --unix-socket <socket> http://localhost/status` reads its idle/running state and queue size. Never
 install this service against a live server without the owner's approval.
 
 ## Clean lane
@@ -24,10 +25,13 @@ an isolated delivery with no GitHub publication. `--now` skips the configurable 
 The local `gate` command must run T1 acceptance; absent or failing gates stop a clean delivery.
 Set the command to the T1 entry point supplied by that stage rather than bypassing it.
 
-The direct systemd transport currently requires explicit `--now`. Its idle-window policy is
-tested, but the server lacks a delivery admission gate that can atomically prevent a new turn
-between observing idle and stopping. The default command refuses before building or stopping;
-it does not claim safe idle delivery. Use `--now` only on isolated targets in this stage.
+Before stopping a unit, the default lane obtains the authenticated server delivery drain.
+The server closes admission to new turns, waits for active turns and queued starts to finish
+up to `maxWaitMs`, and persists the request token across restart. The target verifies the same
+drained token immediately before stopping. Healthy activation or restored health releases it.
+A deadline failure cancels the drain and leaves the existing runtime running. Older servers
+without the drain API fail before stopping; upgrade those through an explicitly authorized
+`--now` operation first. `--now` deliberately permits interruption of active work.
 
 Builds run in one persistent, private clone in `buildDir`, preserving pnpm, Vite task, Rust and
 Gradle caches across refs. The source checkout stays on its branch. Server/web, the executable
@@ -42,7 +46,7 @@ Targets are selected only from the private allowlist. Rollout copies the archive
 when required, and updates one configured
 unit at a time. Both systemd user and system units are supported; the account must be allowed
 to manage the selected unit. The unit must use an absolute `t3` executable in `ExecStart`.
-Before switching, the target stops its unit and backs up `userdata/statev2.sqlite`, retains
+After obtaining the admission fence, the target stops its unit and backs up `userdata/statev2.sqlite`, retains
 the old unit and runtime, starts the new executable and checks B1's `t3_mesh_update_health`:
 version, config revision, the captured peer layout watermarks and resumed replica status.
 A failed check restores the old unit and database and stops the rollout. The B1 health
@@ -61,14 +65,16 @@ An interrupted target with an unfinished journal refuses another switch until ro
 `t3ctl deploy --hot` snapshots the current working tree, including uncommitted files, with a
 temporary Git index and `commit-tree`. It creates `hot/<timestamp>` without changing HEAD,
 the user's index or `ws`. Hot deliveries never publish release assets. They use the same
-backup, health and rollback flow, with the same explicit `--now` requirement above.
+admission drain, backup, health and rollback flow.
 Ignored files are not included in the snapshot.
 
 Configure `cleanAgent.project`, and optionally `ctl`, `agent` and `model` (defaults: Codex Sol).
 After delivery the builder starts a thread in that project with the source branch, commit and
 full diff. Its brief requires proper implementation, tests, T1, merge to `ws` and a clean
 release; a wrong change must be rejected and explained in the inbox. The thread runs on the
-builder's own t3ctl connection. No agent turn is started merely by configuring the builder.
+builder's own t3ctl connection. `cleanAgent.environment` can explicitly select the destination
+using `T3CODE_HOME`, `T3CTL_ORIGIN`, `T3CTL_UNIT`, `T3CTL_T3_BIN` and an isolated
+`XDG_CONFIG_HOME`. No agent turn is started merely by configuring the builder.
 
 ## Phone OTA
 
@@ -77,7 +83,10 @@ An app built with the OTA certificate is required once. Configure the builder en
 same values for fingerprint resolution, APK build and OTA export. Generate keys using
 `node scripts/delivery/mobile-ota.mjs keygen --dir /private/keys`. Keep the private key outside
 source control. The private `ota` config contains `origin`, `store`, `key`, `certificate`
-and `apkUrl`; `store` is a private staging directory. Signed exports are copied into each
+and `apkUrl`; `store` is a private staging directory. An optional `ota.environment` map
+keeps native build inputs such as `T3CODE_MOBILE_VERSION` and `T3_SIDEBAR_VERSION` equal to the
+installed APK. The builder supplies the same sidebar variant, update URL and certificate to
+fingerprint resolution, APK build, public Expo config and JS export. Signed exports are copied into each
 selected server's `<baseDir>/mobile-updates`. Immutable assets arrive before their index.
 See the mobile update settings for checking, applying and rolling back compatible bundles.
 Native fingerprint changes require the APK; they must not be sent to an incompatible client.
@@ -111,3 +120,31 @@ The delivery journal records actual build durations rather than predicted estima
 A real multi-machine rollout, APK installation, desktop visual pass and two OTA transitions
 must also be verified on isolated servers and an emulator before first live use. A successful
 unit test alone does not establish the five-minute delivery target.
+
+## Isolated delivery acceptance
+
+`scripts/delivery/e2e.mjs --config <private-config> --out <private-evidence> --scenario rollout
+--archive <built-runtime> --version <runtime-version> --force-health-failure` drives the real
+user and system units in the allowlist, then deliberately requests a version the archive does
+not provide. The failed first trial must restore the previous runtime and stop before the next
+machine. `sshArgs` and `scpArgs` carry private SSH identity/port options; a privileged private
+Node launcher can manage a system unit without giving the builder a GitHub token. No target
+needs `gh`. Hold the shared test-bed lock before running against shared infrastructure.
+
+`--scenario lanes --ref <baseline-ref>` makes its own private `D1-delivery-fixture` clone,
+changes the mobile About title without committing, and invokes the actual `t3ctl hot` command.
+It checks the snapshot branch, preserved dirty index, signed OTA catalog and the clean thread's
+first Replay response, commits the fixture change in its own clone, then invokes actual clean
+deploy and verifies the configured gate ran. It refuses non-D1 unit names and production clean
+agents. Both command timings must be at most five minutes. Emulator verification of the About
+marker is a separate device-tool capture; the runner does not claim that a manifest proves UI.
+
+The coordinator-authorized `fixture-gate.mjs` is a transport fixture, not T1 acceptance. It
+refuses unless `T3_DELIVERY_FIXTURE_GATE=1` and a private `T3_DELIVERY_FIXTURE_GATE_LOG` are set.
+The private gate command can use `env` to pass these only to that fixture. Production clean
+releases must configure the actual T1 command. Test evidence must say which gate ran.
+
+Warm-lane measurement may begin from an actually installed baseline runtime and native APK.
+Record that baseline ref, artifact and resolved native fingerprint before initializing the
+private `last-build.json`; do not modify that history between the timed hot and clean commands.
+The first native build, toolchain preparation and cache warming are reported separately.

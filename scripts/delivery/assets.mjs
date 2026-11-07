@@ -55,6 +55,7 @@ export async function buildAssets({
         "Mobile delivery requires signing key, certificate and update origin in local ota config",
       );
     const mobileEnv = {
+      ...(config.ota.environment ?? {}),
       APP_VARIANT: "sidebar",
       T3_MOBILE_UPDATE_URL: new URL("/api/mobile-updates/manifest", config.ota.origin).href,
       T3_MOBILE_UPDATE_CERTIFICATE: config.ota.certificate,
@@ -121,19 +122,33 @@ export async function buildAssets({
       for (const machine of machines) {
         const destination = join(machine.home, "mobile-updates");
         if (machine.ssh) {
-          exec("ssh", ["-o", "BatchMode=yes", machine.ssh, `mkdir -p ${quote(destination)}`]);
-          exec("scp", ["-r", join(config.ota.store, "assets"), `${machine.ssh}:${destination}/`]);
+          exec("ssh", [
+            "-o",
+            "BatchMode=yes",
+            ...(machine.sshArgs ?? []),
+            machine.ssh,
+            `mkdir -p ${quote(destination)}`,
+          ]);
           exec("scp", [
+            ...(machine.scpArgs ?? []),
+            "-r",
+            join(config.ota.store, "assets"),
+            `${machine.ssh}:${destination}/`,
+          ]);
+          exec("scp", [
+            ...(machine.scpArgs ?? []),
             join(config.ota.store, "certificate.pem"),
             `${machine.ssh}:${destination}/certificate.pem`,
           ]);
           exec("scp", [
+            ...(machine.scpArgs ?? []),
             join(config.ota.store, "catalog.json"),
             `${machine.ssh}:${destination}/catalog.json.tmp`,
           ]);
           exec("ssh", [
             "-o",
             "BatchMode=yes",
+            ...(machine.sshArgs ?? []),
             machine.ssh,
             `mv ${quote(join(destination, "catalog.json.tmp"))} ${quote(join(destination, "catalog.json"))}`,
           ]);
