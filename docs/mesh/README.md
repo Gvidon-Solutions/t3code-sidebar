@@ -29,8 +29,9 @@ are correctly ignored in favor of the embedded bundle.
 
 Desktop's stable custom protocol follows the active connected thread/draft server. The
 `app/DesktopUi.ts` service validates saved origins and persists the choice; `ipc/methods/ui.ts`
-accepts only the main application frame. Web's `DesktopUiCoordinator` flushes drafts before
-reloading for a source/version change; About shows UI/shell versions and actual source.
+accepts only the main application frame. Web's `DesktopUiCoordinator` waits for in-flight sends
+(including server-drain retries), then flushes drafts before reloading for a source/version
+change; About shows UI/shell versions and actual source.
 `ElectronProtocol.ts` pins assets to their document's server, strips local credentials and
 compressed-response transport headers, and loads the bundled copy when the document is offline.
 Relay-only connections without a direct UI route explicitly use the bundled UI. Never mix

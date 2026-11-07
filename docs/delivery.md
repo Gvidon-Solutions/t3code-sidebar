@@ -107,7 +107,8 @@ require authorization when the task prohibits pushing.
 
 Desktop keeps a bundled offline UI. After installing the new shell once, it follows the server
 of the active thread or draft and retains that choice while visiting Settings. A connected
-server version change reloads its UI after flushing pending composer writes. Settings › About
+server version change waits for in-flight sends to be accepted or restored, then reloads its UI
+after flushing pending composer writes. Settings › About
 shows the UI version, shell version, serving origin and any offline fallback reason.
 
 The main process validates the paired connection and the main application frame before changing

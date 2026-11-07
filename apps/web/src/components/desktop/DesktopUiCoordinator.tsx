@@ -1,6 +1,7 @@
 import { type DesktopUiInfo } from "@t3tools/contracts";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { afterChatSendsSettled } from "../chat/draftSendState";
 import { DraftId, flushComposerDrafts, useComposerDraftStore } from "../../composerDraftStore";
 import {
   useEnvironments,
@@ -52,17 +53,26 @@ export function DesktopUiCoordinator() {
   useEffect(() => {
     if (!ui || !loaded || !environmentId || !httpBaseUrl || !version) return;
     let active = true;
+    let cancelReload: (() => void) | undefined;
     void ui
       .select({ environmentId, httpBaseUrl, serverVersion: version })
       .then((changed) => {
         if (active && changed) {
-          flushComposerDrafts();
-          window.location.reload();
+          cancelReload = afterChatSendsSettled(() => {
+            if (!active) return;
+            try {
+              flushComposerDrafts();
+              window.location.reload();
+            } catch (error) {
+              console.error("Could not reload connected server UI", error);
+            }
+          });
         }
       })
       .catch((error) => console.error("Could not select connected server UI", error));
     return () => {
       active = false;
+      cancelReload?.();
     };
   }, [ui, loaded, environmentId, httpBaseUrl, version]);
   return null;
