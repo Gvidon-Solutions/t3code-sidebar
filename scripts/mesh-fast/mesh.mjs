@@ -1,50 +1,160 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeNet from "node:net";
+import * as NodeOS from "node:os";
+import * as NodeCrypto from "node:crypto";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeEvents from "node:events";
 import * as NodeURL from "node:url";
-import { run, until, rpc, mcp } from "../mesh-e2e/client.mjs";
+import { run, until, rpc, mcp } from "./client.mjs";
 
 const repo = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
 const binary = NodePath.join(repo, "apps/server/src/bin.ts");
+let bootSlots = Math.max(2, Math.min(6, Math.floor(NodeOS.availableParallelism() / 4)));
+const bootQueue = [];
+async function boot(work) {
+  if (bootSlots === 0) await new Promise((resolve) => bootQueue.push(resolve));
+  else bootSlots--;
+  try {
+    return await work();
+  } finally {
+    const next = bootQueue.shift();
+    if (next) next();
+    else bootSlots++;
+  }
+}
+const allocatedPorts = new Set();
 async function port() {
   const socket = NodeNet.createServer();
   socket.listen(0, "127.0.0.1");
   await NodeEvents.once(socket, "listening");
   const number = socket.address().port;
   await new Promise((resolve) => socket.close(resolve));
+  if (allocatedPorts.has(number)) return port();
+  allocatedPorts.add(number);
   return number;
 }
 
 export class MiniMesh {
+  static active = new Set();
   children = [];
+  beforeClose = [];
   nodes = [];
   constructor(directory) {
+    MiniMesh.active.add(this);
     this.directory = directory;
+    this.containerMode = true;
   }
 
   async start(names = ["studio", "cloudbox", "laptop"]) {
-    this.nodes = await Promise.all(names.map((name) => this.startNode(name)));
+    this.routes = new Map();
+    for (const value of this.extraRoutes ?? []) allocatedPorts.add(value);
+    this.network =
+      "mesh-fast-" +
+      process.pid +
+      "-" +
+      NodePath.basename(this.directory).replaceAll(/[^a-z0-9-]/gi, "-");
+    let allocated = false;
+    for (let attempt = 0; attempt < 64; attempt++) {
+      const subnet = `10.240.${NodeCrypto.randomInt(256)}.${NodeCrypto.randomInt(16) * 16}/28`;
+      try {
+        await run("docker", ["network", "create", "--subnet", subnet, this.network]);
+        allocated = true;
+        break;
+      } catch (error) {
+        if (!/Pool overlaps|already in use/.test(error.message)) throw error;
+      }
+    }
+    if (!allocated) throw Error("Could not allocate a private fixture subnet");
+
+    this.gateway = JSON.parse(
+      await run("docker", ["network", "inspect", this.network]),
+    )[0].IPAM.Config[0].Gateway;
+    for (const value of this.extraRoutes ?? [])
+      this.launch(
+        process.execPath,
+        [
+          new URL("forward.mjs", import.meta.url).pathname,
+          String(value),
+          "127.0.0.1",
+          String(value),
+          this.gateway,
+        ],
+        process.env,
+        NodePath.join(this.directory, "gateway.log"),
+      );
+    this.firstName = names[0];
+    this.nodeCount = names.length;
+    const started = await Promise.allSettled(names.map((name) => boot(() => this.startNode(name))));
+    this.nodes = started.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+    for (const result of started) if (result.status === "rejected") throw result.reason;
     for (const node of this.nodes)
       await rpc(node, "server.updateSettings", {
         patch: { meshEnabled: true, linkedEnvironmentsEnabled: true },
       });
-    const hub = this.nodes[1];
-    for (const node of this.nodes.filter((node) => node !== hub)) {
+    await Promise.all(
+      this.nodes
+        .filter(
+          (node) => this.preserveIdentity !== true && !this.preserveIdentity?.includes(node.name),
+        )
+        .map(async (node) => {
+          const current = await until(
+            "initial private machine binding",
+            () => rpc(node, "meshConfig.get"),
+            (value) => Object.values(value.bindings).includes(node.id),
+          );
+          const old = Object.keys(current.bindings).find(
+            (key) => current.bindings[key] === node.id,
+          );
+          await rpc(node, "meshConfig.apply", {
+            baseRevision: current.current.revision,
+            doc: {
+              ...current.current.doc,
+              machines: {
+                [old]: {
+                  ...current.current.doc.machines[old],
+                  title: node.name,
+                  label: node.name.slice(0, 2).toUpperCase(),
+                },
+              },
+            },
+          });
+          const titled = await until(
+            "private display title applied",
+            () => rpc(node, "meshConfig.get"),
+            (value) => value.current.doc.machines[old]?.title === node.name,
+          );
+          await rpc(node, "meshConfig.apply", {
+            baseRevision: titled.current.revision,
+            doc: {
+              ...titled.current.doc,
+              machines: { [node.name]: titled.current.doc.machines[old] },
+            },
+          });
+          await until(
+            "private named claim reconciled",
+            () => rpc(node, "meshLayout.get"),
+            (value) =>
+              value.document["mesh.machineClaim/" + node.id]?.v?.name === node.name &&
+              value.document["mesh.machineClaim/" + node.id]?.v?.machine?.title === node.name,
+          );
+        }),
+    );
+    const hub = this.nodes[1] ?? this.nodes[0];
+    const leaves = this.nodes.filter((node) => node !== hub);
+    if (this.reverseJoins) leaves.reverse();
+    const join = async (node) => {
       const pair = JSON.parse(
-        await run(
-          process.execPath,
-          [binary, "auth", "pairing", "create", "--base-dir", hub.base, "--ttl", "20m", "--json"],
-          { env: hub.env },
-        ),
+        await hub.cli(["auth", "pairing", "create", "--ttl", "20m", "--json"]),
       );
       await rpc(node, "peerLinks.link", {
         url: hub.origin,
         pairingCode: pair.credential,
         access: "full-access",
       });
-    }
+    };
+    if (this.concurrentJoins) await Promise.all(leaves.map(join));
+    else for (const node of leaves) await join(node);
     await until(
       "initial config convergence",
       () => Promise.all(this.nodes.map((node) => rpc(node, "meshConfig.get"))),
@@ -54,6 +164,18 @@ export class MiniMesh {
             value.current.revision === values[0].current.revision &&
             Object.keys(value.bindings).length === names.length,
         ),
+    );
+    await until(
+      "managed SSH routes ready",
+      () => Promise.all(this.nodes.map((node) => rpc(node, "meshConfig.status"))),
+      (values) =>
+        values.every((value, index) => {
+          const row = value.servers.find((row) => row.environmentId === this.nodes[index].id);
+          const routes = row?.actions.filter((action) => action.id.startsWith("ssh/route/"));
+          return (
+            routes?.length === names.length - 1 && routes.every((action) => action.state === "done")
+          );
+        }),
     );
     return this.nodes;
   }
@@ -75,20 +197,78 @@ export class MiniMesh {
   }
 
   async startNode(name) {
+    const inContainer =
+      this.containerMode && (this.containerNames ?? [this.firstName]).includes(name);
+    const nodeBinary = this.previousEntry && name === "laptop" ? this.previousEntry : binary;
     const root = NodePath.join(this.directory, name);
     const home = NodePath.join(root, "home"),
       base = NodePath.join(root, "state");
     await NodeFSP.mkdir(home, { recursive: true });
     const env = {
-      ...process.env,
+      LANG: "C.UTF-8",
+      LC_ALL: "C.UTF-8",
+      ...this.environment,
       HOME: home,
       XDG_CONFIG_HOME: NodePath.join(home, ".config"),
+      XDG_DATA_HOME: NodePath.join(home, ".local/share"),
+      XDG_CACHE_HOME: NodePath.join(home, ".cache"),
+      CODEX_HOME: NodePath.join(home, ".codex"),
+      SSH_AUTH_SOCK: "",
+      GIT_CONFIG_GLOBAL: NodePath.join(home, ".gitconfig"),
+      GIT_CONFIG_NOSYSTEM: "1",
       T3_MESH_AGENT_HOME: home,
       T3_MESH_SSH_HOME: home,
       T3_MESH_LEGACY_GLOBAL: NodePath.join(home, "absent"),
-      T3_MESH_TIME_SCALE: "0.01",
+      T3_MESH_TIME_SCALE: process.env.MESH_FAST_REALISTIC === "1" ? "1" : "0.1",
       NODE_ENV: "test",
     };
+    if (process.env.MESH_FAST_MUTAGEN_CACHE && !this.coldInstall) {
+      await NodeFSP.mkdir(NodePath.join(base, "bin"), { recursive: true });
+      for (const file of ["mutagen", "mutagen-agents.tar.gz"])
+        await NodeFSP.copyFile(
+          NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, file),
+          NodePath.join(base, "bin", file),
+        );
+      await NodeFSP.chmod(NodePath.join(base, "bin/mutagen"), 0o755);
+    }
+    if (this.legacySeed) {
+      await NodeFSP.mkdir(NodePath.join(base, "userdata"), { recursive: true });
+      await NodeFSP.writeFile(
+        NodePath.join(base, "userdata/settings.json"),
+        JSON.stringify({
+          sidebarWorkspaces: {
+            workspaces: [
+              { id: "main-" + name, name: "main" },
+              { id: "notes-" + name, name: "notes-" + name },
+            ],
+            projectOrder: ["title:seed-" + name],
+            placements: { ["title:seed-" + name]: ["main-" + name] },
+          },
+        }),
+      );
+    }
+    const fakeBin = NodePath.join(home, "fake-bin");
+    await NodeFSP.mkdir(fakeBin);
+    await NodeFSP.writeFile(
+      NodePath.join(fakeBin, "pnpm"),
+      `#!/usr/bin/env node
+const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stringify(['install','--frozen-lockfile']))throw Error('Unexpected install arguments');fs.mkdirSync('.t3',{recursive:true});const n='.t3/install-count';fs.writeFileSync(n,String((fs.existsSync(n)?Number(fs.readFileSync(n)):0)+1));fs.copyFileSync('pnpm-lock.yaml','.t3/installed-lock');
+`,
+      { mode: 0o700 },
+    );
+    env.PATH = [
+      fakeBin,
+      NodePath.dirname(process.execPath),
+      ...(inContainer ? ["/usr/local/bin"] : []),
+      "/usr/sbin",
+      "/usr/bin",
+      "/bin",
+    ].join(NodePath.delimiter);
+    if (inContainer) env.SHELL = "/bin/bash";
+    if (this.skewable) {
+      env.MESH_FAST_CLOCK_FILE = NodePath.join(home, "clock-offset");
+      await NodeFSP.writeFile(env.MESH_FAST_CLOCK_FILE, "0");
+    }
     const sshPort = await port();
     const sshConfig = (
       await run(process.execPath, [
@@ -97,45 +277,193 @@ export class MiniMesh {
         String(sshPort),
       ])
     ).trim();
-    await NodeFSP.appendFile(sshConfig, `SetEnv ${JSON.stringify("HOME=" + home)}\n`);
-    env.T3_MESH_SSHD_DIR = NodePath.dirname(sshConfig);
-    this.launch(
-      "/usr/sbin/sshd",
-      ["-D", "-e", "-f", sshConfig],
-      env,
-      NodePath.join(root, "sshd.log"),
+    if (inContainer)
+      await NodeFSP.writeFile(
+        sshConfig,
+        (await NodeFSP.readFile(sshConfig, "utf8")).replace(/^AllowUsers .*$/m, "AllowUsers node"),
+      );
+    await NodeFSP.appendFile(
+      sshConfig,
+      `SetEnv ${JSON.stringify("HOME=" + home)} ${JSON.stringify("PATH=" + env.PATH)}\n`,
     );
+    env.T3_MESH_SSHD_DIR = NodePath.dirname(sshConfig);
+    if (!inContainer)
+      this.launch(
+        "/usr/sbin/sshd",
+        ["-D", "-e", "-f", sshConfig],
+        env,
+        NodePath.join(root, "sshd.log"),
+      );
     const backend = await port(),
       front = await port();
-    const state = NodePath.join(root, "proxy.json");
-    await NodeFSP.writeFile(state, JSON.stringify({ cut: false, denyPeer: name === "studio" }));
+    this.routes.set(name, front);
     this.launch(
       process.execPath,
       [
-        NodePath.join(repo, "scripts/mesh-e2e/network-proxy.mjs"),
+        new URL("forward.mjs", import.meta.url).pathname,
         String(front),
-        String(backend),
-        state,
-      ],
-      env,
-      NodePath.join(root, "proxy.log"),
-    );
-    const child = this.launch(
-      process.execPath,
-      [
-        binary,
-        "serve",
-        "--base-dir",
-        base,
-        "--host",
         "127.0.0.1",
-        "--port",
-        String(backend),
-        "--no-browser",
+        String(front),
+        this.gateway,
       ],
       env,
-      NodePath.join(root, "server.log"),
+      NodePath.join(root, "gateway.log"),
     );
+    const state = NodePath.join(root, "proxy.json");
+    await NodeFSP.writeFile(
+      state,
+      JSON.stringify({ cut: false, denyPeer: name === this.firstName }),
+    );
+    if (!inContainer)
+      this.launch(
+        process.execPath,
+        [
+          NodePath.join(repo, "scripts/mesh-fast/proxy.mjs"),
+          String(front),
+          String(backend),
+          state,
+          "127.0.0.1",
+        ],
+        env,
+        NodePath.join(root, "proxy.log"),
+      );
+    const useSource =
+      (this.skewable && name === this.firstName) || (this.previousEntry && name === "laptop");
+    const native = NodePath.join(root, "runtime/t3");
+    if (!useSource)
+      await run("cp", [
+        "-al",
+        NodePath.join(process.env.MESH_FAST_RUNTIMES, "0.1.6"),
+        NodePath.join(root, "runtime"),
+      ]);
+    let serverCommand = useSource ? process.execPath : native;
+    let serverArgs = [
+      ...(useSource ? [nodeBinary] : []),
+      "serve",
+      "--base-dir",
+      base,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(backend),
+      "--no-browser",
+    ];
+    if (this.launcher) {
+      const installed = NodePath.join(base, "runtime/versions/0.1.5");
+      await NodeFSP.mkdir(NodePath.dirname(installed), { recursive: true });
+      await NodeFSP.cp(NodePath.join(process.env.MESH_FAST_RUNTIMES, "0.1.5"), installed, {
+        recursive: true,
+      });
+      await NodeFSP.writeFile(NodePath.join(installed, ".install-complete"), "0.1.5\n");
+      await NodeFSP.writeFile(
+        NodePath.join(base, "runtime/service-state.json"),
+        JSON.stringify({ protocol: 3, activeVersion: "0.1.5" }),
+      );
+      Object.assign(env, {
+        T3CODE_HOME: base,
+        T3CODE_PORT: String(backend),
+        T3CODE_HOST: "127.0.0.1",
+        T3CODE_NO_BROWSER: "true",
+        T3_MESH_TEST_MODE: "1",
+      });
+      if (name === "laptop") env.T3_MESH_TEST_FAIL_HEALTH_VERSION = "0.1.6";
+      serverArgs = [NodePath.join(installed, "t3"), "__service-launcher"];
+    }
+    if (this.skewable && name === this.firstName)
+      serverArgs.unshift("--import", NodePath.join(repo, "scripts/mesh-fast/clock.mjs"));
+    if (this.launcher) {
+      serverCommand = serverArgs.shift();
+    }
+    const spec = NodePath.join(root, "server-spec.json"),
+      receipt = NodePath.join(root, "server-process.json");
+    await NodeFSP.writeFile(
+      spec,
+      JSON.stringify({
+        command: serverCommand,
+        args: serverArgs,
+      }),
+    );
+    let container;
+    let child;
+    if (inContainer) {
+      container = this.network + "-" + name;
+      await until(
+        "local node routes allocated",
+        async () => this.routes.size,
+        (value) => value === this.nodeCount,
+      );
+      const containerConfig = NodePath.join(root, "container.json");
+      await NodeFSP.writeFile(
+        spec,
+        JSON.stringify({
+          command: useSource ? "/usr/local/bin/node" : serverCommand,
+          args: serverArgs,
+        }),
+      );
+      await NodeFSP.writeFile(
+        containerConfig,
+        JSON.stringify({
+          routes: [
+            ...[...this.routes]
+              .filter(([peer]) => peer !== name)
+              .map(([, port]) => ({ port, target: port })),
+            ...(this.extraRoutes ?? []).map((port) => ({ port, target: port })),
+          ],
+          children: [
+            ["/usr/sbin/sshd", "-D", "-e", "-f", sshConfig],
+            [
+              "/usr/local/bin/node",
+              NodePath.join(repo, "scripts/mesh-fast/proxy.mjs"),
+              String(front),
+              String(backend),
+              state,
+              "0.0.0.0",
+            ],
+            [
+              "/usr/local/bin/node",
+              NodePath.join(repo, "scripts/mesh-fast/supervisor.mjs"),
+              spec,
+              receipt,
+            ],
+          ],
+        }),
+      );
+      child = this.launch(
+        "docker",
+        [
+          "run",
+          "--rm",
+          "--init",
+          "--name",
+          container,
+          "--network",
+          this.network,
+          "--hostname",
+          this.hostnames?.[name] ?? name,
+          "--add-host",
+          "host.docker.internal:" + this.gateway,
+          "-p",
+          `127.0.0.1:${front}:${front}`,
+          "-v",
+          repo + ":" + repo + ":ro",
+          "-v",
+          root + ":" + root,
+          ...Object.entries(env).flatMap(([key, value]) => ["-e", key + "=" + value]),
+          "mesh-fast-node:26",
+          "sh",
+          "-ec",
+          `usermod -u ${process.getuid()} -d '${home}' node; exec runuser -u node -- /usr/local/bin/node '${NodePath.join(repo, "scripts/mesh-fast/container-node.mjs")}' '${containerConfig}'`,
+        ],
+        process.env,
+        NodePath.join(root, "server.log"),
+      );
+    } else
+      child = this.launch(
+        process.execPath,
+        [NodePath.join(repo, "scripts/mesh-fast/supervisor.mjs"), spec, receipt],
+        env,
+        NodePath.join(root, "server.log"),
+      );
     const origin = `http://127.0.0.1:${front}`;
     const descriptor = await until(
       `${name} ready`,
@@ -147,11 +475,22 @@ export class MiniMesh {
     );
     const token = (
       await run(
-        process.execPath,
-        [binary, "auth", "session", "issue", "--base-dir", base, "--ttl", "1h", "--token-only"],
+        useSource ? process.execPath : native,
+        [
+          ...(useSource ? [nodeBinary] : []),
+          "auth",
+          "session",
+          "issue",
+          "--base-dir",
+          base,
+          "--ttl",
+          "12h",
+          "--token-only",
+        ],
         { env },
       )
     ).split("\n")[0];
+    if (container && useSource) serverCommand = "/usr/local/bin/node";
     return {
       name,
       root,
@@ -162,7 +501,20 @@ export class MiniMesh {
       state,
       token,
       id: descriptor.environmentId,
-      cli: (args) => run(process.execPath, [binary, ...args, "--base-dir", base], { env }),
+      child,
+      serverArgs,
+      serverCommand,
+      backend,
+      front,
+      spec,
+      receipt,
+      container,
+      cli: (args) =>
+        run(
+          useSource ? process.execPath : native,
+          [...(useSource ? [nodeBinary] : []), ...args, "--base-dir", base],
+          { env },
+        ),
     };
   }
 
@@ -170,7 +522,75 @@ export class MiniMesh {
     await NodeFSP.writeFile(node.state, JSON.stringify(state));
   }
 
-  async close() {
+  async signal(node, signal) {
+    const processState = JSON.parse(await NodeFSP.readFile(node.receipt, "utf8"));
+    if (!Number.isSafeInteger(processState.pid) || processState.pid <= 1)
+      throw Error("Invalid captured server PID");
+    if (node.container)
+      await run("docker", [
+        "exec",
+        node.container,
+        "kill",
+        "-" + signal.slice(3),
+        String(processState.pid),
+      ]);
+    else process.kill(processState.pid, signal);
+    return processState;
+  }
+  async stop(node) {
+    const spec = JSON.parse(await NodeFSP.readFile(node.spec, "utf8"));
+    await NodeFSP.writeFile(node.spec, JSON.stringify({ ...spec, paused: true }));
+    await this.signal(node, "SIGTERM");
+    await until(
+      "supervisor stopped",
+      async () => JSON.parse(await NodeFSP.readFile(node.receipt, "utf8")),
+      (value) => value.stopped,
+    );
+    delete node.mcpInitialized;
+    delete node.mcpSession;
+  }
+  async resume(node) {
+    await NodeFSP.writeFile(
+      node.spec,
+      JSON.stringify({ command: node.serverCommand, args: node.serverArgs }),
+    );
+    await until(
+      node.name + " resumed",
+      async () => (await fetch(node.origin + "/.well-known/t3/environment")).json(),
+      (value) => value.environmentId === node.id,
+    );
+  }
+  async restart(node) {
+    await NodeFSP.writeFile(
+      node.spec,
+      JSON.stringify({
+        command: node.serverCommand,
+        args: node.serverArgs,
+      }),
+    );
+    const before = await this.signal(node, "SIGKILL");
+    await until(
+      "automatic supervisor restart",
+      async () => JSON.parse(await NodeFSP.readFile(node.receipt, "utf8")),
+      (value) => value.generation > before.generation && value.pid !== before.pid,
+    );
+    delete node.mcpInitialized;
+    delete node.mcpSession;
+    await until(
+      node.name + " recovered",
+      async () => (await fetch(node.origin + "/.well-known/t3/environment")).json(),
+      (value) => value.environmentId === node.id,
+    );
+  }
+
+  close() {
+    this.closing ??= this.shutdown().finally(() => MiniMesh.active.delete(this));
+    return this.closing;
+  }
+  async shutdown() {
+    for (const cleanup of this.beforeClose) await cleanup();
+    for (const node of this.nodes)
+      if (node.container) await run("docker", ["stop", "--time", "3", node.container]);
     for (const { child } of this.children) if (child.exitCode === null) child.kill("SIGTERM");
     const timer = setTimeout(() => {
       for (const { child } of this.children)
@@ -181,15 +601,26 @@ export class MiniMesh {
     } finally {
       clearTimeout(timer);
     }
+    if (this.network) await run("docker", ["network", "rm", this.network]);
     for (const node of this.nodes) {
       const executable = NodePath.join(node.base, "bin", "mutagen");
       const data = NodePath.join(node.base, "mutagen");
-      try {
-        await NodeFSP.stat(NodePath.join(data, "daemon", "daemon.lock"));
-      } catch (error) {
-        if (error.code === "ENOENT") continue;
-        throw error;
-      }
+      const active = await new Promise((resolve, reject) => {
+        const socket = NodeNet.connect(NodePath.join(data, "daemon/daemon.sock"));
+        socket.once("connect", () => {
+          socket.end();
+          resolve(true);
+        });
+        socket.once("error", (error) => {
+          if (["ENOENT", "ECONNREFUSED"].includes(error.code)) resolve(false);
+          else reject(error);
+        });
+        socket.setTimeout(1000, () => {
+          socket.destroy();
+          reject(Error("Private daemon shutdown probe timed out"));
+        });
+      });
+      if (!active) continue;
       await run(executable, ["daemon", "stop"], {
         env: { ...node.env, MUTAGEN_DATA_DIRECTORY: data },
       });

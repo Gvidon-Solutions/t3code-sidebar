@@ -1,6 +1,18 @@
+import { bindingScenarios } from "./bindings.mjs";
+import { forkScenarios } from "./forks.mjs";
+import { cliScenarios } from "./cli.mjs";
+import { metadataScenarios } from "./metadata.mjs";
+import { skewScenarios } from "./skew.mjs";
+import { uiScenarios } from "./ui.mjs";
+import { rolloutScenarios } from "./rollout.mjs";
+import { runScenarios } from "./runs.mjs";
+import { threadScenarios } from "./threads.mjs";
+import { layoutScenarios } from "./layout.mjs";
+import { replicaScenarios } from "./replicas.mjs";
+import { networkScenarios } from "./network.mjs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import { run } from "../mesh-e2e/client.mjs";
+import { run } from "./client.mjs";
 import * as NodeAssert from "node:assert/strict";
 import { MiniMesh, rpc, until, mcp } from "./mesh.mjs";
 
@@ -34,6 +46,18 @@ async function converged(nodes, expected) {
   );
 }
 export const scenarios = {
+  ...bindingScenarios,
+  ...forkScenarios,
+  ...networkScenarios,
+  ...replicaScenarios,
+  ...layoutScenarios,
+  ...threadScenarios,
+  ...runScenarios,
+  ...rolloutScenarios,
+  ...uiScenarios,
+  ...skewScenarios,
+  ...metadataScenarios,
+  ...cliScenarios,
   "replica-ssh": (directory) =>
     withMesh(directory, async (mesh) => {
       const [studio, , laptop] = mesh.nodes;

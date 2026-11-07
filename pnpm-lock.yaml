@@ -266,6 +266,9 @@ catalogs:
     unified:
       specifier: 11.0.5
       version: 11.0.5
+    ws:
+      specifier: 8.22.0
+      version: 8.22.0
 
 overrides:
   react-native-image-viewing: 0.2.2
@@ -2488,6 +2491,9 @@ importers:
       sharp:
         specifier: 0.35.4
         version: 0.35.4(@types/node@24.12.4)
+      ws:
+        specifier: 'catalog:'
+        version: 8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     devDependencies:
       '@effect/vitest':
         specifier: 4.1.2

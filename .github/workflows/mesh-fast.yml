@@ -6,22 +6,37 @@ on:
 jobs:
   mesh-fast:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
+    env:
+      MESH_FAST_MUTAGEN_CACHE: /tmp/mesh-fast-tools-0.18.1
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "26.12.1"
-      - run: sudo apt-get update && sudo apt-get install -y openssh-server
+          cache: pnpm
+      - run: sudo apt-get update && sudo apt-get install -y openssh-server patchelf && sudo mkdir -p /run/sshd
       - run: pnpm install --frozen-lockfile
-      - run: pnpm mesh:fast
-      - uses: actions/upload-artifact@v4
-        if: failure()
+      - uses: actions/cache@v4
         with:
-          name: mesh-fast-failure
+          path: |
+            /tmp/mesh-fast-tools-0.18.1/mutagen*
+            /tmp/mesh-fast-tools-0.18.1/browsers
+            /tmp/mesh-fast-tools-0.18.1/previous-*
+            /tmp/mesh-fast-tools-0.18.1/toolchain
+            native/resource-monitor/target
+          key: mesh-fast-tools-v2-${{ runner.os }}-${{ hashFiles('native/resource-monitor/Cargo.lock', 'scripts/mesh-fast/previous.mjs') }}
+      - run: pnpm --dir scripts exec playwright-core install-deps chromium
+      - run: scripts/mesh-fast/setup.sh
+      - run: pnpm mesh:fast --jobs 2 --budget-seconds 1800
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mesh-fast-results
           path: |
             /tmp/mesh-fast-*/summary.json
             /tmp/mesh-fast-*/junit.xml
             /tmp/mesh-fast-*/**/*.log
             /tmp/mesh-fast-*/**/failure.txt
+            /tmp/mesh-fast-*/**/shots/*
