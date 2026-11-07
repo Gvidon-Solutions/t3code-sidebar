@@ -7,7 +7,20 @@ export MESH_E2E_ROUND1_WORK=${N1_BED_OPS:-/tmp/N1-network-ops}
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
 set -euo pipefail
-[ "$(gor_ssh 'cat /tmp/mesh-bed.lock/owner')" = N1 ] || die "N1 must hold the bed lock"
+BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-N1}
+require_bed_lock() {
+  local owner
+  owner=$(gor_ssh 'cat /tmp/mesh-bed.lock/owner') || return 1
+  [ "$owner" = "$BED_LOCK_OWNER" ] || { printf 'Bed belongs to %s, expected %s.\n' "$owner" "$BED_LOCK_OWNER" >&2; return 1; }
+}
+require_bed_lock || die "$BED_LOCK_OWNER must hold the bed lock"
+ws_rpc() {
+  require_bed_lock || return 1
+  local machine=$1 method=$2 payload=${3:-'{}'} first=${4:-} token
+  token=$(token_of "$machine")
+  [ -n "$token" ] || { printf '{"__error":true,"message":"no token"}\n'; return 1; }
+  node "$WS" rpc "$method" "$payload" ${first:+"$first"} --origin "$(origin_of "$machine")" --token "$token" --timeout 60000
+}
 chmod 700 "$WORK"
 T_GV=$(mint_token gv)
 T_GOR=$(mint_token gor)
@@ -130,6 +143,7 @@ EOF
     systemctl --user daemon-reload
     tunnel_stopped=0
     restore_tunnel() {
+      require_bed_lock || { printf 'Bed lock lost; leaving shared tunnels untouched.\n' >&2; return 1; }
       if [ "$tunnel_stopped" = 1 ]; then systemctl --user start "$GV_TUNNEL_UNIT"; fi
       rm "$dropin"
       systemctl --user daemon-reload
@@ -137,11 +151,13 @@ EOF
     trap restore_tunnel EXIT
     before=$(systemctl --user show "$GV_UNIT" -p NRestarts --value)
     systemctl --user is-active --quiet "$GV_TUNNEL_UNIT"
+    require_bed_lock || die 'Bed lock lost before tunnel cut'
     tunnel_stopped=1
     systemctl --user stop "$GV_TUNNEL_UNIT"
     wait_connection offline
     jq -e --arg e "$VPS_ENV" '.connections[] | select(.environmentId==$e and .offlineSince!=null and .lastError!=null)' "$WORK/current-status.json" > "$WORK/tunnel-offline.json"
     for elapsed in 30 60 90 120 150 180; do sleep 30; printf 'N1 bed tunnel cut: %s/180 seconds\n' "$elapsed"; done
+    require_bed_lock || die 'Bed lock lost during tunnel cut'
     systemctl --user start "$GV_TUNNEL_UNIT"
     tunnel_stopped=0
     wait_connection relayed
@@ -153,6 +169,7 @@ EOF
     connected_at=$(jq -r --arg e "$VPS_ENV" '.connections[] | select(.environmentId==$e and .state=="direct") | .connectedAt' "$WORK/before-kill-status.json")
     pid=$(vps_ssh 'docker exec t3-mesh-e2e cat /tmp/N1-server-spawn.pid')
     [[ "$pid" =~ ^[0-9]+$ ]] && [ "$pid" -gt 1 ] || die "Invalid captured server PID"
+    require_bed_lock || die 'Bed lock lost before server crash'
     vps_ssh "docker exec t3-mesh-e2e kill -9 '$pid'"
     for attempt in $(seq 1 90); do
       after=$(vps_ssh 'docker inspect -f "{{.RestartCount}}" t3-mesh-e2e')

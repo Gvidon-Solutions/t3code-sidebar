@@ -381,6 +381,7 @@ rexec gor sh -c "printf 'N-authority-wins' > '$N_FILE'"
 rexec gv sh -c "printf 'N-gv-loses' > '$N_FILE'"
 rexec vps sh -c "printf 'N-vps-loses' > '$N_FILE'"
 for _ in $(seq 1 180); do sleep 1; done
+require_bed_lock || die 'Bed lock lost during partition'
 gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json"
 gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT"
 PARTITION_ACTIVE=0

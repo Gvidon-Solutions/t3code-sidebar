@@ -646,6 +646,7 @@ the profile in both the SSH account’s passwd home and the isolated runtime HOM
 Round three checks lock ownership before destructive operations and leaves shared services untouched
 if a host reboot removes the lock. Crash workloads remain 128/256 MiB with mandatory
 active-staging and file-hash assertions.
+Network acceptance also fences RPC operations and tunnel cleanup after a lost lock.
 
 The round-three daemon fixture suspends its verified isolated server process only while
 starting the foreground fault-test daemon, then resumes it before the crash. Background
