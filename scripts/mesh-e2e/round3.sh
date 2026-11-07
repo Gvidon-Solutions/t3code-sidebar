@@ -352,6 +352,10 @@ rexec gor sh -c "printf 'N-authority-wins' > '$N_FILE'"
 rexec gv sh -c "printf 'N-gv-loses' > '$N_FILE'"
 rexec vps sh -c "printf 'N-vps-loses' > '$N_FILE'"
 for m in gv vps; do
+  # Release setup-only pauses before observing recovery from the network outage.
+  while IFS= read -r name; do mut "$m" sync resume "$name"; done < <(jq -r --arg p "$N_ROOT" '.[] | select(.beta.path==$p) | .name' "$WORK/N-before-partition-$m.json")
+  mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-partition-running-$m.json"
+  jq -e --arg p "$N_ROOT" 'any(.[]; .beta.path==$p and .paused==false)' "$WORK/N-partition-running-$m.json" >/dev/null
   ws_rpc "$m" server.updateSettings "$(jq -nc --argjson enabled "$(cat "$WORK/N-replicas-enabled-before-$m.json")" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-partition-enable-$m.json"
   mv "$WORK/N-replicas-enabled-before-$m.json" "$WORK/N-replicas-enabled-restored-$m.json"
 done

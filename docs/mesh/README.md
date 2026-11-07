@@ -656,3 +656,8 @@ Sequential transport acceptance waits for manual-folder policy metadata and its 
 before requesting SSHFS on the same representation key. Otherwise a concurrent ignores
 enrichment can legitimately win the whole-entry LWW race; config revision delivery alone
 does not prove that the per-representation policy action has completed.
+
+The partition fixture releases its artificial setup pauses while the network remains
+cut, before the timed outage window. A real user pause is persistent; leaving one in
+place would test manual pause semantics instead of automatic reconnection. No Mutagen
+retry/resume command runs after network restoration.

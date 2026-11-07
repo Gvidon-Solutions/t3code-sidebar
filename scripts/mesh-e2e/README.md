@@ -438,3 +438,8 @@ does not prove that the per-representation policy action has completed.
 The N1 test sshd accepts the normal managed authorized_keys as well as its separate
 ephemeral-key file. Replacing the managed file would break replica and run access
 while the independent pinned-key transfer scenario is active.
+
+The partition fixture releases its artificial setup pauses while the network remains
+cut, before the timed outage window. A real user pause is persistent; leaving one in
+place would test manual pause semantics instead of automatic reconnection. No Mutagen
+retry/resume command runs after network restoration.
