@@ -142,7 +142,7 @@ test("managed mesh version conflict refuses before stopping or preparing any tar
   assert.equal(prepared, false);
 });
 
-test("delivery rejects a target outside the private allowlist before building", async () => {
+test("delivery rejects unsafe requests before building", async () => {
   const { deliver } = await import("./builder.mjs");
   const dir = mkdtempSync(join(tmpdir(), "delivery-deny-"));
   try {
@@ -152,6 +152,17 @@ test("delivery rejects a target outside the private allowlist before building", 
         { hot: true, machines: "unknown" },
       ),
       /not in delivery allowlist/,
+    );
+    await assert.rejects(
+      deliver({ stateDir: dir, machines: [{ name: "studio" }] }, { hot: true }),
+      /admission|quiesc/i,
+    );
+    await assert.rejects(
+      deliver(
+        { stateDir: dir, machines: [{ name: "studio" }] },
+        { hot: true, now: true, release: "public-tag" },
+      ),
+      /never publish/,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
