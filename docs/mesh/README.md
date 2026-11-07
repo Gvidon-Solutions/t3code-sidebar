@@ -18,6 +18,9 @@ retain their command/message IDs. Old targets without drain support fail before 
 explicit `--now` remains available to skip waiting.
 B1 rechecks its lease after draining: fewer than twelve minutes remaining cancels the fence
 and stops before backup or handoff, even when the configured idle deadline is longer.
+Manual rollback acquires a fresh fence. The staged database restore carries that current
+admission row into the restored database before restart; its historical token cannot authorize
+the new operation. Restored health passes before the current fence is released.
 See [delivery.md](../delivery.md) for configuration, commands and limitations.
 
 The public release workflow publishes runtime first; Windows consumes its archive without
