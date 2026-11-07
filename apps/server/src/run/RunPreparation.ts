@@ -102,6 +102,7 @@ export const layer = Layer.effect(
             config,
             environmentId: mesh.environmentId,
             bindings: bindingsFromLayout(document),
+            ...(doc ? { machines: doc.machines } : {}),
             ...(doc?.ssh?.mode ? { sshMode: doc.ssh.mode } : {}),
           }),
         catch: (cause) => new RunPreparationError({ reason: "resolution", paths: [], cause }),

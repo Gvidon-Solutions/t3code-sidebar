@@ -106,3 +106,13 @@ it("maps Windows replicas to POSIX primaries without depending on the local OS",
   });
   expect(resolveRunPlan({ ...data, cwd: "D:\\copies\\app" })).toEqual({ kind: "local" });
 });
+
+it("uses the user's configured host in existing SSH mode and refuses an absent host", () => {
+  const data = {
+    ...input(),
+    sshMode: "existing" as const,
+    machines: { cloudbox: { ssh: { host: "studio-custom" } } },
+  };
+  expect(resolveRunPlan(data)).toMatchObject({ host: "studio-custom" });
+  expect(() => resolveRunPlan({ ...data, machines: {} })).toThrow(/configured SSH host/);
+});
