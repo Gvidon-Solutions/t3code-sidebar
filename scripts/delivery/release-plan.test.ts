@@ -38,13 +38,13 @@ const workflow = Schema.decodeSync(
 it("release source filters keep unrelated platform builds out of the hot path", () => {
   NodeAssert.deepEqual(releasePlan(["docs/delivery.md"]), { desktop: false, android: false });
   NodeAssert.deepEqual(releasePlan(["apps/mobile/src/App.tsx"]), { desktop: false, android: true });
-  for (const path of [
-    "apps/web/src/App.tsx",
-    "apps/server/src/bin.ts",
-    "apps/desktop/src/boot.ts",
-  ]) {
-    NodeAssert.deepEqual(releasePlan([path]), { desktop: true, android: false });
+  for (const path of ["apps/web/src/App.tsx", "apps/server/src/bin.ts"]) {
+    NodeAssert.deepEqual(releasePlan([path]), { desktop: false, android: false });
   }
+  NodeAssert.deepEqual(releasePlan(["apps/desktop/src/boot.ts"]), {
+    desktop: true,
+    android: false,
+  });
   for (const path of ["pnpm-lock.yaml", "packages/client-runtime/src/index.ts"]) {
     NodeAssert.deepEqual(releasePlan([path]), { desktop: true, android: true });
   }

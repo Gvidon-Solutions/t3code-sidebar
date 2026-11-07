@@ -12,7 +12,7 @@ export function releasePlan(paths: readonly string[]) {
       (path) =>
         infrastructure.test(path) ||
         shared.test(path) ||
-        /^(apps\/(desktop|web|server)\/|native\/|scripts\/(build-desktop|build-cli|lib\/|update-release))/.test(
+        /^(apps\/desktop\/|native\/|scripts\/(build-desktop|build-cli|lib\/|update-release))/.test(
           path,
         ),
     ),
