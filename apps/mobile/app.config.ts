@@ -1,7 +1,11 @@
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
 import type { ExpoConfig } from "expo/config";
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
+const { isAbsolute, relative, dirname } = NodePath;
+const { fileURLToPath } = NodeURL;
 
 // "sidebar" is the fork build: its own package, name and scheme, next to upstream's apps.
 type AppVariant = "development" | "preview" | "production" | "sidebar";
@@ -12,8 +16,8 @@ Object.assign(process.env, repoEnv);
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const runtimeVersionPolicy =
-  process.env.MOBILE_VERSION_POLICY ??
-  (APP_VARIANT === "development" || APP_VARIANT === "sidebar" ? "appVersion" : "fingerprint");
+  (APP_VARIANT === "sidebar" ? "fingerprint" : process.env.MOBILE_VERSION_POLICY) ??
+  (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
@@ -259,8 +263,25 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   updates: {
     // Upstream's OTA channel would replace the fork's JavaScript.
-    enabled: APP_VARIANT !== "sidebar" && repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    enabled:
+      (APP_VARIANT !== "sidebar" ||
+        Boolean(repoEnv.T3_MOBILE_UPDATE_URL && repoEnv.T3_MOBILE_UPDATE_CERTIFICATE)) &&
+      repoEnv.T3CODE_MOBILE_UPDATES_ENABLED !== "0",
+    url:
+      APP_VARIANT === "sidebar"
+        ? repoEnv.T3_MOBILE_UPDATE_URL
+        : "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    ...(APP_VARIANT === "sidebar" && repoEnv.T3_MOBILE_UPDATE_CERTIFICATE
+      ? {
+          codeSigningCertificate: isAbsolute(repoEnv.T3_MOBILE_UPDATE_CERTIFICATE)
+            ? relative(
+                dirname(fileURLToPath(import.meta.url)),
+                repoEnv.T3_MOBILE_UPDATE_CERTIFICATE,
+              )
+            : repoEnv.T3_MOBILE_UPDATE_CERTIFICATE,
+          codeSigningMetadata: { keyid: "main", alg: "rsa-v1_5-sha256" },
+        }
+      : {}),
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -486,6 +507,7 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
+    mobileUpdateUrl: APP_VARIANT === "sidebar" ? (repoEnv.T3_MOBILE_UPDATE_URL ?? null) : null,
     forkReleaseRepo: APP_VARIANT === "sidebar" ? "Gvidon-Solutions/t3code-sidebar" : null,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
