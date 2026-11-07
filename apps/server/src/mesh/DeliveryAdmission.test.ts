@@ -1,3 +1,5 @@
+import * as EffectWorker from "../orchestration-v2/EffectWorker.ts";
+import * as Ref from "effect/Ref";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -178,14 +180,38 @@ it.effect(
       const rows =
         yield* sql`SELECT status FROM orchestration_v2_effect_outbox WHERE effect_id = 'pending-effect'`;
       assert.deepEqual(rows, [{ status: "pending" }]);
-      const delivered = yield* Deferred.make<void>();
-      const send = yield* restarted
-        .withStart(Deferred.succeed(delivered, undefined))
-        .pipe(Effect.forkChild);
-      assert.isFalse(yield* Deferred.isDone(delivered));
+      const newOutboxContext = yield* Layer.build(Outbox.layer).pipe(
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.provideService(Admission.DeliveryAdmission, restarted),
+      );
+      const newOutbox = Context.get(newOutboxContext, Outbox.EffectOutboxV2);
+      const delivered = yield* Ref.make(0);
+      const workerContext = yield* Layer.build(
+        EffectWorker.layerWithOptions({ workerId: "restarted-worker" }),
+      ).pipe(
+        Effect.provideService(Outbox.EffectOutboxV2, newOutbox),
+        Effect.provideService(EffectWorker.OrchestrationEffectExecutorV2, {
+          execute: () =>
+            restarted.withStart(Ref.update(delivered, (count) => count + 1)).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new EffectWorker.OrchestrationEffectExecutionError({
+                    effectId: "pending-effect",
+                    effectType: "provider-turn.start",
+                    cause,
+                  }),
+              ),
+            ),
+        }),
+      );
+      const worker = Context.get(workerContext, EffectWorker.OrchestrationEffectWorkerV2);
+      assert.isFalse(yield* worker.runOnce);
+      const awakened = yield* worker.awaitWork.pipe(Effect.forkChild);
       yield* restarted.cancel("restart");
-      yield* Fiber.join(send);
-      assert.isTrue(yield* Deferred.isDone(delivered));
+      yield* Fiber.join(awakened);
+      assert.isTrue(yield* worker.runOnce);
+      assert.isFalse(yield* worker.runOnce);
+      assert.equal(yield* Ref.get(delivered), 1);
       yield* restarted.cancel("restart");
     }).pipe(Effect.scoped, Effect.provide(layer)),
 );
@@ -217,8 +243,66 @@ it.effect("a provider start racing closure cannot cross the admission mutex", ()
     yield* Fiber.join(first);
     assert.equal((yield* Fiber.join(drain)).phase, "drained");
     assert.isFalse(yield* Deferred.isDone(nextDelivered));
+    const refusal = yield* Fiber.join(next).pipe(Effect.flip);
+    assert.isTrue(isDeliveryUpdating(refusal));
     yield* admission.cancel("start-race");
-    yield* Fiber.join(next);
+    yield* admission.withStart(Deferred.succeed(nextDelivered, undefined));
     assert.isTrue(yield* Deferred.isDone(nextDelivered));
   }).pipe(Effect.provide(layer)),
+);
+
+it.effect(
+  "a start claimed exactly before closure is requeued without exhausting its retry budget",
+  () =>
+    Effect.gen(function* () {
+      const admission = yield* Admission.DeliveryAdmission;
+      const projections = yield* Projections.ProjectionStoreV2;
+      const outbox = yield* Outbox.EffectOutboxV2;
+      const pending = yield* event("claim-race", "starting");
+      yield* projections.apply(pending);
+      yield* outbox.enqueue([
+        {
+          id: "claim-race-effect",
+          commandId: CommandId.make("claim-race-command"),
+          threadId: pending.threadId,
+          request: { type: "provider-turn.start", runId: pending.payload.id },
+        },
+      ]);
+      const first = yield* Ref.make(true);
+      const delivered = yield* Ref.make(0);
+      const context = yield* Layer.build(
+        EffectWorker.layerWithOptions({ workerId: "claim-race-worker", maxAttempts: 1 }),
+      ).pipe(
+        Effect.provideService(Outbox.EffectOutboxV2, outbox),
+        Effect.provideService(EffectWorker.OrchestrationEffectExecutorV2, {
+          execute: () =>
+            Effect.gen(function* () {
+              if (yield* Ref.getAndSet(first, false))
+                yield* admission.drain({ requestId: "claim-race", deadlineMs: 1000 });
+              yield* admission.withStart(Ref.update(delivered, (count) => count + 1));
+            }).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new EffectWorker.OrchestrationEffectExecutionError({
+                    effectId: "claim-race-effect",
+                    effectType: "provider-turn.start",
+                    cause,
+                  }),
+              ),
+            ),
+        }),
+      );
+      const worker = Context.get(context, EffectWorker.OrchestrationEffectWorkerV2);
+      assert.isTrue(yield* worker.runOnce);
+      const sql = yield* SqlClient.SqlClient;
+      assert.deepEqual(
+        yield* sql`SELECT status, attempt_count FROM orchestration_v2_effect_outbox WHERE effect_id = 'claim-race-effect'`,
+        [{ status: "pending", attempt_count: 0 }],
+      );
+      assert.isFalse(yield* worker.runOnce);
+      yield* admission.cancel("claim-race");
+      assert.isTrue(yield* worker.runOnce);
+      assert.isFalse(yield* worker.runOnce);
+      assert.equal(yield* Ref.get(delivered), 1);
+    }).pipe(Effect.scoped, Effect.provide(layer)),
 );

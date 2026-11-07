@@ -51,7 +51,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     yield* sql`CREATE TABLE IF NOT EXISTS delivery_admission (id INTEGER PRIMARY KEY CHECK(id = 1), request_id TEXT NOT NULL, deadline_at INTEGER NOT NULL, deferred_json TEXT NOT NULL)`;
-    const resumeQueued = yield* Ref.make(Effect.void);
+    const resumeQueued = yield* Ref.make<ReadonlyArray<Effect.Effect<void>>>([]);
     const changed = yield* Ref.make(yield* Deferred.make<void>());
     const startLock = yield* Semaphore.make(1);
     const mapError = (cause: unknown) =>
@@ -104,30 +104,19 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.mapError(mapError));
       yield* notify;
-      yield* yield* Ref.get(resumeQueued);
+      yield* Effect.all(yield* Ref.get(resumeQueued), { discard: true });
       return yield* status;
     });
-    const awaitOpen: Effect.Effect<void, DeliveryDrainError> = Effect.suspend(() =>
-      Effect.gen(function* () {
-        const signal = yield* Ref.get(changed);
-        if ((yield* status).phase === "open") return;
-        yield* Deferred.await(signal);
-        return yield* awaitOpen;
-      }),
-    );
     const withStart = <A, E, R>(
       effect: Effect.Effect<A, E, R>,
     ): Effect.Effect<A, E | DeliveryDrainError, R> =>
-      Effect.suspend(() =>
+      startLock.withPermits(1)(
         Effect.gen(function* () {
-          yield* awaitOpen;
-          const result = yield* startLock.withPermits(1)(
-            Effect.gen(function* () {
-              if ((yield* status).phase !== "open") return { closed: true as const };
-              return { closed: false as const, value: yield* effect };
-            }),
-          );
-          return result.closed ? yield* withStart(effect) : result.value;
+          if ((yield* status).phase !== "open")
+            return yield* new DeliveryDrainError({
+              message: `${DELIVERY_UPDATING}: server is draining; retry this command`,
+            });
+          return yield* effect;
         }),
       );
     const drain = Effect.fn("DeliveryAdmission.drain")(function* (
@@ -224,7 +213,9 @@ export const layer = Layer.effect(
       }),
     );
     return DeliveryAdmission.of({
-      onOpen: Effect.fn("DeliveryAdmission.onOpen")((resume) => Ref.set(resumeQueued, resume)),
+      onOpen: Effect.fn("DeliveryAdmission.onOpen")((resume) =>
+        Ref.update(resumeQueued, (callbacks) => [...callbacks, resume]),
+      ),
       awaitClosed,
       drain,
       cancel,

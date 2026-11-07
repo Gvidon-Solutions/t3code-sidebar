@@ -1,3 +1,4 @@
+import { isDeliveryUpdating } from "@t3tools/contracts";
 import { CommandId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -806,6 +807,17 @@ export const layerWithOptions = (
             }).pipe(Effect.onError((cause) => recoverPostSuccessSettlement(effect, cause)));
           }
 
+          if (isDeliveryUpdating(Cause.squash(exit.cause))) {
+            return yield* outbox
+              .retry({
+                effectId: effect.id,
+                workerId,
+                error: "T3_UPDATING: delivery admission is closed",
+                delayMs: 0,
+                preserveAttempt: true,
+              })
+              .pipe(Effect.onError((cause) => requeueClaim(effect, cause)));
+          }
           const error = Cause.pretty(exit.cause);
           const nonRetryable = isNonRetryableProviderTurnControlFailure(effect.request.type, error);
           yield* Effect.logWarning("Orchestration effect execution failed", {
