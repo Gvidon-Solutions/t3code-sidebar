@@ -43,9 +43,9 @@ describe("rewriteMarkdownFileUriHref", () => {
 describe("t3-file links", () => {
   it("names the machine and keeps the absolute path", () => {
     expect(
-      resolveMarkdownFileLinkMeta("t3-file://operalia/%2Fsrv%2Fapp%2FREADME.md", "/repo", "/repo"),
+      resolveMarkdownFileLinkMeta("t3-file://cloudbox/%2Fsrv%2Fapp%2FREADME.md", "/repo", "/repo"),
     ).toMatchObject({
-      environmentId: "operalia",
+      environmentId: "cloudbox",
       filePath: "/srv/app/README.md",
       targetPath: "/srv/app/README.md",
       workspaceRelativePath: null,
@@ -54,10 +54,10 @@ describe("t3-file links", () => {
 
   it("keeps a line suffix", () => {
     expect(
-      resolveMarkdownFileLinkMeta("t3-file://gor/%2Fsrv%2Fapp%2Fmain.ts", "/repo", "/repo"),
-    ).toMatchObject({ environmentId: "gor" });
+      resolveMarkdownFileLinkMeta("t3-file://laptop/%2Fsrv%2Fapp%2Fmain.ts", "/repo", "/repo"),
+    ).toMatchObject({ environmentId: "laptop" });
     expect(
-      resolveMarkdownFileLinkMeta("t3-file://gor/%2Fsrv%2Fapp%2Fmain.ts%3A12", "/repo", "/repo"),
+      resolveMarkdownFileLinkMeta("t3-file://laptop/%2Fsrv%2Fapp%2Fmain.ts%3A12", "/repo", "/repo"),
     ).toMatchObject({ line: 12, filePath: "/srv/app/main.ts" });
   });
 });

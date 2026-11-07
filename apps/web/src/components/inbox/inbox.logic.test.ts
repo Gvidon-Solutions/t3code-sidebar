@@ -18,8 +18,8 @@ import {
   mergeInboxEnvironments,
 } from "./inbox.logic";
 
-const gvidon = EnvironmentId.make("env-gvidon");
-const gor = EnvironmentId.make("env-gor");
+const studio = EnvironmentId.make("env-studio");
+const laptop = EnvironmentId.make("env-laptop");
 
 const issue = (id: string, overrides: Partial<InboxIssue> = {}): InboxIssue => ({
   id: InboxIssueId.make(id),
@@ -72,8 +72,8 @@ describe("mergeInboxEnvironments", () => {
     const state = mergeInboxEnvironments(
       [
         {
-          environmentId: gvidon,
-          environmentLabel: "gvidon",
+          environmentId: studio,
+          environmentLabel: "studio",
           snapshot: snapshot(
             [
               issue("info"),
@@ -83,17 +83,17 @@ describe("mergeInboxEnvironments", () => {
           ),
         },
         {
-          environmentId: gor,
-          environmentLabel: "gor",
+          environmentId: laptop,
+          environmentLabel: "laptop",
           snapshot: snapshot([issue("action", { severity: "action", waitingForOwner: true })], 2),
         },
       ],
       null,
     );
     expect(state.items.map((item) => [item.environmentLabel, item.issue.id])).toEqual([
-      ["gor", "action"],
-      ["gvidon", "info"],
-      ["gvidon", "done"],
+      ["laptop", "action"],
+      ["studio", "info"],
+      ["studio", "done"],
     ]);
     expect(state.open).toHaveLength(2);
     expect(state.closed).toHaveLength(1);
@@ -105,8 +105,8 @@ describe("mergeInboxEnvironments", () => {
     const first = mergeInboxEnvironments(
       [
         {
-          environmentId: gvidon,
-          environmentLabel: "gvidon",
+          environmentId: studio,
+          environmentLabel: "studio",
           snapshot: snapshot([issue("a", { threadIds: [ThreadId.make("t1")] }), issue("b")]),
         },
       ],
@@ -116,8 +116,8 @@ describe("mergeInboxEnvironments", () => {
     const same = mergeInboxEnvironments(
       [
         {
-          environmentId: gvidon,
-          environmentLabel: "gvidon",
+          environmentId: studio,
+          environmentLabel: "studio",
           snapshot: snapshot([issue("a", { threadIds: [ThreadId.make("t1")] }), issue("b")]),
         },
       ],
@@ -128,8 +128,8 @@ describe("mergeInboxEnvironments", () => {
     const changed = mergeInboxEnvironments(
       [
         {
-          environmentId: gvidon,
-          environmentLabel: "gvidon",
+          environmentId: studio,
+          environmentLabel: "studio",
           snapshot: snapshot([
             issue("a", { threadIds: [ThreadId.make("t1")] }),
             issue("b", { lastSequence: 2, notableSequence: 2 }),
@@ -149,17 +149,17 @@ describe("mergeInboxEnvironments", () => {
 describe("collectInboxAlertsByEnvironment", () => {
   it("does not replay a late environment's old news, and announces what is new", () => {
     const gvidonOnly = mergeInboxEnvironments(
-      [{ environmentId: gvidon, environmentLabel: "gvidon", snapshot: snapshot([issue("a")]) }],
+      [{ environmentId: studio, environmentLabel: "studio", snapshot: snapshot([issue("a")]) }],
       null,
     );
     const first = collectInboxAlertsByEnvironment(new Map(), gvidonOnly.environments);
     expect(first.alerts).toEqual([]);
 
-    // gor connects later with an unseen issue: its first snapshot only sets marks.
+    // laptop connects later with an unseen issue: its first snapshot only sets marks.
     const both = mergeInboxEnvironments(
       [
-        { environmentId: gvidon, environmentLabel: "gvidon", snapshot: snapshot([issue("a")]) },
-        { environmentId: gor, environmentLabel: "gor", snapshot: snapshot([issue("old")]) },
+        { environmentId: studio, environmentLabel: "studio", snapshot: snapshot([issue("a")]) },
+        { environmentId: laptop, environmentLabel: "laptop", snapshot: snapshot([issue("old")]) },
       ],
       gvidonOnly,
     );
@@ -169,11 +169,11 @@ describe("collectInboxAlertsByEnvironment", () => {
     const news = mergeInboxEnvironments(
       [
         {
-          environmentId: gvidon,
-          environmentLabel: "gvidon",
+          environmentId: studio,
+          environmentLabel: "studio",
           snapshot: snapshot([issue("a"), issue("new")]),
         },
-        { environmentId: gor, environmentLabel: "gor", snapshot: snapshot([issue("old")]) },
+        { environmentId: laptop, environmentLabel: "laptop", snapshot: snapshot([issue("old")]) },
       ],
       both,
     );
@@ -185,8 +185,8 @@ describe("collectInboxAlertsByEnvironment", () => {
     const withClosed = mergeInboxEnvironments(
       [
         {
-          environmentId: gvidon,
-          environmentLabel: "gvidon",
+          environmentId: studio,
+          environmentLabel: "studio",
           snapshot: snapshot([issue("closed", { state: "resolved", alertSequence: 3 })]),
         },
       ],
@@ -194,15 +194,15 @@ describe("collectInboxAlertsByEnvironment", () => {
     );
     const first = collectInboxAlertsByEnvironment(new Map(), withClosed.environments);
     const without = mergeInboxEnvironments(
-      [{ environmentId: gvidon, environmentLabel: "gvidon", snapshot: snapshot([]) }],
+      [{ environmentId: studio, environmentLabel: "studio", snapshot: snapshot([]) }],
       withClosed,
     );
     const second = collectInboxAlertsByEnvironment(first.marks, without.environments);
     const back = mergeInboxEnvironments(
       [
         {
-          environmentId: gvidon,
-          environmentLabel: "gvidon",
+          environmentId: studio,
+          environmentLabel: "studio",
           snapshot: snapshot([issue("closed", { state: "resolved", alertSequence: 3 })]),
         },
       ],
@@ -217,8 +217,8 @@ describe("groupInboxIssuesBySeverity", () => {
     const state = mergeInboxEnvironments(
       [
         {
-          environmentId: gvidon,
-          environmentLabel: "gvidon",
+          environmentId: studio,
+          environmentLabel: "studio",
           snapshot: snapshot([issue("i"), issue("x", { severity: "action" })]),
         },
       ],

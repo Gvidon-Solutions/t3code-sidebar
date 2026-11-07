@@ -321,7 +321,7 @@ it.effect("the first comment on an issue without a thread starts the responsible
         { threadId: null, clientLabel: "t3ctl" },
         {
           severity: "attention",
-          title: "Disk check script: gor at 92%",
+          title: "Disk check script: laptop at 92%",
           description: "/ is full.",
         },
       );
@@ -334,7 +334,7 @@ it.effect("the first comment on an issue without a thread starts the responsible
       const detail = yield* inbox.ownerComment({ issueId, text: "Clear the docker cache." });
       const [launch] = yield* Ref.get(launched);
       assert.equal(launch?.projectId, scratch);
-      assert.equal(launch?.title, "Disk check script: gor at 92%");
+      assert.equal(launch?.title, "Disk check script: laptop at 92%");
       // The agent gets the issue as context; the thread shows only the owner's words.
       assert.include(launch?.initialMessage?.text ?? "", "/ is full.");
       assert.equal(

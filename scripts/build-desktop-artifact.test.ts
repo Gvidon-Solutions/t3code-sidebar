@@ -21,6 +21,7 @@ import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import {
+  DESKTOP_APP_ID,
   buildDesktopBundles,
   copyDesktopBuildArtifacts,
   DesktopBuildManifestRestoreError,
@@ -1393,7 +1394,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.gvidon.t3code-sidebar",
+      appId: DESKTOP_APP_ID,
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1416,7 +1417,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.gvidon.t3code-sidebar</string>");
+    assert.include(entitlements, `<string>ABC1234567.${DESKTOP_APP_ID}</string>`);
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
