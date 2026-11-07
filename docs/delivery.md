@@ -81,6 +81,10 @@ and `apkUrl`; `store` is a private staging directory. Signed exports are copied 
 selected server's `<baseDir>/mobile-updates`. Immutable assets arrive before their index.
 See the mobile update settings for checking, applying and rolling back compatible bundles.
 Native fingerprint changes require the APK; they must not be sent to an incompatible client.
+The generated certificate includes Digital Signature and Code Signing usages required by Expo.
+The APK also declares the request headers needed for selecting a previous bundle. Changing
+either native input needs another APK; an OTA bundle cannot enable it retrospectively.
+Set `ota.apkUrl` to a reachable APK download for the native-update notice.
 
 ## Verification and limits
 

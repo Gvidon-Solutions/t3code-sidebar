@@ -14,6 +14,10 @@ The public release workflow publishes runtime first; Windows consumes its archiv
 waiting for the Linux installer. Each platform attaches its artifacts independently.
 Server `delivery/` serves signed Expo manifests and immutable assets. Mobile clients match
 native fingerprints, check on launch/foreground and can request a previous compatible bundle.
+Expo also enforces certificate Digital Signature/Code Signing usages and a native allowlist
+of overridable update headers. Those inputs must be baked into the first APK; JavaScript
+cannot repair them through OTA. Publish manifests after building that APK: older manifests
+are correctly ignored in favor of the embedded bundle.
 
 Desktop's production custom protocol prefers its local server's UI, or the explicit
 `T3CODE_DESKTOP_UI_URL`, retaining the stable storage/preload origin and bundled offline UI.
