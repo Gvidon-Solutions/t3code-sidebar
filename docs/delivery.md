@@ -183,7 +183,7 @@ builder clone does not depend on the developer checkout's `.env` or app-config s
 --bed-lock-file /tmp/mesh-bed.lock/owner` prepares only D1-prefixed fixture units. Each machine
 needs a private `sshdPort`; the helper installs its daemon with private keys and authorized-key
 file, copies Node and the agent CLI over configured SSH, and installs a user or root system
-unit. A fixture ownership marker prevents adopting another server's existing database. The
+unit. A fixture ownership marker prevents adopting another server's existing database.
 For SSH accounts without permission to write the root runtime directory, configure a private
 `uploadDir` writable by that SSH account; the privileged target helper extracts from staging. The
 root Node launcher uses a private tool PATH that omits `gh`; `requireNoGh` makes the rollout
