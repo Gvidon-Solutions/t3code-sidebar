@@ -78,7 +78,10 @@ export async function runScenarios(h) {
   );
   const profile =
     'export HOME=/bed/home\nexport PATH=/usr/bin:/bin\nexport NVM_DIR=/bed/home/.nvm\n. "$NVM_DIR/nvm.sh" --no-use\nnvm use --silent v26.12.1\nexport PATH=/bed/home/.local/bin:$PATH\nexport R1_LOGIN_PROFILE=loaded\n';
-  await file(cloudbox, "/home/t3/.bash_profile", profile);
+  const loginHome = await cloud(`node -p ${quote("require('node:os').userInfo().homedir")}`);
+  for (const home of new Set([cloudbox.home, loginHome])) {
+    await file(cloudbox, `${home}/.bash_profile`, profile);
+  }
   const env = {
     ...process.env,
     HOME: studio.home,

@@ -548,7 +548,6 @@ try {
   await file(studio, `${source}/README.md`, "S1 primary wins");
   await file(laptop, `${laptop.replica.path}/README.md`, "S1 replica loses");
   await mutate(laptop, "resume");
-  await mutate(laptop, "flush");
   await until(
     "primary-wins",
     () => read(laptop, `${laptop.replica.path}/README.md`),
@@ -577,7 +576,6 @@ try {
     `node -e ${quote(`require('node:fs').utimesSync(${JSON.stringify(laptop.replica.path + "/README.md")},200,200)`)}`,
   );
   await mutate(laptop, "resume");
-  await mutate(laptop, "flush");
   await until(
     "newest-wins",
     () => read(studio, `${source}/README.md`),
@@ -603,7 +601,6 @@ try {
   }
   if (!refused) throw Error("Removal accepted unsynced files");
   await mutate(laptop, "resume");
-  await mutate(laptop, "flush");
   await until(
     "clean before removal",
     () => read(studio, `${source}/unsynced.txt`),

@@ -61,13 +61,15 @@ const until = async (description, read, accepts) => {
   }
   throw Error(`${description}: ${JSON.stringify(value).slice(-3000)}`);
 };
+await NodeFSP.mkdir(root, { recursive: true });
+const localRoot = await NodeFSP.realpath(root);
 const nodes = [
   {
     name: "studio",
     port: 3795,
     sshPort: 22295,
-    base: `${root}/studio/state`,
-    home: `${root}/studio/home`,
+    base: `${localRoot}/studio/state`,
+    home: `${localRoot}/studio/home`,
     origin: "http://127.0.0.1:3795",
   },
   {
