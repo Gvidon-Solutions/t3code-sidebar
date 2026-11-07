@@ -3,7 +3,7 @@ const { test } = NodeTest;
 import * as NodeAssert from "node:assert/strict";
 const assert = NodeAssert.default;
 import * as NodeFS from "node:fs";
-const { mkdtempSync, readFileSync, rmSync, writeFileSync } = NodeFS;
+const { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = NodeFS;
 import * as NodeOS from "node:os";
 const { tmpdir } = NodeOS;
 import * as NodePath from "node:path";
@@ -115,7 +115,8 @@ test("hot snapshot includes staged, unstaged and untracked files without changin
     writeFileSync(join(dir, "new"), "untracked");
     const index = readFileSync(join(dir, ".git/index"));
     const before = git("rev-parse", "HEAD");
-    const result = snapshot(dir, "test");
+    mkdirSync(join(dir, "nested"));
+    const result = snapshot(join(dir, "nested"), "test");
     assert.equal(git("branch", "--show-current"), "work");
     assert.equal(git("rev-parse", "HEAD"), before);
     assert.deepEqual(readFileSync(join(dir, ".git/index")), index);

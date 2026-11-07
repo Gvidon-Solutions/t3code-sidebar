@@ -71,6 +71,7 @@ export function readConfig(path = defaultConfigPath()) {
   return config;
 }
 export function snapshot(worktree, id = new Date().toISOString().replaceAll(/[-:.]/g, "")) {
+  worktree = exec("git", ["-C", worktree, "rev-parse", "--show-toplevel"]).trim();
   const index = join(worktree, `.delivery-index-${randomUUID()}`);
   const env = { ...process.env, GIT_INDEX_FILE: index };
   const git = (...args) => exec("git", ["-C", worktree, ...args], { env }).trim();
