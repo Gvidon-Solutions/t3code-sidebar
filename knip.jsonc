@@ -35,6 +35,7 @@
         "mesh-e2e/network-proxy.mjs",
         "mesh-e2e/network-ssh.mjs",
         "mesh-e2e/network-local.mjs",
+        "mesh-e2e/convergence.mjs",
         "mesh-e2e/managed-sshd.mjs",
         "mesh-e2e/s1-bed.mjs",
         "mesh-e2e/r1-harness.mjs",

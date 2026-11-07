@@ -15,6 +15,8 @@ import * as TestClock from "effect/testing/TestClock";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import * as Config from "./MeshConfig.ts";
 
+const isServerStatus = Schema.is(MeshConfigServerStatus);
+
 const layout = Layer.effect(
   MeshLayoutService,
   Effect.gen(function* () {
@@ -162,7 +164,7 @@ it.layer(Config.layer.pipe(Layer.provideMerge(layout), Layer.provide(oncePlanner
           Stream.filter((snapshot) => {
             const value = snapshot.document["mesh.configStatus/studio"]?.v;
             return (
-              Schema.is(MeshConfigServerStatus)(value) &&
+              isServerStatus(value) &&
               value.actions.some((action) => action.id === "once/studio" && action.state === "done")
             );
           }),
