@@ -1,3 +1,4 @@
+import { buildMeshMachines, deriveMeshFooterStatus } from "./meshMachines.ts";
 import upgradeFixture from "./meshLayout/fixtures/upgrade.json" with { type: "json" };
 import { projectMachineStrip } from "./meshLayout/projectMachineStrip.ts";
 import type {
@@ -455,6 +456,15 @@ it("merges the upgrade snapshot with a legacy offline cache without stealing the
     config: materialize(upgradeFixture.document),
   });
   const config = state.snapshot!.config;
+  const machines = buildMeshMachines({
+    config,
+    connections: upgradeFixture.connections,
+    peerStates: upgradeFixture.peerStates,
+  });
+  expect(deriveMeshFooterStatus({ enabled: true, machines, now: 0 })).toMatchObject({
+    kind: "unreachable",
+    environmentId: "studio",
+  });
   for (const projectKey of ["lp-application", "github-neutral/docs"]) {
     const strip = projectMachineStrip(
       config,

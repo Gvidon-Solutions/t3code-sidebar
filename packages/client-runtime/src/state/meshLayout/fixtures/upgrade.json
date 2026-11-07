@@ -73,5 +73,21 @@
       "v": "lp-application",
       "h": "0000000000001.00000.studio"
     }
-  }
+  },
+  "connections": [
+    {
+      "environmentId": "cloudbox",
+      "label": "Cloudbox",
+      "connected": true
+    }
+  ],
+  "peerStates": [
+    {
+      "environmentId": "studio",
+      "lastExchangeAt": null,
+      "lastError": "No response from the old route",
+      "sentSeq": 0,
+      "receivedSeq": 0
+    }
+  ]
 }
