@@ -204,7 +204,7 @@ Build without touching another checkout or the installed `t3` skill:
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 MESH_E2E_BUILD_CURRENT=1 scripts/mesh-e2e/up.sh xdev
 scripts/mesh-e2e/round1.sh
-scripts/mesh-e2e/round2.sh
+MESH_E2E_LIVE_REPORTS=1 scripts/mesh-e2e/round2.sh
 ```
 
 `MESH_E2E_BUILD_CURRENT=1` builds this checkout's HEAD (printed in the log),
@@ -215,16 +215,13 @@ worktree. Deployment copies staged `~/.agents/skills/t3-next/scripts` to gor's
 Round 2 reuses round 1's authenticated WS helpers through
 `MESH_E2E_HELPERS_ONLY=1`. Its default evidence directory is
 `/tmp/t3-mesh-e2e-round2`; override `MESH_E2E_ROUND2_WORK` to retain another run.
-It enables replicas on the test nodes and saves routes through `meshLayout.apply`,
-the Settings model. MCP and CLI calls use separate temporary auth directories.
+It enables replicas on the test nodes. MCP and CLI calls use separate temporary auth directories.
 Do not publish those directories: they contain credentials.
 
-`round2-routes.sh` creates a dedicated SSH key whose VPS authorized-key command
-is restricted to `docker exec -i t3-mesh-e2e`. This lets Mutagen address paths
-inside the container from gor and gvidon without exposing host paths or adding
-an SSH daemon. The private key is copied only to gor; the pinned VPS host key
-comes from the existing vpn-ops known_hosts. Settings reach routes use the
-identity file so T3 generates its managed SSH aliases.
+Round 2 applies managed SSH through `meshConfig.apply` and resolves the generated
+`t3-<name>` aliases from the environment bindings. It uses the isolated SSH homes
+and sshd endpoints provisioned by deployment. It does not invoke the legacy
+`round2-routes.sh`, write real-user SSH files or configure raw reach routes.
 
 The runner leaves the bed running, the reverse representation and second demo
 primary in the layout, and a labelled orphan session for inspection. It removes
@@ -233,10 +230,8 @@ project. Re-running allocates another free replica path when the old files are
 still there. Assertions and deadlines fail explicitly; no failed acceptance is
 silently treated as a pass. `round2.log` and `round2-report.md` record the run.
 
-Round 2 provisions SCP/SFTP support for that container-only SSH endpoint and,
-when absent, copies the existing local Codex auth fixture into the isolated
-container HOME (override its source with `MESH_E2E_CODEX_AUTH`). Credentials never
-enter evidence logs. The installer test temporarily moves only the test server's
+The real-agent scenarios require Codex authentication in the isolated container
+HOME before the run. Credentials never enter evidence logs. The installer test temporarily moves only the test server's
 `bin` directory aside and proves T3 restores pinned Mutagen on first use.
 
 ## N1 transport acceptance

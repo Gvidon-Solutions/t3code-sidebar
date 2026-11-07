@@ -630,3 +630,5 @@ status; otherwise background reports prevent the mesh from becoming quiescent.
 The bed's `convergence.mjs` captures an all-entry HLC barrier for rounds with live
 reports; the default round-one check still requires complete document equality.
 This avoids comparing sequential reads as if they were an atomic distributed snapshot.
+Round 2 provisions SSH through `meshConfig.apply` and probes bound `t3-<name>` aliases;
+the legacy raw-route/key installer is no longer part of that acceptance path.

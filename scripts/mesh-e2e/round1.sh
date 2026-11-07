@@ -390,7 +390,7 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
       ws_get "$machine" > "$WORK/snap-$machine.json" || return 1
       snapshots+=("$WORK/snap-$machine.json")
     done
-    node "$MESH_DIR/convergence.mjs" capture "$barrier" "${snapshots[@]}" || return 1
+    node "$REPO_ROOT/scripts/mesh-e2e/convergence.mjs" capture "$barrier" "${snapshots[@]}" || return 1
   fi
   while :; do
     converged=1
@@ -413,7 +413,7 @@ wait_converged() { # wait_converged <label> [machines...] -> 0 when docs and con
       fi
     done
     if [ "$converged" = 1 ] && [ "${MESH_E2E_LIVE_REPORTS:-0}" = 1 ]; then
-      node "$MESH_DIR/convergence.mjs" check "$barrier" "${snapshots[@]}" || converged=0
+      node "$REPO_ROOT/scripts/mesh-e2e/convergence.mjs" check "$barrier" "${snapshots[@]}" || converged=0
       first_doc="captured all-entry HLC barrier"
     fi
     if [ "$converged" = 1 ]; then

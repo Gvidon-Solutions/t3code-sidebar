@@ -7,8 +7,10 @@ export MESH_E2E_HELPERS_ONLY=1
 export MESH_E2E_ROUND1_WORK="${MESH_E2E_ROUND2_WORK:-/tmp/t3-mesh-e2e-round2}"
 . "$(dirname "$0")/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
+export MESH_E2E_SSH_CONTROL_DIR="${MESH_E2E_SSH_CONTROL_DIR:-$WORK/round2-ssh}"
+mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
+chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
 TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-120}
-"$MESH_DIR/round2-routes.sh" || exit 1
 PASS=0; FAIL=0; FAILED=()
 CTL="$HOME/.agents/skills/t3-next/scripts/t3ctl.mjs"
 for m in gv gor vps; do
@@ -45,25 +47,18 @@ printf 'build=%s environments gv=%s gor=%s vps=%s evidence=%s\n' "$BUILD_VERSION
 probe installer-disable ws_rpc vps server.updateSettings '{"patch":{"replicasEnabled":false}}'
 probe installer-clean vexec sh -c 'if test -d /home/t3/.t3/bin; then mv /home/t3/.t3/bin "/home/t3/.t3/bin.before-round2-$1"; fi; test ! -e /home/t3/.t3/bin/mutagen' sh "$RUN_TS"
 for m in gv gor vps; do probe "enable-$m" ws_rpc "$m" server.updateSettings '{"patch":{"meshEnabled":true,"linkedEnvironmentsEnabled":true,"replicasEnabled":true,"mutagenPath":""}}'; done
-# Same per-machine model and layout.apply transport as Settings > Mesh.
-ws_get gor > "$WORK/routes-before.json"
-node --input-type=module - "$WORK/routes-before.json" "$GV_ENV" "$GOR_ENV" "$VPS_ENV" > "$WORK/routes.json" <<'JS'
-import {readFileSync} from 'node:fs';
-const [file,gv,gor,vps]=process.argv.slice(2), {document}=JSON.parse(readFileSync(file));
-const h=`${Math.max(Date.now(),...Object.values(document).map(e=>Number(e.h.slice(0,13))+1))}.00000.${gor}`;
-const route=(id,label,tag,reach)=>[`machine/${id}`,{v:{...document[`machine/${id}`]?.v,label,tag,reach},h}];
-console.log(JSON.stringify({entries:Object.fromEntries([
-route(gv,'gv test','GV',{[gor]:{ssh:'user@192.168.1.10',identityFile:process.env.HOME+'/.ssh/id_malaniya_25519'},[vps]:{ssh:'root@152.89.244.57',identityFile:process.env.HOME+'/.local/share/t3-mesh-e2e/round2-container'}}),
-route(gor,'gor','GR',{[vps]:{ssh:'root@152.89.244.57',identityFile:'/home/user/.local/share/t3-mesh-e2e/round2-container'}}),
-route(vps,'vps','VP',{[gor]:{ssh:'gor'},[gv]:{ssh:'gvidon'}})
-])}));
-JS
-probe routes ws_rpc gor meshLayout.apply "$(cat "$WORK/routes.json")"
+ws_rpc gor meshConfig.get '{}' > "$WORK/routes-config.json"
+GV_NAME=$(jq -er --arg id "$GV_ENV" '.bindings|to_entries[]|select(.value==$id)|.key' "$WORK/routes-config.json")
+GOR_NAME=$(jq -er --arg id "$GOR_ENV" '.bindings|to_entries[]|select(.value==$id)|.key' "$WORK/routes-config.json")
+VPS_NAME=$(jq -er --arg id "$VPS_ENV" '.bindings|to_entries[]|select(.value==$id)|.key' "$WORK/routes-config.json")
+jq --arg gv "$GV_NAME" --arg gor "$GOR_NAME" --arg vps "$VPS_NAME" '.current.doc | .ssh = {mode:"managed"} | .machines |= with_entries(.value.ssh = {}) | .machines[$gv].label = "GV" | .machines[$gor].label = "GR" | .machines[$vps].label = "VP"' "$WORK/routes-config.json" > "$WORK/routes-doc.json"
+BASE=$(jq -er '.current.revision' "$WORK/routes-config.json")
+probe routes ws_rpc gor meshConfig.apply "$(jq -nc --slurpfile doc "$WORK/routes-doc.json" --arg base "$BASE" '{doc:$doc[0],baseRevision:$base}')"
 wait_converged 'routes converge'
-probe route-gv-gor ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-mesh-$GOR_ENV" hostname
-probe route-vps-gor vexec ssh -o BatchMode=yes gor hostname
-probe route-vps-gv vexec ssh -o BatchMode=yes gvidon hostname
-probe route-gor-vps gor_ssh "ssh -o BatchMode=yes -o ConnectTimeout=10 t3-mesh-$VPS_ENV hostname"
+probe route-gv-gor ssh -F "$GV_BASE_DIR/home/.ssh/config" -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
+probe route-vps-gor vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
+probe route-vps-gv vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GV_NAME" hostname
+probe route-gor-vps gor_ssh "ssh -o BatchMode=yes -o ConnectTimeout=10 t3-$VPS_NAME hostname"
 if ! ws_rpc gor peerLinks.list '{}' | jq -e --arg e "$GV_ENV" '.links[] | select(.environmentId==$e and .access=="full-access")' > "$WORK/gor-gv-link.json"; then
  code=$(pair_code gv)
  probe link-gor-gv ws_rpc gor peerLinks.link "$(jq -nc --arg code "$code" --arg e "$GV_ENV" '{url:"http://127.0.0.1:13795",pairingCode:$code,access:"full-access",expectedEnvironmentId:$e}')"
@@ -132,7 +127,7 @@ probe c-files reverse_files
 # Independent second primary of demo.
 checkout_demo() {
  local ssh_command
- printf -v ssh_command '%q ' ssh -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes
+ printf -v ssh_command '%q ' ssh -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no
  if [ ! -d /tmp/t3-mesh-round2-primary/.git ]; then
   GIT_SSH_COMMAND="$ssh_command" git clone -q "$GOR_HOST:/home/user/xdev-e2e/demo" /tmp/t3-mesh-round2-primary || return
  fi
