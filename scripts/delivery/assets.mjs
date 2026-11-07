@@ -1,7 +1,8 @@
 import * as NodeChildProcess from "node:child_process";
 const { execFileSync } = NodeChildProcess;
 import * as NodeFS from "node:fs";
-const { cpSync, copyFileSync, mkdirSync, readdirSync, renameSync, writeFileSync } = NodeFS;
+const { cpSync, copyFileSync, mkdirSync, readdirSync, renameSync, writeFileSync, existsSync } =
+  NodeFS;
 import * as NodePath from "node:path";
 const { join, resolve } = NodePath;
 const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
@@ -17,7 +18,6 @@ export function changedArtifacts(paths) {
 }
 export async function buildAssets({
   config,
-  machines,
   paths,
   logDir,
   version,
@@ -49,6 +49,7 @@ export async function buildAssets({
     );
   }
   let nativeFingerprint = previousFingerprint;
+  let mobileUpdate = null;
   if (changes.mobile) {
     if (!config.ota)
       throw new Error(
@@ -99,6 +100,8 @@ export async function buildAssets({
     if (config.ota) {
       const output = join(logDir, "ota-export");
       const publicConfig = join(logDir, "expo-public.json");
+      const candidate = join(logDir, "mobile-update-store");
+      if (existsSync(config.ota.store)) cpSync(config.ota.store, candidate, { recursive: true });
       writeFileSync(
         publicConfig,
         exec("pnpm", ["--silent", "exec", "expo", "config", "--type", "public", "--json"], {
@@ -126,63 +129,65 @@ export async function buildAssets({
         "--origin",
         config.ota.origin,
         "--store",
-        config.ota.store,
+        candidate,
         "--key",
         config.ota.key,
         "--certificate",
         config.ota.certificate,
         ...(config.ota.apkUrl ? ["--apk-url", config.ota.apkUrl] : []),
       ]);
-      for (const machine of machines) {
-        const destination = join(machine.home, "mobile-updates");
-        if (machine.ssh) {
-          exec("ssh", [
-            "-o",
-            "BatchMode=yes",
-            ...(machine.sshArgs ?? []),
-            machine.ssh,
-            `mkdir -p ${quote(destination)}`,
-          ]);
-          exec("scp", [
-            ...(machine.scpArgs ?? []),
-            "-r",
-            join(config.ota.store, "assets"),
-            `${machine.ssh}:${destination}/`,
-          ]);
-          exec("scp", [
-            ...(machine.scpArgs ?? []),
-            join(config.ota.store, "certificate.pem"),
-            `${machine.ssh}:${destination}/certificate.pem`,
-          ]);
-          exec("scp", [
-            ...(machine.scpArgs ?? []),
-            join(config.ota.store, "catalog.json"),
-            `${machine.ssh}:${destination}/catalog.json.tmp`,
-          ]);
-          exec("ssh", [
-            "-o",
-            "BatchMode=yes",
-            ...(machine.sshArgs ?? []),
-            machine.ssh,
-            `mv ${quote(join(destination, "catalog.json.tmp"))} ${quote(join(destination, "catalog.json"))}`,
-          ]);
-        } else if (resolve(config.ota.store) !== resolve(destination)) {
-          mkdirSync(destination, { recursive: true, mode: 0o700 });
-          cpSync(join(config.ota.store, "assets"), join(destination, "assets"), {
-            recursive: true,
-          });
-          copyFileSync(
-            join(config.ota.store, "certificate.pem"),
-            join(destination, "certificate.pem"),
-          );
-          copyFileSync(
-            join(config.ota.store, "catalog.json"),
-            join(destination, "catalog.json.tmp"),
-          );
-          renameSync(join(destination, "catalog.json.tmp"), join(destination, "catalog.json"));
-        }
-      }
+      mobileUpdate = { store: candidate };
     }
   }
-  return { files: artifacts, nativeFingerprint };
+  return { files: artifacts, nativeFingerprint, mobileUpdate };
+}
+
+function copyMobileStore(store, destination) {
+  if (resolve(store) === resolve(destination)) return;
+  mkdirSync(destination, { recursive: true, mode: 0o700 });
+  cpSync(join(store, "assets"), join(destination, "assets"), { recursive: true });
+  copyFileSync(join(store, "certificate.pem"), join(destination, "certificate.pem"));
+  copyFileSync(join(store, "catalog.json"), join(destination, "catalog.json.tmp"));
+  renameSync(join(destination, "catalog.json.tmp"), join(destination, "catalog.json"));
+}
+
+export async function publishMobileUpdate(store, config, machines) {
+  const exec = (command, args) =>
+    execFileSync(command, args, { encoding: "utf8", timeout: 900_000 });
+  copyMobileStore(store, config.ota.store);
+  for (const machine of machines) {
+    const destination = join(machine.home, "mobile-updates");
+    if (machine.ssh) {
+      exec("ssh", [
+        "-o",
+        "BatchMode=yes",
+        ...(machine.sshArgs ?? []),
+        machine.ssh,
+        `mkdir -p ${quote(destination)}`,
+      ]);
+      exec("scp", [
+        ...(machine.scpArgs ?? []),
+        "-r",
+        join(store, "assets"),
+        `${machine.ssh}:${destination}/`,
+      ]);
+      exec("scp", [
+        ...(machine.scpArgs ?? []),
+        join(store, "certificate.pem"),
+        `${machine.ssh}:${destination}/certificate.pem`,
+      ]);
+      exec("scp", [
+        ...(machine.scpArgs ?? []),
+        join(store, "catalog.json"),
+        `${machine.ssh}:${destination}/catalog.json.tmp`,
+      ]);
+      exec("ssh", [
+        "-o",
+        "BatchMode=yes",
+        ...(machine.sshArgs ?? []),
+        machine.ssh,
+        `mv ${quote(join(destination, "catalog.json.tmp"))} ${quote(join(destination, "catalog.json"))}`,
+      ]);
+    } else copyMobileStore(store, destination);
+  }
 }

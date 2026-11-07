@@ -272,3 +272,61 @@ test("the isolated fixture gate refuses production use and records an explicit a
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("failed runtime health leaves phone catalogs unchanged; only healthy rollout promotes the signed candidate", async () => {
+  const { rolloutAndPublish } = await import("./builder.mjs");
+  const root = mkdtempSync(join(tmpdir(), "delivery-ota-transaction-"));
+  try {
+    const candidate = join(root, "candidate"),
+      committed = join(root, "successful-store"),
+      home = join(root, "studio");
+    for (const dir of [candidate, committed, join(home, "mobile-updates")]) {
+      mkdirSync(join(dir, "assets"), { recursive: true });
+      writeFileSync(join(dir, "certificate.pem"), "certificate");
+      writeFileSync(
+        join(dir, "catalog.json"),
+        JSON.stringify({ id: dir === candidate ? "new" : "old" }),
+      );
+    }
+    writeFileSync(join(candidate, "assets/new-hash"), "new bundle");
+    let active = false,
+      healthy = false;
+    const adapter = {
+      name: "studio",
+      health: async () => ({ ...health(active ? "2" : "1"), replicasReady: !active || healthy }),
+      prepare: async () => {},
+      drain: async () => {},
+      activate: async () => {
+        active = true;
+      },
+      rollback: async () => {
+        active = false;
+      },
+    };
+    const input = {
+      adapters: [adapter],
+      version: "2",
+      options: { healthWaitMs: 0 },
+      journal: async () => {},
+      mobileUpdate: { store: candidate },
+      config: { ota: { store: committed } },
+      machines: [{ home }],
+    };
+    await assert.rejects(rolloutAndPublish(input), /Replicas have not resumed/);
+    assert.equal(JSON.parse(readFileSync(join(committed, "catalog.json"), "utf8")).id, "old");
+    assert.equal(
+      JSON.parse(readFileSync(join(home, "mobile-updates/catalog.json"), "utf8")).id,
+      "old",
+    );
+    healthy = true;
+    await rolloutAndPublish(input);
+    assert.equal(JSON.parse(readFileSync(join(committed, "catalog.json"), "utf8")).id, "new");
+    assert.equal(
+      JSON.parse(readFileSync(join(home, "mobile-updates/catalog.json"), "utf8")).id,
+      "new",
+    );
+    assert.equal(readFileSync(join(home, "mobile-updates/assets/new-hash"), "utf8"), "new bundle");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

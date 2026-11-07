@@ -28,7 +28,7 @@ import * as NodeNet from "node:net";
 import * as Effect from "effect/Effect";
 import * as HostProcess from "../../packages/shared/src/HostProcess.ts";
 import { rollout, waitForHealthy } from "./rollout.mjs";
-import { buildAssets } from "./assets.mjs";
+import { buildAssets, publishMobileUpdate } from "./assets.mjs";
 
 const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 const exec = (command, args, options = {}) =>
@@ -139,6 +139,23 @@ export function machineAdapter(machine, archive, version, id, now = false, maxWa
     release: async () => call("cancelDrain"),
   };
 }
+export async function rolloutAndPublish({
+  adapters,
+  version,
+  options,
+  journal,
+  mobileUpdate,
+  config,
+  machines,
+}) {
+  await rollout(adapters, version, options, journal);
+  if (mobileUpdate) {
+    await journal({ phase: "mobile-publish" });
+    await publishMobileUpdate(mobileUpdate.store, config, machines);
+    await journal({ phase: "mobile-published" });
+  }
+}
+
 export async function deliver(config, request) {
   const platform = Effect.runSync(Effect.service(HostProcess.Platform));
   const arch = Effect.runSync(Effect.service(HostProcess.Architecture));
@@ -269,7 +286,6 @@ export async function deliver(config, request) {
     if (!existsSync(archive)) throw new Error("Runtime archive missing");
     const artifacts = await buildAssets({
       config,
-      machines,
       paths,
       logDir,
       version,
@@ -280,16 +296,19 @@ export async function deliver(config, request) {
     const adapters = machines.map((machine) =>
       machineAdapter(machine, archive, version, id, request.now, config.maxWaitMs),
     );
-    await rollout(
+    await rolloutAndPublish({
       adapters,
       version,
-      {
+      options: {
         now: request.now,
         maxWaitMs: config.maxWaitMs ?? 300_000,
         healthWaitMs: config.healthWaitMs ?? 120_000,
       },
       journal,
-    );
+      mobileUpdate: artifacts.mobileUpdate,
+      config,
+      machines,
+    });
     if (!request.hot && request.release) {
       if (!config.releaseRepository) throw new Error("Configure releaseRepository before upload");
       await run("gh", [

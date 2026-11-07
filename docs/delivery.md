@@ -87,7 +87,8 @@ source control. The private `ota` config contains `origin`, `store`, `key`, `cer
 and `apkUrl`; `store` is a private staging directory. An optional `ota.environment` map
 keeps native build inputs such as `T3CODE_MOBILE_VERSION` and `T3_SIDEBAR_VERSION` equal to the
 installed APK. The builder supplies the same sidebar variant, update URL and certificate to
-fingerprint resolution, APK build, public Expo config and JS export. Signed exports are copied into each
+fingerprint resolution, APK build, public Expo config and JS export. Signed exports first stay in a per-delivery candidate store. Only after every selected runtime
+passes health are the catalog and immutable assets promoted to the successful staging store and
 selected server's `<baseDir>/mobile-updates`. Immutable assets arrive before their index.
 See the mobile update settings for checking, applying and rolling back compatible bundles.
 Native fingerprint changes require the APK; they must not be sent to an incompatible client.

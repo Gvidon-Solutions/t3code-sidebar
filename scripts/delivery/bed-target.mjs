@@ -114,7 +114,7 @@ if (!NodeFS.existsSync(binary)) throw new Error("Fixture archive has no t3 execu
 const port = Number(new URL(machine.origin).port);
 NodeFS.writeFileSync(
   machine.unitPath,
-  `[Unit]\nDescription=D1 isolated delivery ${machine.name}\n[Service]\nType=simple\nWorkingDirectory=${agentHome}\nEnvironment=HOME=${agentHome}\nEnvironment=PATH=${tools}\nEnvironment=T3_MESH_SSH_HOME=${agentHome}\nEnvironment=T3_MESH_AGENT_HOME=${agentHome}\nEnvironment=T3_MESH_SSHD_DIR=${sshDir}\nEnvironment=T3_MESH_TEST_MODE=1\nExecStart=${binary} serve --base-dir ${machine.home} --host 127.0.0.1 --port ${port} --no-browser\nKillMode=mixed\nStandardOutput=append:${machine.home}/serve.log\nStandardError=append:${machine.home}/serve.log\n`,
+  `[Unit]\nDescription=D1 isolated delivery ${machine.name}\n[Service]\nType=simple\nWorkingDirectory=${agentHome}\nUnsetEnvironment=T3CODE_HOME T3_BOOT_SERVICE_UNIT T3_SERVICE_LAUNCHER_CONTEXT\nEnvironment=HOME=${agentHome}\nEnvironment=PATH=${tools}\nEnvironment=T3_MESH_SSH_HOME=${agentHome}\nEnvironment=T3_MESH_AGENT_HOME=${agentHome}\nEnvironment=T3_MESH_SSHD_DIR=${sshDir}\nEnvironment=T3_MESH_TEST_MODE=1\nExecStart=${binary} serve --base-dir ${machine.home} --host 127.0.0.1 --port ${port} --no-browser\nKillMode=mixed\nStandardOutput=append:${machine.home}/serve.log\nStandardError=append:${machine.home}/serve.log\n`,
   { mode: 0o600 },
 );
 const sshUnit = machine.unit.replace(/\.service$/, "-sshd.service");
