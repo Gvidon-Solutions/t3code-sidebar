@@ -96,10 +96,10 @@ KEY=$(node --input-type=module -e 'import {createHash} from "node:crypto"; conso
 MARK="round2-$RUN_TS"
 LAUNCH=$(jq -nc --arg p "$DEMO" --arg e "$VPS_ENV" --arg key "$MARK-a" --arg msg "In your current working directory on this VPS replica, use a local shell command to append the exact line $MARK-a to README.md. Mutagen syncs this local edit back to gor. Do not access the primary, request a machine link, run git, or create other files. Finish after making the local edit." '{projectId:$p,environmentId:$e,clientRequestId:$key,title:$key,message:$msg,modelSelection:{instanceId:"codex",model:"gpt-6-luna"},runtimeMode:"full-access"}')
 wait_replica() {
- local m=$1 key=$2 env=$3 state=$4 deadline=$((SECONDS+TIMEOUT))
+ local m=$1 key=$2 env=$3 state=$4 copies=${5:-} deadline=$((SECONDS+TIMEOUT))
  while [ "$SECONDS" -lt "$deadline" ]; do
   ws_rpc "$m" replicas.status '{}' --first > "$WORK/status-$m.json" || return
-  if jq -e --arg k "$key" --arg e "$env" --arg s "$state" '.. | objects | select(.logicalKey?==$k and .environmentId?==$e and .state?==$s)' "$WORK/status-$m.json" >/dev/null; then cat "$WORK/status-$m.json"; return 0; fi
+  if jq -e --arg k "$key" --arg e "$env" --arg s "$state" --arg copies "$copies" '.. | objects | select(.logicalKey?==$k and .environmentId?==$e and .state?==$s and ($copies=="" or (.conflictCopies.path? // "")!=""))' "$WORK/status-$m.json" >/dev/null; then cat "$WORK/status-$m.json"; return 0; fi
   sleep 2
  done
  cat "$WORK/status-$m.json"; return 1
@@ -235,7 +235,7 @@ probe e-alpha gor_ssh "printf 'alpha-$MARK\n' > /home/user/xdev-e2e/demo/round2-
 probe e-beta vexec sh -c "printf 'beta-$MARK\n' > '$VPATH/round2-conflict.txt'"
 probe e-resume mut sync resume "$SESSION"
 probe e-enable ws_rpc vps server.updateSettings '{"patch":{"replicasEnabled":true}}'
-probe e-recovered wait_replica vps "$KEY" "$VPS_ENV" watching
+probe e-recovered wait_replica vps "$KEY" "$VPS_ENV" watching copies
 probe e-flush mut sync flush "$SESSION"
 probe e-content vexec grep -F "alpha-$MARK" "$VPATH/round2-conflict.txt"
 probe e-preserved-loser vexec sh -c 'find "$1/.t3-conflicts" -type f -name round2-conflict.txt -exec cat {} \; | grep -F "$2"' sh "$VPATH" "beta-$MARK"
