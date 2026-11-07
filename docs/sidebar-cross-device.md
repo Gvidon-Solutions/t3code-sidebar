@@ -167,8 +167,8 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 - Needs `machine/<self>.reach[source].ssh` (ssh alias/URL to the source machine) — configurable in
   Settings › Machines; local server settings: `mutagenPath` (default `mutagen`), `replicaRoot`
   (default "": same absolute path as the source when free, else `~/t3-replicas/<basename>`),
-  `replicaIgnores` (default `node_modules .venv venv __pycache__ .pytest_cache dist build target
-  .next .turbo coverage .t3 .claude/worktrees .DS_Store`, no trailing slashes) + `--ignore-vcs`.
+  `replicaIgnores` + `--ignore-vcs`. New meshes use the code-only defaults in
+  [CONCEPT §6](mesh/CONCEPT.md#6-replicas); existing explicit ignore lists stay unchanged.
 - Session: deterministic name `t3-<hash8(logicalKey)>-<envId8>`, labels `t3-logical=<hash8>`
   `t3-env=<envId8>`; `mutagen sync create --mode two-way-safe --ignore-vcs --ignore …
   --default-file-mode-beta=0644 --default-directory-mode-beta=0755 --symlink-mode=portable
