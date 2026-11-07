@@ -123,6 +123,7 @@ export function machineAdapter(machine, archive, version, id, now = false, maxWa
   };
   return {
     name: machine.name,
+    capabilities: async () => call("capabilities"),
     busy: async () => call("busy"),
     health: async () => call("health"),
     prepare: async () => call("prepare"),

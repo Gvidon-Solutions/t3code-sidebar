@@ -52,6 +52,20 @@ if (values.scenario === "rollout") {
     ),
   );
   const baseline = await Promise.all(adapters.map((adapter) => adapter.health()));
+  for (let index = 0; index < adapters.length; index++) {
+    const capabilities = await adapters[index].capabilities();
+    if (config.machines[index].requireNoGh)
+      NodeAssert.equal(
+        capabilities.hasGh,
+        false,
+        "The configured system target must operate with no gh executable",
+      );
+    await record({
+      proof: "target execution environment",
+      machine: adapters[index].name,
+      ...capabilities,
+    });
+  }
   NodeFS.writeFileSync(NodePath.join(output, "baseline.json"), JSON.stringify(baseline, null, 2), {
     mode: 0o600,
   });

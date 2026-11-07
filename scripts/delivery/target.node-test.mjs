@@ -130,7 +130,7 @@ test("target requires its matching drained admission fence and releases it only 
     writeFileSync(statusPath, JSON.stringify({ requestId, phase: "drained" }));
     writeFileSync(
       ctl,
-      `import fs from 'node:fs'; const file=${JSON.stringify(statusPath)}; const tool=process.argv[3]; const input=JSON.parse(process.argv[4]||'{}'); let status=JSON.parse(fs.readFileSync(file,'utf8')); if(tool==='t3_delivery_cancel_drain'){if(status.requestId!==input.requestId) throw new Error('mismatch'); status={requestId:null,phase:'open'}; fs.writeFileSync(file,JSON.stringify(status));} console.log(JSON.stringify(status));`,
+      `import fs from 'node:fs'; const file=${JSON.stringify(statusPath)}; const tool=process.argv[3]; const input=JSON.parse(process.argv[4]||'{}'); let status=JSON.parse(fs.readFileSync(file,'utf8')); if(status.unsupported) throw new Error('Unknown tool: delivery drain'); if(tool==='t3_delivery_cancel_drain'){if(status.requestId!==input.requestId) throw new Error('mismatch'); status={requestId:null,phase:'open'}; fs.writeFileSync(file,JSON.stringify(status));} console.log(JSON.stringify(status));`,
     );
     const statePath = join(runtimeDir, "delivery-state.json");
     const state = {
@@ -160,13 +160,38 @@ test("target requires its matching drained admission fence and releases it only 
     assert.throws(() => operation("activate"), /admission fence was lost/);
     assert.equal(JSON.parse(readFileSync(statePath, "utf8")).phase, "drained");
     writeFileSync(statusPath, JSON.stringify({ requestId, phase: "drained" }));
+    assert.throws(() => operation("commit"), /Only a runtime trial/);
+    writeFileSync(statePath, JSON.stringify({ ...state, phase: "trial" }));
     operation("commit");
     assert.deepEqual(JSON.parse(readFileSync(statusPath, "utf8")), {
       requestId: null,
       phase: "open",
     });
     assert.equal(JSON.parse(readFileSync(statePath, "utf8")).phase, "healthy");
+    const prepared = { ...state, phase: "prepared" };
+    delete prepared.requestId;
+    writeFileSync(statePath, JSON.stringify(prepared));
+    writeFileSync(statusPath, JSON.stringify({ unsupported: true }));
+    assert.throws(() => operation("drain"), /Unknown tool: delivery drain/);
+    assert.equal(JSON.parse(readFileSync(statePath, "utf8")).phase, "prepared");
+    operation("rollback");
+    assert.equal(JSON.parse(readFileSync(statePath, "utf8")).phase, "rolledBack");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("system target diagnostics prove execution without a GitHub CLI", () => {
+  const result = JSON.parse(
+    execFileSync(process.execPath, [new URL("./target.mjs", import.meta.url).pathname], {
+      encoding: "utf8",
+      input: JSON.stringify({
+        config: { runtimeDir: "/unused", scope: "system" },
+        operation: "capabilities",
+      }),
+      env: { ...process.env, PATH: "" },
+      stdio: ["pipe", "pipe", "pipe"],
+    }),
+  );
+  assert.deepEqual(result, { hasGh: false, scope: "system" });
 });

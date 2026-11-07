@@ -25,6 +25,11 @@ export async function targetOperation(config, operation) {
   const prefix = config.scope === "user" ? ["--user"] : [];
   const systemctl = (...args) => run("systemctl", [...prefix, ...args]);
   const statePath = join(config.runtimeDir, "delivery-state.json");
+  if (operation === "capabilities") {
+    const result = NodeChildProcess.spawnSync("gh", ["--version"], { encoding: "utf8" });
+    if (result.error && result.error.code !== "ENOENT") throw result.error;
+    return { hasGh: result.error?.code !== "ENOENT", scope: config.scope };
+  }
   const ctl = (...args) => {
     const unit = config.unitPath ? readFileSync(config.unitPath, "utf8") : "";
     const executable = /^ExecStart=(?:"([^"]+)"|(\S+))\s/m.exec(unit);
@@ -119,6 +124,9 @@ export async function targetOperation(config, operation) {
   if (operation === "drain") {
     if (state.phase !== "prepared" && state.phase !== "draining")
       throw new Error("Runtime must be prepared before draining");
+    const current = ctl("tool", "t3_delivery_drain_status", "{}");
+    if (current.requestId && current.requestId !== state.requestId)
+      throw new Error("Another delivery owns the server admission fence");
     state.requestId ??= NodeCrypto.randomUUID();
     state.phase = "draining";
     atomic(statePath, state);
@@ -161,6 +169,8 @@ export async function targetOperation(config, operation) {
     return true;
   }
   if (operation === "commit") {
+    if (state.phase !== "trial" && state.phase !== "healthy")
+      throw new Error("Only a runtime trial can commit delivery");
     state.phase = "healthy";
     atomic(statePath, state);
     cancelDrain();
