@@ -516,3 +516,9 @@ sync deadlines default to 900 seconds, matching the server’s 15-minute replica
 budget rather than cutting off a slow 128 MiB transfer after 180 seconds.
 `MESH_E2E_ROUND2_RPC_TIMEOUT` and `MESH_E2E_ROUND2_TIMEOUT` override those bounds.
 The transfer check compares both SHA-256 hashes and requires exactly 128 MiB on the replica.
+
+Round three’s runtime-copy fixture accepts `MESH_E2E_RUNTIME_SSH_DESTINATION`,
+`MESH_E2E_RUNTIME_SSH_IDENTITY` and `MESH_E2E_RUNTIME_SSH_KNOWN_HOSTS` for a
+relocated bed. Use a private bed account/key and a known-host file pinned from that
+bed’s host key. The route is copied into the disposable runtime fixture; it never
+reads or changes the administrator’s SSH configuration.

@@ -394,6 +394,12 @@ gor_ssh "mkdir -p '$runtime_root-source/runtime/versions/0.0.4-N'; printf '#!/bi
 vps_ssh "mkdir -p '$runtime_root'"
 tar -czf "$WORK/N-runtime-scripts.tar.gz" -C "$REPO_ROOT/agent-kit/skills/t3" scripts
 vps_put "$WORK/N-runtime-scripts.tar.gz" "$runtime_root/N-runtime-scripts.tar.gz"
+jq -n \
+  --arg destination "${MESH_E2E_RUNTIME_SSH_DESTINATION:-$(gor_ssh 'id -un')@172.17.0.1:22022}" \
+  --arg identityFile "${MESH_E2E_RUNTIME_SSH_IDENTITY:-$VPS_DATA/.ssh/id_mesh_gor}" \
+  --arg knownHostsFile "${MESH_E2E_RUNTIME_SSH_KNOWN_HOSTS:-$VPS_DATA/.ssh/known_hosts}" \
+  '{destination:$destination,identityFile:$identityFile,knownHostsFile:$knownHostsFile}' > "$WORK/N-runtime-ssh.json"
+vps_put "$WORK/N-runtime-ssh.json" "$runtime_root/ssh-copy.json"
 vps_put "$MESH_DIR/round3-runtime.sh" "$runtime_root/round3-runtime.sh"
 vps_ssh "tar -xzf '$runtime_root/N-runtime-scripts.tar.gz' -C '$runtime_root'; bash '$runtime_root/round3-runtime.sh' '$runtime_root'" | tee "$WORK/N-system-services.log"
 printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, primary, 6 restart orders; evidence %s\n' "$WORK"
