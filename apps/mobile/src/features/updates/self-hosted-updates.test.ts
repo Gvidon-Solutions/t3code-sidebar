@@ -1,3 +1,4 @@
+import { flushPendingAppUpdateWrites } from "./app-updates";
 import { expect, it, vi } from "vite-plus/test";
 import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,7 +23,10 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
 }));
 vi.mock("react-native", () => ({ AppState: {}, Linking: {}, Platform: { OS: "android" } }));
 vi.mock("../../components/ui/Dialog", () => ({ alert: vi.fn() }));
-vi.mock("./app-updates", () => ({ installAppUpdateChecks: vi.fn() }));
+vi.mock("./app-updates", () => ({
+  installAppUpdateChecks: vi.fn(),
+  flushPendingAppUpdateWrites: vi.fn(),
+}));
 
 it("pins rollback to the bundle being replaced and restores latest selection after a failed rollback", async () => {
   vi.clearAllMocks();
@@ -53,4 +57,7 @@ it("pins rollback to the bundle being replaced and restores latest selection aft
   await resumeLatestMobileBundle();
   expect(Updates.setUpdateRequestHeadersOverride).toHaveBeenLastCalledWith(null);
   expect(AsyncStorage.removeItem).toHaveBeenCalledWith("t3.mobileUpdateRollbackFrom");
+  vi.mocked(flushPendingAppUpdateWrites).mockRejectedValueOnce(new Error("Storage unavailable"));
+  await expect(rollbackMobileBundle()).rejects.toThrow("Storage unavailable");
+  expect(Updates.reloadAsync).toHaveBeenCalledTimes(2);
 });

@@ -1,4 +1,4 @@
-import { installAppUpdateChecks } from "./app-updates";
+import { installAppUpdateChecks, flushPendingAppUpdateWrites } from "./app-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
@@ -23,6 +23,7 @@ export async function rollbackMobileBundle() {
     const result = await Updates.fetchUpdateAsync();
     if (!result.isNew) throw new Error("No previous compatible bundle is available");
     await AsyncStorage.setItem(ROLLBACK_KEY, Updates.updateId);
+    await flushPendingAppUpdateWrites();
     await Updates.reloadAsync();
   } catch (error) {
     Updates.setUpdateRequestHeadersOverride(
@@ -40,7 +41,10 @@ export async function resumeLatestMobileBundle() {
   await AsyncStorage.removeItem(ROLLBACK_KEY);
   Updates.setUpdateRequestHeadersOverride(null);
   const result = await Updates.fetchUpdateAsync();
-  if (result.isNew) await Updates.reloadAsync();
+  if (result.isNew) {
+    await flushPendingAppUpdateWrites();
+    await Updates.reloadAsync();
+  }
 }
 
 export function installSelfHostedUpdateStatus() {

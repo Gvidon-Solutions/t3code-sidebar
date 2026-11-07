@@ -6,7 +6,7 @@ import * as NodeUtil from "node:util";
 import * as NodeURL from "node:url";
 const { createHash, randomUUID, sign, verify, X509Certificate } = NodeCrypto;
 const { readFile, writeFile, mkdir, rename, stat } = NodeFSP;
-const { resolve, join, sep } = NodePath;
+const { resolve, join, sep, basename } = NodePath;
 const { spawnSync } = NodeChildProcess;
 const { parseArgs } = NodeUtil;
 const { pathToFileURL } = NodeURL;
@@ -29,13 +29,35 @@ export async function publishMobileUpdate(options) {
       throw new Error("Export asset must be inside export directory");
     const bytes = await readFile(file);
     const hash = createHash("sha256").update(bytes).digest("base64url");
-    await writeFile(join(store, "assets", hash), bytes);
+    try {
+      await writeFile(join(store, "assets", hash), bytes, { flag: "wx" });
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const existing = await readFile(join(store, "assets", hash));
+      if (createHash("sha256").update(existing).digest("base64url") !== hash)
+        throw new Error("Existing OTA asset is corrupt", { cause: error });
+    }
     return {
-      key: hash,
+      key: basename(relativePath),
       hash,
       fileExtension: "." + ext,
       contentType:
-        ext === "js" || ext === "hbc" ? "application/javascript" : "application/octet-stream",
+        ext === "js" || ext === "hbc"
+          ? "application/javascript"
+          : ({
+              png: "image/png",
+              jpg: "image/jpeg",
+              jpeg: "image/jpeg",
+              webp: "image/webp",
+              gif: "image/gif",
+              ttf: "font/ttf",
+              otf: "font/otf",
+              woff: "font/woff",
+              woff2: "font/woff2",
+              json: "application/json",
+              mp3: "audio/mpeg",
+              mp4: "video/mp4",
+            }[ext] ?? "application/octet-stream"),
       url: new URL("/api/mobile-updates/assets/" + hash, base).href,
     };
   };
@@ -82,7 +104,7 @@ export async function publishMobileUpdate(options) {
   );
   if (existingCertificate && existingCertificate !== cert)
     throw new Error("Certificate rotation requires a separate store and native app rebuild");
-  await writeFile(join(store, "certificate.pem"), cert);
+  if (!existingCertificate) await writeFile(join(store, "certificate.pem"), cert, { flag: "wx" });
   catalog.releases.push({ manifest, signature, platform });
   if (options["apk-url"]) catalog.apkUrl = new URL(options["apk-url"]).href;
   await writeFile(catalogPath + ".tmp", JSON.stringify(catalog));

@@ -88,10 +88,20 @@ export const layer = Layer.effect(
     const asset = Effect.fn("MobileOta.asset")(
       function* (key: string) {
         if (!/^[A-Za-z0-9_-]{43}$/.test(key)) return HttpServerResponse.empty({ status: 404 });
+        const catalog = yield* readCatalog();
+        const manifests = yield* Effect.forEach(catalog.releases, (release) =>
+          decodeManifest(release.manifest),
+        );
+        const known = manifests
+          .flatMap((manifest) => [manifest.launchAsset, ...manifest.assets])
+          .find((asset) => asset.hash === key);
+        if (!known) return HttpServerResponse.empty({ status: 404 });
         const bytes = yield* fs.readFile(path.join(root, "assets", key));
         return HttpServerResponse.uint8Array(bytes, {
           headers: {
-            "content-type": "application/octet-stream",
+            "content-type": known.contentType,
+            "x-content-type-options": "nosniff",
+            "content-security-policy": "default-src 'none'",
             "cache-control": "public, max-age=31536000, immutable",
           },
         });

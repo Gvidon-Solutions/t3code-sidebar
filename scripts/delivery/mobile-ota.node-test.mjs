@@ -81,6 +81,7 @@ test("publishes real Expo exports, keeps two signed updates and refuses mismatch
       );
       const manifest = JSON.parse(release.manifest);
       NodeAssert.equal(manifest.runtimeVersion, "native-a");
+      NodeAssert.equal(manifest.assets[0].key, "image.png");
       NodeAssert.ok(await readFile(join(store, "assets", manifest.launchAsset.hash)));
     }
     await NodeAssert.rejects(publishMobileUpdate({ ...options, runtime: "" }), /fingerprint/);

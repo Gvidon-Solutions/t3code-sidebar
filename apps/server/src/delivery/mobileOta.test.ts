@@ -51,7 +51,7 @@ function signingFixture() {
 function release(id: string, runtime: string, createdAt: string, key: Buffer): OtaRelease {
   const asset = {
     key: "bundle",
-    hash: "bundle",
+    hash: "A".repeat(43),
     contentType: "application/javascript",
     url: "https://studio.example/api/mobile-updates/assets/bundle",
     fileExtension: ".js",
@@ -124,6 +124,12 @@ describe("self-hosted mobile updates", () => {
           400,
         );
         expect((yield* ota.asset("../certificate.pem")).status).toBe(404);
+        yield* fs.makeDirectory(join(root, "assets"));
+        yield* fs.writeFileString(join(root, "assets", "A".repeat(43)), "bundle");
+        expect((yield* ota.asset("A".repeat(43))).headers["content-type"]).toBe(
+          "application/javascript",
+        );
+        expect((yield* ota.asset("B".repeat(43))).status).toBe(404);
         const status = yield* ota.status("android", "native-a");
         expect(status.body._tag).toBe("Uint8Array");
         if (status.body._tag === "Uint8Array")
