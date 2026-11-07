@@ -1,4 +1,4 @@
-import { MeshConfigError } from "@t3tools/contracts";
+import { MeshConfigError, MeshConfigServerStatus } from "@t3tools/contracts";
 import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
 import { expect, it } from "@effect/vitest";
@@ -10,6 +10,8 @@ import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as Ref from "effect/Ref";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
+import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import * as Config from "./MeshConfig.ts";
 
@@ -154,6 +156,20 @@ it.layer(Config.layer.pipe(Layer.provideMerge(layout), Layer.provide(oncePlanner
           Effect.forkScoped,
         );
         yield* Deferred.await(ready);
+        const persistedReady = yield* Deferred.make<void>();
+        const firstDone = yield* mesh.changes.pipe(
+          Stream.tap(() => Deferred.succeed(persistedReady, undefined)),
+          Stream.filter((snapshot) => {
+            const value = snapshot.document["mesh.configStatus/studio"]?.v;
+            return (
+              Schema.is(MeshConfigServerStatus)(value) &&
+              value.actions.some((action) => action.id === "once/studio" && action.state === "done")
+            );
+          }),
+          Stream.runHead,
+          Effect.forkScoped,
+        );
+        yield* Deferred.await(persistedReady);
         yield* config.start;
         const completed = {
           id: "once/studio",
@@ -162,6 +178,11 @@ it.layer(Config.layer.pipe(Layer.provideMerge(layout), Layer.provide(oncePlanner
           state: "done",
         };
         expect((yield* Fiber.join(reports)).at(-1)).toEqual([completed]);
+        const done = Option.getOrThrow(yield* Fiber.join(firstDone));
+        yield* TestClock.adjust("30 seconds");
+        expect((yield* mesh.read).document["mesh.configStatus/studio"]).toEqual(
+          done.document["mesh.configStatus/studio"],
+        );
         yield* Effect.gen(function* () {
           const restarted = yield* Config.MeshConfig;
           expect(restarted).not.toBe(config);
@@ -173,6 +194,10 @@ it.layer(Config.layer.pipe(Layer.provideMerge(layout), Layer.provide(oncePlanner
             Stream.runHead,
           );
           expect(Option.getOrThrow(actions)).toEqual([completed]);
+          yield* TestClock.adjust("30 seconds");
+          expect((yield* mesh.read).document["mesh.configStatus/studio"]).toEqual(
+            done.document["mesh.configStatus/studio"],
+          );
         }).pipe(
           Effect.provide(
             Layer.fresh(Config.layer).pipe(

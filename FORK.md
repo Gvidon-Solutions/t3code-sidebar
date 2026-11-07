@@ -1699,5 +1699,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   Portable forks exclude terminal checkpoint bookkeeping, keeping the actual final reply visible
   when imported assistant rows are grouped. The measured tool-list budget grows to 60846 bytes
   with upstream's expanded tools.
+  Config reconciliation preserves the HLC of an unchanged status, allowing layout replication
+  to become quiescent after a completed action and across server restarts.
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.

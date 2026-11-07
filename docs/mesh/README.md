@@ -622,3 +622,7 @@ retains message attachments and tool outputs while asserting that the actual rep
 The local network fixture explicitly grants `files: all` before reading its non-project proof
 file and waits for that revision on every node; the default `projects` permission rejects it.
 Its temporary root honors `TMPDIR` so large SSH transfer artifacts can stay off the root disk.
+
+`MeshConfig.publishStatus` compares the persisted value before advancing its HLC. Repeated
+reconciliation and service restarts must not generate new layout entries for an unchanged
+status; otherwise background reports prevent the mesh from becoming quiescent.

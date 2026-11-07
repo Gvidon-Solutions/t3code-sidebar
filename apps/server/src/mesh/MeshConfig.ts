@@ -15,7 +15,7 @@ import {
   parseConfig,
   referenceErrors,
 } from "@t3tools/shared/meshConfig";
-import type { Json, MeshLayoutDocument } from "@t3tools/shared/meshLayout";
+import { canonical, type Json, type MeshLayoutDocument } from "@t3tools/shared/meshLayout";
 import type * as Duration from "effect/Duration";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -212,9 +212,11 @@ export const layer = Layer.effect(
         revision,
         actions,
       }).pipe(Effect.orDie)) as Json;
+      const key = `mesh.configStatus/${encodeURIComponent(mesh.environmentId)}`;
+      if (canonical((yield* mesh.read).document[key]?.v ?? null) === canonical(value)) return;
       const h = yield* mesh.nextHlc;
       yield* mesh.apply({
-        [`mesh.configStatus/${encodeURIComponent(mesh.environmentId)}`]: { v: value, h },
+        [key]: { v: value, h },
       });
     });
     const changes = mesh.changes.pipe(
