@@ -39,7 +39,9 @@ settings. It changes no other VPS stack and requires no gor kernel change.
 The X1 alternative is `/tmp/X1-third-bed/compose.yaml` on gor, container
 `t3-mesh-e2e`, loopback port 3791. The native gor server remains a separate node.
 The preset `/tmp/X1-third.env` exports `VPS_HOST`, `VPS_SSH_CONFIG`,
-`MESH_E2E_VPS_DIR` and `MESH_E2E_VPS_SUDO=1`; source it before the round scripts.
+`MESH_E2E_VPS_DIR`, `MESH_E2E_VPS_SUDO=1` and `MESH_E2E_GOR_TUNNEL_UNIT`;
+source it before the round scripts. The latter selects the gor forwarding unit
+for partition/restore checks instead of starting the old VPS tunnel.
 `vps_ssh` then runs the third-node commands with passwordless sudo, and
 `vps_put` streams files through that same connection instead of bypassing it
 with scp. The artifact directory in the preset selects the tested build.
