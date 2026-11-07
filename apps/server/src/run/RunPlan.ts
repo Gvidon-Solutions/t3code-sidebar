@@ -19,6 +19,7 @@ export function resolveRunPlan(input: {
   readonly cwd: string;
   readonly bindings: Readonly<Record<string, string>>;
   readonly machines?: MeshConfigDocument["machines"];
+  readonly desiredConfig?: MeshConfigDocument;
   readonly sshMode?: "managed" | "existing" | "off";
 }) {
   const matches = Object.entries(input.config.projectMounts)
@@ -64,7 +65,10 @@ export function resolveRunPlan(input: {
     platform: input.config.machines[primary.environmentId]?.reported?.platform.os ?? "posix",
     ignores: [
       ...new Set([
-        ...projectPolicy(defaults(), input.config.projectTitles[match.logicalKey] ?? "").ignore,
+        ...projectPolicy(
+          input.desiredConfig ?? defaults(),
+          input.config.projectTitles[match.logicalKey] ?? "",
+        ).ignore,
         ...(match.replica.ignores ?? []),
       ]),
     ],
