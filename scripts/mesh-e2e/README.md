@@ -45,6 +45,11 @@ for partition/restore checks instead of starting the old VPS tunnel.
 `vps_ssh` then runs the third-node commands with passwordless sudo, and
 `vps_put` streams files through that same connection instead of bypassing it
 with scp. The artifact directory in the preset selects the tested build.
+For redeployment the preset also sets `MESH_E2E_REUSE_NETWORK=1` and
+`MESH_E2E_COMPOSE_TEMPLATE=/tmp/X1-third-compose-template.json`. The template keeps
+the relocated mounts, 4 GiB/4 CPU limits and provider egress; `deploy.sh` replaces
+its `t3-mesh-e2e:dev` image placeholder with the build image. Without a template,
+deployment uses the standard VPS compose file.
 
 The gvidon test-tunnel override `99-X1-third.conf` forwards ports 13797/13791
 through gor and reverses 13795/22023 to the isolated gvidon server/SSH.

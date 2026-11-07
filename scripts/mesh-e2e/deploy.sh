@@ -30,7 +30,7 @@ vps_ssh "install -d -m 700 '$VPS_DIR' '$VPS_DATA'"
 
 log "transferring image $IMAGE to the VPS"
 docker save "$IMAGE" | gzip -1 | vps_ssh 'gunzip | docker load'
-sed "s|image: t3-mesh-e2e:dev|image: $IMAGE|" "$MESH_DIR/compose.yaml" | vps_ssh "cat > '$VPS_DIR/compose.yaml'"
+sed "s|t3-mesh-e2e:dev|$IMAGE|" "${MESH_E2E_COMPOSE_TEMPLATE:-$MESH_DIR/compose.yaml}" | vps_ssh "cat > '$VPS_DIR/compose.yaml'"
 
 log "preserving VPS temporary project folders across container recreation"
 vps_ssh 'bash -s' <<EOF
