@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- A separate Node process verifies module-load environment selection.
 import * as NodeChildProcess from "node:child_process";
 import { expect, it } from "vite-plus/test";
 import { meshMillis, resolveMeshTimeScale } from "./MeshTiming.ts";
