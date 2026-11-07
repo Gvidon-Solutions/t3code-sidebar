@@ -16,6 +16,8 @@ private systemd transport drain before backup/switch and reopen only after healt
 Transient updating refusals are never stored as rejected command receipts; client and CLI retries
 retain their command/message IDs. Old targets without drain support fail before being stopped;
 explicit `--now` remains available to skip waiting.
+B1 rechecks its lease after draining: fewer than twelve minutes remaining cancels the fence
+and stops before backup or handoff, even when the configured idle deadline is longer.
 See [delivery.md](../delivery.md) for configuration, commands and limitations.
 
 The public release workflow publishes runtime first; Windows consumes its archive without

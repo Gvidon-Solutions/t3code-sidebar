@@ -365,6 +365,16 @@ export const layer = Layer.effect(
           now: revision.doc.t3?.drain?.skipForVersion === target,
         })
         .pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              if (DateTime.toEpochMillis(yield* DateTime.now) >= lease.expiresAt - 12 * 60_000)
+                return yield* new MeshConfigError({
+                  reason: "storage",
+                  message:
+                    "Update lease no longer has enough time after draining; runtime stays running",
+                });
+            }),
+          ),
           Effect.andThen(backup.create(lease.token)),
           Effect.andThen(
             selfUpdate.update({ targetVersion: target }, undefined, () =>

@@ -1,6 +1,7 @@
 import { DeliveryAdmission } from "./DeliveryAdmission.ts";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import { MeshTrialFailureExit } from "../platform/ServerPlatform.ts";
 import { MeshStateBackup } from "./MeshStateBackup.ts";
 import { expect, it } from "@effect/vitest";
@@ -39,6 +40,8 @@ const fixture = Effect.gen(function* () {
   const forced: boolean[] = [];
   const steps: string[] = [];
   const backupBlocks = new Map<string, Effect.Effect<void>>();
+  const drainBlocks = new Map<string, Effect.Effect<void>>();
+  const cancelled: string[] = [];
   const h = yield* mesh.nextHlc;
   const doc = {
     schema: 1,
@@ -126,8 +129,12 @@ const fixture = Effect.gen(function* () {
                 deadlines.push(deadlineMs);
                 forced.push(now === true);
                 return { ...openDrain, requestId, phase: "drained" as const };
+              }).pipe(Effect.tap(() => drainBlocks.get(id) ?? Effect.void)),
+            cancel: () =>
+              Effect.sync(() => {
+                cancelled.push(id);
+                return openDrain;
               }),
-            cancel: () => Effect.succeed(openDrain),
             status: Effect.succeed(openDrain),
           })
         : Layer.empty,
@@ -172,7 +179,20 @@ const fixture = Effect.gen(function* () {
     return service;
   });
   for (const id of Object.keys(doc.machines)) yield* make(id, "0.1.5");
-  return { mesh, make, services, requested, root, fs, backupBlocks, steps, deadlines, forced };
+  return {
+    mesh,
+    make,
+    services,
+    requested,
+    root,
+    fs,
+    backupBlocks,
+    drainBlocks,
+    cancelled,
+    steps,
+    deadlines,
+    forced,
+  };
 });
 const testLayer = Layout.layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG).pipe(
   Layer.provideMerge(NodeServices.layer),
@@ -282,6 +302,37 @@ it.effect("refuses runtime handoff before backup when admission is unavailable",
     expect(f.steps).toEqual([]);
     expect((yield* f.mesh.read).document["mesh.updateLease"]).toBeUndefined();
   }).pipe(Effect.scoped, Effect.provide(testLayer)),
+);
+
+it.effect(
+  "reopens admission without backup or switch when draining exhausts the lease handoff window",
+  () =>
+    Effect.gen(function* () {
+      const f = yield* fixture;
+      const reached = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      f.drainBlocks.set(
+        "cloudbox",
+        Deferred.succeed(reached, undefined).pipe(Effect.andThen(Deferred.await(release))),
+      );
+      const pending = yield* f.services
+        .get("cloudbox")!
+        .reconcile.pipe(
+          Effect.match({
+            onFailure: (error) => error.message,
+            onSuccess: () => "Runtime switched",
+          }),
+          Effect.forkChild,
+        );
+      yield* Deferred.await(reached);
+      yield* TestClock.adjust("19 minutes");
+      yield* Deferred.succeed(release, undefined);
+      expect(yield* Fiber.join(pending)).toContain("enough time after draining");
+      expect(f.steps).toEqual(["drain/cloudbox"]);
+      expect(f.requested).toEqual([]);
+      expect(f.cancelled).toEqual(["cloudbox"]);
+      expect((yield* f.mesh.read).document["mesh.updateLease"]?.v).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
 );
 
 it.effect.each([
