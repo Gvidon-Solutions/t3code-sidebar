@@ -12,6 +12,7 @@ import {
   forgetMachineFacts,
   deriveMeshFooterStatus,
   meshFooterText,
+  meshProjectRows,
 } from "./meshMachines.ts";
 
 const base: SidebarWorkspacesConfig = {
@@ -559,4 +560,63 @@ it("ignores malformed percent encoding in replicated machine facts", () => {
   expect(
     meshMachineFactTimes({ "machine/bad%": { h: "0000000000001.00000.studio", v: {} } }),
   ).toEqual({});
+});
+
+describe("meshProjectRows", () => {
+  const config = (transport: "mutagen" | "manual", message?: string): SidebarWorkspacesConfig => ({
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    projectTitles: { app: "Billing API" },
+    machines: { atlas: { title: "Atlas" }, cloudbox: { title: "Cloudbox" } },
+    projectMounts: {
+      app: [
+        {
+          environmentId: "atlas",
+          path: "/app",
+          role: "primary",
+          transport: "git",
+          createdAt: "",
+        },
+        {
+          environmentId: "cloudbox",
+          path: "/app",
+          role: "replica",
+          transport,
+          source: "atlas",
+          createdAt: "",
+        },
+      ],
+    },
+    projectMountStatus: {
+      app: { cloudbox: { state: "watching", updatedAt: "", ...(message ? { message } : {}) } },
+    },
+  });
+
+  it("does not call a manual copy synced", () => {
+    expect(meshProjectRows(config("manual"), "cloudbox")[0]?.sentence).toBe(
+      "Billing API · copy not synced automatically",
+    );
+  });
+
+  it("uses the live status the Diagnostics panel reads", () => {
+    const stored = config("mutagen");
+    expect(
+      meshProjectRows(stored, "cloudbox", [
+        {
+          logicalKey: "app",
+          environmentId: "cloudbox",
+          state: "watching",
+          message: "Manual copy",
+          updatedAt: "",
+          conflicts: [],
+          problems: [],
+        },
+      ])[0]?.sentence,
+    ).toBe("Billing API · copy not synced automatically");
+  });
+
+  it("still calls an automatically synced copy synced", () => {
+    expect(meshProjectRows(config("mutagen"), "cloudbox")[0]?.sentence).toBe(
+      "Billing API · copy synced",
+    );
+  });
 });

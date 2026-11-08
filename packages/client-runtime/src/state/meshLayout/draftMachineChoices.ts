@@ -41,7 +41,7 @@ export function draftMachineDisplays(
       const distinctTag = tag && group.every((other) => other === row || other.tag !== row.tag);
       const host = shortMachineHost(row.url);
       const platform = config.machines[row.environmentId]?.reported?.platform;
-      row.label = `${label} (${platform ? `${platform.os} · ${host ?? row.tag}` : distinctTag ? row.tag : (host ?? "not connected")})`;
+      row.label = `${label} (${platform ? `${platform.os} · ${host ?? row.tag ?? "this device"}` : distinctTag ? row.tag : (host ?? row.tag ?? "this device")})`;
     }
     const duplicates = group.filter((row) =>
       group.some((other) => other !== row && other.label === row.label),

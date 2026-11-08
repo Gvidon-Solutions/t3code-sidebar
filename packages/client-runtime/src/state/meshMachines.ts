@@ -3,6 +3,7 @@ import * as DateTime from "effect/DateTime";
 import type {
   EnvironmentId,
   PeerLinkCreateInput,
+  ReplicaLiveStatus,
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
 
@@ -519,6 +520,7 @@ export interface MeshProjectRow {
 export function meshProjectRows(
   config: SidebarWorkspacesConfig,
   environmentId: string,
+  liveStatuses: ReadonlyArray<ReplicaLiveStatus> = [],
 ): MeshProjectRow[] {
   return Object.entries(config.projectMounts).flatMap(([key, reps]) =>
     reps
@@ -527,12 +529,31 @@ export function meshProjectRows(
         const title = config.projectTitles[key] ?? "Project";
         if (rep.role === "primary")
           return { key, title, sentence: `${title} · main copy`, canRetry: false };
-        const state = config.projectMountStatus[key]?.[environmentId]?.state;
+        const stored = config.projectMountStatus[key]?.[environmentId];
+        const current = liveStatuses.find(
+          (status) => status.environmentId === environmentId && status.logicalKey === key,
+        );
+        const state = current?.state ?? stored?.state;
+        const message = current?.message ?? stored?.message ?? null;
+        // A manual or external copy can report "watching" without ever syncing
+        // automatically; the summary must not call that synced while Diagnostics
+        // says otherwise.
+        const manual =
+          rep.transport === "manual" ||
+          message === "Manual copy" ||
+          message?.startsWith("External folder") === true;
         const source = rep.source
           ? machineDisplayOf(config, rep.source, rep.source).label
           : "its main copy";
         if (state === "watching")
-          return { key, title, sentence: `${title} · copy synced`, canRetry: false };
+          return {
+            key,
+            title,
+            sentence: manual
+              ? `${title} · copy not synced automatically`
+              : `${title} · copy synced`,
+            canRetry: false,
+          };
         if (state === "mounting" || state === "pending")
           return { key, title, sentence: `${title} · copying files…`, canRetry: false };
         if (state === "conflict")

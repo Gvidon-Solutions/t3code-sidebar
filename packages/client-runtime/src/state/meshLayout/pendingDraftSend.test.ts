@@ -12,6 +12,7 @@ import {
 import {
   PendingDraftOutbox,
   decodePendingDraftSends,
+  launchPendingDraft,
   type PendingDraftSend,
   type PendingDraftMesh,
 } from "./pendingDraftSend.ts";
@@ -264,4 +265,33 @@ it("does not start a turn when an attachment upload fails", async () => {
     }),
   ).rejects.toThrow("upload refused");
   expect(started.value).toBe(false);
+});
+
+it("keeps the draft's branch and worktree choice in the queued bootstrap", async () => {
+  const { send } = setup();
+  const captured: unknown[] = [];
+  await launchPendingDraft({
+    send: { ...send, branch: "feature", worktreePath: "/checkout/feature" },
+    projectId: "bo-project",
+    upload: async () => "attachment",
+    startTurn: async (command) => {
+      captured.push(command.bootstrap?.createThread);
+    },
+  });
+  expect(captured).toEqual([
+    expect.objectContaining({ branch: "feature", worktreePath: "/checkout/feature" }),
+  ]);
+});
+
+it("uses plain text for a launch failure instead of a stringified cause", async () => {
+  const { storage, send, registered } = setup();
+  const outbox = new PendingDraftOutbox(storage);
+  await outbox.enqueue(send);
+  await outbox.drain(registered, async () => {
+    class RpcClientError extends Error {
+      readonly _tag = "RpcClientError";
+    }
+    throw new RpcClientError("Machine did not answer");
+  });
+  expect(outbox.getSnapshot()[0]?.error).toBe("Machine did not answer");
 });

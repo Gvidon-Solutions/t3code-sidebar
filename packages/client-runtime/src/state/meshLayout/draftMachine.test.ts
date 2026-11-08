@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { defaultDraftMachine, machineForDraftModel } from "./draftMachine.ts";
+import {
+  defaultDraftMachine,
+  draftMachineCatalogsKnown,
+  hasUsableDraftModels,
+  machineForDraftModel,
+  nextSelectableDraftMachine,
+} from "./draftMachine.ts";
 
 describe("draft machine defaults", () => {
   const machines = [
@@ -7,9 +13,47 @@ describe("draft machine defaults", () => {
     { environmentId: "authenticated", connected: true, usable: true, primary: false },
     { environmentId: "offline", connected: false, usable: true, primary: false },
   ];
-  it("honours an explicit device preference before model availability", () => {
-    expect(defaultDraftMachine(machines, "primary")).toBe("primary");
-    expect(defaultDraftMachine(machines, "offline")).toBe("offline");
+  it("only honours a device preference that can still run the draft", () => {
+    const usableRemembered = machines.map((machine) =>
+      machine.environmentId === "offline" ? { ...machine, connected: true } : machine,
+    );
+    expect(defaultDraftMachine(usableRemembered, "offline")).toBe("offline");
+    expect(defaultDraftMachine(machines, "primary")).toBe("authenticated");
+    expect(defaultDraftMachine(machines, "offline")).toBe("authenticated");
+  });
+  it("never picks an offline remembered machine", () => {
+    const onlyOfflineRemembered = machines.filter(
+      (machine) => machine.environmentId !== "authenticated",
+    );
+    expect(defaultDraftMachine(onlyOfflineRemembered, "offline")).toBe("primary");
+  });
+  it("falls back to the main copy when no machine is usable and keeps its reason", () => {
+    const noneUsable = machines.map((machine) => ({ ...machine, usable: false }));
+    expect(defaultDraftMachine(noneUsable, "offline")).toBe("primary");
+    const noPrimary = [{ environmentId: "first", connected: false, usable: false, primary: false }];
+    expect(defaultDraftMachine(noPrimary, null)).toBe("first");
+  });
+  it("cycles only through connected machines that have a usable model and wraps", () => {
+    expect(nextSelectableDraftMachine(machines, "authenticated")).toBe("authenticated");
+    const twoUsable = [
+      { environmentId: "a", connected: true, usable: true, primary: true },
+      { environmentId: "b", connected: false, usable: true, primary: false },
+      { environmentId: "c", connected: true, usable: false, primary: false },
+      { environmentId: "d", connected: true, usable: true, primary: false },
+    ];
+    expect(nextSelectableDraftMachine(twoUsable, "a")).toBe("d");
+    expect(nextSelectableDraftMachine(twoUsable, "d")).toBe("a");
+    expect(nextSelectableDraftMachine(twoUsable, "unknown")).toBe("a");
+    expect(nextSelectableDraftMachine([], "a")).toBeNull();
+    expect(
+      nextSelectableDraftMachine(
+        twoUsable.map((machine) => ({ ...machine, usable: false })),
+        "a",
+      ),
+    ).toBeNull();
+  });
+  it("treats an unknown catalog as unknown rather than as no usable models", () => {
+    expect(hasUsableDraftModels(null, null)).toBeNull();
   });
   it("prefers the project's main copy when it can run, then any authenticated machine", () => {
     expect(
@@ -128,4 +172,15 @@ it("uses the configured usable local default before catalog order", () => {
     ),
   ).toEqual({ instanceId, model: "first" });
   expect(defaultUsableDraftModel(null, null)).toBeNull();
+});
+
+it("waits for every connected machine's catalog before pinning a draft default", () => {
+  const machines = [
+    { environmentId: "a", connected: true },
+    { environmentId: "b", connected: true },
+    { environmentId: "c", connected: false },
+  ];
+  expect(draftMachineCatalogsKnown(machines, new Set(["a"]))).toBe(false);
+  expect(draftMachineCatalogsKnown(machines, new Set(["a", "b"]))).toBe(true);
+  expect(draftMachineCatalogsKnown([], new Set())).toBe(true);
 });

@@ -46,6 +46,8 @@ it("never prints opaque ids even when two stale connections have no usable endpo
   ]).rows;
   expect(new Set(rows.map((row) => row.label)).size).toBe(2);
   expect(rows.map((row) => row.label).join()).not.toContain("opaque");
+  // A collision is explained by what this device knows, never by "not connected".
+  expect(rows.map((row) => row.label).join()).not.toContain("not connected");
   expect(draftMachineStatus({ connected: true, hasProject: true })).toBe("here");
   expect(draftMachineStatus({ connected: true, hasProject: false })).toBe("copy will be created");
   expect(draftMachineStatus({ connected: false, hasProject: true })).toBe("not connected");

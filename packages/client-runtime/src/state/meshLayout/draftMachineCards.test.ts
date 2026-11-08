@@ -16,7 +16,7 @@ describe("draftMachineCardState", () => {
         hasUsableModels: true,
         sync: "synced",
       }),
-    ).toEqual({ status: "synced", text: "Synced", selectable: true });
+    ).toEqual({ status: "synced", text: "Synced", selectable: true, guidance: null });
     expect(
       draftMachineCardState({
         label: "cloudbox",
@@ -48,7 +48,12 @@ describe("draftMachineCardState", () => {
         hasProject: false,
         hasUsableModels: true,
       }),
-    ).toEqual({ status: "will-copy", text: "Will set up a copy here", selectable: true });
+    ).toEqual({
+      status: "will-copy",
+      text: "Will set up a copy here",
+      selectable: true,
+      guidance: null,
+    });
   });
 
   it("dims a machine with no usable models and names it", () => {
@@ -64,7 +69,84 @@ describe("draftMachineCardState", () => {
       status: "no-models",
       text: "No models set up on cloudbox",
       selectable: false,
+      guidance: null,
     });
+  });
+
+  it("disables a machine that cannot host a copy and gives the plain reason", () => {
+    expect(
+      draftMachineCardState({
+        label: "oldbox",
+        connected: true,
+        reachable: true,
+        hasProject: false,
+        hasUsableModels: true,
+        canHostCopy: false,
+      }),
+    ).toEqual({
+      status: "cannot-host",
+      text: "Can't set up a copy on oldbox",
+      selectable: false,
+      guidance: null,
+    });
+    // An existing copy on an older server is still usable.
+    expect(
+      draftMachineCardState({
+        label: "oldbox",
+        connected: true,
+        reachable: true,
+        hasProject: true,
+        hasUsableModels: true,
+        canHostCopy: false,
+      }).status,
+    ).toBe("synced");
+  });
+
+  it("tells the user when the draft's selected model is missing there", () => {
+    const config = {
+      machines: {
+        studio: { title: "studio", tag: "ST" },
+        cloudbox: { title: "cloudbox", tag: "CB" },
+      },
+    } as const;
+    const state = draftMachineCardState({
+      label: "cloudbox",
+      connected: true,
+      reachable: true,
+      hasProject: true,
+      hasUsableModels: true,
+      hasSelectedModel: false,
+    });
+    expect(state.selectable).toBe(true);
+    expect(state.guidance).toBe("The selected model isn't set up on cloudbox");
+    const rows = draftMachineCards({
+      config,
+      choices: [
+        {
+          environmentId: "studio",
+          label: "studio",
+          projectId: "p1",
+          primary: true,
+          connected: true,
+          hasUsableModels: true,
+          hasSelectedModel: true,
+        },
+        {
+          environmentId: "cloudbox",
+          label: "cloudbox",
+          projectId: "p1",
+          primary: false,
+          connected: true,
+          hasUsableModels: true,
+          hasSelectedModel: false,
+        },
+      ],
+      reachability: {},
+      selectedEnvironmentId: "studio",
+    });
+    expect(rows.find((row) => row.environmentId === "cloudbox")?.note).toBe(
+      "The selected model isn't set up on cloudbox",
+    );
   });
 
   it("names a mesh-reached machine's copy without calling it not connected", () => {
@@ -78,7 +160,7 @@ describe("draftMachineCardState", () => {
         hasUsableModels: true,
         sync: "synced",
       }),
-    ).toEqual({ status: "synced", text: "Synced", selectable: false });
+    ).toEqual({ status: "synced", text: "Synced", selectable: false, guidance: null });
     expect(
       draftMachineCardState({
         label: "laptop",
@@ -88,7 +170,12 @@ describe("draftMachineCardState", () => {
         hasProject: false,
         hasUsableModels: true,
       }),
-    ).toEqual({ status: "will-copy", text: "Will set up a copy here", selectable: false });
+    ).toEqual({
+      status: "will-copy",
+      text: "Will set up a copy here",
+      selectable: false,
+      guidance: null,
+    });
     expect(
       draftMachineCardState({
         label: "laptop",
@@ -97,7 +184,12 @@ describe("draftMachineCardState", () => {
         hasProject: false,
         hasUsableModels: null,
       }),
-    ).toEqual({ status: "unreachable", text: "Can't reach laptop", selectable: false });
+    ).toEqual({
+      status: "unreachable",
+      text: "Can't reach laptop",
+      selectable: false,
+      guidance: null,
+    });
   });
 });
 

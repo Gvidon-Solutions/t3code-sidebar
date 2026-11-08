@@ -139,6 +139,10 @@
       "types": "./src/voice-mode/index.ts",
       "default": "./src/voice-mode/index.ts"
     },
+    "./voice-availability": {
+      "types": "./src/voiceAvailability.ts",
+      "default": "./src/voiceAvailability.ts"
+    },
     "./t3ToolSummary": {
       "types": "./src/t3ToolSummary.ts",
       "default": "./src/t3ToolSummary.ts"
