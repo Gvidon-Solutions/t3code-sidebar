@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Platform, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { FormSheet, ScreenStack } from "react-native-screens";
 import { useResolveClassNames } from "uniwind";
 
@@ -15,6 +15,7 @@ import type { SheetProps } from "./Sheet.types";
 /** Native presentation. Scrollable children use automatic insets beneath the iOS header. */
 export function Sheet(props: SheetProps) {
   const containerStyle = useResolveClassNames("bg-sheet");
+  const sheetColor = StyleSheet.flatten(containerStyle)?.backgroundColor;
   const screenId = useId();
   const [isOpen, setIsOpen] = useState(true);
   const close = () => setIsOpen(false);
@@ -42,7 +43,9 @@ export function Sheet(props: SheetProps) {
           >
             {props.children}
             <NativeHeader
-              backgroundColor="rgba(0,0,0,0)"
+              backgroundColor={
+                props.opaqueHeader && typeof sheetColor === "string" ? sheetColor : "rgba(0,0,0,0)"
+              }
               tintColorClassName="accent-foreground"
               hideBackButton
               hideShadow={false}

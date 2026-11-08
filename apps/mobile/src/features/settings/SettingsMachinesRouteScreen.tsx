@@ -6,7 +6,6 @@ import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import {
-  meshConnectionText,
   offlineMachineText,
   meshMachineDetailRows,
   partitionMeshMachines,
@@ -102,18 +101,10 @@ export function SettingsMachinesRouteScreen() {
                 />
                 <AppText
                   numberOfLines={1}
-                  style={{ maxWidth: 110 }}
+                  style={{ maxWidth: 235 }}
                   className="text-xs text-foreground-muted"
                 >
-                  {online(machine)
-                    ? machine.network?.state === "relayed"
-                      ? meshConnectionText(machine, machines)
-                      : "Online"
-                    : (meshConnectionText(machine, machines) ??
-                      offlineMachineText(machine.lastSeenAt))}
-                </AppText>
-                <AppText numberOfLines={1} className="text-xs text-foreground-muted">
-                  {[machine.version, machine.platform?.os].filter(Boolean).join(" · ")}
+                  {statusOf(machine)}
                 </AppText>
                 <AppText>›</AppText>
               </Pressable>
@@ -121,7 +112,7 @@ export function SettingsMachinesRouteScreen() {
           ))}
         </SettingsSection>
         {selected ? (
-          <Sheet title={selected.label} onClose={() => setDetail(null)}>
+          <Sheet title={selected.label} onClose={() => setDetail(null)} opaqueHeader>
             <ScreenScrollView contentContainerClassName="gap-3 p-5">
               <AppText>
                 {online(selected)
@@ -144,7 +135,7 @@ export function SettingsMachinesRouteScreen() {
                 ? meshMachineDetailRows(selected, base, live).map((row) => (
                     <View key={row.label}>
                       <AppText className="text-xs text-foreground-muted">{row.label}</AppText>
-                      <AppText>{row.value}</AppText>
+                      <AppText accessibilityHint={row.exact || undefined}>{row.value}</AppText>
                     </View>
                   ))
                 : null}
