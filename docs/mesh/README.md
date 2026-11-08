@@ -105,10 +105,17 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   both peer cursors. Connection-up notifications clear retry backoff before exchanging
   watermarks. Clock rejections and quarantine reasons are
   exposed by `meshLayout.status`. Tombstones require thirty days and acknowledgement from
-  every currently linked full-access peer before collection.
+  every currently linked peer, including read-only and expired links, before collection.
+  Authorship records expire after thirty days independently of tombstone acknowledgements.
   Web and mobile mount one `MeshLayoutProvider` each; their hooks adapt RPC and persistence
   to `packages/client-runtime/src/state/meshLayoutClient.ts` (`MeshLayoutStore`). The store
   owns snapshots, subscriptions, optimistic edits and the persisted reconnect outbox.
+  Its cache stores documents rather than derived config; rejected edits rebuild from confirmed
+  entries plus the remaining outbox. Authorization refusals retain edits for re-authentication.
+  `meshLayout/resolveAlias.ts` resolves complete chains; a cycle uses its smallest member,
+  excluding the incoming tail. HLC generation refuses clock skew or exhausted counters rather
+  than emitting a repeated or decreasing clock. Known keys require canonical URI segments, and
+  representation values must match their key environment.
 - **Routing.** A call for another machine goes direct when linked, else through one relay hop:
   `apps/server/src/mesh/MeshRouting.ts` (`callRouted`) used by `PeerForwarding`, files and forks.
 - **Replicas.** `apps/server/src/replicas/`: `MutagenInstaller` (pinned 0.18.1, sha256),
@@ -183,6 +190,9 @@ primary's login environment, streams output and flushes results back. `--list`, 
 Ignored outputs are named with “stayed on <machine>”. The timeout bounds synchronization and
 remote execution. Plain environment commands explain how to use `t3 run` and exit 127;
 configure their names with `replicas.remoteCommands`.
+
+When the server socket is unavailable, `RunClient` permits local execution only after a valid
+manifest proves the cwd is outside a lite replica. Missing or invalid manifests refuse with 75.
 
 The runtime CLI and private local-server socket live in `apps/server/src/run/Run{Cli,Client,Ipc,Control}.ts`.
 `RunPlan` maps the nearest representation's relative cwd onto its primary. `RunPreparation`

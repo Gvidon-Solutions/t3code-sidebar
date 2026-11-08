@@ -340,9 +340,7 @@ export const layer = Layer.effect(
               retries.clear();
               for (const id of retryTimers.keys()) yield* cancelRetry(id);
             }
-            const linked = (yield* links.list).filter(
-              (peer) => peer.access === "full-access" && peer.status !== "expired",
-            );
+            const linked = yield* links.list;
             for (const peer of linked) {
               if (peer.access !== "full-access" || peer.status === "expired") continue;
               const now = yield* Clock.currentTimeMillis;

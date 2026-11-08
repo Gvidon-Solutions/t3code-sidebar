@@ -109,6 +109,16 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — F2b layout and replica-run data-loss fixes
+
+- **What.** Offline edits survive derived-config upgrades; rejected optimistic writes roll back,
+  and authorization failures stay queued. Invalid representation keys cannot crash the sidebar.
+- **How.** Canonical key validation, monotonic bounded HLC refusal, shared cycle resolution,
+  bytewise clock ordering, thirty-day authorship retention and all-linked-peer tombstone GC.
+  `t3 run` refuses an unavailable server when the manifest cannot prove local execution is safe.
+- **Where.** Shared `meshLayout`, client-runtime `meshLayoutClient`, server
+  `MeshLayoutServiceLive`, `MeshReplicator` and `run/RunClient`; regression tests beside them.
+
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
 - **What.** Local Android builds retain native outputs, reuse identical APKs and publish native

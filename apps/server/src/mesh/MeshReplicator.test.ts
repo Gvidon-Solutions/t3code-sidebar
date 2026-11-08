@@ -370,6 +370,18 @@ it.effect("reports peer watermarks and retains old tombstones while a linked pee
       seq: 1,
       ackReceivedSeq: seq,
     });
+    linked = [
+      ...linked,
+      {
+        ...linked[0]!,
+        environmentId: EnvironmentId.make("readonly-peer"),
+        access: "read-only",
+        status: "expired",
+      },
+    ];
+    yield* replicator.sync;
+    expect((yield* mesh.read).document["machine/deleted"]).toBeDefined();
+    linked = linked.filter((peer) => peer.environmentId !== "readonly-peer");
     yield* replicator.sync;
     expect((yield* mesh.read).document["machine/deleted"]).toBeUndefined();
   }).pipe(Effect.scoped),
