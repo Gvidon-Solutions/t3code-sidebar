@@ -406,18 +406,32 @@ replicaScenarios["crash-mutagen"] = (directory) =>
         async () => JSON.parse(await mutagen(driver, "sync", "list", "--template", "{{json .}}")),
         (rows) => rows.some((row) => ["staging-alpha", "staging-beta"].includes(row.status)),
       );
-      const inode = String(
-        (await NodeFSP.stat(NodePath.join(driver.base, "mutagen/daemon/daemon.lock"))).ino,
+      const lockPath = NodePath.join(driver.base, "mutagen/daemon/daemon.lock");
+      const inode = String((await NodeFSP.stat(lockPath)).ino);
+      const descriptors = await NodeFSP.readdir(`/proc/${daemon.pid}/fd`);
+      const locks = [];
+      for (const descriptor of descriptors) {
+        let target;
+        try {
+          target = await NodeFSP.readlink(`/proc/${daemon.pid}/fd/${descriptor}`);
+        } catch (error) {
+          if (error.code === "ENOENT") continue;
+          throw error;
+        }
+        if (target === lockPath)
+          locks.push(await NodeFSP.readFile(`/proc/${daemon.pid}/fdinfo/${descriptor}`, "utf8"));
+      }
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "captured-daemon-lock.json"),
+        JSON.stringify({ pid: daemon.pid, lockPath, inode, locks }),
       );
-      const locks = await NodeFSP.readFile("/proc/locks", "utf8");
       NodeAssert.ok(
-        locks
-          .split("\n")
-          .some(
-            (line) =>
-              line.includes(":" + inode + " ") &&
-              line.trim().split(/\s+/)[4] === String(daemon.pid),
-          ),
+        locks.some((info) =>
+          info
+            .split("\n")
+            .some((line) => line.startsWith("lock:") && line.includes(":" + inode + " ")),
+        ),
+        "The captured daemon must hold its private lock",
       );
       daemon.kill("SIGKILL");
       await mesh.fault(mesh.nodes[1], {});

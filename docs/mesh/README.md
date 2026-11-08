@@ -833,3 +833,7 @@ in fast tests. The real installer still verifies its digest, extracts the tools
 and completes synchronization. The loopback-only asset override is unavailable
 in production bundles and non-test source execution; nightly retains the public
 release URL. This keeps parallel cold installs independent of GitHub throughput.
+
+Daemon crash evidence reads the captured process's own `fdinfo` lock record for
+its exact private lock path, then kills that PID during real staging. A global
+`/proc/locks` scan can race unrelated lock churn and is unnecessary for ownership.
