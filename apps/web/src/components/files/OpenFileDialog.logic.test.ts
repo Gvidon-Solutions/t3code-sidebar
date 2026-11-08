@@ -92,11 +92,11 @@ describe("findProjectForFile", () => {
     expect(
       fileViewerContext({
         environmentId: there,
-        environmentLabel: "Operalia",
+        environmentLabel: "Cloudbox",
         absolutePath: "/etc/hosts",
         projects,
       }),
-    ).toEqual({ environmentId: there, workspaceRoot: "/", projectName: "Operalia" });
+    ).toEqual({ environmentId: there, workspaceRoot: "/", projectName: "Cloudbox" });
   });
 });
 

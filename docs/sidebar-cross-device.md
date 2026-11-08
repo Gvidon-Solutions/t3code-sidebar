@@ -1,13 +1,13 @@
 # T3 Mesh: one layout, logical projects, replicas on any machine (fork feature spec)
 
-Owner: Anton. Coordinator: Claude (Operalia). Implementers: agents on gvidon.
-Integration branch `xdev` (worktree `/home/user/Repos/t3/t3code-xdev`, from `origin/ws` d439778e41).
+This specification describes customer-managed installations and their agents.
+Integration branch `xdev` (worktree `/home/dev/Repos/t3/t3code-xdev`, from `origin/ws` d439778e41).
 Read `AGENTS.md` and `FORK.md` first. Fork code goes into fork-only files; seams into upstream
 files stay small and are listed in FORK.md.
 
 ## Product in one paragraph
 
-The owner runs T3 servers on several machines (today gvidon, Operalia, gor, a VPS, a Windows
+The owner runs T3 servers on several machines (today studio, Cloudbox, nodeB, a VPS, a Windows
 desktop; tomorrow maybe two "main" machines). They form a **mesh**: every server knows the others,
 holds a replica of one shared **layout document** (workspaces, placements, order, fold, machine
 names/tags, logical projects) and merges edits from any server or client automatically, offline
@@ -16,7 +16,7 @@ any number of **primaries** (own `.git`, compute) and **replicas** (working copi
 one source representation with Mutagen, both directions). Which machine is primary is
 configuration per project, never code. Creating a thread "in project X on machine M" makes M a
 replica when needed — mounted, synced, registered, placed — then the thread starts. Agents and
-voice can do everything by name: "создай тред в проекте X на Operalia", "открой тред про mount"
+voice can do everything by name: "создай тред в проекте X на Cloudbox", "открой тред про mount"
 — whatever machine it lives on.
 
 ## 0. Object model (the law; code must match it exactly)
@@ -27,7 +27,7 @@ Primitives (unchanged, owned by T3/upstream or the OS): **Machine** (one T3 serv
 
 Layers built on them:
 
-1. **Mesh** = machines + links. Exactly one **authority** machine: layout entry `mesh.authority` = environmentId (configurable in Settings › Mesh; the owner's is gvidon; default when unset = the machine with the lowest environmentId among those that ever wrote, shown in the UI as "Authority: <label>"). The mesh needs connectivity, not a full graph: calls relay through linked peers (≤ 2 hops).
+1. **Mesh** = machines + links. Exactly one **authority** machine: layout entry `mesh.authority` = environmentId (configurable in Settings › Mesh; the owner's is studio; default when unset = the machine with the lowest environmentId among those that ever wrote, shown in the UI as "Authority: <label>"). The mesh needs connectivity, not a full graph: calls relay through linked peers (≤ 2 hops).
 2. **Project** (logical) = opaque stable id (the logical key; NEVER shown to the user anywhere — UI, CLI output, MCP text; only ids in JSON fields) + **title** (one name for the whole mesh, renameable from any machine; layout `proj/<id>.title`) + **representations**: (machine, folder path, role, transport, projectId on that machine). Roles: **primary** (owns `.git`, builds, tests; ≥ 0 per project, usually 1) and **replica** (folder kept equal to one primary by one sync session). Legacy keys (`github.com/…`, `<env>:<path>`, `title:…`) are only **aliases** of the id. A server's own project record is the representation's local handle, not the project.
 3. **Sync**: one replica ↔ exactly one sync session with its source primary (alpha = primary, beta = replica). Driver = the side that can ssh to the other (replica side first). States: pending → mounting → watching; conflict, error, paused; removed. Ignores: VCS + the configured list.
 4. **Presentation**: workspaces (placement, order, fold), machine labels/tags/colors and user-defined aliases stored on `machine/<env>`, the per-row machine strip. Purely organisational; nothing in sync or threads depends on them.
@@ -43,7 +43,7 @@ Thread rules: a thread runs on one machine; its working directory is inside one 
 - I3 The project title is the same on every machine and every surface; renaming changes only the title, never the id.
 - I4 No user-visible surface prints an opaque id or a legacy key as a name.
 - I5 Workspaces never influence sync, threads or routing.
-- I6 Any machine can be primary, replica, both (different projects) or authority; nothing assumes gvidon except the configured authority value.
+- I6 Any machine can be primary, replica, both (different projects) or authority; nothing assumes studio except the configured authority value.
 
 ### Authority and conflicts (owner rule: one machine is 100 % the source of truth)
 
@@ -65,8 +65,8 @@ Kill -9 each server mid-sync and mid-mount; kill the Mutagen daemon; cut a link/
   by id" (`apps/web/src/components/workspaces/WorkspaceSidebar.tsx`), phone reads the first server
   by id and writes `edit(source.config)` per server
   (`apps/mobile/src/features/workspaces/useSidebarWorkspaces.ts`). Copies drift; phone shows
-  Operalia's layout.
-- Live data: tile "main" is `workspace-4` on gvidon and `main` on Operalia; keys mix
+  Cloudbox's layout.
+- Live data: tile "main" is `workspace-4` on studio and `main` on Cloudbox; keys mix
   `github.com/...`, `<envId>:<path>`, `github-anton/...`; keys of offline environments
   (`e2e6225c…` Windows) must never be pruned.
 - Logical project key = client derivation by grouping mode
@@ -78,7 +78,7 @@ Kill -9 each server mid-sync and mid-mount; kill the Mutagen daemon; cut a link/
 - Server-to-server links exist: `PeerLinks` (`apps/server/src/peer/`), stored per server, call the
   peer's `/mcp` with a session made from a pairing code (`packages/contracts/src/peerLink.ts`);
   `PeerMcpClient`, `PeerForwarding`, `RemoteDelegation` (finds a project there only by repository
-  key). Gated by setting `linkedEnvironmentsEnabled` (off on Operalia today). Fenced (non
+  key). Gated by setting `linkedEnvironmentsEnabled` (off on Cloudbox today). Fenced (non
   full-access) links may not change projects/settings (`apps/server/src/mcp/linkOrigin.ts`).
 - MCP project toolkit (`apps/server/src/mcp/toolkits/project/tools.ts`): `t3_project_create`,
   `t3_project_clone`, `t3_thread_launch` accept `environmentId` (forwarded over links).
@@ -204,7 +204,7 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 - Mutagen is installed by T3 itself when missing: `MutagenInstaller` downloads the pinned release
   (0.18.1, sha256-checked) for the host OS/arch into `<baseDir>/bin/mutagen` (+ agents bundle) on
   first use; `mutagenPath` overrides. Each T3 server uses its own `MUTAGEN_DATA_DIRECTORY` under its
-  base dir so it never collides with a user's own daemon/sessions (e.g. gvidon's existing
+  base dir so it never collides with a user's own daemon/sessions (e.g. studio's existing
   `mutagen-daemon.service` with sessions `calf-wrapper`, `acc-review` — never touched).
 - Existing manual sessions can be adopted: Settings › Machines lists the user's foreign sessions.
   Adoption records `transport: mutagen`, pauses the original, recreates the same endpoints under
@@ -213,10 +213,10 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 
 ### 2a. Links and routing (decided after the survey)
 
-- Links today: none; `linkedEnvironmentsEnabled=false` on gvidon/Operalia; gor runs 0.0.45 without
-  links. HTTP reachability: gvidon→Operalia `https://operalia.bolychev.com:3774`; Operalia→gvidon
-  `https://happier.nobodyshurt.com`; gvidon↔gor only through ssh tunnels (gor listens on loopback);
-  Operalia↔gor no route.
+- Links today: none; `linkedEnvironmentsEnabled=false` on studio/Cloudbox; nodeB runs 0.0.45 without
+  links. HTTP reachability: studio→Cloudbox `https://cloudbox.example.test:3774`; Cloudbox→studio
+  `https://happier.example.test`; studio↔nodeB only through ssh tunnels (nodeB listens on loopback);
+  Cloudbox↔nodeB no route.
 - The mesh does not need a full graph: layout gossips over any connected graph. Tool calls to a
   machine without a direct link are relayed: `PeerForwarding` forwards to a linked peer that has a
   link to the target (max 2 hops, loop guard by a hop header, the target's access rules still apply).
@@ -293,11 +293,11 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 
 ### 11. Agents everywhere understand the mesh
 
-- Global agent instructions on every machine (gvidon, Operalia, gor): `~/.claude/CLAUDE.md`,
+- Global agent instructions on every machine (studio, Cloudbox, nodeB): `~/.claude/CLAUDE.md`,
   `~/.codex/AGENTS.md` (and other harnesses' global files that exist), kept identical in content:
   the machines, their roles, the mesh, the `t3` skill and when to use it, Mutagen rules (git and
   builds on the primary), how to open threads/files on any machine.
-- Behaviour eval: a list of Russian voice-style requests ("создай тред в проекте X на Operalia
+- Behaviour eval: a list of Russian voice-style requests ("создай тред в проекте X на Cloudbox
   на соннете", "открой тред про маунт", "покажи файл README из X на гвидоне", "сделай X репликой на
   горе", "что сейчас работает на всех машинах") run as real threads on the test bed with several
   harnesses (Claude, Codex, DeepSeek 1017); pass = right tool calls, first action within seconds, no
@@ -318,30 +318,19 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 | J — agents      | §11 instructions + behaviour eval                                                                     | F          |
 | G — e2e         | test bed and scenarios below; web (Playwright), Android (adb emulator), desktop build                 | all        |
 
-## Test bed (E2E) — never the live gvidon/Operalia servers
+## Disposable test bed
 
-- Machine 1 (primary): gor (`ssh -F ~/.local/share/gor-transfer/ssh_config -i ~/.ssh/id_malaniya_25519
-  -o IdentitiesOnly=yes gor`), its own T3 test server (restart allowed), demo repo
-  `~/xdev-e2e/demo`.
-- Machine 2: VPS `152.89.244.57` (`ssh -F ~/.local/share/vpn-ops/ssh_config 152.89.244.57`), NEW
-  isolated container `t3-xdev` (compose `/opt/t3-xdev`, 127.0.0.1:3791 only, ≤ 2 GiB RAM, image
-  from `xdev` + mutagen + openssh-client). Never touch `t3-ws` or other stacks there.
-- Machine 3: gvidon isolated server (`--base-dir /tmp/t3-xdev-gv --port 3795`).
-- Clients: web via Playwright on gvidon (ssh -L tunnels), Android emulator on gvidon
-  (`scripts/sidebar-mobile-e2e/`), desktop build smoke.
-- Scenarios: link all three; legacy configs (copies of the real gvidon and Operalia
-  `sidebarWorkspaces`) import and merge without losing a key; edits on each machine and offline
-  edits converge; tags left only in multi-machine folders; "new thread on VPS" in the demo project →
-  mounting → watching → project registered → thread runs → file edit reaches gor, `.git` and
-  `node_modules` did not; reverse (gvidon replica of a VPS primary); two primaries; conflict →
-  shown → resolved → Retry; remove replica → session gone, files kept; ensure twice → no
-  duplicates; restart a server → state recovered; agent finds and opens a thread on another machine.
+The nodeA, nodeB and cloud fixtures use separate units, state directories, sandbox homes and
+loopback ports. Copy `scripts/mesh-e2e/local.env.example` to the gitignored `local.env` and
+configure your own infrastructure there. No production server or account SSH authorization
+file is part of the bed. See [the harness guide](../scripts/mesh-e2e/README.md) for setup,
+commands, the shared lock and cleanup rules.
 
 ## Rules for every agent
 
 - Work only in your own worktree/branch given in your task; commit there (conventional messages,
-  e.g. `feat(mesh): …`). Never push, never touch `ws`, never restart/update the live T3 on gvidon
-  or Operalia, never edit their settings.
+  e.g. `feat(mesh): …`). Never push, never touch `ws`, never restart/update the live T3 on studio
+  or Cloudbox, never edit their settings.
 - `export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH` in every shell (hooks need it).
   The pre-commit `knip:check` already fails on `ws` (33 old unused exports): commit with
   `--no-verify` after running yourself `./node_modules/.bin/vp fmt`, `./node_modules/.bin/vp lint`

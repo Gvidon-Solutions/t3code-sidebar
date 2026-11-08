@@ -668,7 +668,7 @@ export const makeDeviceTools = Effect.fn("evaluateMcpToolUse.makeDeviceTools")(f
   world: DeviceWorld,
   environment: { readonly cwd: string; readonly platform: string },
 ) {
-  const home = /^\/(?:home|Users)\/[^/]+/.exec(environment.cwd)?.[0] ?? "/home/user";
+  const home = /^\/(?:home|Users)\/[^/]+/.exec(environment.cwd)?.[0] ?? "/home/dev";
   for (const id of Object.keys(world.agentDeviceSessions ?? {})) {
     if (!world.devices.some((device) => device.id === id)) {
       return yield* Effect.die(new Error(`world.agentDeviceSessions names no device ${id}.`));

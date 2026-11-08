@@ -12,7 +12,7 @@ import * as NodeSqlite from "node:sqlite";
 import { readFirefoxCookies } from "./FirefoxCookies.ts";
 import { parseFirefoxProfiles } from "./Sources.ts";
 
-const parsePosixFirefoxProfiles = (ini: string, root = "/home/user/.mozilla/firefox") =>
+const parsePosixFirefoxProfiles = (ini: string, root = "/home/dev/.mozilla/firefox") =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
     return parseFirefoxProfiles(ini, path, root);
@@ -352,7 +352,7 @@ describe("parseFirefoxProfiles", () => {
   );
 
   it.effect.each([
-    { platform: "Linux", root: "/home/user/.mozilla/firefox" },
+    { platform: "Linux", root: "/home/dev/.mozilla/firefox" },
     { platform: "macOS", root: "/Users/user/Library/Application Support/Firefox" },
   ])("validates relative and absolute $platform profile paths", ({ root }) =>
     Effect.gen(function* () {

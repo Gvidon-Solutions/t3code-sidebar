@@ -249,7 +249,7 @@ Never format `agent-kit/skills/t3/**`. Keep the skill general and compact.
   `vp lint` 0 errors, `typecheck` in contracts/shared/client-runtime/server/mobile and
   `vp exec tsc --noEmit -p apps/web/tsconfig.json`. Commit with `--no-verify` only because of the
   old knip baseline; add no new knip findings.
-- Three-machine bed: `scripts/mesh-e2e/README.md` (gor main server + isolated gvidon :3795 +
+- Three-machine bed: `scripts/mesh-e2e/README.md` (nodeB main server + isolated studio :3795 +
   VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
   `round1.sh` (layout, links, files, old clients), `round2.sh` (replicas on real Mutagen, t3ctl),
   `round3.sh` (crashes, partitions, duplicate claims). They must stay green.
@@ -260,15 +260,13 @@ Never format `agent-kit/skills/t3/**`. Keep the skill general and compact.
   changing SKILL.md or GLOBAL.md, run model-level routing cases using customer-defined machine
   identities/aliases and configured models; do not make old owner-name translations part of the product contract.
 
-## Operating the owner's live machines (installation example)
+## Operating configured installations
 
-- Releases: push to `ws` builds desktop (Windows/Linux), APK and the server runtime
-  (`sidebar-desktop.yml`). Live servers restart **only with the owner's yes** (AGENTS.md).
-- gvidon: user unit; `t3ctl server install <ver>` + `server use <ver> --yes`.
-- Operalia: **system** unit as root (`/etc/systemd/system/t3code-sidebar.service`), no gh login:
-  copy the runtime dir from gvidon, change `ExecStart`, `daemon-reload`, restart. Claude works
-  only on Operalia; this thread type cannot run on gvidon.
-- Back up `userdata/statev2.sqlite` (`sqlite3 .backup`), `settings.json` and the unit first.
+Releases on `ws` build desktop clients, Android and the server runtime. Use the configured
+machine's installation scope and discovered service unit. Back up its database, settings and
+unit before an update. An owner's active server restarts only with their explicit approval;
+use a disposable fixture for development. Provider availability comes from each environment's
+catalog, not a machine name or an assumed operating system.
 
 ## Lessons already paid for (do not repeat)
 
@@ -793,8 +791,9 @@ settings writes leave replica diagnostics to the servers, so older clients canno
 `MeshLinkPermissions.ts` requires distinct local and peer environment IDs bound in the mesh
 config. A missing config, missing binding, unknown peer ID, or legacy label-only session denies
 files, replicas and threads. Labels are migration input, never a runtime permission identity.
-The OAuth issuance path must also authenticate the peer identity against its link record;
-config binding alone cannot establish that identity. HTTP idempotency namespaces use the
+`EnvironmentAuth` resolves identity from the authenticated incoming-link or reverse-grant
+record. OAuth registration metadata, token claims and caller headers never supply permission
+identity. A conflicting peer header is rejected at the persistent transport upgrade. HTTP idempotency namespaces use the
 session peer ID (or session ID), never caller-supplied mesh-hop or peer-ID headers. Legacy
 label matching lives only in `meshConfig/migration.ts`. Import defaults to project files;
 existing config revisions are untouched. An unrestricted link requires an explicit `files: all`
@@ -809,3 +808,18 @@ or changing Mutagen endpoint syntax.
 New configs leave agent aliases empty; aliases belong in customer config. Delivery clean-agent
 launches inherit project settings unless explicitly configured. Android signing runs only on
 `ws` through the protected `android-release` environment; see [delivery.md](../delivery.md#android-signing-boundary).
+
+MCP tool declarations carry a domain in `McpToolDomain.ts` annotations. Receiving handlers
+and forwarded calls derive the same policy from those declarations. Linked callers cannot
+invoke unclassified or owner-only tools; file, replica and thread domains obey the respective
+link limits. Repository-wide filesystem operations require `files: all`; the file SDK also
+supports project-only access with realpath checks. Computer-control, secret and configuration
+administration tools require a direct owner caller. Mesh protocol calls require a session bound
+to a peer record.
+
+The public harness keeps infrastructure in the ignored `scripts/mesh-e2e/local.env`; its
+tracked example uses neutral roles. Deploy/teardown use sandbox homes, bed units and bed
+ports, and never edit administrator SSH authorization. Live unit/data/port overrides require
+`MESH_E2E_ALLOW_LIVE=1` in addition to the owner's operational approval. See the harness guide
+for pinned infrastructure SSH keys and isolation tests. Git history is not rewritten by this
+cleanup; removing historical disclosures is a separate repository-owner decision.

@@ -1846,7 +1846,7 @@ it.layer(
           TMUX: "/tmp/tmux-1000/default,1234,0",
           TMUX_PANE: "%3",
           ZELLIJ_SESSION_NAME: "work",
-          ZELLIJ_CONFIG_DIR: "/home/user/.config/zellij",
+          ZELLIJ_CONFIG_DIR: "/home/dev/.config/zellij",
         },
       });
       yield* manager.open(openInput());
@@ -1862,7 +1862,7 @@ it.layer(
       expect(spawnInput.env.TMUX).toBeUndefined();
       expect(spawnInput.env.TMUX_PANE).toBeUndefined();
       expect(spawnInput.env.ZELLIJ_SESSION_NAME).toBeUndefined();
-      expect(spawnInput.env.ZELLIJ_CONFIG_DIR).toBe("/home/user/.config/zellij");
+      expect(spawnInput.env.ZELLIJ_CONFIG_DIR).toBe("/home/dev/.config/zellij");
       expect(ptyAdapter.spawnInputs[1]?.env.TMUX_PANE).toBe("%9");
     }),
   );
@@ -1872,12 +1872,12 @@ it.layer(
       const appDir = "/tmp/.mount_T3Codeabc123";
       const { manager, ptyAdapter } = yield* createManager(5, {
         env: {
-          APPIMAGE: "/home/user/T3-Code.AppImage",
+          APPIMAGE: "/home/dev/T3-Code.AppImage",
           APPDIR: appDir,
-          ARGV0: "/home/user/T3-Code.AppImage",
-          OWD: "/home/user/project",
+          ARGV0: "/home/dev/T3-Code.AppImage",
+          OWD: "/home/dev/project",
           PATH: `${appDir}/usr/bin:${appDir}:/usr/local/bin:/usr/bin:/bin`,
-          LD_LIBRARY_PATH: `${appDir}/usr/lib:/home/user/.local/lib`,
+          LD_LIBRARY_PATH: `${appDir}/usr/lib:/home/dev/.local/lib`,
           XDG_DATA_DIRS: `${appDir}/usr/share:/usr/local/share:/usr/share`,
           GSETTINGS_SCHEMA_DIR: `${appDir}/usr/share/glib-2.0/schemas`,
           TEST_TERMINAL_KEEP: "keep-me",
@@ -1893,7 +1893,7 @@ it.layer(
       expect(spawnInput.env.ARGV0).toBeUndefined();
       expect(spawnInput.env.OWD).toBeUndefined();
       expect(spawnInput.env.PATH).toBe("/usr/local/bin:/usr/bin:/bin");
-      expect(spawnInput.env.LD_LIBRARY_PATH).toBe("/home/user/.local/lib");
+      expect(spawnInput.env.LD_LIBRARY_PATH).toBe("/home/dev/.local/lib");
       expect(spawnInput.env.XDG_DATA_DIRS).toBe("/usr/local/share:/usr/share");
       expect(spawnInput.env.GSETTINGS_SCHEMA_DIR).toBeUndefined();
       expect(spawnInput.env.TEST_TERMINAL_KEEP).toBe("keep-me");

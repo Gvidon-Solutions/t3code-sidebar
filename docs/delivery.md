@@ -241,3 +241,9 @@ ref cannot access signing credentials. Removing repository copies of these secre
 `android-release.mjs restore` reads release metadata and downloads an APK after matching the
 build key, then verifies SHA-256. It writes only the local output directory and GitHub step
 outputs; it never uploads or changes release assets.
+
+Local Android release builds can load signing settings from the explicit
+`T3_ANDROID_SIGNING_ENV` file. Only `T3_ANDROID_*` entries are read; the file is never executed.
+There is no automatic home-directory signing-file lookup. An explicitly configured missing
+file fails the build. Existing `T3_ANDROID_KEYSTORE` settings take precedence; development
+builds use their development signing path.

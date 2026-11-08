@@ -130,12 +130,12 @@ export interface Path {
  *   const path = yield* Path.Path
  *
  *   // Parse a path and get a Path.Parsed object
- *   const parsed = path.parse("/home/user/file.txt")
+ *   const parsed = path.parse("/home/dev/file.txt")
  *
  *   // The parsed object conforms to the Path.Parsed interface
  *   const exampleParsed = {
  *     root: "/",
- *     dir: "/home/user",
+ *     dir: "/home/dev",
  *     base: "file.txt",
  *     ext: ".txt",
  *     name: "file"
@@ -174,10 +174,10 @@ export declare namespace Path {
    *   const path = yield* Path.Path
    *
    *   // Parse a path into its components
-   *   const parsed = path.parse("/home/user/documents/file.txt")
+   *   const parsed = path.parse("/home/dev/documents/file.txt")
    *   // Format a path from its components
    *   const formatted = path.format({
-   *     dir: "/home/user",
+   *     dir: "/home/dev",
    *     name: "newfile",
    *     ext: ".ts"
    *   })
@@ -185,9 +185,9 @@ export declare namespace Path {
    * })
    *
    * const result = Effect.runSync(Effect.provide(program, Path.layer))
-   * result.dir // => "/home/user/documents"
+   * result.dir // => "/home/dev/documents"
    * result.base // => "file.txt"
-   * result.formatted // => "/home/user/newfile.ts"
+   * result.formatted // => "/home/dev/newfile.ts"
    * ```
    *
    * @category models

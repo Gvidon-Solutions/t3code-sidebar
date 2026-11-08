@@ -39,7 +39,7 @@ Every eval follows the same shape, so a new one is easy to write and an old one 
 - If you change a case, the changed case must still fail on the text it was written against. Prefer to fix T3 Code over loosening a case.
 - Add controls: cases where the correct action is ordinary work. They catch a fix that overcorrects.
 - Model output varies. Run each case several times. A case fails when half or more of its samples fail. Compare against a baseline on the same model, not against an absolute score.
-- No user data in cases, fixtures, or templates. Use `/home/user` and `acme/app`. Read every captured fixture before you commit it.
+- No user data in cases, fixtures, or templates. Use `/home/dev` and `acme/app`. Read every captured fixture before you commit it.
 - No unreleased model details in committed files, except model ids in an eval's model table.
 
 ## Cost

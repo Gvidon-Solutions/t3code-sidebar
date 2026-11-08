@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mint one-time pairing tokens on all three test servers and print ready URLs
-# for a browser on gvidon and for an Android emulator running on gvidon.
+# for a browser on studio and for an Android emulator running on studio.
 #
 # Usage: pair.sh [ttl]        (default 2h)
 set -euo pipefail
@@ -23,10 +23,10 @@ mint_token() {
   printf '%s' "$token"
 }
 
-mint_gv() {
+mint_nodeA() {
   local label=$1 out token
-  out="$("$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" pair \
-    --base-dir "$GV_BASE_DIR" --ttl "$TTL" --label "$label" 2>&1)" || {
+  out="$("$NODE_A_RUNTIME_ROOT/$BUILD_VERSION/t3" pair \
+    --base-dir "$NODE_A_BASE_DIR" --ttl "$TTL" --label "$label" 2>&1)" || {
     printf '%s\n' "$out" >&2
     return 1
   }
@@ -37,9 +37,9 @@ mint_gv() {
   printf '%s' "$token"
 }
 
-mint_gor() {
+mint_nodeB() {
   local label=$1 out token
-  out="$(gor_ssh "~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 pair \
+  out="$(nodeB_ssh "~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 pair \
     --base-dir ~/.t3-sidebar-server --ttl $TTL --label '$label'" 2>&1)" || {
     printf '%s\n' "$out" >&2
     return 1
@@ -51,9 +51,9 @@ mint_gor() {
   printf '%s' "$token"
 }
 
-mint_vps() {
+mint_cloud() {
   local label=$1 out token
-  out="$(vps_ssh "docker exec t3-mesh-e2e node /opt/t3/dist/bin.mjs pair \
+  out="$(cloud_ssh "docker exec t3-mesh-e2e node /opt/t3/dist/bin.mjs pair \
     --base-dir /home/t3/.t3 --ttl $TTL --label '$label'" 2>&1)" || {
     printf '%s\n' "$out" >&2
     return 1
@@ -69,7 +69,7 @@ print_site() {
   local name=$1 port=$2 mint=$3
   local web_token android_token
   echo ""
-  echo "== $name (gvidon local port $port) =="
+  echo "== $name (studio local port $port) =="
   web_token="$($mint "$name-web")" || die "$name: failed to mint a web token"
   android_token="$($mint "$name-android")" || die "$name: failed to mint an Android token"
   echo "web:      http://127.0.0.1:$port/pair#token=$web_token"
@@ -78,10 +78,10 @@ print_site() {
 }
 
 require_bins
-print_site gv "$GV_LOCAL" mint_gv
-print_site gor "$GOR_LOCAL" mint_gor
-print_site vps "$VPS_LOCAL" mint_vps
+print_site nodeA "$NODE_A_LOCAL" mint_nodeA
+print_site nodeB "$NODE_B_LOCAL" mint_nodeB
+print_site cloud "$CLOUD_LOCAL" mint_cloud
 
 echo ""
-echo "Android emulator on another host: adb reverse tcp:$GV_LOCAL tcp:$GV_LOCAL and use 127.0.0.1."
+echo "Android emulator on another host: adb reverse tcp:$NODE_A_LOCAL tcp:$NODE_A_LOCAL and use 127.0.0.1."
 echo "Tunnels must be up (tunnels.sh up). Tokens expire after $TTL."

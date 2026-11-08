@@ -18,12 +18,11 @@ upstream `pingdotgg/t3code`. Read [FORK.md](FORK.md) before changing anything. I
   `agent-kit/install.sh --dest DIR` creates an offline staging copy.
 - Every push to `ws` publishes a desktop release that installed apps update to. Push only
   changes you have verified.
-- **The owner's live server restarts only with the owner's go-ahead (rule of 2026-10-14).** On
-  gvidon, `t3code-sidebar.service` (`~/.t3-sidebar-server`, :3774) runs every thread the owner has,
-  including yours. Before restarting, stopping, killing or updating it (unit, runtime,
-  `t3 service install`, a second `serve` on :3774 or that base dir), tell the owner what, why and
-  how to roll back, and wait for their yes. One approval covers one restart. Build and test on gor
-  (`gor.local`) or on an isolated server (`--base-dir /tmp/… --port 3795`).
+- **An owner's active server restarts only with their explicit go-ahead.** Discover the
+  target environment and its service/base directory instead of assuming a host or installation
+  path. Before restarting, stopping, killing or updating that server, explain what, why and how
+  to roll back, then wait for approval. One approval covers one restart. Build and test with
+  disposable state and a separate port; the configured mesh bed is also isolated by default.
 - Never open PRs against upstream unless the owner asks. The rest of this file is upstream's
   guidance and still applies; where it says "we" it means upstream maintainers.
 

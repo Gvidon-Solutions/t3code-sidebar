@@ -287,9 +287,9 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 
 ### 2026-11-03 — T3 Mesh — Stage J global agent instructions
 
-- **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to gor.
+- **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to nodeB.
 - **How:** staged `t3ctl agents sync/status` uses local file operations or pinned SSH routes, with offline render/diff/backup/isolation tests and real Codex/OpenCode eval evidence. Mesh routing resolves configured names and project paths, searches across machines, and runs git on a replica’s primary. General dispatch rules cover API prerequisites and execution location; compact skill tables are excluded from the formatter.
-- **Where:** `agent-kit/skills/t3/`, `agent-kit/skills/t3/global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
+- **Where:** `agent-kit/skills/t3/`, `agent-kit/skills/t3/global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live studio/Cloudbox configuration changed.
 
 ### 2026-11-03 — T3 Mesh — Stage M session identity and thread access
 
@@ -299,7 +299,7 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 
 ### 2026-11-02 — T3 Mesh — round 2 replica acceptance
 
-- **What:** real Mutagen replica acceptance across gor, isolated gvidon and the VPS container, including staged `t3ctl-next`.
+- **What:** real Mutagen replica acceptance across nodeB, isolated studio and the VPS container, including staged `t3ctl-next`.
 - **How:** Settings-model SSH routes, authenticated MCP launches, live status, file and session assertions, conflict/retry, restart, removal and orphan checks. Build-current mode avoids the shared build checkout; deploy copies only the staged skill.
 - **Where:** `scripts/mesh-e2e/round2.sh`, `round2-routes.sh` and the accompanying run report/log. Product code is unchanged.
 
@@ -369,7 +369,7 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 - **What.** A folder's "New thread" stays as before; a small chevron beside it opens "New thread
   on…" with every connected machine and its tag. Choosing a machine that has no copy of the
   project records a Mutagen replica and shows a pending row at the top of the folder (tag,
-  "Mounting on Operalia… 42%", "2 conflicts", or the error with Retry). The new-thread draft
+  "Mounting on Cloudbox… 42%", "2 conflicts", or the error with Retry). The new-thread draft
   opens there as soon as that machine registers the project. A folder's menu has "Machines…"
   with every representation: machine, Primary/Replica, path, state, conflicts, Make primary,
   Add replica on…, Retry, and Remove (files stay). The phone gets the same "New thread on…"
@@ -548,8 +548,8 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 
 - **What.** A new project-grouping mode, "Group by name": projects with the same name appear as
   one sidebar row on any machine, whatever their folders or git identities. It fixes the phone
-  showing, for example, two "CALF Wrapper" folders because one copy lives on gvidon and the
-  other on Operalia over SSHFS with no detected repository.
+  showing, for example, two "CALF Wrapper" folders because one copy lives on studio and the
+  other on Cloudbox over SSHFS with no detected repository.
 - **How.** `deriveTitleScopedKey` normalizes the title (trim, collapse whitespace, lower case) and
   becomes the logical key for the `title` mode; grouping is client-side, so older servers need no
   change. Available in Settings › Organization on the phone.

@@ -15,8 +15,8 @@ import {
   type InboxSource,
 } from "./inboxList";
 
-const gvidon = EnvironmentId.make("gvidon");
-const gor = EnvironmentId.make("gor");
+const studio = EnvironmentId.make("studio");
+const nodeB = EnvironmentId.make("nodeB");
 
 function issue(
   id: string,
@@ -75,15 +75,15 @@ describe("mergeInboxSources", () => {
   it("merges machines, keeps each issue's machine, and skips ones without an inbox", () => {
     const state = mergeInboxSources(
       [
-        source(gvidon, [issue("a", { severity: "info" })]),
-        source(gor, [issue("b", { severity: "action" })]),
+        source(studio, [issue("a", { severity: "info" })]),
+        source(nodeB, [issue("b", { severity: "action" })]),
         source(EnvironmentId.make("old"), null),
       ],
       30,
     );
     expect(state.open.map((item) => [item.environmentId, item.issue.id])).toEqual([
-      [gor, "b"],
-      [gvidon, "a"],
+      [nodeB, "b"],
+      [studio, "a"],
     ]);
     expect(state.isLoading).toBe(false);
   });
@@ -91,8 +91,8 @@ describe("mergeInboxSources", () => {
   it("keeps the newest closed issues across machines within the page", () => {
     const state = mergeInboxSources(
       [
-        source(gvidon, [closed("g1", 1), closed("g5", 5)], 7),
-        source(gor, [closed("r3", 3), closed("r9", 9)], 4),
+        source(studio, [closed("g1", 1), closed("g5", 5)], 7),
+        source(nodeB, [closed("r3", 3), closed("r9", 9)], 4),
       ],
       3,
     );
@@ -101,11 +101,11 @@ describe("mergeInboxSources", () => {
   });
 
   it("is loading only while nothing has arrived from a connected machine", () => {
-    expect(mergeInboxSources([source(gvidon, null, 0, true)], 30).isLoading).toBe(true);
+    expect(mergeInboxSources([source(studio, null, 0, true)], 30).isLoading).toBe(true);
     expect(
-      mergeInboxSources([source(gvidon, null, 0, true), source(gor, [issue("a")])], 30).isLoading,
+      mergeInboxSources([source(studio, null, 0, true), source(nodeB, [issue("a")])], 30).isLoading,
     ).toBe(false);
-    expect(mergeInboxSources([source(gvidon, null)], 30).isLoading).toBe(false);
+    expect(mergeInboxSources([source(studio, null)], 30).isLoading).toBe(false);
   });
 });
 
@@ -113,7 +113,7 @@ describe("buildOpenInboxRows", () => {
   it("puts one header with its count before each severity run", () => {
     const { open } = mergeInboxSources(
       [
-        source(gvidon, [
+        source(studio, [
           issue("i1", { severity: "info" }),
           issue("a1", { severity: "action" }),
           issue("a2", { severity: "action", activityAt: "2026-10-02T00:00:00.000Z" }),
@@ -149,9 +149,9 @@ describe("presentInboxEntry", () => {
       detail: "Renewed the certificate.",
       tone: "outcome",
     });
-    expect(presentInboxEntry(entry("dismissed", "Moved to gor"))).toMatchObject({
+    expect(presentInboxEntry(entry("dismissed", "Moved to nodeB"))).toMatchObject({
       label: "Closed as not relevant",
-      detail: "Moved to gor",
+      detail: "Moved to nodeB",
       tone: "outcome",
     });
   });

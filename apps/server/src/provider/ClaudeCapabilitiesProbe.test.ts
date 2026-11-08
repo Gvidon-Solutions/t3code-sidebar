@@ -19,7 +19,7 @@ it("drops strict MCP mode, and only that, next to an administrator's managed-mcp
   const options = buildClaudeCapabilitiesProbeQueryOptions({
     executablePath: "/usr/bin/claude",
     abortController: new AbortController(),
-    environment: { HOME: "/home/user" },
+    environment: { HOME: "/home/dev" },
     cwd: undefined,
     managedMcpConfig: true,
   });
