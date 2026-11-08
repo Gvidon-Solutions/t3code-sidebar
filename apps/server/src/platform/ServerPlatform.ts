@@ -65,8 +65,8 @@ export async function securePipeAddress(address: string, platform: NodeJS.Platfo
   if (platform !== "win32") await NodeFSP.chmod(address, 0o600);
 }
 
-export const nodeCommand = (source: string) =>
-  `node -e "eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())"`;
+export const nodeCommand = (source: string, platform = "linux") =>
+  loginCommand(`eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())`, "", platform, false);
 
 export function sshArguments(host: string, sshHome?: string): string[] {
   if (!host || host.startsWith("-") || /[\s\0]/.test(host)) throw new Error("Invalid SSH host");

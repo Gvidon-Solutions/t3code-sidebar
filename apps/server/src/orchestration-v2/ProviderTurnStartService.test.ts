@@ -30,6 +30,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
+import * as Logger from "effect/Logger";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -1784,6 +1785,18 @@ effectIt.effect("does not mistake a failed state read for a superseded run", () 
     const finalizeCheck = yield* Effect.flip(controls.shouldFinalizeRun!());
     expect(startCheck._tag).toBe("ProjectionStoreReadError");
     expect(finalizeCheck._tag).toBe("ProjectionStoreReadError");
+    const warnings: unknown[] = [];
+    const logger = Logger.make(({ message }) => {
+      warnings.push(message);
+    });
+    expect(
+      yield* controls.loadInheritedBackgroundTurnItems!().pipe(
+        Effect.mapError((cause) => new Error(String(cause))),
+        Effect.orDie,
+        Effect.provide(Logger.layer([logger], { mergeWithExisting: false })),
+      ),
+    ).toEqual([]);
+    expect(warnings.flat()).toContain("Cannot read inherited background items");
   }),
 );
 

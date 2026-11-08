@@ -403,7 +403,14 @@ it("warns before removing a primary, omits Adopt when synced, and opens conflict
         studio: {
           state: "watching",
           updatedAt: "",
-          conflictCopies: { environmentId: "studio", path: "/notes/.t3-conflicts/copy" },
+          conflictCopies: {
+            environmentId: "studio",
+            path: "/notes/.t3-conflicts/copy",
+            locations: [
+              { environmentId: "studio", path: "/notes/.t3-conflicts/copy" },
+              { environmentId: "cloudbox", path: "/cloud/.t3-conflicts/copy" },
+            ],
+          },
         },
       },
     },
@@ -432,10 +439,10 @@ it("warns before removing a primary, omits Adopt when synced, and opens conflict
   expect(confirmation.message).toContain("leaves replicas without their git and build machine");
   act(confirmation.onConfirm);
   expect(remove).toHaveBeenCalledWith("studio");
-  screen.click("Open copies");
+  screen.click("Open copies on cloudbox");
   expect(mocks.navigate).toHaveBeenCalledWith(
     "OpenFile",
-    expect.objectContaining({ cwd: "/notes/.t3-conflicts/copy" }),
+    expect.objectContaining({ environmentId: "cloudbox", cwd: "/cloud/.t3-conflicts/copy" }),
   );
 });
 it("shows a short no-models reason, expandable details, provider settings and project sync status", () => {

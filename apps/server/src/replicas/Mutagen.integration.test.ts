@@ -51,7 +51,6 @@ it.live("installs verified Mutagen and synchronizes isolated local endpoints bid
       const run = Effect.gen(function* () {
         const runner = yield* MutagenRunner.MutagenRunner;
         yield* runner.daemon("start");
-        yield* Effect.addFinalizer(() => runner.daemon("stop").pipe(Effect.orDie));
         const comparison = {
           source: { environmentId: "alpha", path: alpha },
           destination: { environmentId: "beta", path: beta },

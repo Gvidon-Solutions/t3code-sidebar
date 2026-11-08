@@ -63,7 +63,13 @@ export const ReplicaLiveStatus = Schema.Struct({
   skipped: SidebarProjectMountStatus.fields.skipped,
   skippedPaths: SidebarProjectMountStatus.fields.skippedPaths,
   conflictCopies: Schema.optionalKey(
-    Schema.Struct({ environmentId: Schema.String, path: Schema.String }),
+    Schema.Struct({
+      environmentId: Schema.String,
+      path: Schema.String,
+      locations: Schema.optionalKey(
+        Schema.Array(Schema.Struct({ environmentId: Schema.String, path: Schema.String })),
+      ),
+    }),
   ),
   logicalKey: Schema.String,
   environmentId: Schema.String,

@@ -1,4 +1,5 @@
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG, EnvironmentId } from "@t3tools/contracts";
+import { vi } from "vite-plus/test";
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -73,12 +74,22 @@ it.live(
           },
         },
       });
-      const sshEnvironment: Record<string, string | undefined> = { T3_MESH_SSH_HOME: home };
+      const sshdDirectory = path.join(root, "sshd");
+      yield* fs.makeDirectory(sshdDirectory);
+      yield* fs.writeFileString(path.join(sshdDirectory, "sshd_config"), "");
+      using reads = vi.spyOn(fs, "readFileString");
+      const sshEnvironment: Record<string, string | undefined> = {
+        T3_MESH_SSH_HOME: home,
+        T3_MESH_SSHD_DIR: sshdDirectory,
+      };
       const environment = Layer.succeed(HostProcess.Environment, sshEnvironment);
       const dependencies = Layer.mergeAll(
         mesh,
         links,
         environment,
+        Layer.succeed(HostProcess.ExecutablePath, "/runtime/node"),
+        Layer.succeed(HostProcess.Arguments, ["/runtime/node", "/runtime/start.js"]),
+        Layer.succeed(HostProcess.IsExecutable, false),
         processes,
         ServerConfig.layerTest(root, root),
       );
@@ -102,6 +113,7 @@ it.live(
           sshRoutes: { "laptop-env": { status: "unknown", checkedAt: expect.any(String) } },
         });
         const config = path.join(home, ".ssh", "config");
+        expect(yield* fs.readFileString(config)).toContain("/runtime/start.js");
         const peerFacts = (yield* layout.read).config.machines["laptop-env"]!.reported!;
         yield* layout.edit((state) => ({
           ...state,
@@ -206,6 +218,10 @@ it.live(
             },
           },
         });
+        expect(
+          reads.mock.calls.filter(([file]) => file === path.join(sshdDirectory, "sshd_config"))
+            .length,
+        ).toBeGreaterThan(1);
         const count = calls.filter((call) => call.command === "ssh-keygen").length;
         yield* Effect.gen(function* () {
           expect((yield* Ssh.MeshSsh).publicKey).toBe(ssh.publicKey);

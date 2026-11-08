@@ -102,20 +102,27 @@ export function MachinesSheet(props: {
               {copies && !row.text.startsWith("Resolved ") ? (
                 <Text className="text-sm text-foreground-muted">Last automatic resolution</Text>
               ) : null}
-              {copies ? (
-                <Button
-                  label="Open copies"
-                  tone="secondary"
-                  onPress={() => {
-                    props.onClose();
-                    navigation.navigate("OpenFile", {
-                      environmentId: copies.environmentId,
-                      cwd: copies.path,
-                      projectName: props.title,
-                    });
-                  }}
-                />
-              ) : null}
+              {copies
+                ? (copies.locations ?? [copies]).map((location) => (
+                    <Button
+                      key={`${location.environmentId}:${location.path}`}
+                      label={
+                        copies.locations && copies.locations.length > 1
+                          ? `Open copies on ${location.environmentId}`
+                          : "Open copies"
+                      }
+                      tone="secondary"
+                      onPress={() => {
+                        props.onClose();
+                        navigation.navigate("OpenFile", {
+                          environmentId: location.environmentId,
+                          cwd: location.path,
+                          projectName: props.title,
+                        });
+                      }}
+                    />
+                  ))
+                : null}
               <View className="flex-row items-center gap-2">
                 <ReplicaTag label={label} tag={tag} color={color} />
                 <Text

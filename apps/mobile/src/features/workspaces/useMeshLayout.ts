@@ -32,6 +32,7 @@ const emptySnapshot = () => emptyState;
 const noSubscription = () => () => {};
 const NO_SUBSCRIPTION = Atom.make<null>(null);
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import * as Dialog from "../../components/ui/Dialog";
 import { uuidv4 } from "../../lib/uuid";
 function useMeshLayoutOwner() {
   const { environments } = useEnvironments();
@@ -81,7 +82,13 @@ function useMeshLayoutOwner() {
           });
         },
       },
-      onPermanentFailure: (error) => console.error("Mesh layout failed", error),
+      onPermanentFailure: (error) => {
+        console.error("Mesh layout failed", error);
+        Dialog.alert(
+          "Layout change failed",
+          error instanceof Error ? error.message : String(error),
+        );
+      },
       rpc: {
         get: async () => {
           if (!current.current.remote) throw new Error("Waiting for mesh snapshot");

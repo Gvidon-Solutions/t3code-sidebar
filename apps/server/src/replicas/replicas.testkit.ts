@@ -65,6 +65,7 @@ export const makeReplicaHarness = (
   const terminated: string[] = [];
   const validation = {
     pending: [] as readonly string[],
+    flush: Effect.void as Effect.Effect<void, ReplicaError>,
     beforePause: Effect.void as Effect.Effect<void, ReplicaError>,
     preserve: Effect.void as Effect.Effect<void, ReplicaError>,
     check: (
@@ -138,7 +139,7 @@ export const makeReplicaHarness = (
           sessions = sessions.map((s) => ({ ...s, paused: false }));
         }),
       reset: () => Effect.void,
-      flush: () => Effect.void,
+      flush: () => validation.flush,
       daemon: () => Effect.void,
     }),
   );

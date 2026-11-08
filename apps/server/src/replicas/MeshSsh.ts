@@ -47,6 +47,9 @@ export const layer = Layer.effect(
     const path = yield* Path.Path;
     const home = yield* HostProcess.HomeDirectory;
     const env = yield* HostProcess.Environment;
+    const executable = yield* HostProcess.ExecutablePath;
+    const args = yield* HostProcess.Arguments;
+    const isExecutable = yield* HostProcess.IsExecutable;
     const runner = yield* ProcessRunner.ProcessRunner;
     const mesh = yield* MeshLayoutService;
     const blockLock = yield* Semaphore.make(1);
@@ -61,10 +64,7 @@ export const layer = Layer.effect(
       env.T3_MESH_SSHD_DIR ?? sshDirectory(platform, env),
       "sshd_config",
     );
-    const sshdConfig = (yield* fs.exists(sshdConfigFile))
-      ? yield* fs.readFileString(sshdConfigFile)
-      : "";
-    const authorizedFiles = authorizedKeysLocations(platform, sshHome, env, sshdConfig);
+    let previousAuthorizedFiles: readonly string[] = [];
     const mapError = (cause: unknown) =>
       new MeshConfigError({
         reason: "storage",
@@ -102,7 +102,7 @@ export const layer = Layer.effect(
         }
       } else
         for (const program of ["ssh", "scp"] as const) {
-          const wrapper = sshWrapper(platform, process.execPath, configFile, program);
+          const wrapper = sshWrapper(platform, executable, configFile, program);
           yield* fs.writeFileString(path.join(bin, wrapper.name), wrapper.contents);
           yield* fs.chmod(path.join(bin, wrapper.name), 0o700);
         }
@@ -211,14 +211,20 @@ export const layer = Layer.effect(
                   identity,
                   knownHosts,
                   runtime:
-                    process.argv[1]?.endsWith(".ts") || process.argv[1]?.endsWith(".mjs")
-                      ? [process.execPath, path.resolve(process.argv[1])]
-                      : [process.execPath],
+                    isExecutable || !args[1] ? [executable] : [executable, path.resolve(args[1])],
                 }),
               );
               yield* write(configFile, mode === "managed" ? files.config : []);
-              for (const file of authorizedFiles)
-                yield* write(file, mode === "managed" ? files.authorized : []);
+              const sshdConfig = (yield* fs.exists(sshdConfigFile))
+                ? yield* fs.readFileString(sshdConfigFile)
+                : "";
+              const authorizedFiles = authorizedKeysLocations(platform, sshHome, env, sshdConfig);
+              for (const file of new Set([...previousAuthorizedFiles, ...authorizedFiles]))
+                yield* write(
+                  file,
+                  mode === "managed" && authorizedFiles.includes(file) ? files.authorized : [],
+                );
+              previousAuthorizedFiles = authorizedFiles;
               yield* write(knownHosts, mode === "managed" ? files.known : []);
             }),
           );

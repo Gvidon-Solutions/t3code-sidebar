@@ -56,6 +56,7 @@ export function environmentCommands(files: readonly string[], platform: string) 
 export class ReplicaEnvironment extends Context.Service<
   ReplicaEnvironment,
   {
+    readonly retry: (root: string) => Effect.Effect<void, ReplicaError>;
     readonly ensure: (
       root: string,
       report: (
@@ -74,6 +75,18 @@ export const layer = Layer.effect(
     const platform = yield* HostProcess.Platform;
     const processes = yield* ProcessRunner.ProcessRunner;
     return ReplicaEnvironment.of({
+      retry: Effect.fn("ReplicaEnvironment.retry")((root) =>
+        fs.remove(path.join(root, ".t3", "environment.failed"), { force: true }).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ReplicaError({
+                reason: "storage",
+                message: "Cannot reset the failed environment fingerprint.",
+                cause,
+              }),
+          ),
+        ),
+      ),
       ensure: Effect.fn("ReplicaEnvironment.ensure")(
         function* (root, report) {
           const chunks: Uint8Array[] = [];
@@ -96,6 +109,13 @@ export const layer = Layer.effect(
           }
           const fingerprint = Hex.encode(yield* digest.digest(Digest.sha256, bytes));
           const marker = path.join(root, ".t3", "environment.sha256");
+          const failed = path.join(root, ".t3", "environment.failed");
+          if ((yield* fs.exists(failed)) && (yield* fs.readFileString(failed)) === fingerprint)
+            return yield* new ReplicaError({
+              reason: "storage",
+              message:
+                "Environment installation failed for this lock fingerprint. Retry explicitly or update the lockfile.",
+            });
           if (yield* fs.exists(marker)) {
             if ((yield* fs.readFileString(marker)) === fingerprint) {
               yield* report("ready");
@@ -108,23 +128,33 @@ export const layer = Layer.effect(
             return;
           }
           if (commands.length) yield* report("installing");
-          for (const { command, args } of commands) {
-            const result = yield* processes.run({
-              command,
-              args,
-              cwd: root,
-              timeout: "10 minutes",
-              maxOutputBytes: 1024 * 1024,
-              outputMode: "truncate",
-            });
-            if (result.code !== 0)
-              return yield* new ReplicaError({
-                reason: "storage",
-                message: `Environment install failed: ${command} exited ${result.code}; ${result.stderr.trim().slice(-1000)}`,
+          yield* Effect.gen(function* () {
+            for (const { command, args } of commands) {
+              const result = yield* processes.run({
+                command,
+                args,
+                cwd: root,
+                timeout: "10 minutes",
+                maxOutputBytes: 1024 * 1024,
+                outputMode: "truncate",
               });
-          }
+              if (result.code !== 0)
+                return yield* new ReplicaError({
+                  reason: "storage",
+                  message: `Environment install failed: ${command} exited ${result.code}; ${result.stderr.trim().slice(-1000)}`,
+                });
+            }
+          }).pipe(
+            Effect.tapError(() =>
+              Effect.gen(function* () {
+                yield* fs.makeDirectory(path.dirname(failed), { recursive: true });
+                yield* fs.writeFileString(failed, fingerprint);
+              }),
+            ),
+          );
           yield* fs.makeDirectory(path.dirname(marker), { recursive: true });
           yield* fs.writeFileString(marker, fingerprint);
+          yield* fs.remove(failed, { force: true });
           yield* report("ready");
         },
         Effect.mapError(
