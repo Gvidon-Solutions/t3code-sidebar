@@ -148,7 +148,7 @@ const mcp = async (node, name, args = {}) => {
           ? { "content-type": form ? "application/x-www-form-urlencoded" : "application/json" }
           : {},
         body: body ? (form ? new URLSearchParams(body) : JSON.stringify(body)) : undefined,
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(120000),
       });
       const value = await response.json();
       if (!response.ok) throw Error(`OAuth ${path}: ${JSON.stringify(value)}`);

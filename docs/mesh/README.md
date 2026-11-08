@@ -820,3 +820,10 @@ A private SSH HOME does not change sshd's initial working directory for a host
 user. The fixture's forced command enters that private home before running SSH
 or SFTP commands; `replica-ssh` asserts both cwd and HOME through managed routes.
 Bootstrap systemd uses its own cgroup namespace without mounting host cgroups.
+
+A convergence barrier accepts a tombstone collected on every peer. It still
+rejects a missing live write, an older resurrection, or divergent equal clocks.
+The preceding release can expose an epoch-zero migration tombstone while current
+peers collect it; requiring its physical retention creates a false failure.
+Harness OAuth requests share the normal RPC deadline, while the command's global
+wall budget remains authoritative under concurrent authentication work.

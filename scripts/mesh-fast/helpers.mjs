@@ -3,6 +3,7 @@ import * as NodePath from "node:path";
 import * as NodeAssert from "node:assert/strict";
 import { MiniMesh, rpc, mcp, until } from "./mesh.mjs";
 import { run } from "./client.mjs";
+import { missingBarrierEntries } from "./convergence.ts";
 export { rpc, mcp, until, run };
 export async function fixture(directory, work, options = {}) {
   const mesh = Object.assign(new MiniMesh(directory), options);
@@ -122,29 +123,14 @@ export async function invariant(mesh) {
   await NodeFSP.writeFile(NodePath.join(mesh.directory, "barrier.json"), JSON.stringify(barrier));
   await until(
     "all entry HLC barrier",
-    async () =>
-      Promise.all(
-        mesh.nodes.map(async (node) => {
-          const { document } = await rpc(node, "meshLayout.get");
-          return {
-            node: node.name,
-            missing: Object.entries(barrier).flatMap(([key, entry]) =>
-              document[key] &&
-              document[key].h >= entry.h &&
-              (document[key].h !== entry.h || canonical(document[key].v) === canonical(entry.v))
-                ? []
-                : [
-                    {
-                      key,
-                      expected: entry.h,
-                      actual: document[key]?.h,
-                      sameValue: canonical(document[key]?.v) === canonical(entry.v),
-                    },
-                  ],
-            ),
-          };
-        }),
-      ),
+    async () => {
+      const snapshots = await Promise.all(mesh.nodes.map((node) => rpc(node, "meshLayout.get")));
+      const missing = missingBarrierEntries(
+        barrier,
+        snapshots.map(({ document }) => document),
+      );
+      return mesh.nodes.map((node, index) => ({ node: node.name, missing: missing[index] }));
+    },
     (values) => values.every((value) => value.missing.length === 0),
   );
   await until(
