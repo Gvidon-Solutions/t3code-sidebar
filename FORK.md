@@ -109,6 +109,39 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — F4b client fixes from audit round 4
+
+- **What.** User guidance no longer points at the deleted Settings › Mesh config editor: retry
+  failures say to ask an agent to fix the connection. Git controls hide only while a mesh layout
+  is loading or on a lite replica; without a mesh every folder is an ordinary project. The
+  automatic draft default no longer overwrites a remembered machine, and mobile waits for
+  provider catalogs, uses the same selectable-machine cycle, same host rule and same main-copy
+  fallback as web. Voice entry points (composer, command palette, Talk) share one project-aware
+  rule and never silently do nothing. "Fix with an agent" opens the thread on the settings
+  machine or problem source with the machine in the link, and agent prompts sanitize peer text,
+  strip typed-address secrets and stay under the `/new` limit. Mobile Settings › Mesh gains the
+  offline, replica and failed-update agent actions. The connect-all prompt dismisses only what
+  succeeded, prunes departed machines and is repeatable from Settings. UI no longer shows raw
+  ids or ISO strings, mobile says Main/Copy, and never-connected machines say so. Disabled
+  machine cards stay focusable with their reason, catalog polling stops when every machine is
+  connected with bounded keys, and repeated fix buttons have distinct accessible names.
+- **How.** Shared client-runtime rules gained `draftMachineCanHostCopy`, `draftMachineUsable`,
+  `savedDraftMachineChoice`, `hidesGitControls({layoutLoading})`, catalog request helpers,
+  `dismissMeshConnectIds`/`pruneMeshConnectDismissed`, and prompt builders in `meshMachines.ts`
+  (`promptDataText`, `safePromptAddress`, `fitMeshPrompt`). `AgentFixActions` and the new mobile
+  `MeshAgentFixActions` pass `env` through `buildNewThreadLink`/`parseNewThreadLink` to
+  `NewThreadLinkView` and the mobile prompt-link resolver. Settings panels share the same
+  builders for update problems and fixes.
+- **Where.** client-runtime `state/meshLayout/{gitVisibility,draftMachine,draftMachineCards,
+  meshConnectPrompt,replicas}.ts`, `state/{meshMachines,meshConfigStatus}.ts`,
+  `voiceAvailability.ts`; shared `promptLinks.ts`; web `useDraftEnvironmentRouting`, `ChatView`,
+  `DraftMachineCards`, `CommandPalette`, `useTalk`, `useStartVoiceThread`, `AgentFixActions`,
+  `MeshSettingsPanel`, `MeshConnectPrompt`, `MachinesDialog`, `WorkspaceSidebar`,
+  `NewThreadLinkView`, `useMeshOverview`, `PendingMeshDraftCoordinator`, `ForkThreadDialog`;
+  mobile `new-task-flow-provider`, `NewTaskDraftScreen`, `DraftMachineStatus`,
+  `DraftMachineCards`, `MeshConnectPrompt`, `MeshAgentFixActions`, `SettingsMachinesRouteScreen`,
+  `MachinesSheet`, `useMeshOverview`, `newTaskPromptLink`, `prompt-link-model`.
+
 ### 2026-11-08 — F3b client audit fixes and shared machine decisions
 
 - **What.** Web and Android now make the same choices about a draft's machine, its voice button,
