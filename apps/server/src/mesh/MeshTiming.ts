@@ -1,3 +1,5 @@
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 declare const __T3CODE_PRODUCTION_BUILD__: boolean | undefined;
 
 const productionBuild =
@@ -11,12 +13,18 @@ export function resolveMeshTimeScale(value: string | undefined, production: bool
   return scale;
 }
 
-const scale = resolveMeshTimeScale(
-  process.env.T3_MESH_TIME_SCALE,
-  productionBuild || process.env.NODE_ENV === "production",
+export const MeshTimeScale = Context.Reference<number>("t3/mesh/TimeScale", {
+  defaultValue: () =>
+    resolveMeshTimeScale(
+      process.env.T3_MESH_TIME_SCALE,
+      productionBuild || process.env.NODE_ENV === "production",
+    ),
+});
+export const meshMillis = (milliseconds: number, scale = 1) => milliseconds * scale;
+export const meshTimer = Effect.map(
+  MeshTimeScale,
+  (scale) => (milliseconds: number) => meshMillis(milliseconds, scale),
 );
-
-export const meshMillis = (milliseconds: number) => milliseconds * scale;
 
 export function resolveMeshAssetUrl(url: string, origin: string | undefined, production: boolean) {
   if (production || origin === undefined) return url;

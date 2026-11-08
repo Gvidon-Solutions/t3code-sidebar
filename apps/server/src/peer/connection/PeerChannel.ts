@@ -51,6 +51,7 @@ export class PeerChannel {
   private ping: string | undefined;
 
   private readonly options: {
+    readonly timeScale?: number;
     readonly send: (frame: string) => void;
     readonly close: (reason: Error) => void;
     readonly call: (body: unknown, signal: AbortSignal) => Promise<unknown>;
@@ -59,8 +60,11 @@ export class PeerChannel {
     readonly now: () => number;
   };
 
+  private readonly millis: (ms: number) => number;
+
   constructor(options: PeerChannel["options"]) {
     this.options = options;
+    this.millis = (ms) => meshMillis(ms, options.timeScale ?? 1);
     this.lastReceived = options.now();
     this.lastPing = this.lastReceived;
   }
@@ -320,9 +324,9 @@ export class PeerChannel {
       1,
       Math.min(
         // A pong can shorten the deadline after this delay has already been scheduled.
-        meshMillis(15_000),
-        this.lastReceived + meshMillis(45_000) - now,
-        this.lastPing + meshMillis(this.ping === undefined ? 15_000 : 45_000) - now,
+        this.millis(15_000),
+        this.lastReceived + this.millis(45_000) - now,
+        this.lastPing + this.millis(this.ping === undefined ? 15_000 : 45_000) - now,
       ),
     );
   }
@@ -330,11 +334,11 @@ export class PeerChannel {
   tick() {
     const now = this.options.now();
     if (
-      now - this.lastReceived >= meshMillis(45_000) ||
-      (this.ping !== undefined && now - this.lastPing >= meshMillis(45_000))
+      now - this.lastReceived >= this.millis(45_000) ||
+      (this.ping !== undefined && now - this.lastPing >= this.millis(45_000))
     ) {
       this.close(new Error("Peer heartbeat timed out"));
-    } else if (now - this.lastPing >= meshMillis(15_000) && this.ping === undefined) {
+    } else if (now - this.lastPing >= this.millis(15_000) && this.ping === undefined) {
       this.ping = NodeCrypto.randomUUID();
       this.lastPing = now;
       this.trySend({ type: "ping", nonce: this.ping });
