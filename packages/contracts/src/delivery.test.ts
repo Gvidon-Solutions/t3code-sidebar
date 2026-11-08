@@ -26,7 +26,9 @@ it("preserves the updating tag through RPC and MCP error codecs", () => {
   expect(isDeliveryUpdating(Schema.decodeSync(mcpCodec)(Schema.encodeSync(mcpCodec)(mcp)))).toBe(
     true,
   );
-  expect(isDeliveryUpdating({ message: "T3_UPDATING: user text" })).toBe(false);
+  expect(isDeliveryUpdating({ message: "T3_UPDATING: user text" })).toBe(true);
+  expect(isDeliveryUpdating({ cause: { message: "T3_UPDATING: older peer" } })).toBe(true);
+  expect(isDeliveryUpdating({ message: "Server is updating; retry this command" })).toBe(false);
   const cycle: { cause?: unknown } = {};
   cycle.cause = cycle;
   expect(isDeliveryUpdating(cycle)).toBe(false);
