@@ -1,4 +1,10 @@
-import { executableName, mutagenTarget } from "../platform/ServerPlatform.ts";
+import {
+  mutagenChecksums,
+  mutagenTarget,
+  mutagenArchiveName,
+  mutagenReleaseUrl,
+} from "../platform/mutagenRelease.ts";
+import { executableName } from "../platform/ServerPlatform.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Digest from "effect/crypto/Digest";
 import * as Schema from "effect/Schema";
@@ -15,15 +21,6 @@ import * as ServerSettings from "../serverSettings.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import { meshAssetUrl } from "../mesh/MeshTiming.ts";
 
-// https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/SHA256SUMS
-const checksums: Readonly<Record<string, string>> = {
-  linux_amd64: "7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f",
-  linux_arm64: "bcba735aebf8cbc11da9b3742118a665599ac697fa06bc5751cac8dcd540db8a",
-  darwin_amd64: "7d06f7d8fcfe90bc7e55cc834a2f2f20c2e0af9ea9bc35911fc4341ad56a9bbf",
-  darwin_arm64: "6f810416d9e5fc4fd5e18431146f8b3c5a2056ba5a24f76c1e66da86eb3257e2",
-  windows_amd64: "3e237e77f69959ed520a0f877330a431507bb0a85d9da7919764ba0c87b702c7",
-  windows_arm64: "9ac53447e46f019be9d37f49c00eeed8635966b885ed29ef06b3ff19afdee532",
-};
 export class MutagenInstaller extends Context.Service<
   MutagenInstaller,
   {
@@ -53,17 +50,15 @@ const make = Effect.gen(function* () {
     if ((yield* fs.exists(executable)) && (yield* fs.exists(join(bin, "mutagen-agents.tar.gz"))))
       return executable;
     const target = mutagenTarget(platformName, architecture);
-    const checksum = checksums[target];
+    const checksum = mutagenChecksums[target];
     if (!checksum)
       return yield* new ReplicaError({
         reason: "mutagen",
         message: `Mutagen does not support ${target}.`,
       });
-    const archive = `mutagen_${target}_v0.18.1.tar.gz`;
+    const archive = mutagenArchiveName(target);
     const response = yield* http
-      .get(
-        meshAssetUrl(`https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/${archive}`),
-      )
+      .get(meshAssetUrl(mutagenReleaseUrl(target)))
       .pipe(Effect.timeout("30 seconds"));
     if (response.status !== 200)
       return yield* new ReplicaError({ reason: "mutagen", message: "Mutagen download failed." });

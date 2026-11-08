@@ -273,9 +273,6 @@ function signalGroup(pid, sig, emit) {
 export const executableName = (program: string, platform: string) =>
   platform === "win32" ? `${program}.exe` : program;
 
-export const mutagenTarget = (platform: string, architecture: string) =>
-  `${platform === "win32" ? "windows" : platform}_${architecture === "x64" ? "amd64" : architecture}`;
-
 export const agentSkillDirectories = (home: string, platform: string) => {
   const paths = platform === "win32" ? NodePath.win32 : NodePath.posix;
   return [
