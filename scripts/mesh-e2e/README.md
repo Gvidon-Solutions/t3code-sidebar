@@ -232,6 +232,9 @@ transfer 256 MiB through the relay. Set `MESH_E2E_ROUND3_TIMEOUT` to override it
 Mount-crash checks subscribe to replica status before placing the replica and wait for
 a subsequent `mounting` event. Placement runs through a surviving control server;
 waiting until both placements finish can miss this transient state entirely.
+The container daemon check pauses only the recorded T3 process, keeping `docker exec`
+available. It records and validates the process start time before resuming, including
+error cleanup; native servers use their isolated systemd unit instead.
 Round 3 requests four-hour test sessions (`MESH_E2E_SESSION_TTL`) so credentials
 remain valid across those transfers and the six restart orders.
 Use `MESH_E2E_LIVE_REPORTS=1` for round one on a populated bed with ongoing status writers;

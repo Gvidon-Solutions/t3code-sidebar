@@ -37,6 +37,8 @@ PARTITION_ACTIVE=0
 CRASH_TARGET=
 MOUNT_WATCH_PID=
 PLACEMENT_PID=
+FROZEN_CONTAINER_ID=
+FROZEN_DRIVER_RECORD=
 declare -A CRASH_PEERS=()
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
 git -C "$REPO_ROOT" merge-base --is-ancestor "$source_commit" "$COMMIT" || die "Build lacks N: use MESH_E2E_BUILD_CURRENT=1 build.sh xdev-n, then deploy.sh while the bed is free"
@@ -148,6 +150,14 @@ project_options() {
   config=$(ws_rpc gv meshConfig.get '{}')
   ws_rpc gv meshConfig.apply "$(jq -nc --argjson config "$config" --arg project "$project" --argjson options "$options" '{baseRevision:$config.current.revision,doc:($config.current.doc | .projects.overrides = ((.projects.overrides // []) + [($options + {project:$project})]))}')"
 }
+resume_container_driver() {
+  [ -n "$FROZEN_DRIVER_RECORD" ] || return 0
+  local args
+  printf -v args '%q ' node "$driver_signal" resume "$(base_of vps)" "$FROZEN_DRIVER_RECORD"
+  vps_ssh "docker exec '$FROZEN_CONTAINER_ID' $args" || return 1
+  FROZEN_DRIVER_RECORD=
+  FROZEN_CONTAINER_ID=
+}
 ws_get gv > "$WORK/N-before.json"
 restore() {
   local rc=$? child child_status
@@ -163,6 +173,10 @@ restore() {
       fi
     fi
   done
+  if ! resume_container_driver; then
+    printf 'Could not resume our captured container driver.\n' >&2
+    rc=1
+  fi
   if require_bed_lock; then
     for m in gv gor vps; do unit "$m" start || rc=1; done
     if [ "$PARTITION_ACTIVE" = 1 ]; then
@@ -328,12 +342,21 @@ for m in gv gor vps; do
   assert_converged "N mid-sync crash $m"
 done
 # Kill only a private daemon PID captured when this script launched it.
+driver_signal="/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs"
+vps_put "$MESH_DIR/round3-driver.mjs" "$VPS_DIR/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs"
+vps_ssh "chmod 644 '$VPS_DIR/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs'"
 for m in gv vps; do
   base=$(base_of "$m")
   daemon_dir="$base/N-faults/$N_KEY"
   rexec "$m" mkdir -p "$daemon_dir"
   daemon_binary=$(mut_bin "$m")
-  unit "$m" stop
+  if [ "$m" = vps ]; then
+    FROZEN_CONTAINER_ID=$(vps_ssh 'docker inspect -f "{{.Id}}" t3-mesh-e2e')
+    FROZEN_DRIVER_RECORD="$daemon_dir/server-paused.json"
+    rexec vps node "$driver_signal" pause "$base" "$FROZEN_DRIVER_RECORD"
+  else
+    unit "$m" stop
+  fi
   if ! daemon_lock "$m" 0; then
     wait_daemon "$m"
     mut "$m" daemon stop
@@ -347,7 +370,7 @@ for m in gv vps; do
   wait_daemon "$m"
   captured_pid=$(rexec "$m" cat "$daemon_dir/daemon.pid")
   daemon_lock "$m" "$captured_pid"
-  unit "$m" start
+  if [ "$m" = vps ]; then resume_container_driver; else unit "$m" start; fi
   wait_health "$(origin_of "$m")" "$TIMEOUT"
   before=$(restart_count "$m")
   daemon_lock "$m" "$captured_pid"
