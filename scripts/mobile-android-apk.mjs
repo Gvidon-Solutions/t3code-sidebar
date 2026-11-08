@@ -11,6 +11,8 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
 import {
+  androidEnvironment,
+  androidFingerprint,
   configureAndroidGradle,
   androidBuildKey,
   androidArchitectures,
@@ -136,7 +138,14 @@ process.env.NODE_OPTIONS = process.env.NODE_OPTIONS ?? "--max-old-space-size=819
 const fingerprintStart = Date.now();
 const fingerprintResult = spawnSync(
   "pnpm",
-  ["--silent", "exec", "expo-updates", "runtimeversion:resolve", "--platform", "android"],
+  [
+    "--silent",
+    "exec",
+    "expo-updates",
+    dev ? "fingerprint:generate" : "runtimeversion:resolve",
+    "--platform",
+    "android",
+  ],
   {
     cwd: APP_DIR,
     env: process.env,
@@ -145,8 +154,7 @@ const fingerprintResult = spawnSync(
 );
 if (fingerprintResult.status !== 0)
   fail(fingerprintResult.stderr || "Native fingerprint resolution failed");
-const fingerprint = JSON.parse(fingerprintResult.stdout).runtimeVersion;
-if (typeof fingerprint !== "string" || !fingerprint) fail("Native fingerprint missing");
+const fingerprint = androidFingerprint(fingerprintResult.stdout, dev);
 timings.fingerprintMs = Date.now() - fingerprintStart;
 const filesResult = spawnSync(
   "git",
@@ -242,6 +250,8 @@ const gradleArgs = [
   dev ? "app:assembleDebug" : "app:assembleRelease",
   `-PreactNativeArchitectures=${arch}`,
   `-Pt3AndroidNativeFingerprint=${fingerprint}`,
+  `-Pt3AndroidBundleEnvironment=${androidEnvironment()}`,
+  `-Pt3AndroidUpdateEnvironment=${androidEnvironment(process.env, true)}`,
   "--build-cache",
   "--configuration-cache",
   "--daemon",

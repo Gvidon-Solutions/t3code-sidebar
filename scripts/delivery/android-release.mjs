@@ -3,7 +3,7 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
-import { androidArchitectures, androidBuildKey } from "./android-build.mjs";
+import { androidEnvironment, androidArchitectures, androidBuildKey } from "./android-build.mjs";
 
 const digest = (bytes) => NodeCrypto.createHash("sha256").update(bytes).digest("hex");
 const exec = (command, args) =>
@@ -52,6 +52,10 @@ function releaseKey() {
 
 if (process.argv[1] === NodeURL.fileURLToPath(import.meta.url)) {
   const [action, directory] = process.argv.slice(2);
+  if (["bundle-environment", "update-environment"].includes(action)) {
+    console.log(androidEnvironment(process.env, action === "update-environment"));
+    process.exit(0);
+  }
   if (!["restore", "record"].includes(action) || !directory)
     throw new Error("Usage: android-release.mjs restore|record OUTPUT_DIR");
   const key = releaseKey();

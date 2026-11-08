@@ -515,9 +515,13 @@ jobs:
           fs.writeFileSync(path, source.replace(pattern, `versionName "${version}"`));
           NODE
           node --input-type=module -e 'import { configureAndroidGradle } from "../../../scripts/delivery/android-build.mjs"; configureAndroidGradle("app/build.gradle")'
+          android_bundle_environment="$(node ../../../scripts/delivery/android-release.mjs bundle-environment)"
+          android_update_environment="$(node ../../../scripts/delivery/android-release.mjs update-environment)"
           ./gradlew assembleRelease \
             -PreactNativeArchitectures="$ANDROID_ARCH" \
             -Pt3AndroidNativeFingerprint="${{ steps.native.outputs.fingerprint }}" \
+            -Pt3AndroidBundleEnvironment="$android_bundle_environment" \
+            -Pt3AndroidUpdateEnvironment="$android_update_environment" \
             -Pandroid.enableMinifyInReleaseBuilds=false \
             -Pandroid.enablePngCrunchInReleaseBuilds=false \
             -x lintVitalRelease \

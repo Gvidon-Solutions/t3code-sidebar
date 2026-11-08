@@ -12,6 +12,8 @@ const { tmpdir } = NodeOS;
 import * as NodePath from "node:path";
 const { join } = NodePath;
 import {
+  androidEnvironment,
+  androidFingerprint,
   configureAndroidGradle,
   androidBuildKey,
   androidResources,
@@ -96,6 +98,16 @@ test("generated Gradle resolves Node inputs through providers and supplies both 
         'inputs.property("t3NativeFingerprint", providers.gradleProperty("t3AndroidNativeFingerprint"))',
       ),
     );
+    assert.ok(
+      text.includes(
+        'inputs.property("t3BundleEnvironment", providers.gradleProperty("t3AndroidBundleEnvironment"))',
+      ),
+    );
+    assert.ok(
+      text.includes(
+        'inputs.property("t3UpdateEnvironment", providers.gradleProperty("t3AndroidUpdateEnvironment"))',
+      ),
+    );
     assert.ok(text.includes("rootProject.ext.REACT_NATIVE_NODE_MODULES_DIR"));
     assert.ok(text.includes("project.ext.REACT_NATIVE_NODE_MODULES_DIR"));
     configureAndroidGradle(file);
@@ -144,6 +156,14 @@ test("release CLI records inputs, restores the matching release and rejects a co
       GITHUB_OUTPUT: join(root, "outputs"),
       ANDROID_RELEASE_FIXTURE: release,
     };
+    assert.equal(
+      exec(process.execPath, [script, "bundle-environment"], { env }).toString().trim(),
+      androidEnvironment(env),
+    );
+    assert.equal(
+      exec(process.execPath, [script, "update-environment"], { env }).toString().trim(),
+      androidEnvironment(env, true),
+    );
     exec(process.execPath, [script, "record", release], { env });
     writeFileSync(
       join(bin, "gh"),
@@ -161,4 +181,39 @@ test("release CLI records inputs, restores the matching release and rejects a co
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("development prebuild invalidation uses a native hash rather than its constant app-version runtime", () => {
+  assert.equal(androidFingerprint('{"runtimeVersion":"native-release"}', false), "native-release");
+  assert.equal(androidFingerprint('{"hash":"native-development"}', true), "native-development");
+  assert.throws(
+    () => androidFingerprint('{"runtimeVersion":"1.0.0"}', true),
+    /Native fingerprint missing/,
+  );
+  assert.throws(
+    () => androidFingerprint('{"runtimeVersion":null}', false),
+    /Native fingerprint missing/,
+  );
+});
+
+test("Gradle environment keys invalidate public bundles and versioned manifests without hashing signing passwords", () => {
+  const env = {
+    APP_VARIANT: "sidebar",
+    EXPO_PUBLIC_LABEL: "first",
+    T3_SIDEBAR_VERSION: "1",
+    T3_ANDROID_KEYSTORE_PASSWORD: "secret",
+  };
+  assert.notEqual(
+    androidEnvironment(env),
+    androidEnvironment({ ...env, EXPO_PUBLIC_LABEL: "second" }),
+  );
+  assert.equal(androidEnvironment(env), androidEnvironment({ ...env, T3_SIDEBAR_VERSION: "2" }));
+  assert.notEqual(
+    androidEnvironment(env, true),
+    androidEnvironment({ ...env, T3_SIDEBAR_VERSION: "2" }, true),
+  );
+  assert.equal(
+    androidEnvironment(env, true),
+    androidEnvironment({ ...env, T3_ANDROID_KEYSTORE_PASSWORD: "changed" }, true),
+  );
 });
