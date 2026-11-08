@@ -1,6 +1,7 @@
 import { useScratchProject } from "../../hooks/useScratchProject";
 import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
 import { ProjectMachineStrip } from "./ProjectMachineStrip";
+import { MachineTag } from "./MachineTag";
 import { threadDropProject } from "./threadDrop.logic";
 /**
  * Workspace sidebar (fork feature): workspace tiles at the bottom and the open workspace's projects
@@ -1491,6 +1492,14 @@ export default function WorkspaceSidebar() {
   const renderFolder = (folder: FolderModel) => {
     const folderKey = `${folder.workspaceId}:${folder.group.projectKey}`;
     const offline = folder.group.meshOffline;
+    const offlineMachine =
+      offline === undefined
+        ? null
+        : machineDisplayOf(
+            config,
+            offline.environmentId,
+            environmentLabels.get(offline.environmentId) ?? "",
+          );
     const dropAt = folderDrop?.projectKey === folder.group.projectKey ? folderDrop : null;
     // "No project" stays last, so it neither takes nor makes a place in the order.
     const acceptsDrop =
@@ -1665,8 +1674,14 @@ export default function WorkspaceSidebar() {
               ) : (
                 folder.label
               )}
-              {offline ? ` · on ${offline.tag}, not connected here` : ""}
             </span>
+            {offlineMachine ? (
+              <MachineTag
+                machine={offlineMachine}
+                muted
+                description={`On ${offlineMachine.label} · not connected to this device`}
+              />
+            ) : null}
             {!open && (attention > 0 || working > 0) ? (
               <span className="flex shrink-0 items-center gap-1.5 text-2xs font-semibold tabular-nums group-hover/ws-folder:hidden">
                 {attention > 0 ? (
@@ -1746,11 +1761,6 @@ export default function WorkspaceSidebar() {
             {folder.active.length > FOLDER_PREVIEW_COUNT ? (
               <MoreButton onClick={() => view.toggleFolderExpanded(folderKey)}>
                 {expanded ? "Show less" : `Show ${folder.active.length - visible.length} more`}
-              </MoreButton>
-            ) : null}
-            {folder.active.length === 0 && folder.settled.length === 0 ? (
-              <MoreButton onClick={() => startThreadInFolder(folder)}>
-                <SquarePenIcon className="size-3" /> New thread
               </MoreButton>
             ) : null}
             {folder.settled.length > 0 ? (

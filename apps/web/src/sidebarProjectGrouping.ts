@@ -11,6 +11,7 @@ import {
   type ProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
 import { offlineLogicalProjects } from "@t3tools/client-runtime/state/mesh-layout";
+import { logicalProjectKeyForRecord } from "@t3tools/shared/meshLayout";
 import type { Project } from "./types";
 
 export const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> = {
@@ -221,56 +222,70 @@ export function buildSidebarProjectSnapshots(input: {
   const offline =
     input.layout === undefined || input.connectedEnvironmentIds === undefined
       ? []
-      : offlineLogicalProjects(input.layout, input.connectedEnvironmentIds, (environmentId) =>
-          input.resolveEnvironmentLabel(environmentId as EnvironmentId),
-        )
-          .filter(
-            (entry) => !snapshots.some((snapshot) => snapshot.projectKey === entry.logicalKey),
-          )
-          .map((entry): SidebarProjectSnapshot => {
-            const title =
-              input.layout?.projectTitles[entry.logicalKey] ??
-              entry.path.split(/[\\/]/).filter(Boolean).at(-1) ??
-              entry.logicalKey;
-            const project = {
-              id: `mesh:${entry.logicalKey}:${entry.environmentId}` as Project["id"],
-              environmentId: entry.environmentId as Project["environmentId"],
-              title,
-              workspaceRoot: entry.path,
-              repositoryIdentity: null,
-              defaultModelSelection: null,
-              scripts: [],
-              createdAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
-              updatedAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
-            } as Project;
-            return {
-              ...project,
-              projectKey: entry.logicalKey,
-              displayName: title,
-              groupedProjectCount: 1,
-              environmentPresence: "remote-only",
-              allRemoteMembersAreDesktopLocal: false,
-              allRemoteMembersAreWsl: false,
-              memberProjects: [
-                {
-                  ...project,
-                  physicalProjectKey: `${entry.environmentId}:${entry.path}`,
-                  environmentLabel: input.resolveEnvironmentLabel(
-                    entry.environmentId as EnvironmentId,
-                  ),
-                },
-              ],
-              memberProjectRefs: [],
-              remoteEnvironmentLabels: [entry.tag],
-              pinned: false,
-              archived: false,
-              meshOffline: {
-                environmentId: entry.environmentId,
-                tag: entry.tag,
-                state: entry.state,
-              },
-            };
+      : (() => {
+          const layout = input.layout;
+          // Resolve every visible row through the layout too: a connected project's group key can
+          // differ from its logical id, which otherwise lets its greyed offline twin appear.
+          const covered = new Set<string>();
+          for (const snapshot of snapshots) {
+            for (const member of snapshot.memberProjects) {
+              covered.add(logicalProjectKeyForRecord(layout, member, member.physicalProjectKey));
+            }
+          }
+          const seen = new Set<string>();
+          return offlineLogicalProjects(
+            layout,
+            input.connectedEnvironmentIds ?? new Set(),
+            (environmentId) => input.resolveEnvironmentLabel(environmentId as EnvironmentId),
+          ).filter((entry) => {
+            if (covered.has(entry.logicalKey) || seen.has(entry.logicalKey)) return false;
+            seen.add(entry.logicalKey);
+            return true;
           });
+        })().map((entry): SidebarProjectSnapshot => {
+          const title =
+            input.layout?.projectTitles[entry.logicalKey] ??
+            entry.path.split(/[\\/]/).filter(Boolean).at(-1) ??
+            entry.logicalKey;
+          const project = {
+            id: `mesh:${entry.logicalKey}:${entry.environmentId}` as Project["id"],
+            environmentId: entry.environmentId as Project["environmentId"],
+            title,
+            workspaceRoot: entry.path,
+            repositoryIdentity: null,
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
+            updatedAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
+          } as Project;
+          return {
+            ...project,
+            projectKey: entry.logicalKey,
+            displayName: title,
+            groupedProjectCount: 1,
+            environmentPresence: "remote-only",
+            allRemoteMembersAreDesktopLocal: false,
+            allRemoteMembersAreWsl: false,
+            memberProjects: [
+              {
+                ...project,
+                physicalProjectKey: `${entry.environmentId}:${entry.path}`,
+                environmentLabel: input.resolveEnvironmentLabel(
+                  entry.environmentId as EnvironmentId,
+                ),
+              },
+            ],
+            memberProjectRefs: [],
+            remoteEnvironmentLabels: [entry.tag],
+            pinned: false,
+            archived: false,
+            meshOffline: {
+              environmentId: entry.environmentId,
+              tag: entry.tag,
+              state: entry.state,
+            },
+          };
+        });
   return [...snapshots, ...offline];
 }
 

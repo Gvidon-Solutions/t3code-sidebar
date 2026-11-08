@@ -554,15 +554,6 @@ export function buildWorkspaceHomeItems(input: {
         label: expanded ? "Show less" : `Show ${model.active.length - visible.length} more`,
       });
     }
-    if (model.active.length === 0 && model.settled.length === 0) {
-      rows.push({
-        type: "ws-more",
-        key: `ws-more:new:${folderKey}`,
-        toggleKey: `new:${folderKey}`,
-        label: "New thread",
-        newThreadIn: model.input.project,
-      });
-    }
     if (model.settled.length > 0) {
       const settledKey = `settled:${folderKey}`;
       const settledOpen = has(settledKey);

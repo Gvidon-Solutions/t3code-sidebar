@@ -110,7 +110,6 @@ describe("buildWorkspaceHomeItems", () => {
       "folder Alpha",
       "thread active",
       "folder Beta",
-      "more New thread",
     ]);
   });
 
@@ -211,16 +210,11 @@ describe("buildWorkspaceHomeItems", () => {
     ]);
   });
 
-  it("offers New thread in an empty folder", () => {
+  it("does not add a separate New thread row to an empty folder", () => {
     const items = build([thread("x", "a")], []);
     expect(outline(items)).toContain("folder Alpha");
     const quiet = build([], ["quiet:w", "w:key-a"]);
-    expect(outline(quiet)).toEqual([
-      "section quiet 2",
-      "folder Alpha",
-      "more New thread",
-      "folder Beta (closed)",
-    ]);
+    expect(outline(quiet)).toEqual(["section quiet 2", "folder Alpha", "folder Beta (closed)"]);
     const offline = {
       ...folder("a", "Alpha"),
       meshOffline: { environmentId: "remote", tag: "REM", state: null },
