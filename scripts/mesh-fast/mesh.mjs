@@ -373,9 +373,22 @@ const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(a
         sshConfig,
         (await NodeFSP.readFile(sshConfig, "utf8")).replace(/^AllowUsers .*$/m, "AllowUsers node"),
       );
+    const sshCommand = NodePath.join(home, "sshd/command.sh");
+    await NodeFSP.writeFile(
+      sshCommand,
+      `#!/bin/sh
+set -eu
+cd "$HOME"
+if [ "\${SSH_ORIGINAL_COMMAND:-}" = internal-sftp ]; then
+  exec /usr/lib/openssh/sftp-server
+fi
+exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --noprofile --norc}"
+`,
+      { mode: 0o700 },
+    );
     await NodeFSP.appendFile(
       sshConfig,
-      `SetEnv ${JSON.stringify("HOME=" + home)} ${JSON.stringify("PATH=" + env.PATH)} ${JSON.stringify("NODE_COMPILE_CACHE=" + env.NODE_COMPILE_CACHE)}\n`,
+      `SetEnv ${JSON.stringify("HOME=" + home)} ${JSON.stringify("PATH=" + env.PATH)} ${JSON.stringify("NODE_COMPILE_CACHE=" + env.NODE_COMPILE_CACHE)}\nForceCommand ${JSON.stringify(sshCommand)}\n`,
     );
     env.T3_MESH_SSHD_DIR = NodePath.dirname(sshConfig);
     if (!inContainer)

@@ -107,8 +107,8 @@ calling-thread MCP requests and interruptible partial turns. Tests exercise real
 orchestration, persistence, placement, relay, history copying and provider
 selection with those profiles. Native Codex/OpenCode protocol and paid model
 turns remain in the realistic nightly scripts; the fast command spends no model
-credits. Full-mode dependency installation uses the existing S1 deterministic
-pnpm fixture and checks both lockfile changes and exact install counts.
+credits. Full-mode dependency installation uses checksum-pinned real pnpm offline and
+checks both lockfile changes and exact successful install counts.
 
 ## Coverage map
 

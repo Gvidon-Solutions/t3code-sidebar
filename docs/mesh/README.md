@@ -815,3 +815,8 @@ recovery retains one session.
 R1 and bootstrap service ports use the same command-wide allocator as sshd and
 server ports. Probing a free host port separately can select a port already in use
 inside a fixture container, including its private sshd port.
+
+A private SSH HOME does not change sshd's initial working directory for a host
+user. The fixture's forced command enters that private home before running SSH
+or SFTP commands; `replica-ssh` asserts both cwd and HOME through managed routes.
+Bootstrap systemd uses its own cgroup namespace without mounting host cgroups.

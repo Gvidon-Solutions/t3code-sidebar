@@ -98,6 +98,23 @@ export const scenarios = {
       );
       const replica = mounted.representations.find((rep) => rep.environmentId === laptop.id);
       const config = await rpc(laptop, "meshConfig.get");
+      for (const target of mesh.nodes.filter((node) => node.id !== laptop.id)) {
+        const slug = Object.keys(config.bindings).find((key) => config.bindings[key] === target.id);
+        NodeAssert.ok(slug);
+        NodeAssert.equal(
+          await run(
+            "ssh",
+            [
+              "-F",
+              NodePath.join(laptop.home, ".ssh/config"),
+              "t3-" + slug,
+              "pwd; printf '%s' \"$HOME\"",
+            ],
+            { env: laptop.env },
+          ),
+          target.home + "\n" + target.home,
+        );
+      }
       const sourceName = Object.entries(config.bindings).find(([, id]) => id === studio.id)?.[0];
       NodeAssert.ok(sourceName);
       NodeAssert.equal(
