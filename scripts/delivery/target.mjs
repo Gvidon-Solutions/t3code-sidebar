@@ -22,16 +22,30 @@ const atomic = (path, value) => {
   writeFileSync(path + ".tmp", JSON.stringify(value), { mode: 0o600 });
   renameSync(path + ".tmp", path);
 };
+export function verifyMobileAssets(store) {
+  const directory = join(store, "assets");
+  for (const key of NodeFS.readdirSync(directory)) {
+    if (
+      !/^[A-Za-z0-9_-]{43}$/.test(key) ||
+      NodeCrypto.createHash("sha256")
+        .update(readFileSync(join(directory, key)))
+        .digest("base64url") !== key
+    )
+      throw new Error(`OTA asset bytes do not match their content hash: ${key}`);
+  }
+}
 export async function targetOperation(config, operation) {
   const prefix = config.scope === "user" ? ["--user"] : [];
   const systemctl = (...args) => run("systemctl", [...prefix, ...args]);
   const statePath = join(config.runtimeDir, "delivery-state.json");
   if (operation === "publishMobile") {
+    verifyMobileAssets(config.mobileStore);
     const destination = join(config.home, "mobile-updates");
     mkdirSync(destination, { recursive: true, mode: 0o700 });
     NodeFS.cpSync(join(config.mobileStore, "assets"), join(destination, "assets"), {
       recursive: true,
     });
+    verifyMobileAssets(destination);
     copyFileSync(join(config.mobileStore, "certificate.pem"), join(destination, "certificate.pem"));
     copyFileSync(join(config.mobileStore, "catalog.json"), join(destination, "catalog.json.tmp"));
     renameSync(join(destination, "catalog.json.tmp"), join(destination, "catalog.json"));
