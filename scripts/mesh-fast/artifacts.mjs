@@ -152,10 +152,9 @@ export async function finishRun(directory, current, failed) {
   }
   await atomicWrite(NodePath.join(directory, completeMarker), JSON.stringify({ failed }));
   const removed = await pruneRuns(base, current);
-  await atomicWrite(
-    NodePath.join(reports, "retention.json"),
-    JSON.stringify({ directory, failed, removed }),
-  );
+  const audit = JSON.stringify({ directory, failed, removed });
+  await atomicWrite(NodePath.join(reports, "retention.json"), audit);
+  if (failed) await atomicWrite(NodePath.join(directory, "retention.json"), audit);
   return failed ? directory : reports;
 }
 

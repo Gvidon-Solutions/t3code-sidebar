@@ -133,6 +133,12 @@ it("retains the newest three failed runs, reclaims abandoned and legacy successf
       const owner = dead();
       const directory = await fixture(base, owner, true);
       expect(await finishRun(directory, owner, true)).toBe(directory);
+      expect(
+        JSON.parse(await NodeFSP.readFile(NodePath.join(directory, "retention.json"), "utf8")),
+      ).toMatchObject({
+        directory,
+        failed: true,
+      });
       const stamp = index + 2;
       await NodeFSP.utimes(NodePath.join(directory, ".mesh-fast-complete.json"), stamp, stamp);
       failures.push(directory);
