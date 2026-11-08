@@ -761,7 +761,8 @@ export const make = Effect.gen(function* () {
     offlineSince.delete(env);
     yield* Effect.whileLoop({
       while: () => live.get(env)?.channel === channel,
-      body: () => Effect.sleep("1 second").pipe(Effect.andThen(Effect.sync(() => channel.tick()))),
+      body: () =>
+        Effect.sleep(meshMillis(1000)).pipe(Effect.andThen(Effect.sync(() => channel.tick()))),
       step: () => undefined,
     }).pipe(Effect.forkScoped);
     yield* announce(entry);

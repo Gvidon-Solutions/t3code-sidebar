@@ -20,6 +20,7 @@ const counts = {
   pipeBytes: 0,
   idleDrops: 0,
   peerIdleDrops: 0,
+  peerPings: 0,
   peerResets: 0,
   mcp: 0,
   refusedMcp: 0,
@@ -29,7 +30,18 @@ const counts = {
   refusedUpgrades: 0,
 };
 let state = { denyMcp: false, cut: false };
+function track(socket, peer = false) {
+  sockets.add(socket);
+  if (peer) peerSockets.add(socket);
+  socket.setTimeout(state.idleMs ?? 0);
+  socket.on("timeout", () => {
+    counts.idleDrops++;
+    if (peerSockets.has(socket)) counts.peerIdleDrops++;
+    socket.destroy();
+  });
+}
 function refresh() {
+  const previousIdle = state.idleMs ?? 0;
   try {
     state = JSON.parse(NodeFS.readFileSync(stateFile, "utf8"));
   } catch (error) {
@@ -46,12 +58,8 @@ function refresh() {
       held.delete(release);
       release();
     }
-  for (const socket of sockets)
-    socket.setTimeout(state.idleMs ?? 0, () => {
-      counts.idleDrops++;
-      if (peerSockets.has(socket)) counts.peerIdleDrops++;
-      socket.destroy();
-    });
+  if (previousIdle !== (state.idleMs ?? 0))
+    for (const socket of sockets) socket.setTimeout(state.idleMs ?? 0);
 }
 NodeFS.watchFile(stateFile, { interval: 200 }, refresh);
 refresh();
@@ -128,9 +136,9 @@ server.on("upgrade", (request, socket, head) => {
       const pending = [];
       const commits = new Set();
       counts.upgrades++;
-      sockets.add(socket);
-      peerSockets.add(socket);
+      track(socket, true);
       const send = (to, bytes, binary, frame) => {
+        if (frame?.type === "ping") counts.peerPings++;
         const deliver = () => {
           if (to.readyState === WebSocket.OPEN) to.send(bytes, { binary });
         };
@@ -196,12 +204,9 @@ server.on("upgrade", (request, socket, head) => {
       return;
     }
     counts.upgrades++;
-    sockets.add(socket);
-    sockets.add(remote);
-    if (request.url?.split("?")[0] === "/peer") {
-      peerSockets.add(socket);
-      peerSockets.add(remote);
-    }
+    const peer = request.url?.split("?")[0] === "/peer";
+    track(socket, peer);
+    track(remote, peer);
     const headers = [];
     for (let i = 0; i < response.rawHeaders.length; i += 2)
       headers.push(`${response.rawHeaders[i]}: ${response.rawHeaders[i + 1]}`);

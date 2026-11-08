@@ -797,3 +797,8 @@ code cache to support dynamic imports. Bootstrap/rollout and the realistic suite
 retain native execution. Two-machine cases avoid an unused third server, while
 relay and collision cases retain their full topology. Full-mode tests run real,
 checksum-pinned pnpm offline and import the installed local dependency.
+
+Heartbeat polling must scale along with its deadline: a one-second polling tick
+can miss an accelerated heartbeat. `timing-heartbeat` proves this with a real idle
+cutoff above the scaled heartbeat period that the old poller misses. Reading proxy metrics
+must not restart that cutoff; timeout listeners are attached once per socket.

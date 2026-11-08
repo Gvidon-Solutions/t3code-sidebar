@@ -155,3 +155,30 @@ export const networkScenarios = Object.fromEntries(
       }),
   ]),
 );
+networkScenarios["timing-heartbeat"] = (directory) =>
+  fixture(
+    directory,
+    async (mesh) => {
+      const [, hub] = mesh.nodes;
+      const before = await metrics(hub);
+      await mesh.fault(hub, { idleMs: 20_000 * Number(hub.env.T3_MESH_TIME_SCALE) });
+      const observed = await until(
+        "scaled heartbeat keeps an idle peer connected",
+        () => metrics(hub),
+        (value) =>
+          value.peerPings >= before.peerPings + 6 || value.peerIdleDrops > before.peerIdleDrops,
+      );
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "timing-heartbeat.json"),
+        JSON.stringify({ before, observed }, null, 2),
+      );
+      NodeAssert.equal(
+        observed.peerIdleDrops,
+        before.peerIdleDrops,
+        "heartbeat polling must scale with its heartbeat deadline",
+      );
+      NodeAssert.ok(observed.peerPings >= before.peerPings + 6);
+      await mesh.fault(hub, {});
+    },
+    { names: ["studio", "cloudbox"], messageProxy: true },
+  );
