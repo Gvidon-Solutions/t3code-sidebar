@@ -14,11 +14,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import {
-  AuthAccessWriteScope,
-  type EnvironmentId,
-  type SidebarWorkspacesConfig,
-} from "@t3tools/contracts";
+import { AuthAccessWriteScope, type EnvironmentId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import { useState } from "react";
@@ -51,7 +47,7 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { MachineTag } from "./MachineTag";
-import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { meshProjectRows } from "@t3tools/client-runtime/state/mesh-machines";
 import { linkSourceOptions, linkTargetOptions, meshSetupPrompt } from "./meshSettings.logic";
 
 const failureToast = (title: string, description: string) =>
@@ -314,29 +310,6 @@ export function MeshSettingsPanel() {
   const openAgent = (prompt: string) => {
     void navigate({ to: "/new", search: { prompt } as never });
   };
-  const projectsOn = (machine: (typeof machines)[number]) =>
-    Object.entries(config.projectMounts).flatMap(([key, reps]) =>
-      reps
-        .filter((rep) => rep.environmentId === machine.environmentId)
-        .map((rep) => {
-          const title = config.projectTitles[key] ?? "Project";
-          const status = config.projectMountStatus[key]?.[machine.environmentId];
-          const state = status?.state ?? null;
-          if (rep.role === "primary") return { key, title, sentence: `${title} · main copy` };
-          const sourceLabel = rep.source ? machineLabel(config, rep.source) : "its main copy";
-          const sentence =
-            state === "watching"
-              ? `${title} · copy synced`
-              : state === "mounting" || state === "pending"
-                ? `${title} · copying files…`
-                : state === "conflict"
-                  ? `${title} · copies kept after a conflict`
-                  : state === "error"
-                    ? `${title} · can't reach ${sourceLabel}`
-                    : `${title} · out of sync`;
-          return { key, title, sentence, canRetry: state === "error" };
-        }),
-    );
   return (
     <SettingsPageContainer>
       <SettingsSection
@@ -388,7 +361,7 @@ export function MeshSettingsPanel() {
             </DialogHeader>
             <DialogPanel>
               <ul className="space-y-2 text-sm">
-                {projectsOn(selected).map((project) => (
+                {meshProjectRows(config, selected.environmentId).map((project) => (
                   <li key={project.key} className="flex items-center gap-2">
                     <span className="min-w-0 flex-1">{project.sentence}</span>
                     {project.canRetry ? (
@@ -455,8 +428,4 @@ export function MeshSettingsPanel() {
       />
     </SettingsPageContainer>
   );
-}
-
-function machineLabel(config: SidebarWorkspacesConfig, environmentId: string): string {
-  return machineDisplayOf(config, environmentId, environmentId).label;
 }

@@ -532,3 +532,44 @@ export function offlineMachineText(
   if (elapsed < 86_400_000) return `offline ${Math.floor(elapsed / 3_600_000)} h`;
   return `offline ${Math.floor(elapsed / 86_400_000)} d`;
 }
+
+export interface MeshProjectRow {
+  readonly key: string;
+  readonly title: string;
+  readonly sentence: string;
+  readonly canRetry: boolean;
+}
+
+/** The copies of projects on one machine, in plain words with no file or byte counts. */
+export function meshProjectRows(
+  config: SidebarWorkspacesConfig,
+  environmentId: string,
+): MeshProjectRow[] {
+  return Object.entries(config.projectMounts).flatMap(([key, reps]) =>
+    reps
+      .filter((rep) => rep.environmentId === environmentId)
+      .map((rep) => {
+        const title = config.projectTitles[key] ?? "Project";
+        if (rep.role === "primary")
+          return { key, title, sentence: `${title} · main copy`, canRetry: false };
+        const state = config.projectMountStatus[key]?.[environmentId]?.state;
+        const source = rep.source
+          ? machineDisplayOf(config, rep.source, rep.source).label
+          : "its main copy";
+        if (state === "watching")
+          return { key, title, sentence: `${title} · copy synced`, canRetry: false };
+        if (state === "mounting" || state === "pending")
+          return { key, title, sentence: `${title} · copying files…`, canRetry: false };
+        if (state === "conflict")
+          return {
+            key,
+            title,
+            sentence: `${title} · copies kept after a conflict`,
+            canRetry: false,
+          };
+        if (state === "error")
+          return { key, title, sentence: `${title} · can't reach ${source}`, canRetry: true };
+        return { key, title, sentence: `${title} · out of sync`, canRetry: false };
+      }),
+  );
+}

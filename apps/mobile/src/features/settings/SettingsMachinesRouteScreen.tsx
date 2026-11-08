@@ -19,44 +19,7 @@ import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { AppText } from "../../components/ui/AppText";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
-import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
-import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
-
-function MachineProjects(props: {
-  readonly machine: { readonly environmentId: string };
-  readonly base: SidebarWorkspacesConfig;
-}) {
-  const rows = Object.entries(props.base.projectMounts).flatMap(([key, reps]) =>
-    reps
-      .filter((rep) => rep.environmentId === props.machine.environmentId)
-      .map((rep) => {
-        const title = props.base.projectTitles[key] ?? "Project";
-        if (rep.role === "primary") return { key, sentence: `${title} · main copy` };
-        const state = props.base.projectMountStatus[key]?.[props.machine.environmentId]?.state;
-        const source = rep.source
-          ? machineDisplayOf(props.base, rep.source, rep.source).label
-          : "its main copy";
-        const sentence =
-          state === "watching"
-            ? `${title} · copy synced`
-            : state === "mounting" || state === "pending"
-              ? `${title} · copying files…`
-              : state === "conflict"
-                ? `${title} · copies kept after a conflict`
-                : state === "error"
-                  ? `${title} · can't reach ${source}`
-                  : `${title} · out of sync`;
-        return { key, sentence };
-      }),
-  );
-  return (
-    <View className="gap-2">
-      {rows.map((row) => (
-        <AppText key={row.key}>{row.sentence}</AppText>
-      ))}
-    </View>
-  );
-}
+import { meshProjectRows } from "@t3tools/client-runtime/state/mesh-machines";
 
 export function SettingsMachinesRouteScreen() {
   const mesh = useMeshLayout();
@@ -148,7 +111,11 @@ export function SettingsMachinesRouteScreen() {
                     : "Online"
                   : (offlineMachineText(selected.lastSeenAt) ?? "Offline")}
               </AppText>
-              <MachineProjects machine={selected} base={base} />
+              <View className="gap-2">
+                {meshProjectRows(base, selected.environmentId).map((row) => (
+                  <AppText key={row.key}>{row.sentence}</AppText>
+                ))}
+              </View>
               <Button
                 label={diagnosticsOpen ? "Hide diagnostics" : "Diagnostics"}
                 tone="text"

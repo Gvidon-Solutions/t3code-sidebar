@@ -8,6 +8,7 @@ import {
   meshSetupPrompt,
   shouldOfferConnect,
 } from "./meshSettings.logic";
+import { meshProjectRows } from "@t3tools/client-runtime/state/mesh-machines";
 
 const environment = (
   environmentId: string,
@@ -98,5 +99,60 @@ describe("meshSetupPrompt", () => {
     expect(prompt).toContain("- Cloudbox is offline");
     expect(prompt).toContain("t3ctl mesh config plan");
     expect(prompt).not.toContain("environmentId");
+  });
+});
+
+describe("meshProjectRows", () => {
+  it("speaks about main copies, synced copies and unreachable copies without counts", () => {
+    const config = {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      machines: { studio: { label: "Studio" } },
+      projectTitles: { a: "Billing", b: "Deployment" },
+      projectMounts: {
+        a: [
+          {
+            environmentId: "studio",
+            path: "/repo/billing",
+            transport: "git" as const,
+            role: "primary" as const,
+            createdAt: "",
+          },
+          {
+            environmentId: "cloudbox",
+            path: "/copy/billing",
+            transport: "mutagen" as const,
+            role: "replica" as const,
+            source: "studio",
+            createdAt: "",
+          },
+        ],
+        b: [
+          {
+            environmentId: "cloudbox",
+            path: "/copy/deploy",
+            transport: "mutagen" as const,
+            role: "replica" as const,
+            source: "studio",
+            createdAt: "",
+          },
+        ],
+      },
+      projectMountStatus: {
+        a: { cloudbox: { state: "watching" as const, updatedAt: "" } },
+        b: { cloudbox: { state: "error" as const, updatedAt: "" } },
+      },
+    };
+    expect(meshProjectRows(config, "studio")).toEqual([
+      { key: "a", title: "Billing", sentence: "Billing · main copy", canRetry: false },
+    ]);
+    expect(meshProjectRows(config, "cloudbox")).toEqual([
+      { key: "a", title: "Billing", sentence: "Billing · copy synced", canRetry: false },
+      {
+        key: "b",
+        title: "Deployment",
+        sentence: "Deployment · can't reach Studio",
+        canRetry: true,
+      },
+    ]);
   });
 });
