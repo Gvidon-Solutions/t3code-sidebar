@@ -449,7 +449,7 @@ try {
     await NodeFSP.readFile(NodePath.join(replica, "output.txt"), "utf8"),
     "returned",
   );
-  NodeAssert.match(output.stderr, /dist\/built.txt stayed on cloudbox/);
+  NodeAssert.equal(output.stderr, "dist/ stayed on cloudbox\n");
   await NodeAssert.rejects(NodeFSP.access(NodePath.join(replica, "dist/built.txt")));
   const concurrent = await Promise.all([
     run("concurrent_one", ["--", "node", "-e", "console.log('one')"]),
@@ -694,14 +694,15 @@ try {
   NodeAssert.equal(completedLogs.code, 0);
   NodeAssert.equal(completedLogs.stdout, "BG_COMPLETE\n");
   NodeAssert.match(completedLogs.stderr, /stayed on cloudbox/);
-  const loggedPaths = new Set(
-    completedLogs.stderr.trim().split(" stayed on cloudbox")[0]!.split(", "),
+  NodeAssert.equal(completedLogs.stderr, "dist/ stayed on cloudbox\n");
+  const retained = await NodeFSP.readdir(NodePath.join(primary, "dist"));
+  NodeAssert.equal(retained.filter((name) => name.startsWith("bg-" + "Ю".repeat(40))).length, 2048);
+  NodeAssert.ok(retained.includes("bg-output.txt"));
+  NodeAssert.deepEqual(
+    retained.filter((name) => name.startsWith("bg-line")),
+    ["bg-line\nbreak.txt"],
   );
-  NodeAssert.equal(loggedPaths.size, 2050);
-  for (let i = 0; i < 2048; i++) NodeAssert.ok(loggedPaths.has(`dist/bg-${"Ю".repeat(40)}-${i}`));
-  NodeAssert.ok(loggedPaths.has("dist/bg-output.txt"));
-  NodeAssert.ok(loggedPaths.has(JSON.stringify("dist/bg-line\nbreak.txt")));
-  NodeAssert.equal(completedLogs.stderr.trim().split("\n").length, 1);
+  await NodeAssert.rejects(NodeFSP.access(NodePath.join(replica, "dist")));
   const large = await launch(
     [
       "--",
@@ -716,9 +717,14 @@ try {
     error: large.code === 0 ? undefined : large.stderr.slice(0, 2048),
   });
   NodeAssert.equal(large.code, 0);
-  NodeAssert.equal(large.stderr.match(/dist\/dependency-/g)?.length, 16384);
-  NodeAssert.equal(large.stderr.trim().split("\n").length, 1);
-  NodeAssert.ok(large.stderr.length > 1048576);
+  NodeAssert.equal(large.stderr, "dist/ stayed on cloudbox\n");
+  NodeAssert.equal(
+    (await NodeFSP.readdir(NodePath.join(primary, "dist"))).filter((name) =>
+      name.startsWith("dependency-"),
+    ).length,
+    16384,
+  );
+  await NodeAssert.rejects(NodeFSP.access(NodePath.join(replica, "dist")));
   report("large_ignored_outputs", { code: large.code, paths: 16384, noteLines: 1 });
   const finalSessions = JSON.parse(await mutagen("sync", "list", "--template", "{{json .}}"));
   NodeAssert.equal(finalSessions.length, 1);
