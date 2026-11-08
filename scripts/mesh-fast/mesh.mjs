@@ -6,6 +6,7 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeEvents from "node:events";
 import { run, until, rpc, mcp } from "./client.mjs";
+import { waitForDaemonShutdown } from "./daemons.mjs";
 import { harnessRoot as repo, productRoot } from "./paths.mjs";
 
 const binary = NodePath.join(productRoot, "apps/server/src/bin.ts");
@@ -803,10 +804,11 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
             reject(Error("Private daemon shutdown probe timed out"));
           });
         });
-        if (!active) return;
-        await run(executable, ["daemon", "stop"], {
-          env: { ...node.env, MUTAGEN_DATA_DIRECTORY: data },
-        });
+        if (active)
+          await run(executable, ["daemon", "stop"], {
+            env: { ...node.env, MUTAGEN_DATA_DIRECTORY: data },
+          });
+        await waitForDaemonShutdown(data);
       }),
     );
     if (errors.length)

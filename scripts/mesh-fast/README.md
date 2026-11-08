@@ -80,6 +80,8 @@ screenshots and a WebM recording. Process supervisors record the exact child PID
 and generation: crash cases kill that child and observe automatic recovery.
 Cleanup only stops tracked children, named containers/networks and each fixture's
 private Mutagen daemon. SIGINT/SIGTERM also trigger cleanup.
+Shutdown waits for each private daemon's OS lock after requesting its stop:
+the listener can already be gone while final cache writes are still running.
 
 ## Timing and providers
 
