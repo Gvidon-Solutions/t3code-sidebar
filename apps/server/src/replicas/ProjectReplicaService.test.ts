@@ -603,7 +603,7 @@ it.effect.each(["failure", "success"] as const)(
     const h = harness();
     return Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "N-stale-placement-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-stale-placement-" });
       const entered = yield* Deferred.make<void>();
       const finish = yield* Deferred.make<void>();
       h.validation.check = (input) =>
