@@ -10,7 +10,11 @@ import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironments } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { planMeshConnect } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  dismissMeshConnectPrompt,
+  planMeshConnect,
+  shouldShowMeshConnectPrompt,
+} from "@t3tools/client-runtime/state/mesh-layout";
 
 export const MESH_CONNECT_PROMPT_DISMISSED_KEY = "t3code.meshConnectPrompt.dismissed";
 
@@ -27,11 +31,20 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
   const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
   const setEnabled = useAtomCommand(environmentCatalog.setEnabled, { reportFailure: false });
   const navigate = useNavigate();
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(MESH_CONNECT_PROMPT_DISMISSED_KEY) === "1";
+  const [dismissed, setDismissed] = useState<readonly string[]>(() => {
+    if (typeof window === "undefined") return [];
+    const raw = window.localStorage.getItem(MESH_CONNECT_PROMPT_DISMISSED_KEY);
+    if (raw === null) return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string")
+        : [];
+    } catch {
+      return [];
+    }
   });
-  if (!enabled || dismissed) return null;
+  if (!enabled) return null;
   const connected = new Set(
     environments
       .filter((environment) => environment.connection.phase === "connected")
@@ -50,11 +63,12 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
       ]),
     ),
   });
-  if (!plan.needed) return null;
+  if (!shouldShowMeshConnectPrompt(plan, dismissed)) return null;
   const dismiss = () => {
-    setDismissed(true);
+    const next = dismissMeshConnectPrompt(dismissed, plan);
+    setDismissed(next);
     try {
-      window.localStorage.setItem(MESH_CONNECT_PROMPT_DISMISSED_KEY, "1");
+      window.localStorage.setItem(MESH_CONNECT_PROMPT_DISMISSED_KEY, JSON.stringify(next));
     } catch (error) {
       console.warn("Could not remember the dismissed mesh prompt", error);
     }

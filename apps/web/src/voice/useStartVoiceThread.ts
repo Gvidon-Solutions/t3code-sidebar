@@ -51,8 +51,9 @@ export function useStartVoiceThread() {
     if (launching) return;
     const serverConfig = appAtomRegistry.get(environmentServerConfigsAtom).get(input.environmentId);
     const modelSelection = resolveVoiceThreadModelSelection(
+      serverConfig ?? null,
       input.modelSelection,
-      serverConfig?.providers ?? [],
+      input.projectId,
     );
     if (modelSelection === null) return;
     launching = true;

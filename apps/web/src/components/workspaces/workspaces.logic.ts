@@ -159,3 +159,17 @@ export function compactAgo(ms: number, now: number): string {
   if (delta < 7 * DAY_MS) return `${Math.floor(delta / DAY_MS)}d`;
   return `${Math.floor(delta / (7 * DAY_MS))}w`;
 }
+
+/**
+ * What activating a project folder row does. Offline folders open the
+ * Connections settings instead of expanding an empty folder; click and the
+ * Enter/Space key use this same decision so keyboard and pointer agree.
+ */
+export function folderRowActivation(offline: boolean): "connections" | "toggle" {
+  return offline ? "connections" : "toggle";
+}
+
+/** The row's accessible name, including why an offline folder cannot expand. */
+export function folderRowAriaLabel(label: string, offline: boolean): string | undefined {
+  return offline ? `${label}: Not connected to this device` : undefined;
+}

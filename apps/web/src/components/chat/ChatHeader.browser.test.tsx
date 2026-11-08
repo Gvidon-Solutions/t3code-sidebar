@@ -19,6 +19,9 @@ vi.mock(import("../../state/use-orchestration-command"), async (importOriginal) 
 vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
   useThreadActionMenu: () => ({ openMenu: () => {}, closeMenu: () => {} }),
 }));
+vi.mock(import("../../hooks/useMeshLayout"), () => ({
+  useMeshLayout: () => ({ config: null, source: null, state: {} as never, edit: () => {} }),
+}));
 
 import { render } from "../../../test/render";
 import { ChatHeader } from "./ChatHeader";

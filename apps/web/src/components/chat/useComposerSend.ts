@@ -981,6 +981,8 @@ export function useComposerSend(input: ComposerSendInput) {
           modelSelection: ctxSelectedModelSelection,
           runtimeMode,
           interactionMode: sendInteractionMode,
+          branch: activeThreadBranch,
+          worktreePath: activeThread.worktreePath,
           attachments,
           ...(outgoingMessageContext ? { context: outgoingMessageContext } : {}),
           createdAt: messageCreatedAt,

@@ -190,7 +190,7 @@ export function WorkspaceTitlebar({
             render={
               <button
                 type="button"
-                className="min-w-0 truncate rounded px-0.5 text-left text-sm font-semibold tracking-tight text-sidebar-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                className="min-w-0 flex-1 truncate rounded px-0.5 text-left text-sm font-semibold tracking-tight text-sidebar-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 onDoubleClick={workspace ? onStartRename : undefined}
                 onContextMenu={onContextMenu}
               />
@@ -203,8 +203,7 @@ export function WorkspaceTitlebar({
           </TooltipPopup>
         </Tooltip>
       )}
-      <span className="flex-1" />
-      <div className="flex shrink-0 items-center">{actions}</div>
+      <div className="flex shrink-0 items-center gap-0.5">{actions}</div>
     </div>
   );
 }

@@ -144,18 +144,18 @@ function useMeshLayoutOwner() {
 }
 
 type MeshLayout = ReturnType<typeof useMeshLayoutOwner>;
-const emptyLayout: MeshLayout = {
-  source: null,
-  state: emptyState,
-  config: null,
-  edit: () => {},
-};
 const MeshLayoutContext = createContext<MeshLayout | null>(null);
 export function MeshLayoutProvider({ children }: { readonly children: ReactNode }) {
   const value = useMeshLayoutOwner();
   return createElement(MeshLayoutContext.Provider, { value }, children);
 }
-/** Mesh-aware components render without mesh data instead of crashing outside the provider. */
+/**
+ * Mesh-aware components require the provider. A silent empty fallback would
+ * hide a missing provider as "single machine, not a replica" and could offer
+ * git actions on a replica, so this is a construction error.
+ */
 export function useMeshLayout(): MeshLayout {
-  return use(MeshLayoutContext) ?? emptyLayout;
+  const value = use(MeshLayoutContext);
+  if (value === null) throw new Error("MeshLayoutProvider is missing");
+  return value;
 }

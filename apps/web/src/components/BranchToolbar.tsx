@@ -1,5 +1,5 @@
 import { useMeshLayout } from "../hooks/useMeshLayout";
-import { replicaExecutionLabel } from "@t3tools/client-runtime/state/mesh-layout";
+import { hidesGitControls } from "@t3tools/client-runtime/state/mesh-layout";
 import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
 import { readLocalApi } from "../localApi";
@@ -632,13 +632,12 @@ export const BranchToolbar = memo(function BranchToolbar({
 }: BranchToolbarProps) {
   const mesh = useMeshLayout();
   // A lite replica has no local git checkout, so its git controls stay hidden.
-  const isReplica =
-    replicaExecutionLabel(
-      mesh.config,
-      draftMachineId ?? environmentId,
-      projectId,
-      environmentId,
-    ) !== null;
+  const isReplica = hidesGitControls(
+    mesh.config,
+    draftMachineId ?? environmentId,
+    projectId,
+    environmentId,
+  );
   const showGitControls = requestedGitControls && !isReplica;
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = scopeThreadRef(environmentId, threadId);

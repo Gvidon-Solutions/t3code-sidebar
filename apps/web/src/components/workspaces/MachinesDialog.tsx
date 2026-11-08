@@ -2,6 +2,7 @@ import { AdoptReplicaAction } from "./AdoptReplicaAction";
 import { EnvironmentId } from "@t3tools/contracts";
 import { openOpenFileDialog } from "../files/openFileDialogState";
 import {
+  removeRepresentationCopy,
   representationCandidates,
   representationRow,
   type PendingReplicaRow,
@@ -75,7 +76,20 @@ export function MachinesDialog(props: {
   const [removing, setRemoving] = useState<string | null>(null);
   const reps: ReadonlyArray<SidebarProjectMount> =
     props.config.projectMounts[props.logicalKey] ?? [];
-  const removingRole = reps.find((rep) => rep.environmentId === removing)?.role ?? "replica";
+  const removingRep = reps.find((rep) => rep.environmentId === removing) ?? null;
+  const removeCopy = removingRep
+    ? removeRepresentationCopy({
+        role: removingRep.role,
+        otherCopies: reps
+          .filter(
+            (rep) => rep.environmentId !== removingRep.environmentId && rep.role === "replica",
+          )
+          .map((rep) => ({
+            environmentId: rep.environmentId,
+            label: machineDisplayOf(props.config, rep.environmentId, rep.environmentId).label,
+          })),
+      })
+    : null;
   const present = new Set(reps.map((rep) => rep.environmentId));
   const candidates = representationCandidates(props.machines, present);
   return (
@@ -269,36 +283,24 @@ export function MachinesDialog(props: {
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {removingRole === "primary" ? "Remove the main copy?" : "Remove this copy?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {removingRole === "replica"
-                ? "Synchronization stops and this copy is removed from the project. Files already on the machine stay where they are."
-                : reps.find((rep) => rep.role === "replica") === undefined
-                  ? "Removing the main copy leaves the project on this machine only as an ordinary folder."
-                  : "The main copy runs git and builds. Make another copy the main copy first, then remove this one."}
-            </AlertDialogDescription>
+            <AlertDialogTitle>{removeCopy?.title ?? "Remove this copy?"}</AlertDialogTitle>
+            <AlertDialogDescription>{removeCopy?.message ?? ""}</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="sm:flex-col sm:items-stretch">
             <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-            {removingRole === "primary" && reps.some((rep) => rep.role === "replica") ? (
-              reps
-                .filter((rep) => rep.role === "replica")
-                .map((rep) => (
-                  <AlertDialogClose
-                    key={rep.environmentId}
-                    render={<Button variant="default" />}
-                    onClick={() => {
-                      props.onMakePrimary(rep.environmentId);
-                      setRemoving(null);
-                    }}
-                  >
-                    Make{" "}
-                    {machineDisplayOf(props.config, rep.environmentId, rep.environmentId).label} the
-                    main copy
-                  </AlertDialogClose>
-                ))
+            {removeCopy && removeCopy.makePrimary.length > 0 ? (
+              removeCopy.makePrimary.map((choice) => (
+                <AlertDialogClose
+                  key={choice.environmentId}
+                  render={<Button variant="default" />}
+                  onClick={() => {
+                    props.onMakePrimary(choice.environmentId);
+                    setRemoving(null);
+                  }}
+                >
+                  {choice.actionLabel}
+                </AlertDialogClose>
+              ))
             ) : (
               <AlertDialogClose
                 render={<Button variant="destructive" />}

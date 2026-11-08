@@ -397,7 +397,7 @@ export function MeshSettingsPanel() {
                 </div>
               ) : null}
               <ul className="space-y-2 text-sm">
-                {meshProjectRows(config, selected.environmentId).map((project) => (
+                {meshProjectRows(config, selected.environmentId, live).map((project) => (
                   <li key={project.key} className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 flex-1">{project.sentence}</span>
                     {project.canRetry ? (

@@ -1,13 +1,14 @@
 import {
   draftMachineCardSync,
   draftMachineCards,
+  hasUsableDraftModels,
   type DraftMachineCardRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import {
   deriveLogicalProjectKeyFromSettings,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
-import type { ServerProvider } from "@t3tools/contracts";
+import type { ModelSelection, ProjectId, ServerProvider } from "@t3tools/contracts";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { resolveLogicalProjectKey } from "@t3tools/client-runtime/state/mesh-layout";
 import { CheckIcon } from "lucide-react";
@@ -17,6 +18,7 @@ import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useEnvironmentProviders } from "../../state/environments";
+import { useServerConfigs } from "../../state/entities";
 import { useReplicaStatuses } from "../../state/meshReplicas";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -24,18 +26,6 @@ import type { EnvironmentOption } from "../BranchToolbar.logic";
 import { MachineTag } from "../workspaces/MachineTag";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
-
-function hasUsableModel(providers: ReadonlyArray<ServerProvider> | undefined): boolean | null {
-  if (providers === undefined) return null;
-  return providers.some(
-    (provider) =>
-      provider.installed &&
-      provider.auth.status !== "unauthenticated" &&
-      provider.status !== "error" &&
-      provider.availability !== "unavailable" &&
-      provider.models.length > 0,
-  );
-}
 
 /**
  * Fork: the machine choice for a new thread, centred above the composer. A project
@@ -45,28 +35,52 @@ export function DraftMachineCards(props: {
   readonly choices: ReadonlyArray<EnvironmentOption>;
   readonly activeProject: EnvironmentProject | null;
   readonly selectedEnvironmentId: string | null;
+  readonly selection: ModelSelection | null;
   readonly onSelect: (environmentId: EnvironmentOption["environmentId"]) => void;
 }) {
   const mesh = useMeshLayout();
   const { machines } = useMeshOverview({ config: mesh.config });
   const providersByEnvironment = useEnvironmentProviders();
+  const serverConfigs = useServerConfigs();
   const statuses = useReplicaStatuses();
   const loadCatalog = useAtomCommand(threadEnvironment.forkCatalog, { reportFailure: false });
   const [catalogs, setCatalogs] = useState<Readonly<Record<string, ReadonlyArray<ServerProvider>>>>(
     {},
   );
   const requestedCatalogs = useRef(new Set<string>());
+  const [catalogRefresh, setCatalogRefresh] = useState(0);
   const projectSettings = useClientSettings(selectProjectGroupingSettings);
   const catalogKey = props.choices
     .filter((choice) => !choice.connected)
     .map((choice) => choice.environmentId)
     .join(",");
   const activeProjectEnvironmentId = props.activeProject?.environmentId;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes a destination catalog so a card stops naming models it now has
+  useEffect(() => {
+    const timer = window.setInterval(() => setCatalogRefresh((tick) => tick + 1), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  // A machine that connects now reads its catalog from this client again; the
+  // cached copy was taken while it was unreachable.
+  const connectedKey = props.choices
+    .filter((choice) => choice.connected)
+    .map((choice) => choice.environmentId)
+    .join(",");
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads each destination catalog over the mesh so a card can name missing models
+  useEffect(() => {
+    if (!activeProjectEnvironmentId) return;
+    for (const environmentId of connectedKey.split(",").filter(Boolean)) {
+      const prefix = `${activeProjectEnvironmentId}:${environmentId}:`;
+      for (const key of requestedCatalogs.current) {
+        if (key.startsWith(prefix)) requestedCatalogs.current.delete(key);
+      }
+    }
+  }, [activeProjectEnvironmentId, connectedKey]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads each destination catalog over the mesh so a card can name missing models
   useEffect(() => {
     if (!activeProjectEnvironmentId) return;
     for (const environmentId of catalogKey.split(",").filter(Boolean)) {
-      const key = `${activeProjectEnvironmentId}:${environmentId}`;
+      const key = `${activeProjectEnvironmentId}:${environmentId}:${catalogRefresh}`;
       if (requestedCatalogs.current.has(key)) continue;
       requestedCatalogs.current.add(key);
       void loadCatalog({
@@ -80,7 +94,7 @@ export function DraftMachineCards(props: {
         }
       });
     }
-  }, [activeProjectEnvironmentId, catalogKey, loadCatalog]);
+  }, [activeProjectEnvironmentId, catalogKey, catalogRefresh, loadCatalog]);
 
   if (!props.activeProject) return null;
   const fallbackLogicalKey = () =>
@@ -121,6 +135,20 @@ export function DraftMachineCards(props: {
         draftMachineCardSync(live?.state) ??
         draftMachineCardSync(stored?.state) ??
         (projectId !== null ? "synced" : null);
+      const serverConfig = serverConfigs.get(choice.environmentId) ?? null;
+      const providers =
+        providersByEnvironment.get(choice.environmentId) ?? catalogs[choice.environmentId];
+      const catalog = providers
+        ? {
+            providers,
+            ...(serverConfig
+              ? {
+                  settings: serverConfig.settings,
+                  managedPolicy: serverConfig.managedPolicy,
+                }
+              : {}),
+          }
+        : null;
       return {
         environmentId: choice.environmentId,
         label: choice.label,
@@ -131,14 +159,15 @@ export function DraftMachineCards(props: {
           ) ||
           (mounts.length === 0 && choice.isPrimary),
         connected: choice.connected === true,
-        hasUsableModels: hasUsableModel(
-          providersByEnvironment.get(choice.environmentId) ?? catalogs[choice.environmentId],
-        ),
+        hasUsableModels: hasUsableDraftModels(catalog, projectId as ProjectId | null),
+        config: catalog,
+        canHostCopy: choice.supportsMesh === true || props.activeProject?.isScratch === true,
         sync,
       };
     }),
     reachability,
     selectedEnvironmentId: props.selectedEnvironmentId,
+    selection: props.selection,
   });
   if (rows.length === 0) return null;
   return (
