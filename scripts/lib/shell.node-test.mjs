@@ -1,26 +1,26 @@
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import * as NodeTest from "node:test";
+import * as NodeAssert from "node:assert/strict";
 import { quote, run, runSync, until } from "./shell.mjs";
 
-test("quotes shell metacharacters without evaluating them", () => {
+NodeTest.test("quotes shell metacharacters without evaluating them", () => {
   const input = "space ' quote $HOME `id`\nsecond line";
-  assert.equal(runSync("sh", ["-c", `printf %s ${quote(input)}`]), input);
+  NodeAssert.equal(runSync("sh", ["-c", `printf %s ${quote(input)}`]), input);
 });
 
-test("preserves output and exit diagnostics", async () => {
-  assert.equal(await run(process.execPath, ["-e", "console.log('value')"]), "value");
-  await assert.rejects(
+NodeTest.test("preserves output and exit diagnostics", async () => {
+  NodeAssert.equal(await run(process.execPath, ["-e", "console.log('value')"]), "value");
+  await NodeAssert.rejects(
     run(process.execPath, ["-e", "console.error('reason'); process.exit(7)"]),
     (error) => error.code === 7 && error.stderr.includes("reason"),
   );
-  await assert.rejects(
+  await NodeAssert.rejects(
     run(process.execPath, ["-e", "console.log(1234)"], { maxBuffer: 2 }),
     /maxBuffer/,
   );
 });
 
-test("polling returns the accepted result and surfaces the last refusal", async () => {
-  assert.equal(
+NodeTest.test("polling returns the accepted result and surfaces the last refusal", async () => {
+  NodeAssert.equal(
     await until(
       "ready",
       async () => "ready",
@@ -28,7 +28,7 @@ test("polling returns the accepted result and surfaces the last refusal", async 
     ),
     "ready",
   );
-  await assert.rejects(
+  await NodeAssert.rejects(
     until(
       "refused",
       async () => {
