@@ -246,12 +246,12 @@ export function runWorkerMain(
     let buffer = "";
     let decoder = new (require("node:string_decoder").StringDecoder)("utf8");
     let identity: string | undefined;
-    let watcher: import("node:fs").FSWatcher | undefined;
+    let stopWatcher: (() => void) | undefined;
     let draining = false;
     let again = false;
     let completed = false;
     const close = () => {
-      if (watcher) watcher.close();
+      stopWatcher?.();
       process.stdin.destroy();
     };
     async function drain() {
@@ -308,9 +308,26 @@ export function runWorkerMain(
       }
     }
     if (follow) {
-      watcher = fs.watch(root, (_, name) => {
-        if (name === id + ".json" || name === id + ".ndjson") drain().catch(fail);
-      });
+      try {
+        const watcher = fs.watch(root, (_, name) => {
+          if (name === id + ".json" || name === id + ".ndjson") drain().catch(fail);
+        });
+        stopWatcher = () => watcher.close();
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "ENOSPC" && code !== "EMFILE") throw error;
+        // A busy host can exhaust inotify; poll the durable record instead of failing the wait.
+        let stopped = false;
+        const poll = () => {
+          if (stopped) return;
+          drain().catch(fail);
+          if (!stopped) setTimeout(poll, 500);
+        };
+        stopWatcher = () => {
+          stopped = true;
+        };
+        setTimeout(poll, 500);
+      }
       process.stdin.on("end", close);
       process.stdin.resume();
     }
