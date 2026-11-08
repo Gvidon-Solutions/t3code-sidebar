@@ -22,8 +22,8 @@ install this service against a live server without the owner's approval.
 queues a build. `--release <existing-tag>` uploads the resulting runtime and changed installers
 with `gh release upload`; only the builder needs GitHub credentials. Without that flag it is
 an isolated delivery with no GitHub publication. `--now` skips the configurable idle wait.
-The local `gate` command must run T1 acceptance; absent or failing gates stop a clean delivery.
-Set the command to the T1 entry point supplied by that stage rather than bypassing it.
+The local `gate` command must run mesh fast suite acceptance; absent or failing gates stop a
+clean delivery. Set the command to the mesh fast suite entry point rather than bypassing it.
 
 Before stopping a unit, the default lane obtains the authenticated server delivery drain.
 The server closes admission to new turns and waits for active work up to `maxWaitMs`.
@@ -42,7 +42,7 @@ and uses drain once the upgraded server supports it.
 `--now` still closes and verifies the admission fence, but skips waiting for existing work and
 permits interruption. New submissions continue retrying until health and cancellation.
 
-Config-driven B1 rollouts use `t3ctl mesh update VERSION [--plan] [--max-wait 5m] [--now]`.
+Config-driven mesh rollouts use `t3ctl mesh update VERSION [--plan] [--max-wait 5m] [--now]`.
 The maximum idle wait is stored as `t3.drain.maxWaitMs` in mesh config (milliseconds,
 default 300000; range 1–3600000). `--now` records `t3.drain.skipForVersion` equal to
 that exact target, so another version cannot inherit permission to interrupt work.
@@ -66,12 +66,12 @@ when required, and updates one configured
 unit at a time. Both systemd user and system units are supported; the account must be allowed
 to manage the selected unit. The unit must use an absolute `t3` executable in `ExecStart`.
 After obtaining the admission fence, the target stops its unit and backs up `userdata/statev2.sqlite`, retains
-the old unit and runtime, starts the new executable and checks B1's `t3_mesh_update_health`:
+the old unit and runtime, starts the new executable and checks the rollout `t3_mesh_update_health`:
 version, config revision, the captured peer layout watermarks and resumed replica status.
-A failed check restores the old unit and database and stops the rollout. The B1 health
+A failed check restores the old unit and database and stops the rollout. The rollout health
 contract treats an intentionally paused replica as ready. This delivery path does not change
 mesh desired version. Before switching, it refuses a configured `t3.version` that differs
-from the delivered version, preventing a competing B1 reconciliation from downgrading it.
+from the delivered version, preventing a competing rollout reconciliation from downgrading it.
 An unmanaged desired version (absent `t3.version`) is allowed for isolated hot trials.
 
 `t3ctl deploy rollback [--machines studio]` restores each selected target's journaled previous
@@ -91,7 +91,7 @@ Ignored files are not included in the snapshot.
 
 Configure `cleanAgent.project`, and optionally `ctl`, `agent` and `model` (defaults: Codex Sol).
 After delivery the builder starts a thread in that project with the source branch, commit and
-full diff. Its brief requires proper implementation, tests, T1, merge to `ws` and a clean
+full diff. Its brief requires proper implementation, tests, the mesh fast suite, merge to `ws` and a clean
 release; a wrong change must be rejected and explained in the inbox. The thread runs on the
 builder's own t3ctl connection. `cleanAgent.environment` can explicitly select the destination
 using `T3CODE_HOME`, `T3CTL_ORIGIN`, `T3CTL_UNIT`, `T3CTL_T3_BIN` and an isolated
@@ -221,10 +221,10 @@ deploy and verifies the configured gate ran. It refuses non-delivery-bed unit na
 agents. Both command timings must be at most five minutes. Emulator verification of the About
 marker is a separate device-tool capture; the runner does not claim that a manifest proves UI.
 
-The isolated `test-fixtures/fixture-gate.mjs` is a transport fixture, not T1 acceptance. It
+The isolated `test-fixtures/fixture-gate.mjs` is a transport fixture, not mesh fast suite acceptance. It
 refuses unless `T3_DELIVERY_FIXTURE_GATE=1` and a private `T3_DELIVERY_FIXTURE_GATE_LOG` are set.
 The private gate command can use `env` to pass these only to that fixture. Production clean
-releases must configure the actual T1 command. Test evidence must say which gate ran.
+releases must configure the actual mesh fast suite command. Test evidence must say which gate ran.
 
 Warm-lane measurement may begin from an actually installed baseline runtime and native APK.
 Record that baseline ref, artifact and resolved native fingerprint before initializing the

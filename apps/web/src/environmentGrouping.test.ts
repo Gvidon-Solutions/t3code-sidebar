@@ -399,7 +399,7 @@ describe("T3 Mesh logical projects", () => {
       connectedEnvironmentIds: new Set([primaryEnvironmentId]),
     });
     const shared = groups.filter(
-      (group) => group.projectKey === "logical-shared" || group.meshOffline?.tag === "OP",
+      (group) => group.projectKey === "logical-shared" || group.meshOffline?.tag === "CB",
     );
     expect(shared).toHaveLength(1);
     expect(shared[0]?.meshOffline).toBeUndefined();
@@ -416,12 +416,12 @@ describe("T3 Mesh logical projects", () => {
         environmentId === remoteEnvironmentId ? "Cloudbox" : null,
       layout: {
         ...layout,
-        machines: { [remoteEnvironmentId]: { tag: "OP" } },
+        machines: { [remoteEnvironmentId]: { tag: "CB" } },
         projectMounts: { "logical-shared": [layout.projectMounts["logical-shared"]![1]!] },
       },
       connectedEnvironmentIds: new Set([primaryEnvironmentId]),
     });
     expect(groups).toHaveLength(1);
-    expect(groups[0]?.meshOffline).toMatchObject({ environmentId: remoteEnvironmentId, tag: "OP" });
+    expect(groups[0]?.meshOffline).toMatchObject({ environmentId: remoteEnvironmentId, tag: "CB" });
   });
 });
