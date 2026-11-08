@@ -377,3 +377,28 @@ test("a stable layout key created during startup must reach fresh peer health be
   assert.equal(nextPrepared, false);
   assert.equal(active, false);
 });
+
+test("native APK is staged immutably beside OTA assets and the incompatible-runtime notice points at it", async () => {
+  const { stageMobileApk } = await import("./assets.mjs");
+  const root = mkdtempSync(join(tmpdir(), "delivery-apk-"));
+  try {
+    const apk = join(root, "release.apk"),
+      store = join(root, "store");
+    mkdirSync(store);
+    writeFileSync(apk, "signed-apk");
+    writeFileSync(join(store, "catalog.json"), JSON.stringify({ releases: [{ id: "ota" }] }));
+    stageMobileApk(store, apk, "https://studio.example");
+    const catalog = JSON.parse(readFileSync(join(store, "catalog.json"), "utf8"));
+    assert.equal(catalog.releases[0].id, "ota");
+    assert.equal(catalog.apkAsset.contentType, "application/vnd.android.package-archive");
+    assert.equal(
+      catalog.apkUrl,
+      `https://studio.example/api/mobile-updates/assets/${catalog.apkAsset.hash}`,
+    );
+    assert.equal(readFileSync(join(store, "assets", catalog.apkAsset.hash), "utf8"), "signed-apk");
+    stageMobileApk(store, apk, "https://studio.example");
+    assert.deepEqual(JSON.parse(readFileSync(join(store, "catalog.json"), "utf8")), catalog);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
