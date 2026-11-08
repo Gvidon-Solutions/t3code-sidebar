@@ -12,6 +12,7 @@ const { installPublicRuntime, installSshRuntime } = await import(
   ).href
 );
 import { MiniMesh, allocatePort as port } from "./mesh.mjs";
+import { containerBoot } from "./boot.mjs";
 import { project, rpc, mcp, until, run, invariant } from "./helpers.mjs";
 export const rolloutScenarios = {
   "bootstrap-rollout": async (directory) => {
@@ -107,47 +108,49 @@ export const rolloutScenarios = {
       fresh = "mesh-fast-bootstrap-" + process.pid + "-" + NodePath.basename(directory);
       await NodeFSP.mkdir(freshRoot);
       await NodeFSP.writeFile(NodePath.join(freshRoot, ".mesh-fast-node"), "bootstrap fixture\n");
-      const freshCreate = mesh.launchContainer(
-        [
-          "run",
-          "-d",
-          "--name",
-          fresh,
-          "--privileged",
-          "--cgroupns=private",
-          "--network",
-          mesh.network,
-          "--add-host",
-          "host.docker.internal:" + mesh.gateway,
-          "--tmpfs",
-          "/run",
-          "--tmpfs",
-          "/tmp",
-          "-v",
-          freshRoot + ":" + freshRoot,
-          "-p",
-          `127.0.0.1:${sshPort}:22`,
-          "-p",
-          `127.0.0.1:${apiPort}:${apiPort}`,
-          "mesh-fast-bootstrap:24",
-        ],
-        process.env,
-        NodePath.join(directory, "fresh-create.log"),
-      );
-      const [freshCode] = await NodeEvents.once(freshCreate, "close");
-      if (freshCode !== 0) throw Error("Fresh fixture container exited " + freshCode);
-      await until(
-        "fresh sshd and no T3/Node",
-        () =>
-          run("docker", [
-            "exec",
+      await containerBoot(async () => {
+        const freshCreate = mesh.launchContainer(
+          [
+            "run",
+            "-d",
+            "--name",
             fresh,
-            "sh",
-            "-ec",
-            "! command -v node; ! command -v t3; systemctl is-active ssh",
-          ]),
-        (value) => value.trim() === "active",
-      );
+            "--privileged",
+            "--cgroupns=private",
+            "--network",
+            mesh.network,
+            "--add-host",
+            "host.docker.internal:" + mesh.gateway,
+            "--tmpfs",
+            "/run",
+            "--tmpfs",
+            "/tmp",
+            "-v",
+            freshRoot + ":" + freshRoot,
+            "-p",
+            `127.0.0.1:${sshPort}:22`,
+            "-p",
+            `127.0.0.1:${apiPort}:${apiPort}`,
+            "mesh-fast-bootstrap:24",
+          ],
+          process.env,
+          NodePath.join(directory, "fresh-create.log"),
+        );
+        const [freshCode] = await NodeEvents.once(freshCreate, "close");
+        if (freshCode !== 0) throw Error("Fresh fixture container exited " + freshCode);
+        await until(
+          "fresh sshd and no T3/Node",
+          () =>
+            run("docker", [
+              "exec",
+              fresh,
+              "sh",
+              "-ec",
+              "! command -v node; ! command -v t3; systemctl is-active ssh",
+            ]),
+          (value) => value.trim() === "active",
+        );
+      });
       for (const target of [studio.front, laptop.front, releasePort])
         await run("docker", [
           "exec",

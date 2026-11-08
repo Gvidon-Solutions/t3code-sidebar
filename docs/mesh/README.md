@@ -766,6 +766,13 @@ uses the shared bed. `MeshTiming.ts` scales test timers while normal production
 bundles ignore the knob. Native fixture builds are explicitly marked test builds.
 The runner reports wall time and JUnit, retains failure artifacts, and bounds
 concurrent startup separately from scenario concurrency.
+`lifecycle.mjs` admits one runner per user/host and reclaims only labelled resources
+from a previous boot or dead runner. Boot identity plus process start time prevents
+PID reuse from targeting a live process; cleanup never signals old host PIDs. The
+same local command gates either configured builder host, capped at eight meshes,
+eight server starts and two container starts; host identity is recorded in results.
+`runner-reboot-recovery` proves real Docker cleanup, port reuse and preservation of
+active/foreign resources. An unowned bridge attachment aborts reclamation.
 
 The realistic inventory lives in `scripts/mesh-e2e/bed-config.sh`; shell bed
 helpers use neutral roles and resolve physical destinations through that file.

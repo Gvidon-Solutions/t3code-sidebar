@@ -37,6 +37,8 @@ jobs:
           name: mesh-fast-results
           path: |
             ${{ steps.mesh.outputs.artifacts }}/summary.json
+            ${{ steps.mesh.outputs.artifacts }}/runner.json
+            ${{ steps.mesh.outputs.artifacts }}/recovery.json
             ${{ steps.mesh.outputs.artifacts }}/junit.xml
             ${{ steps.mesh.outputs.artifacts }}/failure.txt
             ${{ steps.mesh.outputs.artifacts }}/*/failure.txt

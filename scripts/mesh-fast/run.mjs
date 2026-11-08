@@ -3,6 +3,7 @@ import { previous } from "./previous.mjs";
 import { runtimes } from "./runtimes.mjs";
 import { prepare } from "./prepare.mjs";
 import { prunePassed } from "./artifacts.mjs";
+import { defaultJobs, ownership, assertHostLease, recoverStale } from "./lifecycle.mjs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -22,7 +23,7 @@ for (const key of Object.keys(process.env))
     delete process.env[key];
 const args = process.argv.slice(2);
 let repeat = 1,
-  jobs = Math.min(16, Math.max(1, Math.floor(NodeOS.availableParallelism() / 4))),
+  jobs = defaultJobs(NodeOS.availableParallelism()),
   filter,
   budgetSeconds = process.env.MESH_FAST_REALISTIC === "1" ? 10800 : 300;
 while (args.length) {
@@ -31,6 +32,7 @@ while (args.length) {
   else if (arg === "--jobs") jobs = Number(args.shift());
   else if (arg === "--scenario") filter = args.shift();
   else if (arg === "--budget-seconds") budgetSeconds = Number(args.shift());
+  else if (arg === "--host-info") filter = "@host-info";
   else throw Error(`Unknown argument ${arg}`);
 }
 if (![repeat, jobs, budgetSeconds].every((n) => Number.isInteger(n) && n > 0))
@@ -66,14 +68,28 @@ const selected = Object.entries(scenarios)
     return (x < 0 ? priority.length : x) - (y < 0 ? priority.length : y);
   })
   .filter(([name]) => !filter || name.includes(filter));
+await assertHostLease();
+const owner = await ownership();
+const host = {
+  ...owner,
+  jobs,
+  containerBoots: 2,
+  serverBoots: Math.max(2, Math.min(8, Math.floor(owner.cores / 2))),
+};
+if (filter === "@host-info") {
+  console.log(JSON.stringify(host, null, 2));
+  process.exit(0);
+}
 if (!selected.length) throw Error(`No scenarios match ${filter}`);
 const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-fast-"));
-await NodeFSP.writeFile(NodePath.join(root, "runner.json"), JSON.stringify({ pid: process.pid }));
+await NodeFSP.writeFile(NodePath.join(root, "runner.json"), JSON.stringify(host));
+console.log(`Host: ${owner.hostname}; cores ${owner.cores}; meshes ${jobs}; container boots 2`);
 console.log(`Artifacts: ${root}`);
 if (process.env.GITHUB_OUTPUT)
   await NodeFSP.appendFile(process.env.GITHUB_OUTPUT, `artifacts=${root}\n`);
 const started = performance.now(),
   results = [];
+let recovery;
 const elapsed = () => (performance.now() - started) / 1000;
 const escape = (text) =>
   String(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
@@ -81,7 +97,7 @@ async function report() {
   const seconds = elapsed();
   await NodeFSP.writeFile(
     NodePath.join(root, "summary.json"),
-    JSON.stringify({ seconds, budgetSeconds, results }, null, 2),
+    JSON.stringify({ seconds, budgetSeconds, host, recovery, results }, null, 2),
   );
   await NodeFSP.writeFile(
     NodePath.join(root, "junit.xml"),
@@ -109,6 +125,12 @@ const watchdog = setTimeout(
   budgetSeconds * 1000,
 );
 try {
+  recovery = await recoverStale(owner);
+  await NodeFSP.writeFile(NodePath.join(root, "recovery.json"), JSON.stringify(recovery, null, 2));
+  if (recovery.interruptedRuns.length)
+    console.log(
+      `RECOVERED ${recovery.containers.length} containers, ${recovery.networks.length} networks from interrupted runs`,
+    );
   process.env.MESH_FAST_MUTAGEN_CACHE = await prepare();
   process.env.PLAYWRIGHT_BROWSERS_PATH ??= NodePath.join(
     process.env.MESH_FAST_MUTAGEN_CACHE,
@@ -120,27 +142,32 @@ try {
   const queue = selected.flatMap(([name, run]) =>
     Array.from({ length: repeat }, (_, index) => ({ name: `${name}-${index + 1}`, run })),
   );
+  async function execute(task) {
+    if (terminating) return;
+    const directory = NodePath.join(root, task.name);
+    await NodeFSP.mkdir(directory);
+    const start = performance.now();
+    let error;
+    try {
+      await task.run(directory);
+      await prunePassed(directory);
+    } catch (cause) {
+      error = cause.stack ?? String(cause);
+      await NodeFSP.writeFile(NodePath.join(directory, "failure.txt"), error);
+    }
+    const seconds = (performance.now() - start) / 1000;
+    results.push({ name: task.name, seconds, error });
+    console.log(
+      `${error ? "FAIL" : "PASS"} ${task.name} ${seconds.toFixed(2)}s${error ? `\n${error}` : ""}`,
+    );
+  }
+  // Recovery inspects ownership globally before other scenarios create or remove fixtures.
+  for (const task of queue.filter((task) => task.name.startsWith("runner-reboot-recovery-")))
+    await execute(task);
+  const parallel = queue.filter((task) => !task.name.startsWith("runner-reboot-recovery-"));
   await Promise.all(
-    Array.from({ length: Math.min(jobs, queue.length) }, async () => {
-      for (let task; (task = queue.shift());) {
-        if (terminating) return;
-        const directory = NodePath.join(root, task.name);
-        await NodeFSP.mkdir(directory);
-        const start = performance.now();
-        let error;
-        try {
-          await task.run(directory);
-          await prunePassed(directory);
-        } catch (cause) {
-          error = cause.stack ?? String(cause);
-          await NodeFSP.writeFile(NodePath.join(directory, "failure.txt"), error);
-        }
-        const seconds = (performance.now() - start) / 1000;
-        results.push({ name: task.name, seconds, error });
-        console.log(
-          `${error ? "FAIL" : "PASS"} ${task.name} ${seconds.toFixed(2)}s${error ? `\n${error}` : ""}`,
-        );
-      }
+    Array.from({ length: Math.min(jobs, parallel.length) }, async () => {
+      for (let task; (task = parallel.shift());) await execute(task);
     }),
   );
 } catch (cause) {

@@ -109,6 +109,17 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — T1 bounded host admission and reboot recovery
+
+Fast acceptance uses the configured builder host with an eight-mesh default,
+two simultaneous container boots and bounded native/Mutagen workers. A kernel
+admission lock prevents overlapping gates; ownership labels distinguish boots
+and PID generations so a later run safely reclaims abandoned Docker containers,
+bridges and published ports. Active and foreign resources remain intact. Host
+identity and recovery evidence accompany timings. Implementation and real
+subprocess/Docker proofs live in `scripts/mesh-fast/{lifecycle,recovery}.mjs`,
+`lifecycle.test.ts` and the `runner-reboot-recovery` scenario.
+
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
 - **What.** Local Android builds retain native outputs, reuse identical APKs and publish native

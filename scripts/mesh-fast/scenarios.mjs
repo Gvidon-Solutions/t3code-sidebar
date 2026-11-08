@@ -10,6 +10,7 @@ import { threadScenarios } from "./threads.mjs";
 import { layoutScenarios } from "./layout.mjs";
 import { replicaScenarios } from "./replicas.mjs";
 import { networkScenarios } from "./network.mjs";
+import { recoveryScenario } from "./recovery.mjs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import { run } from "./client.mjs";
@@ -46,6 +47,7 @@ async function converged(nodes, expected) {
   );
 }
 export const scenarios = {
+  "runner-reboot-recovery": recoveryScenario,
   "runner-cancel-boot": async (directory) => {
     const mesh = new MiniMesh(directory);
     const spawned = new Promise((resolve) => {

@@ -56,13 +56,17 @@ and authenticated N1 byte pipes. Nothing uses an existing T3 server, physical
 machine identity, owner's SSH configuration, VPS or Mutagen daemon.
 
 The harness accepts a machine-name array (`MiniMesh.start(names)`); scenarios
-choose their topology. The default runner budgets four logical cores per mesh, up to 16 concurrently,
-with bounded server startup concurrency. Ports are allocated once per command.
+choose their topology. The default runner budgets four logical cores per mesh,
+capped at eight on every host. At most eight servers and two containers boot
+concurrently, including fresh bootstrap containers. Mutagen uses two Go execution
+threads per daemon/agent; native monitor compilation uses four build jobs. Ports
+are allocated once per command. `--jobs` is an explicit operator override.
 
 ```sh
 scripts/mesh-fast/run.sh --scenario crash --repeat 5
 scripts/mesh-fast/run.sh --scenario partition --repeat 5
 scripts/mesh-fast/run.sh --jobs 8
+scripts/mesh-fast/run.sh --host-info
 ```
 
 `--scenario` selects a name substring. `--repeat` creates fresh meshes on each
@@ -71,8 +75,38 @@ The final line reports total wall time, with a default 300-second ceiling. A
 watchdog shuts down owned fixtures and fails the command when the ceiling is
 exceeded. `--budget-seconds` explicitly changes that ceiling for smaller hosts:
 the independent hosted CI job uses two meshes and 2700 seconds; performance
-acceptance on the 32-core host keeps the default 300 seconds. Existing build jobs
+acceptance on either configured host keeps the default 300 seconds. Existing build jobs
 have no dependency on this job.
+
+The gate runs on the host where the command is invoked. The delivery builder's
+configured `gate` command selects that host: the example's local command runs on
+the configured builder, whether that is gvidon or gor. Provision either using the
+same commands above. An explicit SSH gate must point to the prepared candidate
+checkout on the selected host. There is no implicit remote host or fallback.
+`--host-info`, the first output line, `runner.json` and `summary.json.host` record
+the actual hostname, boot identity, available CPUs and concurrency. Host names
+are evidence, never fixture identities. Treat gor's unexplained hard resets as
+an infrastructure fault; a successful gate does not establish hardware stability.
+
+One user-wide kernel lock admits a single runner across checkouts. A concurrent
+command exits 75 before changing Docker resources. The lock releases on process
+death and reboot; no persistent PID lock can strand the next run.
+Every fixture container/bridge carries labels with a stable machine hash, UID,
+boot UUID, runner PID/start time and run UUID. Containers use `--restart=no`.
+Before preparing runtimes, the next command removes only labelled abandoned
+resources on this host owned by this UID, collecting their last logs in
+`recovery.json`. Previous-boot PIDs are never signalled; same-boot PID reuse is
+checked by process start time. Active owners and unlabelled resources survive.
+An abandoned bridge with a foreign attachment fails closed before any removal.
+Removing stale publications frees their ports; host listeners died with the
+reboot. Failed scenario directories remain available for diagnosis.
+
+`runner-reboot-recovery` exercises this with real running Docker services: a
+previous boot publishes a TCP port with `restart=always`, a reused current PID
+has a different start time, active and foreign containers coexist, and a foreign
+network attachment prevents cleanup. It then verifies removal, port rebinding
+and preservation. `lifecycle.test.ts` kills a real lock owner and proves admission
+is released, concurrent refusal and the eight-mesh default.
 
 The printed private artifact directory contains `junit.xml`, `summary.json`,
 server/proxy/sshd logs, failure stacks and convergence barriers. The F1 case adds

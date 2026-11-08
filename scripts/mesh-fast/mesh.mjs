@@ -7,10 +7,12 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeEvents from "node:events";
 import { run, until, rpc, mcp } from "./client.mjs";
 import { waitForDaemonShutdown } from "./daemons.mjs";
+import { ownership, labelArgs } from "./lifecycle.mjs";
+import { containerBoot } from "./boot.mjs";
 import { harnessRoot as repo, productRoot } from "./paths.mjs";
 
 const binary = NodePath.join(productRoot, "apps/server/src/bin.ts");
-let bootSlots = Math.max(2, Math.min(12, Math.floor(NodeOS.availableParallelism() / 2)));
+let bootSlots = Math.max(2, Math.min(8, Math.floor(NodeOS.availableParallelism() / 2)));
 const bootQueue = [];
 async function boot(work) {
   if (bootSlots === 0) await new Promise((resolve) => bootQueue.push(resolve));
@@ -57,6 +59,7 @@ export class MiniMesh {
   }
 
   async start(names = ["studio", "cloudbox", "laptop"]) {
+    this.owner = await ownership();
     this.routes = new Map();
     if (this.browser)
       await NodeFSP.mkdir(NodePath.join(this.directory, "artifacts"), { recursive: true });
@@ -76,6 +79,7 @@ export class MiniMesh {
         await run("docker", [
           "network",
           "create",
+          ...labelArgs(this.owner),
           "--subnet",
           subnet,
           "--gateway",
@@ -107,7 +111,15 @@ export class MiniMesh {
       );
     this.firstName = names[0];
     this.nodeCount = names.length;
-    const started = await Promise.allSettled(names.map((name) => boot(() => this.startNode(name))));
+    for (const name of names) this.routes.set(name, await port());
+    const started = await Promise.allSettled(
+      names.map((name) => {
+        const start = () => boot(() => this.startNode(name));
+        return this.containerMode && (this.containerNames ?? [this.firstName]).includes(name)
+          ? containerBoot(start)
+          : start();
+      }),
+    );
     this.nodes = started.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
     for (const result of started) if (result.status === "rejected") throw result.reason;
     for (const node of this.nodes)
@@ -227,7 +239,12 @@ export class MiniMesh {
   launchContainer(args, env, log) {
     const index = args.indexOf("--name");
     if (index < 0 || !args[index + 1]) throw Error("Fixture containers require an owned name");
-    const child = this.launch("docker", args, env, log);
+    const child = this.launch(
+      "docker",
+      [args[0], ...labelArgs(this.owner), "--restart=no", ...args.slice(1)],
+      env,
+      log,
+    );
     const spawned = { name: args[index + 1], child };
     this.containers.push(spawned);
     this.onContainerSpawn?.(spawned);
@@ -271,6 +288,7 @@ export class MiniMesh {
             ? "0.2"
             : "0.075",
       NODE_ENV: "test",
+      GOMAXPROCS: "2",
       NODE_COMPILE_CACHE: NodePath.join(process.env.MESH_FAST_RUNTIMES, "compile-cache"),
     };
     if (process.env.MESH_FAST_MUTAGEN_CACHE && !this.coldInstall) {
@@ -402,7 +420,7 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
     );
     await NodeFSP.appendFile(
       sshConfig,
-      `SetEnv ${JSON.stringify("HOME=" + home)} ${JSON.stringify("PATH=" + env.PATH)} ${JSON.stringify("NODE_COMPILE_CACHE=" + env.NODE_COMPILE_CACHE)}\nForceCommand ${JSON.stringify(sshCommand)}\n`,
+      `SetEnv ${JSON.stringify("HOME=" + home)} ${JSON.stringify("PATH=" + env.PATH)} ${JSON.stringify("NODE_COMPILE_CACHE=" + env.NODE_COMPILE_CACHE)} GOMAXPROCS=2\nForceCommand ${JSON.stringify(sshCommand)}\n`,
     );
     env.T3_MESH_SSHD_DIR = NodePath.dirname(sshConfig);
     if (!inContainer)
@@ -413,8 +431,7 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
         NodePath.join(root, "sshd.log"),
       );
     const backend = await port(),
-      front = await port();
-    this.routes.set(name, front);
+      front = this.routes.get(name);
     this.launch(
       process.execPath,
       [
