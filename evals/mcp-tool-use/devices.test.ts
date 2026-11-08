@@ -87,7 +87,7 @@ it.effect("answers device calls with T3's handlers over the case's world", () =>
     );
     const opened = json((yield* tools.call("device_open", { hostId: MAC, deviceId: IPHONE })).text);
     const { command } = opened.agentDevice;
-    assert.match(command, /^\/home\/user\/\.t3\/userdata\/device\/.+\/agent-device$/);
+    assert.match(command, /^\/home\/dev\/\.t3\/userdata\/device\/.+\/agent-device$/);
     assert.include(opened.quickStart, command);
     assert.deepEqual(tools.launchers, [command]);
     // The image never reaches the model; T3's text result has the rest.

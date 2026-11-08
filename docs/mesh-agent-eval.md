@@ -80,7 +80,7 @@ The formatter now explicitly ignores docs/skill-t3-next/SKILL.md. Before/after S
 
 | Item                                                          | Status / location                      | Proof                                                                                                          |
 | ------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Updated instructions on isolated HOME and nodeB, backups kept   | done — private HOME and nodeB only       | sync readback, nodeB Claude/Codex status both in sync; nodeB backup 2026-11-03T10-31-56-995Z-2058766               |
+| Updated instructions on isolated HOME and nodeB, backups kept | done — private HOME and nodeB only     | sync readback, nodeB Claude/Codex status both in sync; nodeB backup 2026-11-03T10-31-56-995Z-2058766           |
 | Eight fresh requests per model                                | done — 24 selected threads in new JSON | 81-attempt ledger; each model has all eight distinct completed selected rows                                   |
 | Latency, total, ordered calls, first route, tokens, confusion | done — matrix and JSON                 | native provider session mapping plus t3ctl show --activity; selected timestamps and counters asserted          |
 | Actual requested effects                                      | done — bed GV/GR/VP                    | child completion/project checks, UI packets, README equality, replica state and primary commits detailed above |
@@ -90,7 +90,7 @@ The formatter now explicitly ignores docs/skill-t3-next/SKILL.md. Before/after S
 
 ## Checks
 
-Every shell exports PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH. Product contracts/interfaces were not changed.
+Every shell uses its configured Node bin directory. Product contracts/interfaces were not changed.
 
 - ./node_modules/.bin/vp fmt: exit 0; Finished in 6979ms on 6764 files using 128 threads. SKILL.md excluded; hash unchanged.
 - ./node_modules/.bin/vp lint: exit 0, 0 errors, existing warnings only.

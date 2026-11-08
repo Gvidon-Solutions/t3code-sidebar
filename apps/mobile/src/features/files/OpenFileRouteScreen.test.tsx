@@ -47,7 +47,7 @@ vi.mock("../../state/workspace", () => ({
   ],
 }));
 vi.mock("../workspaces/useMeshLayout", () => ({
-  useMeshLayout: () => ({ config: { machines: { remote: { label: "nodeB" } } } }),
+  useMeshLayout: () => ({ config: { machines: { remote: { label: "Cloudbox", tag: "CB" } } } }),
 }));
 vi.mock("../../components/ui/ScreenScrollView", () => ({
   ScreenScrollView: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -121,7 +121,7 @@ it("switches machine history and opens a completion on its machine while preserv
     );
     expect(container.textContent).toContain("/local/old.md");
     const remote = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "GOR nodeB",
+      (button) => button.textContent === "CB Cloudbox",
     );
     expect(remote).toBeDefined();
     await act(async () => remote?.click());
@@ -146,7 +146,7 @@ it("switches machine history and opens a completion on its machine while preserv
       environmentId: "remote",
       sourceEnvironmentId: "local",
       cwd: "/",
-      projectName: "nodeB",
+      projectName: "Cloudbox",
       path: ["", "remote", "README.md"],
     });
     expect(container.textContent).toContain("Storage unavailable");

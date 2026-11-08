@@ -427,35 +427,19 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl status --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl status --all"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl machines"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl mesh status"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl mesh status"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-04-55-01a1a0a7-869c-7230-9f8d-32e3623f70ef.jsonl",
@@ -648,11 +632,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_environment_links",
@@ -692,11 +672,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_thread_search",
@@ -707,35 +683,19 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find 'маунт' --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find 'маунт' --all"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find 'mount' --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find 'mount' --all"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl open fc221127 --on VP"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl open fc221127 --on VP"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines --json"]
         },
         {
           "tool": "t3-code.t3_thread_search",
@@ -781,11 +741,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_environment_links",
@@ -834,11 +790,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_project_place",
@@ -856,11 +808,7 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines"]
         },
         {
           "tool": "t3-code.t3_project_place",
@@ -899,19 +847,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl status --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl status --all"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-04-55-01a1a0a7-83b0-7f90-8a12-f0645ae05b37.jsonl",
@@ -940,11 +880,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_environment_links",
@@ -977,27 +913,15 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find 'конфликт' --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find 'конфликт' --all"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl show ec5e0aed --on VP --messages 3"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl show ec5e0aed --on VP --messages 3"]
         },
         {
           "tool": "t3-code.t3_environment_links",
@@ -1005,11 +929,7 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find 'конфликт' --all --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find 'конфликт' --all --json"]
         },
         {
           "tool": "t3-code.t3_thread_read",
@@ -1088,27 +1008,15 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.codex/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.codex/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl machines"]
         },
         {
           "tool": "shell",
@@ -1157,11 +1065,7 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_thread_search",
@@ -1275,35 +1179,19 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines && t3ctl project machines demo --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines && t3ctl project machines demo --json"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl help | rg -n 'project|place|machines'"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl help | rg -n 'project|place|machines'"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl projects --json && t3ctl project demo --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl projects --json && t3ctl project demo --json"]
         },
         {
           "tool": "shell",
@@ -1338,19 +1226,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl status --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl status --all"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-09-01-01a1a0ab-465b-73a1-8319-38c6a65be618.jsonl"
@@ -1377,19 +1257,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-09-01-01a1a0ab-46ed-7871-8671-ef21014261a0.jsonl"
@@ -1531,19 +1403,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines"]
         },
         {
           "tool": "shell",
@@ -1571,11 +1435,7 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines --json"]
         },
         {
           "tool": "shell",
@@ -1610,11 +1470,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_thread_search",
@@ -1666,11 +1522,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_project_machines",
@@ -1680,11 +1532,7 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "/tmp/t3-eval-home/.local/bin/t3ctl machines --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "/tmp/t3-eval-home/.local/bin/t3ctl machines --json"]
         },
         {
           "tool": "t3-code.ui_open",
@@ -1721,19 +1569,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines"]
         },
         {
           "tool": "t3-code.t3_project_machines",
@@ -1767,19 +1607,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "/tmp/t3-eval-home/.local/bin/t3ctl status --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "/tmp/t3-eval-home/.local/bin/t3ctl status --all"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-09-00-01a1a0ab-4256-75a1-ad6a-b90ea4a8a90d.jsonl"
@@ -1806,19 +1638,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-09-00-01a1a0ab-4336-72d0-bf6e-4f3a2e7f3100.jsonl"
@@ -1845,11 +1669,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_thread_search",
@@ -2019,11 +1839,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
@@ -2066,19 +1882,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find mount --all --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find mount --all --json"]
         },
         {
           "tool": "t3-code.ui_open",
@@ -2115,11 +1923,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
@@ -2166,11 +1970,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
@@ -2229,27 +2029,15 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.codex/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.codex/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find mount --all --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find mount --all --json"]
         },
         {
           "tool": "t3-code.ui_open",
@@ -2334,35 +2122,19 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.codex/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.codex/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl machines --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl machines --json"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl projects --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl projects --json"]
         },
         {
           "tool": "shell",
@@ -2374,11 +2146,7 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl schema t3_project_machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl schema t3_project_machines"]
         },
         {
           "tool": "shell",
@@ -2390,19 +2158,11 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl place demo --on studio --wait"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl place demo --on studio --wait"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl place demo --on GV --wait"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl place demo --on GV --wait"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-14-29-01a1a0b0-48a6-7b31-a95f-8960d1aca417.jsonl"
@@ -2429,19 +2189,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl status --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl status --all"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-14-28-01a1a0b0-43f4-7c31-9782-a3163b656441.jsonl",
@@ -2472,19 +2224,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-14-28-01a1a0b0-449e-7bf3-a913-233002f3d90a.jsonl",
@@ -2515,19 +2259,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find конфликт --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find конфликт --all"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-14-29-01a1a0b0-4543-7942-ab0b-80e282e59ef1.jsonl"
@@ -2562,19 +2298,11 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "pwd && git status --short --branch"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "pwd && git status --short --branch"]
         },
         {
           "tool": "shell",
@@ -2625,19 +2353,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines --json"]
         },
         {
           "tool": "shell",
@@ -2676,19 +2396,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find mount --all --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find mount --all --json"]
         },
         {
           "tool": "t3-code.ui_open",
@@ -2729,11 +2441,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "t3-code.t3_project_machines",
@@ -2743,11 +2451,7 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl machines"]
         },
         {
           "tool": "t3-code.ui_open",
@@ -2788,19 +2492,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines --json"]
         },
         {
           "tool": "shell",
@@ -2812,11 +2508,7 @@
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl place demo --on GV --wait"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl place demo --on GV --wait"]
         },
         {
           "tool": "shell",
@@ -2855,19 +2547,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "/tmp/t3-eval-home/.local/bin/t3ctl status --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "/tmp/t3-eval-home/.local/bin/t3ctl status --all"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-14-27-01a1a0b0-3fbb-71d2-9352-5226ed8c3732.jsonl",
@@ -2898,19 +2582,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "/tmp/t3-eval-home/.local/bin/t3ctl machines"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "/tmp/t3-eval-home/.local/bin/t3ctl machines"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-14-27-01a1a0b0-4066-7ad1-9b57-b6ddf5fc00d9.jsonl",
@@ -2941,27 +2617,15 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find конфликт --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find конфликт --all"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find конфликт --all --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find конфликт --all --json"]
         }
       ],
       "transcript": "rollout-2026-11-03T12-14-28-01a1a0b0-4158-7ea3-915c-9ab37432e95e.jsonl",
@@ -2992,19 +2656,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl machines --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl machines --json"]
         },
         {
           "tool": "t3-code.t3_project_machines",
@@ -3058,11 +2714,7 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
@@ -3109,19 +2761,11 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "~/.local/bin/t3ctl machines --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl machines --json"]
         },
         {
           "tool": "t3-code.t3_project_machines",
@@ -3159,27 +2803,15 @@
       "actions": [
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "cat /tmp/t3-eval-home/.agents/skills/t3/SKILL.md"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find конфликт --all"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find конфликт --all"]
         },
         {
           "tool": "shell",
-          "command": [
-            "/usr/bin/zsh",
-            "-lc",
-            "t3ctl find конфликт --all --json"
-          ]
+          "command": ["/usr/bin/zsh", "-lc", "t3ctl find конфликт --all --json"]
         },
         {
           "tool": "t3-code.ui_open",

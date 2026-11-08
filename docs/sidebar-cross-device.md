@@ -205,7 +205,7 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
   (0.18.1, sha256-checked) for the host OS/arch into `<baseDir>/bin/mutagen` (+ agents bundle) on
   first use; `mutagenPath` overrides. Each T3 server uses its own `MUTAGEN_DATA_DIRECTORY` under its
   base dir so it never collides with a user's own daemon/sessions (e.g. studio's existing
-  `mutagen-daemon.service` with sessions `calf-wrapper`, `acc-review` — never touched).
+  `mutagen-daemon.service` with sessions `manual-session-a`, `manual-session-b` — never touched).
 - Existing manual sessions can be adopted: Settings › Machines lists the user's foreign sessions.
   Adoption records `transport: mutagen`, pauses the original, recreates the same endpoints under
   T3's private daemon and terminates the original only after the replacement watches. Conflicts
@@ -215,7 +215,7 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 
 - Links today: none; `linkedEnvironmentsEnabled=false` on studio/Cloudbox; nodeB runs 0.0.45 without
   links. HTTP reachability: studio→Cloudbox `https://cloudbox.example.test:3774`; Cloudbox→studio
-  `https://happier.example.test`; studio↔nodeB only through ssh tunnels (nodeB listens on loopback);
+  `https://node-a.example.test`; studio↔nodeB only through ssh tunnels (nodeB listens on loopback);
   Cloudbox↔nodeB no route.
 - The mesh does not need a full graph: layout gossips over any connected graph. Tool calls to a
   machine without a direct link are relayed: `PeerForwarding` forwards to a linked peer that has a
@@ -289,7 +289,7 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
   connected here" and a one-tap connect. Never hide them silently, never duplicate them.
 - When a new server joins (link created), it gets the full layout within one exchange; its projects
   appear in the default workspace (or by rules) on every client.
-- Status line in the sidebar footer: "Mesh: 3 machines · synced" / "OP unreachable 5 min".
+- Status line in the sidebar footer: "Mesh: 3 machines · synced" / "CLD unreachable 5 min".
 
 ### 11. Agents everywhere understand the mesh
 
@@ -331,7 +331,7 @@ commands, the shared lock and cleanup rules.
 - Work only in your own worktree/branch given in your task; commit there (conventional messages,
   e.g. `feat(mesh): …`). Never push, never touch `ws`, never restart/update the live T3 on studio
   or Cloudbox, never edit their settings.
-- `export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH` in every shell (hooks need it).
+- Use the Node version declared by package.json; configure its bin directory in the bed local.env.
   The pre-commit `knip:check` already fails on `ws` (33 old unused exports): commit with
   `--no-verify` after running yourself `./node_modules/.bin/vp fmt`, `./node_modules/.bin/vp lint`
   (no errors), typecheck and the tests of every package you touched; add no new knip findings.

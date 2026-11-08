@@ -880,9 +880,7 @@
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": [
-        "mcp:1a626209-09be-418f-b140-1e76f1f32621"
-      ],
+      "childThreadIds": ["mcp:1a626209-09be-418f-b140-1e76f1f32621"],
       "callErrors": [
         {
           "position": 3,
@@ -1055,9 +1053,7 @@
       "interruptions": [],
       "outcomeCorrect": false,
       "firstActionRight": true,
-      "confusion": [
-        "Guessed a provider-specific skill path before reading the installed skill."
-      ],
+      "confusion": ["Guessed a provider-specific skill path before reading the installed skill."],
       "review": "Requested effect not verified."
     },
     {
@@ -1332,9 +1328,7 @@
       "interruptions": [],
       "outcomeCorrect": true,
       "firstActionRight": false,
-      "confusion": [
-        "Guessed a provider-specific skill path before reading the installed skill."
-      ],
+      "confusion": ["Guessed a provider-specific skill path before reading the installed skill."],
       "review": "Requested effect checked."
     },
     {
@@ -1677,9 +1671,7 @@
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": [
-        "mcp:eebeb73d-2bac-4300-bcbe-392916528cdc"
-      ],
+      "childThreadIds": ["mcp:eebeb73d-2bac-4300-bcbe-392916528cdc"],
       "callErrors": [
         {
           "position": 7,
@@ -3205,9 +3197,7 @@
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
-      "childThreadIds": [
-        "mcp:6231f506-e60c-471e-a083-b957d61013af"
-      ],
+      "childThreadIds": ["mcp:6231f506-e60c-471e-a083-b957d61013af"],
       "callErrors": [],
       "interruptions": [],
       "firstActionRight": null,
@@ -4247,9 +4237,7 @@
       "nativeSession": "ses_e5f2de9b5ffeeMlJ9DJ7V3yTTP",
       "fixtureInvalid": false,
       "fixtureIssue": null,
-      "errors": [
-        "Internal Server Error (request_id: 7a95e059-f51b-4dc2-b925-b1fa8a395ea1)"
-      ],
+      "errors": ["Internal Server Error (request_id: 7a95e059-f51b-4dc2-b925-b1fa8a395ea1)"],
       "callErrors": [],
       "interruptions": [],
       "outcomeCorrect": false,
@@ -4486,9 +4474,7 @@
       "interruptions": [],
       "outcomeCorrect": true,
       "firstActionRight": true,
-      "confusion": [
-        "Guessed a provider-specific skill path before reading the installed skill."
-      ],
+      "confusion": ["Guessed a provider-specific skill path before reading the installed skill."],
       "review": "Selected successful general-only run; validated against bed effects."
     },
     {
@@ -4744,14 +4730,7 @@
             "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
             "allProjects": true,
             "limit": 100,
-            "statuses": [
-              "preparing",
-              "queued",
-              "starting",
-              "running",
-              "waiting",
-              "failed"
-            ]
+            "statuses": ["preparing", "queued", "starting", "running", "waiting", "failed"]
           }
         },
         {
@@ -4760,14 +4739,7 @@
             "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
             "allProjects": true,
             "limit": 100,
-            "statuses": [
-              "preparing",
-              "queued",
-              "starting",
-              "running",
-              "waiting",
-              "failed"
-            ]
+            "statuses": ["preparing", "queued", "starting", "running", "waiting", "failed"]
           }
         },
         {
@@ -4776,14 +4748,7 @@
             "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
             "allProjects": true,
             "limit": 100,
-            "statuses": [
-              "preparing",
-              "queued",
-              "starting",
-              "running",
-              "waiting",
-              "failed"
-            ]
+            "statuses": ["preparing", "queued", "starting", "running", "waiting", "failed"]
           }
         }
       ],
@@ -4871,9 +4836,7 @@
       "interruptions": [],
       "outcomeCorrect": true,
       "firstActionRight": true,
-      "confusion": [
-        "Guessed a provider-specific skill path before reading the installed skill."
-      ],
+      "confusion": ["Guessed a provider-specific skill path before reading the installed skill."],
       "review": "Selected successful general-only run; validated against bed effects."
     },
     {
@@ -5178,9 +5141,7 @@
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": [
-        "mcp:8406a29a-5c96-47f0-b044-254b8cfa6607"
-      ],
+      "childThreadIds": ["mcp:8406a29a-5c96-47f0-b044-254b8cfa6607"],
       "selected": true,
       "callErrors": [],
       "interruptions": [],
@@ -5875,9 +5836,7 @@
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": [
-        "mcp:bb6cb221-ea49-4c0e-85d3-22b88d08feec"
-      ],
+      "childThreadIds": ["mcp:bb6cb221-ea49-4c0e-85d3-22b88d08feec"],
       "callErrors": [
         {
           "position": 10,
@@ -6087,9 +6046,7 @@
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": [
-        "mcp:9f16c4f3-a4dd-4820-92fe-ebf574250a67"
-      ],
+      "childThreadIds": ["mcp:9f16c4f3-a4dd-4820-92fe-ebf574250a67"],
       "selected": true,
       "callErrors": [],
       "interruptions": [],
@@ -6274,9 +6231,7 @@
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": [
-        "mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3"
-      ],
+      "childThreadIds": ["mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3"],
       "selected": true,
       "callErrors": [
         {
