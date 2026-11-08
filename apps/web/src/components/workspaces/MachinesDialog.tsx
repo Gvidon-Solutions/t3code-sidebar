@@ -2,10 +2,8 @@ import { AdoptReplicaAction } from "./AdoptReplicaAction";
 import { EnvironmentId } from "@t3tools/contracts";
 import { openOpenFileDialog } from "../files/openFileDialogState";
 import {
-  removeRepresentationCopy,
   representationCandidates,
   representationRow,
-  replicaLagText,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
@@ -15,6 +13,7 @@ import type {
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
 import { useState } from "react";
+import { CopyIcon } from "lucide-react";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -36,12 +35,27 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { MachineTag } from "./MachineTag";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export interface MachinesDialogMachine {
   readonly environmentId: string;
   readonly label: string;
   readonly disabled: boolean;
   readonly reason: string | null;
+}
+
+function plainCopyStatus(state: string, fallback: string): string {
+  if (state === "watching") return fallback === "Synced" ? "Synced" : fallback;
+  if (state === "mounting" || state === "pending") return "Copying files…";
+  if (state === "paused") return "Paused";
+  return fallback;
+}
+
+function middleEllipsis(value: string, max = 56): string {
+  if (value.length <= max) return value;
+  const head = Math.ceil((max - 1) / 2);
+  const tail = Math.floor((max - 1) / 2);
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
 }
 
 /** Fork: every representation of one logical project, with its machine, role and state. */
@@ -107,23 +121,36 @@ export function MachinesDialog(props: {
                         {machine.label}
                       </span>
                       <Badge variant={rep.role === "primary" ? "default" : "secondary"}>
-                        {rep.role === "primary" ? "Primary" : "Replica"}
+                        {rep.role === "primary" ? "Main" : "Copy"}
                       </Badge>
                     </div>
-                    <div className="break-all font-mono text-2xs text-muted-foreground">
-                      {rep.path}
+                    <div className="flex min-w-0 items-center gap-1">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className="min-w-0 flex-1 truncate font-mono text-2xs text-muted-foreground" />
+                          }
+                        >
+                          {middleEllipsis(rep.path)}
+                        </TooltipTrigger>
+                        <TooltipPopup>{rep.path}</TooltipPopup>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label="Copy path"
+                              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                              onClick={() => void navigator.clipboard.writeText(rep.path)}
+                            />
+                          }
+                        >
+                          <CopyIcon className="size-3" aria-hidden />
+                        </TooltipTrigger>
+                        <TooltipPopup>Copy path</TooltipPopup>
+                      </Tooltip>
                     </div>
-                    {rep.role === "replica" ? (
-                      <span className="text-xs text-muted-foreground">
-                        {replicaLagText(
-                          props.liveStatuses.find(
-                            (item) =>
-                              item.environmentId === rep.environmentId &&
-                              item.logicalKey === props.logicalKey,
-                          )?.lag,
-                        )}
-                      </span>
-                    ) : null}
                     {status.status.skippedPaths?.length ? (
                       <ul
                         aria-label="Skipped files"
@@ -144,11 +171,10 @@ export function MachinesDialog(props: {
                             : "text-muted-foreground"
                         }
                       >
-                        {status.text}
+                        {copies
+                          ? `${status.status.conflicts || 1} conflict${(status.status.conflicts || 1) === 1 ? "" : "s"} resolved (copies kept)`
+                          : plainCopyStatus(status.status.state, status.text)}
                       </span>
-                      {copies && !status.text.startsWith("Resolved ") ? (
-                        <span className="text-muted-foreground">Last automatic resolution</span>
-                      ) : null}
                       {copies
                         ? (copies.locations ?? [copies]).map((location) => (
                             <Button
@@ -181,7 +207,7 @@ export function MachinesDialog(props: {
                           variant="outline"
                           onClick={() => props.onMakePrimary(rep.environmentId)}
                         >
-                          Make primary
+                          Make main copy
                         </Button>
                       ) : null}
                       {status.retry ? (
@@ -243,22 +269,47 @@ export function MachinesDialog(props: {
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>{removeRepresentationCopy(removingRole).title}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {removingRole === "primary" ? "Remove the main copy?" : "Remove this copy?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {removeRepresentationCopy(removingRole).message}
+              {removingRole === "replica"
+                ? "Synchronization stops and this copy is removed from the project. Files already on the machine stay where they are."
+                : reps.find((rep) => rep.role === "replica") === undefined
+                  ? "Removing the main copy leaves the project on this machine only as an ordinary folder."
+                  : "The main copy runs git and builds. Make another copy the main copy first, then remove this one."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-            <AlertDialogClose
-              render={<Button variant="destructive" />}
-              onClick={() => {
-                if (removing !== null) props.onRemove(removing);
-                setRemoving(null);
-              }}
-            >
-              Remove
-            </AlertDialogClose>
+            {removingRole === "primary" && reps.some((rep) => rep.role === "replica") ? (
+              reps
+                .filter((rep) => rep.role === "replica")
+                .map((rep) => (
+                  <AlertDialogClose
+                    key={rep.environmentId}
+                    render={<Button variant="default" />}
+                    onClick={() => {
+                      props.onMakePrimary(rep.environmentId);
+                      setRemoving(null);
+                    }}
+                  >
+                    Make{" "}
+                    {machineDisplayOf(props.config, rep.environmentId, rep.environmentId).label} the
+                    main copy
+                  </AlertDialogClose>
+                ))
+            ) : (
+              <AlertDialogClose
+                render={<Button variant="destructive" />}
+                onClick={() => {
+                  if (removing !== null) props.onRemove(removing);
+                  setRemoving(null);
+                }}
+              >
+                Remove
+              </AlertDialogClose>
+            )}
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>

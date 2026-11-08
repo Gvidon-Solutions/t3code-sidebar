@@ -1,29 +1,25 @@
 import { Button } from "../../components/ui/Button";
 import { Sheet } from "../../components/ui/Sheet";
 import { useReplicaStatuses } from "../../state/meshReplicas";
-import { useEnvironmentQuery } from "../../state/query";
-import { meshLayoutAtoms } from "../../state/mesh-layout";
 import { useNowMinuteMs } from "../../lib/clock";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import {
-  meshConnectionText,
   offlineMachineText,
   meshMachineDetailRows,
-  meshConfigApplyGroups,
-  meshConfigHistory,
   partitionMeshMachines,
   forgetMachineFacts,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import { useMeshOverview } from "../workspaces/useMeshOverview";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { MeshLinkForm } from "./MeshLinkForm";
-import { MeshConfigSheet } from "./MeshConfigSheet";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { AppText } from "../../components/ui/AppText";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
+import { meshProjectRows, meshSetupPrompt } from "@t3tools/client-runtime/state/mesh-machines";
+import * as Linking from "expo-linking";
 
 export function SettingsMachinesRouteScreen() {
   const mesh = useMeshLayout();
@@ -36,24 +32,30 @@ export function SettingsMachinesRouteScreen() {
     now,
   );
   const [forgottenOpen, setForgottenOpen] = useState(false);
-  const applyStatus = useEnvironmentQuery(
-    mesh.source ? meshLayoutAtoms.configStatus({ environmentId: mesh.source, input: {} }) : null,
-  );
   const [linkOpen, setLinkOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const live = useReplicaStatuses();
   const base = config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
   const selected = machines.find((machine) => machine.environmentId === detail);
-  const groups = meshConfigApplyGroups(
-    applyStatus.data,
-    meshConfigHistory(mesh.state?.snapshot?.document ?? {}),
-    now,
-  );
   const online = (machine: (typeof machines)[number]) =>
     machine.connectedHere ||
     machine.network?.state === "direct" ||
     machine.network?.state === "relayed";
+  const statusOf = (machine: (typeof machines)[number]) =>
+    online(machine)
+      ? machine.network?.state === "relayed"
+        ? "Online through another machine"
+        : "Online"
+      : (offlineMachineText(machine.lastSeenAt) ?? "Offline");
+  const setupPrompt = meshSetupPrompt(
+    machines.map((machine) => ({
+      label: machine.label,
+      online: online(machine),
+      detail: statusOf(machine),
+    })),
+    machines.filter((machine) => !online(machine)).map((machine) => `${machine.label} is offline`),
+  );
   return (
     <SettingsScreen title="Mesh">
       <ScreenScrollView contentContainerClassName="gap-3 px-5 py-4">
@@ -62,10 +64,13 @@ export function SettingsMachinesRouteScreen() {
         >
           <View className="flex-row flex-wrap gap-2 p-4">
             <Button
-              label="Edit config"
+              label="Set up the mesh with an agent"
               tone="primary"
-              disabled={mesh.source === null}
-              onPress={() => setEditing(true)}
+              onPress={() =>
+                void Linking.openURL(
+                  Linking.createURL("new", { queryParams: { prompt: setupPrompt } }),
+                )
+              }
             />
             <Button
               label="Link a machine"
@@ -96,55 +101,44 @@ export function SettingsMachinesRouteScreen() {
                 />
                 <AppText
                   numberOfLines={1}
-                  style={{ maxWidth: 110 }}
+                  style={{ maxWidth: 235 }}
                   className="text-xs text-foreground-muted"
                 >
-                  {online(machine)
-                    ? machine.network?.state === "relayed"
-                      ? meshConnectionText(machine, machines)
-                      : "Online"
-                    : (meshConnectionText(machine, machines) ??
-                      offlineMachineText(machine.lastSeenAt))}
-                </AppText>
-                <AppText numberOfLines={1} className="text-xs text-foreground-muted">
-                  {[machine.version, machine.platform?.os].filter(Boolean).join(" · ")}
+                  {statusOf(machine)}
                 </AppText>
                 <AppText>›</AppText>
               </Pressable>
-              {machine.unnamed ? (
-                <View className="px-4 pb-2">
-                  <Button label="Name it in config" tone="text" onPress={() => setEditing(true)} />
-                </View>
-              ) : null}
             </View>
           ))}
         </SettingsSection>
         {selected ? (
-          <Sheet title={selected.label} onClose={() => setDetail(null)}>
+          <Sheet title={selected.label} onClose={() => setDetail(null)} opaqueHeader>
             <ScreenScrollView contentContainerClassName="gap-3 p-5">
               <AppText>
-                Reach path:{" "}
-                {meshConnectionText(selected, machines) ??
-                  (online(selected) ? "Connected directly" : "Offline")}
+                {online(selected)
+                  ? selected.network?.state === "relayed"
+                    ? "Online through another machine"
+                    : "Online"
+                  : (offlineMachineText(selected.lastSeenAt) ?? "Offline")}
               </AppText>
-              {selected.lastError ? (
-                <AppText accessibilityRole="alert">{selected.lastError}</AppText>
-              ) : null}
-              {meshMachineDetailRows(selected, base, live).map((row) => (
-                <View key={row.label}>
-                  <AppText className="text-xs text-foreground-muted">{row.label}</AppText>
-                  <AppText>{row.value}</AppText>
-                </View>
-              ))}
-              {selected.unnamed ? (
-                <Button
-                  label="Name it in config"
-                  onPress={() => {
-                    setDetail(null);
-                    setEditing(true);
-                  }}
-                />
-              ) : null}
+              <View className="gap-2">
+                {meshProjectRows(base, selected.environmentId).map((row) => (
+                  <AppText key={row.key}>{row.sentence}</AppText>
+                ))}
+              </View>
+              <Button
+                label={diagnosticsOpen ? "Hide diagnostics" : "Diagnostics"}
+                tone="text"
+                onPress={() => setDiagnosticsOpen(!diagnosticsOpen)}
+              />
+              {diagnosticsOpen
+                ? meshMachineDetailRows(selected, base, live).map((row) => (
+                    <View key={row.label}>
+                      <AppText className="text-xs text-foreground-muted">{row.label}</AppText>
+                      <AppText accessibilityHint={row.exact || undefined}>{row.value}</AppText>
+                    </View>
+                  ))
+                : null}
             </ScreenScrollView>
           </Sheet>
         ) : null}
@@ -176,37 +170,6 @@ export function SettingsMachinesRouteScreen() {
                 ))
               : null}
           </SettingsSection>
-        ) : null}
-        {applyStatus.error ? (
-          <AppText accessibilityRole="alert">{applyStatus.error}</AppText>
-        ) : null}
-        {groups.map((group) => (
-          <SettingsSection key={group.revision} title={group.title}>
-            <View className="gap-3 p-4">
-              {group.actions.map((action) => (
-                <View key={`${action.server}:${action.id}`}>
-                  <AppText>
-                    {action.description} ·{" "}
-                    {action.state === "in_progress"
-                      ? "In progress"
-                      : action.state === "done"
-                        ? "Done"
-                        : "Failed"}
-                  </AppText>
-                  {action.reason ? (
-                    <AppText className="text-xs text-foreground-muted">{action.reason}</AppText>
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          </SettingsSection>
-        ))}
-        {editing && mesh.source ? (
-          <MeshConfigSheet
-            key={mesh.source}
-            environmentId={mesh.source}
-            onClose={() => setEditing(false)}
-          />
         ) : null}
       </ScreenScrollView>
     </SettingsScreen>

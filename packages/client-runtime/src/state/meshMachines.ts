@@ -413,18 +413,6 @@ export async function linkMeshMachines<A>(input: {
   });
 }
 
-export function meshConnectionText(
-  machine: Pick<MeshMachine, "network">,
-  machines: readonly Pick<MeshMachine, "environmentId" | "label">[],
-): string | null {
-  const state = machine.network;
-  if (!state) return null;
-  if (state.state === "direct") return "Connected directly";
-  if (state.state === "relayed")
-    return `Via ${machines.find((item) => item.environmentId === state.via)?.label ?? "linked machine"}`;
-  return offlineMachineText(state.offlineSince);
-}
-
 export function partitionMeshMachines(
   machines: readonly MeshMachine[],
   config: Pick<SidebarWorkspacesConfig, "machines">,
@@ -518,4 +506,72 @@ export function offlineMachineText(
   if (elapsed < 3_600_000) return `offline ${Math.floor(elapsed / 60_000)} min`;
   if (elapsed < 86_400_000) return `offline ${Math.floor(elapsed / 3_600_000)} h`;
   return `offline ${Math.floor(elapsed / 86_400_000)} d`;
+}
+
+export interface MeshProjectRow {
+  readonly key: string;
+  readonly title: string;
+  readonly sentence: string;
+  readonly canRetry: boolean;
+}
+
+/** The copies of projects on one machine, in plain words with no file or byte counts. */
+export function meshProjectRows(
+  config: SidebarWorkspacesConfig,
+  environmentId: string,
+): MeshProjectRow[] {
+  return Object.entries(config.projectMounts).flatMap(([key, reps]) =>
+    reps
+      .filter((rep) => rep.environmentId === environmentId)
+      .map((rep) => {
+        const title = config.projectTitles[key] ?? "Project";
+        if (rep.role === "primary")
+          return { key, title, sentence: `${title} · main copy`, canRetry: false };
+        const state = config.projectMountStatus[key]?.[environmentId]?.state;
+        const source = rep.source
+          ? machineDisplayOf(config, rep.source, rep.source).label
+          : "its main copy";
+        if (state === "watching")
+          return { key, title, sentence: `${title} · copy synced`, canRetry: false };
+        if (state === "mounting" || state === "pending")
+          return { key, title, sentence: `${title} · copying files…`, canRetry: false };
+        if (state === "conflict")
+          return {
+            key,
+            title,
+            sentence: `${title} · copies kept after a conflict`,
+            canRetry: false,
+          };
+        if (state === "error")
+          return { key, title, sentence: `${title} · can't reach ${source}`, canRetry: true };
+        return { key, title, sentence: `${title} · out of sync`, canRetry: false };
+      }),
+  );
+}
+
+export interface MeshPromptMachine {
+  readonly label: string;
+  readonly online: boolean;
+  readonly detail?: string | null;
+}
+
+/** A prepared request for the mesh setup thread: current state, problems and the controls. */
+export function meshSetupPrompt(
+  machines: ReadonlyArray<MeshPromptMachine>,
+  problems: ReadonlyArray<string> = [],
+): string {
+  const list = machines.map(
+    (machine) => `${machine.label} (${machine.online ? "online" : (machine.detail ?? "offline")})`,
+  );
+  return [
+    "Help me set up my T3 mesh.",
+    "",
+    `Machines: ${list.length > 0 ? list.join(", ") : "none yet"}.`,
+    problems.length > 0
+      ? `Problems:\n${problems.map((problem) => `- ${problem}`).join("\n")}`
+      : "No known problems.",
+    "",
+    "The desired state lives in one mesh config. You can read it with `t3ctl mesh config get`, preview with `t3ctl mesh config plan`, apply with `t3ctl mesh config apply`, and check reconciliation with `t3ctl mesh status`. The same tools are available as MCP `t3_mesh_config_get`, `t3_mesh_config_plan`, `t3_mesh_config_apply` and `t3_mesh_status`.",
+    "Ask me what I want the mesh to do, then plan it, show me the plan, and apply it once I agree.",
+  ].join("\n");
 }

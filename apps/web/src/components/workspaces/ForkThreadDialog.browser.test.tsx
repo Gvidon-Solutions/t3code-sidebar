@@ -100,18 +100,18 @@ it("offers machine titles, explains unavailable models and loads an unconnected 
     // This dialog does not navigate.
     { router: false },
   );
-  await expect.element(screen.getByRole("heading", { name: "Fork to Studio" })).toBeInTheDocument();
+  await expect.element(screen.getByRole("heading", { name: "Fork to Laptop" })).toBeInTheDocument();
   const select = screen.getByRole("combobox", { name: "Fork target machine" });
   await userEvent.fill(select, "Cloudbox");
   await page.getByRole("option", { name: "Cloudbox", exact: true }).click();
   await expect
-    .element(screen.getByText("Could not load models on Cloudbox: Cloudbox is offline."))
+    .element(screen.getByText("Couldn't load models on Cloudbox. Try again."))
     .toBeInTheDocument();
   await expect.element(screen.getByRole("button", { name: "Fork to Cloudbox" })).toBeDisabled();
   await userEvent.fill(select, "Laptop");
   await page.getByRole("option", { name: "Laptop", exact: true }).click();
   await expect
-    .element(screen.getByText("No models are available on Laptop.").first())
+    .element(screen.getByText("No models are available on Laptop. Set one up there first.").first())
     .toBeInTheDocument();
   await expect.element(screen.getByRole("button", { name: "Fork to Laptop" })).toBeDisabled();
   await userEvent.fill(select, "Workshop");

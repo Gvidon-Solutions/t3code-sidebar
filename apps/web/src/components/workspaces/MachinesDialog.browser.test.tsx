@@ -63,9 +63,7 @@ it("opens the preserved versions on the losing machine from the last automatic r
     />,
     { router: false },
   );
-  await expect
-    .element(page.getByText("1 conflict resolved automatically · copies in .t3-conflicts"))
-    .toBeVisible();
+  await expect.element(page.getByText("1 conflict resolved (copies kept)")).toBeVisible();
   await userEvent.click(page.getByRole("button", { name: "Open copies on replica" }));
   expect(onOpenChange).toHaveBeenCalledWith(false);
   expect(useOpenFileDialogStore.getState().initialEnvironmentId).toBe(
@@ -104,13 +102,13 @@ it("confirms the actual primary or replica being removed, with cancellation pres
     .element(page.getByRole("button", { name: "Adopt", exact: true }))
     .not.toBeInTheDocument();
   await userEvent.click(page.getByRole("button", { name: "Remove", exact: true }));
-  await expect.element(page.getByText("Remove this primary?", { exact: true })).toBeVisible();
+  await expect.element(page.getByText("Remove the main copy?", { exact: true })).toBeVisible();
   await expect
-    .element(page.getByText(/leaves replicas without their git and build machine/))
+    .element(page.getByText(/leaves the project on this machine only as an ordinary folder/))
     .toBeVisible();
   await userEvent.click(page.getByRole("button", { name: "Cancel", exact: true }));
   await expect
-    .element(page.getByText("Remove this primary?", { exact: true }))
+    .element(page.getByText("Remove the main copy?", { exact: true }))
     .not.toBeInTheDocument();
   expect(remove).not.toHaveBeenCalled();
   await screen.rerender(
@@ -125,10 +123,10 @@ it("confirms the actual primary or replica being removed, with cancellation pres
     />,
   );
   await userEvent.click(page.getByRole("button", { name: "Remove", exact: true }));
-  await expect.element(page.getByText("Remove this replica?", { exact: true })).toBeVisible();
+  await expect.element(page.getByText("Remove this copy?", { exact: true })).toBeVisible();
   await userEvent.click(page.getByRole("button", { name: "Cancel", exact: true }));
   await expect
-    .element(page.getByText("Remove this replica?", { exact: true }))
+    .element(page.getByText("Remove this copy?", { exact: true }))
     .not.toBeInTheDocument();
   expect(remove).not.toHaveBeenCalled();
 });

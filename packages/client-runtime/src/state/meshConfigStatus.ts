@@ -1,25 +1,15 @@
 import {
-  MeshConfigRevision,
+  type MeshConfigRevision,
   type MeshConfigStatus,
   type SidebarWorkspacesConfig,
   type ReplicaLiveStatus,
 } from "@t3tools/contracts";
-import * as Schema from "effect/Schema";
+import * as DateTime from "effect/DateTime";
 import { machineDisplayOf } from "./machineDisplay.ts";
 import type { MeshMachine } from "./meshMachines.ts";
 
-const isRevision = Schema.is(MeshConfigRevision);
 function readableReason(message: string) {
   return message.replaceAll("Unknown machine (UN)", "Unnamed machine");
-}
-export function meshConfigHistory(
-  document: Readonly<Record<string, { readonly v: unknown }>>,
-): MeshConfigRevision[] {
-  const revisions = new Map<string, MeshConfigRevision>();
-  for (const [key, entry] of Object.entries(document))
-    if ((key === "mesh.config" || key.startsWith("mesh.configHistory/")) && isRevision(entry.v))
-      revisions.set(entry.v.revision, entry.v);
-  return [...revisions.values()].sort((a, b) => a.writtenAt.localeCompare(b.writtenAt));
 }
 function relativeTime(at: string, now: number) {
   const minutes = Math.max(0, Math.floor((now - Date.parse(at)) / 60_000));
@@ -75,36 +65,73 @@ export function meshConfigApplyGroups(
   }
   return [...groups.values()].reverse();
 }
-export function meshMachineDetailRows(
+export interface MeshMachineDetailRow {
+  readonly label: string;
+  readonly value: string;
+  /** Exact ISO time behind a relative "checked ..." phrase. */
+  readonly exact?: string;
+}
+
+function plainReplicaState(
+  key: string,
   machine: MeshMachine,
   config: SidebarWorkspacesConfig,
   live: readonly ReplicaLiveStatus[],
 ) {
-  const rows: { label: string; value: string }[] = [];
+  const current = live.find(
+    (item) => item.environmentId === machine.environmentId && item.logicalKey === key,
+  );
+  const stored = config.projectMountStatus[key]?.[machine.environmentId];
+  const state = current?.state ?? stored?.state ?? "pending";
+  const rep = config.projectMounts[key]?.find(
+    (candidate) => candidate.environmentId === machine.environmentId,
+  );
+  const source = rep?.source
+    ? machineDisplayOf(config, rep.source, "the main copy").label
+    : "the main copy";
+  const message = current?.message ?? stored?.message ?? null;
+  const skipped = current?.skipped ?? stored?.skipped;
+  const value =
+    state === "watching"
+      ? message === "Manual copy"
+        ? "Not synced automatically"
+        : `Sync running${skipped ? ` · ${skipped} ${skipped === 1 ? "file" : "files"} skipped` : ""}`
+      : state === "paused"
+        ? "Sync paused"
+        : state === "mounting" || state === "pending"
+          ? "Copying files"
+          : state === "error"
+            ? `Can't reach ${source}`
+            : state === "conflict"
+              ? "Conflicts resolved"
+              : state === "removed"
+                ? "Removed"
+                : "Sync state unknown";
+  return { value, exact: current?.updatedAt ?? stored?.updatedAt ?? "" };
+}
+
+export function meshMachineDetailRows(
+  machine: MeshMachine,
+  config: SidebarWorkspacesConfig,
+  live: readonly ReplicaLiveStatus[],
+  now = DateTime.toEpochMillis(DateTime.nowUnsafe()),
+): MeshMachineDetailRow[] {
+  const rows: MeshMachineDetailRow[] = [];
   for (const [target, route] of Object.entries(
     config.machines[machine.environmentId]?.reported?.sshRoutes ?? {},
   ))
     rows.push({
       label: `SSH to ${machineDisplayOf(config, target, "").label}`,
-      value: `${route.status === "ok" ? "OK" : route.status === "failed" ? "Failed" : "Unknown"}${route.reason ? ` · ${route.reason}` : ""} · checked ${route.checkedAt}`,
+      value: `${route.status === "ok" ? "OK" : route.status === "failed" ? "Failed" : "Unknown"}${route.reason ? ` · ${route.reason}` : ""} · checked ${relativeTime(route.checkedAt, now)}`,
+      exact: route.checkedAt,
     });
   if (!rows.length) rows.push({ label: "SSH routes", value: "Not reported" });
   for (const [key, reps] of Object.entries(config.projectMounts))
     for (const rep of reps) {
       if (rep.environmentId !== machine.environmentId || rep.role !== "replica") continue;
-      const current = live.find(
-        (item) => item.environmentId === machine.environmentId && item.logicalKey === key,
-      );
-      const stored = config.projectMountStatus[key]?.[machine.environmentId];
-      const lag = current?.lag;
-      const reason = readableReason(
-        [current?.message ?? stored?.message, ...(current?.problems ?? [])]
-          .filter(Boolean)
-          .join(" · "),
-      );
       rows.push({
         label: config.projectTitles[key] ?? "Project replica",
-        value: `${current?.state ?? stored?.state ?? "Unknown"} · ${lag ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}` : "Lag not reported"}${reason ? ` · ${reason}` : ""}`,
+        ...plainReplicaState(key, machine, config, live),
       });
     }
   return rows;

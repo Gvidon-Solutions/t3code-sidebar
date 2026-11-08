@@ -98,7 +98,7 @@ describe("mobilePendingReplicaItems", () => {
     expect(items[0]).toMatchObject({
       tag: "BO",
       label: "Boreal",
-      text: "Mounting on Boreal… 42%",
+      text: "Copying files to Boreal… 42%",
       retryEnvironmentId: "beta",
     });
   });

@@ -24,6 +24,7 @@ import {
   replicaExecutionLabel,
   replicaLagText,
   unmanagedSessionLabel,
+  replicaStatusDetail,
 } from "./replicas.ts";
 
 const primary = (environmentId: string, path = "/work/demo"): SidebarProjectMount => ({
@@ -324,9 +325,14 @@ describe("replicaStatusCopy", () => {
   };
   it("names the machine and the percentage while mounting", () => {
     expect(replicaStatusCopy({ ...base, state: "mounting", progress: 0.42 })).toBe(
-      "Mounting on Boreal… 42%",
+      "Copying files to Boreal… 42%",
     );
-    expect(replicaStatusCopy({ ...base, state: "mounting" })).toBe("Mounting on Boreal…");
+    expect(replicaStatusCopy({ ...base, state: "mounting" })).toBe("Copying files to Boreal…");
+  });
+  it("explains a manual copy instead of repeating the server phrase", () => {
+    expect(replicaStatusCopy({ ...base, state: "watching", message: "Manual copy" })).toBe(
+      "Not synced automatically",
+    );
   });
   it("says Synced, counts conflicts and pluralizes", () => {
     expect(replicaStatusCopy({ ...base, state: "watching" })).toBe("Synced");
@@ -336,6 +342,13 @@ describe("replicaStatusCopy", () => {
   it("turns unreachable errors into the Settings › Mesh route hint", () => {
     expect(
       replicaStatusCopy({
+        ...base,
+        state: "error",
+        message: "Boreal cannot reach atlas and back. Add an ssh route.",
+      }),
+    ).toBe("Can't reach atlas");
+    expect(
+      replicaStatusDetail({
         ...base,
         state: "error",
         message: "Boreal cannot reach atlas and back. Add an ssh route.",

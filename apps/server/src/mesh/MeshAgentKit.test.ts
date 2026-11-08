@@ -101,9 +101,7 @@ it.effect(
           T3_MESH_AGENT_SOURCE: source,
         }),
         Effect.provideService(SpawnExecutableResolution, (command) =>
-          command === "codex" || command === "opencode"
-            ? `/usr/local/bin/${command}`
-            : undefined,
+          command === "codex" || command === "opencode" ? `/usr/local/bin/${command}` : undefined,
         ),
       );
       yield* kit.reconcile({ schema: 1, machines: { studio: { label: "ST" } } });
@@ -114,9 +112,7 @@ it.effect(
       );
       // Claude is not installed: our skill copy and managed block are gone, owner text stays.
       expect(yield* fs.exists(`${home}/.claude/skills/t3`)).toBe(false);
-      expect(yield* fs.readFileString(`${home}/.claude/CLAUDE.md`)).toBe(
-        "Owner note\n\nTail\n",
-      );
+      expect(yield* fs.readFileString(`${home}/.claude/CLAUDE.md`)).toBe("Owner note\n\nTail\n");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 

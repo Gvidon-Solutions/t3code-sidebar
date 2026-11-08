@@ -86,7 +86,15 @@ export function ForkThreadDialog(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const target = targetEnvironmentId ?? source.environmentId;
+  // Never default to the machine the thread already runs on when another can take it.
+  const defaultTarget =
+    environments.find(
+      (entry) =>
+        entry.environmentId !== source.environmentId && entry.connection.phase === "connected",
+    )?.environmentId ??
+    environments.find((entry) => entry.environmentId !== source.environmentId)?.environmentId ??
+    source.environmentId;
+  const target = targetEnvironmentId ?? defaultTarget;
   const connected = environments.some(
     (entry) => entry.environmentId === target && entry.connection.phase === "connected",
   );
@@ -149,17 +157,11 @@ export function ForkThreadDialog(props: {
     : loadingModels
       ? null
       : !connected && catalog?.error
-        ? `Could not load models on ${displayMachine(target).title}: ${catalog.error}`
+        ? `Couldn't load models on ${displayMachine(target).title}. Try again.`
         : !online
           ? `Choose a machine to load its models.`
           : choices.length === 0
-            ? [
-                `No models are available on ${displayMachine(target).title}.`,
-                ...providers
-                  .filter((provider) => provider.enabled && provider.message)
-                  .slice(0, 2)
-                  .map((provider) => provider.message),
-              ].join(" ")
+            ? `No models are available on ${displayMachine(target).title}. Set one up there first.`
             : null;
 
   if (!source.shell) return null;
@@ -270,7 +272,11 @@ export function ForkThreadDialog(props: {
                 <ComboboxPopup>
                   <ComboboxList>
                     {(machine: (typeof machines)[number]) => (
-                      <ComboboxItem key={machine.environmentId} value={machine}>
+                      <ComboboxItem
+                        key={machine.environmentId}
+                        value={machine}
+                        disabled={machine.unavailable}
+                      >
                         {machine.title}
                         {machine.unavailable ? " (unavailable)" : ""}
                       </ComboboxItem>
@@ -294,20 +300,9 @@ export function ForkThreadDialog(props: {
               <p role="status">Loading models on {displayMachine(target).title}…</p>
             ) : null}
             {noModelsReason ? (
-              <div className="space-y-2 text-sm">
-                <p className="text-destructive">
-                  {choices.length === 0 && online
-                    ? `No models are available on ${displayMachine(target).title}.`
-                    : `Could not load models on ${displayMachine(target).title}.`}
-                </p>
-                <details>
-                  <summary>Details</summary>
-                  <p>{noModelsReason}</p>
-                </details>
-                <a className="underline" href="/settings/providers">
-                  Open provider settings
-                </a>
-              </div>
+              <p role="status" className="text-sm text-destructive">
+                {noModelsReason}
+              </p>
             ) : initial && selectedEntry ? (
               <div className="flex min-h-10 items-center justify-between gap-3">
                 <span className="text-sm">Model</span>

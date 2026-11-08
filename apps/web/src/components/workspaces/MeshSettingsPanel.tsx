@@ -1,17 +1,11 @@
 import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
 import { useReplicaStatuses } from "../../state/meshReplicas";
-import { useEnvironmentQuery } from "../../state/query";
-import { meshLayoutAtoms } from "../../state/meshLayout";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { useNowMinute } from "../../hooks/useNowMinute";
-import { MeshConfigDialog } from "./MeshConfigDialog";
 import { linkRequestFailureMessage } from "@t3tools/client-runtime/link-request";
 import {
   linkMeshMachines,
-  meshConfigHistory,
-  meshConfigApplyGroups,
   meshMachineDetailRows,
-  meshConnectionText,
   offlineMachineText,
   partitionMeshMachines,
   forgetMachineFacts,
@@ -34,6 +28,7 @@ import {
 } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
+import { useNavigate } from "@tanstack/react-router";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { useEnvironments } from "../../state/environments";
 import { SettingsPageContainer, SettingsSection } from "../settings/settingsLayout";
@@ -52,7 +47,21 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { MachineTag } from "./MachineTag";
-import { linkSourceOptions, linkTargetOptions } from "./meshSettings.logic";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { meshProjectRows, meshSetupPrompt } from "@t3tools/client-runtime/state/mesh-machines";
+import {
+  linkSourceOptions,
+  linkTargetOptions,
+  meshUpdateProblems,
+  meshUpdatePrompt,
+  offlineMachinePrompt,
+  plainFailureText,
+  refusedLinkPrompt,
+  replicaProblemPrompt,
+  showsLinkSourcePicker,
+} from "./meshSettings.logic";
+import { AgentFixActions } from "./AgentFixActions";
 
 const failureToast = (title: string, description: string) =>
   toastManager.add(stackedThreadToast({ type: "error", title, description }));
@@ -81,6 +90,7 @@ function LinkWithDialog(props: {
   const [url, setUrl] = useState("");
   const [pairingCode, setPairingCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [linkFailure, setLinkFailure] = useState<string | null>(null);
   const targetMachine = props.machines.find((machine) => machine.environmentId === target) ?? null;
   const targetEnvironmentId = (targetMachine?.environmentId as EnvironmentId | undefined) ?? null;
   const connected = usePreparedConnection(targetEnvironmentId);
@@ -103,6 +113,7 @@ function LinkWithDialog(props: {
   const submit = async () => {
     if (!ready || selectedSource === null) return;
     setBusy(true);
+    setLinkFailure(null);
     try {
       const result = await linkMeshMachines({
         source: selectedSource,
@@ -129,10 +140,14 @@ function LinkWithDialog(props: {
         reset();
         props.onOpenChange(false);
       } else if (!isAtomCommandInterrupted(result)) {
-        failureToast("Could not link the machine", String(squashAtomCommandFailure(result)));
+        const reason = plainFailureText(squashAtomCommandFailure(result));
+        setLinkFailure(reason);
+        failureToast("Couldn't link", reason);
       }
     } catch (error) {
-      failureToast("Could not link the machine", String(error));
+      const reason = plainFailureText(error);
+      setLinkFailure(reason);
+      failureToast("Couldn't link", reason);
     }
     setBusy(false);
   };
@@ -154,32 +169,34 @@ function LinkWithDialog(props: {
         </DialogHeader>
         <DialogPanel>
           <div className="space-y-4">
-            <label className="block space-y-1.5">
-              <span className="block text-xs font-medium text-foreground">Link from</span>
-              <Select
-                value={selectedSource}
-                onValueChange={(value) => {
-                  setSource(value as EnvironmentId);
-                  reset();
-                }}
-              >
-                <SelectTrigger aria-label="Link from">
-                  <SelectValue>
-                    {(value: EnvironmentId | null) =>
-                      props.sources.find((entry) => entry.environmentId === value)?.label ??
-                      "Pick a machine"
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup>
-                  {props.sources.map((entry) => (
-                    <SelectItem key={entry.environmentId} value={entry.environmentId}>
-                      {entry.label}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </label>
+            {showsLinkSourcePicker(props.sources) ? (
+              <label className="block space-y-1.5">
+                <span className="block text-xs font-medium text-foreground">Link from</span>
+                <Select
+                  value={selectedSource}
+                  onValueChange={(value) => {
+                    setSource(value as EnvironmentId);
+                    reset();
+                  }}
+                >
+                  <SelectTrigger aria-label="Link from">
+                    <SelectValue>
+                      {(value: EnvironmentId | null) =>
+                        props.sources.find((entry) => entry.environmentId === value)?.label ??
+                        "Pick a machine"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {props.sources.map((entry) => (
+                      <SelectItem key={entry.environmentId} value={entry.environmentId}>
+                        {entry.label}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </label>
+            ) : null}
             <label className="block space-y-1.5">
               <span className="block text-xs font-medium text-foreground">Link to</span>
               <Select
@@ -249,6 +266,22 @@ function LinkWithDialog(props: {
             )}
           </div>
         </DialogPanel>
+        {linkFailure ? (
+          <div className="px-6 pb-2">
+            <p role="alert" className="text-sm text-destructive">
+              Couldn't link: {linkFailure}
+            </p>
+            <AgentFixActions
+              prompt={refusedLinkPrompt({
+                source:
+                  props.sources.find((entry) => entry.environmentId === selectedSource)?.label ??
+                  "this machine",
+                target: targetMachine?.label ?? url,
+                reason: linkFailure,
+              })}
+            />
+          </div>
+        ) : null}
         <DialogFooter variant="bare">
           <DialogClose disabled={busy} render={<Button variant="outline" type="button" />}>
             Cancel
@@ -264,6 +297,7 @@ function LinkWithDialog(props: {
 
 export function MeshSettingsPanel() {
   const mesh = useMeshLayout();
+  const navigate = useNavigate();
   const { machines: allMachines } = useMeshOverview({ config: mesh.config });
   const now = minuteTickToEpochMs(useNowMinute());
   const { active: machines, forgotten } = partitionMeshMachines(
@@ -272,33 +306,45 @@ export function MeshSettingsPanel() {
     now,
   );
   const sources = usePermittedLinkSources();
-  const applyStatus = useEnvironmentQuery(
-    mesh.source ? meshLayoutAtoms.configStatus({ environmentId: mesh.source, input: {} }) : null,
-  );
   const [linkOpen, setLinkOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   const live = useReplicaStatuses();
   const config = mesh.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
   const selected = machines.find((machine) => machine.environmentId === detail);
-  const groups = meshConfigApplyGroups(
-    applyStatus.data,
-    meshConfigHistory(mesh.state?.snapshot?.document ?? {}),
-    now,
-  );
   const online = (machine: (typeof machines)[number]) =>
     machine.connectedHere ||
     machine.network?.state === "direct" ||
     machine.network?.state === "relayed";
+  const machineStatus = (machine: (typeof machines)[number]) =>
+    online(machine)
+      ? machine.network?.state === "relayed"
+        ? "Online through another machine"
+        : "Online"
+      : (offlineMachineText(machine.lastSeenAt) ?? "Offline");
+  const updateProblems = meshUpdateProblems(mesh.state?.snapshot?.document ?? {});
+  const problems = machines
+    .filter((machine) => !online(machine))
+    .map((machine) => `${machine.label} is offline`);
+  const setupPrompt = meshSetupPrompt(
+    machines.map((machine) => ({
+      label: machine.label,
+      online: online(machine),
+      detail: machineStatus(machine),
+    })),
+    problems,
+  );
+  const openAgent = (prompt: string) => {
+    void navigate({ to: "/new", search: { prompt } as never });
+  };
   return (
     <SettingsPageContainer>
       <SettingsSection
         title="Mesh"
         headerAction={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter(online).length} online`}
       >
-        <div className="flex gap-2 px-4 py-3">
-          <Button size="sm" disabled={mesh.source === null} onClick={() => setEditing(true)}>
-            Edit config
+        <div className="flex flex-wrap gap-2 px-4 py-3">
+          <Button size="sm" disabled={mesh.source === null} onClick={() => openAgent(setupPrompt)}>
+            Set up the mesh with an agent
           </Button>
           <Button
             size="sm"
@@ -320,33 +366,9 @@ export function MeshSettingsPanel() {
               >
                 <MachineTag machine={machine} />
                 <span className="min-w-0 flex-1 truncate font-medium">{machine.label}</span>
-                <span
-                  aria-hidden="true"
-                  className={`size-1.5 shrink-0 rounded-full ${online(machine) ? "bg-success" : "bg-muted-foreground"}`}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {online(machine)
-                    ? machine.network?.state === "relayed"
-                      ? meshConnectionText(machine, machines)
-                      : "Online"
-                    : (meshConnectionText(machine, machines) ??
-                      offlineMachineText(machine.lastSeenAt))}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {machine.version ?? "Version not reported"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {machine.platform?.os ?? "Platform not reported"}
-                </span>
+                <span className="text-xs text-muted-foreground">{machineStatus(machine)}</span>
                 <span aria-hidden="true">›</span>
               </button>
-              {machine.unnamed ? (
-                <div className="px-4 pb-2">
-                  <Button size="xs" variant="ghost" onClick={() => setEditing(true)}>
-                    Name it in config
-                  </Button>
-                </div>
-              ) : null}
             </li>
           ))}
         </ul>
@@ -361,41 +383,53 @@ export function MeshSettingsPanel() {
           <DialogPopup>
             <DialogHeader>
               <DialogTitle>{selected.label}</DialogTitle>
-              <DialogDescription>Machine details</DialogDescription>
+              <DialogDescription>{machineStatus(selected)}</DialogDescription>
             </DialogHeader>
             <DialogPanel>
-              <dl className="space-y-3 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">Reach path</dt>
-                  <dd>
-                    {meshConnectionText(selected, machines) ??
-                      (online(selected) ? "Connected directly" : "Offline")}
-                  </dd>
+              {!online(selected) ? (
+                <div className="mb-3 space-y-2 rounded-lg border border-border/60 p-3">
+                  <p className="text-sm text-muted-foreground">
+                    {selected.label} · {machineStatus(selected)}
+                  </p>
+                  <AgentFixActions
+                    prompt={offlineMachinePrompt(selected.label, machineStatus(selected))}
+                  />
                 </div>
-                {selected.lastError ? (
-                  <div>
-                    <dt>Last error</dt>
-                    <dd role="alert">{selected.lastError}</dd>
-                  </div>
-                ) : null}
-                {meshMachineDetailRows(selected, config, live).map((row) => (
-                  <div key={row.label}>
-                    <dt className="text-muted-foreground">{row.label}</dt>
-                    <dd>{row.value}</dd>
-                  </div>
-                ))}
-              </dl>
-              {selected.unnamed ? (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDetail(null);
-                    setEditing(true);
-                  }}
-                >
-                  Name it in config
-                </Button>
               ) : null}
+              <ul className="space-y-2 text-sm">
+                {meshProjectRows(config, selected.environmentId).map((project) => (
+                  <li key={project.key} className="flex flex-wrap items-center gap-2">
+                    <span className="min-w-0 flex-1">{project.sentence}</span>
+                    {project.canRetry ? (
+                      <AgentFixActions
+                        prompt={replicaProblemPrompt(project.title, selected.label)}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs text-muted-foreground">
+                  Diagnostics
+                </summary>
+                <dl className="mt-2 space-y-2 text-xs text-muted-foreground">
+                  {meshMachineDetailRows(selected, config, live).map((row) => (
+                    <div key={row.label}>
+                      <dt>{row.label}</dt>
+                      <dd>
+                        {row.exact ? (
+                          <Tooltip>
+                            <TooltipTrigger render={<span />}>{row.value}</TooltipTrigger>
+                            <TooltipPopup>{row.exact}</TooltipPopup>
+                          </Tooltip>
+                        ) : (
+                          row.value
+                        )}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
             </DialogPanel>
           </DialogPopup>
         </Dialog>
@@ -408,7 +442,7 @@ export function MeshSettingsPanel() {
               key={machine.environmentId}
               className="flex items-center justify-between px-4 py-2"
             >
-              <span>{machine.label}</span>
+              <span>{machine.label} · forgotten</span>
               <Button
                 size="xs"
                 variant="outline"
@@ -422,28 +456,27 @@ export function MeshSettingsPanel() {
           ))}
         </details>
       ) : null}
-      {applyStatus.error ? <p role="alert">{applyStatus.error}</p> : null}
-      {groups.map((group) => (
-        <SettingsSection key={group.revision} title={group.title}>
-          <ul className="space-y-2 px-4 py-3 text-sm">
-            {group.actions.map((action) => (
-              <li key={`${action.server}:${action.id}`}>
-                <span>
-                  {action.description} ·{" "}
-                  {action.state === "in_progress"
-                    ? "In progress"
-                    : action.state === "done"
-                      ? "Done"
-                      : "Failed"}
-                </span>
-                {action.reason ? (
-                  <p className="text-xs text-muted-foreground">{action.reason}</p>
-                ) : null}
-              </li>
-            ))}
+      {updateProblems.length > 0 ? (
+        <SettingsSection title="Problems">
+          <ul className="space-y-3 px-4 py-3 text-sm">
+            {updateProblems.map((problem) => {
+              const label = machineDisplayOf(
+                config,
+                problem.environmentId,
+                problem.environmentId,
+              ).label;
+              return (
+                <li key={problem.revision} className="space-y-2">
+                  <p>
+                    Update to {problem.target} failed on {label}: {problem.reason}
+                  </p>
+                  <AgentFixActions prompt={meshUpdatePrompt(problem, label)} />
+                </li>
+              );
+            })}
           </ul>
         </SettingsSection>
-      ))}
+      ) : null}
       <LinkWithDialog
         open={linkOpen}
         onOpenChange={setLinkOpen}
@@ -451,13 +484,6 @@ export function MeshSettingsPanel() {
         sources={sources}
         initialSource={sources[0]?.environmentId ?? null}
       />
-      {editing && mesh.source ? (
-        <MeshConfigDialog
-          key={mesh.source}
-          environmentId={mesh.source}
-          onClose={() => setEditing(false)}
-        />
-      ) : null}
     </SettingsPageContainer>
   );
 }
