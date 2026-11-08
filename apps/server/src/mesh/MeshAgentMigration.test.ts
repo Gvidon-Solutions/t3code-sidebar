@@ -13,7 +13,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "B1-migrate-" });
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-migrate-" });
       yield* fs.makeDirectory(`${home}/.agents/skills/t3/global`, { recursive: true });
       const legacy = "Private customer instructions\nKeep every byte.\n";
       yield* fs.writeFileString(`${home}/.agents/skills/t3/global/GLOBAL.md`, legacy);

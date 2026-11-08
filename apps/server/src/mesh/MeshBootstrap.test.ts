@@ -27,7 +27,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "B1-bootstrap-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-bootstrap-" });
       const calls: ProcessRunInput[] = [];
       let installed = false;
       let failProbe = true;

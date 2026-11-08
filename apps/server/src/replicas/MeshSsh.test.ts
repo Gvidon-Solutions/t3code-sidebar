@@ -20,7 +20,7 @@ it.live(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "s1-ssh-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-ssh-" });
       const home = path.join(root, "home");
       const calls: ProcessRunner.ProcessRunInput[] = [];
       let stderr = "";

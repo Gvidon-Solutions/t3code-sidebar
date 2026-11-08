@@ -26,7 +26,7 @@ type Row = {
 
 const ROWS: ReadonlyArray<Row> = [
   { id: "R1", fixture: "opencode2_nested_background", requireSettledSnapshots: true },
-  { id: "R1-compat", fixture: "opencode2_background", requireSettledSnapshots: true },
+  { id: "mesh-compat", fixture: "opencode2_background", requireSettledSnapshots: true },
   { id: "R2c-compat", fixture: "opencode2_resume_after_restart", requireSettledSnapshots: false },
   { id: "R2c-compat", fixture: "opencode2_interrupt", requireSettledSnapshots: false },
   { id: "R3", fixture: "opencode2_simple", requireSettledSnapshots: false },

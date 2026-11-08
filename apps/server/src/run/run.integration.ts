@@ -32,12 +32,12 @@ const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 const requireNative = NodeModule.createRequire(import.meta.url);
 const repo = NodePath.resolve(import.meta.dirname, "../../../..");
 const bin = NodePath.join(repo, "apps/server/src/bin.ts");
-const runtimeCommand = process.env.R1_RUN_BINARY ?? process.execPath;
-const runtimeArgs = process.env.R1_RUN_BINARY ? [] : [bin];
-const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "R1-run-integration-"));
+const runtimeCommand = process.env.MESH_E2E_RUN_BINARY ?? process.execPath;
+const runtimeArgs = process.env.MESH_E2E_RUN_BINARY ? [] : [bin];
+const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-run-integration-"));
 const primary = NodePath.join(root, "primary"),
   replica = NodePath.join(root, "replica");
-const container = `r1-run-${NodeCrypto.randomUUID().slice(0, 8)}`;
+const container = `mesh-run-${NodeCrypto.randomUUID().slice(0, 8)}`;
 let daemon: NodeChildProcess.ChildProcess | undefined;
 let disposeRuntime: (() => Promise<void>) | undefined;
 const daemonEnv = {
@@ -47,7 +47,7 @@ const daemonEnv = {
   MUTAGEN_SSH_PATH: NodePath.join(root, "ssh-bin"),
 };
 const sshConfig = NodePath.join(root, "ssh-config");
-const session = `R1-${NodeCrypto.randomUUID().slice(0, 8)}`;
+const session = `mesh-${NodeCrypto.randomUUID().slice(0, 8)}`;
 const pairs = new Set<NodeNet.Socket>();
 let blocked = false;
 const proxy = NodeNet.createServer();
@@ -155,7 +155,7 @@ try {
   await NodeFSP.chmod(NodePath.join(root, "home/.local/bin/uv"), 0o700);
   await NodeFSP.writeFile(
     NodePath.join(root, "home/.bash_profile"),
-    'export NVM_DIR="$HOME/.nvm"\n. "$NVM_DIR/nvm.sh" --no-use\nnvm use --silent v26.12.1\nexport PATH="$HOME/.local/bin:$PATH"\nexport R1_LOGIN_PROFILE=loaded\n',
+    'export NVM_DIR="$HOME/.nvm"\n. "$NVM_DIR/nvm.sh" --no-use\nnvm use --silent v26.12.1\nexport PATH="$HOME/.local/bin:$PATH"\nexport MESH_E2E_LOGIN_PROFILE=loaded\n',
   );
   await NodeFSP.writeFile(
     NodePath.join(root, "sshd_config"),
@@ -179,7 +179,7 @@ try {
     `type=bind,src=${root},dst=${root}`,
     "--mount",
     `type=bind,src=${repo},dst=${repo},readonly`,
-    process.env.R1_SSH_IMAGE ?? "t3-run-sshd-test:local",
+    process.env.MESH_E2E_SSH_IMAGE ?? "t3-run-sshd-test:local",
     "-f",
     NodePath.join(root, "sshd_config"),
   ]);
@@ -353,8 +353,8 @@ try {
     Effect.map(ProjectReplicaService, (service) => ({ get: Effect.succeed(service) })),
   ).pipe(Layer.provide(replicas));
   const runtimeInfo = {
-    command: process.env.R1_RUN_BINARY ?? "/usr/local/bin/node",
-    ...(process.env.R1_RUN_BINARY ? {} : { entrypoint: bin }),
+    command: process.env.MESH_E2E_RUN_BINARY ?? "/usr/local/bin/node",
+    ...(process.env.MESH_E2E_RUN_BINARY ? {} : { entrypoint: bin }),
     ptyModule: requireNative.resolve("node-pty"),
   };
   const peers = Layer.mock(PeerMcpClient)({
@@ -379,7 +379,7 @@ try {
     RunEnvironment.install().pipe(
       Effect.provideService(HostProcess.Arguments, [runtimeCommand, ...runtimeArgs]),
       Effect.provideService(HostProcess.ExecutablePath, runtimeCommand),
-      Effect.provideService(HostProcess.IsExecutable, Boolean(process.env.R1_RUN_BINARY)),
+      Effect.provideService(HostProcess.IsExecutable, Boolean(process.env.MESH_E2E_RUN_BINARY)),
       Effect.provideService(HostProcess.Environment, {
         ...process.env,
         T3_MESH_SSH_HOME: NodePath.join(root, "client-home"),
@@ -418,7 +418,7 @@ try {
         "--",
         "node",
         "-e",
-        "console.log(process.env.R1_LOGIN_PROFILE);console.log(require('child_process').execFileSync('uv',['--version']).toString().trim());console.log(process.version)",
+        "console.log(process.env.MESH_E2E_LOGIN_PROFILE);console.log(require('child_process').execFileSync('uv',['--version']).toString().trim());console.log(process.version)",
       ])
     ).code,
     0,

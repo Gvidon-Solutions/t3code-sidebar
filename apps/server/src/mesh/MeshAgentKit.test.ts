@@ -10,7 +10,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "b1-agent-home-" });
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-agent-home-" });
       const source = `${home}/bundled`;
       yield* fs.makeDirectory(`${source}/scripts`, { recursive: true });
       yield* fs.writeFileString(`${source}/SKILL.md`, "skill v1");
