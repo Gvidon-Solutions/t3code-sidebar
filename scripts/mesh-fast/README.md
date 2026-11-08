@@ -78,11 +78,11 @@ scripts/mesh-fast/run.sh --host-info
 
 `--scenario` selects a name substring. `--repeat` creates fresh meshes on each
 iteration; failures are never retried. Every case reports PASS/FAIL and duration.
-The final line reports total wall time, with a default 300-second ceiling. A
+The final line reports total wall time, with the agreed default 360-second ceiling. A
 watchdog shuts down owned fixtures and fails the command when the ceiling is
 exceeded. `--budget-seconds` explicitly changes that ceiling for smaller hosts:
 the independent hosted CI job uses two meshes and 2700 seconds; performance
-acceptance on either configured host keeps the default 300 seconds. Existing build jobs
+acceptance on either configured host keeps the default 360 seconds. Existing build jobs
 have no dependency on this job.
 
 The gate runs on the host where the command is invoked. The delivery builder's
@@ -116,7 +116,7 @@ perform startup recovery; the scenario then verifies removal, port rebinding
 and preservation. `lifecycle.test.ts` kills a real lock owner and proves admission
 is released, concurrent refusal and the eight-mesh default.
 
-The printed private artifact directory contains `junit.xml`, `summary.json`,
+The printed private artifact directory contains `junit.xml`, `summary.json`, `preparation.json`,
 server/proxy/sshd logs, failure stacks and convergence barriers. The F1 case adds
 screenshots and a WebM recording. Process supervisors record the exact child PID
 and generation: crash cases kill that child and observe automatic recovery.
@@ -126,11 +126,28 @@ Shutdown waits for each private daemon's POSIX lock after requesting its stop:
 the listener can already be gone while final cache writes are still running.
 The tiny source-fingerprinted C helper uses `F_SETLKW`; Linux `flock` locks do
 not contend with Mutagen's POSIX locks. No cleanup or scenario retries are used.
+Paused supervisors close their filesystem watchers during shutdown; queued
+restarts cannot launch after shutdown starts. Fast teardown kills tracked direct
+server children after assertions; native launchers and realistic runs retain
+graceful shutdown. Private Mutagen daemons still receive their stop request and
+must release the POSIX lock before passed payloads are removed.
+
+Native preparation builds web and server bundles concurrently, then stages the
+current web output into both real version archives. It retains a complete workspace
+snapshot because the shared Vite config imports desktop build metadata. Independent
+version trees use native copy-on-write copies where supported. Bundler workers use
+one quarter of available CPUs, capped at 32; compilation and extraction failures
+are reported together after all builds finish. `preparation.json` describes the
+immutable runtime cache's build, including phase timings; a warm lookup reuses it.
+Generated Astro types and mobile preview output do not change the runtime source
+fingerprint. Passed payload deletion preserves diagnostics and never follows
+fixture symlinks into external data.
 
 ## Timing and providers
 
 `T3_MESH_TIME_SCALE` is the only server timing knob. `(0,1]` is accepted in source
-execution; unset or `1` preserves defaults. The runner uses `0.075`, or `0.2`
+execution; unset or `1` preserves defaults. The runner uses `0.04` for ordinary
+bundled servers, `0.075` for native launcher/previous-version meshes, or `0.2`
 on hosts with fewer than eight logical CPUs to keep health windows usable while
 native subprocesses start. It scales
 heartbeat/dead detection, reconnect backoff, exchange/retry/debounce, config,

@@ -279,7 +279,9 @@ export class MiniMesh {
           ? "1"
           : NodeOS.availableParallelism() < 8
             ? "0.2"
-            : "0.075",
+            : this.launcher || this.previousEntry
+              ? "0.075"
+              : "0.04",
       NODE_ENV: "test",
       GOMAXPROCS: "2",
       NODE_COMPILE_CACHE: NodePath.join(process.env.MESH_FAST_RUNTIMES, "compile-cache"),
@@ -779,7 +781,12 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
         );
         if (!state.exists) return;
         created.push(name);
-        await run("docker", ["stop", "--time", "1", name]);
+        await run("docker", [
+          "stop",
+          "--time",
+          process.env.MESH_FAST_REALISTIC === "1" ? "1" : "0",
+          name,
+        ]);
       }),
     );
     for (const { child } of this.children) if (child.exitCode === null) child.kill("SIGTERM");

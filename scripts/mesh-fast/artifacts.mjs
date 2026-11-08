@@ -1,7 +1,9 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
+import { run } from "./client.mjs";
 
 export async function prunePassed(directory) {
+  const payloads = [];
   for (const entry of await NodeFSP.readdir(directory, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const machine = NodePath.join(directory, entry.name);
@@ -16,6 +18,7 @@ export async function prunePassed(directory) {
     }
     if (owned)
       for (const payload of ["home", "state", "runtime"])
-        await NodeFSP.rm(NodePath.join(machine, payload), { recursive: true, force: true });
+        payloads.push(NodePath.join(machine, payload));
   }
+  if (payloads.length) await run("rm", ["-rf", "--", ...payloads]);
 }

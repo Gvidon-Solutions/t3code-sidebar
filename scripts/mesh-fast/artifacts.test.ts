@@ -26,6 +26,10 @@ it("prunes passed machine payloads while preserving diagnostics and unowned or l
     await NodeFSP.symlink(outside, NodePath.join(scenario, "linked"));
     await NodeFSP.mkdir(NodePath.join(scenario, "artifacts"));
     await NodeFSP.writeFile(NodePath.join(scenario, "artifacts", "shot.png"), "evidence");
+    const bootstrap = NodePath.join(scenario, "cloudbox");
+    await NodeFSP.mkdir(NodePath.join(bootstrap, "state"), { recursive: true });
+    await NodeFSP.writeFile(NodePath.join(bootstrap, ".mesh-fast-node"), "bootstrap fixture");
+    await NodeFSP.writeFile(NodePath.join(bootstrap, "state", "data"), "private bootstrap data");
     await prunePassed(scenario);
     for (const payload of ["home", "state", "runtime"])
       await expect(NodeFSP.lstat(NodePath.join(machine, payload))).rejects.toMatchObject({
@@ -35,6 +39,9 @@ it("prunes passed machine payloads while preserving diagnostics and unowned or l
       "diagnostics",
     );
     expect(await NodeFSP.readFile(NodePath.join(outside, "retained"), "utf8")).toBe("owner data");
+    await expect(NodeFSP.lstat(NodePath.join(bootstrap, "state"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     expect(
       await NodeFSP.readFile(NodePath.join(scenario, "unmarked", "state", "data"), "utf8"),
     ).toBe("retained");

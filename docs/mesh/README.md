@@ -857,7 +857,7 @@ its exact private lock path, then kills that PID during real staging. A global
 
 Native rollout fixtures build their two versions concurrently in independent
 source snapshots, then discard those snapshots after extracting self-contained
-archives. Source-dependent preparation stays inside the five-minute wall budget.
+archives. Source-dependent preparation stays inside the agreed six-minute wall budget.
 
 Realistic C2/F1 wrappers retain the runner's short temporary paths. Putting
 Mutagen homes under nested nightly result directories exceeds Unix socket path

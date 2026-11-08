@@ -25,7 +25,7 @@ const args = process.argv.slice(2);
 let repeat = 1,
   jobs = defaultJobs(NodeOS.availableParallelism()),
   filter,
-  budgetSeconds = process.env.MESH_FAST_REALISTIC === "1" ? 10800 : 300;
+  budgetSeconds = process.env.MESH_FAST_REALISTIC === "1" ? 10800 : 360;
 while (args.length) {
   const arg = args.shift();
   if (arg === "--repeat") repeat = Number(args.shift());
@@ -40,35 +40,51 @@ if (![repeat, jobs, budgetSeconds].every((n) => Number.isInteger(n) && n > 0))
 const priority = [
   "bootstrap-rollout",
   "run-concept",
+  "crash-laptop-mount",
+  "crash-cloudbox-mount",
+  "crash-studio-sync",
   "network-mid-pipe",
   "f1-pending-expiry",
+  "crash-studio-mount",
   "network-sleep",
-  "crash-restart-orders",
-  "cli-routing",
-  "replica-policies",
+  "crash-laptop-sync",
   "replica-conflicts",
+  "crash-cloudbox-sync",
   "replica-foreign-adoption",
   "f1-web-journey",
-  "crash-studio-mount",
-  "crash-cloudbox-mount",
-  "crash-laptop-mount",
-  "crash-studio-sync",
-  "crash-cloudbox-sync",
-  "crash-laptop-sync",
+  "replica-policies",
+  "cli-routing",
   "fork-matrix",
-  "crash-mutagen",
+  "crash-restart-orders",
   "f1-replica-content",
-  "installer-cold",
+  "crash-mutagen",
   "threads-fake-provider",
-  "config-rules-agents",
+  "f1-dropped-commit",
+  "installer-cold",
   "replica-ssh",
-  "replica-warnings",
+  "config-rules-agents",
   "replica-full",
-  "layout-alias-transports",
+  "replica-warnings",
+  "c2-concurrent-reverse",
   "clock-skew-hour",
+  "layout-alias-transports",
+  "network-delay",
+  "network-reset",
   "mixed-version",
   "c2-concurrent-forward",
-  "c2-concurrent-reverse",
+  "network-drop-idle",
+  "network-cut",
+  "f1-offline-atomic",
+  "network-ip-change",
+  "layout-files",
+  "identity-collisions-unknown-version",
+  "layout-legacy-concurrent",
+  "layout-path-claims",
+  "layout-legacy-edits",
+  "config-clock",
+  "layout-partition",
+  "timing-heartbeat",
+  "runner-cancel-boot",
 ];
 const selected = Object.entries(scenarios)
   .sort(([a], [b]) => {
@@ -146,6 +162,10 @@ try {
     "browsers",
   );
   process.env.MESH_FAST_RUNTIMES = await runtimes(process.env.MESH_FAST_MUTAGEN_CACHE);
+  await NodeFSP.copyFile(
+    NodePath.join(process.env.MESH_FAST_RUNTIMES, "preparation.json"),
+    NodePath.join(root, "preparation.json"),
+  );
   if (selected.some(([name]) => name === "mixed-version"))
     process.env.MESH_FAST_PREVIOUS_ENTRY = await previous(process.env.MESH_FAST_MUTAGEN_CACHE);
   const queue = selected.flatMap(([name, run]) =>

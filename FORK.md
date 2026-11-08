@@ -121,6 +121,11 @@ subprocess/Docker proofs live in `scripts/mesh-fast/{lifecycle,recovery}.mjs`,
 `lifecycle.test.ts` and the `runner-reboot-recovery` scenario.
 Fresh bootstrap units use the private pinned Mutagen mirror and assert their
 test environment. Measured long scenarios start earlier to avoid a slow final wave.
+The agreed fast gate ceiling is six minutes. Native preparation overlaps web and
+server builds and records cache-build phases. Paused supervisors close their
+watchers and reject late restarts; fast cleanup removes only marked payloads and
+preserves external symlink targets. The paused-process regression fails before
+the watcher fix and passes afterward.
 
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
