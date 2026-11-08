@@ -92,14 +92,18 @@ export const layer = Layer.effect(
         const manifests = yield* Effect.forEach(catalog.releases, (release) =>
           decodeManifest(release.manifest),
         );
-        const known = manifests
-          .flatMap((manifest) => [manifest.launchAsset, ...manifest.assets])
-          .find((asset) => asset.hash === key);
+        const known = [
+          ...manifests.flatMap((manifest) => [manifest.launchAsset, ...manifest.assets]),
+          ...(catalog.apkAsset ? [catalog.apkAsset] : []),
+        ].find((asset) => asset.hash === key);
         if (!known) return HttpServerResponse.empty({ status: 404 });
         const bytes = yield* fs.readFile(path.join(root, "assets", key));
         return HttpServerResponse.uint8Array(bytes, {
           headers: {
             "content-type": known.contentType,
+            ...(known.contentType === "application/vnd.android.package-archive"
+              ? { "content-disposition": 'attachment; filename="T3-Code-Sidebar.apk"' }
+              : {}),
             "x-content-type-options": "nosniff",
             "content-security-policy": "default-src 'none'",
             "cache-control": "public, max-age=31536000, immutable",

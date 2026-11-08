@@ -37,7 +37,14 @@ const workflow = Schema.decodeSync(
 
 it("release source filters keep unrelated platform builds out of the hot path", () => {
   NodeAssert.deepEqual(releasePlan(["docs/delivery.md"]), { desktop: false, android: false });
-  NodeAssert.deepEqual(releasePlan(["apps/mobile/src/App.tsx"]), { desktop: false, android: true });
+  for (const path of [
+    "apps/mobile/src/App.tsx",
+    "scripts/mobile-android-apk.mjs",
+    "scripts/delivery/android-build.mjs",
+    "scripts/delivery/android-release.mjs",
+  ]) {
+    NodeAssert.deepEqual(releasePlan([path]), { desktop: false, android: true });
+  }
   for (const path of ["apps/web/src/App.tsx", "apps/server/src/bin.ts"]) {
     NodeAssert.deepEqual(releasePlan([path]), { desktop: false, android: false });
   }
@@ -100,6 +107,7 @@ it("release creation is fenced to the release branch and dry-run is the manual d
   );
   NodeAssert.deepEqual(branches, ["refs/heads/ws", "refs/heads/ws"]);
   NodeAssert.ok(workflow.on.push.branches.includes("delivery-ci/**"));
+  NodeAssert.ok(workflow.on.push.branches.includes("ci/a1-timing"));
 });
 
 it("path planner diffs renamed paths without splitting spaces and refuses invalid refs", () => {

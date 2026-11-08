@@ -109,6 +109,16 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — A1 Android build caching and private APK delivery
+
+- **What.** Local Android builds retain native outputs, reuse identical APKs and publish native
+  upgrades through the existing private mobile-update notice. Public CI caches by native fingerprint.
+- **How.** Content-based prebuild invalidation, bounded machine-aware Gradle workers/heap, warm
+  daemon, configuration/build caches and scan-free profiles. APKs use the existing signing plugin
+  and app identity; hot-lane APKs are immutable OTA-store assets promoted after healthy rollout.
+- **Where.** `scripts/delivery/android-{build,release}.mjs`, `scripts/mobile-android-apk.mjs`, D1 assets,
+  server `delivery/MobileOta.ts`/catalog, `sidebar-desktop.yml`, `docs/delivery.md`.
+
 ### 2026-11-07 — D1 private delivery and independent release artifacts
 
 - **What.** Private clean/hot builder lanes, serial idle-window delivery with stopped-DB backup
