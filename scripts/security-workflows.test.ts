@@ -18,9 +18,16 @@ it("keeps Android signing behind the release branch and protected environment", 
 it("pins mesh actions and removes upstream-only secret workflows", () => {
   for (const match of workflow("mesh-platform-smoke.yml").matchAll(/uses:\s*([^\s]+)/g))
     expect(match[1]).toMatch(/@[a-f0-9]{40}$/);
-  expect(
-    NodeFS.existsSync(new URL("../.github/workflows/mobile-eas-preview-fork.yml", import.meta.url)),
-  ).toBe(false);
+  for (const retired of [
+    "mobile-eas-preview-fork.yml",
+    "mobile-eas-preview.yml",
+    "desktop-macos-preview-publish.yml",
+    "relay-preview.yml",
+    "relay-preview-cleanup.yml",
+  ])
+    expect(NodeFS.existsSync(new URL(`../.github/workflows/${retired}`, import.meta.url))).toBe(
+      false,
+    );
   for (const file of NodeFS.readdirSync(new URL("../.github/workflows/", import.meta.url)))
     if (file.endsWith(".yml"))
       expect(workflow(file)).not.toContain("github.repository == 'pingdotgg/t3code'");
