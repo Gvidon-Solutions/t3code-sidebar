@@ -18,7 +18,7 @@ import {
 import { buildProjectGroups } from "../projectGrouping.ts";
 import { tick, receive, compare } from "./index.ts";
 import { between, generateN } from "./index.ts";
-import { merge, apply, keys, entriesNewerThan, type MeshLayoutDocument } from "./index.ts";
+import { merge, keys, type MeshLayoutDocument } from "./index.ts";
 import { diff } from "./index.ts";
 import { materialize } from "./index.ts";
 import { importLegacy, mergeLegacyConfigs } from "./index.ts";
@@ -99,7 +99,7 @@ describe("LWW document", () => {
         const i = Math.floor(random() * 3),
           key = `order/${Math.floor(random() * 8)}`;
         clocks[i] = tick(Math.floor(random() * 100), clocks[i]!, String(i));
-        replicas[i] = apply(replicas[i]!, {
+        replicas[i] = merge(replicas[i]!, {
           [key]: { v: random() < 0.3 ? null : { sort: between(null, null) }, h: clocks[i]! },
         });
         if (random() < 0.2) {
@@ -119,8 +119,6 @@ describe("LWW document", () => {
     const a = { k: { v: "a", h: low } },
       b = { k: { v: null, h: low } };
     expect(merge(a, b)).toEqual(merge(b, a));
-    expect(entriesNewerThan(a, low)).toEqual({});
-    expect(entriesNewerThan(a, "0000000000000.00000.a")).toEqual(a);
   });
   it("escapes every key component, including slashes and percent signs", () => {
     const p = "github.com/a/b%",
@@ -175,7 +173,7 @@ describe("materialization and diffs", () => {
     ];
     for (const edit of operations) {
       const after = edit(before);
-      expect(materialize(apply(doc, diff(before, after, doc, h)))).toEqual(after);
+      expect(materialize(merge(doc, diff(before, after, doc, h)))).toEqual(after);
     }
     expect(diff(before, before, doc, h)).toEqual({});
     const added = addWorkspace(materialize({})).config;
@@ -207,7 +205,7 @@ describe("materialization and diffs", () => {
                     ? setProjectFoldMode(before, ws, "p", random() < 0.5 ? "auto" : "quiet")
                     : { ...before, workspaces: reorderWorkspaces(before.workspaces, ws, 0) };
         h = tick(1, h, "a");
-        doc = apply(doc, diff(before, after, doc, h));
+        doc = merge(doc, diff(before, after, doc, h));
         expect(materialize(doc)).toEqual(after);
       }
     }
@@ -233,7 +231,7 @@ describe("concurrent layout edits", () => {
                 }
               : setProjectFoldMode(before, ws, "p", random() < 0.5 ? "quiet" : "active");
           clock = tick(1, clock, String(machine));
-          replicas[machine] = apply(doc, diff(before, after, doc, clock));
+          replicas[machine] = merge(doc, diff(before, after, doc, clock));
         }
       }
       const [a, b, c] = replicas as [MeshLayoutDocument, MeshLayoutDocument, MeshLayoutDocument];
@@ -241,7 +239,7 @@ describe("concurrent layout edits", () => {
       expect(doc).toEqual(merge(c, merge(a, b)));
       const before = materialize(doc),
         after = { ...before, workspaces: [...before.workspaces].reverse() };
-      expect(materialize(apply(doc, diff(before, after, doc, tick(100, null, "new"))))).toEqual(
+      expect(materialize(merge(doc, diff(before, after, doc, tick(100, null, "new"))))).toEqual(
         after,
       );
     }
@@ -268,7 +266,7 @@ describe("collection removals", () => {
     const entries = diff(before, after, doc, tick(1, low, "a"));
     expect(Object.values(entries).every((e) => e.v === null)).toBe(true);
     expect(Object.keys(entries)).toHaveLength(4);
-    expect(materialize(apply(doc, entries))).toEqual(after);
+    expect(materialize(merge(doc, entries))).toEqual(after);
   });
 });
 describe("legacy configs", () => {
@@ -394,7 +392,7 @@ describe("logical projects", () => {
     let clock = low;
     for (const after of [merged, split, logical.removeRepresentation(split, "separate", "b")]) {
       const before = materialize(doc);
-      doc = apply(doc, diff(before, after, doc, (clock = tick(2, clock, "z"))));
+      doc = merge(doc, diff(before, after, doc, (clock = tick(2, clock, "z"))));
       expect(materialize(doc)).toEqual(after);
     }
   });
