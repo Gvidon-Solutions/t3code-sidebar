@@ -993,3 +993,67 @@ it.effect.each(["managed", "existing"] as const)(
     }).pipe(Effect.provide(h.layer));
   },
 );
+
+it.effect("recovers interrupted automatic conflict resolution without resuming user pauses", () => {
+  const h = harness();
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    const name = sessionIdentity("repo", "replica").name;
+    yield* service.reconcile;
+    h.setSession({ status: "watching", conflicts: [{ root: "payload" }] });
+    h.validation.beforePause = Effect.gen(function* () {
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+        resolvingConflicts: name,
+      });
+    });
+    h.validation.preserve = Effect.fail(
+      new ReplicaError({
+        reason: "unreachable",
+        message: "Connection closed while preserving the losing version.",
+      }),
+    );
+    yield* service.reconcile;
+    expect((yield* service.status)[0]).toMatchObject({
+      state: "error",
+      message: "Connection closed while preserving the losing version.",
+    });
+    expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+      resolvingConflicts: name,
+    });
+    h.validation.preserve = Effect.void;
+    yield* Effect.gen(function* () {
+      const restarted = yield* ReplicaService.ProjectReplicaService;
+      yield* restarted.reconcile;
+      expect((yield* restarted.status)[0]?.state).toBe("mounting");
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).not.toHaveProperty(
+        "resolvingConflicts",
+      );
+      yield* restarted.reconcile;
+      expect(h.preserved).toHaveLength(2);
+      expect(h.preserved.at(-1)).toMatchObject({ root: "/replica", paths: ["payload"] });
+      h.setSession({ status: "watching", conflicts: [] });
+      yield* restarted.reconcile;
+      expect((yield* restarted.status)[0]?.state).toBe("watching");
+      h.setSession({ paused: true });
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMountStatus: {
+          ...config.projectMountStatus,
+          repo: {
+            ...config.projectMountStatus.repo,
+            replica: {
+              ...config.projectMountStatus.repo!.replica!,
+              resolvingConflicts: "another-session",
+            },
+          },
+        },
+      }));
+      yield* restarted.reconcile;
+      expect((yield* restarted.status)[0]?.state).toBe("paused");
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).not.toHaveProperty(
+        "resolvingConflicts",
+      );
+    }).pipe(Effect.provide(Layer.fresh(ReplicaService.layer)));
+  }).pipe(Effect.provide(h.layer));
+});

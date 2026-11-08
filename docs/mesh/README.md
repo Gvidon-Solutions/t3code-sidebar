@@ -722,3 +722,8 @@ Local SSH pipe sockets disable Nagle: separate small SSH records otherwise wait 
 ACKs even on loopback. The real relay/IPC test exercises split records before its 200 MiB canary.
 
 Existing-session adoption resolves SSH endpoints from machine bindings and the configured SSH mode, just like replica creation. Display titles and labels can change independently of a managed `t3-<name>` alias or an existing SSH host; using them to identify endpoints rejects valid reversed sessions.
+
+Automatic conflict resolution records its Mutagen session id in `repstatus.resolvingConflicts`
+before pausing. Keep that intent when publishing errors. After an interruption the driver resets
+and resumes only that marked session, then scans again; an unmarked pause remains intentional.
+Clearing intent before resume completes can strand the copy after a crash.

@@ -1715,6 +1715,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **What.** Preserves project machine chips through legacy cache upgrades, avoids false offline
   footer reports, uses existing SSH hosts for remote commands, preserves replica ignores and
   seeds code-only defaults for new meshes. Managed instructions identify their own machine.
+  Interrupted automatic conflict resolution recovers its owned pause without resuming user pauses.
   Legacy settings writes preserve concurrent workspace renames while repairing sort collisions
   and keep separate RPC-client baselines advanced from the merged response.
   Bed uploads share the configured SSH/sudo transport when the third node moves hosts.

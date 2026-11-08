@@ -147,6 +147,7 @@ const ReplicaSkippedPath = Schema.Struct({ path: Schema.String, error: Schema.St
 
 /** What the machine holding a replica last reported about synchronization. */
 export const SidebarProjectMountStatus = Schema.Struct({
+  resolvingConflicts: Schema.optionalKey(Schema.String),
   skipped: Schema.optionalKey(Schema.Number),
   skippedPaths: Schema.optionalKey(Schema.Array(ReplicaSkippedPath)),
   conflictCopies: Schema.optionalKey(

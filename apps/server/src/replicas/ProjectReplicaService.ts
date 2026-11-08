@@ -189,12 +189,16 @@ const make = Effect.gen(function* () {
   const publish = Effect.fn("ProjectReplicaService.publish")(function* (
     status: ReplicaLiveStatus,
     expected?: SidebarProjectMount,
+    resolvingConflicts?: string | null,
   ) {
     const snapshot = (yield* mesh.read).config;
     if (expected && !placementMatches(snapshot, status.logicalKey, expected)) return;
     const current = snapshot.projectMountStatus[status.logicalKey]?.[status.environmentId];
     const conflictCopies = status.conflictCopies ?? current?.conflictCopies;
+    const resolution =
+      resolvingConflicts === undefined ? current?.resolvingConflicts : resolvingConflicts;
     if (
+      current?.resolvingConflicts !== (resolution ?? undefined) ||
       current?.state !== status.state ||
       current?.message !== status.message ||
       current?.skipped !== status.skipped ||
@@ -212,6 +216,7 @@ const make = Effect.gen(function* () {
                   ...config.projectMountStatus[status.logicalKey],
                   [status.environmentId]: {
                     state: status.state,
+                    ...(resolution ? { resolvingConflicts: resolution } : {}),
                     conflicts: status.conflicts.length,
                     ...(status.message ? { message: status.message } : {}),
                     ...(status.skipped
@@ -289,7 +294,8 @@ const make = Effect.gen(function* () {
       rep = allocatedRep!;
       attempt.rep = rep;
     }
-    const publishPlacement = (status: ReplicaLiveStatus) => publish(status, rep);
+    const publishPlacement = (status: ReplicaLiveStatus, resolution?: string | null) =>
+      publish(status, rep, resolution);
     if (rep.adoption && !rep.adoption.paused) return;
     const driver = replicaDriver(config, rep);
     const now = DateTime.formatIso(yield* DateTime.now);
@@ -434,11 +440,20 @@ const make = Effect.gen(function* () {
       session = undefined;
     }
     if (!session) {
-      yield* publishPlacement({ ...base, sessionName: identity.name, state: "pending" });
+      yield* publishPlacement({ ...base, sessionName: identity.name, state: "pending" }, null);
       yield* runner.create(createInput);
       yield* publishPlacement({ ...base, sessionName: identity.name, state: "mounting" });
     } else {
       if (session.paused) {
+        if (
+          config.projectMountStatus[logicalKey]?.[rep.environmentId]?.resolvingConflicts ===
+          session.identifier
+        ) {
+          yield* runner.reset(identity.name);
+          yield* runner.resume(identity.name);
+          yield* publishPlacement({ ...base, sessionName: identity.name, state: "mounting" }, null);
+          return;
+        }
         if (
           config.projectMountStatus[logicalKey]?.[rep.environmentId]?.message ===
           "SSH is off; cross-machine replicas are disabled."
@@ -446,11 +461,14 @@ const make = Effect.gen(function* () {
           yield* runner.resume(identity.name);
           session = { ...session, paused: false };
         } else {
-          yield* publishPlacement({
-            ...base,
-            sessionName: identity.name,
-            ...sessionStatus(session),
-          });
+          yield* publishPlacement(
+            {
+              ...base,
+              sessionName: identity.name,
+              ...sessionStatus(session),
+            },
+            null,
+          );
           return;
         }
       }
@@ -493,6 +511,10 @@ const make = Effect.gen(function* () {
             ...(route ? { route } : {}),
           });
         });
+        yield* publishPlacement(
+          { ...status, state: "mounting", message: "Resolving conflicts automatically." },
+          session.identifier,
+        );
         yield* runner.pause(identity.name);
         const losing = yield* Effect.forEach(
           status.conflicts,
@@ -536,19 +558,24 @@ const make = Effect.gen(function* () {
         } else yield* runner.reset(identity.name);
         yield* runner.resume(identity.name);
         yield* runner.flush(identity.name);
-        yield* publishPlacement({
-          ...base,
-          sessionName: identity.name,
-          state: "mounting",
-          message: `Resolved ${status.conflicts.length} conflicts automatically · copies in .t3-conflicts`,
-          conflictCopies: {
-            environmentId: loser.environmentId,
-            path: `${loser.path}/.t3-conflicts/${now.replace(/[:.]/g, "-")}/`,
+        yield* publishPlacement(
+          {
+            ...base,
+            sessionName: identity.name,
+            state: "mounting",
+            message: `Resolved ${status.conflicts.length} conflicts automatically · copies in .t3-conflicts`,
+            conflictCopies: {
+              environmentId: loser.environmentId,
+              path: `${loser.path}/.t3-conflicts/${now.replace(/[:.]/g, "-")}/`,
+            },
           },
-        });
+          null,
+        );
         return;
       }
       if (status.state === "watching") {
+        if (config.projectMountStatus[logicalKey]?.[rep.environmentId]?.resolvingConflicts)
+          yield* publishPlacement(status, null);
         const mode = desiredConfig
           ? projectPolicy(desiredConfig, config.projectTitles[logicalKey] ?? logicalKey).replica
           : (rep.mode ?? "lite");
@@ -575,7 +602,7 @@ const make = Effect.gen(function* () {
         }
         yield* register(logicalKey, rep);
       }
-      yield* publishPlacement(status);
+      yield* publishPlacement(status, null);
     }
   });
   const mapError = (cause: unknown) =>
