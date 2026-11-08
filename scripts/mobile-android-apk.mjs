@@ -10,6 +10,15 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
+import {
+  configureAndroidGradle,
+  androidBuildKey,
+  androidArchitectures,
+  androidResources,
+  needsAndroidPrebuild,
+  updateAndroidVersion,
+} from "./delivery/android-build.mjs";
+
 const { spawnSync } = NodeChildProcess;
 const { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } =
   NodeFS;
@@ -25,7 +34,10 @@ const args = new Set(process.argv.slice(2));
 const install = args.has("--install");
 const dev = args.has("--dev");
 const clean = args.has("--clean");
-const arch = process.env.T3_ANDROID_ARCH ?? "arm64-v8a";
+const arch = androidArchitectures(process.env.T3_ANDROID_ARCH);
+const resources = androidResources();
+const timings = {};
+const started = Date.now();
 const sdkRoot =
   process.env.ANDROID_HOME ??
   process.env.ANDROID_SDK_ROOT ??
@@ -121,32 +133,90 @@ process.env.EXPO_NO_GIT_STATUS = "1";
 process.env.APP_VARIANT = dev ? "development" : "sidebar";
 process.env.NODE_OPTIONS = process.env.NODE_OPTIONS ?? "--max-old-space-size=8192";
 
-const generatedMarker = join(ANDROID_DIR, "app/build.gradle");
-const nativeInputs = [
-  join(APP_DIR, "app.config.ts"),
-  join(APP_DIR, "app.json"),
-  join(ROOT, "pnpm-lock.yaml"),
-];
-const nativeInputsNewer =
-  existsSync(generatedMarker) &&
-  nativeInputs.some(
-    (input) => existsSync(input) && statSync(input).mtimeMs > statSync(generatedMarker).mtimeMs,
+const fingerprintStart = Date.now();
+const fingerprintResult = spawnSync(
+  "pnpm",
+  ["--silent", "exec", "expo-updates", "runtimeversion:resolve", "--platform", "android"],
+  {
+    cwd: APP_DIR,
+    env: process.env,
+    encoding: "utf8",
+  },
+);
+if (fingerprintResult.status !== 0)
+  fail(fingerprintResult.stderr || "Native fingerprint resolution failed");
+const fingerprint = JSON.parse(fingerprintResult.stdout).runtimeVersion;
+if (typeof fingerprint !== "string" || !fingerprint) fail("Native fingerprint missing");
+timings.fingerprintMs = Date.now() - fingerprintStart;
+const filesResult = spawnSync(
+  "git",
+  [
+    "ls-files",
+    "-z",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+    "--",
+    "apps/mobile",
+    "packages",
+    "patches",
+    "pnpm-lock.yaml",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "scripts/lib",
+    "tsconfig*.json",
+    "scripts/mobile-android-apk.mjs",
+    "scripts/delivery/android-build.mjs",
+  ],
+  { cwd: ROOT, encoding: "utf8" },
+);
+if (filesResult.status !== 0) fail("Cannot enumerate Android build inputs");
+const dotenvFiles = ["", "apps/mobile/"].flatMap((prefix) =>
+  [".env", ".env.local", ".env.production", ".env.production.local"].map((file) => prefix + file),
+);
+const inputFiles = [...new Set([...filesResult.stdout.split("\0").filter(Boolean), ...dotenvFiles])]
+  .filter((path) => existsSync(join(ROOT, path)))
+  .map((path) => ({ path, bytes: readFileSync(join(ROOT, path)) }));
+const buildKey = androidBuildKey(inputFiles, {
+  fingerprint,
+  arch,
+  dev,
+  node: process.version,
+  alias: process.env.T3_ANDROID_KEY_ALIAS,
+  version: process.env.T3_SIDEBAR_VERSION,
+  environment: Object.entries(process.env)
+    .filter(([key]) => /^(EXPO_PUBLIC_|T3_MOBILE_|T3CODE_MOBILE_|NODE_ENV$|APP_VARIANT$)/.test(key))
+    .sort(),
+  signing: process.env.T3_ANDROID_KEYSTORE
+    ? readFileSync(process.env.T3_ANDROID_KEYSTORE).toString("base64")
+    : "debug",
+});
+const outputPath = join(OUTPUT_DIR, dev ? "t3-sidebar-dev.apk" : "t3-sidebar.apk");
+const buildMarker = outputPath + ".inputs";
+if (
+  !clean &&
+  existsSync(outputPath) &&
+  existsSync(buildMarker) &&
+  readFileSync(buildMarker, "utf8") === buildKey
+) {
+  mkdirSync(OUTPUT_DIR, { recursive: true });
+  writeFileSync(
+    join(OUTPUT_DIR, "android-timings.json"),
+    JSON.stringify(
+      { ...timings, totalMs: Date.now() - started, reused: true, arch, fingerprint },
+      null,
+      2,
+    ),
   );
-const variantMarker = join(ANDROID_DIR, ".t3-variant");
-const variantChanged =
-  !existsSync(variantMarker) ||
-  readFileSync(variantMarker, "utf8").trim() !== process.env.APP_VARIANT;
-
-if (!existsSync(ANDROID_DIR) || clean || nativeInputsNewer || variantChanged) {
-  const cleanPrebuild = clean || (variantChanged && existsSync(ANDROID_DIR));
-  console.log(
-    cleanPrebuild
-      ? "Prebuilding a clean Android project (this is the slow path; native config or app variant changed)."
-      : existsSync(ANDROID_DIR)
-        ? "Native config changed since the last prebuild; refreshing the Android project."
-        : "Prebuilding the Android project for the first time.",
-  );
-  run(
+  console.log("Identical Android inputs; reusing " + outputPath);
+  if (install) run("adb", ["install", "-r", outputPath], ROOT);
+  process.exit(0);
+}
+const fingerprintMarker = join(ANDROID_DIR, ".t3-native-fingerprint");
+timings.prebuildMs = 0;
+if (needsAndroidPrebuild(ANDROID_DIR, fingerprint, clean)) {
+  console.log("Native inputs changed; refreshing the Android project.");
+  timings.prebuildMs = run(
     "pnpm",
     [
       "exec",
@@ -155,12 +225,14 @@ if (!existsSync(ANDROID_DIR) || clean || nativeInputsNewer || variantChanged) {
       "--platform",
       "android",
       "--no-install",
-      ...(cleanPrebuild ? ["--clean"] : []),
+      ...(clean ? ["--clean"] : []),
     ],
     APP_DIR,
   );
-  writeFileSync(variantMarker, `${process.env.APP_VARIANT}\n`);
+  writeFileSync(fingerprintMarker, fingerprint + "\n");
 }
+configureAndroidGradle(join(ANDROID_DIR, "app/build.gradle"));
+updateAndroidVersion(join(ANDROID_DIR, "app/build.gradle"), process.env.T3_SIDEBAR_VERSION);
 const localProperties = join(ANDROID_DIR, "local.properties");
 if (!existsSync(localProperties)) {
   writeFileSync(localProperties, `sdk.dir=${sdkRoot}\n`);
@@ -170,10 +242,16 @@ const gradleArgs = [
   dev ? "app:assembleDebug" : "app:assembleRelease",
   `-PreactNativeArchitectures=${arch}`,
   "--build-cache",
+  "--configuration-cache",
+  "--daemon",
+  "--profile",
+  `-Dorg.gradle.jvmargs=${resources.jvmargs}`,
+  "-Dorg.gradle.daemon.idletimeout=86400000",
   "--parallel",
-  `--max-workers=${process.env.T3_ANDROID_WORKERS ?? "8"}`,
+  `--max-workers=${resources.workers}`,
   "--console=plain",
 ];
+if (args.has("--info")) gradleArgs.push("--info");
 if (!dev) {
   // Preview builds trade R8 and PNG crunching for time; the store build keeps both.
   gradleArgs.push("-Pandroid.enableMinifyInReleaseBuilds=false");
@@ -197,8 +275,18 @@ if (!existsSync(apkPath)) {
   fail(`Gradle finished but ${apkPath} was not produced.`);
 }
 mkdirSync(OUTPUT_DIR, { recursive: true });
-const outputPath = join(OUTPUT_DIR, dev ? "t3-sidebar-dev.apk" : "t3-sidebar.apk");
 copyFileSync(apkPath, outputPath);
+writeFileSync(buildMarker, buildKey);
+timings.gradleMs = buildMs;
+timings.totalMs = Date.now() - started;
+writeFileSync(
+  join(OUTPUT_DIR, "android-timings.json"),
+  JSON.stringify(
+    { ...timings, arch, fingerprint, workers: resources.workers, jvmargs: resources.jvmargs },
+    null,
+    2,
+  ),
+);
 const sizeMb = (statSync(outputPath).size / (1024 * 1024)).toFixed(1);
 
 console.log(`\n✔ APK: ${outputPath} (${sizeMb} MB)`);

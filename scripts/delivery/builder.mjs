@@ -443,7 +443,25 @@ export async function serve(config) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const config = readConfig(process.argv[3]);
   if (process.argv[2] === "serve") await serve(config);
-  else if (process.argv[2] === "run")
+  else if (process.argv[2] === "apk") {
+    console.log(
+      exec(process.execPath, ["scripts/mobile-android-apk.mjs", ...process.argv.slice(4)], {
+        cwd: config.buildDir,
+        env: {
+          ...process.env,
+          ...config.ota?.environment,
+          ...(config.ota
+            ? {
+                APP_VARIANT: "sidebar",
+                T3_MOBILE_UPDATE_URL: new URL("/api/mobile-updates/manifest", config.ota.origin)
+                  .href,
+                T3_MOBILE_UPDATE_CERTIFICATE: config.ota.certificate,
+              }
+            : {}),
+        },
+      }),
+    );
+  } else if (process.argv[2] === "run")
     console.log(JSON.stringify(await deliver(config, JSON.parse(process.argv[4] || "{}"))));
-  else throw new Error("Usage: builder.mjs serve|run [config.json] [request.json]");
+  else throw new Error("Usage: builder.mjs serve|run|apk [config.json] [request.json]");
 }

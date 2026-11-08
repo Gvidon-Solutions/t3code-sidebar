@@ -380,6 +380,9 @@ jobs:
     if: needs.version.outputs.android == 'true'
     runs-on: ubuntu-24.04
     env:
+      GH_TOKEN: ${{ github.token }}
+      T3_ANDROID_KEYSTORE_BASE64: ${{ secrets.T3_ANDROID_KEYSTORE_BASE64 }}
+      T3_ANDROID_KEY_ALIAS: ${{ secrets.T3_ANDROID_KEY_ALIAS }}
       VERSION: ${{ needs.version.outputs.version }}
       ANDROID_ARCH: ${{ inputs.android_arch || 'arm64-v8a' }}
       APP_VARIANT: sidebar
@@ -429,7 +432,32 @@ jobs:
           # `ws` is not the repository's default branch, and the action defaults
           # to read-only caches there. Without this, no Gradle build cache is
           # ever saved, so every mobile push recompiles the native modules.
-          cache-read-only: false
+          cache-read-only: ${{ github.ref != 'refs/heads/ws' }}
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+      - name: Install native compiler cache
+        run: sudo apt-get update && sudo apt-get install -y ccache
+
+      - name: Resolve Android native fingerprint
+        id: native
+        working-directory: apps/mobile
+        run: |
+          fingerprint=$(pnpm --silent exec expo-updates runtimeversion:resolve --platform android | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const v=JSON.parse(s).runtimeVersion;if(!/^[a-zA-Z0-9.+_-]+$/.test(v))throw Error("Invalid fingerprint");process.stdout.write(v)})')
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ccache
+          key: android-ccache-${{ runner.os }}-${{ env.ANDROID_ARCH }}-${{ steps.native.outputs.fingerprint }}-${{ github.sha }}
+          restore-keys: |
+            android-ccache-${{ runner.os }}-${{ env.ANDROID_ARCH }}-${{ steps.native.outputs.fingerprint }}-
+            android-ccache-${{ runner.os }}-${{ env.ANDROID_ARCH }}-
+
+      - name: Reuse an identical signed APK from a previous release
+        id: reuse-apk
+        env:
+          T3_ANDROID_FINGERPRINT: ${{ steps.native.outputs.fingerprint }}
+        run: node scripts/delivery/android-release.mjs restore release-android
 
       # The generated project and the native build outputs are the expensive
       # part. The app's outputs live under `android/`; autolinked modules build
@@ -446,12 +474,12 @@ jobs:
             apps/mobile/modules/**/android/.cxx
             node_modules/.pnpm/**/android/build
             node_modules/.pnpm/**/android/.cxx
-          key: sidebar-android-v3-${{ hashFiles('apps/mobile/app.config.ts', 'apps/mobile/app.json', 'apps/mobile/plugins/**', 'apps/mobile/modules/**', 'patches/**', 'pnpm-lock.yaml') }}
+          key: sidebar-android-v4-${{ env.ANDROID_ARCH }}-${{ steps.native.outputs.fingerprint }}
           restore-keys: |
-            sidebar-android-v3-
+            sidebar-android-v4-${{ env.ANDROID_ARCH }}-
 
       - name: Prebuild Android project
-        if: steps.android-cache.outputs.cache-hit != 'true'
+        if: steps.reuse-apk.outputs.reused != 'true' && steps.android-cache.outputs.cache-hit != 'true'
         run: |
           cd apps/mobile
           npx expo prebuild --platform android --no-install
@@ -460,6 +488,7 @@ jobs:
       # no PNG crunching, no lintVital. Those gates cost minutes and are
       # re-enabled by the EAS store profiles, not here.
       - name: Build signed APK
+        if: steps.reuse-apk.outputs.reused != 'true'
         env:
           T3_SIDEBAR_VERSION: ${{ needs.version.outputs.version }}
           T3_ANDROID_KEYSTORE_BASE64: ${{ secrets.T3_ANDROID_KEYSTORE_BASE64 }}
@@ -485,21 +514,35 @@ jobs:
           }
           fs.writeFileSync(path, source.replace(pattern, `versionName "${version}"`));
           NODE
+          node --input-type=module -e 'import { configureAndroidGradle } from "../../../scripts/delivery/android-build.mjs"; configureAndroidGradle("app/build.gradle")'
           ./gradlew assembleRelease \
             -PreactNativeArchitectures="$ANDROID_ARCH" \
             -Pandroid.enableMinifyInReleaseBuilds=false \
             -Pandroid.enablePngCrunchInReleaseBuilds=false \
             -x lintVitalRelease \
-            --build-cache --parallel --max-workers=4
+            --build-cache --configuration-cache --parallel --max-workers=4 --profile
           mkdir -p "$GITHUB_WORKSPACE/release-android"
           cp app/build/outputs/apk/release/app-release.apk \
             "$GITHUB_WORKSPACE/release-android/T3-Code-Sidebar-$VERSION.apk"
 
+      - name: Record signed APK inputs
+        if: steps.reuse-apk.outputs.reused != 'true'
+        env:
+          T3_ANDROID_FINGERPRINT: ${{ steps.native.outputs.fingerprint }}
+        run: node scripts/delivery/android-release.mjs record release-android
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-android
-          path: release-android/*.apk
+          path: release-android/*
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always() && steps.reuse-apk.outputs.reused != 'true'
+        with:
+          name: android-build-profile
+          path: apps/mobile/android/build/reports/profile
+          if-no-files-found: ignore
 
   release:
     name: Publish server runtime first
