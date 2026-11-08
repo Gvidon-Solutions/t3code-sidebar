@@ -843,6 +843,9 @@ uses the shared bed. `MeshTiming.ts` scales test timers while normal production
 bundles ignore the knob. Native fixture builds are explicitly marked test builds.
 The runner reports wall time and JUnit, retains failure artifacts, and bounds
 concurrent startup separately from scenario concurrency.
+Use `MESH_FAST_ARTIFACTS_DIR` with a short path to move fixtures to a separate disk.
+Changing global `TMPDIR` can split IPC discovery between installed services and
+their clients; artifact storage must not change that rendezvous directory.
 `lifecycle.mjs` admits one runner per user/host and reclaims only labelled resources
 from a previous boot or dead runner. Boot identity plus process start time prevents
 PID reuse from targeting a live process; cleanup never signals old host PIDs. The

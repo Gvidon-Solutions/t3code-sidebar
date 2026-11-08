@@ -122,7 +122,9 @@ subprocess/Docker proofs live in `scripts/mesh-fast/{lifecycle,recovery}.mjs`,
 Fresh bootstrap units use the private pinned Mutagen mirror and assert their
 test environment. Measured long scenarios start earlier to avoid a slow final wave.
 The agreed fast gate ceiling is six minutes. Native preparation overlaps web and
-server builds and records cache-build phases. Paused supervisors close their
+server builds and records cache-build phases. Fixture storage can use a separate
+disk via `MESH_FAST_ARTIFACTS_DIR` without changing service/CLI IPC paths; nested
+recovery verifies the selected directory. Paused supervisors close their
 watchers and reject late restarts; fast cleanup removes only marked payloads and
 preserves external symlink targets. The paused-process regression fails before
 the watcher fix and passes afterward. F2 integration uses pinned HTTPS/bootstrap

@@ -13,6 +13,11 @@ pnpm mesh:fast
 ```
 
 The command builds source-fingerprinted native test runtimes automatically.
+Set `MESH_FAST_ARTIFACTS_DIR` to a short directory on the fixture disk, for example
+`/data/T1`, and `MESH_FAST_MUTAGEN_CACHE` to a cache on the same filesystem.
+Keep the artifact path short enough for Unix sockets. This selects fixture and
+diagnostic storage without changing the system temporary directory used by
+installed services and their CLI clients.
 `MESH_FAST_PRODUCT_ROOT` can select a separate prepared product checkout; the
 nightly wrapper selects the ref it has just built. Server bundles, CLI routing,
 runtime installers and real provider guards use that checkout.

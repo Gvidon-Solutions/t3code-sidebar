@@ -70,10 +70,12 @@ export async function recoveryScenario(directory) {
       "none",
     ]);
     const parentOutput = NodePath.join(directory, "parent-github-output");
+    const nextArtifactBase = NodePath.join(directory, "next-artifacts");
     await NodeFSP.writeFile(parentOutput, "artifacts=parent-only\n");
     const childEnvironment = {
       ...process.env,
       MESH_FAST_STATE_DIR: NodePath.join(directory, "admission"),
+      MESH_FAST_ARTIFACTS_DIR: nextArtifactBase,
       GITHUB_OUTPUT: parentOutput,
     };
     delete childEnvironment.GITHUB_OUTPUT;
@@ -90,6 +92,7 @@ export async function recoveryScenario(directory) {
     await NodeFSP.writeFile(NodePath.join(directory, "next-command.log"), nextCommand);
     const nextArtifacts = nextCommand.match(/^Artifacts: (.+)$/m)?.[1];
     NodeAssert.ok(nextArtifacts, "next real command produced its artifact directory");
+    NodeAssert.equal(NodePath.dirname(nextArtifacts), nextArtifactBase);
     const recovered = JSON.parse(
       await NodeFSP.readFile(NodePath.join(nextArtifacts, "recovery.json"), "utf8"),
     );

@@ -106,7 +106,9 @@ if (filter === "@host-info") {
   process.exit(0);
 }
 if (!selected.length) throw Error(`No scenarios match ${filter}`);
-const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-fast-"));
+const artifactsDirectory = process.env.MESH_FAST_ARTIFACTS_DIR ?? NodeOS.tmpdir();
+await NodeFSP.mkdir(artifactsDirectory, { recursive: true });
+const root = await NodeFSP.mkdtemp(NodePath.join(artifactsDirectory, "mesh-fast-"));
 await NodeFSP.writeFile(NodePath.join(root, "runner.json"), JSON.stringify(host));
 console.log(`Host: ${owner.hostname}; cores ${owner.cores}; meshes ${jobs}; container boots 2`);
 console.log(`Artifacts: ${root}`);
