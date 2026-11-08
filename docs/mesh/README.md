@@ -630,8 +630,9 @@ persists a lock-content fingerprint under ignored `.t3`, and refreshes on change
 replica messages report environment installing/ready/failed with the failure reason.
 Choosing `full` in a placement or config rule explicitly authorizes package managers and
 lifecycle scripts from synchronized project files. A failed fingerprint is stored in
-`.t3/environment.failed`; the same lock is not executed until it changes or explicit Retry
-clears the marker. This persistent stop replaces endless thirty-second install retries.
+`.t3/environment.failed` with its attempt count and retry deadline. The same lock gets at most
+three attempts, with one- and two-minute delays that survive restart; exhaustion requires an
+explicit Retry or lock change. This replaces endless thirty-second install retries.
 The runner uses the injected environment and stops its private daemon at scope shutdown.
 Before replacing ignores or endpoint paths it flushes and verifies the old session so pending
 deletions keep their ancestry. Conflict reports carry every losing location for both clients.

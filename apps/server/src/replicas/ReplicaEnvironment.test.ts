@@ -3,6 +3,7 @@ import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import { ReplicaEnvironment, environmentCommands, layer } from "./ReplicaEnvironment.ts";
 import * as Processes from "../processRunner.ts";
@@ -30,7 +31,7 @@ it("installs requirements through uv on both platforms", () => {
   }
 });
 it.effect(
-  "installs once, refreshes lock changes and blocks repeated installation of a failed fingerprint until the lock changes",
+  "installs once, refreshes lock changes and persists bounded install backoff and resets on a lock change or explicit retry",
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -79,13 +80,37 @@ it.effect(
         fail = false;
         expect(yield* environment.ensure(root, report).pipe(Effect.isFailure)).toBe(true);
         expect(calls).toHaveLength(2);
-        yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "fixed");
+        yield* Effect.gen(function* () {
+          expect(
+            yield* (yield* ReplicaEnvironment).ensure(root, report).pipe(Effect.isFailure),
+          ).toBe(true);
+        }).pipe(Effect.provide(layer.pipe(Layer.provide(processes), Layer.fresh)));
+        expect(calls).toHaveLength(2);
+        yield* TestClock.adjust("1 minute");
         yield* environment.ensure(root, report);
         expect(calls).toHaveLength(3);
+        yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "fixed");
+        yield* environment.ensure(root, report);
+        expect(calls).toHaveLength(4);
         yield* Effect.gen(function* () {
           yield* (yield* ReplicaEnvironment).ensure(root, report);
         }).pipe(Effect.provide(layer.pipe(Layer.provide(processes), Layer.fresh)));
-        expect(calls).toHaveLength(3);
+        expect(calls).toHaveLength(4);
+        yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "persistent failure");
+        fail = true;
+        yield* environment.ensure(root, report).pipe(Effect.flip);
+        yield* TestClock.adjust("1 minute");
+        yield* environment.ensure(root, report).pipe(Effect.flip);
+        yield* TestClock.adjust("2 minutes");
+        yield* environment.ensure(root, report).pipe(Effect.flip);
+        expect(calls).toHaveLength(7);
+        yield* TestClock.adjust("1 day");
+        yield* environment.ensure(root, report).pipe(Effect.flip);
+        expect(calls).toHaveLength(7);
+        yield* environment.retry(root);
+        fail = false;
+        yield* environment.ensure(root, report);
+        expect(calls).toHaveLength(8);
       });
       yield* run.pipe(Effect.provide(layer.pipe(Layer.provide(processes))));
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
