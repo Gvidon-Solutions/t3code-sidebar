@@ -13,6 +13,10 @@ import { useOpenFileDialogStore } from "../files/openFileDialogState";
 it("opens the preserved versions on the losing machine from the last automatic resolution", async () => {
   const onOpenChange = vi.fn();
   const copies = {
+    locations: [
+      { environmentId: "primary", path: "/primary/.t3-conflicts/copy" },
+      { environmentId: "replica", path: "/replica/.t3-conflicts/copy" },
+    ],
     environmentId: "primary",
     path: "/primary/.t3-conflicts/2026-11-03T00:00:00.000Z/",
   };
@@ -62,12 +66,12 @@ it("opens the preserved versions on the losing machine from the last automatic r
   await expect
     .element(page.getByText("1 conflict resolved automatically · copies in .t3-conflicts"))
     .toBeVisible();
-  await userEvent.click(page.getByRole("button", { name: "Open copies" }));
+  await userEvent.click(page.getByRole("button", { name: "Open copies on replica" }));
   expect(onOpenChange).toHaveBeenCalledWith(false);
   expect(useOpenFileDialogStore.getState().initialEnvironmentId).toBe(
-    EnvironmentId.make("primary"),
+    EnvironmentId.make("replica"),
   );
-  expect(useOpenFileDialogStore.getState().initialPath).toBe(copies.path);
+  expect(useOpenFileDialogStore.getState().initialPath).toBe(copies.locations[1]!.path);
   useOpenFileDialogStore.getState().close();
 });
 

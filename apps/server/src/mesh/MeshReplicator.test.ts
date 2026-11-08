@@ -1,3 +1,4 @@
+import { keys } from "@t3tools/shared/meshLayout";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import { CommandId, EventId } from "@t3tools/contracts";
 import * as PubSub from "effect/PubSub";
@@ -371,6 +372,18 @@ it.effect("reports peer watermarks and retains old tombstones while a linked pee
       seq: 1,
       ackReceivedSeq: seq,
     });
+    linked = [
+      ...linked,
+      {
+        ...linked[0]!,
+        environmentId: EnvironmentId.make("readonly-peer"),
+        access: "read-only",
+        status: "expired",
+      },
+    ];
+    yield* replicator.sync;
+    expect((yield* mesh.read).document["machine/deleted"]).toBeDefined();
+    linked = linked.filter((peer) => peer.environmentId !== "readonly-peer");
     yield* replicator.sync;
     expect((yield* mesh.read).document["machine/deleted"]).toBeUndefined();
   }).pipe(Effect.scoped),
@@ -435,7 +448,7 @@ it.effect("restores a wiped store with a new generation without erasing survivin
               );
             if (
               input.environmentId === "laptop" &&
-              Object.hasOwn(decodeExchange(input.arguments).entries, "proj/example.title")
+              Object.hasOwn(decodeExchange(input.arguments).entries, keys.projectTitle("example"))
             )
               yield* Deferred.succeed(pushed, undefined);
             // oxlint-disable-next-line t3code/no-inline-schema-compile -- The peer selects the response schema per call.

@@ -1,7 +1,8 @@
+import { meshRetryDelay } from "../../mesh/retryBackoff.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- These tests drive the Node byte-stream boundary.
 import type * as NodeStream from "node:stream";
 import { expect, it, vi } from "vite-plus/test";
-import { PeerChannel, preferConnection, reconnectDelay } from "./PeerChannel.ts";
+import { PeerChannel, preferConnection } from "./PeerChannel.ts";
 
 function pair(
   call: (body: unknown, signal: AbortSignal) => Promise<unknown> = async (body) => body,
@@ -57,9 +58,9 @@ it("chooses the same physical socket at both ends, regardless of arrival order",
     expect(preferConnection(self, peer, true)).toBe(preferConnection(peer, self, false));
     expect(preferConnection(self, peer, true)).not.toBe(preferConnection(self, peer, false));
   }
-  expect(reconnectDelay(0, 0)).toBe(800);
-  expect(reconnectDelay(0, 1)).toBe(1000);
-  expect(reconnectDelay(10, 1)).toBe(15_000);
+  expect(meshRetryDelay(0, 0)).toBe(1000);
+  expect(meshRetryDelay(0, 1)).toBe(1000);
+  expect(meshRetryDelay(10, 1)).toBe(15_000);
 });
 
 it("multiplexes concurrent calls and notifications without bypassing the receiving handler", async () => {
@@ -108,11 +109,14 @@ it("cancels remote work, times out calls and releases timers on disconnect", asy
 
 it("detects a peer that stops reading even while it keeps sending unrelated traffic", () => {
   const p = pair();
+  expect(p.left.nextTickDelay()).toBe(15_000);
   p.advance(15_000);
   p.left.tick();
+  expect(p.left.nextTickDelay()).toBe(30_000);
   expect(JSON.parse(p.leftWire[0]!)).toMatchObject({ type: "ping" });
   p.advance(30_000);
   p.left.receive(JSON.stringify({ type: "event", name: "noise", body: null }));
+  expect(p.left.nextTickDelay()).toBe(15_000);
   p.advance(15_000);
   p.left.tick();
   expect(p.closed[0]?.message).toBe("Peer heartbeat timed out");

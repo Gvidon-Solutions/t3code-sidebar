@@ -1,5 +1,7 @@
+import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 import { assert, it, vi } from "@effect/vitest";
 import {
+  DeliveryDrainError,
   MessageId,
   NodeId,
   ProviderDriverKind,
@@ -1474,3 +1476,59 @@ it.effect("leaves delegated tasks to their own child threads after process loss"
     assert.deepEqual(noted, [`subagent ${nativeSubagentId}`]);
   }).pipe(Effect.provide(layer));
 });
+
+it.effect(
+  "keeps admission read failures typed and reads deferred runs once per recovery pass",
+  () => {
+    let failing = true;
+    let reads = 0;
+    const failure = new DeliveryDrainError({ message: "Admission unavailable" });
+    const layer = ProviderRuntimeRecovery.layer.pipe(
+      Layer.provide(ServerSettings.layerTest()),
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(DeliveryAdmission)({
+            deferredRunIds: Effect.suspend(() => {
+              reads++;
+              return failing ? Effect.fail(failure) : Effect.succeed(new Set<string>());
+            }),
+          }),
+          Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getRecoveryThreadIds: () =>
+              Effect.succeed([ThreadId.make("first"), ThreadId.make("second")]),
+            getRuntimeRecoveryProjection: (id) =>
+              Effect.succeed({
+                thread: { id },
+                runs: [],
+                nodes: [],
+                runtimeRequests: [],
+                providerSessions: [],
+                providerThreads: [],
+                turnItems: [],
+              } as unknown as OrchestrationV2ThreadProjection),
+          }),
+          Layer.mock(EventSink.EventSinkV2)({}),
+          IdAllocator.layer,
+          Layer.mock(EffectWorker.OrchestrationEffectWorkerV2)({
+            runRecoveryOnce: Effect.succeed(false),
+          }),
+          Layer.mock(EffectOutbox.EffectOutboxV2)({
+            reconcileAfterProcessLoss: Effect.succeed({ requeued: 0, cancelled: 0 }),
+            cancelUnsettled: () => Effect.succeed([]),
+            signalCancellations: () => Effect.void,
+          }),
+        ),
+      ),
+    );
+    return Effect.gen(function* () {
+      const recovery = yield* ProviderRuntimeRecovery.ProviderRuntimeRecoveryService;
+      const error = yield* recovery.recover.pipe(Effect.flip);
+      assert.equal(error._tag, "ProviderRuntimeRecoveryError");
+      assert.strictEqual(error.cause, failure);
+      failing = false;
+      reads = 0;
+      yield* recovery.recover;
+      assert.equal(reads, 1);
+    }).pipe(Effect.provide(layer));
+  },
+);

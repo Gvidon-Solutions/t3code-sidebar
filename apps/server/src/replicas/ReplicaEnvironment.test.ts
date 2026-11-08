@@ -3,6 +3,7 @@ import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import { ReplicaEnvironment, environmentCommands, layer } from "./ReplicaEnvironment.ts";
 import * as Processes from "../processRunner.ts";
@@ -29,59 +30,88 @@ it("installs requirements through uv on both platforms", () => {
     );
   }
 });
-it.effect("installs once, refreshes lock changes and retains failures for a successful retry", () =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const root = yield* fs.makeTempDirectoryScoped({ prefix: "s1-full-" });
-    yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "initial");
-    const calls: Processes.ProcessRunInput[] = [];
-    let fail = false;
-    const processes = Layer.succeed(Processes.ProcessRunner, {
-      run: (input) =>
+it.effect(
+  "installs once, refreshes lock changes and persists bounded install backoff and resets on a lock change or explicit retry",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "s1-full-" });
+      yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "initial");
+      const calls: Processes.ProcessRunInput[] = [];
+      let fail = false;
+      const processes = Layer.succeed(Processes.ProcessRunner, {
+        run: (input) =>
+          Effect.sync(() => {
+            calls.push(input);
+            return {
+              code: (fail ? 1 : 0) as Processes.ProcessRunOutput["code"],
+              stdout: "",
+              stderr: fail ? "dependency unavailable" : "",
+              timedOut: false,
+              stdoutTruncated: false,
+              stderrTruncated: false,
+              stdoutInvalidUtf8: false,
+              stderrInvalidUtf8: false,
+            };
+          }),
+      });
+      const states: string[] = [];
+      const report = (state: string) =>
         Effect.sync(() => {
-          calls.push(input);
-          return {
-            code: (fail ? 1 : 0) as Processes.ProcessRunOutput["code"],
-            stdout: "",
-            stderr: fail ? "dependency unavailable" : "",
-            timedOut: false,
-            stdoutTruncated: false,
-            stderrTruncated: false,
-            stdoutInvalidUtf8: false,
-            stderrInvalidUtf8: false,
-          };
-        }),
-    });
-    const states: string[] = [];
-    const report = (state: string) =>
-      Effect.sync(() => {
-        states.push(state);
+          states.push(state);
+        });
+      const run = Effect.gen(function* () {
+        const environment = yield* ReplicaEnvironment;
+        yield* environment.ensure(root, report);
+        yield* environment.ensure(root, report);
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toMatchObject({
+          command: "pnpm",
+          args: ["install", "--frozen-lockfile"],
+          cwd: root,
+          timeout: "10 minutes",
+        });
+        expect(states).toEqual(["installing", "ready", "ready"]);
+        yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "changed");
+        fail = true;
+        expect((yield* environment.ensure(root, report).pipe(Effect.flip)).message).toContain(
+          "dependency unavailable",
+        );
+        fail = false;
+        expect(yield* environment.ensure(root, report).pipe(Effect.isFailure)).toBe(true);
+        expect(calls).toHaveLength(2);
+        yield* Effect.gen(function* () {
+          expect(
+            yield* (yield* ReplicaEnvironment).ensure(root, report).pipe(Effect.isFailure),
+          ).toBe(true);
+        }).pipe(Effect.provide(layer.pipe(Layer.provide(processes), Layer.fresh)));
+        expect(calls).toHaveLength(2);
+        yield* TestClock.adjust("1 minute");
+        yield* environment.ensure(root, report);
+        expect(calls).toHaveLength(3);
+        yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "fixed");
+        yield* environment.ensure(root, report);
+        expect(calls).toHaveLength(4);
+        yield* Effect.gen(function* () {
+          yield* (yield* ReplicaEnvironment).ensure(root, report);
+        }).pipe(Effect.provide(layer.pipe(Layer.provide(processes), Layer.fresh)));
+        expect(calls).toHaveLength(4);
+        yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "persistent failure");
+        fail = true;
+        yield* environment.ensure(root, report).pipe(Effect.flip);
+        yield* TestClock.adjust("1 minute");
+        yield* environment.ensure(root, report).pipe(Effect.flip);
+        yield* TestClock.adjust("2 minutes");
+        yield* environment.ensure(root, report).pipe(Effect.flip);
+        expect(calls).toHaveLength(7);
+        yield* TestClock.adjust("1 day");
+        yield* environment.ensure(root, report).pipe(Effect.flip);
+        expect(calls).toHaveLength(7);
+        yield* environment.retry(root);
+        fail = false;
+        yield* environment.ensure(root, report);
+        expect(calls).toHaveLength(8);
       });
-    const run = Effect.gen(function* () {
-      const environment = yield* ReplicaEnvironment;
-      yield* environment.ensure(root, report);
-      yield* environment.ensure(root, report);
-      expect(calls).toHaveLength(1);
-      expect(calls[0]).toMatchObject({
-        command: "pnpm",
-        args: ["install", "--frozen-lockfile"],
-        cwd: root,
-        timeout: "10 minutes",
-      });
-      expect(states).toEqual(["installing", "ready", "ready"]);
-      yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "changed");
-      fail = true;
-      expect((yield* environment.ensure(root, report).pipe(Effect.flip)).message).toContain(
-        "dependency unavailable",
-      );
-      fail = false;
-      yield* environment.ensure(root, report);
-      expect(calls).toHaveLength(3);
-      yield* Effect.gen(function* () {
-        yield* (yield* ReplicaEnvironment).ensure(root, report);
-      }).pipe(Effect.provide(layer.pipe(Layer.provide(processes), Layer.fresh)));
-      expect(calls).toHaveLength(3);
-    });
-    yield* run.pipe(Effect.provide(layer.pipe(Layer.provide(processes))));
-  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+      yield* run.pipe(Effect.provide(layer.pipe(Layer.provide(processes))));
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );

@@ -158,7 +158,7 @@ export function diff(
       !Object.hasOwn(after.machines, entry.v)
     ) {
       entries[key] = { v: null, h: nextHlc };
-      entries[`mesh.machineClaim/${encodeURIComponent(entry.v)}`] = { v: null, h: nextHlc };
+      entries[keys.machineClaim(entry.v)] = { v: null, h: nextHlc };
     }
   }
   return entries;

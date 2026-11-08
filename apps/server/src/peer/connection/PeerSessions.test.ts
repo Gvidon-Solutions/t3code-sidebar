@@ -431,7 +431,9 @@ describe("PeerSessions", () => {
       });
       expect(status.find((s) => s.environmentId === String(E))?.state).toBe("offline");
       yield* sessions.close(C, "Fixture relay unavailable");
-      const lost = (yield* sessions.status).find((state) => state.environmentId === D);
+      const afterClose = yield* sessions.status;
+      expect(afterClose.find((state) => state.environmentId === D)).toBeUndefined();
+      const lost = afterClose.find((state) => state.environmentId === C);
       expect(lost).toMatchObject({ state: "offline", lastError: "Fixture relay unavailable" });
       expect(lost?.offlineSince).toBeTypeOf("string");
     }).pipe(Effect.provide(testLayer([B, C, E])), Effect.scoped),

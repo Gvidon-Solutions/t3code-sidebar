@@ -568,7 +568,7 @@ export interface RunExecutionServiceV2StartRootRunInput {
   readonly nativeThreadHasTurns?: boolean;
   readonly loadInheritedBackgroundTurnItems?: () => Effect.Effect<
     ReadonlyArray<InheritedBackgroundTurnItemRoute>,
-    unknown
+    ProjectionStoreV2Error
   >;
   readonly relatedThreadIds?: ReadonlyArray<ThreadId>;
   readonly relatedProviderThreadIds?: ReadonlyArray<ProviderThreadId>;

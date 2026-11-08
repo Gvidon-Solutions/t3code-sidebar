@@ -16,6 +16,20 @@ mtimes without changing native inputs. Expo 58 defaults to cleaning on prebuild:
 refreshes require `--no-clean`. Preserved Gradle history also requires declaring native fingerprint
 and JS inputs on Expo Updates resource generation. See [delivery.md](../delivery.md#android-builds).
 
+## Retry and bootstrap lifetimes (F2b)
+
+`mesh/retryBackoff.ts` defines the shared 1–15 second schedule for peer reconnects,
+layout exchange, bootstrap readiness and fork recovery. Expiry cleanup makes seven attempts,
+logs exhaustion and retains its durable staging record for recovery after restart; committed
+fork intents retain their resumable retry path. Bootstrap polls `pair --check` for readiness
+before minting one pairing token. The check reads the runtime descriptor without opening the
+auth database.
+
+`T3_MESH_JOINING=1` marks a newly bootstrapped service that is waiting to receive its mesh
+config. `MeshConfigMigration` suppresses standalone config seeding while that config is absent;
+identity migration proceeds normally after it arrives. `MeshInstall` writes the marker into the
+new service environment. Ordinary standalone installations omit it.
+
 ## Private delivery (D1)
 
 `scripts/delivery/` owns the private builder queue, warm build clone, target allowlist,
@@ -23,7 +37,9 @@ serial rollout and stopped-DB/unit rollback. The t3ctl `delivery-client.mjs` for
 to a private socket; customer paths never enter public workflow configuration. Targets read
 B1 health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
 `mesh/DeliveryAdmission.ts` fences run creation inside EventSink write transactions and
-serializes provider starts with closing admission. Its operational journal survives restart;
+allows concurrent provider starts while drain exclusively waits for all admitted starts.
+Abandoned persisted fences expire at startup one minute after their deadline. Admission
+failures stay typed during outbox/runtime recovery; deferred ids are read once per recovery pass. Its operational journal survives restart;
 already accepted dormant starts remain in the outbox without occupying worker slots or spending
 retry attempts. Cancellation wakes the worker and queue promotions. Checking provider-session
 inactivity alone misses accepted start effects and internal queue promotions.
@@ -78,7 +94,7 @@ readable from anywhere, and agents that know where they are.
 | Machine           | one T3 server (`environmentId`), label/tag/color/aliases, reported SSH facts                                    | config + layout `machine/<env>`                               |
 | Link              | server-to-server MCP session with config-defined permissions                                                    | each server's PeerLinks table                                 |
 | Mesh              | machines + links; desired state in the mesh config (`mesh.config`), no central authority                        | layout `mesh.config`, bindings                                |
-| Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>.title`, `rep/<id>/<env>`, `alias/*`         |
+| Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `projTitle/<id>`, `rep/<id>/<env>`, `alias/*`          |
 | Representation    | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores)                            | layout `rep/*`                                                |
 | Sync session      | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
 | Thread            | lives on one machine, working dir inside one representation (or "No project")                                   | that machine's DB                                             |
@@ -105,10 +121,33 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   both peer cursors. Connection-up notifications clear retry backoff before exchanging
   watermarks. Clock rejections and quarantine reasons are
   exposed by `meshLayout.status`. Tombstones require thirty days and acknowledgement from
-  every currently linked full-access peer before collection.
+  every currently linked peer, including read-only and expired links, before collection.
+  Authorship records expire after thirty days independently of tombstone acknowledgements.
   Web and mobile mount one `MeshLayoutProvider` each; their hooks adapt RPC and persistence
   to `packages/client-runtime/src/state/meshLayoutClient.ts` (`MeshLayoutStore`). The store
   owns snapshots, subscriptions, optimistic edits and the persisted reconnect outbox.
+  Its cache stores documents rather than derived config; rejected edits rebuild from confirmed
+  entries plus the remaining outbox. Authorization refusals retain edits for re-authentication.
+  `meshLayout/resolveAlias.ts` resolves complete chains; a cycle uses its smallest member,
+  excluding the incoming tail. HLC generation refuses clock skew or exhausted counters rather
+  than emitting a repeated or decreasing clock. Known keys require canonical URI segments, and
+  representation values must match their key environment. Titles use `projTitle/<id>`; old
+  `proj/<id>.title` registers migrate without confusing ids ending in `.title`. Cache migration
+  runs once with the first server aliases; live merges preserve opaque ids. Config inputs require
+  schema one while replicated future revisions remain forwardable and refuse their planners.
+  Migrated titles escape glob wildcards. Key helpers encode machine claims/bindings, and malformed
+  URI segments are ignored by client materialization paths.
+- **Peer receipts.** `peer/connection/PeerReceipts.ts` reserves an in-flight key before SQL
+  and atomically inserts its durable intent. Receipt migration 83 adds indexed creation times;
+  startup and hourly-on-use sweeps retain thirty days, including interrupted requests. Stored
+  responses are capped at 64 KiB of encoded bytes; an oversized response still reaches its
+  original caller, while retries receive an explicit 413 receipt rather than repeating work.
+- **Bounded peer state.** `PeerMcpClient` hashes HTTP session identities and removes rejected
+  sessions on 401, including a failed renewal. `PeerSessions` retains route history only for
+  current links/layout machines or live advertisements. `PeerChannel.nextTickDelay` schedules
+  heartbeat/death deadlines directly rather than ticking every second. `MeshStateBackup` keeps
+  ten completed snapshots, protects the current token, and removes incomplete directories older
+  than a day and stale temporary files under its private root.
 - **Routing.** A call for another machine goes direct when linked, else through one relay hop:
   `apps/server/src/mesh/MeshRouting.ts` (`callRouted`) used by `PeerForwarding`, files and forks.
 - **Replicas.** `apps/server/src/replicas/`: `MutagenInstaller` (pinned 0.18.1, sha256),
@@ -183,6 +222,9 @@ primary's login environment, streams output and flushes results back. `--list`, 
 Ignored outputs are named with “stayed on <machine>”. The timeout bounds synchronization and
 remote execution. Plain environment commands explain how to use `t3 run` and exit 127;
 configure their names with `replicas.remoteCommands`.
+
+When the server socket is unavailable, `RunClient` permits local execution only after a valid
+manifest proves the cwd is outside a lite replica. Missing or invalid manifests refuse with 75.
 
 The runtime CLI and private local-server socket live in `apps/server/src/run/Run{Cli,Client,Ipc,Control}.ts`.
 `RunPlan` maps the nearest representation's relative cwd onto its primary. `RunPreparation`
@@ -299,7 +341,7 @@ catalog, not a machine name or an assumed operating system.
   on an unreachable connection must never produce a model's switch-machine suggestion.
 - Provider authentication and model availability belong to the destination machine. Keep an
   unavailable explicit selection visible, and test catalog caching when adding pending targets.
-- The standalone CLI layout encoder must stay in parity with shared core, including `proj/*`
+- The standalone CLI layout encoder must stay in parity with shared core, including `projTitle/*`
   title entries. Extend `agent-kit/skills/t3/shared-parity.test.mjs` when adding layout fields;
   CLI-only fixtures can otherwise miss data silently.
 
@@ -584,6 +626,16 @@ name. Defaults anchor generated outputs at the root while excluding nested
 node_modules. `ReplicaEnvironment.ts` installs full-mode environments after sync,
 persists a lock-content fingerprint under ignored `.t3`, and refreshes on changes;
 replica messages report environment installing/ready/failed with the failure reason.
+Choosing `full` in a placement or config rule explicitly authorizes package managers and
+lifecycle scripts from synchronized project files. A failed fingerprint is stored in
+`.t3/environment.failed` with its attempt count and retry deadline. The same lock gets at most
+three attempts, with one- and two-minute delays that survive restart; exhaustion requires an
+explicit Retry or lock change. This replaces endless thirty-second install retries.
+The runner uses the injected environment and stops its private daemon at scope shutdown.
+Before replacing ignores or endpoint paths it flushes and verifies the old session so pending
+deletions keep their ancestry. Conflict reports carry every losing location for both clients.
+Remote scripts use the target platform's login shell. SSH reconciliation reloads sshd
+configuration and selects source/bundled entrypoints from runtime facts.
 `ReplicaLiveStatus.lag` reports remaining staging files in either direction. `bytesBehind`
 is included only when the remaining total is known (the final file in each active
 queue); Mutagen reports the current file size, not a total queue size. A clean watching
@@ -611,6 +663,21 @@ transition and scan-problem paths. Inspection rejects missing sessions and reque
 sent to a non-driver. R1 inspects after flush; F1 forwards flush to the replica server.
 Mutagen's list argument is a **label selector**, not a session name: list managed
 sessions and then select the name when inspecting/removing a single session.
+
+`run/RunWorker` keeps completed background records for seven days and bounds each
+journal to 10 MiB. `T3CODE_RUN_RETENTION_MS`, `T3CODE_RUN_LOG_BYTES` and
+`T3CODE_RUN_KILL_GRACE_MS` override those limits (termination defaults to ten seconds).
+Journal rotation preserves complete frames; observers recover completion from the durable
+record. A missing supervisor marks the outcome lost instead of reconnecting forever.
+The forwarding guardian stops for missing jobs, backs off transient failures and caps its log.
+Ignored directories are pruned during output inspection and reported as whole directories;
+this warning is conservative because nested writes cannot be detected without scanning them.
+SSH uses a fifteen-second connection deadline and fifteen-second keepalives.
+
+`delivery/MobileOta` caches decoded manifests and an asset index until the atomically published
+catalog changes. Serving and publishing verify content hashes; corrupt bytes cannot replace an
+existing catalog. Provider startup fallbacks log their original causes while preserving accepted
+turn ingestion. Mobile layout failures show a dialog, including a clock-skew refusal.
 
 The context note states representation, lite/full mode, primary and sync state;
 lite replicas say `build/test/git: t3 run <cmd>`. `AgentContextBudget.test.ts`
@@ -644,7 +711,7 @@ Use `t3ctl mesh machines add cloudbox --ssh user@host[:port]`. SSH agent authent
 
 `MeshRuntimeArchive.ts` shares release URL/platform naming and SHA256SUMS parsing with the existing runtime installer. `MeshInstall.ts` executes `platform/ServerPlatform.ts` service plans: Linux systemd user+linger or root system unit, macOS launchd agent, Windows SCM host. The Windows host implements ServiceBase and supervises the launcher process tree.
 
-`t3ctl mesh update VERSION --plan` plans a config edit; without `--plan` it applies it. `--max-wait 5m` sets `t3.drain.maxWaitMs`; `--now` binds `t3.drain.skipForVersion` to that target only. A normal update clears the skip flag even for the same version, preserving other policy fields. WS `meshConfig.updateVersion`, MCP `t3_mesh_update` and config plan/apply share the typed policy. `MeshRollout.ts` orders bound config names lexically. A candidate obtains durable votes from every configured server before publishing the layout lease (owner/token/expiry). Outstanding votes fence a partitioned owner even after expiry; recovery by that owner releases them only when its launcher has no pending update. The existing protocol-3 launcher backs up the stopped state DB, installs/verifies and trials the selected runtime. Activation starts peer replication before the trial checks version, peer layout convergence and resumed replicas. Failure reason is recorded outside the DB so rollback preserves it; the restored server publishes a stop marker for that config revision before releasing its lease. A new config revision is required to retry. `T3_MESH_TEST_MODE=1` plus `T3_MESH_TEST_FAIL_HEALTH_VERSION` enables the test-only health failure.
+`t3ctl mesh update VERSION --plan` plans a config edit; without `--plan` it applies it. `--max-wait 5m` sets `t3.drain.maxWaitMs`; `--now` binds `t3.drain.skipForVersion` to that target only. A normal update clears the skip flag even for the same version, preserving other policy fields. WS `meshConfig.updateVersion`, MCP `t3_mesh_update` and config plan/apply share the typed policy. `MeshRollout.ts` orders bound config names lexically. A candidate obtains durable votes from every configured server before publishing the layout lease (owner/token/expiry). Outstanding votes fence a partitioned owner even after expiry; recovery by that owner releases them only when its launcher has no pending update. The existing protocol-3 launcher backs up the stopped state DB, installs/verifies and trials the selected runtime. Activation starts peer replication before the trial checks version, peer layout convergence and resumed replicas. Failure reason is recorded outside the DB so rollback preserves it; the restored server publishes a stop marker for that config revision before releasing its lease. A new config revision is required to retry. Unit trial failures are injected through `MeshRollout.layerTest`.
 
 CLI operations have MCP equivalents `t3_mesh_machine_add`, `t3_mesh_update`, `t3_mesh_status` and the credential API. Peer-only update voting accepts trusted full-access links. Test servers set `T3_MESH_AGENT_HOME`, `T3_MESH_SSH_HOME`, private sshd and Mutagen data directories. Native Windows/macOS replica smoke coverage lives in `.github/workflows/mesh-platform-smoke.yml`.
 

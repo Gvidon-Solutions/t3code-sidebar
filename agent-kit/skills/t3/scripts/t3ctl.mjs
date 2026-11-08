@@ -501,7 +501,7 @@ const MESH_KEYS = {
   order: (project) => `order/${encodeURIComponent(project)}`,
   fold: (workspace, project) =>
     `fold/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}`,
-  projectTitle: (key) => `proj/${encodeURIComponent(key)}.title`,
+  projectTitle: (key) => `projTitle/${encodeURIComponent(key)}`,
   alias: (key) => `alias/${encodeURIComponent(key)}`,
   representation: (logical, env) => `rep/${encodeURIComponent(logical)}/${encodeURIComponent(env)}`,
   representationStatus: (logical, env) =>
@@ -632,12 +632,17 @@ export function nextMachineClock(document, now, deviceId) {
     .at(-1);
   const [lastMs, lastCounter] = last?.split(".") ?? ["0", "0"];
   const ceiling = Math.floor(now) + 300_000;
-  let ms = Math.min(ceiling, Math.max(Math.floor(now), Number(lastMs)));
+  let ms = Math.max(Math.floor(now), Number(lastMs));
   let counter = last && ms === Number(lastMs) ? Number(lastCounter) + 1 : 0;
-  if (ms === ceiling) counter = Math.min(counter, 99999);
   if (counter > 99999) {
     ms++;
     counter = 0;
+  }
+  if (ms > ceiling) {
+    throw new Error("Mesh clock is ahead of this device; correct the device clock before editing");
+  }
+  if (!Number.isSafeInteger(ms) || ms < 0 || ms > 9999999999999 || !deviceId) {
+    throw new Error("HLC out of range");
   }
   return `${String(ms).padStart(13, "0")}.${String(counter).padStart(5, "0")}.${deviceId}`;
 }

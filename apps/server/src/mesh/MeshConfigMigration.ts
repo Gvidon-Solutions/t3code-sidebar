@@ -1,3 +1,4 @@
+import { keys } from "@t3tools/shared/meshLayout";
 import { ProjectService } from "../project/ProjectService.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { MeshConfigRevision } from "@t3tools/contracts";
@@ -57,8 +58,8 @@ export const layer = Layer.effectDiscard(
       [`mesh.configHistory/${encodeURIComponent(h)}`]: { v: value, h },
     };
     for (const [name, environmentId] of Object.entries(migration.bindings)) {
-      entries[`mesh.machineBinding/${name}`] = { v: environmentId, h };
-      entries[`mesh.machineClaim/${encodeURIComponent(environmentId)}`] = {
+      entries[keys.machineBinding(name)] = { v: environmentId, h };
+      entries[keys.machineClaim(environmentId)] = {
         v: { name, machine: migration.doc.machines[name]! } as Json,
         h,
       };

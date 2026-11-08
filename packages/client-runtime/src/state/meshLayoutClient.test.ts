@@ -7,7 +7,13 @@ import type {
   SidebarWorkspace,
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
-import { materialize, merge, type MeshLayoutDocument } from "@t3tools/shared/meshLayout";
+import {
+  keys,
+  migrateLogicalProjectIds,
+  materialize,
+  merge,
+  type MeshLayoutDocument,
+} from "@t3tools/shared/meshLayout";
 import { describe, expect, it } from "vite-plus/test";
 
 import { machineTag, mergeSuggestionsFor, offlineLogicalProjects } from "./meshLayout/index.ts";
@@ -219,6 +225,7 @@ describe("mesh layout cache and optimistic edits", () => {
     await mesh.edit((config) => addWorkspace(config).config);
     expect(mesh.current.outbox).toEqual({});
     expect(failures).toHaveLength(1);
+    expect(mesh.current.snapshot?.config.workspaces).toEqual([]);
     expect(isPermanentMeshLayoutFailure(rpc.applyError)).toBe(true);
     expect(isPermanentMeshLayoutFailure(new Error("offline"))).toBe(false);
   });
@@ -262,10 +269,11 @@ describe("MeshLayoutClient sources", () => {
       secondary: { "ws/b": { v: { name: "Secondary", sort: "a" }, h: "0000000000001.00000.seed" } },
     });
     const environments = [source("primary"), source("secondary")];
-    const { mesh } = client(rpc, environments);
+    const { mesh, failures } = client(rpc, environments);
     await mesh.start();
     expect(rpc.subscriptions).toEqual(["primary"]);
     rpc.fail(env("primary"), new Error("disconnected"));
+    expect(failures).toEqual([]);
     await Promise.resolve();
     await Promise.resolve();
     expect(rpc.subscriptions).toEqual(["primary", "secondary"]);
@@ -451,10 +459,20 @@ it("merges the upgrade snapshot with a legacy offline cache without stealing the
     ...emptyMeshLayoutState(),
     snapshot: { environmentId: "studio", document, config: materialize(document) },
   };
-  const state = mergeMeshLayoutSnapshot(cached, {
-    ...upgradeFixture,
-    config: materialize(upgradeFixture.document),
-  });
+  const restored = parseMeshLayoutCache(serializeMeshLayoutCache(cached))!;
+  const migrated = migrateLogicalProjectIds(
+    merge(restored.snapshot!.document, upgradeFixture.document),
+  );
+  const state = mergeMeshLayoutSnapshot(
+    {
+      ...restored,
+      snapshot: { ...restored.snapshot!, document: migrated, config: materialize(migrated) },
+    },
+    {
+      ...upgradeFixture,
+      config: materialize(upgradeFixture.document),
+    },
+  );
   const config = state.snapshot!.config;
   const machines = buildMeshMachines({
     config,
@@ -475,5 +493,110 @@ it("merges the upgrade snapshot with a legacy offline cache without stealing the
       ["studio", "primary"],
       ["cloudbox", "replica"],
     ]);
+  }
+});
+
+it("restores the document and offline outbox independently of obsolete derived config", () => {
+  const state = editMeshLayout(
+    mergeMeshLayoutSnapshot(emptyMeshLayoutState(), snapshotOf("studio", {})),
+    (config) => ({ ...config, quietAfterDays: 23 }),
+    { deviceId: "phone", now: 1000 },
+  ).state;
+  const cache = JSON.stringify({
+    ...state,
+    snapshot: { ...state.snapshot, config: { obsolete: true } },
+  });
+  const restored = parseMeshLayoutCache(cache);
+  expect(restored?.outbox).toEqual(state.outbox);
+  expect(restored?.snapshot?.config.quietAfterDays).toBe(23);
+  expect(JSON.parse(serializeMeshLayoutCache(state)).snapshot.config).toBeUndefined();
+});
+it("retains unauthorized edits until authorization returns", async () => {
+  const rpc = new FakeRpc({ primary: {} });
+  const { mesh } = client(rpc, [source("primary")]);
+  await mesh.start();
+  rpc.applyError = { _tag: "EnvironmentAuthorizationError" };
+  await mesh.edit((config) => addWorkspace(config).config);
+  expect(Object.keys(mesh.current.outbox).length).toBeGreaterThan(0);
+  rpc.applyError = null;
+  await mesh.refreshEnvironments();
+  expect(mesh.current.outbox).toEqual({});
+  expect(materialize(rpc.documents.get("primary")!).workspaces).toHaveLength(1);
+  mesh.dispose();
+});
+it("restores the server value when a queued overwrite is permanently rejected", async () => {
+  const rpc = new FakeRpc({
+    primary: { "ws.quietAfterDays": { v: 7, h: "0000000000001.00000.studio" } },
+  });
+  const { mesh, persistence } = client(rpc, [source("primary")]);
+  await mesh.start();
+  rpc.applyError = new Error("offline");
+  await mesh.edit((config) => ({ ...config, quietAfterDays: 23 }));
+  expect(mesh.current.snapshot?.config.quietAfterDays).toBe(23);
+  rpc.applyError = { _tag: "MeshLayoutError", reason: "invalid_entries" };
+  await mesh.replayOutbox();
+  expect(mesh.current.snapshot?.config.quietAfterDays).toBe(7);
+  expect(persistence.saved()?.snapshot?.config.quietAfterDays).toBe(7);
+  expect(mesh.current.outbox).toEqual({});
+  mesh.dispose();
+});
+it("reports clock skew without changing the cached document or outbox", async () => {
+  const rpc = new FakeRpc({
+    primary: { "ws/main": { v: { name: "Main", sort: "a" }, h: "0000001000000.00000.studio" } },
+  });
+  const { mesh, failures } = client(rpc, [source("primary")]);
+  await mesh.start();
+  const before = mesh.current;
+  await expect(mesh.edit((config) => ({ ...config, quietAfterDays: 23 }))).rejects.toThrow("clock");
+  expect(mesh.current).toBe(before);
+  expect(failures).toHaveLength(1);
+  expect(rpc.applies).toEqual([]);
+  mesh.dispose();
+});
+
+it("keeps opaque dotted project ids unchanged while merging live snapshots", () => {
+  const document = {
+    [keys.projectTitle("a.b/c")]: { v: "Opaque", h: "0000000000002.00000.studio" },
+  };
+  const state = mergeMeshLayoutSnapshot(emptyMeshLayoutState(), {
+    environmentId: "studio",
+    document,
+    config: materialize(document),
+  });
+  expect(state.snapshot?.config.projectTitles["a.b/c"]).toBe("Opaque");
+  expect(state.snapshot?.document).toEqual(document);
+});
+
+it("migrates a hydrated cache once using the first server aliases", async () => {
+  const h = "0000000000001.00000.studio";
+  const legacy = "studio:/application";
+  const document = { [keys.projectTitle(legacy)]: { v: "Offline", h } };
+  const persistence = memoryPersistence({
+    ...emptyMeshLayoutState(),
+    snapshot: snapshotOf("studio", document),
+    outbox: document,
+  });
+  const rpc = new FakeRpc({
+    studio: { [keys.alias(legacy)]: { v: "application", h: "0000000000002.00000.studio" } },
+  });
+  const mesh = new MeshLayoutStore({
+    rpc,
+    persistence,
+    environments: () => [source("studio")],
+    primaryEnvironmentId: () => null,
+    deviceId: "laptop",
+    now: () => 1000,
+  });
+  try {
+    await mesh.start();
+    expect(mesh.current.snapshot?.config.projectTitles.application).toBe("Offline");
+    expect(rpc.applies[0]?.entries[keys.projectTitle("application")]?.v).toBe("Offline");
+    const opaque = {
+      [keys.projectTitle("a.b/c")]: { v: "Unchanged", h: "0000000000003.00000.studio" },
+    };
+    rpc.push(env("studio"), merge(rpc.documents.get("studio")!, opaque));
+    expect(mesh.current.snapshot?.config.projectTitles["a.b/c"]).toBe("Unchanged");
+  } finally {
+    mesh.dispose();
   }
 });

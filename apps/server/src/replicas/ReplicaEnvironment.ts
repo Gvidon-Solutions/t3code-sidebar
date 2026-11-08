@@ -1,5 +1,8 @@
 import { virtualEnvironmentPython } from "../platform/ServerPlatform.ts";
 import { ReplicaError } from "@t3tools/contracts";
+import { meshRetryDelay } from "../mesh/retryBackoff.ts";
+import * as Clock from "effect/Clock";
+import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -9,6 +12,14 @@ import * as Digest from "effect/crypto/Digest";
 import * as Hex from "effect/encoding/Hex";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as ProcessRunner from "../processRunner.ts";
+
+const Failure = Schema.Struct({
+  fingerprint: Schema.String,
+  attempts: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 3 })),
+  retryAt: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+});
+const decodeFailure = Schema.decodeEffect(Schema.fromJsonString(Failure));
+const encodeFailure = Schema.encodeEffect(Schema.fromJsonString(Failure));
 
 const locks = [
   "pnpm-lock.yaml",
@@ -56,6 +67,7 @@ export function environmentCommands(files: readonly string[], platform: string) 
 export class ReplicaEnvironment extends Context.Service<
   ReplicaEnvironment,
   {
+    readonly retry: (root: string) => Effect.Effect<void, ReplicaError>;
     readonly ensure: (
       root: string,
       report: (
@@ -74,6 +86,18 @@ export const layer = Layer.effect(
     const platform = yield* HostProcess.Platform;
     const processes = yield* ProcessRunner.ProcessRunner;
     return ReplicaEnvironment.of({
+      retry: Effect.fn("ReplicaEnvironment.retry")((root) =>
+        fs.remove(path.join(root, ".t3", "environment.failed"), { force: true }).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ReplicaError({
+                reason: "storage",
+                message: "Cannot reset the failed environment fingerprint.",
+                cause,
+              }),
+          ),
+        ),
+      ),
       ensure: Effect.fn("ReplicaEnvironment.ensure")(
         function* (root, report) {
           const chunks: Uint8Array[] = [];
@@ -96,35 +120,74 @@ export const layer = Layer.effect(
           }
           const fingerprint = Hex.encode(yield* digest.digest(Digest.sha256, bytes));
           const marker = path.join(root, ".t3", "environment.sha256");
+          const failed = path.join(root, ".t3", "environment.failed");
           if (yield* fs.exists(marker)) {
             if ((yield* fs.readFileString(marker)) === fingerprint) {
               yield* report("ready");
               return;
             }
           }
+          const prior = (yield* fs.exists(failed))
+            ? yield* decodeFailure(yield* fs.readFileString(failed))
+            : undefined;
+          const attempts = prior?.fingerprint === fingerprint ? prior.attempts : 0;
+          if (attempts >= 3)
+            return yield* new ReplicaError({
+              reason: "storage",
+              message:
+                "Environment installation exhausted three attempts for this lock fingerprint. Retry explicitly or update the lockfile.",
+            });
+          if (
+            prior?.fingerprint === fingerprint &&
+            (yield* Clock.currentTimeMillis) < prior.retryAt
+          )
+            return yield* new ReplicaError({
+              reason: "storage",
+              message:
+                "Environment installation is waiting for its retry backoff. Retry explicitly or update the lockfile.",
+            });
           const commands = environmentCommands(files, platform);
           if (!commands.length) {
             yield* report("ready");
             return;
           }
           if (commands.length) yield* report("installing");
-          for (const { command, args } of commands) {
-            const result = yield* processes.run({
-              command,
-              args,
-              cwd: root,
-              timeout: "10 minutes",
-              maxOutputBytes: 1024 * 1024,
-              outputMode: "truncate",
-            });
-            if (result.code !== 0)
-              return yield* new ReplicaError({
-                reason: "storage",
-                message: `Environment install failed: ${command} exited ${result.code}; ${result.stderr.trim().slice(-1000)}`,
+          yield* Effect.gen(function* () {
+            for (const { command, args } of commands) {
+              const result = yield* processes.run({
+                command,
+                args,
+                cwd: root,
+                timeout: "10 minutes",
+                maxOutputBytes: 1024 * 1024,
+                outputMode: "truncate",
               });
-          }
+              if (result.code !== 0)
+                return yield* new ReplicaError({
+                  reason: "storage",
+                  message: `Environment install failed: ${command} exited ${result.code}; ${result.stderr.trim().slice(-1000)}`,
+                });
+            }
+          }).pipe(
+            Effect.tapError(() =>
+              Effect.gen(function* () {
+                yield* fs.makeDirectory(path.dirname(failed), { recursive: true });
+                yield* fs.writeFileString(
+                  failed,
+                  yield* encodeFailure({
+                    fingerprint,
+                    attempts: attempts + 1,
+                    retryAt:
+                      (yield* Clock.currentTimeMillis) +
+                      meshRetryDelay(attempts, 1, { initialMs: 60000, maxMs: 15 * 60000 }),
+                  }),
+                );
+              }),
+            ),
+          );
           yield* fs.makeDirectory(path.dirname(marker), { recursive: true });
           yield* fs.writeFileString(marker, fingerprint);
+          yield* fs.remove(failed, { force: true });
           yield* report("ready");
         },
         Effect.mapError(

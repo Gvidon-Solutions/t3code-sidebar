@@ -153,3 +153,52 @@ it("converges under random three-replica interleaving, duplication and reorderin
     expect(replicas[0]).toEqual(replicas[2]);
   }
 });
+it("rejects noncanonical keys and mismatched representation identities before materialization", () => {
+  const h = "0000000000000.00000.studio";
+  const rep = {
+    environmentId: "studio",
+    path: "/work",
+    transport: "git",
+    role: "primary",
+    createdAt: "",
+  };
+  for (const key of ["rep/p/cloudbox", "rep/%70/studio", "rep/p/%73tudio"]) {
+    expect(validateLayoutEntry(key, { v: rep, h })).not.toBeNull();
+    expect(() => materialize({ [key]: { v: rep, h } })).not.toThrow();
+  }
+  let seed = 19;
+  const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0);
+  const segments = ["studio", "%73tudio", "%", "a%2fb", "a%2Fb", "__proto__", "a.b"];
+  for (let i = 0; i < 1000; i++) {
+    const key = `rep/${segments[random() % segments.length]}/${segments[random() % segments.length]}`;
+    const document = { [key]: { v: rep, h } };
+    expect(() => materialize(document)).not.toThrow();
+  }
+});
+it("ignores invalid scalar settings and deleted or malformed writers", () => {
+  const h = "0000000000000.00000.studio";
+  expect(
+    materialize({
+      "ws.default": { v: 12, h },
+      "ws.quietAfterDays": { v: -1, h },
+      "writer/studio": { v: null, h },
+      "writer/%": { v: true, h },
+    }),
+  ).toMatchObject({ defaultWorkspace: null, quietAfterDays: 5 });
+  expect(materialize({ "writer/studio": { v: null, h } }).meshWriters).toBeUndefined();
+});
+it("orders competing representation claims by HLC bytes independently of locale", () => {
+  const v = {
+    environmentId: "studio",
+    path: "/work",
+    transport: "git",
+    role: "primary",
+    createdAt: "",
+  };
+  const config = materialize({
+    "rep/p/studio": { v, h: "0000000000001.00000.Z" },
+    "rep/q/studio": { v, h: "0000000000001.00000.a" },
+  });
+  expect(config.projectMounts.p).toEqual([]);
+  expect(config.projectMounts.q).toEqual([v]);
+});

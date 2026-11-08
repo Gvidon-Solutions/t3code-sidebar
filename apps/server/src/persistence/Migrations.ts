@@ -85,6 +85,7 @@ import Migration0079 from "./Migrations/079_DelegatedRecoveryIndexes.ts";
 import Migration0080 from "./Migrations/080_MeshLayout.ts";
 import Migration0082 from "./Migrations/082_PeerIdentityBindings.ts";
 import Migration0081 from "./Migrations/081_PeerConnections.ts";
+import Migration0083 from "./Migrations/083_PeerReceiptRetention.ts";
 
 const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
@@ -171,6 +172,7 @@ const migrationEntries = [
   [80, "MeshLayout", Migration0080],
   [81, "PeerConnections", Migration0081],
   [82, "PeerIdentityBindings", Migration0082],
+  [83, "PeerReceiptRetention", Migration0083],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -213,6 +215,32 @@ const reconcileForkMeshLayoutMigration = Effect.fn("reconcileForkMeshLayoutMigra
         }
         yield* sql`DELETE FROM effect_sql_migrations WHERE (migration_id = 77 AND name = 'MeshLayout') OR (migration_id = 78 AND name = 'PeerConnections')`;
         yield* Effect.logInfo("Moved the sidebar fork's MeshLayout migration from 77 to 80");
+      }),
+    );
+  },
+);
+
+// Unreleased F2b databases used 82 for receipts before peer identity took that id.
+const reconcileForkPeerReceiptMigration = Effect.fn("reconcileForkPeerReceiptMigration")(
+  function* () {
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql.withTransaction(
+      Effect.gen(function* () {
+        const tables =
+          yield* sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'`;
+        if (tables.length === 0) return;
+        const legacy =
+          yield* sql`SELECT migration_id FROM effect_sql_migrations WHERE migration_id = 82 AND name = 'PeerReceiptRetention'`;
+        if (legacy.length === 0) return;
+        const later =
+          yield* sql`SELECT migration_id FROM effect_sql_migrations WHERE migration_id > 82`;
+        if (later.length > 0)
+          return yield* new Migrator.MigrationError({
+            kind: "BadState",
+            message: "Cannot move the fork's receipt migration with later migrations recorded.",
+          });
+        yield* sql`DELETE FROM effect_sql_migrations WHERE migration_id = 82 AND name = 'PeerReceiptRetention'`;
+        yield* Effect.logInfo("Moved the sidebar fork's receipt migration from 82 to 83");
       }),
     );
   },
@@ -266,6 +294,9 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   if (includesV2) {
     if (toMigrationInclusive === undefined || toMigrationInclusive >= 80) {
       yield* reconcileForkMeshLayoutMigration();
+    }
+    if (toMigrationInclusive === undefined || toMigrationInclusive >= 82) {
+      yield* reconcileForkPeerReceiptMigration();
     }
     yield* assertV2MigrationsCanRun(toMigrationInclusive);
   }

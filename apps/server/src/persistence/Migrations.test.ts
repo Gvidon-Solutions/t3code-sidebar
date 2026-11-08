@@ -1,5 +1,6 @@
 import legacyMeshLayout from "./Migrations/080_MeshLayout.ts";
 import peerConnections from "./Migrations/081_PeerConnections.ts";
+import receiptRetention from "./Migrations/083_PeerReceiptRetention.ts";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -166,15 +167,57 @@ describe("runMigrations", () => {
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
-  it.effect("upgrades plain upstream v0.1.7 without a migration collision", () =>
+  it.effect.each(["upstream", "identity", "receipts", "receipts-partial"] as const)(
+    "upgrades %s without a migration collision",
+    (source) =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* runMigrations({
+          toMigrationInclusive: source === "upstream" ? 79 : source === "identity" ? 82 : 81,
+        });
+        if (source === "receipts" || source === "receipts-partial") {
+          yield* receiptRetention;
+          yield* sql`INSERT INTO effect_sql_migrations (migration_id, name) VALUES (82, 'PeerReceiptRetention')`;
+          yield* sql`INSERT INTO peer_call_receipts (environment_id, request_key, request_body, result, created_at) VALUES ('studio', 'saved', '{}', '{"saved":true}', 42)`;
+        }
+        if (source === "receipts-partial") {
+          assert.deepStrictEqual(
+            (yield* runMigrations({ toMigrationInclusive: 82 })).map(([id]) => id),
+            [82],
+          );
+        }
+        assert.deepStrictEqual(
+          (yield* runMigrations()).map(([id]) => id),
+          source === "upstream" ? [80, 81, 82, 83] : source === "receipts" ? [82, 83] : [83],
+        );
+        assert.deepStrictEqual(yield* history, migrationManifest);
+        assert.deepStrictEqual(yield* sql`SELECT COUNT(*) AS count FROM peer_session_identities`, [
+          { count: 0 },
+        ]);
+        if (source === "receipts" || source === "receipts-partial") {
+          assert.deepStrictEqual(yield* sql`SELECT result, created_at FROM peer_call_receipts`, [
+            { result: '{"saved":true}', created_at: 42 },
+          ]);
+        }
+        assert.deepStrictEqual(yield* runMigrations(), []);
+      }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+  );
+
+  it.effect("refuses to remap receipt history with unknown later migrations", () =>
     Effect.gen(function* () {
-      yield* runMigrations({ toMigrationInclusive: 79 });
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 81 });
+      yield* receiptRetention;
+      yield* sql`INSERT INTO effect_sql_migrations (migration_id, name) VALUES (82, 'PeerReceiptRetention'), (83, 'UnknownFork')`;
+      const before = yield* history;
+      const exit = yield* Effect.exit(runMigrations());
+      assert.isTrue(Exit.isFailure(exit));
+      assert.include(String(exit), "Cannot move the fork's receipt migration");
+      assert.deepStrictEqual(yield* history, before);
       assert.deepStrictEqual(
-        (yield* runMigrations()).map(([id]) => id),
-        [80, 81, 82],
+        yield* sql`SELECT name FROM sqlite_master WHERE name = 'peer_session_identities'`,
+        [],
       );
-      assert.deepStrictEqual(yield* history, migrationManifest);
-      assert.deepStrictEqual(yield* runMigrations(), []);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );
 
@@ -197,7 +240,7 @@ describe("runMigrations", () => {
 
         assert.deepStrictEqual(
           (yield* runMigrations()).map(([id]) => id),
-          [77, 78, 79, 80, 81, 82],
+          [77, 78, 79, 80, 81, 82, 83],
         );
         assert.deepStrictEqual(yield* history, migrationManifest);
         assert.deepStrictEqual(yield* sql`SELECT value FROM mesh_layout_entries`, [

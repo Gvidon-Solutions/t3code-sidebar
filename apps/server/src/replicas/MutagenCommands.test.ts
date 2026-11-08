@@ -1,4 +1,5 @@
 import { it, expect } from "@effect/vitest";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
@@ -43,7 +44,8 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
         calls.every(
           (call) =>
             call.command === "/isolated/bin/mutagen" &&
-            call.env?.MUTAGEN_DATA_DIRECTORY === "/isolated/mutagen",
+            call.env?.MUTAGEN_DATA_DIRECTORY === "/isolated/mutagen" &&
+            call.env?.PATH === "fixture",
         ),
       ).toBe(true);
       privateStateExists = true;
@@ -73,6 +75,7 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
       expect(args).toContain("--no-global-configuration");
       fail = true;
       expect((yield* runner.reset("session").pipe(Effect.flip)).reason).toBe("mutagen");
+      fail = false;
     }).pipe(
       Effect.provide(
         Runner.layer.pipe(
@@ -85,6 +88,7 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
             ),
           ),
           Layer.provide(processes),
+          Layer.provide(Layer.succeed(HostProcess.Environment, { PATH: "fixture" })),
           Layer.provide(
             Layer.succeed(Installer.MutagenInstaller, {
               executable: Effect.succeed("/isolated/bin/mutagen"),
@@ -94,5 +98,6 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
         ),
       ),
     );
+    expect(calls.at(-1)?.args).toEqual(["daemon", "stop"]);
   }),
 );

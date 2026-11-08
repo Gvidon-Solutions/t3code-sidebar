@@ -131,6 +131,11 @@ export const MeshConfigDocument = open({
   ),
 });
 export type MeshConfigDocument = typeof MeshConfigDocument.Type;
+// Replicated revisions retain future schemas; local inputs implement version one.
+export const MeshConfigDocumentV1 = open({
+  ...MeshConfigDocument.schema.fields,
+  schema: Schema.Literal(1),
+});
 export const MeshConfigRevision = Schema.Struct({
   sequence: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   revision: Schema.String,

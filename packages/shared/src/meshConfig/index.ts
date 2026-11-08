@@ -1,8 +1,10 @@
 import {
   DEFAULT_REPLICA_IGNORES,
   MeshConfigDocument,
+  MeshConfigDocumentV1,
   MeshConfigRevision,
 } from "@t3tools/contracts";
+import { decodeLayoutKey } from "../meshLayout/document.ts";
 import * as Schema from "effect/Schema";
 import { parse, stringify } from "yaml";
 
@@ -17,7 +19,7 @@ export const defaults = (): MeshConfigDocument => ({
   replicas: { ignore: [...DEFAULT_REPLICA_IGNORES] },
   agents: { aliases: defaultAgentAliases() },
 });
-const decodeConfig = Schema.decodeUnknownSync(MeshConfigDocument, { errors: "all" });
+const decodeConfig = Schema.decodeUnknownSync(MeshConfigDocumentV1, { errors: "all" });
 const decodeJson = Schema.decodeUnknownSync(Schema.Json);
 export const parseConfig = (input: unknown): MeshConfigDocument =>
   decodeConfig(decodeJson(typeof input === "string" ? parse(input) : input));
@@ -31,17 +33,25 @@ export const effectiveLinkPermissions = (config: MeshConfigDocument, a: string, 
     threads: override?.threads ?? config.links?.default?.threads ?? true,
   };
 };
+const globTokens = (pattern: string) => {
+  const characters = [...pattern];
+  const tokens: { value: string; wildcard: boolean }[] = [];
+  for (let i = 0; i < characters.length; i++) {
+    const value = characters[i]!;
+    if (value === "\\" && i + 1 < characters.length)
+      tokens.push({ value: characters[++i]!, wildcard: false });
+    else tokens.push({ value, wildcard: value === "*" || value === "?" });
+  }
+  return tokens;
+};
+export const escapeProjectGlob = (title: string) => title.replace(/[\\*?]/g, "\\$&");
 const glob = (pattern: string, title: string) =>
   new RegExp(
-    `^${pattern
-      .split("*")
-      .map((s) =>
-        s
-          .split("?")
-          .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-          .join("."),
+    `^${globTokens(pattern)
+      .map(({ value, wildcard }) =>
+        wildcard ? (value === "*" ? ".*" : ".") : value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
       )
-      .join(".*")}$`,
+      .join("")}$`,
     "u",
   ).test(title);
 const DEFAULT_IGNORES = [
@@ -104,8 +114,10 @@ export const configDiff = (
 };
 
 const globsOverlap = (patternA: string, patternB: string) => {
-  const a = [...patternA];
-  const b = [...patternB];
+  const a = globTokens(patternA);
+  const b = globTokens(patternB);
+  const star = (token: (typeof a)[number] | undefined) =>
+    token?.wildcard === true && token.value === "*";
   const pending: [number, number][] = [[0, 0]];
   const seen = new Set<string>();
   while (pending.length) {
@@ -114,14 +126,14 @@ const globsOverlap = (patternA: string, patternB: string) => {
     if (seen.has(key)) continue;
     seen.add(key);
     if (i === a.length && j === b.length) return true;
-    if (a[i] === "*") pending.push([i + 1, j]);
-    if (b[j] === "*") pending.push([i, j + 1]);
+    if (star(a[i])) pending.push([i + 1, j]);
+    if (star(b[j])) pending.push([i, j + 1]);
     if (
       i < a.length &&
       j < b.length &&
-      (a[i] === b[j] || a[i] === "*" || a[i] === "?" || b[j] === "*" || b[j] === "?")
+      (a[i]!.value === b[j]!.value || a[i]!.wildcard || b[j]!.wildcard)
     )
-      pending.push([a[i] === "*" ? i : i + 1, b[j] === "*" ? j : j + 1]);
+      pending.push([star(a[i]) ? i : i + 1, star(b[j]) ? j : j + 1]);
   }
   return false;
 };
@@ -191,7 +203,9 @@ export const configFromLayout = (document: Readonly<Record<string, { readonly v:
 export const bindingsFromLayout = (document: Readonly<Record<string, { readonly v: unknown }>>) =>
   Object.fromEntries(
     Object.entries(document).flatMap(([key, entry]) =>
-      key.startsWith("mesh.machineBinding/") && typeof entry.v === "string"
+      key.startsWith("mesh.machineBinding/") &&
+      decodeLayoutKey(key)?.length === 2 &&
+      typeof entry.v === "string"
         ? [[decodeURIComponent(key.slice(20)), entry.v]]
         : [],
     ),

@@ -325,3 +325,83 @@ it.effect(
       yield* admission.cancel("forced");
     }).pipe(Effect.provide(layer)),
 );
+it.effect("expires a persisted fence after its deadline and restart grace", () =>
+  Effect.gen(function* () {
+    const admission = yield* Admission.DeliveryAdmission;
+    yield* admission.drain({ requestId: "abandoned", deadlineMs: 1000, now: true });
+    yield* TestClock.adjust("62 seconds");
+    const sql = yield* SqlClient.SqlClient;
+    const context = yield* Layer.build(Layer.fresh(Admission.layer)).pipe(
+      Effect.provideService(SqlClient.SqlClient, sql),
+    );
+    const restarted = Context.get(context, Admission.DeliveryAdmission);
+    assert.equal((yield* restarted.status).phase, "open");
+    yield* restarted.withStart(Effect.void);
+  }).pipe(Effect.provide(layer)),
+);
+it.effect("refuses effect-only starts for an inactive run while draining", () =>
+  Effect.gen(function* () {
+    const admission = yield* Admission.DeliveryAdmission;
+    yield* admission.drain({ requestId: "effect-only", deadlineMs: 1000, now: true });
+    const failure = yield* admission.guard([], ["missing-run"]).pipe(Effect.result);
+    assert.equal(failure._tag, "Failure");
+  }).pipe(Effect.provide(layer)),
+);
+it.effect("admits independent provider starts concurrently while no drain owns the gate", () =>
+  Effect.gen(function* () {
+    const admission = yield* Admission.DeliveryAdmission;
+    const firstEntered = yield* Deferred.make<void>();
+    const secondEntered = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const first = yield* admission
+      .withStart(
+        Deferred.succeed(firstEntered, undefined).pipe(Effect.andThen(Deferred.await(release))),
+      )
+      .pipe(Effect.forkChild);
+    yield* Deferred.await(firstEntered);
+    const second = yield* admission
+      .withStart(
+        Deferred.succeed(secondEntered, undefined).pipe(Effect.andThen(Deferred.await(release))),
+      )
+      .pipe(Effect.forkChild);
+    yield* Deferred.await(secondEntered);
+    yield* Deferred.succeed(release, undefined);
+    yield* Fiber.join(first);
+    yield* Fiber.join(second);
+  }).pipe(Effect.provide(layer)),
+);
+it.effect("keeps admission storage failures in the outbox recovery error channel", () =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const outbox = yield* Outbox.EffectOutboxV2;
+    yield* sql`DROP TABLE delivery_admission`;
+    const error = yield* outbox.reconcileAfterProcessLoss.pipe(Effect.flip);
+    assert.equal(error._tag, "EffectOutboxError");
+  }).pipe(Effect.provide(layer)),
+);
+it.effect("can cancel a start queued behind drain without waiting for another provider", () =>
+  Effect.gen(function* () {
+    const admission = yield* Admission.DeliveryAdmission;
+    const entered = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const attempted = yield* Deferred.make<void>();
+    const first = yield* admission
+      .withStart(Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release))))
+      .pipe(Effect.forkChild);
+    yield* Deferred.await(entered);
+    const drain = yield* admission
+      .drain({ requestId: "interrupt-gate", deadlineMs: 1000 })
+      .pipe(Effect.forkChild);
+    const second = yield* Deferred.succeed(attempted, undefined).pipe(
+      Effect.andThen(admission.withStart(Effect.void)),
+      Effect.forkChild,
+    );
+    yield* Deferred.await(attempted);
+    yield* Fiber.interrupt(second);
+    yield* Deferred.succeed(release, undefined);
+    yield* Fiber.join(first);
+    assert.equal((yield* Fiber.join(drain)).phase, "drained");
+    yield* admission.cancel("interrupt-gate");
+    yield* admission.withStart(Effect.void);
+  }).pipe(Effect.provide(layer)),
+);

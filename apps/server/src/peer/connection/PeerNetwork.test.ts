@@ -484,9 +484,17 @@ const pairNetwork = Effect.fn("test.pairNetwork")(function* (
   yield* from.links.link({ url: to.url, pairingCode: pairing.credential, access: "full-access" });
 });
 const waitEvent = Effect.fn("test.waitPeerEvent")(
-  (network: Effect.Success<ReturnType<typeof serve>>, name: string, environmentId: string) =>
+  (
+    network: Effect.Success<ReturnType<typeof serve>>,
+    name: string,
+    environmentId: string,
+    accepts: (body: unknown) => boolean = () => true,
+  ) =>
     network.sessions.events.pipe(
-      Stream.filter((event) => event.name === name && event.environmentId === environmentId),
+      Stream.filter(
+        (event) =>
+          event.name === name && event.environmentId === environmentId && accepts(event.body),
+      ),
       Stream.runHead,
       Effect.forkScoped({ startImmediately: true }),
     ),
@@ -709,6 +717,31 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
     yield* laptop.sessions.start;
     yield* Fiber.join(laptopLinked);
     yield* Fiber.join(laptopRoute);
+    const advertised = yield* waitEvent(
+      laptop,
+      "peer.routes",
+      cloudbox.id,
+      (body) => isRoutes(body) && body.routes.includes("transient-one"),
+    );
+    yield* cloudbox.sessions.event(laptop.id, "peer.routes", {
+      routes: [studio.id, "transient-one", "transient-two"],
+    });
+    yield* Fiber.join(advertised);
+    expect(
+      (yield* laptop.sessions.status).some((peer) => peer.environmentId === "transient-one"),
+    ).toBe(true);
+    const withdrawnTransient = yield* waitEvent(
+      laptop,
+      "peer.routes",
+      cloudbox.id,
+      (body) => isRoutes(body) && !body.routes.includes("transient-one"),
+    );
+    yield* cloudbox.sessions.event(laptop.id, "peer.routes", { routes: [studio.id] });
+    yield* Fiber.join(withdrawnTransient);
+    expect(
+      (yield* laptop.sessions.status).some((peer) => peer.environmentId.startsWith("transient-")),
+    ).toBe(false);
+
     expect((yield* cloudbox.links.get(studio.id)).pipe(Option.getOrThrow).urls).toEqual([]);
     expect(
       (yield* cloudbox.links.list).find((link) => link.environmentId === studio.id)?.status,

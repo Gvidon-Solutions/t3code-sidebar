@@ -109,6 +109,39 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — F2b layout and replica-run data-loss fixes
+
+- **What.** Offline edits survive derived-config upgrades; rejected optimistic writes roll back,
+  and authorization failures stay queued. Invalid representation keys cannot crash the sidebar.
+- **How.** Canonical key validation, monotonic bounded HLC refusal, shared cycle resolution,
+  bytewise clock ordering, thirty-day authorship retention and all-linked-peer tombstone GC.
+  `t3 run` refuses an unavailable server when the manifest cannot prove local execution is safe.
+- **Where.** Shared `meshLayout`, client-runtime `meshLayoutClient`, server
+  `MeshLayoutServiceLive`, `MeshReplicator` and `run/RunClient`; regression tests beside them.
+- Delivery admission now waits for in-flight starts without serializing independent providers,
+  checks effect-only starts, expires abandoned fences on startup, and preserves typed recovery
+  failures while reading deferred ids once per recovery pass.
+- Peer receipts reserve keys atomically, retain thirty days and cap stored response bytes at
+  64 KiB; migration 83 preserves existing receipts while adding indexed creation timestamps.
+- Peer route history and revoked HTTP sessions are collected; session cache identities hash the
+  bearer. Heartbeats use their actual deadlines. State backups retain ten completed snapshots
+  and collect stale temporary files without replacing a resumed token’s original snapshot.
+- Shared retry delays stay between one and fifteen seconds. Fork expiry retries are bounded,
+  bootstrap checks readiness before minting a token, and rollout failure injection belongs to
+  a test layer. `pair --check` probes a running server without opening its auth database.
+
+- Detached run supervisors validate control messages, retain bounded journals and completed
+  records, recover lost completion frames, and stop reconnecting to vanished jobs. Termination
+  grace is configurable and normal exits no longer send an unconditional process-group kill.
+
+- Cache migration runs once with server aliases, title registers have a separate family and
+  migrated project globs escape literal wildcards. Config inputs require schema one while future
+  replicated revisions stay forwardable.
+- Full replicas retain failed install fingerprints until retry or lock change. Mutagen lifetimes,
+  injected environments, ancestry flushes, login shells, SSH config reloads and every conflict-copy
+  location have focused regressions. OTA serving and publishing verify content hashes and cache
+  catalog indexes; provider recovery logs include causes and mobile layout failures show a dialog.
+
 ### 2026-11-08 — F2a security and repository privacy
 
 - **What.** Public sources contain neutral infrastructure examples. Linked callers, server-delivered

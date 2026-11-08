@@ -85,17 +85,19 @@ export function requestRun(
           );
         })
         .sort((a, b) => b.root.length - a.root.length)[0];
-      if (match?.lite) throw cause;
-    } catch (error) {
-      if (
-        !(
-          error instanceof Error &&
-          "code" in error &&
-          error.code === "ENOENT" &&
-          !process.env.T3CODE_RUN_SOCKET
-        )
-      )
-        throw error;
+      if (match?.lite)
+        return {
+          ok: false,
+          code: 75,
+          message: "The local T3 server is unavailable; cannot synchronize this lite replica.",
+        } as const;
+    } catch {
+      return {
+        ok: false,
+        code: 75,
+        message:
+          "The local T3 server and representation manifest are unavailable; cannot prove this directory is outside a replica.",
+      } as const;
     }
     return { ok: true, plan: { kind: "local" }, remoteCommands: DEFAULT_REMOTE_COMMANDS } as const;
   });

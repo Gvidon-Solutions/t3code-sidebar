@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
@@ -249,4 +250,99 @@ it.effect("renews a missing peer session once and preserves creation keys throug
     expect(requestKeys[6]).toMatch(/^peer:[0-9a-f]{64}$/);
     expect(requestKeys[6]).not.toBe(requestKeys[2]);
   }).pipe(Effect.scoped),
+);
+it.effect.each([false, true])(
+  "evicts unauthorized sessions even when renewal fails (renewal: %s)",
+  (renewal) =>
+    Effect.gen(function* () {
+      const prefix = renewal ? [200, 202, 404, 401] : [200, 202, 401];
+      const statuses = [...prefix, 200, 202, 200];
+      const sessionHeaders: Array<string | undefined> = [];
+      const http = HttpClient.make((request) =>
+        Effect.sync(() => {
+          const index = sessionHeaders.length;
+          sessionHeaders.push(request.headers["mcp-session-id"]);
+          const status = statuses[index];
+          if (status === undefined) throw new Error("Unexpected peer request");
+          return HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              index === statuses.length - 1
+                ? JSON.stringify({
+                    result: {
+                      content: [{ type: "text", text: '{"modes":"full-access/default"}' }],
+                    },
+                  })
+                : "",
+              {
+                status,
+                headers:
+                  index === 0
+                    ? { "mcp-session-id": "old" }
+                    : index === prefix.length
+                      ? { "mcp-session-id": "fresh" }
+                      : {},
+              },
+            ),
+          );
+        }),
+      );
+      const box = descriptorOf("environment-box", "Box");
+      const context = yield* Layer.build(
+        PeerMcpClient.layer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.succeed(HttpClient.HttpClient, http),
+              Layer.mock(PeerLinks.PeerLinks)({
+                resolve: () =>
+                  Effect.succeed({
+                    link: {
+                      environmentId: box.environmentId,
+                      label: box.label,
+                      urls: ["https://peer.example"],
+                      access: "auto",
+                      linkedAt: DateTime.makeUnsafe(0),
+                      expiresAt: DateTime.makeUnsafe(1),
+                      lastReachedAt: null,
+                      lastError: null,
+                    },
+                    url: "https://peer.example",
+                    token: "fixture",
+                  }),
+                recordOutcome: () => Effect.void,
+              }),
+            ),
+          ),
+        ),
+      );
+      const client = Context.get(context, PeerMcpClient.PeerMcpClient);
+      const call = () =>
+        client.call({
+          environmentId: box.environmentId,
+          tool: "probe",
+          arguments: {},
+          limits: { runtimeMode: "full-access", interactionMode: "default" },
+          success: Result,
+        });
+      expect((yield* call().pipe(Effect.flip)).code).toBe("capability_denied");
+      expect(yield* call()).toEqual({ modes: "full-access/default" });
+      expect(sessionHeaders[prefix.length]).toBeUndefined();
+      expect(sessionHeaders.at(-1)).toBe("fresh");
+    }).pipe(Effect.scoped),
+);
+it.effect("keeps bearer credentials out of HTTP session cache identities", () =>
+  Effect.gen(function* () {
+    const key = yield* PeerMcpClient.peerHttpSessionKey("https://peer.example", "bearer-secret");
+    expect(key).toMatch(/^[0-9a-f]{64}$/);
+    expect(key).not.toContain("bearer-secret");
+    expect(yield* PeerMcpClient.peerHttpSessionKey("https://peer.example", "bearer-secret")).toBe(
+      key,
+    );
+    expect(
+      yield* PeerMcpClient.peerHttpSessionKey("https://other.example", "bearer-secret"),
+    ).not.toBe(key);
+    expect(
+      yield* PeerMcpClient.peerHttpSessionKey("https://peer.example", "rotated-secret"),
+    ).not.toBe(key);
+  }).pipe(Effect.provide(NodeCrypto.layer)),
 );

@@ -1,3 +1,4 @@
+import { meshRetryDelay } from "../../mesh/retryBackoff.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalErrorInEffectCatch:off globalErrorInEffectFailure:off effectFnOpportunity:off runEffectInsideEffect:off -- The peer manager owns Node Duplex pipes, synchronous wire callbacks and its own retry clock; transport failures are intentionally plain Errors.
 import { authenticatedPeerHops } from "./peerIdentity.ts";
 import * as NodeNet from "node:net";
@@ -32,7 +33,7 @@ import * as PeerLinks from "../PeerLinks.ts";
 import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassification";
 import * as PeerFacts from "./PeerFacts.ts";
 import * as PeerTransport from "./PeerTransport.ts";
-import { PeerChannel, preferConnection, reconnectDelay } from "./PeerChannel.ts";
+import { PeerChannel, preferConnection } from "./PeerChannel.ts";
 import { PeerConnectionError } from "./PeerConnectionError.ts";
 import { forwardedCallLimits } from "../../mesh/MeshLinkPermissions.ts";
 import { McpInvocationContext, type McpCapability } from "../../mcp/McpInvocationContext.ts";
@@ -341,6 +342,7 @@ export const make = Effect.gen(function* () {
   const attempt = new Map<string, { attempt: number; nextAt: number; lastError: string | null }>();
   const offlineSince = new Map<string, string>();
   const knownRelays = new Set<string>();
+  const retainedRelays = new Set<string>();
   const reachableRelays = new Set<string>();
   const relayErrors = new Map<string, string>();
   const credentials = yield* Effect.serviceOption(PeerCredentials.PeerCredentials);
@@ -348,8 +350,17 @@ export const make = Effect.gen(function* () {
   const selfFacts = yield* factsReporter.collect;
   const selfId = String(self);
   const updateRelayState = (reason = "No connected relay advertises this machine") => {
+    const advertised = new Set(live.keys());
+    for (const entry of live.values()) for (const target of entry.routes) advertised.add(target);
     for (const target of knownRelays) {
-      if (live.has(target) || [...live.values()].some((entry) => entry.routes.has(target))) {
+      if (!advertised.has(target) && !retainedRelays.has(target)) {
+        knownRelays.delete(target);
+        reachableRelays.delete(target);
+        offlineSince.delete(target);
+        relayErrors.delete(target);
+        continue;
+      }
+      if (advertised.has(target)) {
         reachableRelays.add(target);
         offlineSince.delete(target);
         relayErrors.delete(target);
@@ -365,6 +376,7 @@ export const make = Effect.gen(function* () {
     for (const environmentId of Object.keys(previous.machines)) {
       if (environmentId === selfId) continue;
       knownRelays.add(environmentId);
+      retainedRelays.add(environmentId);
       const state = states.find((item) => item.environmentId === environmentId);
       offlineSince.set(
         environmentId,
@@ -698,18 +710,6 @@ export const make = Effect.gen(function* () {
       live.delete(env);
       existing.channel.close(new Error("Replaced by a newer peer connection"));
     }
-    const entry: Live = {
-      environmentId: env,
-      direction,
-      access,
-      connectedAt: DateTime.nowUnsafe().epochMilliseconds,
-      facts: undefined,
-      routes: new Set(),
-      linkObserved: direction === "outbound",
-      channel: undefined as unknown as PeerChannel,
-      wire,
-      call: callHandler,
-    };
     const channel = makeChannel(wire, nowMs, {
       call: async (body, signal) => {
         const decoded = decodeCallBody(body);
@@ -759,14 +759,28 @@ export const make = Effect.gen(function* () {
         }
       },
     });
-    entry.channel = channel;
+    const entry: Live = {
+      environmentId: env,
+      direction,
+      access,
+      connectedAt: DateTime.nowUnsafe().epochMilliseconds,
+      facts: undefined,
+      routes: new Set(),
+      linkObserved: direction === "outbound",
+      channel,
+      wire,
+      call: callHandler,
+    };
     live.set(env, entry);
     updateRelayState();
     attempt.delete(env);
     offlineSince.delete(env);
     yield* Effect.whileLoop({
       while: () => live.get(env)?.channel === channel,
-      body: () => Effect.sleep("1 second").pipe(Effect.andThen(Effect.sync(() => channel.tick()))),
+      body: () =>
+        Effect.sleep(channel.nextTickDelay()).pipe(
+          Effect.andThen(Effect.sync(() => channel.tick())),
+        ),
       step: () => undefined,
     }).pipe(Effect.forkScoped);
     yield* announce(entry);
@@ -990,7 +1004,7 @@ export const make = Effect.gen(function* () {
       const changed = state.lastError !== message || !offlineSince.has(env);
       attempt.set(env, {
         attempt: nextAttempt,
-        nextAt: nowMs() + reconnectDelay(nextAttempt - 1, jitter),
+        nextAt: nowMs() + meshRetryDelay(nextAttempt - 1, jitter),
         lastError: message,
       });
       if (!offlineSince.has(env)) offlineSince.set(env, DateTime.formatIso(DateTime.nowUnsafe()));
@@ -999,6 +1013,13 @@ export const make = Effect.gen(function* () {
   });
   const reconcile = Effect.gen(function* () {
     const ids = (yield* links.enabled) ? yield* links.ids : [];
+    retainedRelays.clear();
+    for (const id of ids) retainedRelays.add(String(id));
+    if (Option.isSome(mesh))
+      for (const id of Object.keys((yield* mesh.value.read).config.machines))
+        retainedRelays.add(id);
+    updateRelayState();
+
     for (const [id, fiber] of dialWorkers) {
       if (!ids.some((environmentId) => environmentId === id)) {
         yield* Fiber.interrupt(fiber);

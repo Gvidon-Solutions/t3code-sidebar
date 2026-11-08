@@ -45,6 +45,8 @@ it("encodes remote scripts without interpolating their quotes, paths or shell ex
   const source = "const root = 'C:\\\\Studio'; console.log('$HOME');";
   const command = nodeCommand(source);
   expect(command).not.toContain("$HOME");
+  expect(command).toContain('exec "$SHELL" -lc');
+  expect(nodeCommand(source, "win32")).toContain("powershell.exe -NoLogo -EncodedCommand");
   expect(command).toContain(Buffer.from(source).toString("base64"));
 });
 

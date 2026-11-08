@@ -1,3 +1,4 @@
+import { verifyMobileAssets } from "./target.mjs";
 import * as NodeChildProcess from "node:child_process";
 const { execFileSync } = NodeChildProcess;
 import * as NodeFS from "node:fs";
@@ -147,9 +148,11 @@ export async function buildAssets({
 }
 
 function copyMobileStore(store, destination) {
+  verifyMobileAssets(store);
   if (resolve(store) === resolve(destination)) return;
   mkdirSync(destination, { recursive: true, mode: 0o700 });
   cpSync(join(store, "assets"), join(destination, "assets"), { recursive: true });
+  verifyMobileAssets(destination);
   copyFileSync(join(store, "certificate.pem"), join(destination, "certificate.pem"));
   copyFileSync(join(store, "catalog.json"), join(destination, "catalog.json.tmp"));
   renameSync(join(destination, "catalog.json.tmp"), join(destination, "catalog.json"));

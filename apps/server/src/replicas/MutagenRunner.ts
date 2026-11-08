@@ -66,7 +66,11 @@ export const decodeSessions = Schema.decodeUnknownEffect(
 export interface ReplicaEndpoint {
   readonly path: string;
   readonly environmentId: string;
-  readonly route?: { readonly ssh: string; readonly identityFile?: string };
+  readonly route?: {
+    readonly ssh: string;
+    readonly platform?: string | undefined;
+    readonly identityFile?: string;
+  };
 }
 export interface CreateSession {
   readonly name: string;
@@ -93,13 +97,21 @@ export class MutagenRunner extends Context.Service<
       readonly root: string;
       readonly paths: readonly string[];
       readonly iso: string;
-      readonly route?: { readonly ssh: string; readonly identityFile?: string };
+      readonly route?: {
+        readonly ssh: string;
+        readonly platform?: string | undefined;
+        readonly identityFile?: string;
+      };
       readonly environmentId: string;
     }) => Effect.Effect<void, ReplicaError>;
     readonly conflictMtime: (input: {
       readonly root: string;
       readonly paths: readonly string[];
-      readonly route?: { readonly ssh: string; readonly identityFile?: string };
+      readonly route?: {
+        readonly ssh: string;
+        readonly platform?: string | undefined;
+        readonly identityFile?: string;
+      };
       readonly environmentId: string;
     }) => Effect.Effect<number, ReplicaError>;
     readonly create: (input: CreateSession) => Effect.Effect<void, ReplicaError>;
@@ -140,17 +152,19 @@ const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const environment = yield* HostProcess.Environment;
   const platform = yield* HostProcess.Platform;
+  let privateDaemonUsed = false;
   const run = Effect.fn("MutagenRunner.run")(function* (
     args: ReadonlyArray<string>,
     foreign = false,
   ) {
     const command = yield* installer.executable;
+    if (!foreign && !(args[0] === "daemon" && args[1] === "stop")) privateDaemonUsed = true;
     const result = yield* runner
       .run({
         command,
         args,
         env: {
-          ...process.env,
+          ...environment,
           MUTAGEN_DATA_DIRECTORY: foreign ? undefined : installer.dataDirectory,
           ...(!foreign
             ? mutagenSshEnvironment(platform, environment.T3_MESH_SSH_HOME, installer.dataDirectory)
@@ -170,8 +184,19 @@ const make = Effect.gen(function* () {
         message: "Mutagen command failed.",
         cause: result,
       });
+    if (!foreign) privateDaemonUsed = !(args[0] === "daemon" && args[1] === "stop");
     return result.stdout;
   });
+  yield* Effect.addFinalizer(() =>
+    privateDaemonUsed
+      ? run(["daemon", "stop"]).pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning("Cannot stop the private Mutagen daemon", { cause }),
+          ),
+          Effect.asVoid,
+        )
+      : Effect.void,
+  );
   const action = (verb: string) => (session: string) =>
     run(["sync", verb, session]).pipe(Effect.asVoid);
   const list = Effect.fn("MutagenRunner.list")((selector = "t3-logical") =>
@@ -211,7 +236,10 @@ const make = Effect.gen(function* () {
       .run({
         command: route ? "ssh" : "node",
         args: route
-          ? [...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME), nodeCommand(source)]
+          ? [
+              ...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME),
+              nodeCommand(source, route.platform),
+            ]
           : args,
         timeout: "60 seconds",
       })
@@ -290,7 +318,10 @@ const make = Effect.gen(function* () {
         .run({
           command: route ? "ssh" : "node",
           args: route
-            ? [...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME), nodeCommand(script)]
+            ? [
+                ...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME),
+                nodeCommand(script, route.platform),
+              ]
             : ["-e", script],
           timeout: "60 seconds",
         })
@@ -322,7 +353,10 @@ const make = Effect.gen(function* () {
         .run({
           command: route ? "ssh" : "node",
           args: route
-            ? [...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME), nodeCommand(source)]
+            ? [
+                ...sshArguments(route.ssh, environment.T3_MESH_SSH_HOME),
+                nodeCommand(source, route.platform),
+              ]
             : ["-e", source],
           timeout: "30 seconds",
         })

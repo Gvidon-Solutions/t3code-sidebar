@@ -12,7 +12,7 @@ export function adoptLegacy(
   const before = materialize(doc);
   const existing = new Map<string, string>();
   for (const workspace of [...before.workspaces]
-    .sort((a, b) => a.id.localeCompare(b.id))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .reverse()) {
     const entry = doc[keys.workspace(workspace.id)];
     if (entry && !entry.h.startsWith("0000000000000."))

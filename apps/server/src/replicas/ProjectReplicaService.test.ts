@@ -730,10 +730,15 @@ it.effect(
       const service = yield* ReplicaService.ProjectReplicaService;
       yield* service.reconcile;
       h.setSession({ status: "watching", ignore: {} });
+      h.validation.pending = ["deleted-file"];
+      h.validation.flush = Effect.sync(() => {
+        h.validation.pending = [];
+      });
       yield* service.place({ project: "repo", machine: "replica", ignores: ["new-ignore"] });
       yield* service.reconcile;
       expect(h.created).toHaveLength(2);
       expect(h.created[1]?.ignores).toContain("new-ignore");
+      expect(h.validation.pending).toEqual([]);
       expect(h.terminated).toHaveLength(1);
     }).pipe(Effect.provide(h.layer));
   },
@@ -836,6 +841,11 @@ it.effect("newest-wins compares each conflict independently and archives both lo
       { root: "/replica", paths: ["second"] },
     ]);
     expect(h.created).toHaveLength(1);
+    expect(
+      (yield* service.status)[0]?.conflictCopies?.locations
+        ?.map((entry) => entry.environmentId)
+        .sort(),
+    ).toEqual(["replica", "source"]);
   }).pipe(Effect.provide(h.layer));
 });
 
