@@ -118,6 +118,15 @@ const ws = new WebSocket(
 const pending = new Map();
 let seq = 0;
 let connected = false;
+ws.addEventListener("close", () => {
+  connected = false;
+  for (const [id, request] of pending) {
+    if (request.matches) {
+      pending.delete(id);
+      request.resolve({ ok: false, error: "replica stream closed before the requested transition" });
+    }
+  }
+});
 ws.onmessage = (event) => {
   for (const line of String(event.data).split("\n")) {
     if (!line.trim()) continue;
@@ -129,7 +138,21 @@ ws.onmessage = (event) => {
     const request = pending.get(message.requestId);
     if (!request) continue;
     if (message._tag === "Chunk") {
-      request.chunks.push(...message.values);
+      if (request.matches) {
+        request.chunks = message.values;
+        if (!request.ready) {
+          request.ready = true;
+          writeFileSync(request.readyFile, "ready");
+          ws.send(JSON.stringify({ _tag: "Ack", requestId: message.requestId }));
+          continue;
+        }
+        if (!message.values.some(request.matches)) {
+          ws.send(JSON.stringify({ _tag: "Ack", requestId: message.requestId }));
+          continue;
+        }
+      } else {
+        request.chunks.push(...message.values);
+      }
       if (request.firstChunk) {
         pending.delete(message.requestId);
         ws.send(JSON.stringify({ _tag: "Interrupt", requestId: message.requestId }));
@@ -139,7 +162,9 @@ ws.onmessage = (event) => {
       }
     } else if (message._tag === "Exit") {
       pending.delete(message.requestId);
-      if (request.firstChunk && message.exit._tag === "Success" && request.chunks.length > 0) {
+      if (request.matches) {
+        request.resolve({ ok: false, error: "replica stream ended before the requested transition" });
+      } else if (request.firstChunk && message.exit._tag === "Success" && request.chunks.length > 0) {
         request.resolve({ ok: true, value: request.chunks });
       } else if (message.exit._tag === "Success") {
         request.resolve({ ok: true, value: message.exit.value });
@@ -166,7 +191,7 @@ try {
 }
 
 let nextId = 0;
-const rpc = (method, payload = {}, { first = false } = {}) =>
+const rpc = (method, payload = {}, { first = false, matches, readyFile } = {}) =>
   new Promise((resolve, reject) => {
     if (!connected) return reject(new Error("websocket closed"));
     const id = String(nextId++);
@@ -177,6 +202,9 @@ const rpc = (method, payload = {}, { first = false } = {}) =>
     pending.set(id, {
       chunks: [],
       firstChunk: first,
+      matches,
+      readyFile,
+      ready: false,
       resolve: (value) => {
         clearTimeout(timer);
         resolve(value);
@@ -255,6 +283,15 @@ try {
   if (command === "rpc") {
     const method = argv[1];
     const value = await call(method, parseJson(argv[2]), { first: argv.includes("--first") });
+    console.log(JSON.stringify(value, null, 2));
+  } else if (command === "wait-replica") {
+    const [logicalKey, environmentId, state, readyFile] = argv.slice(1);
+    if (!logicalKey || !environmentId || !state || !readyFile) fail("wait-replica needs logical key, environment id, state and ready file");
+    const value = await call("replicas.status", {}, {
+      first: true,
+      readyFile,
+      matches: (snapshot) => snapshot.replicas.some((row) => row.logicalKey === logicalKey && row.environmentId === environmentId && row.state === state),
+    });
     console.log(JSON.stringify(value, null, 2));
   } else if (command === "get") {
     const value = await snapshot();

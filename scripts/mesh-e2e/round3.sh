@@ -35,6 +35,8 @@ set -e
 TIMEOUT=${MESH_E2E_ROUND3_TIMEOUT:-900}
 PARTITION_ACTIVE=0
 CRASH_TARGET=
+MOUNT_WATCH_PID=
+PLACEMENT_PID=
 declare -A CRASH_PEERS=()
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
 git -C "$REPO_ROOT" merge-base --is-ancestor "$source_commit" "$COMMIT" || die "Build lacks N: use MESH_E2E_BUILD_CURRENT=1 build.sh xdev-n, then deploy.sh while the bed is free"
@@ -148,7 +150,19 @@ project_options() {
 }
 ws_get gv > "$WORK/N-before.json"
 restore() {
-  local rc=$?
+  local rc=$? child child_status
+  for child in "$MOUNT_WATCH_PID" "$PLACEMENT_PID"; do
+    if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
+      kill "$child" || rc=1
+      if wait "$child"; then
+        printf 'Round three child %s finished during cleanup.\n' "$child"
+      else
+        child_status=$?
+        printf 'Round three child %s cleanup exit %s.\n' "$child" "$child_status" >&2
+        [ "$child_status" = 143 ] || rc=1
+      fi
+    fi
+  done
   if require_bed_lock; then
     for m in gv gor vps; do unit "$m" start || rc=1; done
     if [ "$PARTITION_ACTIVE" = 1 ]; then
@@ -170,11 +184,11 @@ rexec gor git init -q "$N_ROOT"
 rexec gor sh -c "printf 'baseline' > '$N_FILE'; dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=32 status=none"
 project_options "$N_KEY" '{"conflicts":"primary-wins"}' > "$WORK/N-primary-policy.json"
 add_rep() {
-  local m=$1 role=$2 env source
+  local m=$1 role=$2 control=${3:-gv} env source
   env=$(env_of "$m"); source=null; [ "$role" = primary ] || source="\"$GOR_ENV\""
   local rep
   rep=$(jq -nc --arg env "$env" --arg p "$N_ROOT" --arg role "$role" --argjson source "$source" '{environmentId:$env,path:$p,pathAllocated:true,role:$role,transport:(if $role=="primary" then "git" else "mutagen" end),createdAt:""} + (if $source==null then {} else {source:$source} end)')
-  ws_rpc gv meshLayout.apply "$(entry "rep/$N_KEY/$env" "$rep")" > "$WORK/N-add-$m.json"
+  ws_rpc "$control" meshLayout.apply "$(entry "rep/$N_KEY/$env" "$rep")" > "$WORK/N-add-$m.json"
 }
 add_rep gor primary
 for m in gv vps; do add_rep "$m" replica; done
@@ -285,10 +299,28 @@ for m in gv gor vps; do
     sleep 1
   done
   rexec gor sh -c "dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=128 status=none"
-  for replica in gv vps; do add_rep "$replica" replica; done
   mount_observer=gv; [ "$m" != vps ] || mount_observer=vps
-  wait_state "$mount_observer" mounting
+  control=gor; [ "$m" != gor ] || control=vps
+  ready="$WORK/N-mount-ready-$RUN_TS-$m"
+  node "$WS" wait-replica "$N_KEY" "$(env_of "$mount_observer")" mounting "$ready" --origin "$(origin_of "$mount_observer")" --token "$(token_of "$mount_observer")" --timeout "$((TIMEOUT*1000))" > "$WORK/N-mount-transition-$m.json" &
+  MOUNT_WATCH_PID=$!
+  end=$((SECONDS+TIMEOUT))
+  until [ -f "$ready" ]; do
+    kill -0 "$MOUNT_WATCH_PID" 2>/dev/null || { wait "$MOUNT_WATCH_PID"; exit 1; }
+    [ "$SECONDS" -lt "$end" ] || exit 1
+    sleep 0.1
+  done
+  add_rep "$mount_observer" replica "$control" &
+  PLACEMENT_PID=$!
+  wait "$MOUNT_WATCH_PID"
+  MOUNT_WATCH_PID=
+  printf 'PASS N observed mounting transition before killing %s\n' "$m"
   crash "$m"
+  wait "$PLACEMENT_PID"
+  PLACEMENT_PID=
+  for replica in gv vps; do
+    if [ "$replica" != "$mount_observer" ]; then add_rep "$replica" replica; fi
+  done
   assert_converged "N mid-mount crash $m"
   rexec gor sh -c "dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=256 status=none; printf '$m-sync' > '$N_FILE'"
   wait_staging "$mount_observer" "$m"
