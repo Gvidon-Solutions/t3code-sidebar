@@ -4,6 +4,11 @@ export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 . "$(dirname "$0")/lib.sh"
 worker_name=$(worker_ssh 'hostname -s')
 [ "$worker_name" = "$BED_NIGHTLY_HOST" ] || die "Nightly timer target is $worker_name, expected $BED_NIGHTLY_HOST"
+controller_runtime_dir="$BED_CONTROLLER_RUNTIME_DIR"
+if [ -z "$controller_runtime_dir" ]; then
+  controller_runtime_dir=$(loginctl show-user "$(id -un)" -p RuntimePath --value)
+fi
+[ -S "$controller_runtime_dir/bus" ] || die "Controller user bus missing: $controller_runtime_dir/bus"
 seed_source="${MESH_E2E_NIGHTLY_SEED_DIR:-$STATE_DIR/legacy}"
 seed_destination="$BED_NIGHTLY_ROOT/seed/legacy"
 for file in "$LEGACY_STUDIO_FILE" "$LEGACY_REMOTE_FILE"; do
@@ -29,8 +34,12 @@ opencode_binary="${R1_OPENCODE_BINARY:-$(command -v opencode)}"
 cat > "$private/entry" <<EOF_ENTRY
 #!/bin/sh
 set -eu
+export HOME='$HOME'
+export PATH='$HOME/.nvm/versions/node/v26.12.1/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'
+export XDG_RUNTIME_DIR='$controller_runtime_dir'
+export DBUS_SESSION_BUS_ADDRESS='unix:path=$controller_runtime_dir/bus'
 case "\${SSH_ORIGINAL_COMMAND:-run}" in
- probe) printf 'mesh-nightly-controller-ready\n' ;;
+ probe) systemctl --user show-environment >/dev/null; printf 'mesh-nightly-controller-ready\n' ;;
  run) export R1_CODEX_BINARY='$codex_binary' R1_OPENCODE_BINARY='$opencode_binary'; export HOME='$HOME'; export PATH='$HOME/.nvm/versions/node/v26.12.1/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'; exec bash '$REPO_ROOT/scripts/mesh-e2e/acceptance.sh' ;;
  inbox) body=\$(cat); export HOME='$HOME'; export T3CODE_HOME='$BED_INBOX_HOME'; exec '$HOME/.nvm/versions/node/v26.12.1/bin/node' '$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs' inbox post attention 'Mesh nightly failed' --body "\$body" --key mesh-nightly ;;
  *) exit 64 ;;

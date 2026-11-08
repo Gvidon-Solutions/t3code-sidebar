@@ -547,6 +547,10 @@ rounds/provider guards and then the full isolated matrix with realistic timers a
 payloads. `MESH_FAST_PRODUCT_ROOT` points that matrix, CLI and native provider
 guards at the freshly built ref, so they test the same product as the shared bed.
 The installer checks the worker's hostname before writing either service.
+Its private SSH endpoint sets the controller's user-bus environment explicitly;
+the readiness probe checks that bus as well as SSH authentication. PAM is disabled
+for this endpoint, so a successful SSH handshake alone does not prove systemd
+commands or runtime discovery will work.
 It waits five minutes when another stage holds the bed. It copies the
 captured legacy seed into its own state directory and uses its own nightly demo.
 It starts the retained forwarding units instead of rewriting their configuration
