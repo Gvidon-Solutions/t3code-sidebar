@@ -83,9 +83,7 @@ export function resolveComposerVoiceAvailability(input: {
 }): VoiceAvailability {
   return input.isServerThread
     ? resolveVoiceAvailability(
-        input.providers.find(
-          (provider) => provider.instanceId === input.threadProviderInstanceId,
-        ),
+        input.providers.find((provider) => provider.instanceId === input.threadProviderInstanceId),
       )
     : resolveVoiceAvailability(findVoiceProvider(input.providers));
 }
