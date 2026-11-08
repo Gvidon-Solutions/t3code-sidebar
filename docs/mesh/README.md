@@ -229,7 +229,12 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   replica never offers Initialize Git in the right panel: `chat/threadDetailsGit.ts` hides
   Version Control there, because git lives on the main copy. First run with an incomplete mesh
   shows one dismissible "Connect to all machines in your mesh" prompt; it switches saved
-  connections back on and sends never-added machines to Connections.
+  connections back on and sends never-added machines to Connections. Project rows draw one tag
+  per machine; copies on machines this client is not connected to are dimmed in the same strip.
+  A linked thread's header shows its machine tag only, never a peer label or environment id.
+  The composer voice toggle follows the thread's provider on its own machine and, for a draft,
+  the target machine's provider catalog; the fixture agent reports voice only when
+  `T3_MESH_TEST_VOICE_PROVIDER=1` is set.
 
 ## Interfaces
 
