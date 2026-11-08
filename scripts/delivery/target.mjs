@@ -9,6 +9,48 @@ import * as NodeURL from "node:url";
 const { fileURLToPath } = NodeURL;
 import * as NodeSqlite from "node:sqlite";
 import * as NodeCrypto from "node:crypto";
+import * as NodeTimersPromises from "node:timers/promises";
+const { setTimeout } = NodeTimersPromises;
+
+export const isMissingDrain = (error) =>
+  /Tool ['"]t3_delivery_drain_status['"] not found/.test(String(error.stderr ?? error.message));
+
+export function canonicalHealth(health, document) {
+  const entries = {};
+  for (const [key, clock] of Object.entries(health.entries)) {
+    const value = document[key]?.v;
+    const migrated =
+      key.startsWith("proj/") &&
+      key.endsWith(".title") &&
+      (typeof value === "string" || value === null)
+        ? `projTitle/${key.slice(5, -6)}`
+        : key;
+    if (!entries[migrated] || entries[migrated] < clock) entries[migrated] = clock;
+  }
+  return { ...health, entries };
+}
+
+export async function waitForLegacyIdle({
+  listRunning,
+  maxWaitMs,
+  now = false,
+  clock = { now: Date.now, sleep: setTimeout },
+}) {
+  if (now) return;
+  const deadline = clock.now() + maxWaitMs;
+  for (;;) {
+    const remaining = deadline - clock.now();
+    if (remaining <= 0)
+      throw new Error(
+        "Legacy target did not become idle before the delivery deadline; runtime unchanged",
+      );
+    const running = listRunning(remaining);
+    if (!Array.isArray(running))
+      throw new Error("Invalid running-thread response from legacy target");
+    if (running.length === 0 && clock.now() <= deadline) return;
+    await clock.sleep(Math.min(1000, Math.max(0, deadline - clock.now())));
+  }
+}
 
 const run = (command, args, env, timeout = 120_000) =>
   execFileSync(command, args, {
@@ -21,6 +63,19 @@ const run = (command, args, env, timeout = 120_000) =>
 const atomic = (path, value) => {
   writeFileSync(path + ".tmp", JSON.stringify(value), { mode: 0o600 });
   renameSync(path + ".tmp", path);
+};
+const resetRestoredLayout = (path) => {
+  const database = new NodeSqlite.DatabaseSync(path);
+  try {
+    for (const table of ["mesh_layout_generation", "mesh_peer_state"]) {
+      if (
+        database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)
+      )
+        database.exec(`DELETE FROM ${table}`);
+    }
+  } finally {
+    database.close();
+  }
 };
 export function verifyMobileAssets(store) {
   const directory = join(store, "assets");
@@ -56,6 +111,7 @@ export async function targetOperation(config, operation) {
     if (result.error && result.error.code !== "ENOENT") throw result.error;
     return { hasGh: result.error?.code !== "ENOENT", scope: config.scope };
   }
+  let queryTimeout;
   const ctl = (...args) => {
     const unit = config.unitPath ? readFileSync(config.unitPath, "utf8") : "";
     const executable = /^ExecStart=(?:"([^"]+)"|(\S+))\s/m.exec(unit);
@@ -70,10 +126,11 @@ export async function targetOperation(config, operation) {
           T3CTL_T3_BIN: executable?.[1] ?? executable?.[2] ?? "",
           XDG_CONFIG_HOME: join(config.home, "delivery-client-config"),
         },
-        args[1] === "t3_delivery_drain" ? (config.maxWaitMs ?? 300_000) + 30_000 : 120_000,
+        queryTimeout ??
+          (args[1] === "t3_delivery_drain" ? (config.maxWaitMs ?? 300_000) + 30_000 : 120_000),
       ),
     );
-    if (Array.isArray(result)) {
+    if (Array.isArray(result) && args[0] !== "threads") {
       const text = result.find((item) => item.type === "text")?.text;
       if (!text) throw new Error("Missing MCP JSON health response");
       return JSON.parse(text);
@@ -82,9 +139,16 @@ export async function targetOperation(config, operation) {
   };
   const desiredVersion = () =>
     ctl("mesh", "config", "get", "--json").current?.doc?.t3?.version ?? null;
+  const health = () => {
+    const value = ctl("tool", "t3_mesh_update_health", "{}");
+    if (
+      !Object.keys(value.entries).some((key) => key.startsWith("proj/") && key.endsWith(".title"))
+    )
+      return value;
+    return canonicalHealth(value, ctl("layout", "get", "--json").document);
+  };
   if (operation === "drainStatus") return ctl("tool", "t3_delivery_drain_status", "{}");
-  if (operation === "health")
-    return { ...ctl("tool", "t3_mesh_update_health", "{}"), desiredVersion: desiredVersion() };
+  if (operation === "health") return { ...health(), desiredVersion: desiredVersion() };
   if (operation === "prepare") {
     const desired = desiredVersion();
     if (desired && desired !== config.version)
@@ -113,7 +177,7 @@ export async function targetOperation(config, operation) {
       phase: "prepared",
       unit,
       next,
-      previousHealth: ctl("tool", "t3_mesh_update_health", "{}"),
+      previousHealth: health(),
       backup: join(config.runtimeDir, `backup-${config.version}.sqlite`),
       directory,
     });
@@ -121,8 +185,24 @@ export async function targetOperation(config, operation) {
   }
   const state = JSON.parse(readFileSync(statePath, "utf8"));
   const db = join(config.home, "userdata", "statev2.sqlite");
+  const legacyIdle = () =>
+    waitForLegacyIdle({
+      now: Boolean(config.now),
+      maxWaitMs: config.maxWaitMs ?? 300_000,
+      listRunning: (remaining) => {
+        queryTimeout = Math.max(1, Math.min(120_000, remaining));
+        try {
+          return ctl("threads", "--status", "running", "--subagents", "--json");
+        } finally {
+          queryTimeout = undefined;
+        }
+      },
+    });
   const cancelDrain = () => {
-    if (state.requestId)
+    if (
+      state.requestId &&
+      !(state.phase === "rolledBack" && state.previousAdmission === "legacy-idle")
+    )
       ctl("tool", "t3_delivery_cancel_drain", JSON.stringify({ requestId: state.requestId }));
   };
   if (operation === "drain" || operation === "prepareRollback") {
@@ -132,7 +212,24 @@ export async function targetOperation(config, operation) {
       return state.previousHealth;
     if (!manual && state.phase !== "prepared" && state.phase !== "draining")
       throw new Error("Runtime must be prepared before draining");
-    const current = ctl("tool", "t3_delivery_drain_status", "{}");
+    let current;
+    try {
+      current = ctl("tool", "t3_delivery_drain_status", "{}");
+    } catch (error) {
+      if (!isMissingDrain(error)) throw error;
+      state.admission = "legacy-idle";
+      if (!manual) state.previousAdmission = "legacy-idle";
+      state.now = Boolean(config.now);
+      delete state.requestId;
+      state.phase = manual ? "rollbackDraining" : "draining";
+      atomic(statePath, state);
+      await legacyIdle();
+      state.phase = manual ? "rollbackFenced" : "fenced";
+      atomic(statePath, state);
+      return { mode: "legacy-idle", phase: "idle", fenced: false };
+    }
+    state.admission = "drain";
+    if (!manual) state.previousAdmission = "drain";
     if (current.requestId && current.requestId !== state.requestId)
       throw new Error("Another delivery owns the server admission fence");
     state.requestId ??= NodeCrypto.randomUUID();
@@ -161,12 +258,15 @@ export async function targetOperation(config, operation) {
     if (state.phase !== "fenced") throw new Error("Delivery admission fence has not been acquired");
     if (state.now !== Boolean(config.now))
       throw new Error("Delivery force authorization changed after fencing");
-    const status = ctl("tool", "t3_delivery_drain_status", "{}");
-    if (
-      status.requestId !== state.requestId ||
-      (status.phase !== "drained" && !(state.now && status.phase === "draining"))
-    )
-      throw new Error("Delivery admission fence was lost; no runtime switched");
+    if (state.admission === "legacy-idle") await legacyIdle();
+    else {
+      const status = ctl("tool", "t3_delivery_drain_status", "{}");
+      if (
+        status.requestId !== state.requestId ||
+        (status.phase !== "drained" && !(state.now && status.phase === "draining"))
+      )
+        throw new Error("Delivery admission fence was lost; no runtime switched");
+    }
     state.phase = "stopping";
     atomic(statePath, state);
     systemctl("stop", config.unit);
@@ -212,25 +312,31 @@ export async function targetOperation(config, operation) {
       atomic(statePath, state);
       return state.previousHealth;
     }
-    if (!state.requestId || state.phase === "healthy" || state.phase === "rollbackDraining")
+    if (
+      (!state.requestId && state.admission !== "legacy-idle") ||
+      state.phase === "healthy" ||
+      state.phase === "rollbackDraining"
+    )
       throw new Error("Rollback admission fence has not been acquired");
-    try {
-      const status = ctl("tool", "t3_delivery_drain_status", "{}");
-      if (
-        status.requestId !== state.requestId ||
-        (status.phase !== "drained" && !(state.now && status.phase === "draining"))
-      )
-        throw new Error("Rollback admission fence was lost; no runtime switched");
-    } catch (cause) {
-      const database = new NodeSqlite.DatabaseSync(db, { readOnly: true });
+    if (state.admission !== "legacy-idle") {
       try {
-        const persisted = database
-          .prepare("SELECT request_id FROM delivery_admission WHERE id = 1")
-          .get();
-        if (persisted?.request_id !== state.requestId)
-          throw new Error("Cannot verify rollback admission fence", { cause });
-      } finally {
-        database.close();
+        const status = ctl("tool", "t3_delivery_drain_status", "{}");
+        if (
+          status.requestId !== state.requestId ||
+          (status.phase !== "drained" && !(state.now && status.phase === "draining"))
+        )
+          throw new Error("Rollback admission fence was lost; no runtime switched");
+      } catch (cause) {
+        const database = new NodeSqlite.DatabaseSync(db, { readOnly: true });
+        try {
+          const persisted = database
+            .prepare("SELECT request_id FROM delivery_admission WHERE id = 1")
+            .get();
+          if (persisted?.request_id !== state.requestId)
+            throw new Error("Cannot verify rollback admission fence", { cause });
+        } finally {
+          database.close();
+        }
       }
     }
     state.phase = "rollingBack";
@@ -238,33 +344,41 @@ export async function targetOperation(config, operation) {
     systemctl("stop", config.unit);
     writeFileSync(config.unitPath, state.unit);
     if (existsSync(state.backup)) {
-      const currentDatabase = new NodeSqlite.DatabaseSync(db, { readOnly: true });
-      let fence;
-      try {
-        fence = currentDatabase
-          .prepare(
-            "SELECT request_id, deadline_at, deferred_json FROM delivery_admission WHERE id = 1",
-          )
-          .get();
-        if (fence?.request_id !== state.requestId)
-          throw new Error("Persistent rollback fence changed before database restore");
-      } finally {
-        currentDatabase.close();
+      if (state.admission === "legacy-idle") {
+        for (const suffix of ["-wal", "-shm"]) rmSync(db + suffix, { force: true });
+        copyFileSync(state.backup, db);
+        resetRestoredLayout(db);
+      } else {
+        const currentDatabase = new NodeSqlite.DatabaseSync(db, { readOnly: true });
+        let fence;
+        try {
+          fence = currentDatabase
+            .prepare(
+              "SELECT request_id, deadline_at, deferred_json FROM delivery_admission WHERE id = 1",
+            )
+            .get();
+          if (fence?.request_id !== state.requestId)
+            throw new Error("Persistent rollback fence changed before database restore");
+        } finally {
+          currentDatabase.close();
+        }
+        const restoredPath = db + ".delivery-restore";
+        copyFileSync(state.backup, restoredPath);
+        const restoredDatabase = new NodeSqlite.DatabaseSync(restoredPath);
+        try {
+          if (state.previousAdmission !== "legacy-idle")
+            restoredDatabase
+              .prepare(
+                "INSERT INTO delivery_admission (id, request_id, deadline_at, deferred_json) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET request_id=excluded.request_id, deadline_at=excluded.deadline_at, deferred_json=excluded.deferred_json",
+              )
+              .run(fence.request_id, fence.deadline_at, fence.deferred_json);
+        } finally {
+          restoredDatabase.close();
+        }
+        resetRestoredLayout(restoredPath);
+        for (const suffix of ["-wal", "-shm"]) rmSync(db + suffix, { force: true });
+        renameSync(restoredPath, db);
       }
-      const restoredPath = db + ".delivery-restore";
-      copyFileSync(state.backup, restoredPath);
-      const restoredDatabase = new NodeSqlite.DatabaseSync(restoredPath);
-      try {
-        restoredDatabase
-          .prepare(
-            "INSERT INTO delivery_admission (id, request_id, deadline_at, deferred_json) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET request_id=excluded.request_id, deadline_at=excluded.deadline_at, deferred_json=excluded.deferred_json",
-          )
-          .run(fence.request_id, fence.deadline_at, fence.deferred_json);
-      } finally {
-        restoredDatabase.close();
-      }
-      for (const suffix of ["-wal", "-shm"]) rmSync(db + suffix, { force: true });
-      renameSync(restoredPath, db);
     }
     systemctl("daemon-reload");
     systemctl("start", config.unit);

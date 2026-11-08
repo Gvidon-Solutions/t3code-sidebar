@@ -2,7 +2,7 @@
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 load_build_env
-NODE_B_BASE_DIR=${MESH_E2E_NODE_B_BASE_DIR:-$(nodeB_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')}
+NODE_B_BASE_DIR=${MESH_E2E_NODE_B_BASE_DIR:-$NODE_B_BASE_DIR}
 owner=$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner')
 BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-N1}
 [ "$owner" = "$BED_LOCK_OWNER" ] || die "$BED_LOCK_OWNER must hold the shared bed lock"
@@ -32,7 +32,7 @@ EOF
 set -euo pipefail
 export PATH=$NODE_B_NODE_BIN_DIR:\$PATH
 mkdir -p "\$HOME/.config/systemd/user/$NODE_B_UNIT.d"
-printf '[Service]\nExecStart=\nExecStart=%%h/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 serve --base-dir $NODE_B_BASE_DIR --host 127.0.0.1 --port $((NODE_B_PORT + 1)) --no-browser\n' > "\$HOME/.config/systemd/user/$NODE_B_UNIT.d/$dropin"
+printf '[Service]\nExecStart=\nExecStart=$NODE_B_RUNTIME_ROOT/$BUILD_VERSION/t3 serve --base-dir $NODE_B_BASE_DIR --host 127.0.0.1 --port $((NODE_B_PORT + 1)) --no-browser\n' > "\$HOME/.config/systemd/user/$NODE_B_UNIT.d/$dropin"
 cat > "\$HOME/.config/systemd/user/$name" <<UNIT
 [Unit]
 Description=N1 isolated mesh fault proxy

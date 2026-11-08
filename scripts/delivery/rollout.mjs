@@ -62,7 +62,9 @@ export async function rollout(
     await adapter.prepare();
     try {
       await journal({ machine: adapter.name, phase: "drain" });
-      await adapter.drain();
+      const admission = await adapter.drain();
+      if (admission?.mode === "legacy-idle")
+        await journal({ machine: adapter.name, phase: "legacy-idle", fenced: false });
       await journal({ machine: adapter.name, phase: "switch" });
       await adapter.activate();
       await waitForHealthy(adapter, version, baselines, options.healthWaitMs, clock, adapters);
