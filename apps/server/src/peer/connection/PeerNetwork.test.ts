@@ -1,3 +1,4 @@
+import migratePeerIdentities from "../../persistence/Migrations/082_PeerIdentityBindings.ts";
 import { McpDomainAnnotation } from "../../mcp/McpToolDomain.ts";
 import { linkedTestDocument } from "../../replicas/MeshLayoutTestLayer.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
@@ -28,6 +29,8 @@ import {
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as LegacySessions from "../../auth/SessionStore.ts";
+import { mcpClientScopes } from "@t3tools/contracts";
 import * as Auth from "../../auth/EnvironmentAuth.ts";
 import * as AuthHttp from "../../auth/http.ts";
 import * as OAuth from "../../auth/McpOAuth.ts";
@@ -125,7 +128,14 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
       ),
       Layer.provideMerge(Sqlite.layerMemory),
       Layer.provideMerge(Secrets.layer),
-      Layer.provideMerge(Environment.layerIdentity),
+      Layer.provideMerge(
+        Layer.mergeAll(
+          environment,
+          Layer.succeed(Environment.ServerEnvironmentIdentity, {
+            getEnvironmentId: Effect.succeed(descriptor.environmentId),
+          }),
+        ),
+      ),
       Layer.provideMerge(Config.layerTest(process.cwd(), { prefix: "n1-network-" })),
       Layer.provideMerge(
         Layer.mergeAll(NodeServices.layer, EffectNodeCrypto.layer, ManagedPolicy.layerTest()),
@@ -281,11 +291,25 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
   if (address._tag === "UnixPathAddress") return yield* Effect.die("Expected TCP test server");
   return {
     name,
-    bindSession: (sessionId: string, environmentId: string) =>
-      Context.get(
-        common,
-        SqlClient.SqlClient,
-      )`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${sessionId}, ${environmentId})`,
+    sql: Context.get(common, SqlClient.SqlClient),
+    issueLegacyPeer: (environmentId: string) =>
+      Context.get(common, LegacySessions.SessionStore).issue({
+        subject: "mcp-client",
+        method: "bearer-access-token",
+        scopes: mcpClientScopes("full-access"),
+        runtimeModeCeiling: "full-access",
+        peerLink: true,
+        peerEnvironmentId: environmentId,
+        client: { label: `Legacy ${environmentId}`, deviceType: "bot" },
+      }),
+    upgradeLegacyDatabase: Effect.gen(function* () {
+      const sql = Context.get(common, SqlClient.SqlClient);
+      yield* sql`DROP TABLE peer_session_identities`;
+      yield* sql`DROP TABLE peer_client_identities`;
+      yield* sql`DROP TABLE peer_legacy_identity_candidates`;
+      yield* migratePeerIdentities.pipe(Effect.provideService(SqlClient.SqlClient, sql));
+    }),
+    replication: Context.getOption(context, Replication.MeshReplicator),
     id: descriptor.environmentId,
     baseDir: Context.get(common, Config.ServerConfig).baseDir,
     blockHttp: () => {
@@ -319,13 +343,8 @@ it.live(
     Effect.gen(function* () {
       const studio = yield* serve("studio");
       const cloudbox = yield* serve("cloudbox");
-      const legacy = yield* cloudbox.auth.issueMcpClientSession({
-        label: "Legacy studio",
-        access: "full-access",
-        peerLink: true,
-        client: { deviceType: "bot" },
-      });
-      yield* cloudbox.bindSession(legacy.sessionId, studio.id);
+      const legacy = yield* cloudbox.issueLegacyPeer(studio.id);
+      yield* cloudbox.upgradeLegacyDatabase;
       yield* studio.links.acceptGrant({
         environmentId: cloudbox.id,
         label: cloudbox.name,
@@ -363,6 +382,18 @@ it.live(
       yield* studio.sessions.start;
       yield* Fiber.join(linked);
       expect((yield* cloudbox.links.ids).map(String)).toEqual(["studio"]);
+      expect(
+        yield* studio.sql<{
+          environment_id: string;
+          source: string;
+        }>`SELECT environment_id, source FROM peer_session_identities`,
+      ).toEqual([{ environment_id: "cloudbox", source: "mutual-grant" }]);
+      expect(
+        yield* cloudbox.sql<{
+          environment_id: string;
+          source: string;
+        }>`SELECT environment_id, source FROM peer_session_identities WHERE source = 'legacy-local-link'`,
+      ).toEqual([{ environment_id: "studio", source: "legacy-local-link" }]);
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(cloudbox.count()).toBe(1);
@@ -393,7 +424,7 @@ it.live(
         headers: { authorization: `Bearer ${legacy.token}`, "t3-peer-environment-id": "laptop" },
       });
       expect(rebound.status).toBe(403);
-      expect(yield* rebound.text).toContain("bound to another environment");
+      expect(yield* rebound.text).toContain("authenticated link identity");
       expect(
         yield* cloudbox.client.call({
           ...request,
@@ -833,4 +864,119 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
     yield* cloudbox.sessions.stop;
     yield* laptop.sessions.stop;
   }).pipe(Effect.scoped),
+);
+
+it.live.each(["none", "outgoing", "machine-binding"] as const)(
+  "binds only legacy credentials with existing local %s trust",
+  (trust) =>
+    Effect.gen(function* () {
+      const receiver = yield* serve("cloudbox", { layout: true });
+      const legacy = yield* receiver.issueLegacyPeer("laptop");
+      yield* receiver.upgradeLegacyDatabase;
+      yield* receiver.sql`DELETE FROM mesh_layout_entries WHERE key LIKE 'mesh.machineBinding/%'`;
+      if (trust === "outgoing")
+        yield* receiver.sql`INSERT INTO peer_environment_links(environment_id, secret_name, label, urls_json, access, linked_at, expires_at) VALUES ('laptop', 'legacy-outgoing-token', 'Laptop', '["https://laptop.example.test"]', 'full-access', '2026-01-01T00:00:00Z', '2099-01-01T00:00:00Z')`;
+      if (trust === "machine-binding")
+        yield* receiver.sql`INSERT INTO mesh_layout_entries(key, value, hlc, seq) VALUES ('mesh.machineBinding/laptop', '"laptop"', '1:0:cloudbox', 1)`;
+      const fresh = yield* receiver.auth.issueMcpClientSession({
+        label: "Unbound new token",
+        access: "full-access",
+        peerLink: true,
+        client: { deviceType: "bot" },
+      });
+      for (const claimed of ["laptop", undefined]) {
+        const refused = yield* receiver.http.get("/peer", {
+          headers: {
+            authorization: `Bearer ${fresh.token}`,
+            ...(claimed ? { "t3-peer-environment-id": claimed } : {}),
+          },
+        });
+        expect(refused.status).toBe(401);
+        expect(yield* refused.text).toContain("Pair the machines again");
+      }
+      expect(
+        yield* receiver.sql`SELECT * FROM peer_session_identities WHERE session_id = ${fresh.sessionId}`,
+      ).toEqual([]);
+      const first = yield* receiver.http.get("/peer", {
+        headers: {
+          authorization: `Bearer ${legacy.token}`,
+          "t3-peer-environment-id": "unknown-peer",
+        },
+      });
+      expect(first.status).toBe(401);
+      const matching = yield* receiver.http.get("/peer", {
+        headers: { authorization: `Bearer ${legacy.token}`, "t3-peer-environment-id": "laptop" },
+      });
+      expect(matching.status).toBe(trust === "none" ? 401 : 400);
+      const bindings = yield* receiver.sql<{
+        environment_id: string;
+      }>`SELECT environment_id FROM peer_session_identities WHERE session_id = ${legacy.sessionId}`;
+      expect(bindings).toEqual(trust === "none" ? [] : [{ environment_id: "laptop" }]);
+      if (trust !== "none") {
+        const status = yield* Option.getOrThrow(receiver.replication).status;
+        expect(status.legacyIdentityUpgrades).toEqual([
+          expect.objectContaining({ sessionId: legacy.sessionId, environmentId: "laptop" }),
+        ]);
+        for (const headers of [
+          { "t3-peer-environment-id": "studio" },
+          { "t3-mesh-hops": "studio,unknown-peer" },
+          { "t3-mesh-hops": "laptop,laptop" },
+        ]) {
+          const spoofed = yield* receiver.http.post("/mcp", {
+            headers: { authorization: `Bearer ${legacy.token}`, ...headers },
+          });
+          expect(spoofed.status).toBe(403);
+        }
+      }
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+);
+
+it.live("upgrades mutual legacy link records without pairing again", () =>
+  Effect.gen(function* () {
+    const studio = yield* serve("studio", { layout: true });
+    const cloudbox = yield* serve("cloudbox", { layout: true });
+    const studioToken = yield* studio.issueLegacyPeer(cloudbox.id);
+    const cloudboxToken = yield* cloudbox.issueLegacyPeer(studio.id);
+    yield* studio.links.acceptGrant({
+      environmentId: cloudbox.id,
+      label: "Cloudbox",
+      urls: [cloudbox.url],
+      token: cloudboxToken.token,
+      access: "full-access",
+      expiresAt: cloudboxToken.expiresAt.epochMilliseconds,
+    });
+    yield* cloudbox.links.acceptGrant({
+      environmentId: studio.id,
+      label: "Studio",
+      urls: [studio.url],
+      token: studioToken.token,
+      access: "full-access",
+      expiresAt: studioToken.expiresAt.epochMilliseconds,
+    });
+    for (const receiver of [studio, cloudbox]) {
+      yield* receiver.upgradeLegacyDatabase;
+      yield* receiver.sql`DELETE FROM mesh_layout_entries WHERE key LIKE 'mesh.machineBinding/%'`;
+    }
+    for (const [sender, receiver] of [
+      [studio, cloudbox],
+      [cloudbox, studio],
+    ] as const) {
+      expect(
+        yield* sender.client.call({
+          environmentId: receiver.id,
+          tool: "t3_create_fixture",
+          arguments: {},
+          limits: { runtimeMode: "full-access", interactionMode: "default" },
+          success: Answer,
+        }),
+      ).toEqual({ count: 1 });
+      expect(
+        yield* receiver.sql<{
+          environment_id: string;
+          source: string;
+        }>`SELECT environment_id, source FROM peer_session_identities`,
+      ).toEqual([{ environment_id: sender.id, source: "legacy-local-link" }]);
+      expect(yield* receiver.sql`SELECT * FROM peer_legacy_identity_candidates`).toEqual([]);
+    }
+  }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );

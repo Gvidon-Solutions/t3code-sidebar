@@ -79,7 +79,16 @@ export const servePeer = <E, R, S = never>(
       Layer.provideMerge(ServerSettings.layerTest({ linkedEnvironmentsEnabled: true })),
       Layer.provideMerge(Sqlite.layerMemory),
       Layer.provideMerge(ServerSecretStore.layer),
-      Layer.provideMerge(ServerEnvironment.layerIdentity),
+      Layer.provideMerge(
+        Layer.mergeAll(
+          layerEnvironment,
+          Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+            getEnvironmentId: Ref.get(descriptor).pipe(
+              Effect.map((current) => current.environmentId),
+            ),
+          }),
+        ),
+      ),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-peer-link-peer-" })),
       Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       Layer.fresh,
@@ -134,24 +143,6 @@ export const servePeer = <E, R, S = never>(
     return {
       url,
       auth,
-      bindIdentity: (token: string, environmentId: string) =>
-        auth
-          .authenticateMcpClient(
-            HttpServerRequest.fromWeb(
-              new Request("http://fixture.test/mcp", {
-                headers: { authorization: `Bearer ${token}` },
-              }),
-            ),
-          )
-          .pipe(
-            Effect.flatMap(
-              (client) =>
-                Context.get(
-                  authContext,
-                  SqlClient.SqlClient,
-                )`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${client.sessionId}, ${environmentId}) ON CONFLICT(session_id) DO NOTHING`,
-            ),
-          ),
       /** Its settings, as for turning its Linked environments beta off. */
       settings: Context.get(authContext, ServerSettings.ServerSettingsService),
       descriptor,
@@ -175,7 +166,6 @@ export type ServedPeer = Effect.Success<ReturnType<typeof servePeer>>;
  * The environment that links: its own database and secret store, reaching
  * peers over plain HTTP. Provide it to anything built on its links.
  */
-const fixtureIdentities = new WeakMap<PeerLinks.PeerLinks["Service"], string>();
 
 export const layerLinkingEnvironment = <E = never>(
   descriptor: ExecutionEnvironmentDescriptor,
@@ -199,11 +189,6 @@ export const layerLinkingEnvironment = <E = never>(
     ),
     Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-peer-link-here-" })),
     Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
-    Layer.tap((context) =>
-      Effect.sync(() =>
-        fixtureIdentities.set(Context.get(context, PeerLinks.PeerLinks), descriptor.environmentId),
-      ),
-    ),
     Layer.fresh,
   );
 
@@ -213,17 +198,10 @@ export const linkTo = (
   peer: ServedPeer,
   access: AuthMcpClientAccess = "auto",
 ) =>
-  peer.auth.issuePairingCredential().pipe(
-    Effect.flatMap((pairing) =>
-      links.link({ url: peer.url, pairingCode: pairing.credential, access }).pipe(
-        Effect.tap((link) =>
-          Effect.gen(function* () {
-            const identity = fixtureIdentities.get(links);
-            if (!identity) return yield* Effect.die("Fixture link has no source identity");
-            const resolved = yield* links.resolve(link.environmentId);
-            yield* peer.bindIdentity(resolved.token, identity);
-          }),
-        ),
+  peer.auth
+    .issuePairingCredential()
+    .pipe(
+      Effect.flatMap((pairing) =>
+        links.link({ url: peer.url, pairingCode: pairing.credential, access }),
       ),
-    ),
-  );
+    );

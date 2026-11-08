@@ -586,6 +586,18 @@ export const make = Effect.gen(function* () {
         signal,
       });
     }
+    if (
+      body.hops !== undefined &&
+      (body.hops.length !== 2 ||
+        body.hops[1] !== environmentId ||
+        !body.hops[0] ||
+        body.hops[0] === environmentId ||
+        body.hops[0] === selfId)
+    )
+      return yield* new PeerConnectionError({
+        reason: "relay",
+        message: "Relay hops do not match the authenticated peer",
+      });
     const entry = live.get(environmentId);
     if (entry === undefined) {
       return yield* new PeerConnectionError({

@@ -77,6 +77,19 @@ authority.
 - **Relay:** if two machines cannot reach each other, calls and pipes go through one machine both
   reach (max one hop).
 - **Linking is mutual.** One pairing code establishes trust in both directions.
+- **Identity trust root.** Only redemption of an owner-entered one-time pairing code binds
+  a credential to a peer. The exchange carries the redeemer's and issuer's environment IDs;
+  consuming the code and storing `client_id → peerEnvironmentId` are one transaction. The
+  reverse grant uses the already-bound peer identity of that connection.
+- **Subsequent authentication.** `/peer` and every later call only verify bindings. An unbound
+  token returns 401 with a request to pair again; a conflicting identity header returns 403.
+  A relay authenticates as itself. An original caller ID is accepted only in a hop list from
+  an authenticated, bound relay, ending in that relay's identity.
+- **Legacy upgrade.** Credentials existing before this rule may bind once, on first authenticated
+  use, only if this server already holds an outgoing PeerLinks record or `mesh.machineBinding`
+  for the claimed environment ID. The upgrade is logged and appears in mesh status. A new
+  unbound credential or an unknown peer must pair again. One-way and mutual legacy links use
+  this same rule; no live configuration is modified by the upgrade.
 - **Link permissions** (from config): `files: all | projects | none`, `replicas: bool`,
   `threads: bool`. Enforced on the receiving side for every forwarded call. `files: projects`
   allows only paths inside a representation folder of a project on that machine (after realpath).

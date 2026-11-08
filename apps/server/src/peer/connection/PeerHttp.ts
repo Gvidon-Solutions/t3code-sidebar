@@ -8,7 +8,6 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { PeerCallDispatcher } from "./PeerSessions.ts";
 import * as PeerSessions from "./PeerSessions.ts";
 import * as PeerWire from "./PeerWire.ts";
-import * as PeerCredentials from "./PeerCredentials.ts";
 
 const refused = (status: number, message: string) =>
   HttpServerResponse.jsonUnsafe(
@@ -27,7 +26,6 @@ export const layer = Layer.unwrap(
     const auth = yield* EnvironmentAuth.EnvironmentAuth;
     const others = yield* PeerSessions.PeerSessions;
     const dispatcher = yield* PeerCallDispatcher;
-    const credentials = yield* PeerCredentials.PeerCredentials;
     return HttpRouter.add(
       "GET",
       "/peer",
@@ -46,21 +44,26 @@ export const layer = Layer.unwrap(
             yield* Effect.logWarning("Peer authentication failed", authenticated.failure);
             return refused(503, "Peer authentication is temporarily unavailable.");
           }
-          return refused(401, "A link credential is required.");
+          return refused(
+            authenticated.failure._tag === "ServerAuthInvalidCredentialError" &&
+              authenticated.failure.peerIdentityMismatch
+              ? 403
+              : 401,
+            authenticated.failure._tag === "ServerAuthInvalidCredentialError"
+              ? (authenticated.failure.diagnostic ?? "A link credential is required.")
+              : "A link credential is required.",
+          );
         }
         const session = authenticated.success;
-        if (
-          session.peerLink !== true ||
-          (session.peerEnvironmentId === undefined && !request.headers["t3-peer-environment-id"])
-        )
+        if (session.peerLink !== true)
           return refused(403, "This credential is not a T3 Code peer link.");
-        const claimedId = request.headers["t3-peer-environment-id"];
-        if (session.peerEnvironmentId && claimedId && claimedId !== session.peerEnvironmentId)
-          return refused(403, "The peer token is bound to another environment");
-        const callerId = session.peerEnvironmentId ?? request.headers["t3-peer-environment-id"]!;
+        if (!session.peerEnvironmentId)
+          return refused(
+            401,
+            "This peer credential has no bound identity. Pair the machines again.",
+          );
+        const callerId = session.peerEnvironmentId;
         const environmentId = EnvironmentId.make(callerId);
-        const bound = yield* credentials.bind(callerId, session.sessionId).pipe(Effect.result);
-        if (bound._tag === "Failure") return refused(403, bound.failure.message);
         const made = yield* dispatcher.make({
           environmentId: callerId,
           token: request.headers.authorization!.slice(7),

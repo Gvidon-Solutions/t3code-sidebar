@@ -83,7 +83,7 @@ const serveB = (descriptor: ExecutionEnvironmentDescriptor) =>
 /** Environment A, which links to B. */
 const makeA = (
   descriptor: ExecutionEnvironmentDescriptor,
-  peer: ServedPeer | undefined,
+  _peer: ServedPeer | undefined,
   secrets?: typeof ServerSecretStore.layer,
 ) =>
   layerLinkingEnvironment(descriptor, secrets).pipe(
@@ -91,27 +91,7 @@ const makeA = (
     Effect.map((context) => {
       const links = Context.get(context, PeerLinks.PeerLinks);
       return {
-        links: PeerLinks.PeerLinks.of({
-          ...links,
-          link: (input) =>
-            links
-              .link(input)
-              .pipe(
-                Effect.tap((link) =>
-                  peer
-                    ? links
-                        .resolve(link.environmentId)
-                        .pipe(
-                          Effect.flatMap((resolved) =>
-                            peer
-                              .bindIdentity(resolved.token, descriptor.environmentId)
-                              .pipe(Effect.orDie),
-                          ),
-                        )
-                    : Effect.void,
-                ),
-              ),
-        }),
+        links,
         peer: Context.get(context, PeerMcpClient.PeerMcpClient),
         sql: Context.get(context, SqlClient.SqlClient),
         settings: Context.get(context, ServerSettings.ServerSettingsService),

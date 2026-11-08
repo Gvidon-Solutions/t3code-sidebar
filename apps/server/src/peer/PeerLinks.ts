@@ -260,6 +260,7 @@ const make = Effect.gen(function* () {
       input: PeerLinkCreateInput,
       clientName: string,
       environmentId: EnvironmentId,
+      issuerEnvironmentId: EnvironmentId,
     ) {
       const client = yield* clientFor(origin);
       // Only the peer's own refusals are rejections. A dropped connection or
@@ -302,7 +303,13 @@ const make = Effect.gen(function* () {
               state: Redacted.make(state),
               resource,
             },
-            decision: { _tag: "pairing-code", access: input.access, code: input.pairingCode },
+            decision: {
+              _tag: "pairing-code",
+              access: input.access,
+              code: input.pairingCode,
+              peerEnvironmentId: environmentId,
+              issuerEnvironmentId,
+            },
           },
         })
         .pipe(
@@ -462,7 +469,13 @@ const make = Effect.gen(function* () {
         message: `${peer.label} runs a T3 Code version that cannot keep a linked agent's limits. Update it, then link again.`,
       });
     }
-    const issued = yield* signIn(primary, input, `T3 Code · ${self.label}`, self.environmentId);
+    const issued = yield* signIn(
+      primary,
+      input,
+      `T3 Code · ${self.label}`,
+      self.environmentId,
+      peer.environmentId,
+    );
     const now = yield* DateTime.now;
     const linked: PeerLink = {
       environmentId: peer.environmentId,

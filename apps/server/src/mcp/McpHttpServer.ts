@@ -134,12 +134,20 @@ const unauthorized = (input: {
   );
 };
 
+export class McpClientAuthenticationError extends Schema.TaggedError<McpClientAuthenticationError>()(
+  "McpClientAuthenticationError",
+  { status: Schema.Literals([401, 403]), message: Schema.String },
+) {}
+
 export class McpClientAuthenticator extends Context.Service<
   McpClientAuthenticator,
   {
     readonly authenticate: (
       request: HttpServerRequest.HttpServerRequest,
-    ) => Effect.Effect<McpInvocationContext.McpInvocationScope | undefined>;
+    ) => Effect.Effect<
+      McpInvocationContext.McpInvocationScope | undefined,
+      McpClientAuthenticationError
+    >;
   }
 >()("t3/mcp/McpHttpServer/McpClientAuthenticator") {}
 
@@ -241,11 +249,20 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const authorization = request.headers.authorization;
     const token = parseBearerToken(request) ?? "";
-    const invocation =
-      (yield* registry.resolve(token)) ??
-      (Option.isSome(clients) && token.length > 0
-        ? yield* clients.value.authenticate(request)
-        : undefined);
+    const authentication = yield* Effect.gen(function* () {
+      return (
+        (yield* registry.resolve(token)) ??
+        (Option.isSome(clients) && token.length > 0
+          ? yield* clients.value.authenticate(request)
+          : undefined)
+      );
+    }).pipe(Effect.result);
+    if (authentication._tag === "Failure")
+      return HttpServerResponse.jsonUnsafe(
+        { error: "invalid_peer_identity", message: authentication.failure.message },
+        { status: authentication.failure.status, headers: { "cache-control": "no-store" } },
+      );
+    const invocation = authentication.success;
     if (!invocation) {
       yield* Effect.logWarning("rejected MCP request with an unusable credential", {
         reason:
