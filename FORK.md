@@ -1876,13 +1876,20 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   in your mesh" action. The right-hand project panel hides Version Control on a lite replica, so
   it can no longer offer Initialize Git where git does not exist. The shared model chip reserves
   room for a provider-instance badge. Android rows are compact again and pinned rows show their
-  machine tag.
+  machine tag. A linked thread's header names only its machine; no raw environment id or
+  "From T3 Code peer" text remains. Each machine appears exactly once per project row, with copies
+  on unconnected machines dimmed. Disabled machine cards say "Not connected to this device" in
+  visible text while their sync state stays in the tooltip. Android shows the connect-all prompt
+  too.
 - **How.** `meshLayout/draftMachineCards.ts` derives cards and their plain sentences from the
   layout, replica status and destination catalogs; web and mobile render the same rows. The
   default draft machine prefers the project's main copy. `chat/threadDetailsGit.ts` owns the
   panel's git visibility, and `sidebar/meshConnectPrompt.logic.ts` decides what a client can
   reconnect. About and machine versions keep using the build/server values, and project rows no
-  longer append a machine suffix.
+  longer append a machine suffix. The composer voice toggle is shared by server threads and drafts;
+  it follows the thread's provider on its own machine and the draft target machine's provider
+  catalog. The deterministic fixture provider reports voice only under
+  `T3_MESH_TEST_VOICE_PROVIDER=1`, so screenshots use the real badge without changing production.
 - **Where.** `apps/web/src/components/chat/{DraftMachineCards,ChatHeader,ThreadDetailsPanel,
   threadDetailsGit}.tsx|ts`, `apps/web/src/components/sidebar/MeshConnectPrompt*`,
   `apps/web/src/hooks/useLogicalProjectEnvironments.ts`,
