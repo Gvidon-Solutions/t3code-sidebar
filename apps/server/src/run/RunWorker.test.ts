@@ -110,7 +110,7 @@ it.live("returns 127 for a missing executable without signaling an invalid proce
         root,
         cwd: root,
         ignores: [],
-        args: ["r1-nonexistent-executable"],
+        args: ["mesh-nonexistent-executable"],
       };
       const child = NodeChildProcess.spawn(process.execPath, [
         "-e",

@@ -1,4 +1,3 @@
-import * as Option from "effect/Option";
 import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
@@ -183,10 +182,8 @@ function latestStartedRun(
 
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
-  const admission = yield* Effect.serviceOption(DeliveryAdmission);
-  const deferredRuns = Effect.gen(function* () {
-    return Option.isSome(admission) ? yield* admission.value.deferredRunIds : new Set<string>();
-  }).pipe(
+  const admission = yield* DeliveryAdmission;
+  const deferredRuns = admission.deferredRunIds.pipe(
     Effect.mapError(
       (cause) => new ProviderRuntimeRecoveryError({ operation: "read-projections", cause }),
     ),

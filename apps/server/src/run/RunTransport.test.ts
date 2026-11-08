@@ -19,10 +19,10 @@ it.live("preserves remote failures and refuses successful transports without a v
           `import {spawn} from 'node:child_process';
 import {writeFileSync} from 'node:fs';
 const frame = value => process.stdout.write('\\x1eT3RUN ' + JSON.stringify(value) + '\\n');
-const mode = process.env.R1_TRANSPORT_MODE;
+const mode = process.env.MESH_E2E_TRANSPORT_MODE;
 if(mode==='transport') {process.stderr.write('route unavailable\\n');process.exitCode=255;}
 else if(mode==='empty') process.exitCode=0;
-else if(mode==='held') { const holder=spawn(process.execPath,['-e','setInterval(()=>{},60000)'],{stdio:['ignore',process.stdout,process.stderr]}); writeFileSync(process.env.R1_HOLDER_PID,String(holder.pid)); holder.unref(); process.exit(0); }
+else if(mode==='held') { const holder=spawn(process.execPath,['-e','setInterval(()=>{},60000)'],{stdio:['ignore',process.stdout,process.stderr]}); writeFileSync(process.env.MESH_E2E_HOLDER_PID,String(holder.pid)); holder.unref(); process.exit(0); }
 else if(mode==='invalid') process.stdout.write('\\x1eT3RUN invalid\\n');
 else { frame({type:'out',data:Buffer.from(process.argv.slice(2).join(' ')).toString('base64')});
 if(mode==='error') frame({type:'error',message:'primary supervisor failed'});
@@ -42,14 +42,14 @@ frame({type:'done',code:mode==='remote255'?255:23,ignored:[]}); }
         ).href;
         const program = `import {remoteRun} from ${JSON.stringify(transport)};
 const plan={kind:'remote',logicalKey:'sample',environmentId:'laptop',primaryEnvironmentId:'studio',title:'Sample',machine:'studio',host:'t3-studio',primaryRoot:'/project',replicaRoot:'/copy',cwd:'/project',platform:'posix',ignores:[],runtime:{command:process.execPath,ptyModule:'test-terminal'}};
-process.env.R1_HOLDER_PID=${JSON.stringify(NodePath.join(root, "holder.pid"))};
+process.env.MESH_E2E_HOLDER_PID=${JSON.stringify(NodePath.join(root, "holder.pid"))};
 const results=[];
 for(const mode of ['remote','remote255','transport','empty','invalid','error','held']) {
-process.env.R1_TRANSPORT_MODE=mode;const frames=[];
+process.env.MESH_E2E_TRANSPORT_MODE=mode;const frames=[];
 try { const result=await remoteRun(plan,{action:'exec',ports:[3000,8080]},{tty:mode==='remote255',onFrame:f=>frames.push(f)});results.push({mode,result,args:frames.filter(f=>f.type==='out').map(f=>Buffer.from(f.data,'base64').toString()).join('')}); }
 catch(error){results.push({mode,error:error.message});}
 }
-const fs=await import('node:fs'); if(fs.existsSync(process.env.R1_HOLDER_PID)) process.kill(Number(fs.readFileSync(process.env.R1_HOLDER_PID,'utf8')));
+const fs=await import('node:fs'); if(fs.existsSync(process.env.MESH_E2E_HOLDER_PID)) process.kill(Number(fs.readFileSync(process.env.MESH_E2E_HOLDER_PID,'utf8')));
 process.stdout.write(JSON.stringify(results));`;
         const result = await NodeUtil.promisify(NodeChildProcess.execFile)(
           process.execPath,

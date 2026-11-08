@@ -1,3 +1,6 @@
+import { withoutMeshThreadHeader } from "../../../testFixtures/meshPrompt.ts";
+import * as MeshTestServices from "../../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../../mesh/DeliveryAdmission.ts";
 import { vi } from "vite-plus/test";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
 import { assert, describe, it } from "@effect/vitest";
@@ -33,7 +36,6 @@ import * as Stream from "effect/Stream";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import * as SqlitePersistence from "../../persistence/Sqlite.ts";
 import { CommandPolicyCapabilityUnsupportedError } from "../CommandPolicy.ts";
 import {
   ClaudeAgentSdkQueryRunnerError,
@@ -269,7 +271,7 @@ function makeTestAdapter(input: {
                   driver: input.driver,
                   threadId: turnInput.threadId,
                   providerThreadId: turnInput.providerThread.id,
-                  text: turnInput.message.text,
+                  text: withoutMeshThreadHeader(turnInput.message.text),
                   modelSelection: turnInput.modelSelection,
                   attachments: turnInput.message.attachments,
                   nativeThreadId: turnInput.providerThread.nativeThreadRef?.nativeId ?? null,
@@ -2316,8 +2318,11 @@ describe("orchestration v2 provider switching", () => {
           }),
         ]);
         const queuedThreadId = ThreadId.make("thread:queued-provider-switch");
-        const layerDatabase = SqlitePersistence.layerMemory;
-        const layerOutboxProvided = EffectOutbox.layer.pipe(Layer.provide(layerDatabase));
+        const layerDatabase = MeshTestServices.layerMemory;
+        const layerOutboxProvided = EffectOutbox.layer.pipe(
+          Layer.provide(RequiredAdmission.layer),
+          Layer.provide(layerDatabase),
+        );
         const projection = yield* Effect.gen(function* () {
           const orchestrator = yield* Orchestrator.OrchestratorV2;
           const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
@@ -3239,7 +3244,7 @@ describe("orchestration v2 provider switching", () => {
             capturedTurns,
           }),
         ]);
-        const layerDatabase = SqlitePersistence.layerMemory;
+        const layerDatabase = MeshTestServices.layerMemory;
         const layerEventStoreProvided = EventStore.layer.pipe(Layer.provideMerge(layerDatabase));
         const layerProjectionStoreProvided = ProjectionStore.layer.pipe(
           Layer.provideMerge(layerDatabase),
@@ -3249,7 +3254,10 @@ describe("orchestration v2 provider switching", () => {
           layerEventStoreProvided,
           layerProjectionStoreProvided,
         );
-        const layerEventSinkProvided = EventSink.layer.pipe(Layer.provide(layerStoresProvided));
+        const layerEventSinkProvided = EventSink.layer.pipe(
+          Layer.provide(RequiredAdmission.layer),
+          Layer.provide(layerStoresProvided),
+        );
         const layerImporterProvided = LegacyV1ThreadImporter.layer.pipe(
           Layer.provide(Layer.mergeAll(layerStoresProvided, layerEventSinkProvided)),
         );

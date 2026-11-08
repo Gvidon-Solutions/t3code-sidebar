@@ -18,7 +18,7 @@ and JS inputs on Expo Updates resource generation. See [delivery.md](../delivery
 
 ## Retry and bootstrap lifetimes (F2b)
 
-`mesh/retryBackoff.ts` defines the shared 1–15 second schedule for peer reconnects,
+`mesh/Backoff.ts` defines the shared 1–15 second schedule for peer reconnects,
 layout exchange, bootstrap readiness and fork recovery. Expiry cleanup makes seven attempts,
 logs exhaustion and retains its durable staging record for recovery after restart; committed
 fork intents retain their resumable retry path. Bootstrap polls `pair --check` for readiness
@@ -1021,8 +1021,7 @@ label matching lives only in `meshConfig/migration.ts`. Import defaults to proje
 existing config revisions are untouched. An unrestricted link requires an explicit `files: all`
 config override, whose permissions are listed in the plan before apply.
 
-`meshConfig/sshHost.ts` is the shared SSH destination validator. Run plans, run transport,
-replica routes/endpoints, platform SSH arguments and SSH route checks use it. Destinations are
+`meshConfig/sshHost.ts` owns SSH destination validation and `resolveMeshHost` for managed, existing and disabled modes. `platform/ServerPlatform.ts` owns `sshOptions` and `sshConfigPath`. Run plans, run transport, replica routes/endpoints and SSH route checks use these helpers. Destinations are
 configured aliases or host names, with user and port held separately. SSH argument lists end
 options with `--` before the destination. This keeps a config value from becoming an SSH option
 or changing Mutagen endpoint syntax.
@@ -1080,3 +1079,46 @@ Future-row quarantine must also recover the saved HLC from retained valid rows:
 otherwise the bounded clock refuses every startup write after clock correction.
 Heartbeat scheduling caps a pending-pong wait at the next ping interval, since
 an asynchronous pong can shorten a deadline after its sleep was scheduled.
+
+## Public source hygiene
+
+`scripts/public-repo-leakage.test.ts` checks tracked text and compressed fixtures for private
+infrastructure and fixture names. Keep run output outside tracked sources and use neutral
+identities in evaluation captures. `scripts/security-workflows.test.ts` checks all workflows
+for explicit repository read permissions and immutable external actions; Node setup uses
+`package.json` as its version source.
+
+Peer HTTP headers use `peer/connection/peerIdentity.ts` for hop parsing and formatting;
+HTTP and persistent relay paths share its identity/loop rules. Do not filter empty hop
+segments during parsing: malformed lists must reach validation and be refused.
+`platform/mutagenRelease.ts` owns the pinned target/version/archive/digest catalog used by
+production installation and integration fixtures. Retention values in `mesh/retention.ts`
+are independent of scheduling acceleration, including tombstones and durable receipts.
+
+The orphan standalone bootstrap/run/replica bed runners have been retired in favor of
+`scripts/mesh-fast`; native platform smoke imports the same client. Shared local shell helpers
+live in `scripts/lib/shell.mjs`; delivery setup stages that dependency with its remote script.
+Round two reads `MESH_E2E_LOCAL_PRIMARY_ROOT`, `MESH_E2E_REVERSE_ROOT`,
+`MESH_E2E_REVERSE_TITLE` and `MESH_E2E_DEMO_TITLE`, matching nightly isolation.
+
+Production layers require delivery admission, mesh config/layout and peer transport. A missing
+layer is a construction error; tests install explicit layers from `testFixtures/meshServices.ts`.
+Inject node identity and failure layers before constructing a service: its methods keep those
+dependencies. Multi-node fixtures use fresh config layers and keep unused toolkit dependencies
+inside registration, so one node cannot replace another node’s handlers or request scope.
+`DeliveryUpdatingError` is a wire tag carried through RPC and MCP causes. Retry code checks that
+tag, so arbitrary tool text cannot delay a request. The admission SQL and interrupt planning
+share `ADMISSION_GATED_EFFECT_TYPES`.
+
+`MeshTiming.MeshTimeScale` supplies liveness timing through Context; each service captures its
+own timer. Production builds ignore the environment override. `mesh/Backoff.ts` owns capped
+exponential delays and explicit jitter, while `mesh/retention.ts` stays in real elapsed time.
+`platform/Download.ts` verifies archive SHA-256 before publishing bytes and preserves each
+caller's stall/body deadline. `platform/readLine.ts` bounds IPC bytes and time and restores
+trailing stream bytes. `run/RunWorker.ts` is compiled TypeScript; its compatibility source is
+generated from the same worker and platform functions. `auth/PeerIdentities.ts` owns legacy
+identity upgrade queries; replication reads that service instead of auth tables.
+
+Middleware captures only its required service keys with `Context.make`; capturing the whole
+construction context can replace the request scope and prevent cancellation from reaching a
+remote tool. The real peer-network cancellation test covers this boundary.

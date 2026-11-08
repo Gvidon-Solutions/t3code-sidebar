@@ -1,4 +1,4 @@
-import { meshRetryDelay } from "../../mesh/retryBackoff.ts";
+import { meshRetryDelay } from "../../mesh/Backoff.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- These tests drive the Node byte-stream boundary.
 import type * as NodeStream from "node:stream";
 import { expect, it, vi } from "vite-plus/test";

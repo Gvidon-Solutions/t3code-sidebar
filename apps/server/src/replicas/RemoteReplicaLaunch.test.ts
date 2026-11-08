@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { it, expect } from "@effect/vitest";
 import { EnvironmentId, ProjectId, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -116,5 +117,5 @@ it.effect(
           yield* resolveLaunchProject(ProjectId.make("already-remote"), EnvironmentId.make("box")),
         ).toBe("already-remote");
       }).pipe(Effect.provide(runtime));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );

@@ -1,3 +1,5 @@
+import { MeshLayoutService } from "./MeshLayoutService.ts";
+import { relayHopsAllowed, PEER_HOPS_ERROR } from "../peer/connection/peerIdentity.ts";
 import { forwardedCallLimits } from "./MeshLinkPermissions.ts";
 import {
   EnvironmentId,
@@ -20,7 +22,6 @@ export const RelayInput = Schema.Struct({
   arguments: Schema.Record(Schema.String, Schema.Unknown),
 });
 export const Routes = Schema.Array(Schema.String);
-export const HOP_HEADER = "t3-mesh-hops";
 export class MeshRelay extends Context.Service<
   MeshRelay,
   {
@@ -35,18 +36,15 @@ export class MeshRelay extends Context.Service<
 >()("t3/mesh/MeshRelay") {}
 const refused = new OrchestratorMcpFailure({
   code: "capability_denied",
-  message: "Mesh relay requires a direct full-access link, at most two hops and no loops",
+  message: PEER_HOPS_ERROR,
 });
 export const layer = Layer.effect(
   MeshRelay,
   Effect.gen(function* () {
     const links = yield* PeerLinks;
-    const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
-    const status = Effect.suspend(
-      () =>
-        (Option.isSome(transport) ? transport.value.get()?.status : undefined) ??
-        Effect.succeed([]),
-    );
+    const mesh = yield* MeshLayoutService;
+    const transport = yield* PeerTransport.PeerTransport;
+    const status = Effect.suspend(() => transport.get()?.status ?? Effect.succeed([]));
     const peers = yield* PeerMcpClient;
     const self = yield* (yield* ServerEnvironment).getEnvironmentId;
     const routes = links.list.pipe(
@@ -64,15 +62,14 @@ export const layer = Layer.effect(
       limits: PeerCallLimits,
     ) {
       if (
-        hops.length !== 1 ||
-        hops.includes(self) ||
-        hops.includes(input.environmentId) ||
-        input.environmentId === self ||
+        !relayHopsAllowed(hops, self, input.environmentId) ||
         (input.tool.startsWith("t3_mesh_") &&
           !["t3_mesh_update_vote", "t3_mesh_update_health"].includes(input.tool))
       )
         return yield* refused;
-      const narrowed = yield* forwardedCallLimits(input.tool, limits, input.environmentId);
+      const narrowed = yield* forwardedCallLimits(input.tool, limits, input.environmentId).pipe(
+        Effect.provideService(MeshLayoutService, mesh),
+      );
       const target = yield* links.get(input.environmentId).pipe(Effect.mapError(() => refused));
       if (Option.isNone(target)) return yield* refused;
       return yield* peers.call({

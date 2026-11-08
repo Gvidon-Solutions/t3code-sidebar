@@ -90,7 +90,7 @@ const layerStores = Layer.mergeAll(
 
 export const layerEventSink = EventSink.layerFromStores.pipe(
   Layer.provide(layerStores),
-  Layer.provideMerge(DeliveryAdmission.layer),
+  Layer.provide(DeliveryAdmission.layer),
 );
 const layerProjectionMaintenanceProvided = ProjectionMaintenance.layer.pipe(
   Layer.provide(layerStores),

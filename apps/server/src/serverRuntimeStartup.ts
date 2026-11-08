@@ -637,12 +637,12 @@ const make = Effect.fn("serverRuntimeStartup.make")(function* (options?: Startup
     yield* runStartupPhase("http.wait", Deferred.await(httpListening));
     yield* runStartupPhase("auxiliary-roots.parked", options?.awaitAuxiliaryParked ?? Effect.void);
 
-    const rollout = yield* Effect.serviceOption(MeshRollout);
-    const earlyActivation = rollout._tag === "Some" && rollout.value.trial;
+    const rollout = yield* MeshRollout;
+    const earlyActivation = rollout.trial;
     if (earlyActivation) yield* options?.activate ?? Effect.void;
-    if (rollout._tag === "Some") yield* rollout.value.checkTrial;
+    yield* rollout.checkTrial;
     const updateOutcome = yield* launcher.prepareTrial;
-    if (rollout._tag === "Some") yield* rollout.value.finishTrial;
+    yield* rollout.finishTrial;
 
     yield* Effect.logDebug("startup phase: publishing welcome event", {
       environmentId: environment.environmentId,

@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import { assert, it } from "@effect/vitest";
 import {
@@ -169,24 +170,30 @@ const createSupervisedThread = (threadId: ThreadId) =>
     });
   });
 
-it.layer(layerOrchestrator)("writesThreads against a mode raise", (it) => {
-  it.effect("refuses the write when the user raises the thread after the check", () =>
-    Effect.gen(function* () {
-      const projections = yield* ProjectionStore.ProjectionStoreV2;
-      const threadId = ThreadId.make("thread:race-raised");
-      yield* createSupervisedThread(threadId);
-      const outcome = yield* renameRacingTheUser(threadId, true);
-      assert.deepEqual(outcome, { code: "runtime_mode_escalation_denied" });
-      const shell = yield* projections.getThreadShell(threadId);
-      assert.equal(shell?.runtimeMode, "full-access");
-      assert.equal(shell?.title, "Before");
-    }).pipe(
-      Effect.provide(
-        ThreadManagement.layer.pipe(
-          Layer.provide(ServerSettings.layerTest()),
-          Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(layerDatabase))),
+it.layer(layerOrchestrator.pipe(Layer.provide(MeshTestServices.required)))(
+  "writesThreads against a mode raise",
+  (it) => {
+    it.effect("refuses the write when the user raises the thread after the check", () =>
+      Effect.gen(function* () {
+        const projections = yield* ProjectionStore.ProjectionStoreV2;
+        const threadId = ThreadId.make("thread:race-raised");
+        yield* createSupervisedThread(threadId);
+        const outcome = yield* renameRacingTheUser(threadId, true);
+        assert.deepEqual(outcome, { code: "runtime_mode_escalation_denied" });
+        const shell = yield* projections.getThreadShell(threadId);
+        assert.equal(shell?.runtimeMode, "full-access");
+        assert.equal(shell?.title, "Before");
+      }).pipe(
+        Effect.provide(
+          Layer.provideMerge(
+            ThreadManagement.layer.pipe(
+              Layer.provide(ServerSettings.layerTest()),
+              Layer.provide(CommandReceiptStore.layer.pipe(Layer.provide(layerDatabase))),
+            ),
+            MeshTestServices.required,
+          ),
         ),
       ),
-    ),
-  );
-});
+    );
+  },
+);

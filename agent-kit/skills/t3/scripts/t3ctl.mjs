@@ -740,7 +740,14 @@ export function unitRuntimeExecutable(unit) {
 export async function retryUpdatingCall(call, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
   for (;;) {
     const result = await call();
-    if (!result.isError || !(result.content || []).some((item) => item.type === "text" && item.text.includes("T3_UPDATING:"))) return result;
+    const updating = (value) => value !== null && typeof value === "object" &&
+      (value._tag === "DeliveryUpdatingError" || Object.values(value).some(updating));
+    const tagged = updating(result.structuredContent) || (result.content || []).some((item) => {
+      if (item.type !== "text" || !["{", "["].includes(item.text.trimStart()[0])) return false;
+      try { return updating(JSON.parse(item.text)); }
+      catch (error) { console.warn(`Cannot decode MCP retry metadata: ${error.message}`); return false; }
+    });
+    if (!result.isError || !tagged) return result;
     await wait(1000);
   }
 }
@@ -931,7 +938,8 @@ class Mcp {
     if (res.structuredContent !== undefined) return res.structuredContent;
     try {
       return JSON.parse(text);
-    } catch {
+    } catch (error) {
+      console.warn(`${name}: response is not JSON: ${error.message}`);
       return text;
     }
   }
@@ -1558,8 +1566,8 @@ async function resolveThread(ref, { projectRef, includeArchived } = {}) {
     try {
       const t = (await m.call("t3_thread_read", { threadId: r, limit: 1 })).thread;
       if (t) return { ...t, project: t.projectId };
-    } catch {
-      /* fall through */
+    } catch (error) {
+      console.warn(`Direct thread lookup failed; searching titles: ${error.message}`);
     }
   }
   const projects = await listProjects();

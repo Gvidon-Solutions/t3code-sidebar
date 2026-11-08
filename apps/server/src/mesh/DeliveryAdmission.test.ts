@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "./DeliveryAdmission.ts";
 import * as EffectWorker from "../orchestration-v2/EffectWorker.ts";
 import * as Ref from "effect/Ref";
 import { assert, it } from "@effect/vitest";
@@ -21,17 +23,20 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
-import * as Sqlite from "../persistence/Sqlite.ts";
+
 import * as Admission from "./DeliveryAdmission.ts";
 import * as Outbox from "../orchestration-v2/EffectOutbox.ts";
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as EventStore from "../orchestration-v2/EventStore.ts";
 import * as Projections from "../orchestration-v2/ProjectionStore.ts";
 
-const layer = Layer.mergeAll(EventSink.layer, Outbox.layer).pipe(
+const layer = Layer.mergeAll(
+  EventSink.layer.pipe(Layer.provide(RequiredAdmission.layer)),
+  Outbox.layer.pipe(Layer.provide(RequiredAdmission.layer)),
+).pipe(
   Layer.provideMerge(Layer.mergeAll(EventStore.layer, Projections.layer)),
   Layer.provideMerge(Admission.layer),
-  Layer.provideMerge(Sqlite.layerMemory),
+  Layer.provideMerge(MeshTestServices.layerMemory),
 );
 const event = Effect.fn("DeliveryTest.run")(function* (
   name: string,
@@ -180,7 +185,9 @@ it.effect(
       const rows =
         yield* sql`SELECT status FROM orchestration_v2_effect_outbox WHERE effect_id = 'pending-effect'`;
       assert.deepEqual(rows, [{ status: "pending" }]);
-      const newOutboxContext = yield* Layer.build(Outbox.layer).pipe(
+      const newOutboxContext = yield* Layer.build(
+        Outbox.layer.pipe(Layer.provide(RequiredAdmission.layer)),
+      ).pipe(
         Effect.provideService(SqlClient.SqlClient, sql),
         Effect.provideService(Admission.DeliveryAdmission, restarted),
       );

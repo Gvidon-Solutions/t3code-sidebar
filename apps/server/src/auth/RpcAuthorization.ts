@@ -40,6 +40,7 @@ import type * as RpcGroup from "effect/rpc/RpcGroup";
 
 type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
 
+/** @internal */
 export const RPC_REQUIRED_SCOPES = {
   ...CLIENT_GUARDED_RPC_SCOPES,
   [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: AuthOrchestrationOperateScope,
@@ -238,6 +239,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.subscribeAuthAccess]: AuthAccessReadScope,
 } as const satisfies Readonly<Record<WsRpcMethod, AuthEnvironmentScope>>;
 
+/** @internal */
 export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope {
   if (!Object.hasOwn(RPC_REQUIRED_SCOPES, method)) {
     throw new Error(`RPC method ${method} has no declared authorization scope.`);

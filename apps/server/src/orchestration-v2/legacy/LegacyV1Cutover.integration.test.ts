@@ -1,3 +1,4 @@
+import * as RequiredAdmission from "../../mesh/DeliveryAdmission.ts";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
@@ -596,7 +597,10 @@ const layerBoot = (input: {
     layerEventStoreProvided,
     layerProjectionStoreProvided,
   );
-  const layerEventSinkProvided = EventSink.layer.pipe(Layer.provide(layerStoresProvided));
+  const layerEventSinkProvided = EventSink.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
+    Layer.provide(layerStoresProvided),
+  );
   const layerImporterProvided = LegacyV1ThreadImporter.layer.pipe(
     Layer.provide(Layer.mergeAll(layerStoresProvided, layerEventSinkProvided)),
   );

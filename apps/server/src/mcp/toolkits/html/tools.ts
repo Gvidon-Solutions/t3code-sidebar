@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import {
@@ -59,6 +60,7 @@ export const HtmlPreviewTool = Tool.make("html_preview", {
   }),
   failure: OrchestratorMcpFailure,
   dependencies: [
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     HtmlRender.HtmlRender,
@@ -96,6 +98,7 @@ const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
   failure: OrchestratorMcpFailure,
   failureMode: "return",
   dependencies: [
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     HtmlRender.HtmlRender,

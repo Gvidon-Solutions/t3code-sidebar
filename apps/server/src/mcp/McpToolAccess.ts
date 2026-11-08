@@ -370,11 +370,6 @@ const takesLinkedEnvironment = (tool: Tool.Any) => {
   );
 };
 
-const linksUnavailable = new OrchestratorMcpFailure({
-  code: "orchestration_error",
-  message: "This environment cannot reach linked environments.",
-});
-
 /**
  * Every tool that takes a linked environment runs there the same way: its
  * declaration checks the caller here, and the same call goes to the other
@@ -386,8 +381,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
   declarations: Handlers<Tools>,
   checked: Toolkit.HandlersFrom<Tools>,
 ) {
-  // Optional so toolkits that never leave this environment build without it.
-  const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
+  const forwarding = yield* PeerForwarding.PeerForwarding;
   const handlers: Record<string, unknown> = { ...checked };
   const locations = new Map<string, EnvironmentId>();
   const forgetLocation = (id: string) => {
@@ -417,12 +411,9 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
         const scope = yield* McpInvocationContext.McpInvocationContext;
         let target = PeerForwarding.remoteTarget(scope, environmentId);
         if (environmentId === "all" && (name === "t3_thread_list" || name === "t3_thread_search")) {
-          if (Option.isNone(forwarding)) return yield* linksUnavailable;
           const field = name === "t3_thread_list" ? "threads" : "matches";
-          const mesh = yield* Effect.serviceOption(MeshLayoutService);
-          const config = Option.isSome(mesh)
-            ? (yield* mesh.value.read.pipe(Effect.mapError(unavailable))).config
-            : undefined;
+          const mesh = yield* MeshLayoutService;
+          const config = (yield* mesh.read.pipe(Effect.mapError(unavailable))).config;
           const machines = [scope.environmentId, ...(yield* discoverThreadMachines())];
           const results = yield* Effect.forEach(
             machines,
@@ -437,7 +428,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
                           thread: undefined,
                         }),
                       )
-                    : yield* forwarding.value.call(scope, routedTool, id, input);
+                    : yield* forwarding.call(scope, routedTool, id, input);
                 return { id, value: value as Record<string, unknown> };
               }).pipe(Effect.timeout("10 seconds"), Effect.result),
             { concurrency: 4 },
@@ -511,11 +502,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
               .getThreadShell(ThreadId.make(`mcp:${requested}`))
               .pipe(Effect.mapError(unavailable));
           if (shell && shell.deletedAt === null) params = { ...params, threadId: shell.id };
-          else if (
-            scope.linkedEnvironments !== false &&
-            !scope.client?.linked &&
-            Option.isSome(forwarding)
-          ) {
+          else if (scope.linkedEnvironments !== false && !scope.client?.linked) {
             const cached = locations.get(requested);
             const machines = cached
               ? [cached, ...(yield* discoverThreadMachines()).filter((id) => id !== cached)]
@@ -541,7 +528,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
         if (target === undefined) return yield* here(params);
         if (scope.linkedEnvironments === false) return yield* PeerForwarding.linkedEnvironmentsOff;
         yield* (remote as RemoteCheck<typeof params>)(params);
-        if (Option.isNone(forwarding)) return yield* linksUnavailable;
+
         let forwarded = params;
         if (
           name === "t3_thread_launch" &&
@@ -572,7 +559,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
               ),
             };
         }
-        return yield* forwarding.value
+        return yield* forwarding
           .call(scope, routedTool, target, { ...forwarded, environmentId: target })
           .pipe(
             Effect.tapError((error) => {
@@ -612,7 +599,7 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
 export const toLayer = <Tools extends Record<string, Tool.Any>, EX = never, RX = never>(
   toolkit: Toolkit.Toolkit<Tools>,
   build: Handlers<Tools> | Effect.Effect<Handlers<Tools>, EX, RX>,
-): HandlersLayer<Tools, EX, Exclude<RX, Scope.Scope>> => {
+): HandlersLayer<Tools, EX, Exclude<RX, Scope.Scope> | PeerForwarding.PeerForwarding> => {
   registerMcpTools(toolkit.tools);
   // Checked as soon as they are given, so a forged declaration fails here.
   const withDeclarations = (declarations: Handlers<Tools>) =>

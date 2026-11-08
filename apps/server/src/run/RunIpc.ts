@@ -1,3 +1,4 @@
+import { readLine } from "../platform/readLine.ts";
 // @effect-diagnostics globalErrorInEffectFailure:off -- Native socket callback errors are mapped to RunIpcError at the Effect boundary.
 // @effect-diagnostics nodeBuiltinImport:off -- CLI requests use a private OS socket; the transport delegates all decisions to RunControl.
 import * as NodeNet from "node:net";
@@ -39,33 +40,22 @@ export const layer = Layer.effectDiscard(
             socket.on("error", (error) => {
               void run(Effect.logDebug("Run IPC disconnected", error));
             });
-            let input = "";
-            socket.setEncoding("utf8");
-            socket.setTimeout(5000, () => socket.destroy(new Error("Run IPC handshake timed out")));
-            const receive = (chunk: string) => {
-              input += chunk;
-              const end = input.indexOf("\n");
-              if (end < 0 && input.length < 65536) return;
-              socket.removeListener("data", receive);
-              socket.setTimeout(0);
-              const abort = new AbortController();
-              socket.once("close", () => abort.abort());
-              void (async () => {
-                try {
-                  if (end < 0 || end > 65536) throw new Error("Invalid run request");
-                  const response = await run(control.request(decodeRequest(input.slice(0, end))), {
-                    signal: abort.signal,
-                  });
-                  socket.end(`${encodeResponse(response)}\n`);
-                } catch (cause) {
-                  void run(Effect.logWarning("Run IPC failed", cause));
-                  socket.end(
-                    `${encodeResponse({ ok: false, code: 255, message: "The local T3 server could not prepare the command." })}\n`,
-                  );
-                }
-              })();
-            };
-            socket.on("data", receive);
+            const abort = new AbortController();
+            socket.once("close", () => abort.abort());
+            void (async () => {
+              try {
+                const input = await readLine(socket, { maxBytes: 65536, timeoutMs: 5000 });
+                const response = await run(control.request(decodeRequest(input)), {
+                  signal: abort.signal,
+                });
+                socket.end(`${encodeResponse(response)}\n`);
+              } catch (cause) {
+                void run(Effect.logWarning("Run IPC failed", cause));
+                socket.end(
+                  `${encodeResponse({ ok: false, code: 255, message: "The local T3 server could not prepare the command." })}\n`,
+                );
+              }
+            })();
           });
           await new Promise<void>((resolve, reject) => {
             server.once("error", reject);

@@ -1,9 +1,12 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { lookupMeshProject } from "./meshProjectLookup.ts";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import * as FileSystem from "effect/FileSystem";
 import { EnvironmentId, ProjectId, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -50,12 +53,16 @@ it.effect.each([
       };
       const calls: { environmentId: string; tool: string }[] = [];
       const peers = Layer.mergeAll(
-        Layer.mock(PeerLinks)({
-          enabled: Effect.succeed(true),
-          list: Effect.succeed([source]),
-          get: (id) =>
-            Effect.succeed(id === source.environmentId ? Option.some(source) : Option.none()),
-        }),
+        (() => {
+          const list = Effect.succeed([source]);
+          return Layer.mock(PeerLinks)({
+            enabled: Effect.succeed(true),
+            list,
+            get: (id) =>
+              Effect.succeed(id === source.environmentId ? Option.some(source) : Option.none()),
+            ids: Effect.map(list, (peers) => peers.map((peer) => peer.environmentId)),
+          });
+        })(),
         Layer.succeed(
           PeerMcpClient,
           PeerMcpClient.of({
@@ -120,7 +127,11 @@ it.effect.each([
         }));
         const before = (yield* mesh.read).document;
         if (brokenPage) {
-          const error = yield* service.machines("remote TITLE").pipe(Effect.flip);
+          const lookup = yield* service
+            .machines("remote TITLE")
+            .pipe(Effect.flip, Effect.forkChild({ startImmediately: true }));
+          yield* TestClock.adjust("20 seconds");
+          const error = yield* Fiber.join(lookup);
           expect(error.reason).toBe("unreachable");
           expect(error.message).toContain("Second page unavailable");
           expect((yield* mesh.read).document).toEqual(before);
@@ -134,7 +145,7 @@ it.effect.each([
         if (represented) expect(result.logicalKey).toBe("logical");
         expect((yield* mesh.read).document).toEqual(before);
         const root = yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
-          prefix: "N-mesh-lookup-",
+          prefix: "mesh-lookup-",
         });
         const placed = yield* service.place({
           project: "Remote title",
@@ -161,7 +172,7 @@ it.effect.each([
           projectId: remote.id,
         });
       }).pipe(Effect.scoped, Effect.provide(h.layer.pipe(Layer.provideMerge(peers))));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("rejects ambiguous unbound project names rather than allocating a second project", () =>
@@ -184,7 +195,7 @@ it.effect("rejects ambiguous unbound project names rather than allocating a seco
       ]).pipe(Effect.flip);
       expect(error.message).toContain("More than one project");
     }
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("retains logical projects with zero representations in layout lookup", () =>
@@ -197,5 +208,5 @@ it.effect("retains logical projects with zero representations in layout lookup",
       logicalKey: "logical",
       records: [],
     });
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );

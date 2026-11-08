@@ -1,8 +1,7 @@
 import { File, Paths } from "expo-file-system";
 import { getContentUriAsync } from "expo-file-system/legacy";
 import { startActivityAsync } from "expo-intent-launcher";
-import { sha256 } from "@noble/hashes/sha256";
-import { bytesToHex } from "@noble/hashes/utils";
+import { createApkDigest } from "./apkDigest";
 import type { VerifiedApk } from "./native-update-verification";
 
 export async function installVerifiedApk(apk: VerifiedApk): Promise<void> {
@@ -11,7 +10,7 @@ export async function installVerifiedApk(apk: VerifiedApk): Promise<void> {
   const downloaded = await File.downloadFileAsync(apk.apkUrl, destination);
   try {
     const handle = downloaded.open();
-    const digest = sha256.create();
+    const digest = createApkDigest();
     try {
       for (;;) {
         const chunk = await handle.readBytes(1024 * 1024);
@@ -21,8 +20,7 @@ export async function installVerifiedApk(apk: VerifiedApk): Promise<void> {
     } finally {
       handle.close();
     }
-    if (bytesToHex(digest.digest()) !== apk.sha256)
-      throw new Error("APK SHA-256 verification failed");
+    if (digest.hex() !== apk.sha256) throw new Error("APK SHA-256 verification failed");
     await startActivityAsync("android.intent.action.VIEW", {
       data: await getContentUriAsync(downloaded.uri),
       flags: 1,

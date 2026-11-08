@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { ProjectId } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -31,7 +32,7 @@ it.effect(
         { environmentId: "source", h: "0000000000001.00000.source", projects: [project] },
       ]);
       expect((yield* directory.read)[0]?.projects).toEqual([]);
-    }).pipe(Effect.provide(Directory.layer)),
+    }).pipe(Effect.provide(Layer.provideMerge(Directory.layer, MeshTestServices.required))),
 );
 
 it.effect(
@@ -72,7 +73,7 @@ it.effect(
         expect(again.title).toBe("Incoming source");
         expect((yield* mesh.read).document).toEqual(before);
       }).pipe(Effect.provide(h.layer.pipe(Layer.provideMerge(observed))));
-    }).pipe(Effect.provide(Directory.layer)),
+    }).pipe(Effect.provide(Layer.provideMerge(Directory.layer, MeshTestServices.required))),
 );
 
 it.effect("bounds a missing-name wait and reacts to layout-only metadata changes", () =>
@@ -91,7 +92,7 @@ it.effect("bounds a missing-name wait and reacts to layout-only metadata changes
       const missing = yield* replicas.machines("Missing").pipe(Effect.forkChild);
       yield* Deferred.await(entered);
       yield* TestClock.adjust("20 seconds");
-      expect((yield* Fiber.join(missing).pipe(Effect.flip)).reason).toBe("not_found");
+      expect((yield* Fiber.join(missing).pipe(Effect.flip)).reason).toBe("unreachable");
       entered = yield* Deferred.make<void>();
       const waiting = yield* replicas.machines("Layout project").pipe(Effect.forkChild);
       yield* Deferred.await(entered);
@@ -116,5 +117,5 @@ it.effect("bounds a missing-name wait and reacts to layout-only metadata changes
         title: "Layout project",
       });
     }).pipe(Effect.provide(h.layer.pipe(Layer.provideMerge(observed))));
-  }).pipe(Effect.provide(Directory.layer)),
+  }).pipe(Effect.provide(Layer.provideMerge(Directory.layer, MeshTestServices.required))),
 );

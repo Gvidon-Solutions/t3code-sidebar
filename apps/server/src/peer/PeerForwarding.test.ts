@@ -1,4 +1,5 @@
-import { layerLinkedTest } from "../replicas/MeshLayoutTestLayer.ts";
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -211,7 +212,11 @@ const serveBox = (seen: Ref.Ref<Seen>, linkSession: Ref.Ref<string>) =>
       McpHttpServer.layerThreadToolkit,
     )
       .pipe(
-        Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
+        Layer.provide(
+          DocumentText.layer.pipe(
+            Layer.provideMerge(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
+          ),
+        ),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
           layerLinkedTest(
@@ -235,12 +240,12 @@ const serveBox = (seen: Ref.Ref<Seen>, linkSession: Ref.Ref<string>) =>
         Layer.provide(boxProjects(seen)),
         Layer.provide(
           ServerConfig.layerTest(process.cwd(), { prefix: "t3-peer-forwarding-box-" }).pipe(
-            Layer.provide(NodeServices.layer),
+            Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
           ),
         ),
       )
       .pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
         Layer.provide(
           Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
         ),
@@ -253,7 +258,16 @@ const serveBox = (seen: Ref.Ref<Seen>, linkSession: Ref.Ref<string>) =>
         Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
         Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
         Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+        Layer.provide(MeshTestServices.toolkit),
       ),
+  ).pipe(
+    Effect.provide(
+      layerLinkedTest(
+        box.environmentId,
+        { cloudbox: box.environmentId, laptop: laptop.environmentId },
+        "all",
+      ),
+    ),
   );
 
 const mcpClient = McpSchema.McpServerClient.of({
@@ -280,7 +294,11 @@ const makeLaptop = Effect.gen(function* () {
     McpHttpServer.layerProjectRegistration,
     McpHttpServer.layerThreadToolkit,
   ).pipe(
-    Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
+    Layer.provide(
+      DocumentText.layer.pipe(
+        Layer.provideMerge(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
+      ),
+    ),
     Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
     Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
     Layer.provide(Layer.mock(ThreadLaunch.ThreadLaunchService)({})),
@@ -291,10 +309,10 @@ const makeLaptop = Effect.gen(function* () {
     Layer.provide(Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({})),
     Layer.provide(
       ServerConfig.layerTest(process.cwd(), { prefix: "t3-peer-forwarding-laptop-" }).pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
       ),
     ),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
     Layer.provide(PeerForwarding.layer),
     Layer.provide(Layer.succeedContext(linking)),
     Layer.provide(NodeCrypto.layer),
@@ -326,7 +344,7 @@ const makeLaptop = Effect.gen(function* () {
         Layer.mock(ProviderRegistry.ProviderRegistry)({}),
         Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({}),
         Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
-        Layer.mock(ProjectService.ProjectService)({}),
+        Layer.mock(ProjectService.ProjectService)({ getById: () => Effect.succeedNone }),
         Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({}),
         Layer.mock(SecretRequests.SecretRequests)({}),
         ServerSettings.layerTest(),
@@ -336,7 +354,7 @@ const makeLaptop = Effect.gen(function* () {
     ),
     Layer.fresh,
   );
-  const here = yield* Layer.build(layerHere);
+  const here = yield* Layer.build(layerHere.pipe(Layer.provide(MeshTestServices.toolkit)));
   const server = Context.get(here, McpServer.McpServer);
   const scopeOf = (
     caller: string,
@@ -443,7 +461,17 @@ it.effect("an agent here works on a linked environment's threads within its own 
         `delegated-tasks.stop ${boxThread}`,
       ]);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.transport,
+      ),
+    ),
+  ),
 );
 
 it.effect("keeps a forwarded wait short and its retries scoped to the caller", () =>
@@ -487,15 +515,24 @@ it.effect("keeps a forwarded wait short and its retries scoped to the caller", (
       yield* send("thread:laptop-full", "same-key");
       yield* send("thread:laptop-full", "same-key");
       yield* send("thread:laptop-other", "same-key");
-      const [first, retried, other] = (yield* Ref.get(seen)).sends.map((input) => input.commandId);
-      // The box sees every caller here as the one link, so the key is scoped
-      // to its caller before it leaves: a retry matches, another agent's same
-      // key does not.
-      expect(retried).toBe(first);
+      const sent = (yield* Ref.get(seen)).sends.map((input) => input.commandId);
+      const [first, other] = sent;
+      expect(sent).toHaveLength(2);
+      // Receipt replay avoids a second send; another caller gets its own command.
       expect(other).not.toBe(first);
       expect(first).not.toContain("same-key");
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.transport,
+      ),
+    ),
+  ),
 );
 
 it.effect("launches in a linked environment with the caller's modes, retry-safe", () =>
@@ -520,17 +557,17 @@ it.effect("launches in a linked environment with the caller's modes, retry-safe"
         });
 
       const first = yield* launch("thread:laptop-plan");
-      expect(first.isError).toBe(false);
+      expect(first.isError, JSON.stringify(first.content)).toBe(false);
       expect(first.structuredContent).toMatchObject({
         projectId: boxProject,
         modelSelection: codex,
       });
       const retried = yield* launch("thread:laptop-plan");
-      const [launched, relaunched] = (yield* Ref.get(seen)).launches;
-      // The thread there runs with the caller's own modes here, below the
-      // link's full access, and a retry asks for the same thread.
+      const launches = (yield* Ref.get(seen)).launches;
+      const [launched] = launches;
+      expect(launches).toHaveLength(1);
+      // The link preserves the caller's modes and replays the same launch receipt.
       expect(launched).toMatchObject({ runtimeMode: "full-access", interactionMode: "plan" });
-      expect(relaunched?.threadId).toBe(launched?.threadId);
       expect(retried.structuredContent).toEqual(first.structuredContent);
 
       // An escalation past the caller's own modes is refused here.
@@ -546,9 +583,19 @@ it.effect("launches in a linked environment with the caller's modes, retry-safe"
       });
       expect(failureOf(withUpload)).toMatchObject({ code: "invalid_request" });
       expect(yield* Ref.get(b.bearers)).toEqual([]);
-      expect((yield* Ref.get(seen)).launches).toHaveLength(2);
+      expect((yield* Ref.get(seen)).launches).toHaveLength(1);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.transport,
+      ),
+    ),
+  ),
 );
 
 it.effect("brings a repository to a linked environment, only through full access", () =>
@@ -597,7 +644,17 @@ it.effect("brings a repository to a linked environment, only through full access
       expect((yield* Ref.get(seen)).clones).toHaveLength(1);
       expect((yield* Ref.get(seen)).projects).toHaveLength(1);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.transport,
+      ),
+    ),
+  ),
 );
 
 it.effect("runs any tool that takes a linked environment there", () =>
@@ -632,7 +689,17 @@ it.effect("runs any tool that takes a linked environment there", () =>
         runtimeMode: "full-access",
       });
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.transport,
+      ),
+    ),
+  ),
 );
 
 it.effect("refuses what a linked environment cannot take before anything leaves", () =>
@@ -704,5 +771,15 @@ it.effect("refuses what a linked environment cannot take before anything leaves"
       }
       expect(yield* Ref.get(b.bearers)).toEqual([]);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.transport,
+      ),
+    ),
+  ),
 );

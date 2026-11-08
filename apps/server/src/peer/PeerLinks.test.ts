@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { type ExecutionEnvironmentDescriptor, OrchestratorMcpFailure } from "@t3tools/contracts";
@@ -160,6 +161,13 @@ it.effect("routes peer reads to readers and sees uncommitted link updates", () =
       expect(yield* links.unlink(box.environmentId)).toBe(true);
       expect(yield* links.list).toEqual([]);
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -205,7 +213,17 @@ it.effect("links with a pairing code, and the peer holds its agents to the limit
       const notFound = yield* probe(a, undefined, "refuse").pipe(Effect.flip);
       expect(notFound).toMatchObject({ code: "thread_not_found", message: "No such thread." });
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect(
@@ -242,7 +260,17 @@ it.effect(
         yield* b.settings.updateSettings({ linkedEnvironmentsEnabled: true });
         expect(yield* probe(a)).toEqual({ caller: "T3 Code · Laptop", modes: "auto/default" });
       }),
-    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );
 
 it.effect("a link whose row cannot be stored keeps none of its token", () =>
@@ -282,7 +310,17 @@ it.effect("a link whose row cannot be stored keeps none of its token", () =>
       expect(failed.reason).toBe("storage");
       expect(yield* Ref.get(held)).toEqual(new Set());
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("two links racing to one peer leave the stored access matching the token", () =>
@@ -308,7 +346,17 @@ it.effect("two links racing to one peer leave the stored access matching the tok
         stored!.access === "read-only" ? "approval-required/default" : "full-access/default",
       );
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 /** A bare HTTP server on a socket of its own, answering with `handle`. */
@@ -366,7 +414,17 @@ it.effect("never follows a peer's redirect with the pairing code", () =>
       expect(yield* Ref.get(received)).toEqual([]);
       expect(yield* a.links.list).toEqual([]);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("never sends a link's token to an address that stops answering as that peer", () =>
@@ -387,7 +445,17 @@ it.effect("never sends a link's token to an address that stops answering as that
       expect(yield* Ref.get(b.bearers)).toEqual([]);
       expect((yield* a.links.list).map((link) => link.status)).toEqual(["unreachable"]);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("cancelling a descriptor probe aborts its request and leaves later resolves fresh", () =>
@@ -438,7 +506,17 @@ it.effect("cancelling a descriptor probe aborts its request and leaves later res
       expect(yield* Ref.get(requests)).toBe(2);
       expect(yield* Ref.get(b.bearers)).toEqual([]);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("reads one stored link without asking the peer", () =>
@@ -455,7 +533,17 @@ it.effect("reads one stored link without asking the peer", () =>
       expect(Option.isNone(yield* a.links.get(laptop.environmentId))).toBe(true);
       expect(yield* Ref.get(b.probes)).toBe(0);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("a linked peer that is renamed shows its new name", () =>
@@ -476,7 +564,17 @@ it.effect("a linked peer that is renamed shows its new name", () =>
       const storedAfterList = yield* a.links.get(box.environmentId);
       expect(Option.map(storedAfterList, (link) => link.label)).toEqual(Option.some("Box Studio"));
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("tells the agent to link again once the peer revokes the link or it expires", () =>
@@ -533,7 +631,17 @@ it.effect("tells the agent to link again once the peer revokes the link or it ex
       expect(expired.message).toContain("expired");
       expect(yield* Ref.get(b.bearers)).toEqual([]);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect(
@@ -584,7 +692,17 @@ it.effect(
         // Neither attempt spent the pairing code on a session.
         expect(yield* linkedSessions(b)).toEqual([]);
       }),
-    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );
 
 it.effect(
@@ -609,7 +727,17 @@ it.effect(
         expect(yield* Ref.get(impostor.bearers)).toEqual([]);
         expect((yield* linkedSessions(b)).length).toBe(1);
       }),
-    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );
 
 it.effect("linking a picked machine that answers nowhere names it and links nothing", () =>
@@ -647,5 +775,15 @@ it.effect("linking a picked machine that answers nowhere names it and links noth
       expect(refused.message).toContain("could not reach Box");
       expect(refused.message).toContain("plain http");
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );

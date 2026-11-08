@@ -1,3 +1,4 @@
+import { PortNumber } from "./baseSchemas.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -26,7 +27,7 @@ export const SshDeviceHostConfig = Schema.Struct({
   label: TrimmedNonEmptyString,
   target: TrimmedNonEmptyString.check(Schema.isPattern(/^[^\s-][^\s]*$/)),
   identityFile: Schema.optional(TrimmedNonEmptyString),
-  port: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))),
+  port: Schema.optional(PortNumber),
 });
 export type SshDeviceHostConfig = typeof SshDeviceHostConfig.Type;
 

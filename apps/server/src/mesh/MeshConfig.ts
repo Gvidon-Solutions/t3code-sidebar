@@ -1,4 +1,4 @@
-import { meshMillis } from "./MeshTiming.ts";
+import { meshTimer } from "./MeshTiming.ts";
 import type { MeshVersionUpdateInput } from "@t3tools/contracts";
 import {
   MeshConfigDocument,
@@ -103,6 +103,7 @@ const revisionAt = (document: MeshLayoutDocument, key: string) => {
 export const layer = Layer.effect(
   MeshConfig,
   Effect.gen(function* () {
+    const meshMillis = yield* meshTimer;
     const mesh = yield* MeshLayoutService;
     const planners = yield* MeshConfigPlanners;
     const lock = yield* Semaphore.make(1);

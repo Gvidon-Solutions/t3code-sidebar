@@ -1,3 +1,4 @@
+import { resolveMeshHost } from "@t3tools/shared/meshConfig";
 // @effect-diagnostics nodeBuiltinImport:off -- Representation mapping must support both Windows and POSIX paths regardless of the server OS.
 import * as NodePath from "node:path";
 import type { MeshConfigDocument, SidebarWorkspacesConfig } from "@t3tools/contracts";
@@ -49,8 +50,10 @@ export function resolveRunPlan(input: {
   const machine = names[0]!;
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(machine))
     throw new Error("The primary machine name is invalid.");
-  const host =
-    input.sshMode === "existing" ? input.machines?.[machine]?.ssh?.host : `t3-${machine}`;
+  const host = resolveMeshHost(
+    { ssh: { mode: input.sshMode ?? "managed" }, machines: input.machines ?? {} },
+    machine,
+  );
   if (!host) throw new Error("The primary needs a configured SSH host in existing mode.");
   return {
     kind: "remote",

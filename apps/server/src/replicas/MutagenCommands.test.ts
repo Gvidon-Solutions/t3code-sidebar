@@ -59,7 +59,7 @@ it.effect("isolates reset and explicit daemon start/stop and preserves typed CLI
         "{{json .}}",
       ]);
       yield* runner.create({
-        name: "N-protected",
+        name: "mesh-protected",
         logicalHash: "test",
         environmentTag: "test",
         alpha: "/a",

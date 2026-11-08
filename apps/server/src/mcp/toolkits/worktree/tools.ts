@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   WorktreeMcpFailure,
@@ -77,6 +78,7 @@ const WorktreeListTool = Tool.make("t3_worktree_list", {
   failure: OrchestratorMcpFailure,
   failureMode: "return",
   dependencies: [
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     ProjectService.ProjectService,

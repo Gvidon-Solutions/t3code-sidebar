@@ -20,6 +20,7 @@ import * as Stream from "effect/Stream";
 import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 
+/** @internal */
 export class ThreadSettlementCascadeV2 extends Context.Service<
   ThreadSettlementCascadeV2,
   {
@@ -35,6 +36,7 @@ interface Cascade {
 }
 
 /** The parent event a cascade answers, or null for events that do not cascade. */
+/** @internal */
 export function cascadeFor(event: OrchestrationV2DomainEvent): Cascade | null {
   if (event.type === "thread.settled") {
     return { direction: "settle", eventId: event.id, threadId: event.threadId };
@@ -157,4 +159,5 @@ export const make = Effect.gen(function* () {
   return { start, drain: worker.drain } satisfies ThreadSettlementCascadeV2["Service"];
 });
 
+/** @internal */
 export const layer = Layer.effect(ThreadSettlementCascadeV2, make);

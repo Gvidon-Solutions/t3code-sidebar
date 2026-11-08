@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import { assert, it } from "@effect/vitest";
 import {
   EventId,
@@ -22,21 +24,20 @@ import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
 
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
 import * as ProjectionMaintenance from "./ProjectionMaintenance.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
 
-const database = SqlitePersistence.layerMemory;
+const database = MeshTestServices.layerMemory;
 const eventStoreProvided = EventStore.layer.pipe(Layer.provideMerge(database));
 const projectionStoreProvided = ProjectionStore.layer.pipe(Layer.provideMerge(database));
 const stores = Layer.mergeAll(database, eventStoreProvided, projectionStoreProvided);
 const layerTest = Layer.mergeAll(
   stores,
   OrchestrationEventStore.layer.pipe(Layer.provide(database)),
-  EventSink.layer.pipe(Layer.provide(stores)),
+  EventSink.layer.pipe(Layer.provide(RequiredAdmission.layer), Layer.provide(stores)),
   ProjectionMaintenance.layer.pipe(Layer.provide(stores)),
 );
 

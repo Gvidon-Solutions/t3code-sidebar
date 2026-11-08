@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
 import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
@@ -13,7 +14,7 @@ import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
 import { ThreadForkService } from "./ThreadForkService.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
-import { layerLinkedTest } from "../replicas/MeshLayoutTestLayer.ts";
+import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as Receipts from "../peer/connection/PeerReceipts.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 
@@ -162,9 +163,12 @@ it.effect(
     }).pipe(
       Effect.scoped,
       Effect.provide(
-        Layer.merge(
-          NodeHttpServer.layerTest,
-          layerLinkedTest("B", { cloudbox: "B", laptop: "laptop" }),
+        Layer.provideMerge(
+          Layer.merge(
+            NodeHttpServer.layerTest,
+            layerLinkedTest("B", { cloudbox: "B", laptop: "laptop" }),
+          ),
+          MeshTestServices.required,
         ),
       ),
     ),

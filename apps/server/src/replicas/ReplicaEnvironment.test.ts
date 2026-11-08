@@ -35,7 +35,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "s1-full-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-full-" });
       yield* fs.writeFileString(`${root}/pnpm-lock.yaml`, "initial");
       const calls: Processes.ProcessRunInput[] = [];
       let fail = false;

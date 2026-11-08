@@ -1,4 +1,5 @@
-import { layerLinkedTest } from "../replicas/MeshLayoutTestLayer.ts";
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -30,7 +31,7 @@ import * as ThreadForkService from "../orchestration-v2/ThreadForkService.ts";
 import * as ThreadLaunch from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -62,7 +63,7 @@ const adapter = {
   planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" as const }),
   openSession: () => Effect.die("No provider process needed for these commands"),
 } as ProviderAdapter.ProviderAdapterV2["Service"];
-const layerDatabase = SqlitePersistence.layerMemory;
+const layerDatabase = MeshTestServices.layerMemory;
 const layerOrchestrator = Layer.mergeAll(
   layerDatabase,
   ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
@@ -114,94 +115,92 @@ const layerLaunches = Layer.effect(
   }),
 );
 
-const layerTools = Layer.mergeAll(
-  McpHttpServer.layerOrchestratorToolkit,
-  McpHttpServer.layerThreadToolkit,
-  McpHttpServer.layerProjectRegistration,
-)
-  .pipe(
-    Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
-    Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-    Layer.provide(layerLaunches),
-    Layer.provide(NodeCrypto.layer),
-    Layer.provide(
-      Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
+const layerTools = Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer)))(
+  Layer.mergeAll(
+    McpHttpServer.layerOrchestratorToolkit,
+    McpHttpServer.layerThreadToolkit,
+    McpHttpServer.layerProjectRegistration,
+  ),
+).pipe(
+  Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+  Layer.provide(layerLaunches),
+  Layer.provide(NodeCrypto.layer),
+  Layer.provide(
+    Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
+  ),
+  Layer.provide(
+    Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
+      list: () => Effect.succeed([]),
+    }),
+  ),
+  Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
+  Layer.provide(
+    Layer.mock(ProjectService.ProjectService)({
+      getById: () => Effect.succeedNone,
+      create: (input) =>
+        Effect.succeed({
+          id: input.projectId,
+          title: input.title,
+          workspaceRoot: input.workspaceRoot,
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: "2026-10-18T00:00:00.000Z",
+          updatedAt: "2026-10-18T00:00:00.000Z",
+          deletedAt: null,
+        }),
+      update: (input) =>
+        Effect.succeed({
+          id: input.projectId,
+          title: input.title ?? "Untitled",
+          workspaceRoot: "/p/t3code",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: "2026-10-18T00:00:00.000Z",
+          updatedAt: "2026-10-18T00:00:00.000Z",
+          deletedAt: null,
+        }),
+    }),
+  ),
+  Layer.provide(Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({})),
+  Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
+  Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
+  Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
+  Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+  Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
+  Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+  Layer.provide(
+    Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/p" }),
+  ),
+  Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
+  Layer.provide(
+    Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({
+      cloneRepository: (input) =>
+        Effect.succeed({
+          cwd: input.destinationPath,
+          remoteUrl: "https://github.com/pingdotgg/t3code.git",
+          repository: null,
+        }),
+    }),
+  ),
+  Layer.provide(
+    ServerConfig.layerTest(process.cwd(), { prefix: "t3-link-origin-" }).pipe(
+      Layer.provide(NodeServices.layer),
     ),
-    Layer.provide(
-      Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
-        list: () => Effect.succeed([]),
-      }),
+  ),
+  Layer.provide(
+    layerLinkedTest(
+      "environment:box",
+      {
+        cloudbox: "environment:box",
+        laptop: "laptop",
+        desk: "desk",
+        trusted: "trusted",
+      },
+      "all",
     ),
-    Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
-    Layer.provide(
-      Layer.mock(ProjectService.ProjectService)({
-        getById: () => Effect.succeedNone,
-        create: (input) =>
-          Effect.succeed({
-            id: input.projectId,
-            title: input.title,
-            workspaceRoot: input.workspaceRoot,
-            defaultModelSelection: null,
-            scripts: [],
-            createdAt: "2026-10-18T00:00:00.000Z",
-            updatedAt: "2026-10-18T00:00:00.000Z",
-            deletedAt: null,
-          }),
-        update: (input) =>
-          Effect.succeed({
-            id: input.projectId,
-            title: input.title ?? "Untitled",
-            workspaceRoot: "/p/t3code",
-            defaultModelSelection: null,
-            scripts: [],
-            createdAt: "2026-10-18T00:00:00.000Z",
-            updatedAt: "2026-10-18T00:00:00.000Z",
-            deletedAt: null,
-          }),
-      }),
-    ),
-    Layer.provide(Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({})),
-    Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
-  )
-  .pipe(
-    Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
-    Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
-    Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
-    Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
-    Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
-    Layer.provide(
-      Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/p" }),
-    ),
-    Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
-    Layer.provide(
-      Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({
-        cloneRepository: (input) =>
-          Effect.succeed({
-            cwd: input.destinationPath,
-            remoteUrl: "https://github.com/pingdotgg/t3code.git",
-            repository: null,
-          }),
-      }),
-    ),
-    Layer.provide(
-      ServerConfig.layerTest(process.cwd(), { prefix: "t3-link-origin-" }).pipe(
-        Layer.provide(NodeServices.layer),
-      ),
-    ),
-    Layer.provide(
-      layerLinkedTest(
-        "environment:box",
-        {
-          cloudbox: "environment:box",
-          laptop: "laptop",
-          desk: "desk",
-          trusted: "trusted",
-        },
-        "all",
-      ),
-    ),
-    Layer.provide(NodeServices.layer),
-  );
+  ),
+  Layer.provide(NodeServices.layer),
+);
 
 const mcpClient = McpSchema.McpServerClient.of({
   clientId: 1,
@@ -295,7 +294,9 @@ const usersOwnThread = Effect.gen(function* () {
   return threadId;
 });
 
-it.layer(Layer.provideMerge(layerTools, layerOrchestration))("work a link starts", (it) => {
+it.layer(
+  Layer.provideMerge(layerTools, layerOrchestration).pipe(Layer.provide(MeshTestServices.required)),
+)("work a link starts", (it) => {
   it.effect("is stamped, and so is the work it derives", () =>
     Effect.gen(function* () {
       const projections = yield* ProjectionStore.ProjectionStoreV2;

@@ -1,6 +1,7 @@
+import { backoffSchedule } from "../mesh/Backoff.ts";
 import { remoteRepresentation } from "../replicas/replicaModel.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
-import * as ServerSettings from "../serverSettings.ts";
+
 import {
   CommandId,
   type EnvironmentId,
@@ -19,7 +20,7 @@ import {
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
-import * as Duration from "effect/Duration";
+
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -47,17 +48,11 @@ import * as PeerLinks from "./PeerLinks.ts";
 /** How long one follow of a remote task waits on its thread there before checking again. */
 const FOLLOW_WAIT_MS = 10 * 60 * 1_000;
 /** A linked environment that stops answering is retried, backing off to this. */
-const FOLLOW_MAX_BACKOFF = Duration.minutes(5);
 /** How a follower retries; tests step it by hand. */
 export const FollowRetrySchedule = Context.Reference<Schedule.Schedule<unknown>>(
   "t3/peer/RemoteDelegation/FollowRetrySchedule",
   {
-    defaultValue: () =>
-      Schedule.exponential(Duration.seconds(2)).pipe(
-        Schedule.modifyDelay(({ duration }) =>
-          Effect.succeed(Duration.min(duration, FOLLOW_MAX_BACKOFF)),
-        ),
-      ),
+    defaultValue: () => backoffSchedule({ initialMs: 2000, maxMs: 5 * 60_000, jitter: 0 }),
   },
 );
 
@@ -125,8 +120,7 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectService.ProjectService;
   const repositoryIdentities = yield* RepositoryIdentityResolver.RepositoryIdentityResolver;
   const random = yield* SecureRandom.SecureRandom;
-  const meshLayout = yield* Effect.serviceOption(MeshLayoutService);
-  const localSettings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);
+  const meshLayout = yield* MeshLayoutService;
   const hereId = yield* ServerEnvironment.ServerEnvironment.pipe(
     Effect.flatMap((environment) => environment.getEnvironmentId),
   );
@@ -155,20 +149,7 @@ const make = Effect.gen(function* () {
       Effect.orElseSucceed(() => undefined),
     );
     const mesh = meshLayout;
-    const settings = localSettings;
-    const config = Option.isSome(mesh)
-      ? (yield* mesh.value.read).config
-      : Option.isSome(settings)
-        ? (yield* settings.value.getSettings.pipe(
-            Effect.mapError(
-              () =>
-                new OrchestratorMcpFailure({
-                  code: "orchestration_error",
-                  message: "Could not read mesh layout.",
-                }),
-            ),
-          )).sidebarWorkspaces
-        : undefined;
+    const config = (yield* mesh.read).config;
     const representation =
       here && config
         ? remoteRepresentation(

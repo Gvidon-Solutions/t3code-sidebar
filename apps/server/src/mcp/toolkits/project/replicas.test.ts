@@ -1,4 +1,5 @@
-import { layerLinkedTest } from "../../../replicas/MeshLayoutTestLayer.ts";
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
+import { layerLinkedTest } from "../../../../testFixtures/MeshLayoutTestLayer.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import type * as Tool from "effect/ai/Tool";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
@@ -166,7 +167,7 @@ it.effect(
           .pipe(Stream.unwrap, Stream.runCollect);
         expect(removed.at(-1)?.result).toMatchObject({
           code: "invalid_request",
-          message: "Cannot reach the replica driver to verify unsynced changes.",
+          message: "No peer is connected in this fixture.",
         });
         expect(
           (yield* mesh.read).config.projectMounts.repo!.some(
@@ -175,5 +176,5 @@ it.effect(
         ).toBe(true);
         expect(h.terminated).toEqual([]);
       }).pipe(Effect.provide(dependencies));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );

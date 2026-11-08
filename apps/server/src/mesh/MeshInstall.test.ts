@@ -21,7 +21,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "B1-install-" });
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-install-" });
       const calls: { command: string; args: readonly string[] }[] = [];
       const service = yield* Install.MeshInstall.pipe(
         Effect.provide(Install.layer),
@@ -103,7 +103,7 @@ it.effect(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       for (const platform of ["darwin", "win32"] as const) {
-        const home = yield* fs.makeTempDirectoryScoped({ prefix: "B1-native-service-" });
+        const home = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-native-service-" });
         const calls: string[] = [];
         let fail = false;
         const service = yield* Install.MeshInstall.pipe(

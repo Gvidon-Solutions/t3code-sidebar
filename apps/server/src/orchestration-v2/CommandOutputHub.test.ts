@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import { assert, it } from "@effect/vitest";
 import {
   type ModelSelection,
@@ -23,18 +25,18 @@ import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as CommandOutputHub from "./CommandOutputHub.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProjectionStore from "./ProjectionStore.ts";
 
-const layerTestDatabase = SqlitePersistence.layerMemory;
+const layerTestDatabase = MeshTestServices.layerMemory;
 const layerTestStores = Layer.merge(EventStore.layer, ProjectionStore.layer).pipe(
   Layer.provide(layerTestDatabase),
 );
 const layerTestEventSink = EventSink.layer.pipe(
+  Layer.provide(RequiredAdmission.layer),
   Layer.provide(Layer.mergeAll(layerTestStores, layerTestDatabase)),
 );
 const layerTest = Layer.mergeAll(

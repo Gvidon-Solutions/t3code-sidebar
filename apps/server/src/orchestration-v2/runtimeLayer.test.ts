@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import {
   ChatAttachmentId,
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
@@ -78,7 +80,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
 import * as ServerConfig from "../config.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
 import * as ProjectEnrichmentService from "../project/ProjectEnrichmentService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -324,12 +326,12 @@ const layerTest = Layer.mergeAll(
   RuntimeLayer.layerEventSink,
   ProjectStore.layer,
   ProjectionStore.layer,
-  EffectOutbox.layer,
+  EffectOutbox.layer.pipe(Layer.provide(RequiredAdmission.layer)),
   ThreadCommandExecutor.layer,
 ).pipe(
   Layer.provide(McpSessionRegistryTestkit.layer),
   Layer.provide(McpProviderSessions.layer),
-  Layer.provide(SqlitePersistence.layerMemory),
+  Layer.provide(MeshTestServices.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   Layer.provide(layerServerConfig),
   Layer.provide(ServerSettings.layerTest()),
@@ -337,12 +339,13 @@ const layerTest = Layer.mergeAll(
   Layer.provide(layerGitWorkflowTest),
   Layer.provide(layerProjectServiceTest),
   Layer.provide(layerPlatformTest),
+  Layer.provideMerge(MeshTestServices.platform),
 );
 
 const layerLegacyImportTest = Layer.merge(RuntimeLayer.layer, layerProjectionReplayTest).pipe(
   Layer.provide(McpSessionRegistryTestkit.layer),
   Layer.provide(McpProviderSessions.layer),
-  Layer.provideMerge(SqlitePersistence.layerMemory),
+  Layer.provideMerge(MeshTestServices.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   Layer.provide(layerServerConfig),
   Layer.provide(ServerSettings.layerTest()),
@@ -350,6 +353,7 @@ const layerLegacyImportTest = Layer.merge(RuntimeLayer.layer, layerProjectionRep
   Layer.provide(layerGitWorkflowTest),
   Layer.provide(layerProjectServiceTest),
   Layer.provide(layerPlatformTest),
+  Layer.provideMerge(MeshTestServices.platform),
 );
 
 const layerScheduledTasksTest = ScheduledTaskService.layer.pipe(
@@ -408,13 +412,14 @@ const layerProjectDeletionTest = Layer.mergeAll(
   Layer.provideMerge(layerResourceCleanupTest),
   Layer.provide(McpSessionRegistryTestkit.layer),
   Layer.provide(McpProviderSessions.layer),
-  Layer.provide(SqlitePersistence.layerMemory),
+  Layer.provide(MeshTestServices.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   Layer.provide(layerServerConfig),
   Layer.provide(ServerSettings.layerTest()),
   Layer.provide(layerTestProviderInstanceRegistry),
   Layer.provide(layerGitWorkflowTest),
   Layer.provide(layerPlatformTest),
+  Layer.provideMerge(MeshTestServices.platform),
 );
 
 it.layer(layerProjectDeletionTest)("project deletion during thread commands", (it) => {
@@ -892,13 +897,14 @@ const layerSharedApplicationDataPlaneTest = Layer.mergeAll(
   ),
   Layer.provide(McpSessionRegistryTestkit.layer),
   Layer.provide(McpProviderSessions.layer),
-  Layer.provideMerge(SqlitePersistence.layerMemory),
+  Layer.provideMerge(MeshTestServices.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   Layer.provide(layerServerConfig),
   Layer.provide(ServerSettings.layerTest()),
   Layer.provide(layerTestProviderInstanceRegistry),
   Layer.provide(layerGitWorkflowTest),
   Layer.provide(layerPlatformTest),
+  Layer.provideMerge(MeshTestServices.platform),
 );
 
 it.layer(layerTest)("OrchestrationV2LayerLive", (it) => {
@@ -2921,7 +2927,11 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       }
       const linked = yield* orchestrator.getThreadShell(threadId);
       assert.deepEqual(
-        linked?.pullRequests?.map(({ host, repository, number }) => ({ host, repository, number })),
+        linked?.pullRequests?.map(({ host, repository, number }) => ({
+          host,
+          repository,
+          number,
+        })),
         [1, 2].map((number) => ({ host: "github.com", repository: "pingdotgg/t3code", number })),
       );
       yield* orchestrator.dispatch({
@@ -6272,7 +6282,10 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         const queued = (yield* runFor("queued"))!;
         // The failure holds the queue after the reactor scheduled any retry.
         const held = yield* eventSink
-          .stream({ threadId, afterSequence: yield* orchestrator.getThreadEventSequence(threadId) })
+          .stream({
+            threadId,
+            afterSequence: yield* orchestrator.getThreadEventSequence(threadId),
+          })
           .pipe(
             Stream.filter(
               (stored) =>
@@ -6952,6 +6965,7 @@ const layerScratchPromotionTest = ScratchThreadPromotion.layer.pipe(
   ),
   Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   Layer.provideMerge(layerProjectDeletionTest),
+  Layer.provideMerge(MeshTestServices.platform),
 );
 
 it.layer(layerScratchPromotionTest)("turning a No project thread into a project", (it) => {
@@ -7089,7 +7103,9 @@ it.layer(layerScratchPromotionTest)("turning a No project thread into a project"
         projectId: earlier.id,
       });
 
-      assert.deepEqual(yield* promotion.promote({ threadId: movedId }), { projectId: earlier.id });
+      assert.deepEqual(yield* promotion.promote({ threadId: movedId }), {
+        projectId: earlier.id,
+      });
       assert.equal((yield* shellOf(leftId))?.projectId, earlier.id);
     }),
   );
@@ -7479,7 +7495,10 @@ it.layer(layerSharedApplicationDataPlaneTest)("visited projection", (it) => {
         threadId,
         visitedAt: nextVisitedAt,
       });
-      const [watermark] = yield* sql<{ readonly visited_at: string; readonly updated_at: string }>`
+      const [watermark] = yield* sql<{
+        readonly visited_at: string;
+        readonly updated_at: string;
+      }>`
         SELECT json_extract(payload_json, '$.lastVisitedAt') AS visited_at, updated_at
         FROM orchestration_v2_projection_threads WHERE thread_id = ${threadId}
       `;
@@ -7606,7 +7625,11 @@ it.layer(layerSharedApplicationDataPlaneTest)("visited projection", (it) => {
   );
 });
 
-it.layer(Layer.fresh(layerSharedApplicationDataPlaneTest))("thread opens", (it) => {
+it.layer(
+  Layer.fresh(layerSharedApplicationDataPlaneTest).pipe(
+    Layer.provideMerge(MeshTestServices.platform),
+  ),
+)("thread opens", (it) => {
   it.effect(
     "counts opens on the server clock, merges quick reopens, and keeps picked queries",
     () =>
@@ -7676,7 +7699,11 @@ it.layer(Layer.fresh(layerSharedApplicationDataPlaneTest))("thread opens", (it) 
   );
 });
 
-it.layer(Layer.fresh(layerSharedApplicationDataPlaneTest))("PR link events", (it) => {
+it.layer(
+  Layer.fresh(layerSharedApplicationDataPlaneTest).pipe(
+    Layer.provideMerge(MeshTestServices.platform),
+  ),
+)("PR link events", (it) => {
   it.effect("persists only the changed PR link and replays it without losing other links", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -8585,12 +8612,12 @@ const layerQueueResumeDisabledInstanceTest = Layer.mergeAll(
   RuntimeLayer.layerEventSink,
   ProjectStore.layer,
   ProjectionStore.layer,
-  EffectOutbox.layer,
+  EffectOutbox.layer.pipe(Layer.provide(RequiredAdmission.layer)),
   ThreadCommandExecutor.layer,
 ).pipe(
   Layer.provide(McpSessionRegistryTestkit.layer),
   Layer.provide(McpProviderSessions.layer),
-  Layer.provide(SqlitePersistence.layerMemory),
+  Layer.provide(MeshTestServices.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   Layer.provide(layerServerConfig),
   Layer.provide(
@@ -8609,6 +8636,7 @@ const layerQueueResumeDisabledInstanceTest = Layer.mergeAll(
   Layer.provide(layerGitWorkflowTest),
   Layer.provide(layerProjectServiceTest),
   Layer.provide(layerPlatformTest),
+  Layer.provideMerge(MeshTestServices.platform),
 );
 
 it.layer(layerQueueResumeDisabledInstanceTest)(
@@ -8797,7 +8825,10 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         let pauseCatalog = false;
         const flushEntered = yield* Deferred.make<void>();
         const catalogEntered = yield* Deferred.make<void>();
-        const limits = { runtimeMode: "full-access" as const, interactionMode: "default" as const };
+        const limits = {
+          runtimeMode: "full-access" as const,
+          interactionMode: "default" as const,
+        };
         let target: ThreadForks.ThreadForkService["Service"] | undefined;
         const configs = new Map<string, ServerConfig.ServerConfig["Service"]>();
         const journals = new Map<string, ForkTransactions.ForkTransactions["Service"]>();

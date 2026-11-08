@@ -6,7 +6,12 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeStringDecoder from "node:string_decoder";
 import type { RemoteRunPlan, WorkerFrame } from "./RunProtocol.ts";
 import { decodeFrame, FRAME_PREFIX } from "./RunProtocol.ts";
-import { loginCommand, namespaceOf, nativeInvocation } from "../platform/ServerPlatform.ts";
+import {
+  loginCommand,
+  namespaceOf,
+  nativeInvocation,
+  sshOptions,
+} from "../platform/ServerPlatform.ts";
 import { RUN_WORKER_SOURCE } from "./RunWorker.ts";
 
 export interface RemoteRequest {
@@ -39,19 +44,13 @@ const sshArguments = (plan: RemoteRunPlan, request: RemoteRequest, tty: boolean)
     }),
   ).toString("base64");
   return [
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "ConnectTimeout=15",
-    "-o",
-    "ConnectionAttempts=1",
-    "-o",
-    "ServerAliveInterval=15",
-    "-o",
-    "ServerAliveCountMax=3",
-    "-o",
-    "ExitOnForwardFailure=yes",
-    ...(process.env.T3CODE_RUN_SSH_CONFIG ? ["-F", process.env.T3CODE_RUN_SSH_CONFIG] : []),
+    ...sshOptions({
+      configPath: process.env.T3CODE_RUN_SSH_CONFIG,
+      connectTimeoutSeconds: 15,
+      aliveCount: 3,
+      connectionAttempts: 1,
+      exitOnForwardFailure: true,
+    }),
     ...(tty ? ["-tt"] : ["-T"]),
     ...(request.action === "start" ? [] : (request.ports ?? [])).flatMap((port) => [
       "-L",

@@ -22,8 +22,8 @@ export const linkPermissions = Effect.fn("MeshLinkPermissions.read")(function* (
     return { ...defaults, linked: false };
   const scope = invocation.value;
   const client = scope.client!;
-  const mesh = yield* Effect.serviceOption(MeshLayoutService);
-  const document = Option.isSome(mesh) ? (yield* mesh.value.read).document : {};
+  const mesh = yield* MeshLayoutService;
+  const document = (yield* mesh.read).document;
   const config = configFromLayout(document);
   const bindings = bindingsFromLayout(document);
   const self = config

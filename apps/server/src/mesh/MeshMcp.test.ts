@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
 import { EnvironmentId } from "@t3tools/contracts";
@@ -127,5 +128,13 @@ it.effect(
       );
       expect(listed.status).toBe(200);
       expect(yield* listed.text).not.toContain("t3_mesh_exchange");
-    }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );

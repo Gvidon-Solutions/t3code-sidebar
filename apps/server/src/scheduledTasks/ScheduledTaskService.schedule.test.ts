@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
@@ -13,7 +14,7 @@ import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 
@@ -58,7 +59,7 @@ it.effect("rejects a stale form save after deletion while preserving explicit-id
 
       expect((yield* service.upsert(input)).task.id).toBe(created.task.id);
     }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("preserves a due run when a save only pads the scheduled hour", () =>
@@ -118,7 +119,7 @@ it.effect("preserves a due run when a save only pads the scheduled hour", () =>
         DateTime.formatIso(DateTime.toUtc(DateTime.add(dueAt, { minutes: 30 }))),
       );
     }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("keeps the task list order when a toggle or edit rewrites updated_at", () =>
@@ -170,7 +171,7 @@ it.effect("keeps the task list order when a toggle or edit rewrites updated_at",
       yield* service.upsert(yield* decodeUpsertInput({ ...edit, enabled: false }));
       expect(yield* listedIds).toEqual(order);
     }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect(
@@ -232,5 +233,5 @@ it.effect(
         yield* TestClock.adjust("60 seconds");
         expect(yield* Deferred.await(launched)).toBe(created.task.title);
       }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
-    }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );

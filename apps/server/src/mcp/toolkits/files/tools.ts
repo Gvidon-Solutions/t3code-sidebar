@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   FILES_LIST_MAX_LIMIT,
@@ -20,7 +21,7 @@ import * as FilesService from "../../../files/FilesService.ts";
 const shared = {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
-  dependencies: [FilesService.FilesService],
+  dependencies: [MeshLayoutService, FilesService.FilesService],
 };
 
 const FilesReadTool = Tool.make("t3_files_read", {

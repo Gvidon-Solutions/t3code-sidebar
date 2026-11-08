@@ -6,7 +6,7 @@ import {
 } from "@t3tools/shared/observability";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
-import { DesktopBackendBootstrap, PortSchema } from "@t3tools/contracts";
+import { DesktopBackendBootstrap, PortNumber } from "@t3tools/contracts";
 import * as Config from "effect/Config";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -33,7 +33,7 @@ const modeFlag = Flag.Literals("mode", ServerConfig.RuntimeMode.literals).pipe(
   Flag.optional,
 );
 const portFlag = Flag.Int("port").pipe(
-  Flag.withSchema(PortSchema),
+  Flag.withSchema(PortNumber),
   Flag.withDescription("Port for the HTTP/WebSocket server."),
   Flag.optional,
 );
@@ -81,7 +81,7 @@ const tailscaleServeFlag = Flag.Boolean("tailscale-serve").pipe(
   Flag.optional,
 );
 const tailscaleServePortFlag = Flag.Int("tailscale-serve-port").pipe(
-  Flag.withSchema(PortSchema),
+  Flag.withSchema(PortNumber),
   Flag.withDescription("HTTPS port for Tailscale Serve when --tailscale-serve is enabled."),
   Flag.optional,
 );

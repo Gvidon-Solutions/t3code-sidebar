@@ -1,10 +1,11 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import { assert, it } from "@effect/vitest";
 import { CheckpointScopeId, CommandId, GitCommandError, RunId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as VcsStatusBroadcaster from "../vcs/VcsStatusBroadcaster.ts";
@@ -97,7 +98,10 @@ it.effect.each([
       ),
     ),
   );
-  const outbox = EffectOutbox.layer.pipe(Layer.provide(SqlitePersistence.layerMemory));
+  const outbox = EffectOutbox.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
+    Layer.provide(MeshTestServices.layerMemory),
+  );
   const worker = EffectWorker.layer.pipe(Layer.provideMerge(Layer.merge(executor, outbox)));
 
   return Effect.gen(function* () {

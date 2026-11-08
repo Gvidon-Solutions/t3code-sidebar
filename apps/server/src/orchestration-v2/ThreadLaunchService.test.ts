@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
@@ -42,7 +44,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as GitWorkflow from "../git/GitWorkflowService.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ProjectStore from "./ProjectStore.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
@@ -135,7 +137,7 @@ interface HarnessOptions {
 }
 
 function makeHarness(options: HarnessOptions = {}) {
-  const layerDatabase = SqlitePersistence.layerMemory;
+  const layerDatabase = MeshTestServices.layerMemory;
   const layerRegistry = ProviderAdapterRegistry.layerFromAdapters(options.adapters ?? [adapter]);
   const layerOrchestrator = ProviderReplayHarness.layerWithRegistry(
     { name: "thread-launch" },
@@ -149,7 +151,10 @@ function makeHarness(options: HarnessOptions = {}) {
     Layer.provide(layerServerSettings),
     Layer.provide(layerReceipts),
   );
-  const layerOutbox = EffectOutbox.layer.pipe(Layer.provide(layerDatabase));
+  const layerOutbox = EffectOutbox.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
+    Layer.provide(layerDatabase),
+  );
   const createWorktree = vi.fn(
     options.createWorktree ??
       ((input) =>

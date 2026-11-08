@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
@@ -78,5 +79,8 @@ it.effect("relays across two real peer links and refuses a third hop and a loop"
           Effect.match({ onFailure: (error) => error.code, onSuccess: () => "unexpected" }),
         ),
       ).toBe("capability_denied");
-  }).pipe(Effect.scoped),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(Layer.provideMerge(MeshTestServices.platform, MeshTestServices.required)),
+  ),
 );

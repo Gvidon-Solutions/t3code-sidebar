@@ -13,7 +13,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "B1-backup-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-backup-" });
       yield* Effect.gen(function* () {
         const config = yield* ServerConfig.ServerConfig;
         yield* fs.makeDirectory(config.stateDir, { recursive: true });

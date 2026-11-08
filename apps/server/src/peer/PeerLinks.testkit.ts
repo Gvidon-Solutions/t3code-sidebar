@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -28,7 +29,7 @@ import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ServerHttp from "../http.ts";
 import * as McpHttpServer from "../mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
-import * as Sqlite from "../persistence/Sqlite.ts";
+
 import * as PeerLinks from "./PeerLinks.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as PeerMcpClient from "./PeerMcpClient.ts";
@@ -77,7 +78,7 @@ export const servePeer = <E, R, S = never>(
     const authContext = yield* EnvironmentAuth.layer.pipe(
       Layer.provide(ManagedPolicy.layerTest()),
       Layer.provideMerge(ServerSettings.layerTest({ linkedEnvironmentsEnabled: true })),
-      Layer.provideMerge(Sqlite.layerMemory),
+      Layer.provideMerge(MeshTestServices.layerMemory),
       Layer.provideMerge(ServerSecretStore.layer),
       Layer.provideMerge(
         Layer.mergeAll(
@@ -172,8 +173,8 @@ export const layerLinkingEnvironment = <E = never>(
   secrets: typeof ServerSecretStore.layer = ServerSecretStore.layer,
   database: Layer.Layer<
     SqlClient.SqlClient,
-    E | Layer.Error<typeof Sqlite.layerMemory>
-  > = Sqlite.layerMemory,
+    E | Layer.Error<typeof MeshTestServices.layerMemory>
+  > = MeshTestServices.layerMemory,
 ) =>
   PeerMcpClient.layer.pipe(
     Layer.provideMerge(PeerLinks.layer),

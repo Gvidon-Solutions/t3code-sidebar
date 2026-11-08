@@ -1,6 +1,6 @@
 import { EnvironmentId, OrchestratorMcpFailure, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
+
 import * as Schema from "effect/Schema";
 import { Routes } from "./MeshRelay.ts";
 import { callRouted } from "./MeshRouting.ts";
@@ -14,10 +14,10 @@ export const discoverThreadMachines = Effect.fn("MeshThreadAccess.discover")(fun
   const { scope, limits } = caller;
   if (scope.linkedEnvironments === false || scope.client?.linked) return [];
   yield* assertNotLinked(caller, "use this environment’s links");
-  const links = yield* Effect.serviceOption(PeerLinks);
-  const peers = yield* Effect.serviceOption(PeerMcpClient);
-  if (Option.isNone(links) || Option.isNone(peers)) return [];
-  const direct = yield* links.value.list.pipe(
+  const links = yield* PeerLinks;
+  const peers = yield* PeerMcpClient;
+
+  const direct = yield* links.list.pipe(
     Effect.mapError(
       (error) =>
         new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
@@ -28,7 +28,7 @@ export const discoverThreadMachines = Effect.fn("MeshThreadAccess.discover")(fun
     (peer) =>
       peer.access !== "full-access"
         ? Effect.succeed([] as readonly string[])
-        : peers.value
+        : peers
             .call({
               environmentId: peer.environmentId,
               tool: "t3_mesh_routes",
@@ -58,15 +58,11 @@ export const probeThread = Effect.fn("MeshThreadAccess.probe")(function* (
   const caller = yield* readCaller();
   const { scope, limits } = caller;
   yield* assertNotLinked(caller, "use this environment’s links");
-  const linkOption = yield* Effect.serviceOption(PeerLinks);
-  const peerOption = yield* Effect.serviceOption(PeerMcpClient);
-  if (Option.isNone(linkOption) || Option.isNone(peerOption))
-    return yield* new OrchestratorMcpFailure({
-      code: "thread_not_found",
-      message: "No mesh connection available.",
-    });
-  const links = linkOption.value;
-  const peers = peerOption.value;
+  const linkOption = yield* PeerLinks;
+  const peerOption = yield* PeerMcpClient;
+
+  const links = linkOption;
+  const peers = peerOption;
   return yield* callRouted(
     { links, peers, self: scope.environmentId },
     {

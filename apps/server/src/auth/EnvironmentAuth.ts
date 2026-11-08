@@ -1,4 +1,10 @@
-import { authenticatedPeerHops } from "../peer/connection/peerIdentity.ts";
+import { PeerIdentitySource } from "@t3tools/contracts";
+import {
+  PEER_HOPS_HEADER,
+  PEER_HOPS_ERROR,
+  parseHops,
+  authenticatedPeerHops,
+} from "../peer/connection/peerIdentity.ts";
 import {
   AuthAccessTokenType,
   AuthAccessWriteScope,
@@ -1355,7 +1361,7 @@ export const make = Effect.gen(function* () {
         diagnostic: "This peer credential has no bound identity. Pair the machines again.",
       });
     const claimed = request.headers["t3-peer-environment-id"];
-    const hops = request.headers["t3-mesh-hops"]?.split(",");
+    const hops = parseHops(request.headers[PEER_HOPS_HEADER]);
     if (
       session.peerLink === true &&
       ((claimed !== undefined && claimed !== peers[0]?.environment_id) ||
@@ -1363,7 +1369,7 @@ export const make = Effect.gen(function* () {
     )
       return yield* new ServerAuthInvalidCredentialError({
         peerIdentityMismatch: true,
-        diagnostic: "The peer header or relay hops do not match the authenticated link identity.",
+        diagnostic: PEER_HOPS_ERROR,
       });
     if (session.peerLink !== true && hops !== undefined)
       return yield* new ServerAuthInvalidCredentialError({
@@ -1409,7 +1415,7 @@ export const make = Effect.gen(function* () {
             client: { ...input.client, label: input.label, deviceType: "bot" },
           });
           if (input.peerLink && peerEnvironmentId) {
-            yield* sql`INSERT INTO peer_session_identities(session_id, environment_id, source, bound_at) VALUES (${issued.sessionId}, ${peerEnvironmentId}, ${input.peerClientId ? "pairing-code" : "mutual-grant"}, ${DateTime.formatIso(yield* DateTime.now)})`;
+            yield* sql`INSERT INTO peer_session_identities(session_id, environment_id, source, bound_at) VALUES (${issued.sessionId}, ${peerEnvironmentId}, ${(input.peerClientId ? "pairing-code" : "mutual-grant") satisfies PeerIdentitySource}, ${DateTime.formatIso(yield* DateTime.now)})`;
             yield* sql`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${issued.sessionId}, ${peerEnvironmentId})`;
           }
           return { sessionId: issued.sessionId, token: issued.token, expiresAt: issued.expiresAt };

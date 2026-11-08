@@ -1,3 +1,4 @@
+import { resolveMeshHost } from "@t3tools/shared/meshConfig";
 import { proxyCommand } from "../platform/ServerPlatform.ts";
 import type { MeshConfigDocument, SidebarMachine } from "@t3tools/contracts";
 
@@ -62,7 +63,7 @@ export function sshFiles(
     const user =
       peer.settings.ssh?.user ?? peer.settings.bootstrap?.ssh.split("@")[0] ?? facts.user;
     if (!user || !facts.sshd) continue;
-    const host = `t3-${peer.name}`;
+    const host = resolveMeshHost(undefined, peer.name)!;
     const proxy = proxyCommand(paths.platform, paths.runtime, peer.environmentId, paths.baseDir);
     config.push(
       `Host ${host}`,

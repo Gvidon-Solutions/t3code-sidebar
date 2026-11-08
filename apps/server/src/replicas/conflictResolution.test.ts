@@ -21,7 +21,7 @@ describe("conflict copies", () => {
     expect(conflictRoots(["a/b", "a", "a", "abc"])).toEqual(["a", "abc"]);
   });
   it("preserves files, directories, quoted names and deletions and refuses to overwrite a copy", () => {
-    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "N-conflict-"));
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "mesh-conflict-"));
     try {
       NodeFS.mkdirSync(NodePath.join(root, "src"));
       NodeFS.writeFileSync(NodePath.join(root, "src/a'file"), "loser");

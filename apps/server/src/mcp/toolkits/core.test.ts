@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../testFixtures/meshServices.ts";
 import * as DocumentText from "../../provider/DocumentText.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -127,10 +128,19 @@ it.effect("checks capability through the production registration", () =>
     expect(result.structuredContent).toBeUndefined();
   }).pipe(
     Effect.provide(
-      layerThreadToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            layerThreadToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+            ),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.services,
+        ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -162,54 +172,60 @@ it.effect("an answered question reports already answered instead of not found", 
     });
   }).pipe(
     Effect.provide(
-      layerThreadToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: () => Effect.succeed(shell),
-            getProjectThreadRecords: () =>
-              Effect.succeed({
-                ...projection,
-                runtimeRequests: [
-                  {
-                    id: requestId,
-                    nodeId: NodeId.make("root"),
-                    providerTurnId: null,
-                    nativeRequestRef: null,
-                    kind: "user_input",
-                    status: "resolved",
-                    responseCapability: { type: "message" },
-                    createdAt: shell.createdAt,
-                    resolvedAt: shell.updatedAt,
-                    answers: { size: "large" },
-                  },
-                ],
-                turnItems: [
-                  {
-                    id: TurnItemId.make("answered-question-item"),
-                    threadId,
-                    runId: null,
-                    nodeId: null,
-                    providerThreadId: null,
-                    providerTurnId: null,
-                    nativeItemRef: null,
-                    parentItemId: null,
-                    ordinal: 0,
-                    status: "completed",
-                    title: null,
-                    startedAt: shell.createdAt,
-                    completedAt: shell.updatedAt,
-                    updatedAt: shell.updatedAt,
-                    type: "user_input_request",
-                    requestId,
-                    questions: [],
-                  },
-                ],
+      Layer.provideMerge(
+        Layer.provideMerge(
+          layerThreadToolkit.pipe(
+            Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+            Layer.provide(NodeCrypto.layer),
+            Layer.provide(
+              Layer.mock(ThreadManagement.ThreadManagementService)({
+                getThreadShell: () => Effect.succeed(shell),
+                getProjectThreadRecords: () =>
+                  Effect.succeed({
+                    ...projection,
+                    runtimeRequests: [
+                      {
+                        id: requestId,
+                        nodeId: NodeId.make("root"),
+                        providerTurnId: null,
+                        nativeRequestRef: null,
+                        kind: "user_input",
+                        status: "resolved",
+                        responseCapability: { type: "message" },
+                        createdAt: shell.createdAt,
+                        resolvedAt: shell.updatedAt,
+                        answers: { size: "large" },
+                      },
+                    ],
+                    turnItems: [
+                      {
+                        id: TurnItemId.make("answered-question-item"),
+                        threadId,
+                        runId: null,
+                        nodeId: null,
+                        providerThreadId: null,
+                        providerTurnId: null,
+                        nativeItemRef: null,
+                        parentItemId: null,
+                        ordinal: 0,
+                        status: "completed",
+                        title: null,
+                        startedAt: shell.createdAt,
+                        completedAt: shell.updatedAt,
+                        updatedAt: shell.updatedAt,
+                        type: "user_input_request",
+                        requestId,
+                        questions: [],
+                      },
+                    ],
+                  }),
+                dispatch: () => Effect.die("an answered question must not dispatch again"),
               }),
-            dispatch: () => Effect.die("an answered question must not dispatch again"),
-          }),
+            ),
+          ),
+          MeshTestServices.services,
         ),
+        MeshTestServices.required,
       ),
     ),
   );
@@ -273,29 +289,45 @@ it.effect("returns an HTML render reference that Codex and Claude tool rows both
     ).toEqual(reference);
   }).pipe(
     Effect.provide(
-      McpHttpServer.layerHtmlToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(McpProviderSessions.layer),
-        Layer.provide(PreviewBrowser.layer),
-        Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" })),
-        Layer.provide(
-          DocumentText.layer.pipe(
-            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            McpHttpServer.layerHtmlToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(McpProviderSessions.layer),
+              Layer.provide(PreviewBrowser.layer),
+              Layer.provide(
+                ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-html-render-" }),
+              ),
+              Layer.provide(
+                DocumentText.layer.pipe(
+                  Layer.provideMerge(
+                    Layer.mergeAll(
+                      Layer.merge(NodeServices.layer, MeshTestServices.platform),
+                      NodeCrypto.layer,
+                    ),
+                  ),
+                ),
+              ),
+              Layer.provide(FetchHttpClient.layer),
+              Layer.provide(
+                Layer.mock(ThreadManagement.ThreadManagementService)({
+                  getThreadShell: () =>
+                    Effect.succeed({
+                      id: threadId,
+                      deletedAt: null,
+                      archivedAt: null,
+                      activeRunId: RunId.make("mcp-core-run"),
+                      providerInstanceId: ProviderInstanceId.make("codex"),
+                    } as OrchestrationV2ThreadShell),
+                }),
+              ),
+            ),
+            MeshTestServices.platform,
           ),
+          MeshTestServices.services,
         ),
-        Layer.provide(FetchHttpClient.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: () =>
-              Effect.succeed({
-                id: threadId,
-                deletedAt: null,
-                archivedAt: null,
-                activeRunId: RunId.make("mcp-core-run"),
-                providerInstanceId: ProviderInstanceId.make("codex"),
-              } as OrchestrationV2ThreadShell),
-          }),
-        ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -325,32 +357,40 @@ it.effect("records only failed calls of tools that hand off no work", () => {
     });
   }).pipe(
     Effect.provide(
-      layerThreadToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: (id) => Effect.succeed(McpToolAccessTestkit.liveThreadShell(id)),
-            getProjectThreadRecords: ({ threadId: id }) =>
-              Effect.succeed(
-                McpToolAccessTestkit.idleThreadProjection(McpToolAccessTestkit.liveThreadShell(id)),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          layerThreadToolkit.pipe(
+            Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+            Layer.provide(NodeCrypto.layer),
+            Layer.provide(
+              Layer.mock(ThreadManagement.ThreadManagementService)({
+                getThreadShell: (id) => Effect.succeed(McpToolAccessTestkit.liveThreadShell(id)),
+                getProjectThreadRecords: ({ threadId: id }) =>
+                  Effect.succeed(
+                    McpToolAccessTestkit.idleThreadProjection(
+                      McpToolAccessTestkit.liveThreadShell(id),
+                    ),
+                  ),
+                dispatch: () => Effect.succeed({ sequence: 1 } as never),
+              }),
+            ),
+            Layer.provide(
+              Layer.succeed(
+                AnalyticsService.AnalyticsService,
+                AnalyticsService.AnalyticsService.of({
+                  record: (event, properties) =>
+                    Deferred.succeed(recorded, { event, properties: properties ?? {} }).pipe(
+                      Effect.asVoid,
+                    ),
+                  flush: Effect.void,
+                  recordOwners: () => Effect.void,
+                }),
               ),
-            dispatch: () => Effect.succeed({ sequence: 1 } as never),
-          }),
-        ),
-        Layer.provide(
-          Layer.succeed(
-            AnalyticsService.AnalyticsService,
-            AnalyticsService.AnalyticsService.of({
-              record: (event, properties) =>
-                Deferred.succeed(recorded, { event, properties: properties ?? {} }).pipe(
-                  Effect.asVoid,
-                ),
-              flush: Effect.void,
-              recordOwners: () => Effect.void,
-            }),
+            ),
           ),
+          MeshTestServices.services,
         ),
+        MeshTestServices.required,
       ),
     ),
   );
@@ -377,22 +417,30 @@ it.effect("rejects an unknown organize target instead of archiving the calling t
     });
   }).pipe(
     Effect.provide(
-      layerThreadToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: (id) => Effect.succeed(McpToolAccessTestkit.liveThreadShell(id)),
-            getProjectThreadRecords: ({ threadId: id }) =>
-              Effect.succeed(
-                McpToolAccessTestkit.idleThreadProjection(McpToolAccessTestkit.liveThreadShell(id)),
-              ),
-            dispatch: (command) => {
-              dispatched.push(command);
-              return Effect.succeed({ sequence: 1 } as never);
-            },
-          }),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          layerThreadToolkit.pipe(
+            Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+            Layer.provide(NodeCrypto.layer),
+            Layer.provide(
+              Layer.mock(ThreadManagement.ThreadManagementService)({
+                getThreadShell: (id) => Effect.succeed(McpToolAccessTestkit.liveThreadShell(id)),
+                getProjectThreadRecords: ({ threadId: id }) =>
+                  Effect.succeed(
+                    McpToolAccessTestkit.idleThreadProjection(
+                      McpToolAccessTestkit.liveThreadShell(id),
+                    ),
+                  ),
+                dispatch: (command) => {
+                  dispatched.push(command);
+                  return Effect.succeed({ sequence: 1 } as never);
+                },
+              }),
+            ),
+          ),
+          MeshTestServices.services,
         ),
+        MeshTestServices.required,
       ),
     ),
   );
@@ -414,14 +462,23 @@ it.effect("keeps unexpected handler defects private through the production regis
     ]);
   }).pipe(
     Effect.provide(
-      layerThreadToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: () => Effect.die(new Error("private-storage-path")),
-          }),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            layerThreadToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provide(
+                Layer.mock(ThreadManagement.ThreadManagementService)({
+                  getThreadShell: () => Effect.die(new Error("private-storage-path")),
+                }),
+              ),
+            ),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.services,
         ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -475,7 +532,14 @@ it.effect("resolves reused attachment references from stored metadata", () =>
       [stored],
     ).pipe(Effect.flip);
     expect(failure.code).toBe("invalid_request");
-  }),
+  }).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.platform, MeshTestServices.services),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 const clientScope = (
@@ -546,26 +610,37 @@ it.effect("a client caller targets any thread within its ceiling and cannot act 
     expect(declaredFailure(forked)).toMatchObject({ code: "target_required" });
   }).pipe(
     Effect.provide(
-      layerThreadToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: (id) =>
-              Effect.succeed(McpToolAccessTestkit.liveThreadShell(id, { runtimeMode: "auto" })),
-            getProjectThreadRecords: () =>
-              Effect.succeed({
-                thread: {
-                  id: ThreadId.make("other-project-thread"),
-                  projectId: "other-project",
-                  runtimeMode: "auto",
-                  interactionMode: "default",
-                  deletedAt: null,
-                },
-              } as never),
-            dispatch: () => Effect.succeed({ sequence: 7, storedEvents: [] }),
-          }),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            layerThreadToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provide(
+                Layer.mock(ThreadManagement.ThreadManagementService)({
+                  getThreadShell: (id) =>
+                    Effect.succeed(
+                      McpToolAccessTestkit.liveThreadShell(id, { runtimeMode: "auto" }),
+                    ),
+                  getProjectThreadRecords: () =>
+                    Effect.succeed({
+                      thread: {
+                        id: ThreadId.make("other-project-thread"),
+                        projectId: "other-project",
+                        runtimeMode: "auto",
+                        interactionMode: "default",
+                        deletedAt: null,
+                      },
+                    } as never),
+                  dispatch: () => Effect.succeed({ sequence: 7, storedEvents: [] }),
+                }),
+              ),
+            ),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.services,
         ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -606,35 +681,44 @@ it.effect("a read-only client reads threads and is refused every write before it
     expect(dispatched).toEqual([]);
   }).pipe(
     Effect.provide(
-      layerThreadToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: () =>
-              Effect.succeed({
-                id: ThreadId.make("other-project-thread"),
-                projectId: "other-project",
-                deletedAt: null,
-              } as never),
-            getProjectThreadRecords: () =>
-              Effect.succeed({
-                thread: {
-                  id: ThreadId.make("other-project-thread"),
-                  projectId: "other-project",
-                  modelSelection: { instanceId: "codex", model: "gpt-5" },
-                  runtimeMode: "auto",
-                  interactionMode: "default",
-                  deletedAt: null,
-                },
-              } as never),
-            dispatch: () =>
-              Effect.sync(() => {
-                dispatched.push("dispatch");
-                return { sequence: 7 } as never;
-              }),
-          }),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            layerThreadToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provide(
+                Layer.mock(ThreadManagement.ThreadManagementService)({
+                  getThreadShell: () =>
+                    Effect.succeed({
+                      id: ThreadId.make("other-project-thread"),
+                      projectId: "other-project",
+                      deletedAt: null,
+                    } as never),
+                  getProjectThreadRecords: () =>
+                    Effect.succeed({
+                      thread: {
+                        id: ThreadId.make("other-project-thread"),
+                        projectId: "other-project",
+                        modelSelection: { instanceId: "codex", model: "gpt-5" },
+                        runtimeMode: "auto",
+                        interactionMode: "default",
+                        deletedAt: null,
+                      },
+                    } as never),
+                  dispatch: () =>
+                    Effect.sync(() => {
+                      dispatched.push("dispatch");
+                      return { sequence: 7 } as never;
+                    }),
+                }),
+              ),
+            ),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.services,
         ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -659,20 +743,29 @@ it.effect("refuses act-as-caller tools to a client caller", () =>
     expect(declaredFailure(result)).toMatchObject({ code: "thread_credential_required" });
   }).pipe(
     Effect.provide(
-      layerOrchestratorToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
-        Layer.provide(ServerSettings.layerTest()),
-        Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
-        Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
-        Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
-        Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
-        Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
-        Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
-        Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
-        Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
-        Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            layerOrchestratorToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
+              Layer.provide(ServerSettings.layerTest()),
+              Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
+              Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
+              Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
+              Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
+              Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
+              Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+              Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
+              Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
+              Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+            ),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.services,
+        ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -704,34 +797,46 @@ it.effect("a caller cannot rewrite a scheduled task that runs above its own mode
     expect(declaredFailure(incomplete)).toMatchObject({ code: "invalid_request" });
   }).pipe(
     Effect.provide(
-      layerOrchestratorToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
-        Layer.provide(ServerSettings.layerTest()),
-        Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
-        Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
-        Layer.provide(
-          Layer.mock(ScheduledTaskService.ScheduledTaskService)({
-            list: () =>
-              Effect.succeed({
-                tasks: [
-                  scheduledTask("task-full-access", "full-access"),
-                  scheduledTask("task-auto", "auto"),
-                ],
-              }),
-            upsert: (input) =>
-              Effect.succeed({
-                task: { ...(scheduledTask(input.id ?? "task-auto", "auto") as object), ...input },
-              } as never),
-          }),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            layerOrchestratorToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
+              Layer.provide(ServerSettings.layerTest()),
+              Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
+              Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
+              Layer.provide(
+                Layer.mock(ScheduledTaskService.ScheduledTaskService)({
+                  list: () =>
+                    Effect.succeed({
+                      tasks: [
+                        scheduledTask("task-full-access", "full-access"),
+                        scheduledTask("task-auto", "auto"),
+                      ],
+                    }),
+                  upsert: (input) =>
+                    Effect.succeed({
+                      task: {
+                        ...(scheduledTask(input.id ?? "task-auto", "auto") as object),
+                        ...input,
+                      },
+                    } as never),
+                }),
+              ),
+              Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
+              Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
+              Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
+              Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
+              Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+              Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+            ),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.services,
         ),
-        Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
-        Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
-        Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
-        Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
-        Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
-        Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -778,20 +883,29 @@ it.effect.each([
     expect(JSON.stringify(result)).not.toContain("private-");
   }).pipe(
     Effect.provide(
-      McpHttpServer.layerThreadToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
-        Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
-        Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
-        Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
-        Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
-        Layer.provide(
-          Layer.mock(ScheduledTaskService.ScheduledTaskService)({
-            list: () => Effect.succeed({ tasks }),
-            runNow: () => Effect.fail(error),
-          }),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            McpHttpServer.layerThreadToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provide(Layer.mock(ThreadManagement.ThreadManagementService)({})),
+              Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
+              Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
+              Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
+              Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+              Layer.provide(
+                Layer.mock(ScheduledTaskService.ScheduledTaskService)({
+                  list: () => Effect.succeed({ tasks }),
+                  runNow: () => Effect.fail(error),
+                }),
+              ),
+            ),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.services,
         ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -843,43 +957,54 @@ it.effect.each(["t3_thread_interrupt", "t3_workflow_stop"])(
       expect(declaredFailure(result)).toMatchObject({ code: "runtime_mode_escalation_denied" });
     }).pipe(
       Effect.provide(
-        layerOrchestratorToolkit.pipe(
-          Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-          Layer.provide(NodeCrypto.layer),
-          Layer.provide(
-            Layer.mock(ThreadManagement.ThreadManagementService)({
-              getThreadShell: () =>
-                Effect.succeed({
-                  projectId: "project-a",
-                  deletedAt: null,
-                  runtimeMode: "full-access",
-                  interactionMode: "default",
-                } as never),
-              getProjectThreadRecords: () =>
-                Effect.succeed({
-                  thread: {
-                    id: ThreadId.make("full-access-thread"),
-                    projectId: "project-a",
-                    runtimeMode: "full-access",
-                    interactionMode: "default",
-                    deletedAt: null,
-                  },
-                  runs: [],
-                } as never),
-              stopWorkflow: () => Effect.die("workflow stop must not dispatch above the ceiling"),
-              interruptThread: () => Effect.die("interrupt must not dispatch above the ceiling"),
-            }),
+        Layer.provideMerge(
+          Layer.provideMerge(
+            Layer.provideMerge(
+              layerOrchestratorToolkit.pipe(
+                Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+                Layer.provide(NodeCrypto.layer),
+                Layer.provide(
+                  Layer.mock(ThreadManagement.ThreadManagementService)({
+                    getThreadShell: () =>
+                      Effect.succeed({
+                        projectId: "project-a",
+                        deletedAt: null,
+                        runtimeMode: "full-access",
+                        interactionMode: "default",
+                      } as never),
+                    getProjectThreadRecords: () =>
+                      Effect.succeed({
+                        thread: {
+                          id: ThreadId.make("full-access-thread"),
+                          projectId: "project-a",
+                          runtimeMode: "full-access",
+                          interactionMode: "default",
+                          deletedAt: null,
+                        },
+                        runs: [],
+                      } as never),
+                    stopWorkflow: () =>
+                      Effect.die("workflow stop must not dispatch above the ceiling"),
+                    interruptThread: () =>
+                      Effect.die("interrupt must not dispatch above the ceiling"),
+                  }),
+                ),
+                Layer.provide(ServerSettings.layerTest()),
+                Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
+                Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
+                Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
+                Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
+                Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
+                Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+                Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
+                Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
+                Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+              ),
+              MeshTestServices.platform,
+            ),
+            MeshTestServices.services,
           ),
-          Layer.provide(ServerSettings.layerTest()),
-          Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
-          Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
-          Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
-          Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
-          Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
-          Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
-          Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
-          Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
-          Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+          MeshTestServices.required,
         ),
       ),
     ),
@@ -951,31 +1076,38 @@ it.effect("discovers workflow stop targets and requires orchestration capability
     expect(stopped).toEqual([{ threadId: "workflow-parent", subagentId: "workflow-coordinator" }]);
   }).pipe(
     Effect.provide(
-      layerOrchestratorToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(NodeCrypto.layer),
-        Layer.provide(
-          Layer.mock(ThreadManagement.ThreadManagementService)({
-            getThreadShell: (id) => Effect.succeed(McpToolAccessTestkit.liveThreadShell(id)),
-            getProjectThreadRecords: () =>
-              Effect.succeed(McpToolAccessTestkit.idleThreadProjection(shell)),
-            getTimelinePage: () => Effect.succeed({ items: [row], totalItems: 1, hasMore: false }),
-            stopWorkflow: (input) =>
-              Effect.sync(() => {
-                stopped.push(input);
+      Layer.provideMerge(
+        Layer.provideMerge(
+          layerOrchestratorToolkit.pipe(
+            Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+            Layer.provide(NodeCrypto.layer),
+            Layer.provide(
+              Layer.mock(ThreadManagement.ThreadManagementService)({
+                getThreadShell: (id) => Effect.succeed(McpToolAccessTestkit.liveThreadShell(id)),
+                getProjectThreadRecords: () =>
+                  Effect.succeed(McpToolAccessTestkit.idleThreadProjection(shell)),
+                getTimelinePage: () =>
+                  Effect.succeed({ items: [row], totalItems: 1, hasMore: false }),
+                stopWorkflow: (input) =>
+                  Effect.sync(() => {
+                    stopped.push(input);
+                  }),
               }),
-          }),
+            ),
+            Layer.provide(ServerSettings.layerTest()),
+            Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
+            Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
+            Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
+            Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
+            Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
+            Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+            Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
+            Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
+            Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+          ),
+          MeshTestServices.services,
         ),
-        Layer.provide(ServerSettings.layerTest()),
-        Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
-        Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
-        Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
-        Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
-        Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
-        Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
-        Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
-        Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
-        Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+        MeshTestServices.required,
       ),
     ),
   );
@@ -1025,17 +1157,33 @@ it.effect("only the caller that prepared a pending upload can discard it", () =>
     expect(discarded.isError).toBe(false);
   }).pipe(
     Effect.provide(
-      McpHttpServer.layerAttachmentToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
-        Layer.provide(ServerSecretStore.layer),
-        Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-attachment-" })),
-        Layer.provide(
-          DocumentText.layer.pipe(
-            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            McpHttpServer.layerAttachmentToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+              Layer.provide(ServerSecretStore.layer),
+              Layer.provide(
+                ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-attachment-" }),
+              ),
+              Layer.provide(
+                DocumentText.layer.pipe(
+                  Layer.provideMerge(
+                    Layer.mergeAll(
+                      Layer.merge(NodeServices.layer, MeshTestServices.platform),
+                      NodeCrypto.layer,
+                    ),
+                  ),
+                ),
+              ),
+              Layer.provide(NodeCrypto.layer),
+            ),
+            MeshTestServices.platform,
           ),
+          MeshTestServices.services,
         ),
-        Layer.provide(NodeCrypto.layer),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -1070,24 +1218,30 @@ it.effect(
       });
     }).pipe(
       Effect.provide(
-        layerOrchestratorToolkit.pipe(
-          Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-          Layer.provide(NodeCrypto.layer),
-          Layer.provide(
-            Layer.mock(ThreadManagement.ThreadManagementService)({
-              listProjectThreads: () => Effect.succeed([unsettled, settled]),
-            }),
+        Layer.provideMerge(
+          Layer.provideMerge(
+            layerOrchestratorToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provide(
+                Layer.mock(ThreadManagement.ThreadManagementService)({
+                  listProjectThreads: () => Effect.succeed([unsettled, settled]),
+                }),
+              ),
+              Layer.provide(ServerSettings.layerTest()),
+              Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
+              Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
+              Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
+              Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
+              Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
+              Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
+              Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
+              Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
+              Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+            ),
+            MeshTestServices.services,
           ),
-          Layer.provide(ServerSettings.layerTest()),
-          Layer.provide(Layer.mock(ProviderRegistry.ProviderRegistry)({})),
-          Layer.provide(Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({})),
-          Layer.provide(Layer.mock(ScheduledTaskService.ScheduledTaskService)({})),
-          Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
-          Layer.provide(Layer.mock(SecretRequests.SecretRequests)({})),
-          Layer.provide(Layer.mock(PeerForwarding.PeerForwarding)({})),
-          Layer.provide(Layer.mock(PeerLinkRequests.PeerLinkRequests)({})),
-          Layer.provide(Layer.mock(PeerLinks.PeerLinks)({})),
-          Layer.provide(Layer.mock(RemoteDelegation.RemoteDelegation)({})),
+          MeshTestServices.required,
         ),
       ),
     );

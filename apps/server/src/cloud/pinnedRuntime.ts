@@ -1,15 +1,17 @@
-import * as Cause from "effect/Cause";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import { downloadBytes, downloadVerified } from "../platform/Download.ts";
+
 import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Hex from "effect/encoding/Hex";
+
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
-import * as Stream from "effect/Stream";
+
 import * as Semaphore from "effect/Semaphore";
-import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientError } from "effect/http";
 
 import {
   CLI_RELEASE_CHECKSUMS_FILE,
@@ -123,47 +125,15 @@ const fetchReleaseAsset = Effect.fn("cloud.pinned_runtime.fetch_release_asset")(
   step: string,
   onProgress?: (progress: PinnedRuntimeProgress) => void,
 ) {
-  // Bound stalls while holding the install lock, but allow transfers that keep
-  // receiving bytes to finish regardless of their total duration.
-  return yield* httpClient.execute(HttpClientRequest.get(url)).pipe(
-    Effect.flatMap(HttpClientResponse.filterStatusOk),
-    Effect.timeout(PINNED_RUNTIME_DOWNLOAD_STALL_TIMEOUT),
-    Effect.flatMap(
-      Effect.fn(function* (response) {
-        const length = Number(response.headers["content-length"]);
-        const total = Number.isFinite(length) && length > 0 ? length : undefined;
-        let received = 0;
-        onProgress?.({ stage: "download", received, total });
-        const chunks = yield* response.stream.pipe(
-          Stream.timeoutOrElse({
-            duration: PINNED_RUNTIME_DOWNLOAD_STALL_TIMEOUT,
-            orElse: () => Stream.fail(new Cause.TimeoutError()),
-          }),
-          Stream.tap((chunk) =>
-            Effect.sync(() => {
-              received += chunk.byteLength;
-              onProgress?.({ stage: "download", received, total });
-            }),
-          ),
-          Stream.runCollect,
-        );
-        if (total === undefined && received > 0) {
-          onProgress?.({ stage: "download", received, total: received });
-        }
-        const bytes = new Uint8Array(received);
-        let offset = 0;
-        for (const chunk of chunks) {
-          bytes.set(chunk, offset);
-          offset += chunk.byteLength;
-        }
-        return bytes;
-      }),
-    ),
+  return yield* downloadBytes(httpClient, url, {
+    stallTimeout: PINNED_RUNTIME_DOWNLOAD_STALL_TIMEOUT,
+    onProgress,
+  }).pipe(
     Effect.mapError(
       (cause) =>
         new PinnedRuntimeInstallError({
-          step: cause._tag === "TimeoutError" ? `${step} (timed out)` : step,
-          cause,
+          step: cause.reason === "timeout" ? `${step} (timed out)` : step,
+          cause: cause.cause ?? cause,
         }),
     ),
   );
@@ -183,23 +153,32 @@ const installFromArchive = Effect.fn("cloud.pinned_runtime.install_archive")(fun
   const httpClient = input.httpClient;
   input.onProgress?.({ stage: "download", received: 0, total: undefined });
   const { fileName, expected } = yield* publishedArchive(input, platformKey);
-  const archive = yield* fetchReleaseAsset(
+  const archive = yield* downloadVerified(
     httpClient,
     cliReleaseAssetUrl(input.version, fileName, input.releaseBaseUrl),
-    "downloading the t3 release archive",
-    input.onProgress,
+    expected,
+    {
+      stallTimeout: PINNED_RUNTIME_DOWNLOAD_STALL_TIMEOUT,
+      onProgress: input.onProgress,
+      onVerify: Effect.sync(() => {
+        input.onProgress?.({ stage: "verify" });
+      }),
+    },
+  ).pipe(
+    Effect.provide(NodeCrypto.layer),
+    Effect.mapError(
+      (cause) =>
+        new PinnedRuntimeInstallError({
+          step:
+            cause.reason === "checksum"
+              ? "verifying the t3 release archive checksum"
+              : cause.reason === "timeout"
+                ? "downloading the t3 release archive (timed out)"
+                : "downloading the t3 release archive",
+          cause: cause.cause ?? cause,
+        }),
+    ),
   );
-  input.onProgress?.({ stage: "verify" });
-  const digest = yield* Effect.tryPromise({
-    try: () => crypto.subtle.digest("SHA-256", archive),
-    catch: (cause) =>
-      new PinnedRuntimeInstallError({ step: "verifying the t3 release archive", cause }),
-  });
-  if (Hex.encode(new Uint8Array(digest)) !== expected) {
-    return yield* new PinnedRuntimeInstallError({
-      step: "verifying the t3 release archive checksum",
-    });
-  }
 
   const archivePath = path.join(stagingDir, PINNED_RUNTIME_ARCHIVE_FILE);
   yield* fs

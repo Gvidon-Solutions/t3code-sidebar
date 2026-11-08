@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -101,7 +102,7 @@ it.effect("preview_open navigates the opened tab to a dev server in one tool cal
         ),
       ),
     ),
-  ),
+  ).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 describe("claimPreviewRecording", () => {
@@ -140,8 +141,11 @@ describe("claimPreviewRecording", () => {
       expect(wrongPath._tag).toBe("Failure");
     }).pipe(
       Effect.provide(
-        ServerConfig.layerTest(process.cwd(), { prefix: "t3-preview-recording-" }).pipe(
-          Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+        Layer.provideMerge(
+          ServerConfig.layerTest(process.cwd(), { prefix: "t3-preview-recording-" }).pipe(
+            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+          ),
+          MeshTestServices.required,
         ),
       ),
     ),
@@ -185,8 +189,11 @@ describe("claimPreviewRecording", () => {
         }
       }).pipe(
         Effect.provide(
-          ServerConfig.layerTest(process.cwd(), { prefix: "t3-preview-recording-" }).pipe(
-            Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+          Layer.provideMerge(
+            ServerConfig.layerTest(process.cwd(), { prefix: "t3-preview-recording-" }).pipe(
+              Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+            ),
+            MeshTestServices.required,
           ),
         ),
       ),

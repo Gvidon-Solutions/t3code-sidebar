@@ -1,3 +1,4 @@
+import { readLine } from "../../platform/readLine.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- SSH ProxyCommand reaches the running local server through a private OS socket.
 import * as NodeNet from "node:net";
 import type * as NodeStream from "node:stream";
@@ -52,43 +53,23 @@ export const connectLocalPipe = Effect.fn("PeerPipeIpc.connect")(function* (
   const platform = yield* HostProcess.Platform;
   const userId = yield* HostProcess.UserId;
   return yield* Effect.tryPromise({
-    try: () =>
-      new Promise<NodeNet.Socket>((resolve, reject) => {
-        const socket = NodeNet.createConnection({
-          path: pipeAddress(baseDir, platform, userId),
-          allowHalfOpen: true,
-        });
-        let buffer = Buffer.alloc(0);
-        const fail = (error: Error) => {
-          socket.destroy();
-          reject(error);
-        };
-        const ended = () => fail(new Error("Local mesh server closed the pipe handshake"));
-        socket.once("error", fail);
-        socket.once("end", ended);
-        socket.setTimeout(15_000, () => fail(new Error("Local mesh pipe handshake timed out")));
-        socket.once("connect", () => socket.write(`${encode({ machine, target: "sshd" })}\n`));
-        const receive = (chunk: Buffer) => {
-          buffer = Buffer.concat([buffer, chunk]);
-          const newline = buffer.indexOf(10);
-          if (newline < 0 && buffer.length < 8192) return;
-          socket.pause();
-          socket.removeListener("data", receive);
-          socket.setTimeout(0);
-          try {
-            if (newline < 0 || newline > 8192) throw new Error("Invalid local mesh pipe response");
-            const response = decodeResponse(buffer.subarray(0, newline).toString("utf8"));
-            if (!response.ok) throw new Error(response.error);
-            socket.removeListener("error", fail);
-            socket.removeListener("end", ended);
-            if (buffer.length > newline + 1) socket.unshift(buffer.subarray(newline + 1));
-            resolve(socket);
-          } catch (error) {
-            fail(error instanceof Error ? error : new Error("Invalid local mesh pipe response"));
-          }
-        };
-        socket.on("data", receive);
-      }),
+    try: async () => {
+      const socket = NodeNet.createConnection({
+        path: pipeAddress(baseDir, platform, userId),
+        allowHalfOpen: true,
+      });
+      socket.once("connect", () => socket.write(`${encode({ machine, target: "sshd" })}\n`));
+      try {
+        const response = decodeResponse(
+          await readLine(socket, { maxBytes: 8192, timeoutMs: 15000 }),
+        );
+        if (!response.ok) throw new Error(response.error);
+        return socket;
+      } catch (error) {
+        socket.destroy();
+        throw error;
+      }
+    },
     catch: (cause) =>
       new PeerConnectionError({
         reason: "pipe",
@@ -105,7 +86,7 @@ export const layer = Layer.effectDiscard(
     const userId = yield* HostProcess.UserId;
     const sessions = yield* PeerSessions;
     const links = yield* PeerLinks.PeerLinks;
-    const mesh = yield* Effect.serviceOption(MeshLayoutService.MeshLayoutService);
+    const mesh = yield* MeshLayoutService.MeshLayoutService;
     const run = Effect.runPromiseWith(yield* Effect.context<never>());
     const address = pipeAddress(config.baseDir, platform, userId);
     const resolveMachine = Effect.fn("PeerPipeIpc.resolveMachine")(function* (name: string) {
@@ -126,7 +107,7 @@ export const layer = Layer.effectDiscard(
             ),
         ),
       );
-      const snapshot = Option.isSome(mesh) ? yield* mesh.value.read : undefined;
+      const snapshot = yield* mesh.read;
       const matches = ids.filter((id) => {
         const machine = snapshot?.config.machines?.[id];
         return [
@@ -158,45 +139,30 @@ export const layer = Layer.effectDiscard(
             socket.on("error", (error) => {
               void run(Effect.logDebug("Local mesh pipe closed", error));
             });
-            let buffer = Buffer.alloc(0);
-            socket.setTimeout(15_000, () =>
-              socket.destroy(new Error("Local mesh pipe handshake timed out")),
-            );
-            const receive = (chunk: Buffer) => {
-              buffer = Buffer.concat([buffer, chunk]);
-              const newline = buffer.indexOf(10);
-              if (newline < 0 && buffer.length <= 8192) return;
-              socket.pause();
-              socket.removeListener("data", receive);
-              socket.setTimeout(0);
-              const controller = new AbortController();
-              socket.once("close", () => controller.abort());
-              void (async () => {
-                try {
-                  if (newline < 0 || newline > 8192)
-                    throw new Error("Invalid local mesh pipe request");
-                  const request = decodeRequest(buffer.subarray(0, newline).toString("utf8"));
-                  const id = await run(resolveMachine(request.machine), {
+            const controller = new AbortController();
+            socket.once("close", () => controller.abort());
+            void (async () => {
+              try {
+                const line = await readLine(socket, { maxBytes: 8192, timeoutMs: 15000 });
+                const request = decodeRequest(line);
+                const id = await run(resolveMachine(request.machine), {
+                  signal: controller.signal,
+                });
+                const stream = await run(
+                  sessions.openPipe({
+                    environmentId: id,
+                    target: request.target,
                     signal: controller.signal,
-                  });
-                  const stream = await run(
-                    sessions.openPipe({
-                      environmentId: id,
-                      target: request.target,
-                      signal: controller.signal,
-                    }),
-                  );
-                  socket.write(`${encode({ ok: true })}\n`);
-                  if (buffer.length > newline + 1) socket.unshift(buffer.subarray(newline + 1));
-                  bridge(socket, stream);
-                } catch (error) {
-                  socket.end(
-                    `${encode({ ok: false, error: error instanceof Error ? error.message : "Mesh pipe failed" })}\n`,
-                  );
-                }
-              })();
-            };
-            socket.on("data", receive);
+                  }),
+                );
+                socket.write(`${encode({ ok: true })}\n`);
+                bridge(socket, stream);
+              } catch (error) {
+                socket.end(
+                  `${encode({ ok: false, error: error instanceof Error ? error.message : "Mesh pipe failed" })}\n`,
+                );
+              }
+            })();
           });
           await new Promise<void>((resolve, reject) => {
             server.once("error", reject);

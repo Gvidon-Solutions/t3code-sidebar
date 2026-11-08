@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   BrowserNavigationTarget,
@@ -240,7 +241,12 @@ const PreviewRecordingStopTool = safeBrowserTool(
       ...presentationFields,
     }),
     failure: PreviewToolFailure,
-    dependencies: [...dependencies, FileSystem.FileSystem, ServerConfig.ServerConfig],
+    dependencies: [
+      MeshLayoutService,
+      ...dependencies,
+      FileSystem.FileSystem,
+      ServerConfig.ServerConfig,
+    ],
   })
     .annotate(McpDomainAnnotation, "owner")
     .annotate(Tool.Title, "Stop browser recording"),

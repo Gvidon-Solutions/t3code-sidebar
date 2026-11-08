@@ -330,11 +330,13 @@ NodeTest.test("explicit updating refusals retry the same call and stop on succes
   const result = await retryUpdatingCall(async () => {
     sent.push(input);
     calls += 1;
-    return calls === 1 ? { isError: true, content: [{ type: 'text', text: 'T3_UPDATING: retry' }] } : { content: [{ type: 'text', text: 'accepted' }] };
+    return calls === 1 ? { isError: true, content: [{ type: 'text', text: JSON.stringify({ _tag: 'DeliveryUpdatingError', message: 'retry' }) }] } : { content: [{ type: 'text', text: 'accepted' }] };
   }, async () => {});
   NodeAssert.equal(result.isError, undefined);
   NodeAssert.equal(sent.length, 2);
   NodeAssert.equal(sent[0], sent[1]);
   const denied = { isError: true, content: [{ type: 'text', text: 'capability_denied' }] };
   NodeAssert.equal(await retryUpdatingCall(async () => denied, async () => {}), denied);
+  const text = { isError: true, content: [{ type: "text", text: "T3_UPDATING: ordinary tool output" }] };
+  NodeAssert.equal(await retryUpdatingCall(async () => text, async () => { throw Error("must not retry text"); }), text);
 });

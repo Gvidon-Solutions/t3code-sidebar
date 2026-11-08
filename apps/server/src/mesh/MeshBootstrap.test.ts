@@ -8,7 +8,7 @@ import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG, EnvironmentId } from "@t3tools/contr
 import { ProcessRunner, type ProcessRunOutput, type ProcessRunInput } from "../processRunner.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
 import * as ServerConfig from "../config.ts";
-import * as Layout from "../replicas/MeshLayoutTestLayer.ts";
+import * as Layout from "../../testFixtures/MeshLayoutTestLayer.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import { MeshRuntimeArchive } from "./MeshRuntimeArchive.ts";
 import * as Bootstrap from "./MeshBootstrap.ts";
@@ -27,7 +27,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "B1-bootstrap-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-bootstrap-" });
       const calls: ProcessRunInput[] = [];
       let installed = false;
       let failProbe = true;

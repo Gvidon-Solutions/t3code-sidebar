@@ -54,8 +54,9 @@ export class FilesService extends Context.Service<
   }
 >()("t3/files/FilesService") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const path = yield* Path.Path;
+  const mesh = yield* MeshLayoutService;
   const home = yield* HostProcess.HomeDirectory;
   const isServerInternalPath = yield* makeIsServerInternalPath;
 
@@ -83,14 +84,15 @@ export const make = Effect.gen(function* () {
   const authorizeLinkPath = Effect.fn("FilesService.authorizeLinkPath")(function* (target: string) {
     const scope = yield* Effect.serviceOption(McpInvocationContext);
     if (Option.isNone(scope) || scope.value.client?.linked !== true) return;
-    const permissions = yield* linkPermissions();
+    const permissions = yield* linkPermissions().pipe(
+      Effect.provideService(MeshLayoutService, mesh),
+    );
     if (permissions.files === "none") return yield* filesError("permission_denied", target);
     // A read-only link never reads outside this machine's project folders,
     // even when the config would allow all files.
     if (permissions.files === "all" && scope.value.client.access !== "read-only") return;
-    const mesh = yield* Effect.serviceOption(MeshLayoutService);
-    if (Option.isNone(mesh)) return yield* filesError("permission_denied", target);
-    const snapshot = yield* mesh.value.read;
+
+    const snapshot = yield* mesh.read;
     const roots = Object.values(snapshot.config.projectMounts)
       .flat()
       .filter((rep) => rep.environmentId === scope.value.environmentId);
@@ -118,7 +120,9 @@ export const make = Effect.gen(function* () {
   const assertLinkFilesEnabled = Effect.fn("FilesService.assertLinkFilesEnabled")(function* (
     target: string,
   ) {
-    const permissions = yield* linkPermissions();
+    const permissions = yield* linkPermissions().pipe(
+      Effect.provideService(MeshLayoutService, mesh),
+    );
     if (permissions.linked && permissions.files === "none")
       return yield* filesError("permission_denied", target);
   });

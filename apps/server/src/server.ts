@@ -1344,6 +1344,6 @@ const layerMakeServer = Layer.unwrap(
       Layer.provideMerge(Layer.succeed(ProviderRuntimeEnvironment, runEnvironment)),
     );
   }),
-).pipe(Layer.provide(ProcessRunner.layer));
+).pipe(Layer.provide(ProcessRunner.layer), Layer.provide(PeerTransport.layer));
 
 export const runServer = Layer.launch(layerMakeServer);

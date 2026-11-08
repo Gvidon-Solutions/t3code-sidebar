@@ -3,7 +3,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeChildProcess from "node:child_process";
-import { run, until, rpc, mcp } from "./client.mjs";
+import { run, until, rpc, mcp } from "../mesh-fast/client.mjs";
 const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "B1-platform-"));
 const bin = NodePath.resolve("apps/server/dist/bin.mjs");
 const children = [];

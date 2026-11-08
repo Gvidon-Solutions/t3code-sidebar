@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import { expect, it } from "@effect/vitest";
 import {
   type AgentSessionSource,
@@ -31,7 +33,7 @@ import {
   CODEX_MODEL_SELECTION,
 } from "../orchestration-v2/testkit/fixtures/shared.ts";
 import * as ProviderSessionRuntime from "../persistence/ProviderSessionRuntime.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ServerSettings from "../serverSettings.ts";
 import * as AgentSessionImporter from "./AgentSessionImporter.ts";
 import * as AgentSessionScanner from "./AgentSessionScanner.ts";
@@ -41,12 +43,12 @@ const projectId = ProjectId.make("agent-session-import-project");
 const timestamp = "2026-09-01T10:00:00.000Z";
 const now = DateTime.makeUnsafe(timestamp);
 const stores = Layer.mergeAll(EventStore.layer, ProjectionStore.layer).pipe(
-  Layer.provideMerge(SqlitePersistence.layerMemory),
+  Layer.provideMerge(MeshTestServices.layerMemory),
 );
 const persistence = Layer.mergeAll(
   stores,
-  EventSink.layer.pipe(Layer.provide(stores)),
-  ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistence.layerMemory)),
+  EventSink.layer.pipe(Layer.provide(RequiredAdmission.layer), Layer.provide(stores)),
+  ProviderSessionRuntime.layer.pipe(Layer.provide(MeshTestServices.layerMemory)),
   IdAllocator.layer,
 );
 
@@ -187,7 +189,7 @@ const makeImporter = Effect.fn(function* (
     get: (target, key, receiver) =>
       key === "withTransaction" ? withTransaction : Reflect.get(target, key, receiver),
   });
-  const sinkLayer = Layer.fresh(EventSink.layer).pipe(
+  const sinkLayer = Layer.fresh(EventSink.layer.pipe(Layer.provide(RequiredAdmission.layer))).pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(SqlClient.SqlClient, importSql),

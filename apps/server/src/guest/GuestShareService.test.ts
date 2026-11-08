@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -40,7 +42,7 @@ import {
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import { CloudManagedEndpointRuntime } from "../cloud/ManagedEndpointRuntime.ts";
 import * as ServerConfig from "../config.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as CommandOutputHub from "../orchestration-v2/CommandOutputHub.ts";
 import * as EffectOutbox from "../orchestration-v2/EffectOutbox.ts";
@@ -64,11 +66,11 @@ const adapter = {
   planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" as const }),
   openSession: () => Effect.die("No provider process needed for guest shares"),
 } as ProviderAdapter.ProviderAdapterV2["Service"];
-const layerDatabase = SqlitePersistence.layerMemory;
+const layerDatabase = MeshTestServices.layerMemory;
 const layerOrchestration = Layer.mergeAll(
   layerDatabase,
   ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
-  EffectOutbox.layer.pipe(Layer.provide(layerDatabase)),
+  EffectOutbox.layer.pipe(Layer.provide(RequiredAdmission.layer), Layer.provide(layerDatabase)),
   ProviderReplayHarness.layerWithRegistry(
     { name: "guest-share-service" },
     ProviderAdapterRegistry.layerFromAdapters([adapter]),

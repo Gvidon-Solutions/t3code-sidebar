@@ -19,7 +19,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ReplicaService from "./ProjectReplicaService.ts";
 import * as Runner from "./MutagenRunner.ts";
-import * as MeshTest from "./MeshLayoutTestLayer.ts";
+import * as MeshTest from "../../testFixtures/MeshLayoutTestLayer.ts";
 
 const decodeConfig = Schema.decodeSync(SidebarWorkspacesConfig);
 

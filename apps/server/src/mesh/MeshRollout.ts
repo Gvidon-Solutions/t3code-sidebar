@@ -1,6 +1,6 @@
-import { meshMillis } from "./MeshTiming.ts";
+import { meshTimer } from "./MeshTiming.ts";
 import { DeliveryAdmission } from "./DeliveryAdmission.ts";
-import * as Option from "effect/Option";
+
 import { MeshTrialFailureExit } from "../platform/ServerPlatform.ts";
 import { MeshStateBackup } from "./MeshStateBackup.ts";
 import * as FileSystem from "effect/FileSystem";
@@ -78,6 +78,7 @@ export class MeshRollout extends Context.Service<
 const make = Effect.fn("MeshRollout.make")(function* (
   trialCheck: Effect.Effect<void, MeshConfigError>,
 ) {
+  const meshMillis = yield* meshTimer;
   const mesh = yield* MeshLayoutService;
   const failTrial = yield* MeshTrialFailureExit;
   const version = yield* MeshRuntimeVersion;
@@ -86,7 +87,7 @@ const make = Effect.fn("MeshRollout.make")(function* (
   const routed = <S extends Schema.Decoder<unknown>>(input: Parameters<typeof peer.call<S>>[0]) =>
     callRouted({ links, peers: peer, self: mesh.environmentId }, input);
   const selfUpdate = yield* ServerSelfUpdate;
-  const admission = yield* Effect.serviceOption(DeliveryAdmission);
+  const admission = yield* DeliveryAdmission;
   const backup = yield* MeshStateBackup;
   const replicas = yield* ReplicaRuntime;
   const env = yield* HostProcess.Environment;
@@ -217,7 +218,7 @@ const make = Effect.fn("MeshRollout.make")(function* (
     if (!(yield* fs.exists(markerFile))) return;
     const marker = yield* decodeMarker(yield* fs.readFileString(markerFile));
     if (marker.previousUpdateId === context.update.id) return;
-    if (Option.isSome(admission)) yield* admission.value.cancel(`mesh:${marker.token}`);
+    yield* admission.cancel(`mesh:${marker.token}`);
     let reason = context.update.reason ?? context.update.status;
     if (yield* fs.exists(healthFailureFile)) {
       const failure = yield* decodeFailure(yield* fs.readFileString(healthFailureFile));
@@ -259,12 +260,8 @@ const make = Effect.fn("MeshRollout.make")(function* (
         ]);
       return;
     }
-    if (Option.isNone(admission))
-      return yield* new MeshConfigError({
-        reason: "storage",
-        message: "Delivery admission is unavailable; refusing runtime update",
-      });
-    const drainAdmission = admission.value;
+
+    const drainAdmission = admission;
     if (first(state) !== mesh.environmentId)
       return yield* new MeshConfigError({
         reason: "storage",
@@ -384,8 +381,7 @@ const make = Effect.fn("MeshRollout.make")(function* (
         Effect.tapError((error) =>
           Effect.gen(function* () {
             handoffRequested = false;
-            if (Option.isSome(admission))
-              yield* admission.value.cancel(`mesh:${lease.token}`).pipe(Effect.orDie);
+            yield* admission.cancel(`mesh:${lease.token}`).pipe(Effect.orDie);
             yield* write(failedKey(revision.revision), {
               environmentId: mesh.environmentId,
               target,
@@ -494,9 +490,9 @@ const make = Effect.fn("MeshRollout.make")(function* (
   );
   const finishTrial = Effect.gen(function* () {
     committed = true;
-    if (Option.isSome(admission)) {
-      const current = yield* admission.value.status;
-      if (current.requestId?.startsWith("mesh:")) yield* admission.value.cancel(current.requestId);
+    {
+      const current = yield* admission.status;
+      if (current.requestId?.startsWith("mesh:")) yield* admission.cancel(current.requestId);
     }
     const { snapshot } = yield* read;
     const lease = decodeVote(snapshot.document["mesh.updateLease"]?.v);

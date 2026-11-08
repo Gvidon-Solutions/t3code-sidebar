@@ -1,4 +1,4 @@
-import { meshMillis } from "./MeshTiming.ts";
+import { meshTimer, MeshTimeScale } from "./MeshTiming.ts";
 import { exceededDispatchModeLimit } from "../orchestration-v2/DispatchModeLimit.ts";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -28,7 +28,7 @@ import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Scope from "effect/Scope";
 import * as Clock from "effect/Clock";
-import { meshRetrySchedule } from "./retryBackoff.ts";
+import { meshRetrySchedule } from "./Backoff.ts";
 import * as Fiber from "effect/Fiber";
 import { forkParked } from "../serverActivation.ts";
 import * as ForkTransactions from "./ForkTransactions.ts";
@@ -85,6 +85,8 @@ export class ThreadForkService extends Context.Service<
 const serviceLayer = Layer.effect(
   ThreadForkService,
   Effect.gen(function* () {
+    const meshMillis = yield* meshTimer;
+    const timeScale = yield* MeshTimeScale;
     const uploadContext = yield* Effect.context<
       | FileSystem.FileSystem
       | Path.Path
@@ -383,7 +385,7 @@ const serviceLayer = Layer.effect(
       operation.pipe(
         Effect.retry({
           while: (error) => error.code === "orchestration_error",
-          schedule: meshRetrySchedule,
+          schedule: meshRetrySchedule(timeScale),
         }),
       );
     const armExpiry = Effect.fn("ThreadForkService.armExpiry")(function* (
@@ -396,7 +398,7 @@ const serviceLayer = Layer.effect(
           expire(key).pipe(
             Effect.retry({
               while: (error) => error.code === "orchestration_error",
-              schedule: meshRetrySchedule,
+              schedule: meshRetrySchedule(timeScale),
               times: 6,
             }),
             Effect.catch((error) =>

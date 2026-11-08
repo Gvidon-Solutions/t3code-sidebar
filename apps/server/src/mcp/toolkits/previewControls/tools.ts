@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   NonNegativeInt,
@@ -17,6 +18,7 @@ const shared = {
   failure: Schema.Union([PreviewAutomationError, OrchestratorMcpFailure]),
   failureMode: "return" as const,
   dependencies: [
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     PreviewManager.PreviewManager,

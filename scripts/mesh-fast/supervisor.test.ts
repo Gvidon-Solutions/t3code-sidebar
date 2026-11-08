@@ -25,6 +25,7 @@ it("exits a paused supervisor on SIGTERM without leaving its watcher alive", asy
     process.execPath,
     ["scripts/mesh-fast/supervisor.mjs", spec, receipt],
     {
+      cwd: NodePath.resolve(import.meta.dirname, "../.."),
       stdio: "ignore",
       timeout: 2000,
       killSignal: "SIGKILL",

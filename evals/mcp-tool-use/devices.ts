@@ -1,3 +1,5 @@
+import * as MeshConfigTest from "../../apps/server/src/mesh/MeshConfigTestLayer.ts";
+import { PeerForwarding } from "../../apps/server/src/peer/PeerForwarding.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 /**
  * T3's device tools over a case's world. McpHttpServer's device toolkit runs T3's handlers on its
@@ -788,6 +790,8 @@ export const makeDeviceTools = Effect.fn("evaluateMcpToolUse.makeDeviceTools")(f
           }),
         ),
       ),
+      Layer.provideMerge(MeshConfigTest.layerTest()),
+      Layer.provideMerge(Layer.mock(PeerForwarding)({})),
       Layer.provideMerge(config),
       Layer.provideMerge(files),
     ),

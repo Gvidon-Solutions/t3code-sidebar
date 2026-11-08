@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
 import { expect, it } from "@effect/vitest";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -93,5 +94,5 @@ it.effect("refuses a preferences update when the caller's turn ends while it wai
         ),
       ),
     );
-  }),
+  }).pipe(Effect.provide(Layer.provideMerge(MeshTestServices.platform, MeshTestServices.required))),
 );

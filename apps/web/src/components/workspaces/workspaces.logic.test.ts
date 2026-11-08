@@ -25,9 +25,9 @@ const config: SidebarWorkspacesConfig = {
   ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   workspaces: [
     { id: "personal", name: "personal" },
-    { id: "vtbfamily", name: "vtbfamily" },
+    { id: "studio", name: "studio" },
   ],
-  rules: [{ match: "/home/*/repos/vtbfamily/**", workspace: "vtbfamily" }],
+  rules: [{ match: "/home/*/repos/studio/**", workspace: "studio" }],
   defaultWorkspace: "personal",
 };
 
@@ -73,7 +73,7 @@ describe("resolveProjectWorkspaceId", () => {
   it("prefers an explicit assignment over rules", () => {
     expect(
       resolveProjectWorkspaceId(
-        { projectKey: "p1", workspaceRoots: ["/home/t3/repos/vtbfamily/web"] },
+        { projectKey: "p1", workspaceRoots: ["/home/t3/repos/studio/web"] },
         { ...config, assignments: { p1: "personal" } },
       ),
     ).toBe("personal");
@@ -82,10 +82,10 @@ describe("resolveProjectWorkspaceId", () => {
   it("falls back from rules to the default workspace", () => {
     expect(
       resolveProjectWorkspaceId(
-        { projectKey: "p1", workspaceRoots: ["/home/t3/repos/vtbfamily/web"] },
+        { projectKey: "p1", workspaceRoots: ["/home/t3/repos/studio/web"] },
         config,
       ),
-    ).toBe("vtbfamily");
+    ).toBe("studio");
     expect(
       resolveProjectWorkspaceId({ projectKey: "p2", workspaceRoots: ["/srv/other"] }, config),
     ).toBe("personal");
@@ -164,9 +164,7 @@ describe("effectiveDefaultWorkspaceId", () => {
   it("uses the configured default and falls back to the first workspace", () => {
     expect(effectiveDefaultWorkspaceId(config)).toBe("personal");
     expect(effectiveDefaultWorkspaceId({ ...config, defaultWorkspace: "gone" })).toBe("personal");
-    expect(effectiveDefaultWorkspaceId({ ...config, defaultWorkspace: "vtbfamily" })).toBe(
-      "vtbfamily",
-    );
+    expect(effectiveDefaultWorkspaceId({ ...config, defaultWorkspace: "studio" })).toBe("studio");
   });
 });
 
@@ -200,7 +198,7 @@ describe("workspace tile marks", () => {
       kind: "glyph",
       glyph: "graduation",
     });
-    expect(workspaceMark({ name: "potentialplus", icon: "P+" })).toEqual({
+    expect(workspaceMark({ name: "research", icon: "P+" })).toEqual({
       kind: "text",
       text: "P+",
     });

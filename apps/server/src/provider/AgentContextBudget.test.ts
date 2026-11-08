@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
@@ -88,7 +89,11 @@ const toolHandlerServices = Layer.mergeAll(
   Layer.mock(UiRequests)({}),
   Layer.mock(VcsStatusBroadcaster)({}),
   Layer.mock(VoiceSessionServiceV2)({}),
-).pipe(Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)));
+).pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(Layer.merge(NodeServices.layer, MeshTestServices.platform), NodeCrypto.layer),
+  ),
+);
 
 const utf8Bytes = (text: string) => Buffer.byteLength(text, "utf8");
 
@@ -145,9 +150,15 @@ it.effect("agent context matches the committed budget", () =>
     ).toEqual(budget);
   }).pipe(
     Effect.provide(
-      McpHttpServer.layerTools.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provide(toolHandlerServices),
+      Layer.provideMerge(
+        Layer.provideMerge(
+          McpHttpServer.layerTools.pipe(
+            Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+            Layer.provide(toolHandlerServices),
+          ),
+          MeshTestServices.services,
+        ),
+        MeshTestServices.required,
       ),
     ),
   ),

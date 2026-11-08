@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 . scripts/mesh-e2e/round1.sh
 set -e
 unset MESH_E2E_HELPERS_ONLY
-CTL="$HOME/.agents/skills/t3-next/scripts/t3ctl.mjs"
+CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
 for m in nodeA nodeB cloud; do
 cat > "$WORK/t3-$m" <<WRAP
 #!/usr/bin/env bash

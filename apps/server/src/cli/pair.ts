@@ -3,7 +3,7 @@ import {
   AuthStandardClientScopes,
   ExecutionEnvironmentDescriptor,
   ORCHESTRATION_PROTOCOL_VERSION,
-  PortSchema,
+  PortNumber,
 } from "@t3tools/contracts";
 import { resolveWorktreeT3Home } from "@t3tools/shared/devHome";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -468,7 +468,7 @@ const tailscaleFlag = Flag.Boolean("tailscale").pipe(
 );
 
 const tailscaleServePortFlag = Flag.Int("tailscale-serve-port").pipe(
-  Flag.withSchema(PortSchema),
+  Flag.withSchema(PortNumber),
   Flag.withDescription("HTTPS port for Tailscale Serve when --tailscale is enabled."),
   Flag.withDefault(DEFAULT_TAILSCALE_SERVE_PORT),
 );

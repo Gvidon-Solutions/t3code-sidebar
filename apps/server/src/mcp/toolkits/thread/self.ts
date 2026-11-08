@@ -1,11 +1,11 @@
+import * as ReplicaRuntimeService from "../../../replicas/ReplicaRuntime.ts";
 import { logicalProjectKeyForRecord } from "@t3tools/shared/meshLayout";
 import { ServerEnvironment } from "../../../environment/ServerEnvironment.ts";
-import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
+
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
-import { ReplicaRuntime } from "../../../replicas/ReplicaRuntime.ts";
-import { ProjectReplicaService } from "../../../replicas/ProjectReplicaService.ts";
+
 import { ProjectService } from "../../../project/ProjectService.ts";
 import { PeerLinks } from "../../../peer/PeerLinks.ts";
 import { primarySshCommand } from "../../../replicas/ReplicaInstructions.ts";
@@ -18,19 +18,17 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
     scope,
     threads,
   } = yield* readThread(undefined, ["subagents"]);
-  const mesh = yield* Effect.serviceOption(MeshLayoutService);
-  const projects = yield* Effect.serviceOption(ProjectService);
-  const replicas = yield* Effect.serviceOption(ProjectReplicaService);
-  const links = yield* Effect.serviceOption(PeerLinks);
-  const config = Option.isSome(mesh)
-    ? (yield* mesh.value.read).config
-    : DEFAULT_SERVER_SETTINGS.sidebarWorkspaces;
-  const projectOption = Option.isSome(projects)
-    ? yield* projects.value.getById(thread.projectId).pipe(Effect.mapError(unavailable))
-    : Option.none();
+  const mesh = yield* MeshLayoutService;
+  const projects = yield* ProjectService;
+  const replicas = yield* ReplicaRuntimeService.getService.pipe(Effect.mapError(unavailable));
+  const links = yield* PeerLinks;
+  const config = (yield* mesh.read).config;
+  const projectOption = yield* projects
+    .getById(thread.projectId)
+    .pipe(Effect.mapError(unavailable));
   const project = Option.getOrUndefined(projectOption);
-  const server = yield* Effect.serviceOption(ServerEnvironment);
-  const descriptor = Option.isSome(server) ? yield* server.value.getDescriptor : undefined;
+  const server = yield* ServerEnvironment;
+  const descriptor = yield* server.getDescriptor;
   const machine = (id: string) => {
     const label =
       config.machines[id]?.label ??
@@ -69,15 +67,7 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
         : []))
     : [];
   const representation = representations.find((rep) => rep.environmentId === scope.environmentId);
-  const runtime = yield* Effect.serviceOption(ReplicaRuntime);
-  const live = Option.isSome(replicas)
-    ? yield* replicas.value.status
-    : Option.isSome(runtime)
-      ? yield* runtime.value.get.pipe(
-          Effect.flatMap((service) => service.status),
-          Effect.mapError(unavailable),
-        )
-      : [];
+  const live = yield* replicas.status;
   const status = live.find(
     (row) => row.logicalKey === logicalKey && row.environmentId === scope.environmentId,
   );
@@ -99,9 +89,7 @@ export const threadSelf = Effect.fn("mcp.threadSelf")(function* () {
     project.title === basename(project.workspaceRoot)
       ? basename(primary.path)
       : project?.title);
-  const linked = Option.isSome(links)
-    ? yield* links.value.list.pipe(Effect.mapError(unavailable))
-    : [];
+  const linked = yield* links.list.pipe(Effect.mapError(unavailable));
   return {
     threadId: thread.id,
     title: thread.title,

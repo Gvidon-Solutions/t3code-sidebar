@@ -9,3 +9,18 @@ export function resolveSshHost(host: string | undefined): string {
     throw new Error("SSH host must be a configured alias, DNS name or IP address.");
   return host;
 }
+
+export function resolveMeshHost(
+  settings:
+    | {
+        readonly ssh?: { readonly mode?: "managed" | "existing" | "off" };
+        readonly machines?: Readonly<Record<string, { readonly ssh?: { readonly host?: string } }>>;
+      }
+    | undefined,
+  machine: string,
+): string | undefined {
+  if (settings?.ssh?.mode === "off") return undefined;
+  const host =
+    settings?.ssh?.mode === "existing" ? settings.machines?.[machine]?.ssh?.host : `t3-${machine}`;
+  return host === undefined ? undefined : resolveSshHost(host);
+}

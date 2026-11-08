@@ -1,3 +1,4 @@
+import { INCOMPLETE_BACKUP_RETENTION_MS, COMPLETED_BACKUP_LIMIT } from "./retention.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- SQLite's online backup API creates a consistent pre-download snapshot while the server is running.
 import * as NodeSqlite from "node:sqlite";
 import { MeshConfigError } from "@t3tools/contracts";
@@ -37,7 +38,7 @@ export const layer = Layer.effect(
         if (yield* fs.exists(destination)) {
           snapshots.push({ directory, modified });
           yield* fs.remove(destination + ".tmp", { force: true });
-        } else if (directory !== current && now - modified > 24 * 60 * 60 * 1000) {
+        } else if (directory !== current && now - modified > INCOMPLETE_BACKUP_RETENTION_MS) {
           yield* fs.remove(directory, { recursive: true });
         }
       }
@@ -47,7 +48,7 @@ export const layer = Layer.effect(
           b.modified - a.modified ||
           (a.directory < b.directory ? -1 : a.directory > b.directory ? 1 : 0),
       );
-      for (const snapshot of snapshots.slice(10))
+      for (const snapshot of snapshots.slice(COMPLETED_BACKUP_LIMIT))
         yield* fs.remove(snapshot.directory, { recursive: true });
     });
     return MeshStateBackup.of({

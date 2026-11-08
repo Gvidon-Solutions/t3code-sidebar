@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -38,7 +40,7 @@ import * as SqlError from "effect/sql/SqlError";
 import * as Stream from "effect/Stream";
 
 import { toolOutputImages } from "@t3tools/shared/toolOutput";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as EventSink from "./EventSink.ts";
@@ -59,12 +61,13 @@ import {
   selectInheritedBackgroundTurnItems,
 } from "./RunExecutionService.ts";
 
-const layerTestDatabase = SqlitePersistence.layerMemory;
+const layerTestDatabase = MeshTestServices.layerMemory;
 const layerTestStores = Layer.merge(EventStore.layer, ProjectionStore.layer).pipe(
   Layer.provide(layerTestDatabase),
 );
 
 const layerTestEventSink = EventSink.layer.pipe(
+  Layer.provide(RequiredAdmission.layer),
   Layer.provide(Layer.mergeAll(layerTestStores, layerTestDatabase)),
 );
 

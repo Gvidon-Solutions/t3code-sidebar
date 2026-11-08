@@ -15,7 +15,7 @@ it.effect.each([
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "n1-facts-" });
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-facts-" });
     if (key)
       yield* fs.writeFileString(path.join(directory, "ssh_host_ed25519_key.pub"), `${key}\n`);
     yield* fs.writeFileString(path.join(directory, "sshd_config"), config);

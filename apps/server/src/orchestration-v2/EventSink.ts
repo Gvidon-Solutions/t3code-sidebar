@@ -1,4 +1,4 @@
-import { isDeliveryUpdating, DELIVERY_UPDATING } from "@t3tools/contracts";
+import { isDeliveryUpdating, DeliveryUpdatingError } from "@t3tools/contracts";
 import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 import {
   CommandId,
@@ -46,8 +46,7 @@ export class EventSinkWriteError extends Schema.TaggedError<EventSinkWriteError>
   },
 ) {
   override get message(): string {
-    if (isDeliveryUpdating(this.cause))
-      return `${DELIVERY_UPDATING}: server is updating; retry this command`;
+    if (isDeliveryUpdating(this.cause)) return new DeliveryUpdatingError().message;
     return `Failed to write ${this.eventCount} orchestration V2 event(s).`;
   }
 }
@@ -207,6 +206,7 @@ export class EventSinkV2 extends Context.Service<EventSinkV2, EventSinkV2Shape>(
 const layerBase: Layer.Layer<
   EventSinkV2,
   never,
+  | DeliveryAdmission
   | CommandReceiptStore.CommandReceiptStoreV2
   | EffectOutbox.EffectOutboxV2
   | EventStore.EventStoreV2
@@ -218,7 +218,7 @@ const layerBase: Layer.Layer<
   EventSinkV2,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const admission = yield* Effect.serviceOption(DeliveryAdmission);
+    const admission = yield* DeliveryAdmission;
     const commandReceipts = yield* CommandReceiptStore.CommandReceiptStoreV2;
     const effectOutbox = yield* EffectOutbox.EffectOutboxV2;
     const eventStore = yield* EventStore.EventStoreV2;
@@ -257,7 +257,7 @@ const layerBase: Layer.Layer<
         .pipe(
           Effect.andThen(eventStore.publishCommitted(events)),
           Effect.andThen(publishLiveEvents(events)),
-          Effect.andThen(Option.isSome(admission) ? admission.value.notify : Effect.void),
+          Effect.andThen(admission.notify),
         );
 
     // Serialize commit and publish; reordered publication makes clients drop earlier sequences.
@@ -343,25 +343,27 @@ const layerBase: Layer.Layer<
             : [],
         ),
       );
-      return (Option.isSome(admission) ? admission.value.guard(events) : Effect.void).pipe(
-        Effect.andThen(
-          Effect.forEach(
-            events,
-            (event): Effect.Effect<OrchestrationV2DomainEvent, unknown> =>
-              event.type === "turn-item.updated"
-                ? turnItemPositions
-                    .normalize(
-                      event.payload,
-                      event.payload.runId === null
-                        ? undefined
-                        : runOrdinals.get(event.payload.runId),
-                    )
-                    .pipe(Effect.map((payload) => ({ ...event, payload })))
-                : Effect.succeed(event),
-            { concurrency: 1 },
+      return admission
+        .guard(events)
+        .pipe(
+          Effect.andThen(
+            Effect.forEach(
+              events,
+              (event): Effect.Effect<OrchestrationV2DomainEvent, unknown> =>
+                event.type === "turn-item.updated"
+                  ? turnItemPositions
+                      .normalize(
+                        event.payload,
+                        event.payload.runId === null
+                          ? undefined
+                          : runOrdinals.get(event.payload.runId),
+                      )
+                      .pipe(Effect.map((payload) => ({ ...event, payload })))
+                  : Effect.succeed(event),
+              { concurrency: 1 },
+            ),
           ),
-        ),
-      );
+        );
     };
 
     const applyStoredEvents =
@@ -459,16 +461,15 @@ const layerBase: Layer.Layer<
             events: normalized,
           });
           const outcomes = yield* applyStoredEvents(committed);
-          if (Option.isSome(admission))
-            yield* admission.value.guard(
-              [],
-              input.effects.flatMap((effect) =>
-                effect.request.type === "provider-turn.start" ||
-                effect.request.type === "provider-turn.restart"
-                  ? [effect.request.runId]
-                  : [],
-              ),
-            );
+          yield* admission.guard(
+            [],
+            input.effects.flatMap((effect) =>
+              effect.request.type === "provider-turn.start" ||
+              effect.request.type === "provider-turn.restart"
+                ? [effect.request.runId]
+                : [],
+            ),
+          );
           yield* effectOutbox.enqueue(input.effects);
           return { committed, outcomes };
         }).pipe(Effect.withTracerEnabled(false)),
@@ -528,16 +529,15 @@ const layerBase: Layer.Layer<
               events: normalized,
             });
             const outcomes = yield* applyStoredEvents(storedEvents);
-            if (Option.isSome(admission))
-              yield* admission.value.guard(
-                [],
-                (input.effects ?? []).flatMap((effect) =>
-                  effect.request.type === "provider-turn.start" ||
-                  effect.request.type === "provider-turn.restart"
-                    ? [effect.request.runId]
-                    : [],
-                ),
-              );
+            yield* admission.guard(
+              [],
+              (input.effects ?? []).flatMap((effect) =>
+                effect.request.type === "provider-turn.start" ||
+                effect.request.type === "provider-turn.restart"
+                  ? [effect.request.runId]
+                  : [],
+              ),
+            );
             yield* effectOutbox.enqueue(input.effects ?? []);
             return { committed: true as const, storedEvents, outcomes };
           }),
@@ -1038,7 +1038,10 @@ export const layerFromStores = layerBase;
 export const layer: Layer.Layer<
   EventSinkV2,
   never,
-  EventStore.EventStoreV2 | ProjectionStore.ProjectionStoreV2 | SqlClient.SqlClient
+  | DeliveryAdmission
+  | EventStore.EventStoreV2
+  | ProjectionStore.ProjectionStoreV2
+  | SqlClient.SqlClient
 > = layerBase.pipe(
   Layer.provide(
     Layer.mergeAll(

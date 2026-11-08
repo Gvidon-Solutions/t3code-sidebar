@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 // @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises the filesystem boundary.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -63,7 +64,7 @@ describe("t3 theme", () => {
       assert.equal(settings.defaultTheme, "ocean");
       assert.equal(settings.enableProviderUpdateChecks, false);
       assert.deepEqual(settings.somethingFromANewerBuild, { nested: true });
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("clears the default back to leaving fresh clients alone", () =>
@@ -77,7 +78,7 @@ describe("t3 theme", () => {
       const settings = readSettings(baseDir);
       assert.equal(Object.hasOwn(settings, "defaultTheme"), false);
       assert.equal(settings.enableProviderUpdateChecks, false);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("publishes a theme file under its filename and sets it", () =>
@@ -95,7 +96,7 @@ describe("t3 theme", () => {
         (entry) => !entry.endsWith(".json"),
       );
       assert.deepEqual(residue, []);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("rejects a file that is not a theme and sets nothing", () =>
@@ -111,7 +112,7 @@ describe("t3 theme", () => {
       assert.include(String(failure), "not a valid theme file");
       assert.equal(NodeFS.existsSync(NodePath.join(baseDir, "userdata", "themes")), false);
       assert.equal(NodeFS.existsSync(settingsPathFor(baseDir)), false);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect.skipIf(!symlinksSupported)("never writes through a symlink at the staging path", () =>
@@ -129,7 +130,7 @@ describe("t3 theme", () => {
 
       assert.equal(NodeFS.readFileSync(victim, "utf8"), "precious");
       assert.equal(readSettings(baseDir).defaultTheme, "nightfall");
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect.skipIf(windowsHost)("restores the previous theme when a re-publish fails to set", () =>
@@ -153,7 +154,7 @@ describe("t3 theme", () => {
       } finally {
         NodeFS.chmodSync(userdataDir, 0o755);
       }
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect.skipIf(windowsHost)("refuses to write when the settings file cannot be read", () =>
@@ -170,6 +171,6 @@ describe("t3 theme", () => {
       assert.include(String(failure), "Could not read");
       assert.equal(readSettings(baseDir).enableProviderUpdateChecks, false);
       assert.equal(Object.hasOwn(readSettings(baseDir), "defaultTheme"), false);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 });

@@ -1,3 +1,4 @@
+import { MeshRollout } from "./mesh/MeshRollout.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/contracts";
@@ -72,6 +73,11 @@ it.effect("parks automatic pull until activation without delaying command readin
       const dependencies: Layer.Layer<
         Layer.Services<ReturnType<typeof ServerRuntimeStartup.layerWithOptions>>
       > = Layer.mergeAll(
+        Layer.mock(MeshRollout)({
+          trial: false,
+          checkTrial: Effect.void,
+          finishTrial: Effect.void,
+        }),
         Layer.mock(ServerConfig.ServerConfig)({
           ...(yield* ServerConfig.deriveServerPaths(cwd, undefined).pipe(
             Effect.provide(Path.layer),

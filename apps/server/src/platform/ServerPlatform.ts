@@ -74,20 +74,41 @@ export const nodeCommand = (source: string, platform = "linux") =>
     false,
   );
 
-export function sshArguments(host: string, sshHome?: string): string[] {
-  resolveSshHost(host);
+export const sshConfigPath = (home: string) => NodePath.join(home, ".ssh", "config");
+export function sshOptions(
+  options: {
+    readonly configPath?: string | undefined;
+    readonly batchMode?: boolean;
+    readonly connectTimeoutSeconds?: number;
+    readonly aliveIntervalSeconds?: number;
+    readonly aliveCount?: number;
+    readonly connectionAttempts?: number;
+    readonly exitOnForwardFailure?: boolean;
+  } = {},
+): string[] {
   return [
-    ...(sshHome ? ["-F", `${sshHome.replace(/[\\/]$/, "")}/.ssh/config`] : []),
+    ...(options.configPath ? ["-F", options.configPath] : []),
     "-o",
-    "BatchMode=yes",
+    `BatchMode=${options.batchMode === false ? "no" : "yes"}`,
     "-o",
-    "ConnectTimeout=10",
+    `ConnectTimeout=${options.connectTimeoutSeconds ?? 10}`,
+    ...(options.connectionAttempts === undefined
+      ? []
+      : ["-o", `ConnectionAttempts=${options.connectionAttempts}`]),
     "-o",
-    "ServerAliveInterval=15",
+    `ServerAliveInterval=${options.aliveIntervalSeconds ?? 15}`,
     "-o",
-    "ServerAliveCountMax=2",
+    `ServerAliveCountMax=${options.aliveCount ?? 2}`,
+    ...(options.exitOnForwardFailure === undefined
+      ? []
+      : ["-o", `ExitOnForwardFailure=${options.exitOnForwardFailure ? "yes" : "no"}`]),
+  ];
+}
+export function sshArguments(host: string, sshHome?: string): string[] {
+  return [
+    ...sshOptions({ configPath: sshHome ? sshConfigPath(sshHome) : undefined }),
     "--",
-    host,
+    resolveSshHost(host),
   ];
 }
 
@@ -249,32 +270,68 @@ export const nativeInvocation = (
   environment = process.env,
 ) => Effect.runSync(resolveInvocation(command, args, environment));
 
-export const WORKER_PLATFORM_SOURCE = String.raw`
-const root = path.join(os.tmpdir(), 't3-run-' + (process.getuid ? process.getuid() : 'user'), c.namespace);
-const address = id => process.platform === 'win32' ? '\\\\.\\pipe\\t3-run-' + c.namespace + '-' + id : path.join(root, id + '.sock');
-function privateStat(s) { return s.isDirectory() && !(process.platform !== 'win32' && (s.uid !== process.getuid() || (s.mode & 0o077))); }
-async function protectSocket(address) { if (process.platform !== 'win32') await fsp.chmod(address, 0o600); }
-function groupAlive(pid) {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
-  try { process.kill(process.platform === 'win32' ? pid : -pid, 0); return true; }
-  catch(error) { if (error.code === 'ESRCH') return false; throw error; }
-}
-function signalGroup(pid, sig, emit) {
-  if (!groupAlive(pid)) return;
-  if (process.platform === 'win32') {
-    const killer = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {stdio:'ignore'});
-    killer.on('error', error => emit({type:'error',message:error.message}));
-  } else {
-    try { process.kill(-pid,sig); } catch(error) { if (error.code !== 'ESRCH') throw error; }
+export function workerPlatform(
+  requireNode: NodeRequire,
+  namespace: string,
+  spawn: (
+    command: string,
+    args: string[],
+    options: import("node:child_process").SpawnOptions,
+  ) => import("node:child_process").ChildProcess,
+) {
+  const path = requireNode("node:path") as typeof import("node:path");
+  const os = requireNode("node:os") as typeof import("node:os");
+  const fsp = requireNode("node:fs/promises") as typeof import("node:fs/promises");
+  const root = path.join(
+    os.tmpdir(),
+    "t3-run-" + (process.getuid ? process.getuid!() : "user"),
+    namespace,
+  );
+  const address = (id: string) =>
+    process.platform === "win32"
+      ? "\\\\.\\pipe\\t3-run-" + namespace + "-" + id
+      : path.join(root, id + ".sock");
+  function privateStat(s: import("node:fs").Stats) {
+    return (
+      s.isDirectory() &&
+      !(process.platform !== "win32" && (s.uid !== process.getuid!() || s.mode & 0o077))
+    );
   }
+  async function protectSocket(address: string) {
+    if (process.platform !== "win32") await fsp.chmod(address, 0o600);
+  }
+  function groupAlive(pid: number | undefined) {
+    if (!Number.isSafeInteger(pid) || pid === undefined || pid <= 0) return false;
+    try {
+      process.kill(process.platform === "win32" ? pid! : -pid!, 0);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+      throw error;
+    }
+  }
+  function signalGroup(
+    pid: number | undefined,
+    sig: NodeJS.Signals,
+    emit: (frame: { type: string; message: string }) => unknown,
+  ) {
+    if (!groupAlive(pid)) return;
+    if (process.platform === "win32") {
+      const killer = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+      killer.on("error", (error) => emit({ type: "error", message: error.message }));
+    } else {
+      try {
+        process.kill(-pid!, sig);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      }
+    }
+  }
+  return { root, address, privateStat, protectSocket, groupAlive, signalGroup };
 }
-`;
 
 export const executableName = (program: string, platform: string) =>
   platform === "win32" ? `${program}.exe` : program;
-
-export const mutagenTarget = (platform: string, architecture: string) =>
-  `${platform === "win32" ? "windows" : platform}_${architecture === "x64" ? "amd64" : architecture}`;
 
 export const agentSkillDirectories = (home: string, platform: string) => {
   const paths = platform === "win32" ? NodePath.win32 : NodePath.posix;

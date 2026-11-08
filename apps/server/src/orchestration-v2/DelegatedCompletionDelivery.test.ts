@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -31,7 +32,7 @@ import * as Tracer from "effect/Tracer";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as McpSessionRegistryTestkit from "../mcp/McpSessionRegistry.testkit.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ProjectEnrichmentService from "../project/ProjectEnrichmentService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
@@ -144,12 +145,13 @@ const layerTest = Layer.mergeAll(
   ),
   Layer.provide(McpSessionRegistryTestkit.layer),
   Layer.provide(McpProviderSessions.layer),
-  Layer.provide(SqlitePersistence.layerMemory),
+  Layer.provide(MeshTestServices.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   Layer.provide(layerServerConfig),
   Layer.provide(ServerSettings.layerTest()),
   Layer.provide(layerTestProviderInstanceRegistry),
   Layer.provide(layerPlatformTest),
+  Layer.provideMerge(MeshTestServices.platform),
 );
 
 const seedParentWithTerminalTask = (input: {
@@ -3292,7 +3294,13 @@ it.layer(layerTest)("delegated tasks across a server restart", (it) => {
                   ...providerThread,
                   pendingBackgroundTasks: [
                     ...(open
-                      ? [{ taskId: "sleep-900", kind: "command" as const, awaited: true as const }]
+                      ? [
+                          {
+                            taskId: "sleep-900",
+                            kind: "command" as const,
+                            awaited: true as const,
+                          },
+                        ]
                       : []),
                     { taskId: "log-watcher", kind: "monitor" as const },
                   ],
@@ -3319,7 +3327,12 @@ it.layer(layerTest)("delegated tasks across a server restart", (it) => {
             status: "completed",
             now,
           }),
-          payload: { ...child.run, status: "completed" as const, startedAt: now, completedAt: now },
+          payload: {
+            ...child.run,
+            status: "completed" as const,
+            startedAt: now,
+            completedAt: now,
+          },
         });
 
         const beforeEnd = yield* sink.latestSequence();

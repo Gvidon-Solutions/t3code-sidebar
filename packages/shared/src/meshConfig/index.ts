@@ -218,4 +218,4 @@ export const conflictWinner = (
 
 export { repairMachineIdentity, renameMachineBindings, localMachineClaim } from "./identity.ts";
 
-export { resolveSshHost } from "./sshHost.ts";
+export { resolveSshHost, resolveMeshHost } from "./sshHost.ts";

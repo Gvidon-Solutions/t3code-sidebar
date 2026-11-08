@@ -27,7 +27,7 @@ const encode = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 export const interceptForkRequest = Effect.fn("ForkMcp.interceptRequest")(function* (
   request: HttpServerRequest.HttpServerRequest,
   scope: McpInvocationScope,
-  service: Option.Option<ThreadForkService["Service"]>,
+  service: ThreadForkService["Service"],
   enabled: boolean,
 ) {
   if (request.method !== "POST") return undefined;
@@ -43,11 +43,10 @@ export const interceptForkRequest = Effect.fn("ForkMcp.interceptRequest")(functi
   );
   if (!linkAllowsDomain(receiver.domain, permissions, scope.client.peerEnvironmentId !== undefined))
     return HttpServerResponse.jsonUnsafe({ error: "link_threads_denied" }, { status: 403 });
-  if (Option.isNone(service))
-    return HttpServerResponse.jsonUnsafe({ error: "fork_unavailable" }, { status: 503 });
+
   const result = yield* decodeInput(call.value.params.arguments).pipe(
     Effect.flatMap((input) =>
-      service.value.receive(input, {
+      service.receive(input, {
         ...clientModeCeiling(scope.client),
         ...(!permissions.replicas ? { replicas: false } : {}),
       }),

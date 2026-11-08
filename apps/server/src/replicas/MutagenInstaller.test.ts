@@ -163,7 +163,7 @@ it.effect.each(platforms)("installs the pinned $asset executable and agents, onc
 it.effect("times out a stalled download before extraction", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const root = yield* fs.makeTempDirectoryScoped({ prefix: "s1-installer-timeout-" });
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-installer-timeout-" });
     const entered = yield* Deferred.make<void>();
     const stalled = Layer.succeed(
       HttpClient.HttpClient,

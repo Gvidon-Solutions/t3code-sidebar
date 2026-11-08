@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
 import { EnvironmentId } from "@t3tools/contracts";
@@ -110,5 +111,13 @@ it.effect(
       expect(failure).toContain("stale_revision");
       expect(failure).toContain("$.future");
       expect(failure).toContain("current");
-    }).pipe(Effect.scoped, Effect.provide(NodeHttpServer.layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.services),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );

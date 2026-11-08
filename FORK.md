@@ -109,6 +109,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — C3 required mesh services and shared server runtime
+
+- Mesh services now have explicit production dependencies and test layers. Updating refusals preserve a `DeliveryUpdatingError` tag through RPC/MCP; clients and the CLI retry that tag.
+- The remote run worker is compiled TypeScript. Older runtimes receive source generated from those same functions. Downloads verify SHA-256 through one helper; SSH options, bounded socket reads and retry schedules share their platform rules. Timer scaling is an injected Context reference, while retention stays fixed.
+- Peer identity upgrade reads belong to the auth service. Server fixture environment names use `MESH_E2E_*`. Shared rules are exercised by delivery, runtime, socket, SSH, timing and identity tests.
+
 ### 2026-11-08 — T1 bounded host admission and reboot recovery
 
 Fast acceptance uses the configured builder host with an eight-mesh default,
@@ -1706,7 +1712,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 
 ### 2026-10-10 — Workspace sidebar
 
-- **What.** Workspaces (e.g. personal / vtbfamily / potentialplus / eduplatform) as square
+- **What.** Workspaces (e.g. personal / studio / research / learning) as square
   tiles at the bottom, current workspace name at the top, one toggle (Alt+0) to see every
   workspace in one list. Projects are folders with one-line threads in a stable order, a
   Quiet projects group, pinned and snoozed sections, search, context menus, Alt+1…9 to switch
@@ -1864,3 +1870,23 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **What:** Existing sync sessions remain adoptable after machine display titles change.
 - **How:** Resolve their endpoints through the stable machine bindings and managed or existing SSH hosts; ambiguous hosts remain rejected.
 - **Where:** `apps/server/src/replicas/adoptionModel.ts`, `ProjectReplicaService.ts` and their tests.
+
+### 2026-11-08 — C3 public repository hygiene
+
+- **What.** Remove captured bed output and personal fixture names from public sources.
+- **How.** The leakage guard covers private hosts, project names and legacy server paths in
+  scripts/docs. Workflow policy now checks every workflow for explicit read permissions and
+  immutable action revisions; Node setup reads the root package metadata.
+- **Where.** `scripts/public-repo-leakage.test.ts`, `scripts/security-workflows.test.ts`,
+  `.github/workflows/`, mesh evaluation and workspace fixtures.
+
+### 2026-11-08 — C3 shared mesh primitives
+
+- **What.** Keep hop identity checks and pinned Mutagen release metadata consistent across
+  transports and installation fixtures. Retention durations remain real time in accelerated tests.
+- **How.** Shared peer header parsing/formatting and relay validation; one Mutagen release catalog;
+  named tombstone, receipt and backup retention; a common TCP port schema. The replica layout
+  fixture lives under testFixtures. Retired bed runners are removed; platform smoke uses the fast
+  client's RPC/MCP implementation. Round two accepts isolated source paths and titles.
+- **Where.** `peer/connection/peerIdentity.ts`, `platform/mutagenRelease.ts`, `mesh/retention.ts`,
+  contracts `baseSchemas.ts`, `scripts/lib/shell.mjs` and mesh acceptance scripts.

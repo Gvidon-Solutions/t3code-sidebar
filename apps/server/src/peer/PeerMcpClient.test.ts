@@ -1,3 +1,5 @@
+import { DeliveryUpdatingError, isDeliveryUpdating } from "@t3tools/contracts";
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
@@ -109,10 +111,27 @@ it.effect.each([false, true])(
         yield* Deferred.succeed(release, undefined);
         if (!cancelFirst) expect(yield* Fiber.join(held)).toEqual({ modes: "auto/default" });
       }),
-    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(
+            Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+            MeshTestServices.platform,
+          ),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );
 
-it.effect("keeps a link healthy when the peer refuses a call", () =>
+it.effect.each([
+  refusal,
+  new OrchestratorMcpFailure({
+    code: "orchestration_error",
+    message: "Updating",
+    cause: new DeliveryUpdatingError(),
+  }),
+])("keeps a link healthy when the peer refuses a call: $message", (refusal) =>
   Effect.scoped(
     Effect.gen(function* () {
       const handlers = McpToolAccess.toLayer(toolkit, {
@@ -140,10 +159,21 @@ it.effect("keeps a link healthy when the peer refuses a call", () =>
         .pipe(Effect.flip);
       // The agent hears the peer's own refusal; the link answered, so it is not failing.
       expect(refused).toMatchObject({ code: refusal.code, message: refusal.message });
+      expect(isDeliveryUpdating(refused)).toBe(isDeliveryUpdating(refusal));
       const link = yield* links.get(box.environmentId);
       expect(link._tag === "Some" ? link.value.lastError : "missing").toBeNull();
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("renews a missing peer session once and preserves creation keys through renewal", () =>
@@ -249,7 +279,15 @@ it.effect("renews a missing peer session once and preserves creation keys throug
     expect(requestKeys[5]).toBe(requestKeys[2]);
     expect(requestKeys[6]).toMatch(/^peer:[0-9a-f]{64}$/);
     expect(requestKeys[6]).not.toBe(requestKeys[2]);
-  }).pipe(Effect.scoped),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 it.effect.each([false, true])(
   "evicts unauthorized sessions even when renewal fails (renewal: %s)",
@@ -328,7 +366,15 @@ it.effect.each([false, true])(
       expect(yield* call()).toEqual({ modes: "full-access/default" });
       expect(sessionHeaders[prefix.length]).toBeUndefined();
       expect(sessionHeaders.at(-1)).toBe("fresh");
-    }).pipe(Effect.scoped),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );
 it.effect("keeps bearer credentials out of HTTP session cache identities", () =>
   Effect.gen(function* () {
@@ -344,5 +390,15 @@ it.effect("keeps bearer credentials out of HTTP session cache identities", () =>
     expect(
       yield* PeerMcpClient.peerHttpSessionKey("https://peer.example", "rotated-secret"),
     ).not.toBe(key);
-  }).pipe(Effect.provide(NodeCrypto.layer)),
+  }).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeCrypto.layer, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );

@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import {
   ProviderInstanceId,
   RunId,
@@ -47,6 +49,7 @@ it("uses the thread provider for stale background work without provider threads"
     ],
   } as unknown as OrchestrationV2ThreadProjection;
   const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.mergeAll(
@@ -78,5 +81,5 @@ it("uses the thread provider for stale background work without provider threads"
     );
     expect(event?.providerInstanceId).toBe(providerInstanceId);
     expect(event?.type === "turn-item.updated" ? event.payload.status : null).toBe("cancelled");
-  }).pipe(Effect.provide(layer), Effect.runPromise);
+  }).pipe(Effect.provide(layer), MeshTestServices.runPromise);
 });

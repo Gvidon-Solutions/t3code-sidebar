@@ -577,7 +577,7 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
     host: wslBindHost,
     desktopBootstrapToken: input.bootstrapToken,
     desktopBootstrapSecret: input.bootstrapSecret,
-    // PortSchema rejects 0 even when Tailscale Serve is disabled.
+    // PortNumber rejects 0 even when Tailscale Serve is disabled.
     tailscaleServeEnabled: false,
     tailscaleServePort: 443,
     ...buildObservabilityFragment(input.observabilitySettings),

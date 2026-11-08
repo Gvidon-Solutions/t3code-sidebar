@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as NodeUtil from "node:util";
 
@@ -28,7 +29,7 @@ import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 
@@ -157,7 +158,7 @@ it.effect("loads only due tasks and skips corrupt due rows without decoding sett
       last_run_status: string;
     }>`SELECT last_run_status FROM scheduled_tasks WHERE task_id = 'running'`;
     assert.equal(running[0]?.last_run_status, "running");
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect(
@@ -258,7 +259,7 @@ it.effect(
       assert.isNull(byId.get("due-huge")?.next_run_at);
       assert.equal(byId.get("due-bad-date")?.last_run_status, "never");
       assert.equal(byId.get("due-bad-date")?.run_count, 0);
-    }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect(
@@ -337,7 +338,7 @@ it.effect(
           yield* Deferred.succeed(releaseLast, undefined);
         }),
       );
-    }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("thread cleanup notifies subscribers and a finishing run cannot recreate the task", () =>
@@ -407,7 +408,7 @@ it.effect("thread cleanup notifies subscribers and a finishing run cannot recrea
       yield* Fiber.join(run);
       assert.lengthOf((yield* service.list()).tasks, 0);
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("a bound run follows its thread when promotion moves it mid-send", () =>
@@ -482,7 +483,7 @@ it.effect("a bound run follows its thread when promotion moves it mid-send", () 
       );
       assert.equal(new Set(attempts.map((attempt) => attempt.commandId)).size, 1);
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("refuses saving an enabled task above the policy ceiling", () =>
@@ -548,7 +549,7 @@ it.effect("refuses saving an enabled task above the policy ceiling", () =>
         interactionMode: "default",
       });
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("a run interrupted right after it reserves the task does not block the next run", () =>
@@ -616,5 +617,5 @@ it.effect("a run interrupted right after it reserves the task does not block the
       assert.equal(second.threadId, ThreadId.make("thread:launched"));
       assert.equal(yield* Ref.get(launches), 1);
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );

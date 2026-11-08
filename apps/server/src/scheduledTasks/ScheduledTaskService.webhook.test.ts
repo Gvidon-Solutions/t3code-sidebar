@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Effect's Crypto has no createHmac.
 import * as NodeCrypto from "node:crypto";
 
@@ -28,7 +29,7 @@ import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as ScheduledTaskService from "./ScheduledTaskService.ts";
 import { renderWebhookPrompt } from "./webhookTemplate.ts";
@@ -266,7 +267,7 @@ const withService = <A, E>(
   }).pipe(
     Effect.provide(
       options.sql === undefined
-        ? SqlitePersistence.layerMemory
+        ? MeshTestServices.layerMemory
         : Layer.succeed(SqlClient.SqlClient, options.sql),
     ),
   );
@@ -1830,7 +1831,7 @@ it.effect("dispatches an overdue window exactly once after its deadline passed w
         }),
       { sql, workers: secondRestartWorkers },
     );
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("removes a window with a render defect and dispatches the task's next window", () => {

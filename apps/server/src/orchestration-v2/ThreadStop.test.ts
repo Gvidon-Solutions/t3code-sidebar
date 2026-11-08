@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -27,7 +29,6 @@ import * as Stream from "effect/Stream";
 import * as EventStore from "./EventStore.ts";
 import * as TestClock from "effect/testing/TestClock";
 
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import { CLAUDE_PROVIDER } from "./Adapters/ClaudeAdapterV2.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
@@ -51,14 +52,14 @@ const adapter = {
   planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" as const }),
   openSession: () => Effect.die("Runs here never reach a provider"),
 } as ProviderAdapter.ProviderAdapterV2["Service"];
-const layerDatabase = SqlitePersistence.layerMemory;
+const layerDatabase = MeshTestServices.layerMemory;
 const layerTest = ThreadManagementService.layer.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
       layerDatabase,
       ProjectionStore.layer.pipe(Layer.provide(layerDatabase)),
       EventStore.layer.pipe(Layer.provide(layerDatabase)),
-      EffectOutbox.layer.pipe(Layer.provide(layerDatabase)),
+      EffectOutbox.layer.pipe(Layer.provide(RequiredAdmission.layer), Layer.provide(layerDatabase)),
       ProviderReplayHarness.layerWithRegistry(
         { name: "thread-stop" },
         ProviderAdapterRegistry.layerFromAdapters([adapter]),

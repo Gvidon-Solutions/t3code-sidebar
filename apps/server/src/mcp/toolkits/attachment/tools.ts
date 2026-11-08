@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import * as Digest from "effect/crypto/Digest";
 import { McpAttachmentInput } from "./input.ts";
@@ -25,6 +26,7 @@ const shared = {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     ServerConfig.ServerConfig,
@@ -53,7 +55,7 @@ const AttachmentDiscardTool = Tool.make("t3_attachment_discard", {
   .annotate(Tool.Destructive, true);
 const AttachmentSendTool = Tool.make("t3_thread_send_attachments", {
   ...shared,
-  dependencies: [...shared.dependencies, DocumentText.DocumentText],
+  dependencies: [MeshLayoutService, ...shared.dependencies, DocumentText.DocumentText],
   description:
     "Send uploaded attachments as a new message to a thread. No retry key. Target modes cannot exceed yours. Success does not mean the provider read them or finished.",
   parameters: Schema.Struct({

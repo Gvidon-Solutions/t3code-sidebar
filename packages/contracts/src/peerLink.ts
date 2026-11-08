@@ -129,3 +129,10 @@ export class PeerLinkRequestError extends Schema.TaggedError<PeerLinkRequestErro
     return PEER_LINK_REQUEST_FAILURE_MESSAGES[this.reason];
   }
 }
+
+export const PeerIdentitySource = Schema.Literals([
+  "pairing-code",
+  "mutual-grant",
+  "legacy-local-link",
+]);
+export type PeerIdentitySource = typeof PeerIdentitySource.Type;

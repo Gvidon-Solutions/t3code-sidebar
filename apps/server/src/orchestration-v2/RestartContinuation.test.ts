@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { assert, it } from "@effect/vitest";
 import {
   MessageId,
@@ -232,7 +233,7 @@ it.effect.each(["completed", "waiting", "cancelled"] as const)(
       assert.equal(command.restartContinuationOfRunId, runId);
       assert.include(command.text, "- monitor: Watch CI run 42");
       assert.include(command.text, "- shell: vp run dev");
-    }),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect.each([
@@ -292,7 +293,7 @@ it.effect.each([
           type: "provider-runtime.continue",
           sourceRunId: runId,
         });
-    }),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("lets a cut blocking delegate_task wake its parent like an async task", () =>
@@ -348,7 +349,7 @@ it.effect("lets a cut blocking delegate_task wake its parent like an async task"
       upgraded.map((row) => ({ id: row.id, completionWake: row.completionWake })),
       [{ id: NodeId.make("task:waited"), completionWake: "always" }],
     );
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect.each(["running", "waiting"])(
@@ -425,7 +426,7 @@ it.effect.each(["running", "waiting"])(
         committed?.effects.map((effect) => effect.request),
         [{ type: "provider-runtime.continue", sourceRunId: runId }],
       );
-    }),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("does not duplicate delivery and yields to newer user work or opt-out", () =>
@@ -486,7 +487,7 @@ it.effect("does not duplicate delivery and yields to newer user work or opt-out"
       ),
     );
     assert.lengthOf(commands, 1);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("prepares no continuation for background work another provider thread launched", () =>
@@ -562,7 +563,7 @@ it.effect("prepares no continuation for background work another provider thread 
       type: "provider-runtime.continue",
       sourceRunId: runId,
     });
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 const backgroundSubagent = {
@@ -681,7 +682,7 @@ it.effect.each([
         if (status === "completed")
           assert.isFalse(events.some((event) => event.type === "run.updated"));
       }
-    }),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it("does not wake a settled run for work left by a session that already stopped", () => {
@@ -774,7 +775,7 @@ it.effect("wakes a run whose subagent's own shell the restart cut, past a wake i
       providerTurns: [{ ...base.providerTurns[0]!, status: "completed" }],
     } as unknown as OrchestrationV2ThreadProjection);
     assert.lengthOf(stopped, 0);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("does not cancel or resume a run that completes while shutdown intent commits", () =>
@@ -839,7 +840,7 @@ it.effect("does not cancel or resume a run that completes while shutdown intent 
       ),
     );
     assert.isFalse(dispatched);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 const continuationDispatches = (
@@ -918,7 +919,7 @@ it.effect("continues a cut run past queued follow-ups, which stay held", () =>
     assert.deepEqual(texts, [
       "Continue where you left off. Your last turn was cut short, so a command or other action it started may have finished or may still be running. Before you repeat one that changes state, confirm it did not take effect and is not still running; if you cannot tell, say so instead of repeating it.",
     ]);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("continues a resumed queued run that ran after an earlier continuation", () =>
@@ -950,7 +951,7 @@ it.effect("continues a resumed queued run that ran after an earlier continuation
     assert.deepEqual(texts, [
       "Continue where you left off. Your last turn was cut short, so a command or other action it started may have finished or may still be running. Before you repeat one that changes state, confirm it did not take effect and is not still running; if you cannot tell, say so instead of repeating it.",
     ]);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it("backs off twice from a continuation the provider never took, then lets it fail", () => {
@@ -1016,7 +1017,7 @@ it.effect("continues again after a continuation fails before its prompt", () =>
       dispatches.map((command) => command.restartContinuationOfRunId),
       [failedStart.id],
     );
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect.each([
@@ -1062,7 +1063,7 @@ it.effect.each([
         ),
       );
       assert.equal(dispatched, expected);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("does not continue a run the user asked to stop before the restart", () =>
@@ -1072,7 +1073,7 @@ it.effect("does not continue a run the user asked to stop before the restart", (
       turnItems: [{ id: "turn-item:interrupt", runId, type: "run_interrupt_request" }],
     } as unknown as OrchestrationV2ThreadProjection);
     assert.deepEqual(texts, []);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("does not continue a cut /compact or /logout turn", () =>
@@ -1089,7 +1090,7 @@ it.effect("does not continue a cut /compact or /logout turn", () =>
       messages: [{ id: MessageId.make("message:user"), text: "/compact later", attachments: [] }],
     } as unknown as OrchestrationV2ThreadProjection);
     assert.lengthOf(texts, 1);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect(
@@ -1127,7 +1128,7 @@ it.effect(
       assert.lengthOf(texts, 1);
       assert.include(texts[0]!, "sleep 25 && echo DONE");
       assert.notInclude(texts[0]!, "Continue where");
-    }),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("prepares later threads' continuations when one thread fails", () =>
@@ -1165,7 +1166,7 @@ it.effect("prepares later threads' continuations when one thread fails", () =>
       writes.map((write) => write.effects[0]?.request),
       [{ type: "provider-runtime.continue", sourceRunId: runId }],
     );
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect.each([
@@ -1206,7 +1207,7 @@ it.effect.each([
         runtimeRequests,
       } as unknown as OrchestrationV2ThreadProjection;
       assert.lengthOf(yield* continuationTexts(cut), shouldContinue ? 1 : 0);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("does not wake a snoozed or settled thread, but continues once a snooze elapsed", () =>
@@ -1222,7 +1223,7 @@ it.effect("does not wake a snoozed or settled thread, but continues once a snooz
     }
     const thread = { ...live.thread, snoozedUntil: DateTime.subtract(now, { minutes: 1 }) };
     assert.equal(restartContinuationRun({ ...live, thread }, now)?.id, runId);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("does not continue a run waiting on a secret the restart closed", () =>
@@ -1245,7 +1246,7 @@ it.effect("does not continue a run waiting on a secret the restart closed", () =
       }),
       1,
     );
-  }),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect.each(["completed", "failed", "interrupted"] as const)(
@@ -1260,5 +1261,5 @@ it.effect.each(["completed", "failed", "interrupted"] as const)(
         }),
         [],
       );
-    }),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );

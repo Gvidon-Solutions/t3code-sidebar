@@ -1,3 +1,4 @@
+import { mutagenTarget } from "../platform/mutagenRelease.ts";
 import {
   windowsSshWrapperInstall,
   bootstrapAskpass,
@@ -7,7 +8,6 @@ import {
 import { expect, it } from "@effect/vitest";
 import {
   executableName,
-  mutagenTarget,
   agentSkillDirectories,
   mutagenSshEnvironment,
   nodeCommand,
@@ -95,4 +95,18 @@ it("uses native Windows executable transports and askpass without putting a pass
     home: "C:\\Users\\studio",
   });
   expect(() => bootstrapRemoteRuntime("win32", "C:\\Users\\studio", "1.2.3", "relative")).toThrow();
+});
+
+it("pins the same Mutagen archive metadata for installers and fixtures", async () => {
+  const { mutagenArchiveName, mutagenReleaseUrl, mutagenChecksums, MUTAGEN_VERSION } =
+    await import("../platform/mutagenRelease.ts");
+  for (const platform of ["linux", "darwin", "win32"]) {
+    for (const architecture of ["x64", "arm64"]) {
+      const target = mutagenTarget(platform, architecture);
+      expect(mutagenChecksums[target]).toMatch(/^[0-9a-f]{64}$/);
+      expect(mutagenReleaseUrl(target)).toBe(
+        `https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/${mutagenArchiveName(target)}`,
+      );
+    }
+  }
 });

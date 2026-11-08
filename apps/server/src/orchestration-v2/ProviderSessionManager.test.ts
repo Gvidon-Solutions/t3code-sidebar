@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import * as NetAddress from "effect/net/NetAddress";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -39,7 +41,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import * as McpSessionRegistry from "../mcp/McpSessionRegistry.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ServerSettings from "../serverSettings.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EventSink from "./EventSink.ts";
@@ -55,11 +57,12 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as CommandOutputHub from "./CommandOutputHub.ts";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 
-const layerTestDatabase = SqlitePersistence.layerMemory;
+const layerTestDatabase = MeshTestServices.layerMemory;
 const layerTestStores = Layer.merge(EventStore.layer, ProjectionStore.layer).pipe(
   Layer.provide(layerTestDatabase),
 );
 const layerTestEventSink = EventSink.layer.pipe(
+  Layer.provide(RequiredAdmission.layer),
   Layer.provide(Layer.mergeAll(layerTestStores, layerTestDatabase)),
 );
 const layerFailingReleaseEventSink = Layer.effect(

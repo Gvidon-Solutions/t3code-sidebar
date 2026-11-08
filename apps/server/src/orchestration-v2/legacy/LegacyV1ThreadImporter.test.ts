@@ -1,3 +1,4 @@
+import * as RequiredAdmission from "../../mesh/DeliveryAdmission.ts";
 import { assert, it } from "@effect/vitest";
 import {
   ComposerContextId,
@@ -31,7 +32,10 @@ const layerStoresProvided = Layer.mergeAll(
   layerEventStoreProvided,
   layerProjectionStoreProvided,
 );
-const layerEventSinkProvided = EventSink.layer.pipe(Layer.provide(layerStoresProvided));
+const layerEventSinkProvided = EventSink.layer.pipe(
+  Layer.provide(RequiredAdmission.layer),
+  Layer.provide(layerStoresProvided),
+);
 const layerImporterProvided = LegacyV1ThreadImporter.layer.pipe(
   Layer.provide(Layer.mergeAll(layerStoresProvided, layerEventSinkProvided)),
 );

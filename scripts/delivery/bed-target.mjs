@@ -1,17 +1,9 @@
 #!/usr/bin/env node
-import * as NodeChildProcess from "node:child_process";
+import { runSync as run, quote } from "../lib/shell.mjs";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeTimersPromises from "node:timers/promises";
-const run = (command, args, options = {}) =>
-  NodeChildProcess.execFileSync(command, args, {
-    encoding: "utf8",
-    timeout: 120_000,
-    maxBuffer: 32 * 1024 * 1024,
-    ...options,
-  });
-const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 const assertMachine = (machine) => {
   if (
     !/^D1-[a-z-]+\.service$/.test(machine.unit) ||

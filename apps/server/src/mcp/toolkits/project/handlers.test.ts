@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
 import * as ReplicaRuntime from "../../../replicas/ReplicaRuntime.ts";
 import * as Replicas from "../../../replicas/ProjectReplicaService.ts";
 import { makeReplicaHarness } from "../../../replicas/replicas.testkit.ts";
@@ -168,16 +169,20 @@ const clientLaunchHarness = (input: {
     }),
     Layer.mock(PeerForwarding.PeerForwarding)({}),
     Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({ namedProjectsRoot: "/projects" }),
-    DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer)),
+    DocumentText.layer.pipe(
+      Layer.provideMerge(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
+    ),
   ).pipe(
     Layer.provideMerge(GitVcsDriver.layer),
     Layer.provideMerge(VcsProcess.layer),
     Layer.provideMerge(
       ServerConfig.layerTest(process.cwd(), { prefix: "t3-client-launch-" }).pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
       ),
     ),
-    Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(Layer.merge(NodeServices.layer, MeshTestServices.platform), NodeCrypto.layer),
+    ),
   );
   return { projectId, modelSelection, projectDefaults, dependencies: layerDependencies };
 };
@@ -281,7 +286,7 @@ it.effect(
         code: "invalid_request",
         message: "Example Corp limits threads to Supervised.",
       });
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("a launch steps an inherited mode down to the provider's, and refuses one it lacks", () =>
@@ -337,7 +342,7 @@ it.effect("a launch steps an inherited mode down to the provider's, and refuses 
 
     const offered = yield* launchPi("approval-required");
     expect(offered.launched[0]?.runtimeMode).toBe("approval-required");
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("a launch retried with the same clientRequestId replays the first one", () =>
@@ -375,7 +380,7 @@ it.effect("a launch retried with the same clientRequestId replays the first one"
     expect(ids[2]).not.toEqual(ids[0]);
     // Without a key every launch is new.
     expect(ids[3]).not.toEqual(ids[4]);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("a launch key of any length or content gives a short id and never a defect", () =>
@@ -404,7 +409,7 @@ it.effect("a launch key of any length or content gives a short id and never a de
     const loneSurrogate = yield* launch("key-\ud800").pipe(Effect.exit);
     expect(Exit.isFailure(loneSurrogate) && Cause.hasDies(loneSurrogate.cause)).toBe(false);
     expect(launched).toHaveLength(1);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("a retried launch replays after the project loses its default model", () =>
@@ -431,7 +436,7 @@ it.effect("a retried launch replays after the project loses its default model", 
       launched[0]?.threadId,
       launched[0]?.threadId,
     ]);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("a launch binds only an existing checkout that is one of the project's worktrees", () =>
@@ -490,7 +495,15 @@ it.effect("a launch binds only an existing checkout that is one of the project's
     expect((yield* launchInto(worktree)).at(-1)?.result).toMatchObject({
       code: "invalid_request",
     });
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.merge(NodeServices.layer, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("a launch into a new worktree creates nothing when its base ref has no commit", () =>
@@ -534,7 +547,7 @@ it.effect("a launch into a new worktree creates nothing when its base ref has no
 
     expect((yield* launchFrom("main")).at(-1)?.result).toMatchObject({ projectId });
     expect(launched).toHaveLength(1);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("a retried worktree launch replays after its base ref is gone", () =>
@@ -577,7 +590,7 @@ it.effect("a retried worktree launch replays after its base ref is gone", () =>
       launched[0]?.threadId,
       launched[0]?.threadId,
     ]);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("a client launches with the fallback for an exhausted default", () =>
@@ -626,7 +639,7 @@ it.effect("a client launches with the fallback for an exhausted default", () =>
       modelSelection: fallbackModel,
     });
     expect(launched[0]?.modelSelection).toEqual(fallbackModel);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("deleting a project through MCP also discards its clone record", () =>
@@ -670,7 +683,7 @@ it.effect("deleting a project through MCP also discards its clone record", () =>
       .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(dependencies));
 
     expect(discarded).toEqual([harness.projectId]);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 const decodeRemoteLaunch = Schema.decodeUnknownSync(
@@ -754,7 +767,7 @@ it.effect(
         expect(sent).toEqual(["box-project"]);
         expect(localLaunches).toEqual([]);
       }).pipe(Effect.provide(dependencies));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("project update writes the shared logical title", () => {
@@ -787,22 +800,25 @@ it.effect("project update writes the shared logical title", () => {
     expect((yield* mesh.read).config.projectTitles.logical).toBe("Shared title");
   }).pipe(
     Effect.provide(
-      Layer.mergeAll(
-        dependencies,
-        Layer.mock(Project.ProjectService)({
-          update: () =>
-            Effect.succeed({
-              id: base.projectId,
-              title: "Shared title",
-              workspaceRoot: "/repo",
-              repositoryIdentity: null,
-              defaultModelSelection: null,
-              scripts: [],
-              createdAt: "2026-01-01T00:00:00.000Z",
-              updatedAt: "2026-01-01T00:00:00.000Z",
-              deletedAt: null,
-            }),
-        }),
+      Layer.provideMerge(
+        Layer.mergeAll(
+          dependencies,
+          Layer.mock(Project.ProjectService)({
+            update: () =>
+              Effect.succeed({
+                id: base.projectId,
+                title: "Shared title",
+                workspaceRoot: "/repo",
+                repositoryIdentity: null,
+                defaultModelSelection: null,
+                scripts: [],
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+                deletedAt: null,
+              }),
+          }),
+        ),
+        MeshTestServices.required,
       ),
     ),
   );
@@ -852,13 +868,16 @@ it.effect(
       expect(stored.title).toBe("Original title");
     }).pipe(
       Effect.provide(
-        Layer.mergeAll(
-          base.dependencies,
-          h.layer,
-          Layer.mock(Project.ProjectService)({
-            getById: () => Effect.succeedSome(stored),
-            listPage: () => Effect.succeed({ projects: [stored], nextCursor: 3 }),
-          }),
+        Layer.provideMerge(
+          Layer.mergeAll(
+            base.dependencies,
+            h.layer,
+            Layer.mock(Project.ProjectService)({
+              getById: () => Effect.succeedSome(stored),
+              listPage: () => Effect.succeed({ projects: [stored], nextCursor: 3 }),
+            }),
+          ),
+          MeshTestServices.required,
         ),
       ),
     );
@@ -938,6 +957,6 @@ it.effect(
           }),
         ]),
       });
-    }).pipe(Effect.provide(dependencies));
+    }).pipe(Effect.provide(Layer.provideMerge(dependencies, MeshTestServices.required)));
   },
 );

@@ -57,7 +57,7 @@ const asFilesError = (error: OrchestratorMcpFailure, absolutePath: string) => {
 /** A client call is a person's, not an agent's: the link's own access stays the limit. */
 const clientLimits = { runtimeMode: "full-access", interactionMode: "default" } as const;
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const files = yield* FilesService.FilesService;
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const peers = yield* PeerMcpClient.PeerMcpClient;

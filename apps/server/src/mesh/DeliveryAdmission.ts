@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 import {
-  DELIVERY_UPDATING,
+  DeliveryUpdatingError,
+  isDeliveryUpdating,
+  ADMISSION_GATED_EFFECT_TYPES,
   DeliveryDrainError,
   type DeliveryDrainInput,
   type DeliveryDrainStatus,
@@ -37,11 +39,11 @@ export class DeliveryAdmission extends Context.Service<
     readonly guard: (
       events: ReadonlyArray<OrchestrationV2DomainEvent>,
       starts?: ReadonlyArray<string>,
-    ) => Effect.Effect<void, DeliveryDrainError>;
+    ) => Effect.Effect<void, DeliveryDrainError | DeliveryUpdatingError>;
     readonly withStart: <A, E, R>(
       effect: Effect.Effect<A, E, R>,
-    ) => Effect.Effect<A, E | DeliveryDrainError, R>;
-    readonly awaitClosed: Effect.Effect<void, DeliveryDrainError>;
+    ) => Effect.Effect<A, E | DeliveryDrainError | DeliveryUpdatingError, R>;
+    readonly awaitClosed: Effect.Effect<void, DeliveryDrainError | DeliveryUpdatingError>;
     readonly notify: Effect.Effect<void>;
   }
 >()("t3/mesh/DeliveryAdmission") {}
@@ -115,15 +117,12 @@ export const layer = Layer.effect(
     });
     const withStart = <A, E, R>(
       effect: Effect.Effect<A, E, R>,
-    ): Effect.Effect<A, E | DeliveryDrainError, R> =>
+    ): Effect.Effect<A, E | DeliveryDrainError | DeliveryUpdatingError, R> =>
       Effect.uninterruptibleMask((restore) =>
         restore(startLock.take(1)).pipe(
           Effect.andThen(
             Effect.gen(function* () {
-              if ((yield* status).phase !== "open")
-                return yield* new DeliveryDrainError({
-                  message: `${DELIVERY_UPDATING}: server is draining; retry this command`,
-                });
+              if ((yield* status).phase !== "open") return yield* new DeliveryUpdatingError();
               if (activeStarts === 0) startsIdle = Deferred.makeUnsafe<void>();
               activeStarts++;
             }).pipe(Effect.ensuring(startLock.release(1))),
@@ -163,7 +162,7 @@ export const layer = Layer.effect(
                   }
                   const effects = yield* sql<{
                     payload_json: string;
-                  }>`SELECT effect.payload_json FROM orchestration_v2_effect_outbox effect JOIN orchestration_v2_projection_runs run ON run.run_id = json_extract(effect.payload_json, '$.runId') WHERE effect.status IN ('pending','running') AND effect.effect_type IN ('provider-turn.start','provider-turn.restart') AND run.status IN ('preparing','starting')`;
+                  }>`SELECT effect.payload_json FROM orchestration_v2_effect_outbox effect JOIN orchestration_v2_projection_runs run ON run.run_id = json_extract(effect.payload_json, '$.runId') WHERE effect.status IN ('pending','running') AND effect.effect_type IN ${sql.in([...ADMISSION_GATED_EFFECT_TYPES])} AND run.status IN ('preparing','starting')`;
                   const runs = yield* Effect.forEach(effects, (row) =>
                     decodeStart(row.payload_json).pipe(Effect.map((value) => value.runId)),
                   );
@@ -211,34 +210,36 @@ export const layer = Layer.effect(
         ),
       );
     });
-    const guard = Effect.fn("DeliveryAdmission.guard")(function* (
-      events: ReadonlyArray<OrchestrationV2DomainEvent>,
-      starts: ReadonlyArray<string> = [],
-    ) {
-      if (!(yield* read)[0]) return;
-      const runIds = new Set(starts);
-      for (const event of events) {
-        if (
-          (event.type === "run.created" || event.type === "run.updated") &&
-          ["preparing", "starting", "running"].includes(event.payload.status)
-        )
-          runIds.add(event.payload.id);
-      }
-      if (!runIds.size) return;
-      const rows = yield* sql<{
-        run_id: string;
-        status: string;
-      }>`SELECT run_id, status FROM orchestration_v2_projection_runs WHERE run_id IN ${sql.in([...runIds])}`;
-      const admitted = new Set(
-        rows
-          .filter((row) => ["preparing", "starting", "running", "waiting"].includes(row.status))
-          .map((row) => row.run_id),
-      );
-      if ([...runIds].some((id) => !admitted.has(id)))
-        return yield* new DeliveryDrainError({
-          message: `${DELIVERY_UPDATING}: server is draining; retry this command`,
-        });
-    }, Effect.mapError(mapError));
+    const guard = Effect.fn("DeliveryAdmission.guard")(
+      function* (
+        events: ReadonlyArray<OrchestrationV2DomainEvent>,
+        starts: ReadonlyArray<string> = [],
+      ) {
+        if (!(yield* read)[0]) return;
+        const runIds = new Set(starts);
+        for (const event of events) {
+          if (
+            (event.type === "run.created" || event.type === "run.updated") &&
+            ["preparing", "starting", "running"].includes(event.payload.status)
+          )
+            runIds.add(event.payload.id);
+        }
+        if (!runIds.size) return;
+        const rows = yield* sql<{
+          run_id: string;
+          status: string;
+        }>`SELECT run_id, status FROM orchestration_v2_projection_runs WHERE run_id IN ${sql.in([...runIds])}`;
+        const admitted = new Set(
+          rows
+            .filter((row) => ["preparing", "starting", "running", "waiting"].includes(row.status))
+            .map((row) => row.run_id),
+        );
+        if ([...runIds].some((id) => !admitted.has(id))) return yield* new DeliveryUpdatingError();
+      },
+      Effect.mapError((cause) =>
+        isDeliveryUpdating(cause) ? new DeliveryUpdatingError() : mapError(cause),
+      ),
+    );
     const awaitClosed: Effect.Effect<void, DeliveryDrainError> = Effect.suspend(() =>
       Effect.gen(function* () {
         const signal = yield* Ref.get(changed);
