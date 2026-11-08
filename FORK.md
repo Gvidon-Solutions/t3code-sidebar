@@ -109,6 +109,20 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — F2a security boundaries (partial audit remediation)
+
+Release signing is fenced to `ws` and the protected `android-release` GitHub environment;
+mesh platform actions are pinned, and upstream-only release/EAS secret workflows are removed.
+Mesh link permissions fail closed for unresolved bindings and no longer match peer labels.
+HTTP idempotency namespaces prefer session identity over caller headers. Legacy import no longer
+grants unrestricted file access to every pair; config plans show the effective link permissions.
+A shared SSH host validator covers run/replica transports, with option terminators on SSH calls.
+New mesh configs have no personal model aliases, and delivery agent choices come from config
+or project defaults. Regression coverage lives in workflow, RunPlan, Mutagen endpoint,
+MeshLinkPermissions, meshConfig and delivery agent-options tests. OAuth identity issuance,
+desktop server-UI isolation, OTA verification, bootstrap trust and repository leakage cleanup
+remain outside this partial change; this entry does not certify the full F2a audit as resolved.
+
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
 - **What.** Local Android builds retain native outputs, reuse identical APKs and publish native

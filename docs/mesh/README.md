@@ -787,3 +787,25 @@ before pausing. Keep that intent when publishing errors. After an interruption t
 and resumes only that marked session, then scans again; an unmarked pause remains intentional.
 Clearing intent before resume completes can strand the copy after a crash. Legacy whole-object
 settings writes leave replica diagnostics to the servers, so older clients cannot erase this intent.
+
+## Security boundaries
+
+`MeshLinkPermissions.ts` requires distinct local and peer environment IDs bound in the mesh
+config. A missing config, missing binding, unknown peer ID, or legacy label-only session denies
+files, replicas and threads. Labels are migration input, never a runtime permission identity.
+The OAuth issuance path must also authenticate the peer identity against its link record;
+config binding alone cannot establish that identity. HTTP idempotency namespaces use the
+session peer ID (or session ID), never caller-supplied mesh-hop or peer-ID headers. Legacy
+label matching lives only in `meshConfig/migration.ts`. Import defaults to project files;
+existing config revisions are untouched. An unrestricted link requires an explicit `files: all`
+config override, whose permissions are listed in the plan before apply.
+
+`meshConfig/sshHost.ts` is the shared SSH destination validator. Run plans, run transport,
+replica routes/endpoints, platform SSH arguments and SSH route checks use it. Destinations are
+configured aliases or host names, with user and port held separately. SSH argument lists end
+options with `--` before the destination. This keeps a config value from becoming an SSH option
+or changing Mutagen endpoint syntax.
+
+New configs leave agent aliases empty; aliases belong in customer config. Delivery clean-agent
+launches inherit project settings unless explicitly configured. Android signing runs only on
+`ws` through the protected `android-release` environment; see [delivery.md](../delivery.md#android-signing-boundary).
