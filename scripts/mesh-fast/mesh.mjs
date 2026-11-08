@@ -542,7 +542,6 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
         "docker",
         [
           "run",
-          "--rm",
           "--init",
           "--name",
           container,
@@ -745,6 +744,11 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
     } finally {
       clearTimeout(timer);
     }
+    await settle(
+      this.nodes
+        .filter((node) => node.container)
+        .map((node) => run("docker", ["rm", node.container])),
+    );
     if (this.networkCreated) {
       await until(
         "private container network released",
@@ -778,7 +782,12 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
         });
       }),
     );
-    if (errors.length) throw new AggregateError(errors, "Private fixture cleanup failed");
+    if (errors.length)
+      throw new AggregateError(
+        errors,
+        "Private fixture cleanup failed:\n" +
+          errors.map((error) => error.stack ?? String(error)).join("\n"),
+      );
   }
 }
 export { rpc, until, mcp, port as allocatePort };
