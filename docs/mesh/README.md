@@ -94,7 +94,7 @@ readable from anywhere, and agents that know where they are.
 | Machine           | one T3 server (`environmentId`), label/tag/color/aliases, reported SSH facts                                    | config + layout `machine/<env>`                               |
 | Link              | server-to-server MCP session with config-defined permissions                                                    | each server's PeerLinks table                                 |
 | Mesh              | machines + links; desired state in the mesh config (`mesh.config`), no central authority                        | layout `mesh.config`, bindings                                |
-| Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `proj/<id>.title`, `rep/<id>/<env>`, `alias/*`         |
+| Project (logical) | opaque id (the logical key, never shown) + **title** + representations                                          | layout `projTitle/<id>`, `rep/<id>/<env>`, `alias/*`          |
 | Representation    | (machine, folder, role primary/replica, transport git/mutagen/sshfs/manual, ignores)                            | layout `rep/*`                                                |
 | Sync session      | one Mutagen session per replica (alpha = primary, beta = replica), driven by the side that can ssh to the other | Mutagen daemon of the driving T3 server (`<baseDir>/mutagen`) |
 | Thread            | lives on one machine, working dir inside one representation (or "No project")                                   | that machine's DB                                             |
@@ -343,7 +343,7 @@ Never format `agent-kit/skills/t3/**`. Keep the skill general and compact.
   on an unreachable connection must never produce a model's switch-machine suggestion.
 - Provider authentication and model availability belong to the destination machine. Keep an
   unavailable explicit selection visible, and test catalog caching when adding pending targets.
-- The standalone CLI layout encoder must stay in parity with shared core, including `proj/*`
+- The standalone CLI layout encoder must stay in parity with shared core, including `projTitle/*`
   title entries. Extend `agent-kit/skills/t3/shared-parity.test.mjs` when adding layout fields;
   CLI-only fixtures can otherwise miss data silently.
 
