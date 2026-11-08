@@ -87,13 +87,13 @@ have no dependency on this job.
 
 The gate runs on the host where the command is invoked. The delivery builder's
 configured `gate` command selects that host: the example's local command runs on
-the configured builder, whether that is gvidon or gor. Provision either using the
+the selected local or remote builder. Provision either using the
 same commands above. An explicit SSH gate must point to the prepared candidate
 checkout on the selected host. There is no implicit remote host or fallback.
 `--host-info`, the first output line, `runner.json` and `summary.json.host` record
 the actual hostname, boot identity, available CPUs and concurrency. Host names
-are evidence, never fixture identities. Treat gor's unexplained hard resets as
-an infrastructure fault; a successful gate does not establish hardware stability.
+are evidence, never fixture identities. A successful gate does not establish
+hardware stability on hosts with unexplained resets.
 
 One user-wide kernel lock admits a single runner or provisioning command across checkouts. A concurrent
 command exits 75 before changing Docker resources. The lock releases on process

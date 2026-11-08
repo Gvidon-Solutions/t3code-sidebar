@@ -1,4 +1,5 @@
 import { meshMillis } from "./MeshTiming.ts";
+import { meshRetryDelay } from "./retryBackoff.ts";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -224,6 +225,11 @@ export const layer = Layer.effect(
         last_error: string | null;
       }>`SELECT environment_id, sent_seq, received_seq, last_exchange_at, last_error FROM mesh_peer_state ORDER BY environment_id`;
       return {
+        legacyIdentityUpgrades: yield* sql<{
+          sessionId: string;
+          environmentId: string;
+          boundAt: string;
+        }>`SELECT session_id AS sessionId, environment_id AS environmentId, bound_at AS boundAt FROM peer_session_identities WHERE source = 'legacy-local-link' ORDER BY session_id`,
         quarantine: yield* sql<{
           key: string;
           reason: string;
@@ -341,9 +347,7 @@ export const layer = Layer.effect(
               retries.clear();
               for (const id of retryTimers.keys()) yield* cancelRetry(id);
             }
-            const linked = (yield* links.list).filter(
-              (peer) => peer.access === "full-access" && peer.status !== "expired",
-            );
+            const linked = yield* links.list;
             for (const peer of linked) {
               if (peer.access !== "full-access" || peer.status === "expired") continue;
               const now = yield* Clock.currentTimeMillis;
@@ -382,9 +386,7 @@ export const layer = Layer.effect(
                   Effect.gen(function* () {
                     const failures = (retries.get(peer.environmentId)?.failures ?? 0) + 1;
                     const now = yield* Clock.currentTimeMillis;
-                    const after =
-                      now +
-                      Math.min(MAX_RETRY_MS, meshMillis(1000) * 2 ** Math.min(failures - 1, 4));
+                    const after = now + meshRetryDelay(failures - 1);
                     retries.set(peer.environmentId, { failures, after });
                     yield* sql`INSERT INTO mesh_peer_state(environment_id, last_error) VALUES (${peer.environmentId}, ${String(cause)}) ON CONFLICT(environment_id) DO UPDATE SET last_error = excluded.last_error`;
                     yield* Effect.logWarning("Mesh peer exchange failed", cause);
@@ -532,9 +534,6 @@ export const layer = Layer.effect(
     return MeshReplicator.of({ exchange, sync, status });
   }).pipe(Effect.provide(NodeCrypto.layer)),
 );
-
-/** Longest pause before retrying an unreachable peer; a peer that calls in resets it. */
-export const MAX_RETRY_MS = meshMillis(15_000);
 
 const decodeJson = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
 const isMeshError = Schema.is(MeshLayoutError);

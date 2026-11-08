@@ -151,21 +151,26 @@ export function MachinesDialog(props: {
                       {copies && !status.text.startsWith("Resolved ") ? (
                         <span className="text-muted-foreground">Last automatic resolution</span>
                       ) : null}
-                      {copies ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            props.onOpenChange(false);
-                            openOpenFileDialog(
-                              EnvironmentId.make(copies.environmentId),
-                              copies.path,
-                            );
-                          }}
-                        >
-                          Open copies
-                        </Button>
-                      ) : null}
+                      {copies
+                        ? (copies.locations ?? [copies]).map((location) => (
+                            <Button
+                              key={`${location.environmentId}:${location.path}`}
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                props.onOpenChange(false);
+                                openOpenFileDialog(
+                                  EnvironmentId.make(location.environmentId),
+                                  location.path,
+                                );
+                              }}
+                            >
+                              {copies.locations && copies.locations.length > 1
+                                ? `Open copies on ${location.environmentId}`
+                                : "Open copies"}
+                            </Button>
+                          ))
+                        : null}
                       {rep.role === "primary" && status.text !== "Synced" ? (
                         <AdoptReplicaAction
                           environmentId={rep.environmentId}

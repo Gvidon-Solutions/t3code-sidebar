@@ -1,3 +1,4 @@
+import { resolveSshHost } from "@t3tools/shared/meshConfig";
 /* oxlint-disable t3code/no-global-process-runtime -- Native defaults at the server platform boundary also serve standalone launchers. */
 // @effect-diagnostics nodeBuiltinImport:off -- The server platform boundary owns native paths, permissions, shells and private IPC.
 import * as NodePath from "node:path";
@@ -65,11 +66,16 @@ export async function securePipeAddress(address: string, platform: NodeJS.Platfo
   if (platform !== "win32") await NodeFSP.chmod(address, 0o600);
 }
 
-export const nodeCommand = (source: string) =>
-  `node -e "eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())"`;
+export const nodeCommand = (source: string, platform = "linux") =>
+  loginCommand(
+    `eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())`,
+    "",
+    platform,
+    false,
+  );
 
 export function sshArguments(host: string, sshHome?: string): string[] {
-  if (!host || host.startsWith("-") || /[\s\0]/.test(host)) throw new Error("Invalid SSH host");
+  resolveSshHost(host);
   return [
     ...(sshHome ? ["-F", `${sshHome.replace(/[\\/]$/, "")}/.ssh/config`] : []),
     "-o",
@@ -248,7 +254,13 @@ const root = path.join(os.tmpdir(), 't3-run-' + (process.getuid ? process.getuid
 const address = id => process.platform === 'win32' ? '\\\\.\\pipe\\t3-run-' + c.namespace + '-' + id : path.join(root, id + '.sock');
 function privateStat(s) { return s.isDirectory() && !(process.platform !== 'win32' && (s.uid !== process.getuid() || (s.mode & 0o077))); }
 async function protectSocket(address) { if (process.platform !== 'win32') await fsp.chmod(address, 0o600); }
+function groupAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try { process.kill(process.platform === 'win32' ? pid : -pid, 0); return true; }
+  catch(error) { if (error.code === 'ESRCH') return false; throw error; }
+}
 function signalGroup(pid, sig, emit) {
+  if (!groupAlive(pid)) return;
   if (process.platform === 'win32') {
     const killer = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {stdio:'ignore'});
     killer.on('error', error => emit({type:'error',message:error.message}));

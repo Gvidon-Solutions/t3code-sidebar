@@ -23,10 +23,7 @@ it.effect(
         yield* Layer.build(Migration.layer);
         const migrated = (yield* config.current)!;
         expect(migrated.doc.agents?.instructions).toBe(legacy);
-        expect(migrated.doc.agents?.aliases?.["1017"]).toEqual({
-          harness: "opencode",
-          model: "deepseek/deepseek-flash",
-        });
+        expect(migrated.doc.agents?.aliases).toEqual({});
         expect((yield* config.history).length).toBe(2);
         yield* config.apply(
           { ...migrated.doc, agents: { instructions: "Owner changed this", aliases: {} } },

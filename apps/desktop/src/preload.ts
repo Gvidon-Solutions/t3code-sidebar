@@ -1,5 +1,7 @@
+import { isBundledUiUrl, serverUiRendererId } from "./ipc/rendererTrust.ts";
 import type {
   DesktopBridge,
+  DesktopShellBridge,
   DesktopPreviewOpenLinkEvent,
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingInputEvent,
@@ -29,11 +31,14 @@ function isSnapShotEvent(value: unknown): value is DesktopSnapShotEvent {
   );
 }
 
-exposeClerkBridge({ passkeys: true });
+const trustedUi = isBundledUiUrl(location.href);
+const serverRendererId = serverUiRendererId(location.host);
+if (trustedUi) exposeClerkBridge({ passkeys: true });
 
 // Runs before any app script reads localStorage. See DesktopLegacyLocalStorage.
 try {
-  const legacyItems: unknown = ipcRenderer.sendSync(IpcChannels.TAKE_LEGACY_LOCAL_STORAGE_CHANNEL);
+  const legacyItems: unknown =
+    trustedUi && ipcRenderer.sendSync(IpcChannels.TAKE_LEGACY_LOCAL_STORAGE_CHANNEL);
   if (typeof legacyItems === "object" && legacyItems !== null) {
     if (mergeLegacyLocalStorage(window.localStorage, legacyItems as Record<string, string>)) {
       void ipcRenderer.invoke(IpcChannels.COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL);
@@ -72,7 +77,7 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
   return result as Awaited<ReturnType<DesktopBridge["ensureSshEnvironment"]>>;
 }
 
-contextBridge.exposeInMainWorld("desktopBridge", {
+const desktopBridge = {
   ui: {
     select: (selection) => ipcRenderer.invoke(IpcChannels.UI_SELECT_CHANNEL, selection),
     getInfo: () => ipcRenderer.invoke(IpcChannels.UI_INFO_CHANNEL),
@@ -442,4 +447,18 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         ipcRenderer.removeListener(IpcChannels.PREVIEW_OPEN_LINK_CHANNEL, wrappedListener);
     },
   },
-} satisfies DesktopBridge);
+} satisfies DesktopBridge;
+if (trustedUi) contextBridge.exposeInMainWorld("desktopBridge", desktopBridge);
+else if (serverRendererId !== undefined) {
+  const origin: unknown = ipcRenderer.sendSync(IpcChannels.UI_SERVER_ORIGIN_CHANNEL);
+  contextBridge.exposeInMainWorld("desktopShell", {
+    returnToBundled: () =>
+      location.replace(`${location.protocol}//app/?desktopWindowId=${serverRendererId}&bundled=1`),
+    origin: typeof origin === "string" ? origin : null,
+    ui: { getInfo: desktopBridge.ui.getInfo, select: desktopBridge.ui.select },
+    getAppBranding: desktopBridge.getAppBranding,
+    getClientPlatform: desktopBridge.getClientPlatform,
+    getSystemLocale: desktopBridge.getSystemLocale,
+    revealWindow: desktopBridge.revealWindow,
+  } satisfies DesktopShellBridge);
+}

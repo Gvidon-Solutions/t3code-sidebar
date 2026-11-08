@@ -11,6 +11,7 @@ import {
   receive,
   tick,
   isFutureHlc,
+  hlcPhysical,
   validateLayoutEntry,
   type MeshLayoutDocument,
 } from "@t3tools/shared/meshLayout";
@@ -91,7 +92,13 @@ export const layer = Layer.effect(
           let clock = meta.hlc;
           let seq = meta.seq;
           const now = yield* Clock.currentTimeMillis;
-          for (const entry of Object.values(entries)) clock = receive(clock, entry.h, now);
+          for (const entry of Object.values(entries)) {
+            const previous = clock;
+            clock = yield* Effect.try({
+              try: () => receive(previous, entry.h, now),
+              catch: storageError,
+            });
+          }
           for (const row of yield* readRows) {
             if (!Object.hasOwn(merged, row.key))
               yield* sql`DELETE FROM mesh_layout_entries WHERE key = ${row.key}`;
@@ -124,7 +131,11 @@ export const layer = Layer.effect(
           const meta = (yield* sql<{
             hlc: string;
           }>`SELECT hlc FROM mesh_layout_meta WHERE id = 1`)[0]!;
-          const h = tick(yield* Clock.currentTimeMillis, meta.hlc, environmentId);
+          const now = yield* Clock.currentTimeMillis;
+          const h = yield* Effect.try({
+            try: () => tick(now, meta.hlc, environmentId),
+            catch: storageError,
+          });
           yield* sql`UPDATE mesh_layout_meta SET hlc = ${h} WHERE id = 1`;
           return h;
         }),
@@ -180,9 +191,9 @@ export const layer = Layer.effect(
                   (yield* Clock.currentTimeMillis) - meshMillis(30 * 24 * 60 * 60 * 1000);
                 const expired = (yield* readRows).filter(
                   (row) =>
-                    row.value === null &&
-                    row.seq <= acknowledgedSeq &&
-                    Number(row.hlc.slice(0, 13)) < cutoff,
+                    hlcPhysical(row.hlc) < cutoff &&
+                    (row.key.startsWith("author/") ||
+                      (row.value === null && row.seq <= acknowledgedSeq)),
                 );
                 yield* sql.withTransaction(
                   Effect.gen(function* () {
@@ -191,10 +202,9 @@ export const layer = Layer.effect(
                   }),
                 );
                 if (expired.length > 0) {
+                  const removed = new Set(expired.map((row) => row.key));
                   document = Object.fromEntries(
-                    Object.entries(document).filter(
-                      ([key]) => !expired.some((row) => row.key === key),
-                    ),
+                    Object.entries(document).filter(([key]) => !removed.has(key)),
                   );
                   yield* SubscriptionRef.set(state, { document, config: materialize(document) });
                 }

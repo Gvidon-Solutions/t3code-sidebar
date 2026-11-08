@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Build one ref of the fork into the artifacts the three test servers use:
-#   * a linux-x64 T3 runtime archive (worker, isolated studio server)
-#   * the t3-mesh-e2e Docker image (VPS)
+#   * a linux-x64 T3 runtime archive (nodeB, isolated studio server)
+#   * the t3-mesh-e2e Docker image (CLOUD)
 #
-# Usage: build.sh [ref]        (default: xdev)
+# Usage: build.sh [ref]        (default: HEAD)
 set -euo pipefail
 
 # shellcheck source=lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-REF="${1:-xdev}"
+REF="${1:-HEAD}"
 require_bins
-command -v pnpm >/dev/null 2>&1 || die "pnpm not on PATH (export PATH=\$HOME/.nvm/versions/node/v26.12.1/bin:\$PATH)"
+command -v pnpm >/dev/null 2>&1 || die "pnpm not on PATH (export PATH=$NODE_B_NODE_BIN_DIR:\$PATH)"
 command -v patchelf >/dev/null 2>&1 || die "patchelf is required to package the Linux runtime (sudo apt-get install patchelf)"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -40,7 +40,7 @@ else
   git -C "$REPO_ROOT" worktree add --detach --force "$BUILD_DIR" "$COMMIT"
 fi
 
-export PATH="$HOME/.nvm/versions/node/v26.12.1/bin:$BUILD_DIR/node_modules/.bin:$BUILD_DIR/apps/server/node_modules/.bin:$PATH"
+export PATH="${NODE_A_NODE_BIN_DIR:?}:$BUILD_DIR/node_modules/.bin:$BUILD_DIR/apps/server/node_modules/.bin:$PATH"
 export CI=1
 
 log "installing workspace"

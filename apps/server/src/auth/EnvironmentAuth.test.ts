@@ -13,6 +13,7 @@ import { expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Redacted from "effect/Redacted";
 
 import * as ServerConfig from "../config.ts";
@@ -44,7 +45,7 @@ const layerEnvironmentAuth = (overrides?: Partial<ServerConfig.ServerConfig["Ser
     Layer.provide(ManagedPolicy.layerTest()),
     Layer.provideMerge(SqlitePersistence.layerMemory),
     Layer.provide(ServerSecretStore.layer),
-    Layer.provide(ServerEnvironment.layerIdentity),
+    Layer.provideMerge(ServerEnvironment.layerIdentity),
     Layer.provide(layerServerConfig(overrides)),
   );
 
@@ -113,6 +114,105 @@ const makeDpopKey = () => {
 it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
   "EnvironmentAuth.layer",
   (it) => {
+    it.effect(
+      "resolves peer identity from its authenticated link record instead of session claims",
+      () =>
+        Effect.gen(function* () {
+          const auth = yield* EnvironmentAuth.EnvironmentAuth;
+          const sql = yield* SqlClient.SqlClient;
+          const sessions = yield* SessionStore.SessionStore;
+          const issued = yield* sessions.issue({
+            subject: "mcp-client",
+            method: "bearer-access-token",
+            scopes: AuthStandardClientScopes,
+            peerLink: true,
+            peerEnvironmentId: "forged-target",
+            client: { label: "Cloudbox", deviceType: "bot" },
+          });
+          const request = makeBearerRequest(issued.token);
+          expect((yield* auth.authenticateMcpClient(request).pipe(Effect.result))._tag).toBe(
+            "Failure",
+          );
+          yield* sql`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${issued.sessionId}, 'forged-target')`;
+          expect((yield* auth.authenticateMcpClient(request).pipe(Effect.result))._tag).toBe(
+            "Failure",
+          );
+          yield* sql`INSERT INTO peer_session_identities(session_id, environment_id, source, bound_at) VALUES (${issued.sessionId}, 'trusted-peer', 'pairing-code', '2026-01-01T00:00:00Z')`;
+          expect(yield* auth.authenticateMcpClient(request)).toMatchObject({
+            peerEnvironmentId: "trusted-peer",
+          });
+          expect(
+            (yield* auth
+              .authenticateMcpClient({
+                ...request,
+                headers: { ...request.headers, "t3-peer-environment-id": "another-forged-peer" },
+              })
+              .pipe(Effect.result))._tag,
+          ).toBe("Failure");
+        }).pipe(Effect.provide(layerEnvironmentAuth())),
+    );
+
+    it.effect("binds a peer client atomically with one-time code redemption", () =>
+      Effect.gen(function* () {
+        const auth = yield* EnvironmentAuth.EnvironmentAuth;
+        const sql = yield* SqlClient.SqlClient;
+        const issuerEnvironmentId = yield* (yield* ServerEnvironment.ServerEnvironmentIdentity)
+          .getEnvironmentId;
+        const pairing = yield* auth.issuePairingCredential();
+        const peer = {
+          clientId: "registered-laptop",
+          environmentId: "laptop",
+          issuerEnvironmentId,
+        };
+        expect(
+          (yield* auth
+            .consumeMcpApprovalCode(pairing.credential, "auto", {
+              ...peer,
+              issuerEnvironmentId: "another-issuer",
+            })
+            .pipe(Effect.result))._tag,
+        ).toBe("Failure");
+        yield* sql`CREATE TRIGGER reject_fixture_peer BEFORE INSERT ON peer_client_identities BEGIN SELECT RAISE(ABORT, 'fixture storage failure'); END`;
+        expect(
+          (yield* auth.consumeMcpApprovalCode(pairing.credential, "auto", peer).pipe(Effect.result))
+            ._tag,
+        ).toBe("Failure");
+        expect(yield* sql`SELECT * FROM peer_client_identities`).toEqual([]);
+        expect(
+          yield* sql<{
+            consumed_at: string | null;
+          }>`SELECT consumed_at FROM auth_pairing_links WHERE credential = ${pairing.credential}`,
+        ).toEqual([{ consumed_at: null }]);
+        yield* sql`DROP TRIGGER reject_fixture_peer`;
+        yield* auth.consumeMcpApprovalCode(pairing.credential, "auto", peer);
+        expect(
+          yield* sql<{
+            environment_id: string;
+            issuer_environment_id: string;
+          }>`SELECT environment_id, issuer_environment_id FROM peer_client_identities WHERE client_id = ${peer.clientId}`,
+        ).toEqual([{ environment_id: "laptop", issuer_environment_id: issuerEnvironmentId }]);
+        expect(
+          (yield* auth
+            .consumeMcpApprovalCode(pairing.credential, "auto", {
+              ...peer,
+              clientId: "second-client",
+              environmentId: "studio",
+            })
+            .pipe(Effect.result))._tag,
+        ).toBe("Failure");
+        const issued = yield* auth.issueMcpClientSession({
+          label: "Laptop",
+          access: "auto",
+          peerLink: true,
+          peerClientId: peer.clientId,
+          client: { deviceType: "bot" },
+        });
+        expect(yield* auth.authenticateMcpClient(makeBearerRequest(issued.token))).toMatchObject({
+          peerEnvironmentId: "laptop",
+        });
+      }).pipe(Effect.provide(layerEnvironmentAuth())),
+    );
+
     it.effect("uses the reusable dev cookie without overriding a normal scoped cookie", () =>
       Effect.gen(function* () {
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;

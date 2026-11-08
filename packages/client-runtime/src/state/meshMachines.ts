@@ -1,3 +1,4 @@
+import { decodeLayoutKey } from "@t3tools/shared/meshLayout";
 import * as DateTime from "effect/DateTime";
 import type {
   EnvironmentId,
@@ -507,7 +508,7 @@ export function meshMachineFactTimes(
 ) {
   const times: Record<string, string | null> = {};
   for (const [key, entry] of Object.entries(document)) {
-    if (!key.startsWith("machine/")) continue;
+    if (!key.startsWith("machine/") || decodeLayoutKey(key)?.length !== 2) continue;
     const environmentId = decodeURIComponent(key.slice("machine/".length));
     if (entry.v === null) {
       times[environmentId] = null;

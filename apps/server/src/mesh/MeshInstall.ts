@@ -1,3 +1,4 @@
+import { cliReleaseDownloadBaseUrl } from "@t3tools/shared/cliRelease";
 import { MeshConfigError } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
@@ -15,11 +16,10 @@ const decodeSettings = Schema.decodeEffect(
 );
 export const InstallInput = Schema.Struct({
   version: Schema.String,
-  releaseBaseUrl: Schema.optionalKey(
-    Schema.String.check(Schema.isPattern(/^https?:\/\/[^\r\n]+$/)),
-  ),
+  releaseBaseUrl: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^https:\/\/[^\r\n]+$/))),
   port: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
   baseDir: Schema.optionalKey(Schema.String),
+  listenHost: Schema.optionalKey(Schema.Literals(["127.0.0.1", "::1", "0.0.0.0", "::"])),
 });
 export class MeshInstall extends Context.Service<
   MeshInstall,
@@ -47,6 +47,7 @@ export const layer = Layer.effect(
             reason: "validation",
             message: "Unsupported service platform",
           });
+        yield* Effect.try(() => cliReleaseDownloadBaseUrl(input.version, input.releaseBaseUrl));
         const baseDir = input.baseDir ?? path.join(home, ".t3-mesh");
         if (!path.isAbsolute(baseDir))
           return yield* new MeshConfigError({
@@ -79,7 +80,7 @@ export const layer = Layer.effect(
         );
         yield* fs.writeFileString(
           path.join(baseDir, "service.env"),
-          `T3CODE_HOST=0.0.0.0\nT3CODE_PORT=${input.port}\nT3CODE_NO_BROWSER=true\nT3_MESH_JOINING=1\n${input.releaseBaseUrl ? `T3CODE_RELEASE_BASE_URL=${input.releaseBaseUrl}\n` : ""}`,
+          `T3CODE_HOST=${input.listenHost ?? "127.0.0.1"}\nT3CODE_PORT=${input.port}\nT3CODE_NO_BROWSER=true\nT3_MESH_JOINING=1\n${input.releaseBaseUrl ? `T3CODE_RELEASE_BASE_URL=${input.releaseBaseUrl}\n` : ""}`,
         );
         const plan = meshServicePlan({
           platform,

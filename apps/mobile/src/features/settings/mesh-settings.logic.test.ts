@@ -44,8 +44,8 @@ describe("meshLinkSourceOptions", () => {
           },
         },
         {
-          environmentId: "laptop",
-          label: "laptop",
+          environmentId: "nodeB",
+          label: "nodeB",
           connection: { phase: "offline" },
           serverConfig: {
             settings: { linkedEnvironmentsEnabled: true },
@@ -62,9 +62,9 @@ describe("meshLinkTargets", () => {
     const machines = buildMeshMachines({
       config: {
         ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-        machines: { studio: {}, laptop: {} },
+        machines: { studio: {}, nodeB: {} },
       },
     });
-    expect(meshLinkTargets(machines, "studio").map((m) => m.environmentId)).toEqual(["laptop"]);
+    expect(meshLinkTargets(machines, "studio").map((m) => m.environmentId)).toEqual(["nodeB"]);
   });
 });

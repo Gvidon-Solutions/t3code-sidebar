@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { applyAndroidSigningEnvironment } from "./lib/android-signing-env.mjs";
 /**
  * Local Android APK build with a warm Gradle cache: keeps `apps/mobile/android`, builds one ABI and
  * skips R8 and PNG crunching for previews. Flags: --install (adb install -r), --dev (dev-client
@@ -106,24 +107,7 @@ if (!jdk) {
 process.env.JAVA_HOME = jdk;
 process.env.PATH = `${join(jdk, "bin")}:${process.env.PATH ?? ""}`;
 
-// Match the GitHub release APK's signing identity when the fork keystore is
-// available, so `adb install -r` updates an installed sidebar build instead of
-// failing with a signature mismatch. Never print the values.
-const signingEnvPath = join(homedir(), ".local/share/t3-ws/android-signing.env");
-if (!dev && !process.env.T3_ANDROID_KEYSTORE && existsSync(signingEnvPath)) {
-  for (const line of readFileSync(signingEnvPath, "utf8").split("\n")) {
-    const match = /^\s*(?:export\s+)?(T3_ANDROID_[A-Z0-9_]+)=(.*)$/.exec(line);
-    if (!match) continue;
-    let value = match[2].trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    process.env[match[1]] = value;
-  }
-}
+applyAndroidSigningEnvironment(process.env, dev);
 const signingLabel =
   dev || !process.env.T3_ANDROID_KEYSTORE
     ? "debug keystore (uninstall a release build before installing this APK)"

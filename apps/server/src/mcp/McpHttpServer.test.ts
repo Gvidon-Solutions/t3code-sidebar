@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -861,6 +862,16 @@ it.effect("admits provider and OAuth client credentials and points only clients 
         capabilities: new Set(["orchestration"]),
         issuedAt: 1,
       };
+      const linkedScope: McpInvocationContext.McpInvocationScope = {
+        ...clientScope,
+        client: {
+          sessionId: "link-session",
+          label: "Laptop",
+          access: "full-access",
+          linked: true,
+          peerEnvironmentId: EnvironmentId.make("laptop-env"),
+        },
+      };
       const seen: Array<McpInvocationContext.McpInvocationScope> = [];
       const ProbeToolkit = Toolkit.make(
         Tool.make("probe", {
@@ -869,7 +880,7 @@ it.effect("admits provider and OAuth client credentials and points only clients 
           failure: OrchestratorMcpFailure,
           failureMode: "return",
           dependencies: [McpInvocationContext.McpInvocationContext],
-        }),
+        }).annotate(McpDomainAnnotation, "mesh"),
       );
       const serverLayer = McpHttpServer.layerMcpTransport(
         McpHttpServer.toolkitRegistration(
@@ -884,7 +895,7 @@ it.effect("admits provider and OAuth client credentials and points only clients 
           }),
         ),
       ).pipe(
-        Layer.provide(ServerSettings.layerTest()),
+        Layer.provide(ServerSettings.layerTest({ linkedEnvironmentsEnabled: true })),
         Layer.provide(
           Layer.mock(McpSessionRegistry.McpSessionRegistry)({
             resolve: (token) =>
@@ -899,7 +910,11 @@ it.effect("admits provider and OAuth client credentials and points only clients 
           Layer.succeed(McpHttpServer.McpClientAuthenticator, {
             authenticate: (request) =>
               Effect.succeed(
-                request.headers.authorization === `Bearer ${clientToken}` ? clientScope : undefined,
+                request.headers.authorization === `Bearer ${clientToken}`
+                  ? clientScope
+                  : request.headers.authorization === "Bearer linked-client"
+                    ? linkedScope
+                    : undefined,
               ),
           }),
         ),
@@ -908,10 +923,13 @@ it.effect("admits provider and OAuth client credentials and points only clients 
         Layer.build,
       );
       const httpClient = yield* HttpClient.HttpClient;
-      const call = (token: string | undefined) =>
+      const call = (token: string | undefined, claimedPeer = "forged-peer") =>
         Effect.gen(function* () {
           const headers = {
             accept: "application/json, text/event-stream",
+            "t3-idempotency-key": "request-1",
+            "t3-mesh-hops": claimedPeer,
+            "t3-peer-environment-id": claimedPeer,
             ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
           };
           const initialize = yield* httpClient.post("/mcp", {
@@ -940,6 +958,13 @@ it.effect("admits provider and OAuth client credentials and points only clients 
       expect(seen.map((scope) => scope.requestNamespace)).toEqual([
         "provider-session",
         "client:session-1",
+      ]);
+
+      for (const claimedPeer of ["forged-peer", "another-peer"])
+        expect((yield* call("linked-client", claimedPeer)).status).toBe(200);
+      expect(seen.slice(-2).map((scope) => scope.requestNamespace)).toEqual([
+        'peer:["laptop-env","request-1"]',
+        'peer:["laptop-env","request-1"]',
       ]);
 
       const missing = yield* call(undefined);
@@ -1081,14 +1106,16 @@ it.effect("hides tools for links and refuses another environment while the beta 
           success: Schema.Struct({ links: Schema.Number }),
           failure: OrchestratorMcpFailure,
           failureMode: "return",
-        }).annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenWhileLinksOff),
+        })
+          .annotate(McpDomainAnnotation, "mesh")
+          .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenWhileLinksOff),
         Tool.make("where", {
           description: "Says where it ran.",
           parameters: Schema.Struct({ environmentId: OrchestratorMcpEnvironmentTarget }),
           success: Schema.Struct({ ranIn: Schema.String }),
           failure: OrchestratorMcpFailure,
           failureMode: "return",
-        }),
+        }).annotate(McpDomainAnnotation, "mesh"),
       );
       const settingsContext = yield* Layer.build(ServerSettings.layerTest());
       const settings = Context.get(settingsContext, ServerSettings.ServerSettingsService);
@@ -1300,7 +1327,7 @@ it.effect(
               McpInvocationContext.McpInvocationContext,
               ThreadManagementService.ThreadManagementService,
             ],
-          }),
+          }).annotate(McpDomainAnnotation, "mesh"),
         );
         const serverLayer = McpHttpServer.layerMcpTransport(
           McpHttpServer.toolkitRegistration(

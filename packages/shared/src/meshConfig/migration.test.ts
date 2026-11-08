@@ -1,12 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
-import { migrateConfig, extractConfigMigration } from "./migration.ts";
-import {
-  effectiveLinkPermissions,
-  machineByPeerLabel,
-  parseConfig,
-  referenceErrors,
-} from "./index.ts";
+import { migrateConfig, extractConfigMigration, machineByPeerLabel } from "./migration.ts";
+import { effectiveLinkPermissions, parseConfig, referenceErrors, projectPolicy } from "./index.ts";
 it("migrates a three-machine layout and existing routes, aliases, ignores and permissions once", () => {
   const layout = {
     ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
@@ -77,7 +72,7 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
       ),
     )?.name,
   ).toBe("cloudbox");
-  expect(effectiveLinkPermissions(config, "studio", "cloudbox").files).toBe("all");
+  expect(effectiveLinkPermissions(config, "studio", "cloudbox").files).toBe("projects");
   expect(effectiveLinkPermissions(config, "studio", "new-machine").files).toBe("projects");
   expect(config.replicas?.ignore).toEqual(["*.log"]);
   expect(config.projects?.overrides).toEqual([{ project: "Application", ignore: ["/data"] }]);
@@ -273,4 +268,32 @@ it("carries all nine replica ignore lists even when only two layout titles were 
       projects,
     ),
   ).toBeUndefined();
+});
+
+it("migrates wildcard characters in titles as literal project matches", () => {
+  const { doc } = migrateConfig(
+    {},
+    {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      machines: { studio: {} },
+      projectTitles: { application: "App*?\\name" },
+      projectMounts: {
+        application: [
+          {
+            environmentId: "studio",
+            path: "/application",
+            role: "primary",
+            transport: "git",
+            createdAt: "",
+            ignores: ["private"],
+          },
+        ],
+      },
+    },
+    { environmentId: "studio", label: "Studio" },
+    [],
+    [],
+  )!;
+  expect(projectPolicy(doc, "App*?\\name").ignore).toContain("private");
+  expect(projectPolicy(doc, "ApplicationX\\name").ignore).not.toContain("private");
 });

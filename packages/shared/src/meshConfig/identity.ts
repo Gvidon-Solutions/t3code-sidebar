@@ -1,3 +1,5 @@
+import { keys, decodeLayoutKey } from "../meshLayout/document.ts";
+import { compare } from "../meshLayout/hlc.ts";
 import type { MeshConfigDocument } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "../meshLayout/document.ts";
 import { bindingsFromLayout, configFromLayout } from "./index.ts";
@@ -19,6 +21,7 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
   for (const [key, entry] of Object.entries(document)) {
     if (
       !key.startsWith("mesh.machineClaim/") ||
+      !decodeLayoutKey(key) ||
       !entry.v ||
       typeof entry.v !== "object" ||
       Array.isArray(entry.v)
@@ -40,7 +43,7 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
     if (claims.has(id)) continue;
     const historical = Object.entries(document)
       .filter(([key]) => key.startsWith("mesh.configHistory/"))
-      .sort(([, a], [, b]) => b.h.localeCompare(a.h))
+      .sort(([, a], [, b]) => compare(b.h, a.h))
       .flatMap(([, entry]) => {
         const value = entry.v;
         if (!value || typeof value !== "object" || Array.isArray(value)) return [];
@@ -59,14 +62,14 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
   for (const [key, entry] of Object.entries(document)) {
     if (
       !key.startsWith("machine/") ||
+      !decodeLayoutKey(key) ||
       !entry.v ||
       typeof entry.v !== "object" ||
       Array.isArray(entry.v)
     )
       continue;
     const id = decodeURIComponent(key.slice(8));
-    if (claims.has(id) || document[`mesh.machineClaim/${encodeURIComponent(id)}`]?.v === null)
-      continue;
+    if (claims.has(id) || document[keys.machineClaim(id)]?.v === null) continue;
     const facts = entry.v as Record<string, Json>;
     if (typeof facts.title !== "string" && typeof facts.label !== "string") continue;
     const title =
@@ -97,12 +100,12 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
           : !bindings[name]
             ? doc.machines[name]
             : undefined) ?? claim.machine);
-    const key = `mesh.machineClaim/${encodeURIComponent(id)}`;
+    const key = keys.machineClaim(id);
     if (!document[key]) updates[key] = claim as unknown as Json;
   }
   for (const name of new Set([...Object.keys(bindings), ...Object.keys(desired)]))
     if (bindings[name] !== desired[name])
-      updates[`mesh.machineBinding/${name}`] = desired[name] ?? null;
+      updates[keys.machineBinding(name)] = desired[name] ?? null;
   const next = { ...doc, machines };
   return {
     docChanged: JSON.stringify(next) !== JSON.stringify(doc),
@@ -135,18 +138,18 @@ export function renameMachineBindings(
     )
       continue;
     if (bindings[name] && bindings[name] !== bindings[old]) continue;
-    updates[`mesh.machineBinding/${old}`] = null;
-    updates[`mesh.machineBinding/${name}`] = bindings[old]!;
-    updates[`mesh.machineClaim/${encodeURIComponent(bindings[old]!)}`] = {
+    updates[keys.machineBinding(old)] = null;
+    updates[keys.machineBinding(name)] = bindings[old]!;
+    updates[keys.machineClaim(bindings[old]!)] = {
       name,
       machine: after.machines[name]!,
     } as Json;
   }
   for (const old of removed) {
     const id = bindings[old];
-    if (id && updates[`mesh.machineBinding/${old}`] === undefined) {
-      updates[`mesh.machineBinding/${old}`] = null;
-      updates[`mesh.machineClaim/${encodeURIComponent(id)}`] = null;
+    if (id && updates[keys.machineBinding(old)] === undefined) {
+      updates[keys.machineBinding(old)] = null;
+      updates[keys.machineClaim(id)] = null;
     }
   }
   return updates;
@@ -157,7 +160,7 @@ export function localMachineClaim(
   self: { environmentId: string; label: string },
   h: string,
 ): MeshLayoutDocument {
-  const key = `mesh.machineClaim/${encodeURIComponent(self.environmentId)}`;
+  const key = keys.machineClaim(self.environmentId);
   if (document[key]) return {};
   const name =
     Object.entries(bindingsFromLayout(document)).find(([, id]) => id === self.environmentId)?.[0] ??

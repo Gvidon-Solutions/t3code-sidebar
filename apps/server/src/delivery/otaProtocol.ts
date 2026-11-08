@@ -27,6 +27,9 @@ export const OtaRelease = Schema.Struct({
 export const OtaCatalog = Schema.Struct({
   releases: Schema.Array(OtaRelease),
   apkUrl: Schema.optional(Schema.String),
+  nativeUpdate: Schema.optional(
+    Schema.Struct({ payload: Schema.String, signature: Schema.String }),
+  ),
   apkAsset: Schema.optional(OtaAsset),
 });
 const decodeManifest = Schema.decodeSync(Schema.fromJsonString(OtaManifest));
@@ -71,4 +74,9 @@ export function selectOtaRelease(
   if (!previous) return compatible[0]?.release;
   const currentIndex = compatible.findIndex(({ manifest }) => manifest.id === currentId);
   return compatible[(currentIndex < 0 ? 0 : currentIndex) + 1]?.release;
+}
+
+export function verifyOtaAsset(key: string, bytes: Uint8Array) {
+  if (NodeCrypto.createHash("sha256").update(bytes).digest("base64url") !== key)
+    throw new Error("OTA asset bytes do not match their content hash");
 }

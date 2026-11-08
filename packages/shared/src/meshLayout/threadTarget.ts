@@ -1,3 +1,4 @@
+import { resolveAlias } from "./resolveAlias.ts";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 
 export function threadProjectTarget(
@@ -18,11 +19,7 @@ export function threadProjectTarget(
           (rep) => rep.environmentId === target.environmentId && rep.projectId === target.projectId,
         ),
       );
-  const seen = new Set<string>();
-  while (key && config.projectAliases[key] && !seen.has(key)) {
-    seen.add(key);
-    key = config.projectAliases[key];
-  }
+  if (key !== undefined) key = resolveAlias(config.projectAliases, key);
   const local = key
     ? config.projectMounts[key]?.find((rep) => rep.environmentId === sourceEnvironmentId)
     : undefined;

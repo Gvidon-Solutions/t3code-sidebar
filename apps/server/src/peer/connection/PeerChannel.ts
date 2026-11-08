@@ -28,10 +28,6 @@ const MAX_FRAME = 32 * 1024 * 1024;
 export const preferConnection = (self: string, peer: string, outbound: boolean) =>
   outbound === self < peer;
 
-export const reconnectDelay = (attempt: number, random: number) =>
-  meshMillis(Math.min(15_000, 1000 * 2 ** Math.min(4, Math.max(0, attempt)))) *
-  (0.8 + Math.min(1, Math.max(0, random)) * 0.2);
-
 interface PipeState {
   readonly stream: NodeStream.Duplex;
   credit: number;
@@ -316,6 +312,17 @@ export class PeerChannel {
       .finally(() => {
         this.running.delete(frame.id);
       });
+  }
+
+  nextTickDelay() {
+    const now = this.options.now();
+    return Math.max(
+      1,
+      Math.min(
+        this.lastReceived + meshMillis(45_000) - now,
+        this.lastPing + meshMillis(this.ping === undefined ? 15_000 : 45_000) - now,
+      ),
+    );
   }
 
   tick() {

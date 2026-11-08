@@ -129,3 +129,5 @@ export const COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL = "desktop:complete-legacy-lo
 
 export const UI_SELECT_CHANNEL = "desktop:ui:select";
 export const UI_INFO_CHANNEL = "desktop:ui:info";
+
+export const UI_SERVER_ORIGIN_CHANNEL = "desktop:ui:server-origin";

@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   InboxAgentCommentInput,
   InboxIssueDetail,
@@ -34,6 +35,7 @@ const InboxPostTool = Tool.make("inbox_post", {
   parameters: InboxPostInput,
   success: InboxPostResult,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Post inbox issue")
   .annotate(Tool.Destructive, false);
 
@@ -44,6 +46,7 @@ const InboxGetTool = Tool.make("inbox_get", {
   parameters: InboxIssueInput,
   success: InboxIssueDetail,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Read inbox issue")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
@@ -55,6 +58,7 @@ const InboxListTool = Tool.make("inbox_list", {
   parameters: InboxListInput,
   success: InboxListResult,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "List inbox issues")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
@@ -66,6 +70,7 @@ const InboxCommentTool = Tool.make("inbox_comment", {
   parameters: InboxAgentCommentInput,
   success: InboxIssueDetail,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Comment on inbox issue")
   .annotate(Tool.Destructive, false);
 
@@ -76,6 +81,7 @@ const InboxUpdateTool = Tool.make("inbox_update", {
   parameters: InboxUpdateInput,
   success: InboxIssueDetail,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Update inbox issue")
   .annotate(Tool.Destructive, false);
 
@@ -86,6 +92,7 @@ const InboxResolveTool = Tool.make("inbox_resolve", {
   parameters: InboxResolveInput,
   success: InboxIssueDetail,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Resolve inbox issue")
   .annotate(Tool.Destructive, false);
 

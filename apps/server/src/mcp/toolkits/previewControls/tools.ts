@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   NonNegativeInt,
   OrchestratorMcpFailure,
@@ -35,6 +36,7 @@ const PreviewListTool = Tool.make("t3_preview_list", {
     nextCursor: Schema.NullOr(NonNegativeInt),
   }),
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 const PreviewCloseTool = Tool.make("t3_preview_close", {
@@ -43,5 +45,7 @@ const PreviewCloseTool = Tool.make("t3_preview_close", {
     "Close one preview tab this thread owns. Use it on a tab you opened for your own check when you finish.",
   parameters: Schema.Struct({ tabId: PreviewTabId }),
   success: Schema.Struct({}),
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "owner")
+  .annotate(Tool.Destructive, true);
 export const PreviewControlsToolkit = Toolkit.make(PreviewListTool, PreviewCloseTool);

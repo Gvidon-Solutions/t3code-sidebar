@@ -230,8 +230,18 @@ it.effect(
       }>`SELECT seq FROM mesh_layout_entries WHERE key = 'machine/laptop'`)[0]!.seq;
       yield* mesh.collectTombstones!(seq);
       expect((yield* mesh.read).document["machine/laptop"]).toBeDefined();
+      yield* mesh.apply({
+        "author/0000000000001.00000.studio/studio": { v: true, h: "0000000000001.00000.studio" },
+      });
       yield* TestClock.adjust("31 days");
+      yield* mesh.apply({
+        "author/0002678400000.00000.studio/studio": { v: true, h: "0002678400000.00000.studio" },
+      });
       yield* mesh.collectTombstones!(0);
+      expect(
+        (yield* mesh.read).document["author/0000000000001.00000.studio/studio"],
+      ).toBeUndefined();
+      expect((yield* mesh.read).document["author/0002678400000.00000.studio/studio"]).toBeDefined();
       expect((yield* mesh.read).document["machine/laptop"]).toBeDefined();
       yield* mesh.collectTombstones!(seq);
       expect((yield* mesh.read).document["machine/laptop"]).toBeUndefined();

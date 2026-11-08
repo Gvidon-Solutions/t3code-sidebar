@@ -17,6 +17,7 @@ import * as Schema from "effect/Schema";
 import * as Hex from "effect/encoding/Hex";
 import * as HttpBody from "effect/http/HttpBody";
 import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
@@ -116,6 +117,35 @@ const responseJson = (contentType: string | undefined, text: string) =>
         .join("")
     : text;
 
+export const peerHttpSessionKey = Effect.fn("PeerMcpClient.sessionKey")(function* (
+  url: string,
+  token: string,
+) {
+  const digest = yield* Digest.Digest;
+  return Hex.encode(
+    yield* digest.digest(Digest.sha256, new TextEncoder().encode(encodeSeed([url, token]))),
+  );
+});
+
+const decodeRefusal = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({ error: Schema.String, message: Schema.optionalKey(Schema.String) }),
+  ),
+);
+const peerRefusal = Effect.fn("PeerMcpClient.peerRefusal")(function* (
+  response: HttpClientResponse.HttpClientResponse,
+) {
+  const refusal = decodeRefusal(yield* response.text);
+  if (Option.isSome(refusal) && refusal.value.error === "linked_environments_off")
+    return linkedEnvironmentsOffThere;
+  return new OrchestratorMcpFailure({
+    code: "capability_denied",
+    message: Option.isSome(refusal)
+      ? (refusal.value.message ?? "The peer refused this credential or relay identity.")
+      : "The peer refused this credential or relay identity.",
+  });
+});
+
 const make = Effect.gen(function* () {
   const links = yield* PeerLinks.PeerLinks;
   const digest = yield* Digest.Digest;
@@ -160,7 +190,7 @@ const make = Effect.gen(function* () {
       limitHeader,
     );
     const sessionId = initialized.headers["mcp-session-id"];
-    if (initialized.status === 403) return yield* linkedEnvironmentsOffThere;
+    if (initialized.status === 403) return yield* yield* peerRefusal(initialized);
     if (initialized.status !== 200 || sessionId === undefined) {
       return yield* new OrchestratorMcpFailure({
         code: initialized.status === 401 ? "capability_denied" : "orchestration_error",
@@ -206,7 +236,17 @@ const make = Effect.gen(function* () {
           : {}),
         [McpInvocationContext.MODE_LIMIT_HEADER]: `${input.limits.runtimeMode}/${input.limits.interactionMode}`,
       };
-      const sessionKey = `${input.url}\n${input.token}`;
+      const sessionKey = yield* peerHttpSessionKey(input.url, input.token).pipe(
+        Effect.provideService(Digest.Digest, digest),
+        Effect.tapError((cause) => Effect.logError("Peer session identity hash failed", cause)),
+        Effect.mapError(
+          () =>
+            new OrchestratorMcpFailure({
+              code: "orchestration_error",
+              message: "Peer session identity could not be computed",
+            }),
+        ),
+      );
       const callOnce = (sessionId: string) =>
         post(
           input.url,
@@ -227,18 +267,28 @@ const make = Effect.gen(function* () {
       }
       let response = yield* callOnce(sessionId);
       if (response.status === 404) {
+        yield* Ref.update(sessions, (current) => {
+          const next = new Map(current);
+          next.delete(sessionKey);
+          return next;
+        });
         const renewed = yield* openSession(input.url, input.token, limitHeader);
         yield* Ref.update(sessions, (current) => new Map(current).set(sessionKey, renewed));
         response = yield* callOnce(renewed);
       }
       if (response.status === 401) {
+        yield* Ref.update(sessions, (current) => {
+          const next = new Map(current);
+          next.delete(sessionKey);
+          return next;
+        });
         return yield* new OrchestratorMcpFailure({
           code: "capability_denied",
           message:
             "The linked environment no longer accepts this link. It may have been revoked there; link it again.",
         });
       }
-      if (response.status === 403) return yield* linkedEnvironmentsOffThere;
+      if (response.status === 403) return yield* yield* peerRefusal(response);
       if (response.status !== 200) {
         return yield* new OrchestratorMcpFailure({
           code: "orchestration_error",

@@ -185,9 +185,9 @@ it.effect.skipIf(windowsHost)(
             type: "as",
             data: [
               "DISPLAY=:0",
-              "HOME=/home/user",
+              "HOME=/home/dev",
               "WAYLAND_DISPLAY=wayland-1",
-              "XAUTHORITY=/home/user/auth files/cookie",
+              "XAUTHORITY=/home/dev/auth files/cookie",
             ],
           }),
         }),
@@ -196,7 +196,7 @@ it.effect.skipIf(windowsHost)(
           DISPLAY: ":0",
           WAYLAND_DISPLAY: "wayland-1",
           // Raw, not the $'...' quoting `systemctl show-environment` would print.
-          XAUTHORITY: "/home/user/auth files/cookie",
+          XAUTHORITY: "/home/dev/auth files/cookie",
         },
       );
       assert.deepEqual(yield* launchEnv({ stdout: "invalid JSON" }), { PATH: binDir });

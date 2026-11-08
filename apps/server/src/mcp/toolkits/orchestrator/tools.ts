@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   OrchestratorMcpCapabilitiesInput,
   OrchestratorMcpCapabilitiesResult,
@@ -78,6 +79,7 @@ const OrchestratorCapabilitiesTool = Tool.make("orchestrator_capabilities", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "mesh")
   .annotate(Tool.Title, "Get orchestration capabilities")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -92,6 +94,7 @@ const DelegateTaskTool = Tool.make("delegate_task", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Delegate a child task")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
@@ -105,6 +108,7 @@ const TaskStatusTool = Tool.make("task_status", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Get delegated task status")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
@@ -119,6 +123,7 @@ const TaskCancelTool = Tool.make("task_cancel", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Cancel delegated task")
   .annotate(Tool.Destructive, true);
 
@@ -134,6 +139,7 @@ const WorkflowStopTool = Tool.make("t3_workflow_stop", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Stop a workflow")
   .annotate(Tool.Destructive, true);
 
@@ -154,7 +160,9 @@ const BackgroundWaitTool = Tool.make("t3_background_wait", {
   failure: OrchestratorMcpFailure,
   failureMode: "return",
   dependencies,
-}).annotate(Tool.Title, "Wait on background work");
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Title, "Wait on background work");
 
 const ScheduleTaskTool = Tool.make("schedule_task", {
   description:
@@ -165,6 +173,7 @@ const ScheduleTaskTool = Tool.make("schedule_task", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Schedule a task")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
@@ -178,6 +187,7 @@ const ListScheduledTasksTool = Tool.make("list_scheduled_tasks", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "List scheduled tasks")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -192,6 +202,7 @@ const DeleteScheduledTaskTool = Tool.make("delete_scheduled_task", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Delete a scheduled task")
   .annotate(Tool.Destructive, true);
 
@@ -204,6 +215,7 @@ const RequestSecretTool = Tool.make("request_secret", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Request a secret from the user")
   .annotate(Tool.Destructive, false);
 
@@ -216,6 +228,7 @@ const CreateThreadsTool = Tool.make("create_threads", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Create T3 threads")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
@@ -229,6 +242,7 @@ const ThreadListTool = Tool.make("t3_thread_list", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "List T3 threads")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -243,6 +257,7 @@ const ThreadReadTool = Tool.make("t3_thread_read", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Read a T3 thread")
   .annotate(Tool.Strict, true)
   .annotate(Tool.Readonly, false)
@@ -262,6 +277,7 @@ const ThreadUpdateTool = Tool.make("t3_thread_update", {
   failureMode: "return",
   dependencies: threadMetadataDependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Update T3 thread metadata")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.Idempotent, false);
@@ -275,6 +291,7 @@ const ThreadSendTool = Tool.make("t3_thread_send", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Send to a T3 thread")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
@@ -288,6 +305,7 @@ const ThreadWaitTool = Tool.make("t3_thread_wait", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Wait for a T3 thread")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -302,6 +320,7 @@ const ThreadInterruptTool = Tool.make("t3_thread_interrupt", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Interrupt a T3 thread")
   .annotate(Tool.Destructive, true);
 
@@ -313,6 +332,7 @@ const EnvironmentLinksTool = Tool.make("t3_environment_links", {
   failureMode: "return",
   dependencies: linkDependencies,
 })
+  .annotate(McpDomainAnnotation, "mesh")
   .annotate(Tool.Title, "List linked environments")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -328,6 +348,7 @@ const EnvironmentLinkTool = Tool.make("t3_environment_link", {
   failureMode: "return",
   dependencies: linkingDependencies,
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Link another environment")
   .annotate(Tool.Destructive, false)
   .annotate(Tool.OpenWorld, true)
@@ -342,6 +363,7 @@ const EnvironmentUnlinkTool = Tool.make("t3_environment_unlink", {
   failureMode: "return",
   dependencies: linkingDependencies,
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Forget a linked environment")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.Idempotent, true)

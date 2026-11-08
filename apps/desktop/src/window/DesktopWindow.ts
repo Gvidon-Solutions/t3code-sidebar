@@ -1,3 +1,4 @@
+import { isBundledUiUrl, serverUiRendererId } from "../ipc/rendererTrust.ts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -16,7 +17,7 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import { makeComponentLogger } from "../app/DesktopObservability.ts";
 import * as DesktopState from "../app/DesktopState.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
-import { getDesktopUrl } from "../electron/ElectronProtocol.ts";
+import { ElectronProtocol, getDesktopUrl } from "../electron/ElectronProtocol.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
@@ -196,7 +197,10 @@ export function isSameOriginRendererNavigation(input: {
     return (
       applicationUrl.host !== "" &&
       navigationUrl.protocol === applicationUrl.protocol &&
-      navigationUrl.host === applicationUrl.host
+      (navigationUrl.host === applicationUrl.host ||
+        (applicationUrl.searchParams.has("desktopWindowId") &&
+          serverUiRendererId(navigationUrl.host) ===
+            Number(applicationUrl.searchParams.get("desktopWindowId"))))
     );
   } catch {
     return false;
@@ -301,6 +305,7 @@ export const make = Effect.gen(function* () {
   const electronShell = yield* ElectronShell.ElectronShell;
   const electronTheme = yield* ElectronTheme.ElectronTheme;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
+  const electronProtocol = yield* ElectronProtocol;
   const previewManager = yield* PreviewManager.PreviewManager;
   const previewPasskeys = yield* PreviewPasskeys.PreviewPasskeys;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
@@ -360,7 +365,7 @@ export const make = Effect.gen(function* () {
   > {
     if (yield* Ref.get(desktopState.quitting)) return Option.none();
     yield* previewManager.getBrowserSession();
-    const applicationUrl = getDesktopUrl(environment.isDevelopment);
+    let applicationUrl = getDesktopUrl(environment.isDevelopment);
     const iconPaths = yield* assets.iconPaths;
     const iconOption = getIconOption(iconPaths, environment.platform);
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
@@ -416,6 +421,8 @@ export const make = Effect.gen(function* () {
       return Option.none();
     }
 
+    if (!environment.isDevelopment) applicationUrl += `?desktopWindowId=${window.webContents.id}`;
+    yield* electronProtocol.trackWindow(window.webContents);
     pendingMainReveals.set(window, Effect.void);
     yield* rendererHistory.register(window.webContents, { surface: "main" });
     if (environment.platform === "darwin") {
@@ -620,7 +627,10 @@ export const make = Effect.gen(function* () {
     });
 
     window.webContents.setWindowOpenHandler(({ url }) => {
-      if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
+      if (
+        isBundledUiUrl(window.webContents.getURL()) &&
+        Option.isSome(ElectronShell.parseSafeExternalUrl(url))
+      ) {
         void runPromise(electronShell.openExternal(url));
       }
       return { action: "deny" };
@@ -636,7 +646,10 @@ export const make = Effect.gen(function* () {
       }
 
       event.preventDefault();
-      if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
+      if (
+        isBundledUiUrl(window.webContents.getURL()) &&
+        Option.isSome(ElectronShell.parseSafeExternalUrl(url))
+      ) {
         void runPromise(electronShell.openExternal(url));
       }
     });

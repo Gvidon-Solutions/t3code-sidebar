@@ -19,7 +19,7 @@ import {
 } from "./inbox.logic";
 
 const studio = EnvironmentId.make("env-studio");
-const laptop = EnvironmentId.make("env-laptop");
+const nodeB = EnvironmentId.make("env-nodeB");
 
 const issue = (id: string, overrides: Partial<InboxIssue> = {}): InboxIssue => ({
   id: InboxIssueId.make(id),
@@ -83,15 +83,15 @@ describe("mergeInboxEnvironments", () => {
           ),
         },
         {
-          environmentId: laptop,
-          environmentLabel: "laptop",
+          environmentId: nodeB,
+          environmentLabel: "nodeB",
           snapshot: snapshot([issue("action", { severity: "action", waitingForOwner: true })], 2),
         },
       ],
       null,
     );
     expect(state.items.map((item) => [item.environmentLabel, item.issue.id])).toEqual([
-      ["laptop", "action"],
+      ["nodeB", "action"],
       ["studio", "info"],
       ["studio", "done"],
     ]);
@@ -155,11 +155,11 @@ describe("collectInboxAlertsByEnvironment", () => {
     const first = collectInboxAlertsByEnvironment(new Map(), gvidonOnly.environments);
     expect(first.alerts).toEqual([]);
 
-    // laptop connects later with an unseen issue: its first snapshot only sets marks.
+    // nodeB connects later with an unseen issue: its first snapshot only sets marks.
     const both = mergeInboxEnvironments(
       [
         { environmentId: studio, environmentLabel: "studio", snapshot: snapshot([issue("a")]) },
-        { environmentId: laptop, environmentLabel: "laptop", snapshot: snapshot([issue("old")]) },
+        { environmentId: nodeB, environmentLabel: "nodeB", snapshot: snapshot([issue("old")]) },
       ],
       gvidonOnly,
     );
@@ -173,7 +173,7 @@ describe("collectInboxAlertsByEnvironment", () => {
           environmentLabel: "studio",
           snapshot: snapshot([issue("a"), issue("new")]),
         },
-        { environmentId: laptop, environmentLabel: "laptop", snapshot: snapshot([issue("old")]) },
+        { environmentId: nodeB, environmentLabel: "nodeB", snapshot: snapshot([issue("old")]) },
       ],
       both,
     );

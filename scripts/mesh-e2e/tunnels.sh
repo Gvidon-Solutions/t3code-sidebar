@@ -1,60 +1,52 @@
 #!/usr/bin/env bash
-# Tunnels for the T3 Mesh E2E bed.
-#
-#   up      studio: 13795 -> local studio, 13797 -> worker, 13791 -> VPS
-#           studio: reverse to VPS 172.17.0.1:22023 (sshd), :13795 (studio HTTP)
-#           worker:    local 13791 -> VPS; reverse 172.17.0.1:22022 (sshd),
-#                   :13797 (worker HTTP)
-#   down    stop both tunnel units
-#   status  show units and listening ports
-#
-# The reverse side binds to the VPS docker bridge address (172.17.0.1) because
-# the container runs on a bridge network and cannot see host loopback.
+# Loopback forwards and reverse tunnels for nodeA, nodeB and cloud.
+# Endpoints, pinned host keys and fixture identities come from local.env.
 set -euo pipefail
 
 # shellcheck source=lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-STUDIO_RUNNER="$HOME/.local/share/t3-mesh-e2e/tunnels-studio.sh"
-WORKER_RUNNER='$HOME/.local/share/t3-mesh-e2e/tunnels-worker.sh'
-WORKER_CLOUDBOX_KNOWN='$HOME/.ssh/t3_mesh_e2e_cloudbox_known_hosts'
+NODE_A_RUNNER="$STATE_DIR/tunnels-nodeA.sh"
+NODE_B_RUNNER="$NODE_B_STATE_DIR/tunnels-nodeB.sh"
+NODE_B_CLOUD_KNOWN="$NODE_B_STATE_DIR/ssh/cloud_known_hosts"
 
-write_studio_runner() {
-  mkdir -p "$(dirname "$STUDIO_RUNNER")"
-  cat >"$STUDIO_RUNNER" <<EOF
+write_nodeA_runner() {
+  mkdir -p "$(dirname "$NODE_A_RUNNER")"
+  cat >"$NODE_A_RUNNER" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-cleanup() { trap - INT TERM EXIT; kill 0; }
+pids=()
+cleanup() { trap - INT TERM EXIT; for pid in "\${pids[@]}"; do kill "\$pid"; done; }
 trap cleanup INT TERM EXIT
 common=(-o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15
         -o ServerAliveCountMax=3 -o ConnectTimeout=10)
 # Client view on studio: the isolated studio server is loopback-only, so even
 # its own alias goes through sshd.
-ssh "\${common[@]}" -i '$SELF_KEY' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
-  -N -L 127.0.0.1:$STUDIO_LOCAL:127.0.0.1:$STUDIO_PORT $STUDIO_SSH_USER@127.0.0.1 &
-ssh "\${common[@]}" -F '$WORKER_SSH_CONFIG' -i '$WORKER_SSH_KEY' -o IdentitiesOnly=yes \
-  -N -L 127.0.0.1:$WORKER_LOCAL:127.0.0.1:$WORKER_PORT '$WORKER_HOST' &
-ssh "\${common[@]}" -F '$CLOUDBOX_SSH_CONFIG' -i '$REVERSE_KEY_GV' -o IdentitiesOnly=yes \
-  -N -L 127.0.0.1:$CLOUDBOX_LOCAL:127.0.0.1:$CLOUDBOX_PORT \
-  -R $CLOUDBOX_BIND:$CLOUDBOX_SSH_GV:127.0.0.1:22 \
-  -R $CLOUDBOX_BIND:$STUDIO_LOCAL:127.0.0.1:$STUDIO_PORT \
-  '$CLOUDBOX_HOST' &
+ssh "\${common[@]}" -F '$NODE_B_SSH_CONFIG' -i '$NODE_B_SSH_KEY' -o IdentitiesOnly=yes \
+  -N -L 127.0.0.1:$NODE_B_LOCAL:127.0.0.1:$NODE_B_PORT '$NODE_B_HOST' &
+pids+=(\$!)
+ssh "\${common[@]}" -F '$CLOUD_SSH_CONFIG' -i '$REVERSE_KEY_NODE_A' -o IdentitiesOnly=yes \
+  -N -L 127.0.0.1:$CLOUD_LOCAL:127.0.0.1:$CLOUD_PORT \
+  -R $CLOUD_BIND:$CLOUD_SSH_NODE_A:127.0.0.1:$NODE_A_SSHD_PORT \
+  -R $CLOUD_BIND:$NODE_A_LOCAL:127.0.0.1:$NODE_A_PORT \
+  '$CLOUD_HOST' &
+pids+=(\$!)
 wait
 EOF
-  chmod 755 "$STUDIO_RUNNER"
+  chmod 755 "$NODE_A_RUNNER"
 }
 
-write_studio_unit() {
+write_nodeA_unit() {
   mkdir -p "$HOME/.config/systemd/user"
-  cat >"$HOME/.config/systemd/user/$STUDIO_TUNNEL_UNIT" <<EOF
+  cat >"$HOME/.config/systemd/user/$NODE_A_TUNNEL_UNIT" <<EOF
 [Unit]
 Description=T3 Mesh E2E studio tunnels
-After=network-online.target $STUDIO_UNIT
-Wants=$STUDIO_UNIT
+After=network-online.target $NODE_A_UNIT
+Wants=$NODE_A_UNIT
 
 [Service]
 Type=simple
-ExecStart=/bin/bash %h/.local/share/t3-mesh-e2e/tunnels-studio.sh
+ExecStart=/bin/bash $NODE_A_RUNNER
 Restart=always
 RestartSec=5
 KillMode=control-group
@@ -64,36 +56,37 @@ WantedBy=default.target
 EOF
 }
 
-write_worker_runner() {
-  worker_ssh 'mkdir -p ~/.local/share/t3-mesh-e2e'
-  worker_ssh "cat > $WORKER_RUNNER" <<EOF
+write_nodeB_runner() {
+  nodeB_ssh "mkdir -p '$NODE_B_STATE_DIR' '$NODE_B_STATE_DIR/ssh'"
+  nodeB_ssh "cat > $NODE_B_RUNNER" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-cleanup() { trap - INT TERM EXIT; kill 0; }
+pids=()
+cleanup() { trap - INT TERM EXIT; for pid in "\${pids[@]}"; do kill "\$pid"; done; }
 trap cleanup INT TERM EXIT
 exec ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \\
   -o ServerAliveCountMax=3 -o ConnectTimeout=10 \\
-  -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$WORKER_CLOUDBOX_KNOWN" \\
-  -i "\$HOME/.ssh/id_t3_mesh_e2e_vps" -o IdentitiesOnly=yes -N \\
-  -L 127.0.0.1:$CLOUDBOX_LOCAL:127.0.0.1:$CLOUDBOX_PORT \\
-  -L 127.0.0.1:$STUDIO_LOCAL:$CLOUDBOX_BIND:$STUDIO_LOCAL \\
-  -R $CLOUDBOX_BIND:$CLOUDBOX_SSH_GOR:127.0.0.1:22 \\
-  -R $CLOUDBOX_BIND:$WORKER_LOCAL:127.0.0.1:$WORKER_PORT \\
-  root@$CLOUDBOX_HOST
+  -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$NODE_B_CLOUD_KNOWN" \\
+  -F /dev/null -i "$REVERSE_KEY_NODE_B" -o IdentitiesOnly=yes -N \\
+  -L 127.0.0.1:$CLOUD_LOCAL:127.0.0.1:$CLOUD_PORT \\
+  -L 127.0.0.1:$NODE_A_LOCAL:$CLOUD_BIND:$NODE_A_LOCAL \\
+  -R $CLOUD_BIND:$CLOUD_SSH_NODE_B:127.0.0.1:$NODE_B_SSHD_PORT \\
+  -R $CLOUD_BIND:$NODE_B_LOCAL:127.0.0.1:$NODE_B_PORT \\
+  "$CLOUD_SSH_USER@$CLOUD_HOST"
 EOF
-  worker_ssh "chmod 755 $WORKER_RUNNER"
+  nodeB_ssh "chmod 755 $NODE_B_RUNNER"
 }
 
-write_worker_unit() {
-  worker_ssh "mkdir -p ~/.config/systemd/user && cat > ~/.config/systemd/user/$WORKER_TUNNEL_UNIT" <<EOF
+write_nodeB_unit() {
+  nodeB_ssh "mkdir -p ~/.config/systemd/user && cat > ~/.config/systemd/user/$NODE_B_TUNNEL_UNIT" <<EOF
 [Unit]
-Description=T3 Mesh E2E worker tunnels
-After=network-online.target $WORKER_UNIT
-Wants=$WORKER_UNIT
+Description=T3 Mesh E2E nodeB tunnels
+After=network-online.target $NODE_B_UNIT
+Wants=$NODE_B_UNIT
 
 [Service]
 Type=simple
-ExecStart=/bin/bash %h/.local/share/t3-mesh-e2e/tunnels-worker.sh
+ExecStart=/bin/bash $NODE_B_RUNNER
 Restart=always
 RestartSec=5
 KillMode=control-group
@@ -103,14 +96,11 @@ WantedBy=default.target
 EOF
 }
 
-prepare_worker_cloudbox_known_hosts() {
+prepare_nodeB_cloud_known_hosts() {
   local known
-  known="$(ssh-keygen -F "$CLOUDBOX_HOST" -f "$HOME/.local/share/vpn-ops/known_hosts" 2>/dev/null || true)"
-  if [ -z "$known" ]; then
-    known="$(ssh-keyscan -t ed25519 "$CLOUDBOX_HOST" 2>/dev/null || true)"
-  fi
-  [ -n "$known" ] || die "cannot read or scan the VPS host key"
-  worker_ssh "mkdir -p ~/.ssh && cat > $WORKER_CLOUDBOX_KNOWN && chmod 600 $WORKER_CLOUDBOX_KNOWN" <<<"$known"
+  known="$(ssh-keygen -F "$CLOUD_HOST" -f "$CLOUD_KNOWN_HOSTS")"
+  [ -n "$known" ] || die "No pinned cloud host key in CLOUD_KNOWN_HOSTS"
+  nodeB_ssh "mkdir -p '$NODE_B_STATE_DIR/ssh' && cat > '$NODE_B_CLOUD_KNOWN' && chmod 600 '$NODE_B_CLOUD_KNOWN'" <<<"$known"
 }
 
 wait_port_local() {
@@ -122,17 +112,17 @@ wait_port_local() {
   return 1
 }
 
-wait_port_vps() {
+wait_port_cloud() {
   local port=$1 tries=${2:-30} i
   for ((i = 1; i <= tries; i++)); do
-    cloudbox_ssh "ss -H -ltn 'sport = :$port' | grep -q ." && return 0
+    cloud_ssh "ss -H -ltn 'sport = :$port' | grep -q ." && return 0
     sleep 1
   done
   return 1
 }
 
 populate_container_known_hosts() {
-  cloudbox_ssh 'bash -s' <<'EOF'
+  cloud_ssh 'bash -s' <<'EOF'
 set -euo pipefail
 kh=/opt/t3-mesh-e2e/home/.ssh/known_hosts
 : >"$kh"
@@ -146,58 +136,58 @@ EOF
 
 container_ssh_check() {
   local host=$1 target=$2
-  cloudbox_ssh "docker exec t3-mesh-e2e ssh -F /home/t3/.ssh/config -o BatchMode=yes '$host' hostname" \
+  cloud_ssh "docker exec t3-mesh-e2e ssh -F /home/t3/.ssh/config -o BatchMode=yes '$host' hostname" \
     | grep -qx "$target"
 }
 
 cmd_up() {
-  log "preparing worker VPS host key"
-  prepare_worker_cloudbox_known_hosts
+  log "preparing nodeB CLOUD host key"
+  prepare_nodeB_cloud_known_hosts
 
   log "writing studio tunnel unit"
-  write_studio_runner
-  write_studio_unit
+  write_nodeA_runner
+  write_nodeA_unit
   systemctl --user daemon-reload
-  systemctl --user enable --now "$STUDIO_TUNNEL_UNIT" >/dev/null
-  systemctl --user restart "$STUDIO_TUNNEL_UNIT"
+  systemctl --user enable --now "$NODE_A_TUNNEL_UNIT" >/dev/null
+  systemctl --user restart "$NODE_A_TUNNEL_UNIT"
 
-  log "writing worker tunnel unit"
-  write_worker_runner
-  write_worker_unit
-  worker_ssh "systemctl --user daemon-reload && systemctl --user enable --now $WORKER_TUNNEL_UNIT && systemctl --user restart $WORKER_TUNNEL_UNIT" >/dev/null
+  log "writing nodeB tunnel unit"
+  write_nodeB_runner
+  write_nodeB_unit
+  nodeB_ssh "systemctl --user daemon-reload && systemctl --user enable --now $NODE_B_TUNNEL_UNIT && systemctl --user restart $NODE_B_TUNNEL_UNIT" >/dev/null
 
   log "waiting for local forwards"
-  for port in "$STUDIO_LOCAL" "$WORKER_LOCAL" "$CLOUDBOX_LOCAL"; do
+  for port in "$NODE_A_LOCAL" "$NODE_B_LOCAL" "$CLOUD_LOCAL"; do
     wait_port_local "$port" 40 || die "studio local port $port did not come up"
   done
 
-  log "waiting for VPS reverse forwards"
-  for port in "$CLOUDBOX_SSH_GOR" "$CLOUDBOX_SSH_GV" "$WORKER_LOCAL" "$STUDIO_LOCAL"; do
-    wait_port_vps "$port" 40 || die "VPS reverse port $port did not come up"
+  log "waiting for CLOUD reverse forwards"
+  for port in "$CLOUD_SSH_NODE_B" "$CLOUD_SSH_NODE_A" "$NODE_B_LOCAL" "$NODE_A_LOCAL"; do
+    wait_port_cloud "$port" 40 || die "CLOUD reverse port $port did not come up"
   done
 
   log "pinning container host keys"
   populate_container_known_hosts
 
-  log "checking container SSH to worker and studio"
-  container_ssh_check worker worker || die "VPS container cannot ssh to worker"
-  container_ssh_check studio studio || die "VPS container cannot ssh to studio"
+  log "checking container SSH to nodeB and studio"
+  container_ssh_check nodeB nodeB || die "CLOUD container cannot ssh to nodeB"
+  container_ssh_check studio studio || die "CLOUD container cannot ssh to studio"
   log "tunnels up"
 }
 
 cmd_down() {
-  systemctl --user disable --now "$STUDIO_TUNNEL_UNIT" >/dev/null 2>&1 || true
-  worker_ssh "systemctl --user disable --now $WORKER_TUNNEL_UNIT" >/dev/null 2>&1 || true
+  systemctl --user disable --now "$NODE_A_TUNNEL_UNIT" >/dev/null 2>&1 || true
+  nodeB_ssh "systemctl --user disable --now $NODE_B_TUNNEL_UNIT" >/dev/null 2>&1 || true
   log "tunnels down"
 }
 
 cmd_status() {
-  echo "studio tunnels: $(systemctl --user is-active "$STUDIO_TUNNEL_UNIT" 2>/dev/null || true)"
-  echo "worker tunnels:    $(worker_ssh "systemctl --user is-active $WORKER_TUNNEL_UNIT" 2>/dev/null || true)"
+  echo "studio tunnels: $(systemctl --user is-active "$NODE_A_TUNNEL_UNIT" 2>/dev/null || true)"
+  echo "nodeB tunnels:    $(nodeB_ssh "systemctl --user is-active $NODE_B_TUNNEL_UNIT" 2>/dev/null || true)"
   echo "studio local ports:"
-  ss -H -ltn | grep -E ":($STUDIO_LOCAL|$WORKER_LOCAL|$CLOUDBOX_LOCAL) " || echo "  (none)"
-  echo "VPS reverse bindings:"
-  cloudbox_ssh "ss -H -ltn | grep -E '($CLOUDBOX_BIND):($CLOUDBOX_SSH_GOR|$CLOUDBOX_SSH_GV|$WORKER_LOCAL|$STUDIO_LOCAL) ' || true"
+  ss -H -ltn | grep -E ":($NODE_A_LOCAL|$NODE_B_LOCAL|$CLOUD_LOCAL) " || echo "  (none)"
+  echo "CLOUD reverse bindings:"
+  cloud_ssh "ss -H -ltn | grep -E '($CLOUD_BIND):($CLOUD_SSH_NODE_B|$CLOUD_SSH_NODE_A|$NODE_B_LOCAL|$NODE_A_LOCAL) ' || true"
 }
 
 case "${1:-}" in

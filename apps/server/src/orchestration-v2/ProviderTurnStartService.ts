@@ -262,7 +262,12 @@ export const layer: Layer.Layer<
                 turnItems: current.turnItems,
               }),
             ),
-            Effect.catchCause(() => Effect.succeed(input.inheritedBackgroundTurnItems)),
+            Effect.catchCause((cause) =>
+              Effect.logWarning("Cannot read inherited background items", {
+                cause,
+                runId: input.runId,
+              }).pipe(Effect.as(input.inheritedBackgroundTurnItems)),
+            ),
           ),
         shouldStartProviderTurn: () => isCurrentAttemptInStatus("running"),
         shouldFinalizeRun: () =>
@@ -288,7 +293,14 @@ export const layer: Layer.Layer<
                 signal: "interrupt-result",
               }),
             )
-            .pipe(Effect.catchCause(() => Effect.succeed(false))),
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("Cannot read pending run interrupt", {
+                  cause,
+                  runId: input.runId,
+                }).pipe(Effect.as(false)),
+              ),
+            ),
         loadRunInterruptReason: () =>
           projectionStore
             .getThreadRecords(input.threadId, ["turnItems"], {
@@ -300,8 +312,12 @@ export const layer: Layer.Layer<
                 const request = turnItems.find((item) => item.type === "run_interrupt_request");
                 return request?.type === "run_interrupt_request" ? request.message : undefined;
               }),
-              // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.
-              Effect.catchCause(() => Effect.succeed(undefined)),
+              Effect.catchCause((cause) =>
+                Effect.logWarning("Cannot read run interrupt reason", {
+                  cause,
+                  runId: input.runId,
+                }).pipe(Effect.as(undefined)),
+              ),
             ),
       };
     };
@@ -641,13 +657,23 @@ export const layer: Layer.Layer<
       }
       const { worktreePath, branch } = projection.thread;
       if (worktreePath !== null && branch !== null) {
-        const exists = yield* fileSystem
-          .exists(worktreePath)
-          .pipe(Effect.orElseSucceed(() => true));
+        const exists = yield* fileSystem.exists(worktreePath).pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning("Cannot check provider worktree path", {
+              cause,
+              worktreePath,
+            }).pipe(Effect.as(true)),
+          ),
+        );
         if (!exists && (yield* isManagedWorktreePath(worktreePath))) {
           const project = yield* projects.getById(projection.thread.projectId).pipe(
             Effect.map(Option.getOrUndefined),
-            Effect.orElseSucceed(() => undefined),
+            Effect.catch((cause) =>
+              Effect.logWarning("Cannot load project for worktree recovery", {
+                cause,
+                threadId: projection.thread.id,
+              }).pipe(Effect.as(undefined)),
+            ),
           );
           if (project !== undefined) {
             yield* Effect.logWarning("provider turn start recreating missing worktree", {
@@ -883,7 +909,11 @@ export const layer: Layer.Layer<
           ? ""
           : restartCancelledBackgroundWorkNote(restartCancelledWork);
       const tokenCap = yield* handoffTokenCapConfig.pipe(
-        Effect.orElseSucceed(() => DEFAULT_HANDOFF_TOKEN_CAP),
+        Effect.catch((cause) =>
+          Effect.logWarning("Cannot read handoff token cap", { cause }).pipe(
+            Effect.as(DEFAULT_HANDOFF_TOKEN_CAP),
+          ),
+        ),
       );
       const handoffContextForThread = (loadedProviderThread: OrchestrationV2ProviderThread) => {
         const measuredContext = latestNativeContextUsage(projection, providerThread);
@@ -1646,8 +1676,9 @@ export const layer: Layer.Layer<
             Effect.tapError((error) =>
               refusedBeforePrompt(error)
                 ? delivery.unsent.pipe(
-                    Effect.catchCause(() =>
+                    Effect.catchCause((cause) =>
                       Effect.logWarning("Failed to restore unsent context handoffs", {
+                        cause,
                         runId: run.id,
                       }),
                     ),
@@ -1672,8 +1703,9 @@ export const layer: Layer.Layer<
             ],
             (record) =>
               record.pipe(
-                Effect.catchCause(() =>
+                Effect.catchCause((cause) =>
                   Effect.logWarning("Failed to record accepted context handoff delivery", {
+                    cause,
                     runId: run.id,
                     deliveryStatus: "pending",
                   }),

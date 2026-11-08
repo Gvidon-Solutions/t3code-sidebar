@@ -1,3 +1,5 @@
+import { McpDomainAnnotation } from "./McpToolDomain.ts";
+import { layerLinkedTest } from "../replicas/MeshLayoutTestLayer.ts";
 import { expect, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {
@@ -37,10 +39,10 @@ const declaration = {
   dependencies: [McpInvocationContext, ThreadManagementService],
 };
 const toolkit = Toolkit.make(
-  Tool.make("t3_thread_list", declaration),
-  Tool.make("t3_thread_read", declaration),
-  Tool.make("t3_thread_send", declaration),
-  Tool.make("t3_thread_fork", declaration),
+  Tool.make("t3_thread_list", declaration).annotate(McpDomainAnnotation, "threads"),
+  Tool.make("t3_thread_read", declaration).annotate(McpDomainAnnotation, "threads"),
+  Tool.make("t3_thread_send", declaration).annotate(McpDomainAnnotation, "threads"),
+  Tool.make("t3_thread_fork", declaration).annotate(McpDomainAnnotation, "threads"),
 );
 const handlers = Access.toLayer(toolkit, {
   t3_thread_list: Access.reads(() =>
@@ -242,10 +244,14 @@ it.effect(
           client: {
             sessionId: "read-only-link",
             label: "Read-only peer",
+            peerEnvironmentId: EnvironmentId.make("peer"),
             access: "read-only",
             linked: true,
           },
         }),
+        Effect.provide(
+          layerLinkedTest("local", { local: "local", peer: "peer", remote: "remote" }),
+        ),
       );
       expect(denied.at(-1)?.result).toMatchObject({
         code: "capability_denied",

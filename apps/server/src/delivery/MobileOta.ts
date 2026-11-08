@@ -3,10 +3,18 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Option from "effect/Option";
+import * as Semaphore from "effect/Semaphore";
 import * as Schema from "effect/Schema";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { ServerConfig } from "../config.ts";
-import { OtaCatalog, OtaManifest, selectOtaRelease, verifyOtaRelease } from "./otaProtocol.ts";
+import {
+  OtaCatalog,
+  OtaManifest,
+  verifyOtaAsset,
+  selectOtaRelease,
+  verifyOtaRelease,
+} from "./otaProtocol.ts";
 
 const decodeCatalog = Schema.decodeEffect(Schema.fromJsonString(OtaCatalog));
 const decodeManifest = Schema.decodeEffect(Schema.fromJsonString(OtaManifest));
@@ -39,10 +47,39 @@ export const layer = Layer.effect(
     const path = yield* Path.Path;
     const config = yield* ServerConfig;
     const root = path.join(config.baseDir, "mobile-updates");
-    const readCatalog = Effect.fn("MobileOta.readCatalog")(function* () {
-      const text = yield* fs.readFileString(path.join(root, "catalog.json"));
-      return yield* decodeCatalog(text);
-    });
+    const catalogLock = yield* Semaphore.make(1);
+    let cached:
+      | {
+          stamp: string;
+          catalog: typeof OtaCatalog.Type;
+          assets: ReadonlyMap<string, typeof OtaManifest.Type.launchAsset>;
+        }
+      | undefined;
+    const readCatalog = Effect.fn("MobileOta.readCatalog")(() =>
+      catalogLock.withPermit(
+        Effect.gen(function* () {
+          const file = path.join(root, "catalog.json");
+          const info = yield* fs.stat(file);
+          const stamp = `${info.size}:${Option.getOrUndefined(info.ino)}:${Option.getOrElse(
+            Option.map(info.mtime, (time) => time.getTime()),
+            () => 0,
+          )}`;
+          if (cached?.stamp === stamp) return cached;
+          const catalog = yield* decodeCatalog(yield* fs.readFileString(file));
+          const manifests = yield* Effect.forEach(catalog.releases, (release) =>
+            decodeManifest(release.manifest),
+          );
+          const assets = new Map(
+            [
+              ...manifests.flatMap((manifest) => [manifest.launchAsset, ...manifest.assets]),
+              ...(catalog.apkAsset ? [catalog.apkAsset] : []),
+            ].map((asset) => [asset.hash, asset]),
+          );
+          cached = { stamp, catalog, assets };
+          return cached;
+        }),
+      ),
+    );
     const manifest = Effect.fn("MobileOta.manifest")(
       function* (request: Readonly<Record<string, string | undefined>>) {
         if (
@@ -57,7 +94,7 @@ export const layer = Layer.effect(
         }
         if (!(yield* fs.exists(path.join(root, "catalog.json"))))
           return HttpServerResponse.empty({ status: 204, headers });
-        const catalog = yield* readCatalog();
+        const { catalog } = yield* readCatalog();
         const release = yield* Effect.try(() =>
           selectOtaRelease(
             catalog,
@@ -88,16 +125,11 @@ export const layer = Layer.effect(
     const asset = Effect.fn("MobileOta.asset")(
       function* (key: string) {
         if (!/^[A-Za-z0-9_-]{43}$/.test(key)) return HttpServerResponse.empty({ status: 404 });
-        const catalog = yield* readCatalog();
-        const manifests = yield* Effect.forEach(catalog.releases, (release) =>
-          decodeManifest(release.manifest),
-        );
-        const known = [
-          ...manifests.flatMap((manifest) => [manifest.launchAsset, ...manifest.assets]),
-          ...(catalog.apkAsset ? [catalog.apkAsset] : []),
-        ].find((asset) => asset.hash === key);
+        const { assets } = yield* readCatalog();
+        const known = assets.get(key);
         if (!known) return HttpServerResponse.empty({ status: 404 });
         const bytes = yield* fs.readFile(path.join(root, "assets", key));
+        yield* Effect.try(() => verifyOtaAsset(key, bytes));
         return HttpServerResponse.uint8Array(bytes, {
           headers: {
             "content-type": known.contentType,
@@ -120,7 +152,7 @@ export const layer = Layer.effect(
       function* (platform: string, runtime: string) {
         if (!(yield* fs.exists(path.join(root, "catalog.json"))))
           return HttpServerResponse.jsonUnsafe({ requiresNativeUpdate: false }, { headers });
-        const catalog = yield* readCatalog();
+        const { catalog } = yield* readCatalog();
         const newest = catalog.releases.filter((release) => release.platform === platform).at(-1);
         const latestRuntime = newest
           ? (yield* decodeManifest(newest.manifest)).runtimeVersion
@@ -128,7 +160,7 @@ export const layer = Layer.effect(
         return HttpServerResponse.jsonUnsafe(
           {
             requiresNativeUpdate: latestRuntime !== undefined && latestRuntime !== runtime,
-            apkUrl: catalog.apkUrl,
+            nativeUpdate: platform === "android" ? catalog.nativeUpdate : undefined,
           },
           { headers },
         );

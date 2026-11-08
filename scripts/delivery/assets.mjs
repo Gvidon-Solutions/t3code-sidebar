@@ -1,3 +1,4 @@
+import { verifyMobileAssets } from "./target.mjs";
 import * as NodeChildProcess from "node:child_process";
 const { execFileSync } = NodeChildProcess;
 import * as NodeFS from "node:fs";
@@ -118,6 +119,7 @@ export async function buildAssets({
         ? JSON.parse(NodeFS.readFileSync(join(candidate, "catalog.json"), "utf8")).apkAsset?.url
         : undefined;
       const apkUrl = existingApkUrl ?? config.ota.apkUrl;
+      if (apk) stageMobileApk(candidate, apk, config.ota.origin);
       await run(process.execPath, [
         "scripts/delivery/mobile-ota.mjs",
         "publish",
@@ -139,7 +141,6 @@ export async function buildAssets({
         config.ota.certificate,
         ...(apkUrl ? ["--apk-url", apkUrl] : []),
       ]);
-      if (apk) stageMobileApk(candidate, apk, config.ota.origin);
       mobileUpdate = { store: candidate };
     }
   }
@@ -147,9 +148,11 @@ export async function buildAssets({
 }
 
 function copyMobileStore(store, destination) {
+  verifyMobileAssets(store);
   if (resolve(store) === resolve(destination)) return;
   mkdirSync(destination, { recursive: true, mode: 0o700 });
   cpSync(join(store, "assets"), join(destination, "assets"), { recursive: true });
+  verifyMobileAssets(destination);
   copyFileSync(join(store, "certificate.pem"), join(destination, "certificate.pem"));
   copyFileSync(join(store, "catalog.json"), join(destination, "catalog.json.tmp"));
   renameSync(join(destination, "catalog.json.tmp"), join(destination, "catalog.json"));
@@ -216,7 +219,9 @@ export function stageMobileApk(store, apk, origin) {
   mkdirSync(join(store, "assets"), { recursive: true });
   copyFileSync(apk, join(store, "assets", hash));
   const catalogPath = join(store, "catalog.json");
-  const catalog = JSON.parse(NodeFS.readFileSync(catalogPath, "utf8"));
+  const catalog = existsSync(catalogPath)
+    ? JSON.parse(NodeFS.readFileSync(catalogPath, "utf8"))
+    : { releases: [] };
   catalog.apkUrl = url;
   catalog.apkAsset = {
     key: hash,

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 . "$(dirname "$0")/lib.sh"
 worker_name=$(worker_ssh 'hostname -s')
 [ "$worker_name" = "$BED_NIGHTLY_HOST" ] || die "Nightly timer target is $worker_name, expected $BED_NIGHTLY_HOST"
@@ -35,13 +34,13 @@ cat > "$private/entry" <<EOF_ENTRY
 #!/bin/sh
 set -eu
 export HOME='$HOME'
-export PATH='$HOME/.nvm/versions/node/v26.12.1/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'
+export PATH='$NODE_A_NODE_BIN_DIR:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'
 export XDG_RUNTIME_DIR='$controller_runtime_dir'
 export DBUS_SESSION_BUS_ADDRESS='unix:path=$controller_runtime_dir/bus'
 case "\${SSH_ORIGINAL_COMMAND:-run}" in
  probe) systemctl --user show-environment >/dev/null; printf 'mesh-nightly-controller-ready\n' ;;
- run) export R1_CODEX_BINARY='$codex_binary' R1_OPENCODE_BINARY='$opencode_binary'; export HOME='$HOME'; export PATH='$HOME/.nvm/versions/node/v26.12.1/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'; exec bash '$REPO_ROOT/scripts/mesh-e2e/acceptance.sh' ;;
- inbox) body=\$(cat); export HOME='$HOME'; export T3CODE_HOME='$BED_INBOX_HOME'; exec '$HOME/.nvm/versions/node/v26.12.1/bin/node' '$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs' inbox post attention 'Mesh nightly failed' --body "\$body" --key mesh-nightly ;;
+ run) export R1_CODEX_BINARY='$codex_binary' R1_OPENCODE_BINARY='$opencode_binary'; export HOME='$HOME'; export PATH='$NODE_A_NODE_BIN_DIR:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'; exec bash '$REPO_ROOT/scripts/mesh-e2e/acceptance.sh' ;;
+ inbox) body=\$(cat); export HOME='$HOME'; export T3CODE_HOME='$BED_INBOX_HOME'; exec '$(command -v node)' '$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs' inbox post attention 'Mesh nightly failed' --body "\$body" --key mesh-nightly ;;
  *) exit 64 ;;
 esac
 EOF_ENTRY

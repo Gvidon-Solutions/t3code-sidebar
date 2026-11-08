@@ -1,4 +1,5 @@
 import { meshMillis } from "../mesh/MeshTiming.ts";
+import { resolveSshHost } from "@t3tools/shared/meshConfig";
 import { ReplicaEnvironment } from "./ReplicaEnvironment.ts";
 import { EnvironmentId, ProjectPlaceResult } from "@t3tools/contracts";
 import { callRouted } from "../mesh/MeshRouting.ts";
@@ -148,7 +149,7 @@ const make = Effect.gen(function* () {
     ),
   });
   const routeFor = Effect.fn("ProjectReplicaService.routeFor")(function* (environmentId: string) {
-    const { document } = yield* mesh.read;
+    const { document, config } = yield* mesh.read;
     const desired = configFromLayout(document);
     if (desired?.ssh?.mode === "off")
       return yield* new ReplicaError({
@@ -170,7 +171,11 @@ const make = Effect.gen(function* () {
         reason: "unreachable",
         message: "Existing SSH host is not configured.",
       });
-    return { ssh: host };
+    const ssh = yield* Effect.try({
+      try: () => resolveSshHost(host),
+      catch: (cause) => new ReplicaError({ reason: "unreachable", message: String(cause) }),
+    });
+    return { ssh, platform: config.machines[environmentId]?.reported?.platform.os };
   });
   const known = new Map<string, string>();
   const refKey = (logicalKey: string, environmentId: string) => `${logicalKey}\0${environmentId}`;
@@ -204,7 +209,7 @@ const make = Effect.gen(function* () {
       current?.message !== status.message ||
       current?.skipped !== status.skipped ||
       !NodeUtil.isDeepStrictEqual(current?.skippedPaths, status.skippedPaths) ||
-      current?.conflictCopies?.path !== conflictCopies?.path
+      !NodeUtil.isDeepStrictEqual(current?.conflictCopies, conflictCopies)
     )
       yield* mesh.edit((config) =>
         expected && !placementMatches(config, status.logicalKey, expected)
@@ -437,6 +442,28 @@ const make = Effect.gen(function* () {
         session.beta.path !== rep.path ||
         (ignoresChanged && !session.conflicts?.length))
     ) {
+      if (
+        session.paused &&
+        config.projectMountStatus[logicalKey]?.[rep.environmentId]?.message ===
+          "SSH is off; cross-machine replicas are disabled."
+      )
+        yield* runner.resume(session.identifier);
+      yield* runner.flush(session.identifier);
+      const flushed = (yield* runner.list()).find(
+        (candidate) => candidate.identifier === session?.identifier,
+      );
+      const flushedStatus = flushed && sessionStatus(flushed);
+      if (
+        !flushedStatus ||
+        flushedStatus.state !== "watching" ||
+        flushedStatus.conflicts.length ||
+        flushedStatus.problems.length
+      )
+        return yield* new ReplicaError({
+          reason: "mutagen",
+          message:
+            "Cannot replace a sync session until its existing ancestry has synchronized without conflicts or problems.",
+        });
       yield* runner.terminate(session.identifier);
       session = undefined;
     }
@@ -566,6 +593,14 @@ const make = Effect.gen(function* () {
             state: "mounting",
             message: `Resolved ${status.conflicts.length} conflicts automatically · copies in .t3-conflicts`,
             conflictCopies: {
+              locations: [source, rep]
+                .filter((entry) =>
+                  losing.some(({ loser }) => loser.environmentId === entry.environmentId),
+                )
+                .map((entry) => ({
+                  environmentId: entry.environmentId,
+                  path: `${entry.path}/.t3-conflicts/${now.replace(/[:.]/g, "-")}/`,
+                })),
               environmentId: loser.environmentId,
               path: `${loser.path}/.t3-conflicts/${now.replace(/[:.]/g, "-")}/`,
             },
@@ -1742,6 +1777,7 @@ const make = Effect.gen(function* () {
       yield* locks.withLock(
         refKey(input.logicalKey, input.environmentId),
         Effect.gen(function* () {
+          yield* localEnvironment.retry(rep.path);
           const sessions = yield* runner.list();
           if (input.resume !== false && sessions.some((session) => session.name === name))
             yield* runner.resume(name);

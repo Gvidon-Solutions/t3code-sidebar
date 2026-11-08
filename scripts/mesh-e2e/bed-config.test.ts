@@ -9,6 +9,8 @@ const execute = NodeUtil.promisify(NodeChildProcess.execFile);
 it("routes bed roles through the configured inventory and pins both SSH destinations", async () => {
   const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "bed-inventory-"));
   try {
+    for (const name of ["lib.sh", "bed-config.sh"])
+      await NodeFSP.copyFile(NodePath.join(import.meta.dirname, name), NodePath.join(root, name));
     await NodeFSP.writeFile(NodePath.join(root, "ssh"), '#!/bin/sh\nprintf "%s\\n" "$@"\n', {
       mode: 0o700,
     });
@@ -18,17 +20,26 @@ it("routes bed roles through the configured inventory and pins both SSH destinat
         "-c",
         'source "$1"; printf "%s\\n" "${BED_MACHINES[@]}"; worker_ssh probe; cloudbox_ssh probe',
         "bed-config",
-        NodePath.join(import.meta.dirname, "lib.sh"),
+        NodePath.join(root, "lib.sh"),
       ],
       {
         env: {
           ...process.env,
           PATH: root + NodePath.delimiter + process.env.PATH,
-          WORKER_HOST: "studio.test",
-          CLOUDBOX_HOST: "cloudbox.test",
-          WORKER_SSH_CONFIG: "/private/worker-config",
-          WORKER_SSH_KEY: "/private/worker-key",
-          CLOUDBOX_SSH_CONFIG: "/private/cloud-config",
+          NODE_B_HOST: "studio.test",
+          CLOUD_KNOWN_HOSTS: "/private/known-hosts",
+          CLOUD_SSH_USER: "bed",
+          NODE_A_PUBLIC_IP: "192.0.2.1",
+          NODE_B_PUBLIC_IP: "192.0.2.2",
+          NODE_A_NODE_BIN_DIR: root,
+          NODE_B_NODE_BIN_DIR: root,
+          NODE_B_STATE_DIR: "/private/worker",
+          NODE_B_DEMO_DIR: "/private/worker/projects/demo",
+          CLOUD_DIR: "/private/cloud",
+          CLOUD_HOST: "cloudbox.test",
+          NODE_B_SSH_CONFIG: "/private/worker-config",
+          NODE_B_SSH_KEY: "/private/worker-key",
+          CLOUD_SSH_CONFIG: "/private/cloud-config",
         },
       },
     );

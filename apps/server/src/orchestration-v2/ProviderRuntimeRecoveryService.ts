@@ -184,6 +184,14 @@ function latestStartedRun(
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettings.ServerSettingsService;
   const admission = yield* Effect.serviceOption(DeliveryAdmission);
+  const deferredRuns = Effect.gen(function* () {
+    return Option.isSome(admission) ? yield* admission.value.deferredRunIds : new Set<string>();
+  }).pipe(
+    Effect.mapError(
+      (cause) => new ProviderRuntimeRecoveryError({ operation: "read-projections", cause }),
+    ),
+  );
+
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const eventSink = yield* EventSink.EventSinkV2;
   const ids = yield* IdAllocator.IdAllocatorV2;
@@ -210,13 +218,11 @@ export const make = Effect.gen(function* () {
       projection: ProjectionStore.ProjectionRuntimeRecoveryState,
       trigger: "startup" | "shutdown",
       continueAfterRestart: boolean,
+      deferred: ReadonlySet<string>,
       stoppedThisPass: ReadonlyMap<string, RecoverySession> = new Map(),
     ) {
       const now = yield* DateTime.now;
       const runs = [] as Array<OrchestrationV2ThreadProjection["runs"][number]>;
-      const deferred = Option.isSome(admission)
-        ? yield* admission.value.deferredRunIds.pipe(Effect.orDie)
-        : new Set<string>();
       for (const run of nonterminalRuns(projection)) {
         if (deferred.has(run.id)) continue;
         if (run.status === "waiting") {
@@ -753,6 +759,7 @@ export const make = Effect.gen(function* () {
     let closedRequests = 0;
     let retiredEffects = 0;
     const stoppedThisPass = new Map<string, RecoverySession>();
+    const deferred = yield* deferredRuns;
     for (const threadId of threadIds) {
       const projection = yield* projections.getRuntimeRecoveryProjection(threadId).pipe(
         Effect.mapError(
@@ -764,15 +771,18 @@ export const make = Effect.gen(function* () {
             }),
         ),
       );
-      const deferred = Option.isSome(admission)
-        ? yield* admission.value.deferredRunIds.pipe(Effect.orDie)
-        : new Set<string>();
       if (projection.runs.some((run) => deferred.has(run.id))) continue;
       const enabled =
         continueAfterRestart !== null &&
         resolveProjectSettings(continueAfterRestart, projection.thread.projectId).settings
           .continueThreadsAfterServerUpdate;
-      const result = yield* reconcileProjection(projection, trigger, enabled, stoppedThisPass);
+      const result = yield* reconcileProjection(
+        projection,
+        trigger,
+        enabled,
+        deferred,
+        stoppedThisPass,
+      );
       for (const session of projection.providerSessions) {
         if (session.status !== "stopped" && session.status !== "error") {
           stoppedThisPass.set(session.id, session);
@@ -801,6 +811,7 @@ export const make = Effect.gen(function* () {
     const enabled = yield* settings.getSettings.pipe(Effect.orElseSucceed(() => null));
     if (!enabled) return;
     const threadIds = yield* projections.getRecoveryThreadIds("runtime");
+    const deferred = yield* deferredRuns;
     for (const threadId of threadIds) {
       yield* Effect.gen(function* () {
         const projection = yield* projections.getRuntimeRecoveryProjection(threadId);
@@ -811,11 +822,7 @@ export const make = Effect.gen(function* () {
           return;
         const run = restartContinuationRun(projection, yield* DateTime.now);
         if (!run) return;
-        if (
-          Option.isSome(admission) &&
-          (yield* admission.value.deferredRunIds.pipe(Effect.orDie)).has(run.id)
-        )
-          return;
+        if (deferred.has(run.id)) return;
         const commandId = CommandId.make(`command:restart-prepare:${run.id}`);
         yield* eventSink.writeWithEffects({
           commandId,

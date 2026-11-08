@@ -13,6 +13,7 @@ import * as Schema from "effect/Schema";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  MeshConfigError,
   MeshUpdateVoteInput,
   OrchestratorMcpFailure,
 } from "@t3tools/contracts";
@@ -111,7 +112,8 @@ const fixture = Effect.gen(function* () {
             }),
           }
         : {}),
-      ...(fail ? { T3_MESH_TEST_MODE: "1", T3_MESH_TEST_FAIL_HEALTH_VERSION: "0.1.6" } : {}),
+      T3_MESH_TEST_MODE: "1",
+      T3_MESH_TEST_FAIL_HEALTH_VERSION: version,
     };
     const openDrain = {
       requestId: null,
@@ -170,7 +172,19 @@ const fixture = Effect.gen(function* () {
       }),
     );
     const service = yield* Rollout.MeshRollout.pipe(
-      Effect.provide(Rollout.layer.pipe(Layer.provide(dependencies))),
+      Effect.provide(
+        (fail
+          ? Rollout.layerTest(
+              Effect.fail(
+                new MeshConfigError({
+                  reason: "storage",
+                  message: "Injected mesh rollout health failure",
+                }),
+              ),
+            )
+          : Rollout.layer
+        ).pipe(Layer.provide(dependencies)),
+      ),
       Effect.provideService(HostProcess.Environment, environment),
       Effect.provideService(Rollout.MeshRuntimeVersion, version),
       Effect.provideService(MeshTrialFailureExit, Effect.void),

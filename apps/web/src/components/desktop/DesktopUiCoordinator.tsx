@@ -10,7 +10,7 @@ import {
 } from "../../state/environments";
 
 export function DesktopUiCoordinator() {
-  const ui = window.desktopBridge?.ui;
+  const ui = window.desktopBridge?.ui ?? window.desktopShell?.ui;
   const [loaded, setLoaded] = useState<DesktopUiInfo | null>(null);
   const routeEnvironment = useParams({ strict: false, select: (params) => params.environmentId });
   const draftId = useParams({ strict: false, select: (params) => params.draftId });

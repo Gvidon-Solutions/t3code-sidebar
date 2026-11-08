@@ -1,8 +1,28 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cliArchiveTarCommand, newestCliReleaseVersion, parseChecksums } from "./cliRelease.ts";
+import {
+  CLI_RELEASES_PAGE_URL,
+  cliReleaseAssetUrl,
+  cliReleaseDownloadBaseUrl,
+  cliReleaseIndexPageUrl,
+  cliArchiveTarCommand,
+  newestCliReleaseVersion,
+  parseChecksums,
+} from "./cliRelease.ts";
 
 describe("cliRelease", () => {
+  it("uses the fork release repository and refuses insecure download overrides", () => {
+    expect(cliReleaseAssetUrl("1.2.3", "runtime.tar.gz")).toBe(
+      `${CLI_RELEASES_PAGE_URL}/download/v1.2.3/runtime.tar.gz`,
+    );
+    expect(cliReleaseIndexPageUrl(1)).toContain(`repos${new URL(CLI_RELEASES_PAGE_URL).pathname}`);
+    for (const base of [
+      "http://releases.example/download",
+      "file:///tmp/runtime",
+      "https://user:secret@releases.example",
+    ])
+      expect(() => cliReleaseDownloadBaseUrl("1.2.3", base)).toThrow("HTTPS");
+  });
   it("parses sha256sum output including binary-mode markers", () => {
     const checksums = parseChecksums(
       [

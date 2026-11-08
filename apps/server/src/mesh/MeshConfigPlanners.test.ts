@@ -58,6 +58,7 @@ it.effect(
   "installs display and permission policy and recreates real sessions when ignores/mode change",
   () => {
     const h = makeReplicaHarness();
+    h.validation.flush = Effect.sync(() => h.setSession({ status: "watching" }));
     const dependencies = Layer.effect(
       ReplicaRuntime,
       Effect.map(ProjectReplicaService, (service) => ({
@@ -77,6 +78,21 @@ it.effect(
       const mesh = yield* MeshLayoutService;
       const planners = yield* MeshConfigPlanners;
       const plan = (name: string) => planners.find((planner) => planner.name === name)!;
+      const bootstrap = yield* plan("bootstrap").plan(
+        {
+          ...doc,
+          machines: {
+            ...doc.machines,
+            cloudbox: {
+              reach: { address: "https://cloudbox.example" },
+              bootstrap: { ssh: "dev@cloudbox", hostKey: "ssh-ed25519 AAAA" },
+            },
+          },
+        },
+        undefined,
+      );
+      expect(bootstrap[0]?.description).toContain("host fingerprint SHA256:");
+      expect(bootstrap[0]?.description).toContain("HTTPS pairing via https://cloudbox.example");
       const display = (yield* plan("machines").plan(doc, undefined)).find(
         (a) => a.machine === "laptop",
       )!;
@@ -95,6 +111,14 @@ it.effect(
       const permission = (yield* plan("links").plan(doc, undefined)).find(
         (a) => a.server === "replica",
       )!;
+      expect(permission.description).toContain("files=none, replicas=false, threads=true");
+      const fullAccess = {
+        ...doc,
+        links: { overrides: [{ between: ["studio", "laptop"] as const, files: "all" as const }] },
+      };
+      expect((yield* plan("links").plan(fullAccess, undefined))[0]?.description).toContain(
+        "files=all",
+      );
       yield* plan("links").reconcile(permission, doc);
       expect((yield* mesh.read).document["mesh.linkPolicy/replica/studio"]?.v).toMatchObject({
         files: "none",

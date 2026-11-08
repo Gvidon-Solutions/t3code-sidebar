@@ -1,7 +1,7 @@
 import {
   MESH_WS_METHODS,
   MeshLayoutEntries,
-  SidebarWorkspacesConfig,
+  Hlc as HlcSchema,
   type EnvironmentId,
   type MeshLayoutSnapshot as RpcMeshLayoutSnapshot,
   type SidebarWorkspacesConfig as SidebarWorkspacesConfigType,
@@ -17,6 +17,7 @@ import {
   type MeshLayoutDocument,
 } from "@t3tools/shared/meshLayout";
 import * as Schema from "effect/Schema";
+import * as Effect from "effect/Effect";
 import { AsyncResult, Atom } from "effect/reactivity";
 import type * as EnvironmentRegistry from "../connection/registry.ts";
 import {
@@ -78,11 +79,10 @@ const MeshLayoutCacheSchema = Schema.Struct({
     Schema.Struct({
       environmentId: Schema.optionalKey(Schema.String),
       document: MeshLayoutEntries,
-      config: SidebarWorkspacesConfig,
     }),
   ),
   outbox: MeshLayoutEntries,
-  clock: Schema.NullOr(Schema.String),
+  clock: Schema.NullOr(HlcSchema),
 });
 
 const decodeCache = Schema.decodeUnknownSync(Schema.fromJsonString(MeshLayoutCacheSchema));
@@ -93,18 +93,20 @@ export function parseMeshLayoutCache(json: string | null): MeshLayoutClientState
   if (json === null || json.trim() === "") return null;
   try {
     const parsed = decodeCache(json);
+    const document = (parsed.snapshot?.document ?? {}) as MeshLayoutDocument;
     return {
       snapshot: parsed.snapshot
         ? {
             environmentId: parsed.snapshot.environmentId ?? "",
-            document: parsed.snapshot.document as MeshLayoutDocument,
-            config: parsed.snapshot.config,
+            document,
+            config: materialize(document),
           }
         : null,
       outbox: parsed.outbox as MeshLayoutDocument,
       clock: parsed.clock,
     };
-  } catch {
+  } catch (error) {
+    Effect.runSync(Effect.logWarning("Unable to decode mesh layout cache", error));
     return null;
   }
 }
@@ -166,9 +168,8 @@ function highestHlc(hlcs: ReadonlyArray<Hlc | null | undefined>, fallback: Hlc |
 export function mergeMeshLayoutSnapshot(
   state: MeshLayoutClientState,
   remote: MeshLayoutSnapshot,
-  _now: number = 0,
 ): MeshLayoutClientState {
-  const document = migrateLogicalProjectIds(merge(state.snapshot?.document ?? {}, remote.document));
+  const document = merge(state.snapshot?.document ?? {}, remote.document);
   const outbox = Object.fromEntries(
     Object.entries(state.outbox).filter(([key, entry]) => {
       const seen = remote.document[key];
@@ -210,7 +211,7 @@ export function acknowledgeMeshLayoutEntries(
 export function isPermanentMeshLayoutFailure(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
   const tag = (error as { _tag?: unknown })._tag;
-  if (tag === "EnvironmentAuthorizationError") return true;
+  if (tag === "EnvironmentAuthorizationError") return false;
   if (tag !== "MeshLayoutError") return false;
   const reason = (error as { reason?: unknown }).reason;
   return reason === "invalid_entries" || reason === "storage" || reason === "disabled";
@@ -261,6 +262,41 @@ function rpcSnapshot(snapshot: RpcMeshLayoutSnapshot): MeshLayoutSnapshot {
  */
 export class MeshLayoutStore {
   private state: MeshLayoutClientState = emptyMeshLayoutState();
+  private confirmedDocument: MeshLayoutDocument = {};
+
+  private migrateHydratedCache = false;
+  private acceptSnapshot(snapshot: RpcMeshLayoutSnapshot) {
+    if (this.migrateHydratedCache) {
+      this.migrateHydratedCache = false;
+      const aliases = merge(
+        this.state.snapshot?.document ?? {},
+        snapshot.document as MeshLayoutDocument,
+      );
+      const outbox = migrateLogicalProjectIds(this.state.outbox, aliases);
+      const document = migrateLogicalProjectIds(aliases);
+      this.confirmedDocument = migrateLogicalProjectIds(this.confirmedDocument, aliases);
+      if (this.state.snapshot)
+        this.state = {
+          ...this.state,
+          outbox,
+          snapshot: { ...this.state.snapshot, document, config: materialize(document) },
+        };
+    }
+    this.confirmedDocument = merge(this.confirmedDocument, snapshot.document as MeshLayoutDocument);
+    this.state = mergeMeshLayoutSnapshot(this.state, rpcSnapshot(snapshot));
+  }
+
+  private rejectEntries(entries: MeshLayoutDocument) {
+    this.state = acknowledgeMeshLayoutEntries(this.state, entries);
+    if (this.state.snapshot) {
+      const document = merge(this.confirmedDocument, this.state.outbox);
+      this.state = {
+        ...this.state,
+        snapshot: { ...this.state.snapshot, document, config: materialize(document) },
+      };
+    }
+    this.emit();
+  }
   private listeners = new Set<() => void>();
   readonly subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -273,8 +309,17 @@ export class MeshLayoutStore {
   hydrate(state: MeshLayoutClientState) {
     if (this.cacheHydrated) return;
     this.cacheHydrated = true;
+    this.migrateHydratedCache = true;
     const restored =
       this.state.snapshot === null ? state : mergeMeshLayoutSnapshot(state, this.state.snapshot);
+    this.confirmedDocument = merge(
+      this.confirmedDocument,
+      Object.fromEntries(
+        Object.entries(restored.snapshot?.document ?? {}).filter(
+          ([key]) => !Object.hasOwn(restored.outbox, key),
+        ),
+      ),
+    );
     this.state = {
       ...restored,
       outbox: merge(restored.outbox, this.state.outbox),
@@ -353,7 +398,7 @@ export class MeshLayoutStore {
       next,
       (snapshot) => {
         if (this.disposed || this.source !== next) return;
-        this.state = mergeMeshLayoutSnapshot(this.state, rpcSnapshot(snapshot), this.now());
+        this.acceptSnapshot(snapshot);
         this.emit();
         void this.persist()
           .then(() => this.replayOutbox())
@@ -365,13 +410,13 @@ export class MeshLayoutStore {
         this.unsubscribe?.();
         this.unsubscribe = null;
         this.source = null;
-        this.options.onPermanentFailure?.(error);
+        if (isPermanentMeshLayoutFailure(error)) this.options.onPermanentFailure?.(error);
         void this.refreshEnvironments().catch((error) => this.options.onPermanentFailure?.(error));
       },
     );
     try {
       const snapshot = await this.options.rpc.get(next);
-      this.state = mergeMeshLayoutSnapshot(this.state, rpcSnapshot(snapshot), this.now());
+      this.acceptSnapshot(snapshot);
       this.emit();
       await this.persist();
     } catch (error) {
@@ -384,10 +429,17 @@ export class MeshLayoutStore {
   async edit(
     update: (config: SidebarWorkspacesConfigType) => SidebarWorkspacesConfigType,
   ): Promise<MeshLayoutDocument> {
-    const { state, entries } = editMeshLayout(this.state, update, {
-      deviceId: this.options.deviceId,
-      now: this.now(),
-    });
+    let result: EditResult;
+    try {
+      result = editMeshLayout(this.state, update, {
+        deviceId: this.options.deviceId,
+        now: this.now(),
+      });
+    } catch (error) {
+      this.options.onPermanentFailure?.(error);
+      throw error;
+    }
+    const { state, entries } = result;
     this.state = state;
     this.emit();
     await this.persist();
@@ -395,15 +447,13 @@ export class MeshLayoutStore {
     if (source === null || Object.keys(entries).length === 0) return entries;
     try {
       const snapshot = await this.options.rpc.apply(source, entries);
-      this.state = acknowledgeMeshLayoutEntries(
-        mergeMeshLayoutSnapshot(this.state, rpcSnapshot(snapshot), this.now()),
-        entries,
-      );
+      this.acceptSnapshot(snapshot);
+      this.state = acknowledgeMeshLayoutEntries(this.state, entries);
       this.emit();
       await this.persist();
     } catch (error) {
       if (isPermanentMeshLayoutFailure(error)) {
-        this.state = acknowledgeMeshLayoutEntries(this.state, entries);
+        this.rejectEntries(entries);
         this.options.onPermanentFailure?.(error);
         await this.persist();
       }
@@ -420,15 +470,13 @@ export class MeshLayoutStore {
     this.replaying = (async () => {
       try {
         const snapshot = await this.options.rpc.apply(source, entries);
-        this.state = acknowledgeMeshLayoutEntries(
-          mergeMeshLayoutSnapshot(this.state, rpcSnapshot(snapshot), this.now()),
-          entries,
-        );
+        this.acceptSnapshot(snapshot);
+        this.state = acknowledgeMeshLayoutEntries(this.state, entries);
         this.emit();
         await this.persist();
       } catch (error) {
         if (isPermanentMeshLayoutFailure(error)) {
-          this.state = acknowledgeMeshLayoutEntries(this.state, entries);
+          this.rejectEntries(entries);
           this.options.onPermanentFailure?.(error);
           await this.persist();
         }

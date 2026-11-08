@@ -16,7 +16,7 @@ import {
 } from "./inboxList";
 
 const studio = EnvironmentId.make("studio");
-const laptop = EnvironmentId.make("laptop");
+const nodeB = EnvironmentId.make("nodeB");
 
 function issue(
   id: string,
@@ -76,13 +76,13 @@ describe("mergeInboxSources", () => {
     const state = mergeInboxSources(
       [
         source(studio, [issue("a", { severity: "info" })]),
-        source(laptop, [issue("b", { severity: "action" })]),
+        source(nodeB, [issue("b", { severity: "action" })]),
         source(EnvironmentId.make("old"), null),
       ],
       30,
     );
     expect(state.open.map((item) => [item.environmentId, item.issue.id])).toEqual([
-      [laptop, "b"],
+      [nodeB, "b"],
       [studio, "a"],
     ]);
     expect(state.isLoading).toBe(false);
@@ -92,7 +92,7 @@ describe("mergeInboxSources", () => {
     const state = mergeInboxSources(
       [
         source(studio, [closed("g1", 1), closed("g5", 5)], 7),
-        source(laptop, [closed("r3", 3), closed("r9", 9)], 4),
+        source(nodeB, [closed("r3", 3), closed("r9", 9)], 4),
       ],
       3,
     );
@@ -103,8 +103,7 @@ describe("mergeInboxSources", () => {
   it("is loading only while nothing has arrived from a connected machine", () => {
     expect(mergeInboxSources([source(studio, null, 0, true)], 30).isLoading).toBe(true);
     expect(
-      mergeInboxSources([source(studio, null, 0, true), source(laptop, [issue("a")])], 30)
-        .isLoading,
+      mergeInboxSources([source(studio, null, 0, true), source(nodeB, [issue("a")])], 30).isLoading,
     ).toBe(false);
     expect(mergeInboxSources([source(studio, null)], 30).isLoading).toBe(false);
   });
@@ -150,9 +149,9 @@ describe("presentInboxEntry", () => {
       detail: "Renewed the certificate.",
       tone: "outcome",
     });
-    expect(presentInboxEntry(entry("dismissed", "Moved to laptop"))).toMatchObject({
+    expect(presentInboxEntry(entry("dismissed", "Moved to nodeB"))).toMatchObject({
       label: "Closed as not relevant",
-      detail: "Moved to laptop",
+      detail: "Moved to nodeB",
       tone: "outcome",
     });
   });

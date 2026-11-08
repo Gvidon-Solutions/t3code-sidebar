@@ -151,7 +151,13 @@ export const SidebarProjectMountStatus = Schema.Struct({
   skipped: Schema.optionalKey(Schema.Number),
   skippedPaths: Schema.optionalKey(Schema.Array(ReplicaSkippedPath)),
   conflictCopies: Schema.optionalKey(
-    Schema.Struct({ environmentId: Schema.String, path: Schema.String }),
+    Schema.Struct({
+      environmentId: Schema.String,
+      path: Schema.String,
+      locations: Schema.optionalKey(
+        Schema.Array(Schema.Struct({ environmentId: Schema.String, path: Schema.String })),
+      ),
+    }),
   ),
   state: SidebarProjectMountState,
   message: Schema.optionalKey(Schema.String),

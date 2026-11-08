@@ -1,3 +1,4 @@
+import * as NodeCrypto from "node:crypto";
 import * as NodeTest from "node:test";
 const { test } = NodeTest;
 import * as NodeAssert from "node:assert/strict";
@@ -295,7 +296,8 @@ test("failed runtime health leaves phone catalogs unchanged; only healthy rollou
         JSON.stringify({ id: dir === candidate ? "new" : "old" }),
       );
     }
-    writeFileSync(join(candidate, "assets/new-hash"), "new bundle");
+    const assetHash = NodeCrypto.createHash("sha256").update("new bundle").digest("base64url");
+    writeFileSync(join(candidate, "assets", assetHash), "new bundle");
     let active = false,
       healthy = false,
       fenced = false;
@@ -337,7 +339,10 @@ test("failed runtime health leaves phone catalogs unchanged; only healthy rollou
       JSON.parse(readFileSync(join(home, "mobile-updates/catalog.json"), "utf8")).id,
       "new",
     );
-    assert.equal(readFileSync(join(home, "mobile-updates/assets/new-hash"), "utf8"), "new bundle");
+    assert.equal(
+      readFileSync(join(home, "mobile-updates/assets", assetHash), "utf8"),
+      "new bundle",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -398,6 +403,29 @@ test("native APK is staged immutably beside OTA assets and the incompatible-runt
     assert.equal(readFileSync(join(store, "assets", catalog.apkAsset.hash), "utf8"), "signed-apk");
     stageMobileApk(store, apk, "https://studio.example");
     assert.deepEqual(JSON.parse(readFileSync(join(store, "catalog.json"), "utf8")), catalog);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("refuses corrupt staged OTA bytes before replacing a catalog", async () => {
+  const { targetOperation } = await import("./target.mjs");
+  const root = mkdtempSync(join(tmpdir(), "ota-corrupt-"));
+  try {
+    const source = join(root, "source"),
+      home = join(root, "home");
+    mkdirSync(join(source, "assets"), { recursive: true });
+    mkdirSync(join(home, "mobile-updates"), { recursive: true });
+    const key = NodeCrypto.createHash("sha256").update("correct").digest("base64url");
+    writeFileSync(join(source, "assets", key), "corrupt");
+    writeFileSync(join(source, "certificate.pem"), "certificate");
+    writeFileSync(join(source, "catalog.json"), "candidate");
+    writeFileSync(join(home, "mobile-updates", "catalog.json"), "original");
+    await assert.rejects(
+      targetOperation({ home, runtimeDir: root, mobileStore: source }, "publishMobile"),
+      /content hash/,
+    );
+    assert.equal(readFileSync(join(home, "mobile-updates", "catalog.json"), "utf8"), "original");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

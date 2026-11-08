@@ -94,7 +94,12 @@ function setup() {
 
 it("follows connected thread servers and runtime changes, retaining the source in Settings", async () => {
   const fixture = setup();
-  using _bridge = stubGlobal("desktopBridge", fixture.bridge);
+  using _fullBridge = stubGlobal("desktopBridge", undefined);
+  using _bridge = stubGlobal("desktopShell", {
+    ...fixture.bridge,
+    origin: "https://studio.example/",
+    returnToBundled: vi.fn(),
+  });
   function Client() {
     const [generation, setGeneration] = useState(0);
     return (

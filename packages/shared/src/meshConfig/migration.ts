@@ -1,4 +1,4 @@
-import { defaultAgentAliases } from "./index.ts";
+import { defaultAgentAliases, escapeProjectGlob, machineByName } from "./index.ts";
 import * as Schema from "effect/Schema";
 import type { Json } from "../meshLayout/document.ts";
 import {
@@ -143,14 +143,12 @@ export function migrateConfig(
     ssh: { mode: routes.length ? "existing" : "managed" },
     links: {
       default: { files: "projects", replicas: true, threads: true },
-      overrides: names.flatMap((a, i) =>
-        names.slice(i + 1).map((b) => ({ between: [a, b] as const, files: "all" as const })),
-      ),
+      overrides: [],
     },
     projects: {
       defaults: { conflicts: "primary-wins", replica: "lite", ignore: [] },
       overrides: [...projectIgnores].map(([project, patterns]) => ({
-        project,
+        project: escapeProjectGlob(project),
         ignore: [...patterns],
       })),
     },
@@ -216,3 +214,42 @@ export function extractConfigMigration(
   }
   return entries;
 }
+
+const peerLabels = (config: MeshConfigDocument, name: string) => {
+  const machine = machineByName(config, name);
+  if (!machine) return [];
+  const extra = Array.isArray(machine.legacyPeerLabels)
+    ? machine.legacyPeerLabels.filter((label): label is string => typeof label === "string")
+    : [];
+  return [
+    name,
+    machine.title,
+    machine.label,
+    ...(Array.isArray(machine.aliases)
+      ? machine.aliases.filter((alias): alias is string => typeof alias === "string")
+      : []),
+    ...extra,
+  ].filter((label): label is string => typeof label === "string" && label.length > 0);
+};
+
+export const machineByPeerLabel = (
+  config: MeshConfigDocument,
+  bindings: Readonly<Record<string, string>>,
+  peerLabel: string | undefined,
+  migratedLabels: Readonly<Record<string, readonly string[]>> = {},
+) => {
+  if (peerLabel === undefined) return undefined;
+  const compact = peerLabel.replace(/^T3 Code\s*·\s*/u, "").trim();
+  const matches = Object.entries(bindings).filter(
+    ([name]) =>
+      [...peerLabels(config, name), ...(migratedLabels[name] ?? [])].includes(peerLabel) ||
+      [...peerLabels(config, name), ...(migratedLabels[name] ?? [])].includes(compact),
+  );
+  return matches.length === 1
+    ? {
+        name: matches[0]![0],
+        environmentId: matches[0]![1],
+        machine: machineByName(config, matches[0]![0]),
+      }
+    : undefined;
+};

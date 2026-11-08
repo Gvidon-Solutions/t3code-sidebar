@@ -31,7 +31,7 @@ it.effect("reports a signed-in host when glab's default host is signed out", () 
   x gitlab.gnome.org: API call failed: GET https://gitlab.gnome.org/api/v4/user: 401 {message: 401 Unauthorized}
 `;
     const allHosts = `gitlab.com
-  ✓ Logged in to gitlab.com as gitlab-user (/home/user/.config/glab-cli/config.yml)
+  ✓ Logged in to gitlab.com as gitlab-user (/home/dev/.config/glab-cli/config.yml)
 ${defaultHostOnly}`;
     const item = yield* probeSourceControlProvider({
       spec: GitLabSourceControlProvider.discovery,

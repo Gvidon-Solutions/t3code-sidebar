@@ -24,9 +24,11 @@ import {
  * T3 Mesh (fork): the shared layout document every server replicates and every client reads.
  * Entries follow `@t3tools/shared/meshLayout` (LWW per key; `v: null` is a tombstone).
  */
+export const Hlc = Schema.String.check(Schema.isPattern(/^\d{13}\.\d{5}\..+$/));
+
 export const MeshLayoutEntry = Schema.Struct({
   v: Schema.Unknown,
-  h: Schema.String,
+  h: Hlc,
 });
 export type MeshLayoutEntry = typeof MeshLayoutEntry.Type;
 
@@ -61,7 +63,13 @@ export const ReplicaLiveStatus = Schema.Struct({
   skipped: SidebarProjectMountStatus.fields.skipped,
   skippedPaths: SidebarProjectMountStatus.fields.skippedPaths,
   conflictCopies: Schema.optionalKey(
-    Schema.Struct({ environmentId: Schema.String, path: Schema.String }),
+    Schema.Struct({
+      environmentId: Schema.String,
+      path: Schema.String,
+      locations: Schema.optionalKey(
+        Schema.Array(Schema.Struct({ environmentId: Schema.String, path: Schema.String })),
+      ),
+    }),
   ),
   logicalKey: Schema.String,
   environmentId: Schema.String,
@@ -101,6 +109,15 @@ export const MeshPeerState = Schema.Struct({
 export type MeshPeerState = typeof MeshPeerState.Type;
 
 export const MeshLayoutStatus = Schema.Struct({
+  legacyIdentityUpgrades: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        sessionId: Schema.String,
+        environmentId: Schema.String,
+        boundAt: Schema.String,
+      }),
+    ),
+  ),
   quarantine: Schema.optionalKey(
     Schema.Array(Schema.Struct({ key: Schema.String, reason: Schema.String })),
   ),

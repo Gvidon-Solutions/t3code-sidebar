@@ -1,3 +1,4 @@
+import { DesktopUi } from "../../app/DesktopUi.ts";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { ManagedPolicyLimits } from "@t3tools/contracts";
@@ -201,7 +202,10 @@ describe("installRelayTelemetryEnabled", () => {
       yield* installRelayTelemetryEnabled().pipe(
         Effect.provideService(HostProcess.Environment, env),
         Effect.provide(
-          Layer.mergeAll(DesktopIpc.layer(ipcMain), DesktopManagedPolicy.layerTest(policy)),
+          Layer.mergeAll(
+            DesktopIpc.layer(ipcMain, () => undefined),
+            DesktopManagedPolicy.layerTest(policy),
+          ),
         ),
       );
       const event = { returnValue: undefined as unknown };
@@ -240,7 +244,7 @@ describe("readMedia", () => {
   it.effect("reads http(s) media only for the main window", () =>
     Effect.gen(function* () {
       const mib = new Uint8Array(1024 * 1024);
-      const fetch = vi.fn(async (url: string) => {
+      const fetch = vi.fn(async (url: string, _init: RequestInit) => {
         if (url.endsWith("/missing.png")) return new Response("Not Found", { status: 404 });
         if (url.endsWith("/small.png")) return new Response(new Uint8Array([1, 2]));
         let sent = 0;
@@ -254,22 +258,28 @@ describe("readMedia", () => {
         webContents: { id: 1, session: { fetch } },
       } as unknown as Electron.BrowserWindow;
       const read = (url: string, senderId: number) =>
-        readMedia
-          .handler(url, { sender: { id: senderId } })
-          .pipe(
-            Effect.provide(
+        readMedia.handler(url, { sender: { id: senderId } }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
               Layer.mock(ElectronWindow.ElectronWindow)({ main: Effect.succeedSome(main) }),
+              Layer.mock(DesktopUi)({
+                connectionOrigins: Effect.succeed(["https://example.com"]),
+              }),
             ),
-          );
+          ),
+        );
 
       assert.strictEqual(yield* read("https://example.com/a.png", 2), null);
       assert.strictEqual(yield* read("file:///etc/passwd", 1), null);
+      assert.strictEqual(yield* read("https://attacker.example/small.png", 1), null);
+      assert.strictEqual(yield* read("https://user:pass@example.com/small.png", 1), null);
       assert.strictEqual(fetch.mock.calls.length, 0);
       assert.deepEqual(yield* read("https://example.com/small.png", 1), {
         status: 200,
         mimeType: "",
         data: Buffer.from([1, 2]),
       });
+      assert.deepEqual(fetch.mock.calls[0]?.[1], { credentials: "omit", redirect: "error" });
       assert.deepEqual(yield* read("https://example.com/missing.png", 1), {
         status: 404,
         mimeType: "text/plain;charset=UTF-8",

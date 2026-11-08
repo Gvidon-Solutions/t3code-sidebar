@@ -5,6 +5,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { vi } from "vite-plus/test";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -13,7 +14,9 @@ import { ServerConfig, layerTest } from "../config.ts";
 import { MobileOta, layer } from "./MobileOta.ts";
 import { selectOtaRelease, verifyOtaRelease, type OtaRelease } from "./otaProtocol.ts";
 const { execFileSync } = NodeChildProcess;
-const { sign } = NodeCrypto;
+const { sign, createHash } = NodeCrypto;
+const bundleHash = createHash("sha256").update("bundle").digest("base64url");
+const apkHash = createHash("sha256").update("signed-apk").digest("base64url");
 const { mkdtempSync, readFileSync, rmSync } = NodeFS;
 const { tmpdir } = NodeOS;
 const { join } = NodePath;
@@ -55,7 +58,7 @@ function signingFixture() {
 function release(id: string, runtime: string, createdAt: string, key: Buffer): OtaRelease {
   const asset = {
     key: "bundle",
-    hash: "A".repeat(43),
+    hash: bundleHash,
     contentType: "application/javascript",
     url: "https://studio.example/api/mobile-updates/assets/bundle",
     fileExtension: ".js",
@@ -115,8 +118,8 @@ describe("self-hosted mobile updates", () => {
             releases: [first, second],
             apkUrl: "https://studio.example/app.apk",
             apkAsset: {
-              key: "C".repeat(43),
-              hash: "C".repeat(43),
+              key: apkHash,
+              hash: apkHash,
               contentType: "application/vnd.android.package-archive",
               url: "https://studio.example/app.apk",
               fileExtension: "apk",
@@ -128,6 +131,7 @@ describe("self-hosted mobile updates", () => {
           "expo-platform": "android",
           "expo-runtime-version": "native-a",
         };
+        using reads = vi.spyOn(fs, "readFileString");
         const compatible = yield* ota.manifest(request);
         expect(compatible.status).toBe(200);
         expect(compatible.headers["expo-signature"]).toContain(first.signature);
@@ -139,24 +143,28 @@ describe("self-hosted mobile updates", () => {
         );
         expect((yield* ota.asset("../certificate.pem")).status).toBe(404);
         yield* fs.makeDirectory(join(root, "assets"));
-        yield* fs.writeFileString(join(root, "assets", "A".repeat(43)), "bundle");
-        expect((yield* ota.asset("A".repeat(43))).headers["content-type"]).toBe(
+        yield* fs.writeFileString(join(root, "assets", bundleHash), "bundle");
+        expect((yield* ota.asset(bundleHash)).headers["content-type"]).toBe(
           "application/javascript",
         );
         expect((yield* ota.asset("B".repeat(43))).status).toBe(404);
-        yield* fs.writeFileString(join(root, "assets", "C".repeat(43)), "signed-apk");
-        expect((yield* ota.asset("C".repeat(43))).headers["content-type"]).toBe(
+        yield* fs.writeFileString(join(root, "assets", apkHash), "signed-apk");
+        expect((yield* ota.asset(apkHash)).headers["content-type"]).toBe(
           "application/vnd.android.package-archive",
         );
-        expect((yield* ota.asset("C".repeat(43))).headers["content-disposition"]).toBe(
+        expect((yield* ota.asset(apkHash)).headers["content-disposition"]).toBe(
           'attachment; filename="T3-Code-Sidebar.apk"',
         );
+        yield* fs.writeFileString(join(root, "assets", bundleHash), "corrupt");
+        expect((yield* ota.asset(bundleHash)).status).toBe(404);
+        expect(
+          reads.mock.calls.filter(([file]) => file === join(root, "catalog.json")),
+        ).toHaveLength(1);
         const status = yield* ota.status("android", "native-a");
         expect(status.body._tag).toBe("Uint8Array");
         if (status.body._tag === "Uint8Array")
           expect(JSON.parse(new TextDecoder().decode(status.body.body))).toEqual({
             requiresNativeUpdate: true,
-            apkUrl: "https://studio.example/app.apk",
           });
         yield* fs.writeFileString(
           join(root, "catalog.json"),

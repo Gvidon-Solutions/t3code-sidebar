@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
-[ "$(worker_ssh 'cat /tmp/mesh-bed.lock/owner')" = "${MESH_E2E_LOCK_OWNER:-N1}" ] || die "N1 must hold the bed lock"
+[ "$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner')" = N1 ] || die "N1 must hold the bed lock"
 round=${1:-1}
 case "$round" in 1|2) ;; *) die "Usage: network-rounds.sh 1|2";; esac
 export N1_BED_WORK=${N1_BED_WORK:-/tmp/N1-network-rounds}
 export N1_BED_SOURCE=$MESH_DIR
 export N1_BED_PROJECT=N1-network-demo
-export MESH_E2E_DEMO_TITLE="$N1_BED_PROJECT"
-export N1_BED_WORKER_HOME
-N1_BED_WORKER_HOME=$(worker_ssh 'printf %s "$HOME"')
-export MESH_E2E_DEMO_ROOT="$N1_BED_WORKER_HOME/$N1_BED_PROJECT"
+export N1_BED_NODE_B_HOME
+N1_BED_NODE_B_HOME=$(nodeB_ssh 'printf %s "$HOME"')
 mkdir -p "$N1_BED_WORK/scripts"
 node --input-type=module <<'JS'
 import fs from "node:fs";
@@ -20,7 +17,9 @@ const source = process.env.N1_BED_SOURCE;
 const target = path.join(process.env.N1_BED_WORK, "scripts");
 for (const name of ["round1.sh", "round2.sh"]) {
   let text = fs.readFileSync(path.join(source, name), "utf8");
-  text = text.replaceAll("round1-", "N1-round1-").replaceAll("r1-", "N1-r1-")
+  text = text.replaceAll("/home/dev", process.env.N1_BED_NODE_B_HOME)
+    .replaceAll("xdev-e2e/demo", process.env.N1_BED_PROJECT)
+    .replaceAll("round1-", "N1-round1-").replaceAll("r1-", "N1-r1-")
     .replaceAll("round2-primary", "N1-round2-primary")
     .replaceAll("round2-orphan", "N1-round2-orphan")
     .replaceAll("round2-conflict", "N1-round2-conflict")
@@ -36,9 +35,9 @@ for (const name of ["round1.sh", "round2.sh"]) {
 const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 fs.writeFileSync(path.join(target, "lib.sh"), `. ${quote(path.join(source, "lib.sh"))}\nMESH_DIR=${quote(target)}\n`, { mode: 0o700 });
 JS
-worker_ssh 'bash -s' <<EOF
+nodeB_ssh 'bash -s' <<EOF
 set -euo pipefail
-export PATH=\$HOME/.nvm/versions/node/v26.12.1/bin:\$PATH
+export PATH=$NODE_B_NODE_BIN_DIR:\$PATH
 root="\$HOME/$N1_BED_PROJECT"
 mkdir -p "\$root/node_modules" "\$root/.venv"
 printf 'module.exports = 1;\n' > "\$root/node_modules/x.js"

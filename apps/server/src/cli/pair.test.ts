@@ -209,6 +209,11 @@ describe("t3 pair", () => {
           }),
         });
 
+        const ready = yield* captureStdout(runCli(["pair", "--base-dir", baseDir, "--check"]));
+        assert.include(ready, "Server is ready");
+        assert.notInclude(ready, "Token:");
+        assert.isFalse(NodeFS.existsSync(NodePath.join(baseDir, "userdata", "statev2.sqlite")));
+
         const output = yield* captureStdout(runCli(["pair", "--base-dir", baseDir]));
 
         assert.include(output, `Pairing with pair-test (${origin})`);

@@ -149,6 +149,7 @@ describe("Mutagen 0.18.1", () => {
 
 it("uses managed host names for Mutagen endpoints", () => {
   expect(sshEndpoint({ ssh: "t3-studio" }, "env", "/source")).toBe("t3-studio:/source");
+  expect(() => sshEndpoint({ ssh: "-oProxyCommand=id" }, "env", "/source")).toThrow(/SSH host/);
 });
 
 it("keeps user ignore order and duplicate overrides while protecting VCS and conflict copies", () => {

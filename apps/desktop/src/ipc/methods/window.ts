@@ -1,3 +1,4 @@
+import { DesktopUi } from "../../app/DesktopUi.ts";
 import {
   ContextMenuItemSchema,
   DesktopAppBrandingSchema,
@@ -329,10 +330,17 @@ export const readMedia = DesktopIpc.makeIpcMethod({
     ) {
       return null;
     }
+    const parsed = URL.parse(url);
+    if (
+      !parsed ||
+      parsed.username ||
+      parsed.password ||
+      !(yield* (yield* DesktopUi).connectionOrigins).includes(parsed.origin)
+    )
+      return null;
     const session = window.value.webContents.session;
     return yield* Effect.tryPromise(async () => {
-      // Like an <img>, send the session's cookies.
-      const response = await session.fetch(url, { credentials: "include" });
+      const response = await session.fetch(url, { credentials: "omit", redirect: "error" });
       const mimeType = response.headers.get("content-type") ?? "";
       if (!response.ok || !response.body) {
         await response.body?.cancel();

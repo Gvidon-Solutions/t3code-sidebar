@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 . "$(dirname "$0")/lib.sh"
 if [ "${1:-}" = --plan ]; then
   printf '%s\n' 'build deploy network-proxies round1 round2 config network-nat network-ssh network-faults round3 stage-m real-provider-guards realistic-matrix'
@@ -35,7 +34,8 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 mkdir -p "$BED_NIGHTLY_ROOT/state/legacy"
-for file in "$LEGACY_STUDIO_FILE" "$LEGACY_REMOTE_FILE"; do cp "$STATE_DIR/legacy/$file" "$BED_NIGHTLY_ROOT/state/legacy/$file"; done
+cp "$STATE_DIR/legacy/$LEGACY_STUDIO_FILE" "$BED_NIGHTLY_ROOT/state/legacy/studio.json"
+cp "$STATE_DIR/legacy/$LEGACY_REMOTE_FILE" "$BED_NIGHTLY_ROOT/state/legacy/cloudbox.json"
 export MESH_E2E_ARTIFACTS="$BED_NIGHTLY_ROOT/artifacts"
 export MESH_E2E_BUILD_DIR="$BED_NIGHTLY_ROOT/build"
 export MESH_E2E_STATE_DIR="$BED_NIGHTLY_ROOT/state"
@@ -48,7 +48,7 @@ export MESH_E2E_RUN_PREFIX="T1-nightly-$run_id"
 export MESH_E2E_LOCAL_PRIMARY_ROOT="$root/second-primary"
 export MESH_E2E_REVERSE_ROOT="/tmp/T1-nightly-$run_id/reverse"
 export MESH_E2E_REVERSE_TITLE="T1-nightly-$run_id-reverse"
-export MESH_E2E_DEMO_ROOT="$WORKER_HOME/t1-nightly-$run_id/demo"
+export NODE_B_DEMO_DIR="$NODE_B_STATE_DIR/projects/t1-nightly-$run_id/demo"
 export MESH_E2E_DEMO_TITLE="T1-nightly-$run_id"
 export MESH_E2E_ROUND2_WORK="$root/round2"
 export MESH_E2E_ROUND3_WORK="$root/round3"
@@ -60,7 +60,7 @@ export CARGO_HOME="$BED_NIGHTLY_ROOT/toolchain/cargo"
 mkdir -p "$CARGO_HOME/bin"
 if [ ! -f "$CARGO_HOME/bin/rustup" ]; then cp "$(command -v rustup)" "$CARGO_HOME/bin/rustup"; fi
 for tool in cargo rustc rustdoc; do ln -sf rustup "$CARGO_HOME/bin/$tool"; done
-export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$CARGO_HOME/bin:$PATH
+export PATH=$NODE_A_NODE_BIN_DIR:$CARGO_HOME/bin:$PATH
 rustup toolchain install 1.95.0 --profile minimal
 export RUSTUP_TOOLCHAIN=1.95.0
 "$MESH_DIR/build.sh" "${MESH_E2E_NIGHTLY_REF:-xdev}"

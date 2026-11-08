@@ -23,6 +23,9 @@ export const MeshConfigDocument = open({
   t3: Schema.optionalKey(
     open({
       version: Schema.optionalKey(ExactVersion),
+      runtimeChecksums: Schema.optionalKey(
+        Schema.Record(Schema.String, Schema.String.check(Schema.isPattern(/^[a-fA-F0-9]{64}$/))),
+      ),
       drain: Schema.optionalKey(
         open({
           maxWaitMs: Schema.optionalKey(DrainDeadline),
@@ -64,6 +67,14 @@ export const MeshConfigDocument = open({
             Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
           ),
           os: Schema.optionalKey(Schema.String),
+          hostKey: Schema.optionalKey(
+            Schema.String.check(
+              Schema.isPattern(
+                /^(?:ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521)) [A-Za-z0-9+/]+={0,2}$/,
+              ),
+            ),
+          ),
+          listenHost: Schema.optionalKey(Schema.Literals(["127.0.0.1", "::1", "0.0.0.0", "::"])),
         }),
       ),
     }),
@@ -120,6 +131,11 @@ export const MeshConfigDocument = open({
   ),
 });
 export type MeshConfigDocument = typeof MeshConfigDocument.Type;
+// Replicated revisions retain future schemas; local inputs implement version one.
+export const MeshConfigDocumentV1 = open({
+  ...MeshConfigDocument.schema.fields,
+  schema: Schema.Literal(1),
+});
 export const MeshConfigRevision = Schema.Struct({
   sequence: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   revision: Schema.String,

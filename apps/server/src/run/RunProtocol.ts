@@ -48,7 +48,11 @@ export const WorkerFrame = Schema.Union([
   }),
   Schema.Struct({ type: Schema.Literal("ignored"), paths: Schema.Array(Schema.String) }),
   Schema.Struct({ type: Schema.Literal("ready"), id: Schema.String }),
-  Schema.Struct({ type: Schema.Literal("error"), message: Schema.String }),
+  Schema.Struct({
+    type: Schema.Literal("error"),
+    message: Schema.String,
+    reason: Schema.optionalKey(Schema.Literal("job_not_found")),
+  }),
 ]);
 export type WorkerFrame = typeof WorkerFrame.Type;
 export const FRAME_PREFIX = "\x1eT3RUN ";

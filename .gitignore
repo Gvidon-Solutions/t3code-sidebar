@@ -51,3 +51,5 @@ node_modules/
 
 # Local mobile APK output (`pnpm mobile:apk`).
 /dist/
+
+/scripts/mesh-e2e/local.env

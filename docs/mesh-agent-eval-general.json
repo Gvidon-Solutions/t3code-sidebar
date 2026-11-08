@@ -39,7 +39,7 @@
         "threadId": "mcp:b935a866-0c44-45ba-8c9d-94ba3b5aa492",
         "target": {
           "kind": "file",
-          "path": "/home/user/t3-replicas/demo-2/README.md",
+          "path": "/home/dev/t3-replicas/demo-2/README.md",
           "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
         }
       },
@@ -99,7 +99,7 @@
         "threadId": "mcp:f6615644-50c9-4ff5-a5d2-91afb4890fcf",
         "target": {
           "kind": "file",
-          "path": "/home/user/t3-replicas/demo-2/README.md",
+          "path": "/home/dev/t3-replicas/demo-2/README.md",
           "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
         }
       }
@@ -124,7 +124,7 @@
           "Сначала прочитаю указанную ветку и проверю структуру проекта и README в реплике; затем добавлю одну подходящую строку и сверю результат.",
           "Реплика подключена к primary и синхронизация активна без конфликтов. Сейчас посмотрю README и файлы проекта в реплике, чтобы новая строка соответствовала содержимому, а не была общей заглушкой.",
           "Добавил строку с командой запуска, которая соответствует `scripts/run.sh`. Проверяю изменённый README в реплике и по указанной SSH-команде убеждаюсь, что синхронизация донесла строку до primary; git и сборки не запускаю.",
-          "Добавил в `README.md` строку: `Run \\`sh scripts/run.sh\\` to print the contents of \\`src/main.txt\\`.`\n\nПроверил её в реплике и на primary `gor`; синхронизация прошла. Коммит не создавал."
+          "Добавил в `README.md` строку: `Run \\`sh scripts/run.sh\\` to print the contents of \\`src/main.txt\\`.`\n\nПроверил её в реплике и на primary `nodeB`; синхронизация прошла. Коммит не создавал."
         ]
       },
       "mcp:6231f506-e60c-471e-a083-b957d61013af": {
@@ -133,10 +133,10 @@
         "status": "completed",
         "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
         "finalAnswers": [
-          "Сначала прочитаю указанную ветку, затем просмотрю README в проекте на VPS и добавлю одну подходящую строку, сохранив остальной текст. Проверку выполню только на primary через `ssh gor` по указанному пути.",
+          "Сначала прочитаю указанную ветку, затем просмотрю README в проекте на VPS и добавлю одну подходящую строку, сохранив остальной текст. Проверку выполню только на primary через `ssh nodeB` по указанному пути.",
           "Подтвердил, что это Mutagen-реплика проекта, синхронизация активна без конфликтов. Сейчас посмотрю README в локальном представлении и статус изменений перед правкой, чтобы сохранить существующий текст и не затронуть чужую работу.",
           "Строку добавил в README реплики. Проверяю на primary через SSH: diff и whitespace-проверку Git, затем запускаю указанный в README скрипт.",
-          "Добавлена строка: «Цель проекта — проверить двустороннюю синхронизацию файлов между копиями.»\n\nПроверки на primary прошли: `git diff --check` без замечаний, `sh scripts/run.sh` вывел `hello from gor`. Коммит не создавал."
+          "Добавлена строка: «Цель проекта — проверить двустороннюю синхронизацию файлов между копиями.»\n\nПроверки на primary прошли: `git diff --check` без замечаний, `sh scripts/run.sh` вывел `hello from nodeB`. Коммит не создавал."
         ]
       },
       "mcp:8406a29a-5c96-47f0-b044-254b8cfa6607": {
@@ -148,7 +148,7 @@
           "Сначала проверю сведения о треде и структуру проекта, затем допишу строку в README на реплике `demo` и сверю diff через primary по указанной SSH-команде.",
           "Синхронизация реплики активна без конфликтов. Сейчас прочитаю README и проверю его текущее окончание, чтобы добавить короткую строку в том же тоне.",
           "Добавил итоговую строку в конец README на реплике. Теперь проверю на primary, что Mutagen доставил изменение и что diff содержит только эту добавку.",
-          "В конец [README.md](/home/t3/t3-replicas/demo-6/README.md) добавил строку: «Демо показывает согласованность файлов в обеих копиях.»\n\nПроверил diff на primary через `ssh gor`: добавление синхронизировалось. Коммит не создавал."
+          "В конец [README.md](/home/t3/t3-replicas/demo-6/README.md) добавил строку: «Демо показывает согласованность файлов в обеих копиях.»\n\nПроверил diff на primary через `ssh nodeB`: добавление синхронизировалось. Коммит не создавал."
         ]
       },
       "mcp:bb6cb221-ea49-4c0e-85d3-22b88d08feec": {
@@ -158,7 +158,7 @@
         "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
         "finalAnswers": [
           "Прочитаю README и добавлю одну строку в подходящем месте, сохранив стиль документа. Git-проверки выполню на primary; коммит создавать не буду.\n",
-          "В [README.md](/home/t3/t3-replicas/demo-6/README.md:5) после строки о Mutagen добавлена одна строка в стиле соседних инструкций: `Run Git commands, builds, and tests on gor.`\n\nИзменение синхронизировалось на primary, `git diff --check` прошёл. Коммит не создавал."
+          "В [README.md](/home/t3/t3-replicas/demo-6/README.md:5) после строки о Mutagen добавлена одна строка в стиле соседних инструкций: `Run Git commands, builds, and tests on nodeB.`\n\nИзменение синхронизировалось на primary, `git diff --check` прошёл. Коммит не создавал."
         ]
       },
       "mcp:9f16c4f3-a4dd-4820-92fe-ebf574250a67": {
@@ -191,23 +191,23 @@
     },
     "replicas": [
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
-        "path": "/home/user/xdev-e2e/demo",
+        "path": "/home/dev/xdev-e2e/demo",
         "role": "primary",
         "state": "watching",
         "source": null
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
-        "path": "/home/user/t3-replicas/demo-2",
+        "path": "/home/dev/t3-replicas/demo-2",
         "role": "replica",
         "state": "watching",
         "source": "34e33796-4717-4293-a955-88c2f740db4d"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
         "path": "/home/t3/t3-replicas/demo-6",
         "role": "replica",
@@ -215,15 +215,15 @@
         "source": "34e33796-4717-4293-a955-88c2f740db4d"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "98fe006e-1a2f-497b-ae5d-1714bccb2052",
-        "path": "/home/user/t3-replicas/demo",
+        "path": "/home/dev/t3-replicas/demo",
         "role": "replica",
         "state": "error",
         "source": "34e33796-4717-4293-a955-88c2f740db4d"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
         "path": "/tmp/t3-eval-home/demo",
         "role": "replica",
@@ -725,7 +725,7 @@
           "timestamp": "2026-11-03T09:45:33.699Z",
           "tool": "bash",
           "input": {
-            "command": "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short && echo --- && git log --oneline -5'"
+            "command": "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short && echo --- && git log --oneline -5'"
           }
         },
         {
@@ -739,7 +739,7 @@
       "activityActions": [
         {
           "tool": "shell",
-          "command": "$ ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short && echo --- && git log --oneline -5'"
+          "command": "$ ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short && echo --- && git log --oneline -5'"
         },
         {
           "tool": "shell",
@@ -808,7 +808,7 @@
         {
           "timestamp": "2026-11-03T09:44:11.735Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n  projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n  title:\"Дополнить README\",\n  message:\"Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил.\"\n});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n  projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n  title:\"Дополнить README\",\n  message:\"Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил.\"\n});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:44:15.912Z",
@@ -818,7 +818,7 @@
         {
           "timestamp": "2026-11-03T09:44:19.833Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n  projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n  title:\"Дополнить README\",\n  modelSelection:{provider:\"codex\",model:\"gpt-6-luna\"},\n  message:\"Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил.\"\n});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n  projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n  title:\"Дополнить README\",\n  modelSelection:{provider:\"codex\",model:\"gpt-6-luna\"},\n  message:\"Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил.\"\n});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -853,7 +853,7 @@
             "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
             "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
             "title": "Дополнить README",
-            "message": "Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил."
+            "message": "Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил."
           }
         },
         {
@@ -872,7 +872,7 @@
               "provider": "codex",
               "model": "gpt-6-luna"
             },
-            "message": "Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил."
+            "message": "Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил."
           }
         }
       ],
@@ -1085,7 +1085,7 @@
         {
           "timestamp": "2026-11-03T09:43:47.976Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"34e33796-4717-4293-a955-88c2f740db4d\",path:\"/home/user/xdev-e2e/demo/README.md\"}});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"34e33796-4717-4293-a955-88c2f740db4d\",path:\"/home/dev/xdev-e2e/demo/README.md\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -1095,7 +1095,7 @@
             "target": {
               "kind": "file",
               "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
-              "path": "/home/user/xdev-e2e/demo/README.md"
+              "path": "/home/dev/xdev-e2e/demo/README.md"
             }
           }
         }
@@ -1155,7 +1155,7 @@
         {
           "timestamp": "2026-11-03T09:44:03.974Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_project_place({project:\"demo\",machine:\"gvidon\",role:\"replica\",wait:600});\ntext(JSON.stringify(r));\n"
+          "input": "const r = await tools.mcp__t3_code__t3_project_place({project:\"demo\",machine:\"studio\",role:\"replica\",wait:600});\ntext(JSON.stringify(r));\n"
         },
         {
           "timestamp": "2026-11-03T09:44:09.217Z",
@@ -1188,7 +1188,7 @@
           "tool": "t3-code.t3_project_place",
           "input": {
             "project": "demo",
-            "machine": "gvidon",
+            "machine": "studio",
             "role": "replica",
             "wait": 600
           }
@@ -1521,22 +1521,22 @@
         {
           "timestamp": "2026-11-03T09:45:09.650Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short --branch && git diff --stat && git diff --cached --stat' \",yield_time_ms:10000,max_output_tokens:3000}); text(r.output)\n"
+          "input": "const r = await tools.exec_command({cmd:\"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short --branch && git diff --stat && git diff --cached --stat' \",yield_time_ms:10000,max_output_tokens:3000}); text(r.output)\n"
         },
         {
           "timestamp": "2026-11-03T09:45:13.057Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git diff -- README.md stage-j-commit.txt' \",yield_time_ms:10000,max_output_tokens:3000}); text(r.output)\n"
+          "input": "const r = await tools.exec_command({cmd:\"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git diff -- README.md stage-j-commit.txt' \",yield_time_ms:10000,max_output_tokens:3000}); text(r.output)\n"
         },
         {
           "timestamp": "2026-11-03T09:45:15.960Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git add README.md stage-j-commit.txt && git commit -m \\\"Document demo run script\\\" && git status --short --branch' \",yield_time_ms:10000,max_output_tokens:3000}); text(r.output)\n"
+          "input": "const r = await tools.exec_command({cmd:\"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git add README.md stage-j-commit.txt && git commit -m \\\"Document demo run script\\\" && git status --short --branch' \",yield_time_ms:10000,max_output_tokens:3000}); text(r.output)\n"
         },
         {
           "timestamp": "2026-11-03T09:45:19.283Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short --branch && git log -1 --oneline --decorate && git show --stat --oneline -1' \",yield_time_ms:10000,max_output_tokens:3000}); text(r.output)\n"
+          "input": "const r = await tools.exec_command({cmd:\"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short --branch && git log -1 --oneline --decorate && git show --stat --oneline -1' \",yield_time_ms:10000,max_output_tokens:3000}); text(r.output)\n"
         }
       ],
       "activityActions": [
@@ -1546,19 +1546,19 @@
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short --branch && git diff --stat && git diff --cached --stat' \""
+          "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short --branch && git diff --stat && git diff --cached --stat' \""
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git diff -- README.md stage-j-commit.txt' \""
+          "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git diff -- README.md stage-j-commit.txt' \""
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git add README.md stage-j-commit.txt && git commit -m \\\"Document demo run script\\\" && git status --short --branch' \""
+          "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git add README.md stage-j-commit.txt && git commit -m \\\"Document demo run script\\\" && git status --short --branch' \""
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short --branch && git log -1 --oneline --decorate && git show --stat --oneline -1' \""
+          "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short --branch && git log -1 --oneline --decorate && git show --stat --oneline -1' \""
         }
       ],
       "nativeSession": "rollout-2026-11-03T12-45-01-01a1a0cc-3b1f-7321-a7e2-def8b717585d.jsonl",
@@ -1612,12 +1612,12 @@
         {
           "timestamp": "2026-11-03T09:43:58.218Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__t3_thread_launch({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",title:\"Добавить строку в README\",message:\"Антон просит дописать одну уместную строку в README проекта demo. Прочитай README и добавь строку по смыслу. Работай в текущей реплике на VPS /home/t3/t3-replicas/demo-6. Git и сборки выполняй только на primary: ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && <command>'. Файлы синхронизируются Mutagen. Проверь изменение и коротко сообщи добавленную строку. Коммит не требуется.\"}));\ntext(ALL_TOOLS.filter(x=>x.name.endsWith(\"t3_thread_read\")).map(x=>x.description).join(\"\\n\"));\n"
+          "input": "text(await tools.mcp__t3_code__t3_thread_launch({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",title:\"Добавить строку в README\",message:\"Антон просит дописать одну уместную строку в README проекта demo. Прочитай README и добавь строку по смыслу. Работай в текущей реплике на VPS /home/t3/t3-replicas/demo-6. Git и сборки выполняй только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. Файлы синхронизируются Mutagen. Проверь изменение и коротко сообщи добавленную строку. Коммит не требуется.\"}));\ntext(ALL_TOOLS.filter(x=>x.name.endsWith(\"t3_thread_read\")).map(x=>x.description).join(\"\\n\"));\n"
         },
         {
           "timestamp": "2026-11-03T09:44:02.763Z",
           "tool": "exec",
-          "input": "text(await tools.exec_command({cmd:\"t3ctl new --project demo --on vps 'Дополни README одной уместной строкой по смыслу. Файлы правь в реплике; git и сборки только на primary gor в /home/user/xdev-e2e/demo через ssh. Коммит не нужен. Проверь и сообщи добавленную строку.' --json\",max_output_tokens:2000}));\n"
+          "input": "text(await tools.exec_command({cmd:\"t3ctl new --project demo --on vps 'Дополни README одной уместной строкой по смыслу. Файлы правь в реплике; git и сборки только на primary nodeB в /home/dev/xdev-e2e/demo через ssh. Коммит не нужен. Проверь и сообщи добавленную строку.' --json\",max_output_tokens:2000}));\n"
         },
         {
           "timestamp": "2026-11-03T09:44:10.140Z",
@@ -1650,12 +1650,12 @@
             "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
             "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
             "title": "Добавить строку в README",
-            "message": "Антон просит дописать одну уместную строку в README проекта demo. Прочитай README и добавь строку по смыслу. Работай в текущей реплике на VPS /home/t3/t3-replicas/demo-6. Git и сборки выполняй только на primary: ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && <command>'. Файлы синхронизируются Mutagen. Проверь изменение и коротко сообщи добавленную строку. Коммит не требуется."
+            "message": "Антон просит дописать одну уместную строку в README проекта demo. Прочитай README и добавь строку по смыслу. Работай в текущей реплике на VPS /home/t3/t3-replicas/demo-6. Git и сборки выполняй только на primary: ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'. Файлы синхронизируются Mutagen. Проверь изменение и коротко сообщи добавленную строку. Коммит не требуется."
           }
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"t3ctl new --project demo --on vps 'Дополни README одной уместной строкой по смыслу. Файлы правь в реплике; git и сборки только на primary gor в /home/user/xdev-e2e/demo через ssh. Коммит не нужен. Проверь и сообщи добавленную строку.' --json\""
+          "command": "$ /usr/bin/zsh -lc \"t3ctl new --project demo --on vps 'Дополни README одной уместной строкой по смыслу. Файлы правь в реплике; git и сборки только на primary nodeB в /home/dev/xdev-e2e/demo через ssh. Коммит не нужен. Проверь и сообщи добавленную строку.' --json\""
         },
         {
           "tool": "t3-code.t3_thread_read",
@@ -1791,7 +1791,7 @@
         {
           "timestamp": "2026-11-03T09:43:51.013Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/user/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}}));\n"
         }
       ],
       "activityActions": [
@@ -1814,7 +1814,7 @@
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -2111,12 +2111,12 @@
         {
           "timestamp": "2026-11-03T09:45:09.955Z",
           "tool": "exec",
-          "input": "text(await tools.exec_command({cmd:\"ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short && git diff && git diff --cached && git ls-files --others --exclude-standard'\",\"max_output_tokens\":5000}));\n"
+          "input": "text(await tools.exec_command({cmd:\"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short && git diff && git diff --cached && git ls-files --others --exclude-standard'\",\"max_output_tokens\":5000}));\n"
         },
         {
           "timestamp": "2026-11-03T09:45:13.891Z",
           "tool": "exec",
-          "input": "text(await tools.exec_command({cmd:\"ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: document demo runner and update stage J markers\\\" && git status --short && git log -1 --format=\\\"%h %s\\\"'\",\"max_output_tokens\":2000}));\n"
+          "input": "text(await tools.exec_command({cmd:\"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: document demo runner and update stage J markers\\\" && git status --short && git log -1 --format=\\\"%h %s\\\"'\",\"max_output_tokens\":2000}));\n"
         }
       ],
       "activityActions": [
@@ -2126,11 +2126,11 @@
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short && git diff && git diff --cached && git ls-files --others --exclude-standard'\""
+          "command": "$ /usr/bin/zsh -lc \"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short && git diff && git diff --cached && git ls-files --others --exclude-standard'\""
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: document demo runner and update stage J markers\\\" && git status --short && git log -1 --format=\\\"%h %s\\\"'\""
+          "command": "$ /usr/bin/zsh -lc \"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: document demo runner and update stage J markers\\\" && git status --short && git log -1 --format=\\\"%h %s\\\"'\""
         }
       ],
       "nativeSession": "rollout-2026-11-03T12-45-00-01a1a0cc-36f9-7ab3-8504-82a99bc64db9.jsonl",
@@ -2623,7 +2623,7 @@
         {
           "timestamp": "2026-11-03T09:49:57.241Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",title:\"Дополнить строку в README\",message:\"Допиши одну подходящую строку в README проекта demo на VPS. Сначала посмотри текущий README и выбери уместную краткую строку. Это синхронизированная replica: файлы редактируй здесь, а любые git-команды и сборки выполняй на primary через `ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && <command>'`. Не делай коммит. В конце кратко сообщи, какую строку добавил и где.\",runtimeMode:\"full-access\"}); text(r)\n"
+          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",title:\"Дополнить строку в README\",message:\"Допиши одну подходящую строку в README проекта demo на VPS. Сначала посмотри текущий README и выбери уместную краткую строку. Это синхронизированная replica: файлы редактируй здесь, а любые git-команды и сборки выполняй на primary через `ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'`. Не делай коммит. В конце кратко сообщи, какую строку добавил и где.\",runtimeMode:\"full-access\"}); text(r)\n"
         },
         {
           "timestamp": "2026-11-03T09:50:05.817Z",
@@ -2659,7 +2659,7 @@
             "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
             "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
             "title": "Дополнить строку в README",
-            "message": "Допиши одну подходящую строку в README проекта demo на VPS. Сначала посмотри текущий README и выбери уместную краткую строку. Это синхронизированная replica: файлы редактируй здесь, а любые git-команды и сборки выполняй на primary через `ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && <command>'`. Не делай коммит. В конце кратко сообщи, какую строку добавил и где.",
+            "message": "Допиши одну подходящую строку в README проекта demo на VPS. Сначала посмотри текущий README и выбери уместную краткую строку. Это синхронизированная replica: файлы редактируй здесь, а любые git-команды и сборки выполняй на primary через `ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'`. Не делай коммит. В конце кратко сообщи, какую строку добавил и где.",
             "runtimeMode": "full-access"
           }
         },
@@ -2860,7 +2860,7 @@
         {
           "timestamp": "2026-11-03T09:49:25.985Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/user/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}});\ntext(r);\n"
+          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -2879,7 +2879,7 @@
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -3176,7 +3176,7 @@
         {
           "timestamp": "2026-11-03T09:49:21.789Z",
           "tool": "exec",
-          "input": "text(await tools.exec_command({cmd:\"t3ctl new --project demo --on vps --json 'Дополни README проекта demo одной уместной строкой, сохранив существующее содержимое. Выбери текст по контексту README. Файлы правь в представлении проекта на VPS; git и проверки выполняй только на primary через ssh gor в /home/user/xdev-e2e/demo. Не делай коммит. Сообщи добавленную строку и результат проверки.'\",max_output_tokens:2000}));\n"
+          "input": "text(await tools.exec_command({cmd:\"t3ctl new --project demo --on vps --json 'Дополни README проекта demo одной уместной строкой, сохранив существующее содержимое. Выбери текст по контексту README. Файлы правь в представлении проекта на VPS; git и проверки выполняй только на primary через ssh nodeB в /home/dev/xdev-e2e/demo. Не делай коммит. Сообщи добавленную строку и результат проверки.'\",max_output_tokens:2000}));\n"
         }
       ],
       "activityActions": [
@@ -3190,7 +3190,7 @@
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"t3ctl new --project demo --on vps --json 'Дополни README проекта demo одной уместной строкой, сохранив существующее содержимое. Выбери текст по контексту README. Файлы правь в представлении проекта на VPS; git и проверки выполняй только на primary через ssh gor в /home/user/xdev-e2e/demo. Не делай коммит. Сообщи добавленную строку и результат проверки.'\""
+          "command": "$ /usr/bin/zsh -lc \"t3ctl new --project demo --on vps --json 'Дополни README проекта demo одной уместной строкой, сохранив существующее содержимое. Выбери текст по контексту README. Файлы правь в представлении проекта на VPS; git и проверки выполняй только на primary через ssh nodeB в /home/dev/xdev-e2e/demo. Не делай коммит. Сообщи добавленную строку и результат проверки.'\""
         }
       ],
       "nativeSession": "rollout-2026-11-03T12-49-04-01a1a0cf-f25f-7051-989d-c958a26f0be1.jsonl",
@@ -3309,7 +3309,7 @@
         {
           "timestamp": "2026-11-03T09:49:19.459Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/user/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}}));\n"
         }
       ],
       "activityActions": [
@@ -3332,7 +3332,7 @@
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -3681,7 +3681,7 @@
         {
           "position": 8,
           "tool": "shell",
-          "error": "Allocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"\",\n      \"machine\": \"qa\",\n      \"status\": {\n        \"state\": \"error\",\n        \"message\": \"98fe006e-1a2f-497b-ae5d-1714bccb2052 cannot reach 34e33796-4717-4293-a955-88c2f740db4d and back. Add an ssh route in Settings › Machines\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T08:59:35.997Z\"\n      }\n    },\n    {\n      \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"path\": \"/tmp/t3-eval-home/demo\",\n      \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n      \"transport\": \"mutagen\",\n      \"pathAllocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"2026-11-03T09:02:56.915Z\",\n      \"machine\": \"eval\",\n      \"tag\": \"EV\",\n      \"driverEnvironmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"status\": {\n        \"state\": \"watching\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T09:43:32.189Z\"\n      },\n      \"live\": {\n        \"logicalKey\": \"34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo\",\n        \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n        \"state\": \"watching\",\n        \"conflicts\": [],\n        \"problems\": [],\n        \"sessionName\": \"t3-6cd3d4d7-db074357\",\n        \"localPath\": \"/tmp/t3-eval-home/demo\",\n        \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n        \"updatedAt\": \"2026-11-03T10:01:46.525Z\"\n      }\n    }\n  ]\n}\n"
+          "error": "Allocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"\",\n      \"machine\": \"qa\",\n      \"status\": {\n        \"state\": \"error\",\n        \"message\": \"98fe006e-1a2f-497b-ae5d-1714bccb2052 cannot reach 34e33796-4717-4293-a955-88c2f740db4d and back. Add an ssh route in Settings › Machines\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T08:59:35.997Z\"\n      }\n    },\n    {\n      \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"path\": \"/tmp/t3-eval-home/demo\",\n      \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n      \"transport\": \"mutagen\",\n      \"pathAllocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"2026-11-03T09:02:56.915Z\",\n      \"machine\": \"eval\",\n      \"tag\": \"EV\",\n      \"driverEnvironmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"status\": {\n        \"state\": \"watching\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T09:43:32.189Z\"\n      },\n      \"live\": {\n        \"logicalKey\": \"34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo\",\n        \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n        \"state\": \"watching\",\n        \"conflicts\": [],\n        \"problems\": [],\n        \"sessionName\": \"t3-6cd3d4d7-db074357\",\n        \"localPath\": \"/tmp/t3-eval-home/demo\",\n        \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n        \"updatedAt\": \"2026-11-03T10:01:46.525Z\"\n      }\n    }\n  ]\n}\n"
         }
       ],
       "interruptions": [
@@ -3881,7 +3881,7 @@
           "timestamp": "2026-11-03T09:55:12.066Z",
           "tool": "bash",
           "input": {
-            "command": "t3ctl cat /home/user/t3-replicas/demo-2/README.md --on \"gv test\" 2>&1 | head -80"
+            "command": "t3ctl cat /home/dev/t3-replicas/demo-2/README.md --on \"gv test\" 2>&1 | head -80"
           }
         },
         {
@@ -3890,7 +3890,7 @@
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -3933,14 +3933,14 @@
         },
         {
           "tool": "shell",
-          "command": "$ t3ctl cat /home/user/t3-replicas/demo-2/README.md --on \"gv test\" 2>&1 | head -80"
+          "command": "$ t3ctl cat /home/dev/t3-replicas/demo-2/README.md --on \"gv test\" 2>&1 | head -80"
         },
         {
           "tool": "t3-code_ui_open",
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -4583,7 +4583,7 @@
         {
           "timestamp": "2026-11-03T09:51:26.991Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_project_place({project:\"demo\", machine:\"gvidon\", role:\"replica\", wait:600});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__t3_project_place({project:\"demo\", machine:\"studio\", role:\"replica\", wait:600});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:51:29.941Z",
@@ -4613,7 +4613,7 @@
           "tool": "t3-code.t3_project_place",
           "input": {
             "project": "demo",
-            "machine": "gvidon",
+            "machine": "studio",
             "role": "replica",
             "wait": 600
           }
@@ -4693,7 +4693,7 @@
         {
           "timestamp": "2026-11-03T09:51:36.943Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"ssh -F ~/.local/share/gor-transfer/ssh_config -i ~/.ssh/id_malaniya_25519 -o IdentitiesOnly=yes gor 't3ctl status --all'\",\"yield_time_ms\":30000,\"max_output_tokens\":6000});\ntext(r.output);\n"
+          "input": "const r = await tools.exec_command({cmd:\"ssh -F <ssh-config-redacted> -i <ssh-identity-redacted> -o IdentitiesOnly=yes nodeB 't3ctl status --all'\",\"yield_time_ms\":30000,\"max_output_tokens\":6000});\ntext(r.output);\n"
         },
         {
           "timestamp": "2026-11-03T09:51:42.287Z",
@@ -4718,7 +4718,7 @@
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh -F ~/.local/share/gor-transfer/ssh_config -i ~/.ssh/id_malaniya_25519 -o IdentitiesOnly=yes gor 't3ctl status --all'\""
+          "command": "$ /usr/bin/zsh -lc \"ssh -F <ssh-config-redacted> -i <ssh-identity-redacted> -o IdentitiesOnly=yes nodeB 't3ctl status --all'\""
         },
         {
           "tool": "t3-code.t3_environment_links",
@@ -4761,7 +4761,7 @@
         {
           "position": 7,
           "tool": "shell",
-          "error": "$ /usr/bin/zsh -lc \"ssh -F ~/.local/share/gor-transfer/ssh_config -i ~/.ssh/id_malaniya_25519 -o IdentitiesOnly=yes gor 't3ctl status --all'\"\nWarning: Identity file /tmp/t3-eval-home/.ssh/id_malaniya_25519 not accessible: No such file or directory.\nCan't open user config file /tmp/t3-eval-home/.local/share/gor-transfer/ssh_config: No such file or directory\r\n"
+          "error": "$ /usr/bin/zsh -lc \"ssh -F <ssh-config-redacted> -i <ssh-identity-redacted> -o IdentitiesOnly=yes nodeB 't3ctl status --all'\"\nWarning: Identity file <ssh-identity-redacted> not accessible: No such file or directory.\nCan't open user config file <ssh-config-redacted> No such file or directory\r\n"
         }
       ],
       "interruptions": [],
@@ -5036,17 +5036,17 @@
         {
           "timestamp": "2026-11-03T09:53:07.998Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short --branch && git diff --stat && git diff --cached --stat'\",\"yield_time_ms\":10000,\"max_output_tokens\":2000});\ntext(r.output);\n"
+          "input": "const r = await tools.exec_command({cmd:\"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short --branch && git diff --stat && git diff --cached --stat'\",\"yield_time_ms\":10000,\"max_output_tokens\":2000});\ntext(r.output);\n"
         },
         {
           "timestamp": "2026-11-03T09:53:12.878Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git diff -- stage-j-commit.txt && git status --porcelain=v1'\",\"yield_time_ms\":10000,\"max_output_tokens\":2000});\ntext(r.output);\n"
+          "input": "const r = await tools.exec_command({cmd:\"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git diff -- stage-j-commit.txt && git status --porcelain=v1'\",\"yield_time_ms\":10000,\"max_output_tokens\":2000});\ntext(r.output);\n"
         },
         {
           "timestamp": "2026-11-03T09:53:15.063Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git add -- stage-j-commit.txt && git commit -m \\\"Add stage-j generic luna entry\\\" && git status --short --branch'\",\"yield_time_ms\":30000,\"max_output_tokens\":3000});\ntext(r.output);\n"
+          "input": "const r = await tools.exec_command({cmd:\"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git add -- stage-j-commit.txt && git commit -m \\\"Add stage-j generic luna entry\\\" && git status --short --branch'\",\"yield_time_ms\":30000,\"max_output_tokens\":3000});\ntext(r.output);\n"
         }
       ],
       "activityActions": [
@@ -5063,15 +5063,15 @@
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short --branch && git diff --stat && git diff --cached --stat'\""
+          "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short --branch && git diff --stat && git diff --cached --stat'\""
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git diff -- stage-j-commit.txt && git status --porcelain=v1'\""
+          "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git diff -- stage-j-commit.txt && git status --porcelain=v1'\""
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh gor 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git add -- stage-j-commit.txt && git commit -m \\\"Add stage-j generic luna entry\\\" && git status --short --branch'\""
+          "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git add -- stage-j-commit.txt && git commit -m \\\"Add stage-j generic luna entry\\\" && git status --short --branch'\""
         }
       ],
       "nativeSession": "rollout-2026-11-03T12-52-46-01a1a0d3-548a-70b0-b5ea-7596c4a814ce.jsonl",
@@ -5120,7 +5120,7 @@
         {
           "timestamp": "2026-11-03T09:51:37.558Z",
           "tool": "exec",
-          "input": "text(await tools.exec_command({cmd:\"~/.local/bin/t3ctl new --project demo --on vps 'Допиши в конец README одну короткую строку, уместную по содержанию проекта. Прочитай README и сохрани его стиль. Файлы правь в представлении demo на VPS; это синхронизируемая реплика. Любые git-команды выполняй только на primary: ssh gor с переходом в /home/user/xdev-e2e/demo. Не делай коммит. Проверь diff на primary и кратко сообщи добавленную строку.' --json\",max_output_tokens:2000}));\n"
+          "input": "text(await tools.exec_command({cmd:\"~/.local/bin/t3ctl new --project demo --on vps 'Допиши в конец README одну короткую строку, уместную по содержанию проекта. Прочитай README и сохрани его стиль. Файлы правь в представлении demo на VPS; это синхронизируемая реплика. Любые git-команды выполняй только на primary: ssh nodeB с переходом в /home/dev/xdev-e2e/demo. Не делай коммит. Проверь diff на primary и кратко сообщи добавленную строку.' --json\",max_output_tokens:2000}));\n"
         }
       ],
       "activityActions": [
@@ -5134,7 +5134,7 @@
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"~/.local/bin/t3ctl new --project demo --on vps 'Допиши в конец README одну короткую строку, уместную по содержанию проекта. Прочитай README и сохрани его стиль. Файлы правь в представлении demo на VPS; это синхронизируемая реплика. Любые git-команды выполняй только на primary: ssh gor с переходом в /home/user/xdev-e2e/demo. Не делай коммит. Проверь diff на primary и кратко сообщи добавленную строку.' --json\""
+          "command": "$ /usr/bin/zsh -lc \"~/.local/bin/t3ctl new --project demo --on vps 'Допиши в конец README одну короткую строку, уместную по содержанию проекта. Прочитай README и сохрани его стиль. Файлы правь в представлении demo на VPS; это синхронизируемая реплика. Любые git-команды выполняй только на primary: ssh nodeB с переходом в /home/dev/xdev-e2e/demo. Не делай коммит. Проверь diff на primary и кратко сообщи добавленную строку.' --json\""
         }
       ],
       "nativeSession": "rollout-2026-11-03T12-51-18-01a1a0d1-f9f1-77f1-8e48-c0b6f015ea1f.jsonl",
@@ -5257,7 +5257,7 @@
         {
           "timestamp": "2026-11-03T09:51:33.653Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\",path:\"/home/user/t3-replicas/demo-2/README.md\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\",path:\"/home/dev/t3-replicas/demo-2/README.md\"}}));\n"
         }
       ],
       "activityActions": [
@@ -5281,7 +5281,7 @@
             "target": {
               "kind": "file",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
-              "path": "/home/user/t3-replicas/demo-2/README.md"
+              "path": "/home/dev/t3-replicas/demo-2/README.md"
             }
           }
         }
@@ -5578,12 +5578,12 @@
         {
           "timestamp": "2026-11-03T09:52:37.773Z",
           "tool": "exec",
-          "input": "text(await tools.exec_command({cmd:\"ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short && git diff && git diff --cached && ls -a'\",\"max_output_tokens\":3000}));\n"
+          "input": "text(await tools.exec_command({cmd:\"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short && git diff && git diff --cached && ls -a'\",\"max_output_tokens\":3000}));\n"
         },
         {
           "timestamp": "2026-11-03T09:52:41.116Z",
           "tool": "exec",
-          "input": "text(await tools.exec_command({cmd:\"ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git diff --check && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: clarify sync demo and record stage-j run\\\" && git status --short && git log -1 --oneline'\",\"max_output_tokens\":1000}));\n"
+          "input": "text(await tools.exec_command({cmd:\"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git diff --check && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: clarify sync demo and record stage-j run\\\" && git status --short && git log -1 --oneline'\",\"max_output_tokens\":1000}));\n"
         }
       ],
       "activityActions": [
@@ -5604,11 +5604,11 @@
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git status --short && git diff && git diff --cached && ls -a'\""
+          "command": "$ /usr/bin/zsh -lc \"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short && git diff && git diff --cached && ls -a'\""
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && git diff --check && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: clarify sync demo and record stage-j run\\\" && git status --short && git log -1 --oneline'\""
+          "command": "$ /usr/bin/zsh -lc \"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git diff --check && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: clarify sync demo and record stage-j run\\\" && git status --short && git log -1 --oneline'\""
         }
       ],
       "nativeSession": "rollout-2026-11-03T12-52-17-01a1a0d2-e2f4-7173-9000-4d6b8cb6af5f.jsonl",
@@ -5667,21 +5667,21 @@
           "timestamp": "2026-11-03T09:59:44.504Z",
           "tool": "bash",
           "input": {
-            "command": "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status && echo --- && git log --oneline -5 && echo --- && git diff --stat' 2>&1 | head -60"
+            "command": "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status && echo --- && git log --oneline -5 && echo --- && git diff --stat' 2>&1 | head -60"
           }
         },
         {
           "timestamp": "2026-11-03T09:59:59.691Z",
           "tool": "bash",
           "input": {
-            "command": "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git diff' 2>&1 | head -60"
+            "command": "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git diff' 2>&1 | head -60"
           }
         },
         {
           "timestamp": "2026-11-03T10:00:09.232Z",
           "tool": "bash",
           "input": {
-            "command": "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Record stage-j generic 1017 entry and sync note\" && git log --oneline -3 && git status --short' 2>&1 | head -30"
+            "command": "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Record stage-j generic 1017 entry and sync note\" && git log --oneline -3 && git status --short' 2>&1 | head -30"
           }
         }
       ],
@@ -5702,15 +5702,15 @@
         },
         {
           "tool": "shell",
-          "command": "$ ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status && echo --- && git log --oneline -5 && echo --- && git diff --stat' 2>&1 | head -60"
+          "command": "$ ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status && echo --- && git log --oneline -5 && echo --- && git diff --stat' 2>&1 | head -60"
         },
         {
           "tool": "shell",
-          "command": "$ ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git diff' 2>&1 | head -60"
+          "command": "$ ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git diff' 2>&1 | head -60"
         },
         {
           "tool": "shell",
-          "command": "$ ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Record stage-j generic 1017 entry and sync note\" && git log --oneline -3 && git status --short' 2>&1 | head -30"
+          "command": "$ ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Record stage-j generic 1017 entry and sync note\" && git log --oneline -3 && git status --short' 2>&1 | head -30"
         }
       ],
       "nativeSession": "ses_e5f289c8fffe3RZAQrwUjoOJ9z",
@@ -5769,7 +5769,7 @@
         {
           "timestamp": "2026-11-03T09:57:30.008Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({\n title:\"Дополнить README\",\n projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n message:\"Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh gor 'cd /home/user/xdev-e2e/demo && <command>'`. Не коммить.\"\n});\ntext(r);\n"
+          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({\n title:\"Дополнить README\",\n projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n message:\"Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить.\"\n});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:57:33.305Z",
@@ -5784,7 +5784,7 @@
         {
           "timestamp": "2026-11-03T09:57:38.558Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({\n title:\"Дополнить README\",\n projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n modelSelection:{provider:\"codex\",model:\"gpt-6.1-sol\"},\n message:\"Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh gor 'cd /home/user/xdev-e2e/demo && <command>'`. Не коммить.\"\n}); text(r);\n"
+          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({\n title:\"Дополнить README\",\n projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n modelSelection:{provider:\"codex\",model:\"gpt-6.1-sol\"},\n message:\"Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить.\"\n}); text(r);\n"
         }
       ],
       "activityActions": [
@@ -5809,7 +5809,7 @@
             "title": "Дополнить README",
             "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
             "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-            "message": "Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh gor 'cd /home/user/xdev-e2e/demo && <command>'`. Не коммить."
+            "message": "Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить."
           }
         },
         {
@@ -5828,7 +5828,7 @@
               "provider": "codex",
               "model": "gpt-6.1-sol"
             },
-            "message": "Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh gor 'cd /home/user/xdev-e2e/demo && <command>'`. Не коммить."
+            "message": "Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить."
           }
         }
       ],
@@ -5884,7 +5884,7 @@
         {
           "timestamp": "2026-11-03T09:57:18.251Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/user/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -5900,7 +5900,7 @@
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -6021,7 +6021,7 @@
         {
           "timestamp": "2026-11-03T10:08:04.117Z",
           "tool": "exec",
-          "input": "const r = await tools.exec_command({cmd:\"~/.local/bin/t3ctl new --project demo --on vps \\\"Добавь одну уместную строку в README проекта demo. Сначала посмотри стиль и содержание README, допиши одну строку в подходящее место. Поскольку проект — синхронизированная реплика, все git-команды и сборки запускай на primary gor: ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && <command>'. Файлы редактируй в реплике; Mutagen синхронизирует изменения.\\\" --json\",max_output_tokens:3000,yield_time_ms:30000});\ntext(r.output);\n"
+          "input": "const r = await tools.exec_command({cmd:\"~/.local/bin/t3ctl new --project demo --on vps \\\"Добавь одну уместную строку в README проекта demo. Сначала посмотри стиль и содержание README, допиши одну строку в подходящее место. Поскольку проект — синхронизированная реплика, все git-команды и сборки запускай на primary nodeB: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. Файлы редактируй в реплике; Mutagen синхронизирует изменения.\\\" --json\",max_output_tokens:3000,yield_time_ms:30000});\ntext(r.output);\n"
         }
       ],
       "activityActions": [
@@ -6039,7 +6039,7 @@
         },
         {
           "tool": "shell",
-          "command": "$ /usr/bin/zsh -lc \"~/.local/bin/t3ctl new --project demo --on vps \\\"Добавь одну уместную строку в README проекта demo. Сначала посмотри стиль и содержание README, допиши одну строку в подходящее место. Поскольку проект — синхронизированная реплика, все git-команды и сборки запускай на primary gor: ssh 'gor' 'cd '\\\\''/home/user/xdev-e2e/demo'\\\\'' && <command>'. Файлы редактируй в реплике; Mutagen синхронизирует изменения.\\\" --json\""
+          "command": "$ /usr/bin/zsh -lc \"~/.local/bin/t3ctl new --project demo --on vps \\\"Добавь одну уместную строку в README проекта demo. Сначала посмотри стиль и содержание README, допиши одну строку в подходящее место. Поскольку проект — синхронизированная реплика, все git-команды и сборки запускай на primary nodeB: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. Файлы редактируй в реплике; Mutagen синхронизирует изменения.\\\" --json\""
         }
       ],
       "nativeSession": "rollout-2026-11-03T13-07-36-01a1a0e0-e9ee-7dd3-9962-55c98a895958.jsonl",
@@ -6108,7 +6108,7 @@
           "timestamp": "2026-11-03T10:02:38.691Z",
           "tool": "bash",
           "input": {
-            "command": "t3ctl new --project demo --on vps --title \"README: дописать строку\" \"Допиши в README проекта demo одну новую строку с осмысленным текстом (например, короткое описание проекта или заметку), сохрани стиль файла.\n\nВажно: ты работаешь в реплике проекта на VPS (/home/t3/t3-replicas/demo-6). Файлы правь здесь — Mutagen синхронизирует их на primary (gor, /home/user/xdev-e2e/demo). Не делай git init, git commit и не запускай сборки в реплике.\n\nГотово, когда строка добавлена в README и файл сохранён. В отчёте укажи: что именно добавил, в какой файл, и подтверди, что изменение ушло в синхронизацию.\""
+            "command": "t3ctl new --project demo --on vps --title \"README: дописать строку\" \"Допиши в README проекта demo одну новую строку с осмысленным текстом (например, короткое описание проекта или заметку), сохрани стиль файла.\n\nВажно: ты работаешь в реплике проекта на VPS (/home/t3/t3-replicas/demo-6). Файлы правь здесь — Mutagen синхронизирует их на primary (nodeB, /home/dev/xdev-e2e/demo). Не делай git init, git commit и не запускай сборки в реплике.\n\nГотово, когда строка добавлена в README и файл сохранён. В отчёте укажи: что именно добавил, в какой файл, и подтверди, что изменение ушло в синхронизацию.\""
           }
         },
         {
@@ -6167,7 +6167,7 @@
           "timestamp": "2026-11-03T10:03:09.614Z",
           "tool": "bash",
           "input": {
-            "command": "ssh gor 'cd /home/user/xdev-e2e/demo && tail -5 README.md && echo --- && git status --short'"
+            "command": "ssh nodeB 'cd /home/dev/xdev-e2e/demo && tail -5 README.md && echo --- && git status --short'"
           }
         }
       ],
@@ -6224,7 +6224,7 @@
         },
         {
           "tool": "shell",
-          "command": "$ ssh gor 'cd /home/user/xdev-e2e/demo && tail -5 README.md && echo --- && git status --short'"
+          "command": "$ ssh nodeB 'cd /home/dev/xdev-e2e/demo && tail -5 README.md && echo --- && git status --short'"
         }
       ],
       "nativeSession": "ses_e5f23df44ffe4hAOA17FN1pKhU",
@@ -6394,21 +6394,21 @@
           "timestamp": "2026-11-03T10:08:38.359Z",
           "tool": "bash",
           "input": {
-            "command": "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short --branch && echo --- && git log --oneline -5'"
+            "command": "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short --branch && echo --- && git log --oneline -5'"
           }
         },
         {
           "timestamp": "2026-11-03T10:08:55.280Z",
           "tool": "bash",
           "input": {
-            "command": "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git diff -- README.md'"
+            "command": "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git diff -- README.md'"
           }
         },
         {
           "timestamp": "2026-11-03T10:09:26.041Z",
           "tool": "bash",
           "input": {
-            "command": "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add README.md && git commit -m \"docs: note cross-copy consistency check in README\" && git log --oneline -1 && git status --short --branch'"
+            "command": "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add README.md && git commit -m \"docs: note cross-copy consistency check in README\" && git log --oneline -1 && git status --short --branch'"
           }
         }
       ],
@@ -6425,15 +6425,15 @@
         },
         {
           "tool": "shell",
-          "command": "$ ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short --branch && echo --- && git log --oneline -5'"
+          "command": "$ ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short --branch && echo --- && git log --oneline -5'"
         },
         {
           "tool": "shell",
-          "command": "$ ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git diff -- README.md'"
+          "command": "$ ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git diff -- README.md'"
         },
         {
           "tool": "shell",
-          "command": "$ ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add README.md && git commit -m \"docs: note cross-copy consistency check in README\" && git log --oneline -1 && git status --short --branch'"
+          "command": "$ ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add README.md && git commit -m \"docs: note cross-copy consistency check in README\" && git log --oneline -1 && git status --short --branch'"
         }
       ],
       "nativeSession": "ses_e5f1e8316ffelQ50FH1pS23TO7",
@@ -6676,14 +6676,14 @@
           "timestamp": "2026-11-03T10:37:22.112Z",
           "tool": "bash",
           "input": {
-            "command": "t3ctl cat /home/user/t3-replicas/demo-2/README.md --on гвидон 2>&1"
+            "command": "t3ctl cat /home/dev/t3-replicas/demo-2/README.md --on гвидон 2>&1"
           }
         },
         {
           "timestamp": "2026-11-03T10:37:26.697Z",
           "tool": "bash",
           "input": {
-            "command": "t3ctl cat /home/user/t3-replicas/demo-2/README.md --on GV 2>&1"
+            "command": "t3ctl cat /home/dev/t3-replicas/demo-2/README.md --on GV 2>&1"
           }
         }
       ],
@@ -6704,11 +6704,11 @@
         },
         {
           "tool": "shell",
-          "command": "$ t3ctl cat /home/user/t3-replicas/demo-2/README.md --on гвидон 2>&1"
+          "command": "$ t3ctl cat /home/dev/t3-replicas/demo-2/README.md --on гвидон 2>&1"
         },
         {
           "tool": "shell",
-          "command": "$ t3ctl cat /home/user/t3-replicas/demo-2/README.md --on GV 2>&1"
+          "command": "$ t3ctl cat /home/dev/t3-replicas/demo-2/README.md --on GV 2>&1"
         }
       ],
       "nativeSession": "ses_e5f040783ffezasSifznETbXhq",
@@ -6720,12 +6720,12 @@
         {
           "position": 6,
           "tool": "shell",
-          "error": "Allocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"\",\n      \"machine\": \"qa\",\n      \"status\": {\n        \"state\": \"error\",\n        \"message\": \"98fe006e-1a2f-497b-ae5d-1714bccb2052 cannot reach 34e33796-4717-4293-a955-88c2f740db4d and back. Add an ssh route in Settings › Machines\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T08:59:35.997Z\"\n      }\n    },\n    {\n      \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"path\": \"/tmp/t3-eval-home/demo\",\n      \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n      \"transport\": \"mutagen\",\n      \"pathAllocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"2026-11-03T09:02:56.915Z\",\n      \"machine\": \"eval\",\n      \"tag\": \"EV\",\n      \"driverEnvironmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"status\": {\n        \"state\": \"watching\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T09:43:32.189Z\"\n      },\n      \"live\": {\n        \"logicalKey\": \"34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo\",\n        \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n        \"state\": \"watching\",\n        \"conflicts\": [],\n        \"problems\": [],\n        \"sessionName\": \"t3-6cd3d4d7-db074357\",\n        \"localPath\": \"/tmp/t3-eval-home/demo\",\n        \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n        \"updatedAt\": \"2026-11-03T10:36:49.074Z\"\n      }\n    }\n  ]\n}\n"
+          "error": "Allocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"\",\n      \"machine\": \"qa\",\n      \"status\": {\n        \"state\": \"error\",\n        \"message\": \"98fe006e-1a2f-497b-ae5d-1714bccb2052 cannot reach 34e33796-4717-4293-a955-88c2f740db4d and back. Add an ssh route in Settings › Machines\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T08:59:35.997Z\"\n      }\n    },\n    {\n      \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"path\": \"/tmp/t3-eval-home/demo\",\n      \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n      \"transport\": \"mutagen\",\n      \"pathAllocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"2026-11-03T09:02:56.915Z\",\n      \"machine\": \"eval\",\n      \"tag\": \"EV\",\n      \"driverEnvironmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"status\": {\n        \"state\": \"watching\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T09:43:32.189Z\"\n      },\n      \"live\": {\n        \"logicalKey\": \"34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo\",\n        \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n        \"state\": \"watching\",\n        \"conflicts\": [],\n        \"problems\": [],\n        \"sessionName\": \"t3-6cd3d4d7-db074357\",\n        \"localPath\": \"/tmp/t3-eval-home/demo\",\n        \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n        \"updatedAt\": \"2026-11-03T10:36:49.074Z\"\n      }\n    }\n  ]\n}\n"
         },
         {
           "position": 8,
           "tool": "shell",
-          "error": "$ t3ctl cat /home/user/t3-replicas/demo-2/README.md --on гвидон 2>&1\nt3ctl: \"гвидон\" matches 2 machines: eval (EV, db074357), gv test (GV, 375bdc7e); be more specific\n"
+          "error": "$ t3ctl cat /home/dev/t3-replicas/demo-2/README.md --on гвидон 2>&1\nt3ctl: \"гвидон\" matches 2 machines: eval (EV, db074357), gv test (GV, 375bdc7e); be more specific\n"
         }
       ],
       "interruptions": [],
@@ -6736,5 +6736,6 @@
       ],
       "review": "Selected successful general-only run; validated against bed effects."
     }
-  ]
+  ],
+  "redactedInfrastructure": true
 }

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Runs only in a disposable N-prefixed directory on the root VPS bed host.
+# Runs only in a disposable N-prefixed directory on the root CLOUD bed host.
 set -euo pipefail
-export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 ROOT=${1:?N-prefixed fixture directory required}
 case "$ROOT" in /tmp/N-*) ;; *) exit 2;; esac
 export PATH="$ROOT/bin:$PATH"
@@ -85,6 +84,6 @@ const route=JSON.parse(fs.readFileSync(root+'/ssh-copy.json','utf8'));
 const run=(command,args,options)=>execFileSync(command,command==='ssh' ? ['-F','/dev/null','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+route.knownHostsFile,...args] : args,options);
 const result=installSshRuntime({home:root+'/ssh-copy',want:'0.0.4-N',destination:route.destination,identityFile:route.identityFile,remoteHome:root+'-source',run});
 if(!fs.existsSync(result.path+'/t3')) throw Error('SSH runtime missing');
-console.log('PASS N runtime copied from linked worker over SSH without gh');
+console.log('PASS N runtime copied from linked nodeB over SSH without gh');
 JS
 printf 'PASS N system unit status/logs/versions/use/restart; evidence %s\n' "$ROOT"

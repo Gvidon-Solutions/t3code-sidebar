@@ -102,18 +102,18 @@ export const runScenarios = {
         NodePath.join(laptop.home, ".ssh/config"),
         NodePath.join(laptop.home, "run-control"),
       );
-      await NodeFSP.mkdir(NodePath.join(studio.home, ".nvm/versions/node/v26.12.1/bin"), {
+      await NodeFSP.mkdir(NodePath.join(studio.home, ".nvm/versions/node/fixture/bin"), {
         recursive: true,
       });
       await NodeFSP.symlink(
         "/usr/local/bin/node",
-        NodePath.join(studio.home, ".nvm/versions/node/v26.12.1/bin/node"),
+        NodePath.join(studio.home, ".nvm/versions/node/fixture/bin/node"),
       );
       await NodeFSP.mkdir(NodePath.join(studio.home, ".local/bin"), { recursive: true });
       await NodeFSP.symlink("/usr/local/bin/uv", NodePath.join(studio.home, ".local/bin/uv"));
       await NodeFSP.writeFile(
         NodePath.join(studio.home, ".bash_profile"),
-        'export PATH=/usr/bin:/bin\nexport NVM_DIR="$HOME/.nvm"\n. /opt/nvm.sh --no-use\nnvm use --silent v26.12.1\nexport PATH="$HOME/.local/bin:$PATH"\nexport FAST_LOGIN=loaded\n',
+        'export PATH=/usr/bin:/bin\nexport NVM_DIR="$HOME/.nvm"\n. /opt/nvm.sh --no-use\nnvm use --silent fixture\nexport PATH="$HOME/.local/bin:$PATH"\nexport FAST_LOGIN=loaded\n',
       );
       const login = await execute([
         "--",

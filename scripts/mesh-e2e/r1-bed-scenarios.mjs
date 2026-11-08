@@ -66,7 +66,9 @@ export async function runScenarios(h) {
         MUTAGEN_SSH_PATH: studio.base + "/mesh/ssh/bin",
       },
     });
-  await cloud(`mkdir -p /bed/home/.nvm/versions/node/v26.12.1/bin /bed/home/.local/bin`);
+  const nvmVersion = "v26.0.0";
+  const nvmBin = `/bed/home/.nvm/versions/node/${nvmVersion}/bin`;
+  await cloud(`mkdir -p ${nvmBin} /bed/home/.local/bin`);
   await upload(
     "cloudbox",
     NodePath.join(process.env.NVM_DIR || NodePath.join(NodeOS.homedir(), ".nvm"), "nvm.sh"),
@@ -75,10 +77,9 @@ export async function runScenarios(h) {
   const uv = (await run("sh", ["-c", "command -v uv"])).trim();
   await upload("cloudbox", uv, root + "/uv");
   await cloud(
-    `sh -ec ${quote("cp /bed/nvm.sh /bed/home/.nvm/nvm.sh; cp /bed/uv /bed/home/.local/bin/uv; chmod 755 /bed/home/.local/bin/uv; test -L /bed/home/.nvm/versions/node/v26.12.1/bin/node || ln -s /usr/local/bin/node /bed/home/.nvm/versions/node/v26.12.1/bin/node")}`,
+    `sh -ec ${quote(`cp /bed/nvm.sh /bed/home/.nvm/nvm.sh; cp /bed/uv /bed/home/.local/bin/uv; chmod 755 /bed/home/.local/bin/uv; test -L ${nvmBin}/node || ln -s /usr/local/bin/node ${nvmBin}/node`)}`,
   );
-  const profile =
-    'export HOME=/bed/home\nexport PATH=/usr/bin:/bin\nexport NVM_DIR=/bed/home/.nvm\n. "$NVM_DIR/nvm.sh" --no-use\nnvm use --silent v26.12.1\nexport PATH=/bed/home/.local/bin:$PATH\nexport R1_LOGIN_PROFILE=loaded\n';
+  const profile = `export HOME=/bed/home\nexport PATH=/usr/bin:/bin\nexport NVM_DIR=/bed/home/.nvm\n. "$NVM_DIR/nvm.sh" --no-use\nnvm use --silent ${nvmVersion}\nexport PATH=/bed/home/.local/bin:$PATH\nexport R1_LOGIN_PROFILE=loaded\n`;
   const loginHome = await cloud(`node -p ${quote("require('node:os').userInfo().homedir")}`);
   for (const home of new Set([cloudbox.home, loginHome])) {
     await file(cloudbox, `${home}/.bash_profile`, profile);
@@ -143,7 +144,7 @@ export async function runScenarios(h) {
     "console.log(process.env.R1_LOGIN_PROFILE);console.log(process.version);console.log(require('child_process').execFileSync('uv',['--version']).toString().trim())",
   ]);
   NodeAssert.equal(login.code, 0);
-  NodeAssert.match(login.stdout, /loaded\nv26\.12\.1\nuv /);
+  NodeAssert.match(login.stdout, /loaded\nv26\.\d+\.\d+\nuv /);
   await NodeFSP.mkdir(replica + "/nested", { recursive: true });
   const mapped = await execute(
     "mapped_live_stream_exit",
@@ -167,7 +168,7 @@ export async function runScenarios(h) {
     "const fs=require('fs');fs.writeFileSync('returned.txt','back');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/result.txt','stays')",
   ]);
   NodeAssert.equal(ignored.code, 0);
-  NodeAssert.equal(ignored.stderr, `dist/result.txt stayed on ${cloudbox.host}\n`);
+  NodeAssert.equal(ignored.stderr, `dist/ stayed on ${cloudbox.host}\n`);
   NodeAssert.equal(await NodeFSP.readFile(replica + "/returned.txt", "utf8"), "back");
   await NodeAssert.rejects(NodeFSP.access(replica + "/dist/result.txt"));
   const concurrent = await Promise.all([

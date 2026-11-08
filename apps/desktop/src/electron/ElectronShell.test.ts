@@ -30,12 +30,12 @@ describe("ElectronShell", () => {
 
       const electronShell = yield* ElectronShell.ElectronShell;
       const result = yield* electronShell.openExternal(
-        "vscode://vscode-remote/ssh-remote+user%40example.com/home/user/project",
+        "vscode://vscode-remote/ssh-remote+user%40example.com/home/dev/project",
       );
 
       assert.equal(result, true);
       assert.deepEqual(openExternalMock.mock.calls, [
-        ["vscode://vscode-remote/ssh-remote+user%40example.com/home/user/project"],
+        ["vscode://vscode-remote/ssh-remote+user%40example.com/home/dev/project"],
       ]);
     }).pipe(Effect.provide(ElectronShell.layer)),
   );
@@ -61,7 +61,7 @@ describe("ElectronShell", () => {
       const electronShell = yield* ElectronShell.ElectronShell;
       const results = yield* Effect.all([
         electronShell.openExternal("zed://extension/attacker"),
-        electronShell.openExternal("vscode://ssh/example.com/home/user/project"),
+        electronShell.openExternal("vscode://ssh/example.com/home/dev/project"),
         electronShell.openExternal("jetbrains://idea/navigate/reference?project=x&path=y"),
         electronShell.openExternal("jetbrains://gateway/ssh/environment?launchIde=true"),
         electronShell.openExternal("jetbrains://gateway/com.example.provider/connect?h=x"),
@@ -79,12 +79,12 @@ describe("ElectronShell", () => {
       const electronShell = yield* ElectronShell.ElectronShell;
       const results = yield* Effect.all([
         electronShell.openExternal(
-          "vscode://user@vscode-remote/ssh-remote+example.com/home/user/project",
+          "vscode://user@vscode-remote/ssh-remote+example.com/home/dev/project",
         ),
         electronShell.openExternal(
-          "vscode://:secret@vscode-remote/ssh-remote+example.com/home/user/project",
+          "vscode://:secret@vscode-remote/ssh-remote+example.com/home/dev/project",
         ),
-        electronShell.openExternal("zed://ssh/user:secret@example.com/home/user/project"),
+        electronShell.openExternal("zed://ssh/user:secret@example.com/home/dev/project"),
         electronShell.openExternal("jetbrains://user@gateway/ssh/environment?h=example.com"),
       ]);
 

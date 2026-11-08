@@ -5,7 +5,7 @@ import { migrateLogicalProjectIds, opaqueProjectId } from "./logicalIds.ts";
 import { materialize } from "./materialize.ts";
 
 it("migrates legacy projects, titles, placements, folds and aliases with stable clocks and ids", () => {
-  const old = "github.com/owner/repository",
+  const old = "title:repository",
     physical = "machine:/checkout/repository",
     id = opaqueProjectId(old);
   const h = "0000000000100.00000.machine";
@@ -41,6 +41,7 @@ it("migrates legacy projects, titles, placements, folds and aliases with stable 
   expect(canonical(left)).toBe(canonical(right));
   expect(materialize(left).projectMounts[id]).toBeUndefined();
   expect(opaqueProjectId(id)).toBe(id);
+  expect(opaqueProjectId("a.b/c")).toBe("a.b/c");
   expect(opaqueProjectId("title:project")).not.toContain("title:");
 });
 

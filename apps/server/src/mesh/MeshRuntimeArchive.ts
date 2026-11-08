@@ -3,7 +3,6 @@ import {
   cliArchiveFileName,
   cliArchivePlatformKey,
   cliReleaseDownloadBaseUrl,
-  parseChecksums,
 } from "@t3tools/shared/cliRelease";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
@@ -19,6 +18,7 @@ export class MeshRuntimeArchive extends Context.Service<
       version: string,
       platform: NodeJS.Platform,
       arch: string,
+      expectedSha256: string | undefined,
       report?: (stage: "download" | "verify") => Effect.Effect<void, MeshConfigError>,
     ) => Effect.Effect<Uint8Array, MeshConfigError>;
   }
@@ -34,6 +34,7 @@ export const layer = Layer.effect(
         version: string,
         platform: NodeJS.Platform,
         arch: string,
+        expected: string | undefined,
         report: (stage: "download" | "verify") => Effect.Effect<void, MeshConfigError> = () =>
           Effect.void,
       ) {
@@ -51,15 +52,10 @@ export const layer = Layer.effect(
           });
         const base = cliReleaseDownloadBaseUrl(version, env.T3CODE_RELEASE_BASE_URL);
         const filename = cliArchiveFileName(version, key);
-        const sums = yield* http.get(`${base}/SHA256SUMS`).pipe(
-          Effect.flatMap(HttpClientResponse.filterStatusOk),
-          Effect.flatMap((r) => r.text),
-        );
-        const expected = parseChecksums(sums).get(filename);
-        if (!expected)
+        if (!expected || !/^[a-f0-9]{64}$/i.test(expected))
           return yield* new MeshConfigError({
-            reason: "storage",
-            message: "Runtime is absent from release SHA256SUMS",
+            reason: "validation",
+            message: `Pin t3.runtimeChecksums[${filename}] in mesh config before downloading`,
           });
         const bytes = new Uint8Array(
           yield* http.get(`${base}/${filename}`).pipe(
@@ -69,7 +65,7 @@ export const layer = Layer.effect(
         );
         yield* report("verify");
         const actual = Hex.encode(yield* digest.digest(Digest.sha256, bytes));
-        if (actual !== expected)
+        if (actual !== expected.toLowerCase())
           return yield* new MeshConfigError({
             reason: "storage",
             message: "Runtime SHA-256 mismatch",

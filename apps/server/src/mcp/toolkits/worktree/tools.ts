@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   WorktreeMcpFailure,
   OrchestratorMcpEnvironmentTarget,
@@ -34,6 +35,7 @@ const WorktreeHandoffTool = Tool.make("t3_worktree_handoff", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "filesystem")
   .annotate(Tool.Title, "Hand off thread to a git worktree")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, true)
@@ -52,6 +54,7 @@ const WorktreeStatusTool = Tool.make("t3_worktree_status", {
   failureMode: "return",
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "filesystem")
   .annotate(Tool.Title, "Get thread worktree status")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -80,6 +83,7 @@ const WorktreeListTool = Tool.make("t3_worktree_list", {
     WorktreeMcpService.WorktreeMcpService,
   ],
 })
+  .annotate(McpDomainAnnotation, "filesystem")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 export const WorktreeToolkit = Toolkit.make(

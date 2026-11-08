@@ -3,14 +3,6 @@ import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeHttp from "node:http";
 import { run, until, rpc, mcp } from "./client.mjs";
-const studioUnit = (
-  await run("bash", [
-    "-c",
-    'source "$1"; printf "%s" "$STUDIO_UNIT"',
-    "bed-config",
-    new URL("bed-config.sh", import.meta.url).pathname,
-  ])
-).trim();
 const root = process.env.B1_BED_ROOT ?? "/tmp/B1-bed";
 const releases = process.env.B1_RELEASES ?? "/tmp/B1-releases";
 const admin = {
@@ -18,9 +10,7 @@ const admin = {
   cloudbox: JSON.parse(process.env.B1_CLOUDBOX_SSH ?? "null"),
 };
 if (!admin.laptop || !admin.cloudbox)
-  throw Error(
-    "B1_LAPTOP_SSH and B1_CLOUDBOX_SSH must be SSH argument arrays for the two remote bed roles",
-  );
+  throw Error("B1_LAPTOP_SSH and B1_CLOUDBOX_SSH must be SSH argument arrays (CLOUD and nodeB)");
 for (const name of ["laptop", "cloudbox"]) {
   const args = admin[name];
   admin[name] = [
@@ -109,9 +99,9 @@ try {
   console.log("PASS fresh container: sshd active; no T3 or Node");
   await NodeFSP.mkdir(root, { recursive: true });
   await new Promise((resolve) => releaseServer.listen(14890, "127.0.0.1", resolve));
-  const active = await run("systemctl", ["--user", "is-active", studioUnit]);
+  const active = await run("systemctl", ["--user", "is-active", "t3-mesh-e2e-nodeA.service"]);
   if (active === "active") {
-    await run("systemctl", ["--user", "stop", studioUnit]);
+    await run("systemctl", ["--user", "stop", "t3-mesh-e2e-nodeA.service"]);
     stoppedBed = true;
   }
   for (const node of nodes.slice(0, 2)) {
@@ -446,5 +436,5 @@ try {
       console.error("Cleanup", error.message);
     }
   }
-  if (stoppedBed) await run("systemctl", ["--user", "start", studioUnit]);
+  if (stoppedBed) await run("systemctl", ["--user", "start", "t3-mesh-e2e-nodeA.service"]);
 }

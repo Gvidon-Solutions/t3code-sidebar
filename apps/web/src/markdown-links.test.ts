@@ -54,10 +54,10 @@ describe("t3-file links", () => {
 
   it("keeps a line suffix", () => {
     expect(
-      resolveMarkdownFileLinkMeta("t3-file://laptop/%2Fsrv%2Fapp%2Fmain.ts", "/repo", "/repo"),
-    ).toMatchObject({ environmentId: "laptop" });
+      resolveMarkdownFileLinkMeta("t3-file://nodeB/%2Fsrv%2Fapp%2Fmain.ts", "/repo", "/repo"),
+    ).toMatchObject({ environmentId: "nodeB" });
     expect(
-      resolveMarkdownFileLinkMeta("t3-file://laptop/%2Fsrv%2Fapp%2Fmain.ts%3A12", "/repo", "/repo"),
+      resolveMarkdownFileLinkMeta("t3-file://nodeB/%2Fsrv%2Fapp%2Fmain.ts%3A12", "/repo", "/repo"),
     ).toMatchObject({ line: 12, filePath: "/srv/app/main.ts" });
   });
 });

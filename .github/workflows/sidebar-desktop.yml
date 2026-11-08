@@ -2,7 +2,7 @@ name: Sidebar fork desktop build
 
 on:
   push:
-    branches: [ws, delivery-ci/**, ci/a1-timing]
+    branches: [ws]
     paths-ignore: ["deploy/**", "docs/**", "**/*.md", ".github/workflows/sidebar-ios.yml"]
   workflow_dispatch:
     inputs:
@@ -377,7 +377,8 @@ jobs:
   android:
     name: Build Android APK
     needs: version
-    if: needs.version.outputs.android == 'true'
+    if: github.ref == 'refs/heads/ws' && needs.version.outputs.android == 'true'
+    environment: android-release
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}

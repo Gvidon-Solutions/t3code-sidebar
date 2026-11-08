@@ -34,3 +34,14 @@ it("uses the thread's own representation of a remote project, including aliases 
     }).local?.path,
   ).toBe("/local");
 });
+it("uses the same cycle representative from every entry path", () => {
+  const config = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    projectAliases: { a: "z", z: "y", y: "z" },
+  };
+  for (const logicalKey of ["a", "y", "z"]) {
+    expect(
+      threadProjectTarget(config, "studio", { environmentId: "cloudbox", logicalKey }).logicalKey,
+    ).toBe("y");
+  }
+});

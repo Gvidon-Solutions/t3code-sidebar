@@ -42,7 +42,7 @@ const layerEnvironmentAuth = (
     Layer.provide(ManagedPolicy.layerTest(policy)),
     Layer.provideMerge(ServerSecretStore.layer),
     Layer.provideMerge(SqlitePersistence.layerMemory),
-    Layer.provide(ServerEnvironment.layerIdentity),
+    Layer.provideMerge(ServerEnvironment.layerIdentity),
     Layer.provide(layerServerConfig(overrides)),
   );
 

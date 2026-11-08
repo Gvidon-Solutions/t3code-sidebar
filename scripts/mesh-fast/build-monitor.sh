@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 cache=${1:?tool cache required}
 export RUSTUP_HOME="$cache/toolchain/rustup" CARGO_HOME="$cache/toolchain/cargo" RUSTUP_TOOLCHAIN=1.95.0
 export CARGO_BUILD_JOBS=4

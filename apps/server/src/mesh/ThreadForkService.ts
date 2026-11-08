@@ -28,9 +28,8 @@ import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Scope from "effect/Scope";
 import * as Clock from "effect/Clock";
-import * as Schedule from "effect/Schedule";
+import { meshRetrySchedule } from "./retryBackoff.ts";
 import * as Fiber from "effect/Fiber";
-import * as Duration from "effect/Duration";
 import { forkParked } from "../serverActivation.ts";
 import * as ForkTransactions from "./ForkTransactions.ts";
 import * as Hex from "effect/encoding/Hex";
@@ -83,7 +82,7 @@ export class ThreadForkService extends Context.Service<
   }
 >()("t3/mesh/ThreadForkService") {}
 
-export const layer = Layer.effect(
+const serviceLayer = Layer.effect(
   ThreadForkService,
   Effect.gen(function* () {
     const uploadContext = yield* Effect.context<
@@ -384,11 +383,7 @@ export const layer = Layer.effect(
       operation.pipe(
         Effect.retry({
           while: (error) => error.code === "orchestration_error",
-          schedule: Schedule.exponential(meshMillis(1000)).pipe(
-            Schedule.modifyDelay(({ duration }) =>
-              Effect.succeed(Duration.min(duration, Duration.millis(meshMillis(15_000)))),
-            ),
-          ),
+          schedule: meshRetrySchedule,
         }),
       );
     const armExpiry = Effect.fn("ThreadForkService.armExpiry")(function* (
@@ -397,7 +392,18 @@ export const layer = Layer.effect(
     ) {
       const delay = Math.max(0, expiresAt - (yield* Clock.currentTimeMillis));
       yield* Effect.sleep(delay).pipe(
-        Effect.andThen(retry(expire(key))),
+        Effect.andThen(
+          expire(key).pipe(
+            Effect.retry({
+              while: (error) => error.code === "orchestration_error",
+              schedule: meshRetrySchedule,
+              times: 6,
+            }),
+            Effect.catch((error) =>
+              Effect.logWarning("Fork staging expiry retries exhausted", { key, error }),
+            ),
+          ),
+        ),
         Effect.forkIn(serviceScope),
       );
     });
@@ -734,7 +740,6 @@ export const layer = Layer.effect(
     const recover = Effect.gen(function* () {
       for (const { key, value } of yield* transactions.list) {
         if (value.phase === "pending" || value.phase === "uploading") {
-          yield* expire(key);
           yield* armExpiry(key, value.expiresAt);
         } else if (value.phase === "committing") {
           yield* retry(locks.withLock(key, commitFork(value.bundle.id, value.token))).pipe(
@@ -820,4 +825,7 @@ export const layer = Layer.effect(
     });
     return ThreadForkService.of({ fork, receive, catalog });
   }),
-).pipe(Layer.provideMerge(ForkTransactions.layer));
+);
+
+export const layer = serviceLayer.pipe(Layer.provideMerge(ForkTransactions.layer));
+export const layerTest = serviceLayer;

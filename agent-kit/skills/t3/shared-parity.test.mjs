@@ -21,7 +21,7 @@ test("standalone encoder agrees with shared core and clocks can be received", ()
       placements: { "offline:/path": ["z"] },
       machines: { offline: { label: "Offline" } },
       projectMounts: { x: [] },
-      projectTitles: { x: "Shared project title" },
+      projectTitles: { x: "Shared project title", "x/y%.title": "Opaque title identity" },
       projectAliases: { "legacy:/path": "x" },
       projectMountStatus: {
         x: {
@@ -69,8 +69,16 @@ test("alias writes match bounded shared clocks, including counter overflow", asy
     const document = last
       ? { "machine/remote": { v: { aliases: ["office", "研究室"] }, h: last } }
       : {};
-    for (const now of [0, 42, 42.8])
-      assert.equal(nextMachineClock(document, now, "client"), tick(now, last, "client"));
+    for (const now of [0, 42, 42.8]) {
+      let expected;
+      try {
+        expected = tick(now, last, "client");
+      } catch (error) {
+        assert.throws(() => nextMachineClock(document, now, "client"), { message: error.message });
+        continue;
+      }
+      assert.equal(nextMachineClock(document, now, "client"), expected);
+    }
   }
   const config = {
     ...empty,

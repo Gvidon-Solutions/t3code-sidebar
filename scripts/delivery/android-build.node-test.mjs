@@ -195,7 +195,7 @@ test("release CLI records inputs, restores the matching release and rejects a co
     exec(process.execPath, [script, "record", release], { env });
     writeFileSync(
       join(bin, "gh"),
-      '#!/usr/bin/env node\nconst fs=require("node:fs"),p=require("node:path"),args=process.argv.slice(2),root=process.env.ANDROID_RELEASE_FIXTURE;if(args[0]==="api"){process.stdout.write(args[1].includes("releases?")?JSON.stringify([{tag_name:"v1",draft:false,assets:[{name:"android-build.json",id:1}]}]):fs.readFileSync(p.join(root,"android-build.json")));}else{fs.copyFileSync(p.join(root,"App.apk"),p.join(args[args.indexOf("--dir")+1],"App.apk"));}',
+      '#!/usr/bin/env node\nconst fs=require("node:fs"),p=require("node:path"),args=process.argv.slice(2),root=process.env.ANDROID_RELEASE_FIXTURE;if(args[0]==="api"&&!args.some(a=>["--method","-X","-f","-F","--input"].includes(a))){process.stdout.write(args[1].includes("releases?")?JSON.stringify([{tag_name:"v1",draft:false,assets:[{name:"android-build.json",id:1}]}]):fs.readFileSync(p.join(root,"android-build.json")));}else if(args[0]==="release"&&args[1]==="download"){fs.copyFileSync(p.join(root,"App.apk"),p.join(args[args.indexOf("--dir")+1],"App.apk"));}else{throw new Error("Release restore attempted a write: "+args.join(" "));}',
     );
     NodeFS.chmodSync(join(bin, "gh"), 0o755);
     exec(process.execPath, [script, "restore", output], { env });

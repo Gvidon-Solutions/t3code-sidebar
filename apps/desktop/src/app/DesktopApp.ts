@@ -182,6 +182,7 @@ const bootstrap = Effect.gen(function* () {
       ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
       : {
           assetDirectory: environment.clientAssetsDir,
+          connectionOrigins: () => resolveUiOrigin(desktopUi.connectionOrigins),
           onSource: (origin, reason) => resolveUiOrigin(desktopUi.recordSource(origin, reason)),
           serverOrigin: () =>
             resolveUiOrigin(
