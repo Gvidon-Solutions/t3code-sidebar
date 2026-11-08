@@ -811,3 +811,7 @@ The daemon crash fixture starts its captured foreground daemon before T3 clients
 exist. Stopping an auto-started daemon during capture races clients that can start
 another one. The fixture kills its captured lock owner during staging and verifies
 recovery retains one session.
+
+R1 and bootstrap service ports use the same command-wide allocator as sshd and
+server ports. Probing a free host port separately can select a port already in use
+inside a fixture container, including its private sshd port.

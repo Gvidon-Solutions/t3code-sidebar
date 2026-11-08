@@ -7,6 +7,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeURL from "node:url";
 import { fixture, project, place, content, mutagen, archive, until, rpc } from "./helpers.mjs";
 import { ssh } from "./network.mjs";
+import { allocatePort as port } from "./mesh.mjs";
 function launch(node, cwd, args, extra = {}) {
   const direct = Boolean(extra.T3CODE_RUN_SSH_CONFIG);
   const child = NodeChildProcess.spawn(
@@ -56,13 +57,6 @@ function launch(node, cwd, args, extra = {}) {
         ? Promise.resolve()
         : new Promise((resolve, reject) => waiters.push({ text, resolve, reject })),
   };
-}
-async function port() {
-  const server = NodeNet.createServer();
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const value = server.address().port;
-  await new Promise((resolve) => server.close(resolve));
-  return value;
 }
 export const runScenarios = {
   "run-concept": (directory) =>

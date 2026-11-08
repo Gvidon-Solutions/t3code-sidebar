@@ -1,7 +1,6 @@
 import * as NodeAssert from "node:assert/strict";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import * as NodeNet from "node:net";
 import * as NodeHttp from "node:http";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeURL from "node:url";
@@ -11,15 +10,8 @@ const { installPublicRuntime, installSshRuntime } = await import(
     NodePath.join(productRoot, "agent-kit/skills/t3/scripts/server-runtime.mjs"),
   ).href
 );
-import { MiniMesh } from "./mesh.mjs";
+import { MiniMesh, allocatePort as port } from "./mesh.mjs";
 import { project, rpc, mcp, until, run, invariant } from "./helpers.mjs";
-async function port() {
-  const s = NodeNet.createServer();
-  await new Promise((resolve) => s.listen(0, "127.0.0.1", resolve));
-  const value = s.address().port;
-  await new Promise((resolve) => s.close(resolve));
-  return value;
-}
 export const rolloutScenarios = {
   "bootstrap-rollout": async (directory) => {
     const releases = process.env.MESH_FAST_RUNTIMES;

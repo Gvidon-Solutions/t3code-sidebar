@@ -768,4 +768,4 @@ const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(a
     if (errors.length) throw new AggregateError(errors, "Private fixture cleanup failed");
   }
 }
-export { rpc, until, mcp };
+export { rpc, until, mcp, port as allocatePort };
