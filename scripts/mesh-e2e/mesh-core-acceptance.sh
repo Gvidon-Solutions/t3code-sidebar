@@ -37,15 +37,15 @@ NODE_B_BIN="$NODE_B_RUNTIME_ROOT/$BUILD_VERSION/t3"
 CLOUD_BIN="/opt/t3/dist/bin.mjs"
 
 RUN_TS="${MESH_E2E_FIXTURE_PREFIX:+$MESH_E2E_FIXTURE_PREFIX-}$(date -u +%Y%m%dT%H%M%SZ)"
-ROUND1_NAME="${MESH_E2E_CORE_NAME:-core}"
-ROUND1_SCRATCH="${MESH_E2E_CORE_SCRATCH:-r1}"
-SCRATCH="$ROUND1_NAME-$RUN_TS"
-SCRATCH_NAME="$ROUND1_SCRATCH-$RUN_TS"
-SCRATCH_NAME_A="$ROUND1_SCRATCH-a-$RUN_TS"
-SCRATCH_NAME_B="$ROUND1_SCRATCH-b-$RUN_TS"
-SCRATCH_NAME_C="$ROUND1_SCRATCH-c-$RUN_TS"
-OLD_A="$ROUND1_NAME-old-$RUN_TS"
-OLD_B="$ROUND1_NAME-oldb-$RUN_TS"
+CORE_NAME="${MESH_E2E_CORE_NAME:-core}"
+CORE_SCRATCH="${MESH_E2E_CORE_SCRATCH:-core}"
+SCRATCH="$CORE_NAME-$RUN_TS"
+SCRATCH_NAME="$CORE_SCRATCH-$RUN_TS"
+SCRATCH_NAME_A="$CORE_SCRATCH-a-$RUN_TS"
+SCRATCH_NAME_B="$CORE_SCRATCH-b-$RUN_TS"
+SCRATCH_NAME_C="$CORE_SCRATCH-c-$RUN_TS"
+OLD_A="$CORE_NAME-old-$RUN_TS"
+OLD_B="$CORE_NAME-oldb-$RUN_TS"
 
 PASS=0
 FAIL=0
@@ -777,7 +777,7 @@ check "replicas.status returns the live replica stream on every server" test "$r
 echo "== step 7: files =="
 NODE_B_HOME="$(nodeB_ssh 'printf %s "$HOME"')"
 NODE_B_README="$NODE_B_DEMO_DIR/README.md"
-CLOUD_README="/home/t3/$ROUND1_NAME-e2e.txt"
+CLOUD_README="/home/t3/$CORE_NAME-e2e.txt"
 nodeB_ssh "printf 'a\\000b\\n' > '$NODE_B_DEMO_DIR/binary.bin'; truncate -s 70M '$NODE_B_DEMO_DIR/large.bin'" >/dev/null 2>&1
 cloud_ssh "docker exec t3-mesh-e2e sh -c 'printf \"mesh core file from cloud\\n\" > $CLOUD_README'" >/dev/null 2>&1
 
@@ -827,7 +827,7 @@ else
   record_fail "files.list completes on nodeB" "$(printf '%s' "$list_nodeB" | head -c 300)"
 fi
 list_cloud="$(ws_rpc nodeA files.list "{\"environmentId\":\"$CLOUD_ENV\",\"partialPath\":\"/home/t3/\",\"limit\":200}" 2>&1 || true)"
-if printf '%s' "$list_cloud" | jq -e --arg name "$ROUND1_NAME-e2e.txt" '.entries | map(.name) | index($name) != null' >/dev/null 2>&1; then
+if printf '%s' "$list_cloud" | jq -e --arg name "$CORE_NAME-e2e.txt" '.entries | map(.name) | index($name) != null' >/dev/null 2>&1; then
   record_pass "files.list completes on cloud through nodeA"
 else
   record_fail "files.list completes on cloud through nodeA" "$(printf '%s' "$list_cloud" | head -c 300)"
