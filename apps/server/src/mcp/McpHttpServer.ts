@@ -270,11 +270,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
     const key = request.headers["t3-idempotency-key"];
     const peer = invocation.client?.linked === true;
-    const from =
-      request.headers["t3-mesh-hops"]?.split(",")[0] ??
-      invocation.client?.peerEnvironmentId ??
-      request.headers["t3-peer-environment-id"] ??
-      invocation.client?.sessionId;
+    const from = invocation.client?.peerEnvironmentId ?? invocation.client?.sessionId;
     let sequence = 0;
     const callInvocation =
       peer && key && from

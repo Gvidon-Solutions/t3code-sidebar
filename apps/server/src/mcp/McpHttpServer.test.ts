@@ -861,6 +861,16 @@ it.effect("admits provider and OAuth client credentials and points only clients 
         capabilities: new Set(["orchestration"]),
         issuedAt: 1,
       };
+      const linkedScope: McpInvocationContext.McpInvocationScope = {
+        ...clientScope,
+        client: {
+          sessionId: "link-session",
+          label: "Laptop",
+          access: "full-access",
+          linked: true,
+          peerEnvironmentId: EnvironmentId.make("laptop-env"),
+        },
+      };
       const seen: Array<McpInvocationContext.McpInvocationScope> = [];
       const ProbeToolkit = Toolkit.make(
         Tool.make("probe", {
@@ -884,7 +894,7 @@ it.effect("admits provider and OAuth client credentials and points only clients 
           }),
         ),
       ).pipe(
-        Layer.provide(ServerSettings.layerTest()),
+        Layer.provide(ServerSettings.layerTest({ linkedEnvironmentsEnabled: true })),
         Layer.provide(
           Layer.mock(McpSessionRegistry.McpSessionRegistry)({
             resolve: (token) =>
@@ -899,7 +909,11 @@ it.effect("admits provider and OAuth client credentials and points only clients 
           Layer.succeed(McpHttpServer.McpClientAuthenticator, {
             authenticate: (request) =>
               Effect.succeed(
-                request.headers.authorization === `Bearer ${clientToken}` ? clientScope : undefined,
+                request.headers.authorization === `Bearer ${clientToken}`
+                  ? clientScope
+                  : request.headers.authorization === "Bearer linked-client"
+                    ? linkedScope
+                    : undefined,
               ),
           }),
         ),
@@ -908,10 +922,13 @@ it.effect("admits provider and OAuth client credentials and points only clients 
         Layer.build,
       );
       const httpClient = yield* HttpClient.HttpClient;
-      const call = (token: string | undefined) =>
+      const call = (token: string | undefined, claimedPeer = "forged-peer") =>
         Effect.gen(function* () {
           const headers = {
             accept: "application/json, text/event-stream",
+            "t3-idempotency-key": "request-1",
+            "t3-mesh-hops": claimedPeer,
+            "t3-peer-environment-id": claimedPeer,
             ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
           };
           const initialize = yield* httpClient.post("/mcp", {
@@ -940,6 +957,13 @@ it.effect("admits provider and OAuth client credentials and points only clients 
       expect(seen.map((scope) => scope.requestNamespace)).toEqual([
         "provider-session",
         "client:session-1",
+      ]);
+
+      for (const claimedPeer of ["forged-peer", "another-peer"])
+        expect((yield* call("linked-client", claimedPeer)).status).toBe(200);
+      expect(seen.slice(-2).map((scope) => scope.requestNamespace)).toEqual([
+        'peer:["laptop-env","request-1"]',
+        'peer:["laptop-env","request-1"]',
       ]);
 
       const missing = yield* call(undefined);
