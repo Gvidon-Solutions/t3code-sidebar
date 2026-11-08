@@ -91,12 +91,8 @@ export async function buildAssets({
     let fingerprint = resolveFingerprint();
     if (fingerprint !== previousFingerprint) {
       await run(process.execPath, ["scripts/mobile-android-apk.mjs"], config.buildDir, mobileEnv);
-      artifacts.push(
-        ...readdirSync(join(config.buildDir, "dist/mobile"))
-          .filter((file) => file.endsWith(".apk"))
-          .map((file) => join(config.buildDir, "dist/mobile", file)),
-      );
       apk = join(config.buildDir, "dist/mobile/t3-sidebar.apk");
+      artifacts.push(apk);
       fingerprint = resolveFingerprint();
     }
     nativeFingerprint = fingerprint;
