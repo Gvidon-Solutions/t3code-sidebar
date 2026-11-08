@@ -55,7 +55,8 @@ The gvidon test-tunnel override `99-X1-third.conf` forwards ports 13797/13791
 through gor and reverses 13795/22023 to the isolated gvidon server/SSH.
 On gor, `t3-mesh-X1-third-ports.service` forwards the container bridge routes
 13797, 13795, 22022 and 22023, plus the runner's loopback 13791 to port 3791.
-The former gor-to-VPS test-tunnel unit is stopped to avoid a port collision.
+The former gor-to-VPS test-tunnel unit is disabled and stopped to avoid a port collision;
+a reboot otherwise restarts it and occupies the relocated route’s reverse-forward port.
 These are bed-only units. The original stopped VPS data remains available at
 `/opt/t3-mesh-e2e`; the gor copy preserves file ownership.
 
@@ -67,17 +68,23 @@ addresses excluded through `NO_PROXY`. TLS passes through unchanged. Gvidon’s
 `t3-mesh-X1-provider-egress.service` own this route; keep them running for agent acceptance.
 They add no listeners or configuration to any other VPS stack.
 
-For acceptance, `/tmp/X1-fresh.env` selects independent X1 profiles on the same ports:
-`MESH_E2E_GV_BASE_DIR=/tmp/X1-fresh-studio`,
-`MESH_E2E_GOR_BASE_DIR=/tmp/X1-fresh-laptop`, and container mounts below
-`/tmp/X1-fresh-third-bed`. It also selects the matching compose template and fixture
-state directory. These base-directory options apply to RPC credentials, CLI wrappers,
-SSH checks, fault proxies and round-three daemon inspection; an old CLI base directory
-can silently query the other profile.
+For acceptance, `/tmp/X1-fresh.env` selects independent X1 profiles on the same ports.
+Gvidon uses `/tmp/X1-fresh-studio`; gor’s base and the third container’s home/tmp/var-tmp
+mounts live below `~/.local/share/t3-mesh-e2e/X1-recovered` on gor. The preset supplies the
+absolute base paths, matching compose template, fixture state and private runtime-copy SSH route.
+These options apply to RPC credentials, CLI wrappers, SSH checks, fault proxies and daemon
+inspection; an old CLI base directory can silently query another profile.
 
-The shared profile's data remains in its original directories, its container is stopped
-as `t3-mesh-e2e-X1-shared-preserved`, and native unit backups are in
-`/tmp/X1-shared-profile-backups` on gvidon. Never start both profiles on the same ports.
+Gor rebooted on the unchanged 7.0.0-38 kernel during X1’s final repeat and cleared `/tmp`,
+including the relocated copies and temporary test credentials. The profiles were rebuilt from
+a consistent private mesh snapshot, with jobs/auth sessions removed and new private keys;
+links are explicitly paired again. Persistent profile storage prevents a reboot from deleting
+the recovered layout and credentials. It does not prevent a reboot from aborting a test.
+The original VPS data in `/opt/t3-mesh-e2e` and gor’s original home-based state remain intact.
+The earlier stopped container objects preserve their root filesystems, but their old gor `/tmp`
+bind mounts were cleared. Native-unit backups are in `/tmp/X1-shared-profile-backups` on gvidon
+and under the recovered root on gor. Never start profiles on the same ports simultaneously.
+
 X1 observed a 2.3 MiB shared layout, sustained receiver-window backpressure, and a
 256 MiB staging recovery exceeding the 900-second deadline. A fresh three-node profile
 sent a checked 16 MiB through a persistent peer connection in 2.7 seconds, versus
