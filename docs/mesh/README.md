@@ -201,6 +201,8 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   in `packages/client-runtime/src/state/meshLayout/draftMachine.ts`. Pending sends live outside
   route lifetimes: IndexedDB on web, an atomic document file on native, and the shared
   `PendingDraftOutbox` reconciles registration with fixed server command/thread/message IDs.
+  Both `PendingMeshDraftCoordinator`s build their machine map with `pendingDraftMachines` and run
+  `launchPendingDraft`; each app supplies only its byte-upload adapter and command runner.
 - **Files anywhere.** `apps/server/src/files/` (`files.read/list`, forwarded via `callRouted`;
   error reasons travel as `[files:<reason>]`).
 - **Context injection.** Every turn gets a short machine/project/representation note (budget in
@@ -221,6 +223,12 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   ForkThreadDialog, MeshFooterStatus, FileMachineTag); mobile
   `apps/mobile/src/features/workspaces/` (same names). Pure logic lives in
   `packages/client-runtime/src/state/{meshLayout/*,machineDisplay,meshMachines}.ts`.
+  The Machines views and menus share `machineChoices`/`machineChoiceText`,
+  `pendingRowsForProject`, `replicaLagText`, `representationCandidates`,
+  `removeRepresentationCopy` and the adopt copy; each app keeps its own controls.
+  The sidebar fork sequence (`nextForkTitle`, `planForkPlacement`, `runThreadFork`) is shared in
+  `client-runtime/state/threadForks.ts`; app hooks inject the fork command, shell wait, reorder
+  and navigation.
 
 ## Interfaces
 
@@ -1098,6 +1106,11 @@ are independent of scheduling acceleration, including tombstones and durable rec
 
 The orphan standalone bootstrap/run/replica bed runners have been retired in favor of
 `scripts/mesh-fast`; native platform smoke imports the same client. Shared local shell helpers
-live in `scripts/lib/shell.mjs`; delivery setup stages that dependency with its remote script.
+live in `scripts/lib/shell.mjs`, including named command timeouts and buffers; delivery setup
+stages that dependency with its remote script. `scripts/lib/managed-sshd.mjs` writes the isolated
+OpenSSH configuration for the delivery bed, platform smoke and both bed runners.
+`scripts/delivery/bed-target.mjs` now both stages fixtures and applies one target, so the former
+bed-setup entry point is gone. Round scripts take neutral `MESH_E2E_*_NAME`,
+`MESH_E2E_DEMO_TITLE` and `MESH_E2E_ORPHAN_LABEL` values instead of rewriting fixture text.
 Round two reads `MESH_E2E_LOCAL_PRIMARY_ROOT`, `MESH_E2E_REVERSE_ROOT`,
 `MESH_E2E_REVERSE_TITLE` and `MESH_E2E_DEMO_TITLE`, matching nightly isolation.

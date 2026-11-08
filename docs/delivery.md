@@ -213,15 +213,15 @@ machine. `sshArgs` and `scpArgs` carry private SSH identity/port options; a priv
 Node launcher can manage a system unit without giving the builder a GitHub token. No target
 needs `gh`. Hold the shared test-bed lock before running against shared infrastructure.
 
-`--scenario lanes --ref <baseline-ref>` makes its own private `D1-delivery-fixture` clone,
+`--scenario lanes --ref <baseline-ref>` makes its own private `delivery-bed-fixture` clone,
 changes the mobile About title without committing, and invokes the actual `t3ctl hot` command.
 It checks the snapshot branch, preserved dirty index, signed OTA catalog and the clean thread's
 first Replay response, commits the fixture change in its own clone, then invokes actual clean
-deploy and verifies the configured gate ran. It refuses non-D1 unit names and production clean
+deploy and verifies the configured gate ran. It refuses non-delivery-bed unit names and production clean
 agents. Both command timings must be at most five minutes. Emulator verification of the About
 marker is a separate device-tool capture; the runner does not claim that a manifest proves UI.
 
-The coordinator-authorized `fixture-gate.mjs` is a transport fixture, not T1 acceptance. It
+The isolated `test-fixtures/fixture-gate.mjs` is a transport fixture, not T1 acceptance. It
 refuses unless `T3_DELIVERY_FIXTURE_GATE=1` and a private `T3_DELIVERY_FIXTURE_GATE_LOG` are set.
 The private gate command can use `env` to pass these only to that fixture. Production clean
 releases must configure the actual T1 command. Test evidence must say which gate ran.
@@ -237,8 +237,8 @@ update URL, certificate and public environment for the APK and subsequent export
 major-version fingerprint input comes from `apps/mobile/mobile-version.json`, so a private
 builder clone does not depend on the developer checkout's `.env` or app-config source formatting.
 
-`node scripts/delivery/bed-setup.mjs --config <private-config> --archive <baseline-runtime>
---bed-lock-file /tmp/mesh-bed.lock/owner` prepares only D1-prefixed fixture units. Each machine
+`node scripts/delivery/bed-target.mjs --config <private-config> --archive <baseline-runtime>
+--bed-lock-file /tmp/mesh-bed.lock/owner` prepares only delivery-bed-prefixed fixture units. Each machine
 needs a private `sshdPort`; the helper installs its daemon with private keys and authorized-key
 file, copies Node and the agent CLI over configured SSH, and installs a user or root system
 unit. A fixture ownership marker prevents adopting another server's existing database.
