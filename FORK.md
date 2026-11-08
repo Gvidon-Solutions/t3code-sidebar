@@ -135,6 +135,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `packages/contracts/src/{delivery,settings}.ts`, `packages/shared/src/serverSettings.ts`,
   `packages/client-runtime/src/state/meshLayoutClient.ts`, `docs/mesh/*`,
   `docs/sidebar-cross-device.md`.
+- **Fast suite.** The agent-rules scenario seeds a Codex home because managed blocks follow
+  installed harnesses; the browser journey matches the current fork-catalog reason text, retries a
+  crashed headless launch and uses the existing drag/move path; test cleanup retries payload
+  removal while a superseded server flushes logs; and the shared test setup strips inherited T3 run
+  shims so fixture `git` cannot call an installed server. The full isolated suite passes 48/48 in
+  222 s against the 360 s budget.
 - **Handoff.** Client work switches `AddCodexAccountDialog` and
   `buildProviderInstanceUpdatePatch` to the shared `buildProviderInstancePatch` and adds settings
   help text; this stage does not edit `apps/web`.

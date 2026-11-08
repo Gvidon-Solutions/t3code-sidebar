@@ -417,6 +417,13 @@ catalog, not a machine name or an assumed operating system.
 - An explicit representation path wins over allocation.
 - Thread lookups must fall back to the local machine when the server cannot fan out.
 - Calendar-dependent tests break (UsageService); use `Clock`, relative dates.
+- A test run launched from a T3 thread inherits the agent's run shims on PATH. The shared test
+  setup removes them and the `T3CODE_RUN_*` variables, so a fixture `git` cannot call the installed
+  server and leave an idle vitest worker.
+- Agent-kit scenarios must seed a harness home (or binary): managed skill copies and instruction
+  blocks follow installed harnesses, and a scenario that expects them without one is wrong.
+- Headless Chromium can crash at launch under a fully concurrent run; retry that launch, then let
+  the scenario assert. Payload cleanup retries because a superseded server can still flush logs.
 - Many parallel agents on one emulator/bed collide: coordinate devices; bed runs that restart
   servers must not overlap other agents' runs.
 - A draft's machine list must include machines without a representation of its project; deriving
