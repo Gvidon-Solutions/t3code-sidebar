@@ -93,9 +93,7 @@ const runtime = Layer.effect(
   ReplicaRuntime,
   Effect.map(ProjectReplicaService, (replicas) => ({ get: Effect.succeed(replicas) })),
 ).pipe(Layer.provide(replicas));
-export const required = Layer.mergeAll(
-  services,
-  peers,
+export const toolkit = Layer.mergeAll(
   runtime,
   Layer.mock(MeshRollout)({ trial: false }),
   Layer.mock(MeshBootstrap)({}),
@@ -107,7 +105,25 @@ export const required = Layer.mergeAll(
   Layer.succeed(McpClientAuthenticator, {
     authenticate: Effect.fn("fixture.authenticate")(() => Effect.sync(() => undefined)),
   }),
-  Layer.mock(PeerForwarding)({}),
+  Layer.mock(PeerForwarding)({
+    call: () =>
+      Effect.fail(
+        new OrchestratorMcpFailure({
+          code: "orchestration_error",
+          message: "No peer is connected in this fixture.",
+        }),
+      ),
+  }),
   PeerReceipts.layer.pipe(Layer.provide(layerMemory)),
   ApplicationEvents.layer.pipe(Layer.provide(layerMemory)),
+);
+
+export const required = Layer.mergeAll(services, peers, toolkit);
+
+export const transport = Layer.mergeAll(
+  services,
+  Layer.mock(MeshRelay)({}),
+  Layer.mock(MeshReplicator)({}),
+  Layer.mock(ThreadForkService)({}),
+  PeerReceipts.layer.pipe(Layer.provide(layerMemory)),
 );

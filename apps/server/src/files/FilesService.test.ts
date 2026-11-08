@@ -183,7 +183,6 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
     "refuses read-only escapes and allows valid projects despite an unrelated missing root",
     () =>
       Effect.gen(function* () {
-        const files = yield* FilesService.FilesService;
         const fs = yield* FileSystem.FileSystem;
         const path = yield* Path.Path;
         const project = yield* makeTempDir;
@@ -217,8 +216,12 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
             },
           },
         };
-        const invoke = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-          effect.pipe(
+        const invoke = <A, E, R>(
+          operation: (files: FilesService.FilesService["Service"]) => Effect.Effect<A, E, R>,
+        ) =>
+          FilesService.FilesService.pipe(
+            Effect.flatMap(operation),
+            Effect.provide(Layer.fresh(FilesService.layer)),
             Effect.provideService(McpInvocationContext, {
               environmentId: EnvironmentId.make("studio"),
               capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
@@ -247,24 +250,27 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
             ),
           );
         expect(
-          yield* invoke(files.read({ absolutePath: path.join(project, "inside.txt") })),
+          yield* invoke((files) => files.read({ absolutePath: path.join(project, "inside.txt") })),
         ).toMatchObject({ contents: "inside" });
         for (const target of [
           path.join(outside, "secret.txt"),
           path.join(project, "escape", "secret.txt"),
         ]) {
           expect(
-            reasonOf(yield* invoke(files.read({ absolutePath: target })).pipe(Effect.flip)),
+            reasonOf(
+              yield* invoke((files) => files.read({ absolutePath: target })).pipe(Effect.flip),
+            ),
           ).toBe("permission_denied");
         }
         expect(
-          reasonOf(yield* invoke(files.list({ partialPath: `${outside}/` })).pipe(Effect.flip)),
+          reasonOf(
+            yield* invoke((files) => files.list({ partialPath: `${outside}/` })).pipe(Effect.flip),
+          ),
         ).toBe("permission_denied");
       }),
   );
   it.effect("enforces config file permissions on the receiving server", () =>
     Effect.gen(function* () {
-      const files = yield* FilesService.FilesService;
       const path = yield* Path.Path;
       const project = yield* makeTempDir;
       const outside = yield* makeTempDir;
@@ -313,14 +319,22 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
             },
           };
           const missing = path.join(outside, "missing");
-          const operation: Effect.Effect<FilesReadResult | FilesListResult, FilesError> =
-            missingOperation === "list"
-              ? files.list({ partialPath: `${missing}/` })
-              : files.read({
-                  absolutePath:
-                    missingOperation === "read" ? missing : path.join(outside, "secret.txt"),
-                });
+          const operation: Effect.Effect<
+            FilesReadResult | FilesListResult,
+            FilesError,
+            FilesService.FilesService
+          > = FilesService.FilesService.pipe(
+            Effect.flatMap((files): Effect.Effect<FilesReadResult | FilesListResult, FilesError> =>
+              missingOperation === "list"
+                ? files.list({ partialPath: `${missing}/` })
+                : files.read({
+                    absolutePath:
+                      missingOperation === "read" ? missing : path.join(outside, "secret.txt"),
+                  }),
+            ),
+          );
           return yield* operation.pipe(
+            Effect.provide(Layer.fresh(FilesService.layer)),
             Effect.provideService(McpInvocationContext, {
               environmentId: EnvironmentId.make("studio"),
               capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),

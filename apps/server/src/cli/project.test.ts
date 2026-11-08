@@ -1,4 +1,4 @@
-import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as PeerTransport from "../peer/connection/PeerTransport.ts";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 // @effect-diagnostics nodeBuiltinImport:off - CLI integration uses temporary Node paths.
@@ -134,10 +134,7 @@ it.effect("adds, renames, and removes projects through the V2 project CLI domain
     assert.deepEqual((yield* readProjects(baseDir)).projects, []);
   }).pipe(
     Effect.provide(
-      Layer.provideMerge(
-        Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-        MeshTestServices.layerMemory,
-      ),
+      Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer), PeerTransport.layer),
     ),
   ),
 );
@@ -201,7 +198,7 @@ it.effect.each(["snapshot", "mutation"] as const)(
       assert.deepEqual((yield* readProjects(baseDir)).projects, []);
     }).pipe(
       Effect.scoped,
-      Effect.provide(Layer.provideMerge(NodeServices.layer, MeshTestServices.layerMemory)),
+      Effect.provide(Layer.provideMerge(NodeServices.layer, PeerTransport.layer)),
     ),
 );
 
@@ -339,7 +336,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
         );
         assert.deepEqual(yield* readNativeThreadState(baseDir, threadId), before);
         assert.equal(yield* fs.exists(workspaceRoot), !missing);
-      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+      }).pipe(Effect.provide(PeerTransport.layer)),
     );
 
     it.effect.each(["present", "missing"] as const)(
@@ -392,7 +389,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
           assert.deepEqual(yield* readNativeThreadState(baseDir, unrelatedId), unrelatedBefore);
           assert.equal(yield* fs.exists(workspaceRoot), workspace === "present");
           assert.isTrue(yield* fs.exists(otherWorkspace));
-        }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+        }).pipe(Effect.provide(PeerTransport.layer)),
     );
   },
 );
@@ -416,7 +413,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
           ]);
           assert.deepEqual((yield* readProjects(baseDir)).projects, []);
           assert.isFalse(yield* fs.exists(workspaceRoot));
-        }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+        }).pipe(Effect.provide(PeerTransport.layer)),
     );
 
     it.effect("does not resolve another environment's project ID in an empty database", () =>
@@ -441,7 +438,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
           [project.id],
         );
         assert.deepEqual((yield* readProjects(replacementDir)).projects, []);
-      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+      }).pipe(Effect.provide(PeerTransport.layer)),
     );
 
     it.effect("normalizes existing paths without conflating separately registered symlinks", () =>
@@ -478,7 +475,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))(
           [project.id],
         );
         assert.isTrue(NodeFS.existsSync(workspaceRoot));
-      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+      }).pipe(Effect.provide(PeerTransport.layer)),
     );
   },
 );

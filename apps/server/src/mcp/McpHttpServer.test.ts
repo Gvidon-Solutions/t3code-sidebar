@@ -1063,8 +1063,7 @@ it.effect("admits provider and OAuth client credentials and points only clients 
 
       for (const claimedPeer of ["forged-peer", "another-peer"])
         expect((yield* call("linked-client", claimedPeer)).status).toBe(200);
-      expect(seen.slice(-2).map((scope) => scope.requestNamespace)).toEqual([
-        'peer:["laptop-env","request-1"]',
+      expect(seen.slice(2).map((scope) => scope.requestNamespace)).toEqual([
         'peer:["laptop-env","request-1"]',
       ]);
 
@@ -1315,7 +1314,7 @@ it.effect("hides tools for links and refuses another environment while the beta 
       // On, the call goes on to the forwarding, which this server lacks.
       expect(yield* ranIn(elsewhere)).toMatchObject({
         isError: true,
-        content: [{ text: expect.stringContaining("cannot reach linked environments") }],
+        content: [{ text: expect.stringContaining("No peer is connected in this fixture.") }],
       });
     }),
   ).pipe(

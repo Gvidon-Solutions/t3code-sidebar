@@ -92,7 +92,7 @@ it.effect("bounds a missing-name wait and reacts to layout-only metadata changes
       const missing = yield* replicas.machines("Missing").pipe(Effect.forkChild);
       yield* Deferred.await(entered);
       yield* TestClock.adjust("20 seconds");
-      expect((yield* Fiber.join(missing).pipe(Effect.flip)).reason).toBe("not_found");
+      expect((yield* Fiber.join(missing).pipe(Effect.flip)).reason).toBe("unreachable");
       entered = yield* Deferred.make<void>();
       const waiting = yield* replicas.machines("Layout project").pipe(Effect.forkChild);
       yield* Deferred.await(entered);

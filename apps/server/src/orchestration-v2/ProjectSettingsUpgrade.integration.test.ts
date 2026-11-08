@@ -1,3 +1,4 @@
+import * as DeliveryAdmission from "../mesh/DeliveryAdmission.ts";
 import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -153,7 +154,9 @@ const layerRuntime = (dbPath: string) => {
     ),
     Layer.provide(McpSessionRegistryTestkit.layer),
     Layer.provide(McpProviderSessions.layer),
-    Layer.provideMerge(SqlitePersistence.layerFromPath(dbPath)),
+    Layer.provideMerge(
+      DeliveryAdmission.layer.pipe(Layer.provideMerge(SqlitePersistence.layerFromPath(dbPath))),
+    ),
     Layer.provide(layerCheckpointStore),
     Layer.provide(layerServerConfig),
     Layer.provide(ServerSettings.layerTest()),
@@ -199,7 +202,7 @@ it.live("keeps project settings through the V2 migrations and the first V2 boot"
           Layer.merge(NodeServices.layer, MeshTestServices.platform),
           NodeCrypto.layer,
         ),
-        MeshTestServices.services,
+        MeshTestServices.platform,
       ),
     ),
   ),

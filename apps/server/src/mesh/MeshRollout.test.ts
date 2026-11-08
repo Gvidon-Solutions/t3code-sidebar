@@ -14,6 +14,7 @@ import * as Schema from "effect/Schema";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  DeliveryDrainError,
   MeshConfigError,
   MeshUpdateVoteInput,
   OrchestratorMcpFailure,
@@ -140,7 +141,18 @@ const fixture = Effect.gen(function* () {
               }),
             status: Effect.succeed(openDrain),
           })
-        : Layer.empty,
+        : Layer.mock(DeliveryAdmission)({
+            cancel: () =>
+              Effect.sync(() => {
+                cancelled.push(id);
+                return openDrain;
+              }),
+            drain: () =>
+              Effect.fail(new DeliveryDrainError({ message: "Delivery admission is unavailable" })),
+            status: Effect.fail(
+              new DeliveryDrainError({ message: "Delivery admission is unavailable" }),
+            ),
+          }),
       Layer.succeed(MeshLayoutService, { ...mesh, environmentId: id }),
       ServerConfig.layerTest(base, base),
       Layer.succeed(PeerMcpClient, client),
@@ -331,7 +343,7 @@ it.effect("resumes the same lease after interruption before the launcher accepts
   ),
 );
 
-it.effect("refuses runtime handoff before backup when admission is unavailable", () =>
+it.effect("refuses runtime handoff before backup when admission fails", () =>
   Effect.gen(function* () {
     const f = yield* fixture;
     const service = yield* f.make("cloudbox", "0.1.5", undefined, false, false);
@@ -339,7 +351,8 @@ it.effect("refuses runtime handoff before backup when admission is unavailable",
     expect(failure.message).toContain("Delivery admission is unavailable");
     expect(f.requested).toEqual([]);
     expect(f.steps).toEqual([]);
-    expect((yield* f.mesh.read).document["mesh.updateLease"]).toBeUndefined();
+    expect((yield* f.mesh.read).document["mesh.updateLease"]?.v).toBeNull();
+    expect(f.cancelled).toContain("cloudbox");
   }).pipe(
     Effect.scoped,
     Effect.provide(

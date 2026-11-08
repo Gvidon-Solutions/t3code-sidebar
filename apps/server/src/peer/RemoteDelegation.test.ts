@@ -206,7 +206,14 @@ const boxProjects: ReadonlyArray<Project> = [
 ];
 
 const serveBox = (thread: BoxThread) => {
-  return servePeer(box, boxToolkitLayer(thread));
+  return servePeer(box, boxToolkitLayer(thread).pipe(Layer.provide(MeshTestServices.toolkit))).pipe(
+    Effect.provide(
+      MeshTest.layerLinkedTest(box.environmentId, {
+        cloudbox: box.environmentId,
+        laptop: laptop.environmentId,
+      }),
+    ),
+  );
 };
 
 const boxRunId = RunId.make("run:box");
@@ -626,7 +633,7 @@ const makeLaptop = (
       Layer.provide(Layer.mock(GitVcsDriver.GitVcsDriver)({})),
       Layer.fresh,
     );
-    const here = yield* Layer.build(layerHere);
+    const here = yield* Layer.build(layerHere.pipe(Layer.provide(MeshTestServices.toolkit)));
     const server = Context.get(here, McpServer.McpServer);
     return {
       links: Context.get(linking, PeerLinks.PeerLinks),
@@ -943,7 +950,7 @@ it.effect("a task delegated to the box wakes the laptop's parent when it ends th
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1060,7 +1067,7 @@ it.effect.each(["no active parent run", "a newer run owned by another provider"]
       Effect.provide(
         Layer.provideMerge(
           Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-          MeshTestServices.required,
+          MeshTestServices.transport,
         ),
       ),
     ),
@@ -1113,7 +1120,7 @@ it.effect(
       Effect.provide(
         Layer.provideMerge(
           Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-          MeshTestServices.required,
+          MeshTestServices.transport,
         ),
       ),
     ),
@@ -1158,7 +1165,7 @@ it.effect("a task named only by environment inherits the parent's model, within 
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1190,7 +1197,7 @@ it.effect("refuses worktree isolation for a task there before launching anything
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1230,7 +1237,7 @@ it.effect("follows an open task again after the laptop restarts", () =>
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1298,7 +1305,7 @@ it.effect("fails the task when the box revokes the link, and cancel interrupts i
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1348,7 +1355,7 @@ it.effect("a task's result is its own run's whole last reply, not a later run's"
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1391,7 +1398,7 @@ it.effect("a task whose thread there waits on its own task ends with the answer 
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1433,7 +1440,7 @@ it.effect("the same key from another provider session is another task", () =>
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1479,7 +1486,7 @@ it.effect.each([null, "Working before the provider failed."])(
       Effect.provide(
         Layer.provideMerge(
           Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-          MeshTestServices.required,
+          MeshTestServices.transport,
         ),
       ),
     ),
@@ -1519,7 +1526,7 @@ it.effect.each([false, true])(
       Effect.provide(
         Layer.provideMerge(
           Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-          MeshTestServices.required,
+          MeshTestServices.transport,
         ),
       ),
     ),
@@ -1551,7 +1558,7 @@ it.effect("keeps a successful remote reply despite an error item in the run's ac
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1596,7 +1603,7 @@ it.effect("fails the task when its thread there is gone, or the link here is", (
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1631,7 +1638,7 @@ it.effect("cancel ends the task here even when the link is gone", () =>
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1673,7 +1680,7 @@ it.effect("a parent stopped while the task's result is read still stops its thre
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1730,7 +1737,7 @@ it.effect("a stop the box refuses because the parent was lowered ends instead of
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1768,7 +1775,7 @@ it.effect("stopping the parent stops its task there", () =>
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1867,7 +1874,7 @@ it.effect("stopping the parent stops follow-up work on a task there that has its
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1924,7 +1931,7 @@ it.effect("a delayed Stop acknowledgement leaves a newer Stop owed", () =>
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -1971,7 +1978,7 @@ it.effect("a Stop on a task that has its result reaches there after a restart", 
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -2016,7 +2023,7 @@ it.effect("a parent stopped while the box is unreachable still stops its task th
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -2063,7 +2070,7 @@ it.effect("a task cancelled while the box is unreachable is stopped there after 
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -2097,7 +2104,7 @@ it.effect("a task whose thread there has no run ends with its last reply", () =>
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -2124,7 +2131,7 @@ it.effect("a local task runs in this thread's project", () =>
     Effect.provide(
       Layer.provideMerge(
         Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-        MeshTestServices.required,
+        MeshTestServices.transport,
       ),
     ),
   ),
@@ -2185,7 +2192,7 @@ it.effect.each(["representation-id", "representation-path", "same-path"] as cons
       Effect.provide(
         Layer.provideMerge(
           Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
-          MeshTestServices.required,
+          MeshTestServices.transport,
         ),
       ),
     ),

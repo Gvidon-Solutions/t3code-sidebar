@@ -1499,7 +1499,6 @@ it.effect(
     let reads = 0;
     const failure = new DeliveryDrainError({ message: "Admission unavailable" });
     const layer = ProviderRuntimeRecovery.layer.pipe(
-      Layer.provide(RequiredAdmission.layer),
       Layer.provide(ServerSettings.layerTest()),
       Layer.provide(
         Layer.mergeAll(

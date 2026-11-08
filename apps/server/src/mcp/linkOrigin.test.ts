@@ -357,7 +357,7 @@ it.layer(
       assert.deepEqual((yield* projections.getThreadShell(task))?.delegatedFrom, delegatedFrom);
       const claimed = yield* launch(claudeCode, "Claims a parent", { delegatedFrom });
       assert.equal((yield* projections.getThreadShell(claimed))?.delegatedFrom, undefined);
-    }).pipe(Effect.provide(MeshTestServices.required)),
+    }),
   );
 
   it.effect("changes only that link's threads below full access", () =>
@@ -403,7 +403,7 @@ it.layer(
       // Reads are not fenced.
       const read = yield* call(laptop, "t3_thread_read", { threadId: users });
       assert.equal(read.isError, false);
-    }).pipe(Effect.provide(MeshTestServices.required)),
+    }),
   );
 
   it.effect("is not fenced when the link has full access, but still says where it came from", () =>
@@ -430,6 +430,6 @@ it.layer(
         const changed = yield* call(trusted, name, args);
         assert.equal(changed.isError, false, `${name}: ${JSON.stringify(changed.content)}`);
       }
-    }).pipe(Effect.provide(MeshTestServices.required)),
+    }),
   );
 });

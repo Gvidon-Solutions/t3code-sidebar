@@ -15,7 +15,7 @@ it.each([false, true])(
     const local = { protocol: "local", path: "/source" },
       remote = { protocol: "ssh", host: "t3-target", path: "/chosen/copy" };
     const session = {
-      identifier: "N-manual",
+      identifier: "mesh-manual",
       paused: false,
       status: "watching",
       alpha: reversed ? remote : local,

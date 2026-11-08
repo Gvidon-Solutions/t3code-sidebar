@@ -1,4 +1,4 @@
-import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as PeerTransport from "../peer/connection/PeerTransport.ts";
 // @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises Node HTTP and filesystem boundaries.
 // @effect-diagnostics anyUnknownInErrorContext:off - Sidebar fork: with the fork's server types the
 // checker gives up on `cli` in this file and reports `any`; the resolved requirements match upstream.
@@ -197,7 +197,7 @@ describe("t3 pair", () => {
       Effect.provide(
         Layer.provideMerge(
           Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-          MeshTestServices.layerMemory,
+          PeerTransport.layer,
         ),
       ),
     ),
@@ -261,7 +261,7 @@ describe("t3 pair", () => {
       Effect.provide(
         Layer.provideMerge(
           Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-          MeshTestServices.layerMemory,
+          PeerTransport.layer,
         ),
       ),
     ),
@@ -289,7 +289,7 @@ describe("t3 pair", () => {
       Effect.provide(
         Layer.provideMerge(
           Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-          MeshTestServices.layerMemory,
+          PeerTransport.layer,
         ),
       ),
     ),
@@ -336,7 +336,7 @@ describe("t3 pair", () => {
           "Example Corp's policy does not allow remote clients, so Tailscale Serve cannot be turned on.",
         );
       }),
-    ).pipe(Effect.provide(Layer.provideMerge(NodeServices.layer, MeshTestServices.layerMemory))),
+    ).pipe(Effect.provide(Layer.provideMerge(NodeServices.layer, PeerTransport.layer))),
   );
 
   it.effect("ignores runtime state whose recorded pid is no longer alive", () =>
@@ -366,7 +366,7 @@ describe("t3 pair", () => {
       Effect.provide(
         Layer.provideMerge(
           Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-          MeshTestServices.layerMemory,
+          PeerTransport.layer,
         ),
       ),
     ),
@@ -413,7 +413,7 @@ describe("t3 pair", () => {
       Effect.provide(
         Layer.provideMerge(
           Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-          MeshTestServices.layerMemory,
+          PeerTransport.layer,
         ),
       ),
     ),
@@ -454,7 +454,7 @@ describe("t3 pair", () => {
       Effect.provide(
         Layer.provideMerge(
           Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-          MeshTestServices.layerMemory,
+          PeerTransport.layer,
         ),
       ),
     ),
@@ -513,7 +513,7 @@ describe("t3 pair", () => {
       Effect.provide(
         Layer.provideMerge(
           Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
-          MeshTestServices.layerMemory,
+          PeerTransport.layer,
         ),
       ),
     ),
@@ -558,7 +558,7 @@ describe("auth scope options", () => {
         assert.deepEqual(issued.scopes, ["orchestration:read", "access:read"]);
         assert.lengthOf(listed, 1);
         assert.deepEqual(listed[0]?.scopes, issued.scopes);
-      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+      }).pipe(Effect.provide(PeerTransport.layer)),
   );
 
   it.effect.each(
@@ -586,7 +586,7 @@ describe("auth scope options", () => {
       }
       assert.equal(scopeError.option, "scope");
       assert.equal(scopeError.value, "admin");
-    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+    }).pipe(Effect.provide(PeerTransport.layer)),
   );
 });
 
@@ -620,7 +620,7 @@ describe("auth pairing create --base-url", () => {
           runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
         );
         assert.deepEqual(JSON.parse(listOutput), []);
-      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+      }).pipe(Effect.provide(PeerTransport.layer)),
   );
 
   it.effect.each(["http://192.168.1.5:3773", "https://example.com", "http:localhost:3773"])(
@@ -646,7 +646,7 @@ describe("auth pairing create --base-url", () => {
         };
 
         assert.equal(issued.pairUrl, `${new URL(baseUrl).origin}/pair#token=${issued.credential}`);
-      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+      }).pipe(Effect.provide(PeerTransport.layer)),
   );
 });
 
@@ -685,6 +685,6 @@ describe("scripted auth output", () => {
       } else {
         assert.match(output.trim(), /^[\w-]+\.[\w-]+/);
       }
-    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
+    }).pipe(Effect.provide(PeerTransport.layer)),
   );
 });

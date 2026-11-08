@@ -35,7 +35,7 @@ it.effect(
         const replicas = yield* Replicas.ProjectReplicaService;
         yield* replicas.reconcile;
         const runtime = Layer.succeed(Runtime.ReplicaRuntime, { get: Effect.succeed(replicas) });
-        const handlers = group.toLayer(Rpc.handlers).pipe(Layer.provide(runtime));
+        const handlers = group.toLayer(Rpc.handlers).pipe(Layer.provideMerge(runtime));
         const denied = yield* RpcTest.makeClient(group).pipe(
           Effect.provide(Layer.merge(handlers, RpcAuthorization.layer([]))),
         );
@@ -48,7 +48,7 @@ it.effect(
         expect(
           yield* denied[MESH_WS_METHODS.replicasAdopt]({
             project: "repo",
-            session: "N-manual",
+            session: "mesh-manual",
           }).pipe(Effect.flip),
         ).toMatchObject({ requiredPermission: AuthOrchestrationOperateScope });
         expect(
@@ -88,6 +88,15 @@ it.effect(
         expect(clientRpcRequiredScopes(MESH_WS_METHODS.replicasStatus, {})).toEqual([
           AuthOrchestrationOperateScope,
         ]);
-      }).pipe(Effect.provide(h.layer));
+      }).pipe(
+        Effect.provide(
+          Layer.effect(
+            Runtime.ReplicaRuntime,
+            Effect.map(Replicas.ProjectReplicaService, (replicas) => ({
+              get: Effect.succeed(replicas),
+            })),
+          ).pipe(Layer.provideMerge(h.layer)),
+        ),
+      );
     }).pipe(Effect.provide(MeshTestServices.required)),
 );

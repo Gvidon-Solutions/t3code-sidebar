@@ -23,6 +23,7 @@ import { McpInvocationContext } from "../../McpInvocationContext.ts";
 import { idleThreadProjection, liveThreadShell } from "../../McpToolAccess.testkit.ts";
 import { ThreadManagementService } from "../../../orchestration-v2/ThreadManagementService.ts";
 import { ProjectService } from "../../../project/ProjectService.ts";
+import { ReplicaRuntime } from "../../../replicas/ReplicaRuntime.ts";
 import { ProjectReplicaService } from "../../../replicas/ProjectReplicaService.ts";
 import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 
@@ -66,7 +67,7 @@ it.effect.each([
   };
   const initial: SidebarWorkspacesConfig = {
     ...DEFAULT_SERVER_SETTINGS.sidebarWorkspaces,
-    projectTitles: role === "renamed" ? { repo: "N-shared project title" } : {},
+    projectTitles: role === "renamed" ? { repo: "Shared project title" } : {},
     machines: {
       local: { label: "Local", tag: "LO" },
       source: { label: "Worker", tag: "WK" },
@@ -151,8 +152,8 @@ it.effect.each([
     if (role === "remote parent")
       expect(result).toHaveProperty("parent.environmentId", "parent-machine");
     if (role === "renamed") {
-      expect(result).toHaveProperty("project.logicalTitle", "N-shared project title");
-      expect(result).toHaveProperty("project.title", "N-shared project title");
+      expect(result).toHaveProperty("project.logicalTitle", "Shared project title");
+      expect(result).toHaveProperty("project.title", "Shared project title");
     }
     if (role === "allocated replica")
       expect(result).toHaveProperty("project.logicalTitle", "primary");
@@ -233,19 +234,26 @@ it.effect.each([
             environmentId: "local",
             read: Effect.succeed({ config, document: {} }),
           }),
-          Layer.mock(ProjectReplicaService)({
-            status: Effect.succeed([
-              {
-                logicalKey: role === "alias" ? "canonical" : "repo",
-                environmentId: "local",
-                sessionName: "t3-repo-local",
-                state: "conflict",
-                conflicts: ["file"],
-                problems: [],
-                updatedAt: "",
-              },
-            ]),
-          }),
+          Layer.effect(
+            ReplicaRuntime,
+            Effect.map(ProjectReplicaService, (replicas) => ({ get: Effect.succeed(replicas) })),
+          ).pipe(
+            Layer.provide(
+              Layer.mock(ProjectReplicaService)({
+                status: Effect.succeed([
+                  {
+                    logicalKey: role === "alias" ? "canonical" : "repo",
+                    environmentId: "local",
+                    sessionName: "t3-repo-local",
+                    state: "conflict",
+                    conflicts: ["file"],
+                    problems: [],
+                    updatedAt: "",
+                  },
+                ]),
+              }),
+            ),
+          ),
         ),
         MeshTestServices.required,
       ),

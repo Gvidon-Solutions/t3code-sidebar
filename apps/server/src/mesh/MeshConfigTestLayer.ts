@@ -8,4 +8,5 @@ export const layerTest = (environmentId = "test") =>
   Config.layer.pipe(
     Layer.provide(Layer.succeed(Config.MeshConfigPlanners, [])),
     Layer.provideMerge(layoutTest(environmentId, DEFAULT_SIDEBAR_WORKSPACES_CONFIG)),
+    Layer.fresh,
   );

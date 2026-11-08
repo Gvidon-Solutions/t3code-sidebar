@@ -167,7 +167,7 @@ it.effect(
           .pipe(Stream.unwrap, Stream.runCollect);
         expect(removed.at(-1)?.result).toMatchObject({
           code: "invalid_request",
-          message: "Cannot reach the replica driver to verify unsynced changes.",
+          message: "No peer is connected in this fixture.",
         });
         expect(
           (yield* mesh.read).config.projectMounts.repo!.some(

@@ -5,6 +5,8 @@ import * as FileSystem from "effect/FileSystem";
 import { EnvironmentId, ProjectId, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -125,7 +127,11 @@ it.effect.each([
         }));
         const before = (yield* mesh.read).document;
         if (brokenPage) {
-          const error = yield* service.machines("remote TITLE").pipe(Effect.flip);
+          const lookup = yield* service
+            .machines("remote TITLE")
+            .pipe(Effect.flip, Effect.forkChild({ startImmediately: true }));
+          yield* TestClock.adjust("20 seconds");
+          const error = yield* Fiber.join(lookup);
           expect(error.reason).toBe("unreachable");
           expect(error.message).toContain("Second page unavailable");
           expect((yield* mesh.read).document).toEqual(before);
@@ -139,7 +145,7 @@ it.effect.each([
         if (represented) expect(result.logicalKey).toBe("logical");
         expect((yield* mesh.read).document).toEqual(before);
         const root = yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
-          prefix: "N-mesh-lookup-",
+          prefix: "mesh-lookup-",
         });
         const placed = yield* service.place({
           project: "Remote title",
