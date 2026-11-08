@@ -32,6 +32,7 @@ set -eu
 case "\${SSH_ORIGINAL_COMMAND:-run}" in
  probe) printf 'mesh-nightly-controller-ready\n' ;;
  run) export R1_CODEX_BINARY='$codex_binary' R1_OPENCODE_BINARY='$opencode_binary'; export HOME='$HOME'; export PATH='$HOME/.nvm/versions/node/v26.12.1/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'; exec bash '$REPO_ROOT/scripts/mesh-e2e/acceptance.sh' ;;
+ inbox) body=\$(cat); export HOME='$HOME'; export T3CODE_HOME='$BED_INBOX_HOME'; exec '$HOME/.nvm/versions/node/v26.12.1/bin/node' '$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs' inbox post attention 'Mesh nightly failed' --body "\$body" --key mesh-nightly ;;
  *) exit 64 ;;
 esac
 EOF_ENTRY
@@ -88,13 +89,9 @@ worker_scp "$private/ssh-config" "$WORKER_HOST:$BED_NIGHTLY_ROOT/ssh-config"
 worker_scp "$private/known_hosts" "$WORKER_HOST:$BED_NIGHTLY_ROOT/known_hosts"
 worker_scp "$(command -v node)" "$WORKER_HOST:$BED_NIGHTLY_ROOT/node"
 node_path="$BED_NIGHTLY_ROOT/node"
-ctl_path="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
-tar -czf "$private/cli.tar.gz" -C "$REPO_ROOT/agent-kit/skills/t3" scripts
-worker_scp "$private/cli.tar.gz" "$WORKER_HOST:$BED_NIGHTLY_ROOT/cli.tar.gz"
-worker_ssh "tar -xzf '$BED_NIGHTLY_ROOT/cli.tar.gz' -C '$BED_NIGHTLY_ROOT'"
-node - "$private/job.json" "$BED_NIGHTLY_ROOT" "$node_path" <<'JS'
-const fs=require('node:fs');const [file,root,node]=process.argv.slice(2);
-fs.writeFileSync(file,JSON.stringify({directory:root+'/results',command:['ssh','-F',root+'/ssh-config','controller','run'],inboxCommand:[node,root+'/scripts/t3ctl.mjs']}));
+node - "$private/job.json" "$BED_NIGHTLY_ROOT" <<'JS'
+const fs=require('node:fs');const [file,root]=process.argv.slice(2);
+fs.writeFileSync(file,JSON.stringify({directory:root+'/results',command:['ssh','-F',root+'/ssh-config','controller','run'],inboxCommand:['ssh','-F',root+'/ssh-config','controller','inbox'],inboxBodyViaStdin:true}));
 JS
 worker_scp "$private/job.json" "$WORKER_HOST:$BED_NIGHTLY_ROOT/job.json"
 cat > "$private/service" <<EOF_SERVICE

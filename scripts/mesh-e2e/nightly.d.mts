@@ -3,6 +3,7 @@ export interface NightlyOptions {
   readonly directory: string;
   readonly command: readonly string[];
   readonly inboxCommand: readonly string[];
+  readonly inboxBodyViaStdin?: boolean;
 }
 export interface NightlyResult {
   readonly state: "PASS" | "FAIL";

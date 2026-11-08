@@ -5,6 +5,7 @@ export async function nightly({
   directory,
   command,
   inboxCommand,
+  inboxBodyViaStdin = false,
   timeoutMs = 3 * 60 * 60 * 1000,
 }) {
   await NodeFSP.mkdir(directory, { recursive: true, mode: 0o700 });
@@ -55,18 +56,20 @@ export async function nightly({
     await new Promise((resolve, reject) => {
       const child = NodeChildProcess.spawn(
         inboxCommand[0],
-        [
-          ...inboxCommand.slice(1),
-          "inbox",
-          "post",
-          "attention",
-          "Mesh nightly failed",
-          "--body",
-          body,
-          "--key",
-          "mesh-nightly",
-        ],
-        { stdio: "inherit" },
+        inboxBodyViaStdin
+          ? inboxCommand.slice(1)
+          : [
+              ...inboxCommand.slice(1),
+              "inbox",
+              "post",
+              "attention",
+              "Mesh nightly failed",
+              "--body",
+              body,
+              "--key",
+              "mesh-nightly",
+            ],
+        { stdio: inboxBodyViaStdin ? ["pipe", "inherit", "inherit"] : "inherit" },
       );
       child.once("error", reject);
       child.once("close", (code) =>
@@ -74,6 +77,10 @@ export async function nightly({
           ? resolve()
           : reject(Error("Could not post nightly failure to the T3 inbox: " + code)),
       );
+      if (inboxBodyViaStdin) {
+        child.stdin.once("error", reject);
+        child.stdin.end(body);
+      }
     });
   }
   return summary;

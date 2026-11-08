@@ -555,8 +555,11 @@ It neither takes over an active lease nor sends success notifications.
 
 Results are in `~/.local/share/t3-mesh-nightly/results/<UTC>-<pid>/` on the
 worker: `summary.json`, `summary.md`, `suite.log`. Only failure invokes
-`t3ctl inbox post attention ... --key mesh-nightly`. Full bed artifacts remain
-in the controller's nightly runs/artifacts directories. The policy test exercises
+`t3ctl inbox post attention ... --key mesh-nightly`.
+The worker sends the failure body over its private SSH connection to the controller,
+which posts to `MESH_E2E_INBOX_HOME` (the owner's T3 home by default), so the issue
+appears in the owner's inbox. Full bed artifacts remain in the controller's nightly
+runs/artifacts directories. The policy test exercises
 both outcomes with real subprocesses and verifies the exact failure-only argv.
 
 On the worker:

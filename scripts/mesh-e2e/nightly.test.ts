@@ -51,6 +51,21 @@ it("writes both outcomes and posts only a failed run with the stable inbox key",
       "--key",
       "mesh-nightly",
     ]);
+    const forwarded = NodePath.join(root, "forwarded.json");
+    await nightly({
+      directory: NodePath.join(root, "forwarded"),
+      command: [process.execPath, "-e", "process.exitCode=3"],
+      inboxCommand: [
+        process.execPath,
+        "-e",
+        `let body='';process.stdin.setEncoding('utf8');process.stdin.on('data',s=>body+=s);process.stdin.on('end',()=>require('node:fs').writeFileSync(${JSON.stringify(forwarded)},JSON.stringify({body,args:process.argv.slice(1)})))`,
+      ],
+      inboxBodyViaStdin: true,
+    });
+    expect(JSON.parse(await NodeFSP.readFile(forwarded, "utf8"))).toEqual({
+      body: await NodeFSP.readFile(NodePath.join(root, "forwarded/summary.md"), "utf8"),
+      args: [],
+    });
   } finally {
     await NodeFSP.rm(root, { recursive: true, force: true });
   }
