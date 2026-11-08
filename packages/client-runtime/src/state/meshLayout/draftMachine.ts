@@ -63,6 +63,7 @@ export function defaultDraftMachine(
   return (
     (
       machines.find((machine) => machine.environmentId === remembered) ??
+      machines.find((machine) => machine.primary && machine.connected && machine.usable) ??
       machines.find((machine) => machine.connected && machine.usable) ??
       machines.find((machine) => machine.primary) ??
       machines[0]

@@ -11,7 +11,16 @@ describe("draft machine defaults", () => {
     expect(defaultDraftMachine(machines, "primary")).toBe("primary");
     expect(defaultDraftMachine(machines, "offline")).toBe("offline");
   });
-  it("prefers an authenticated connected machine, then the primary", () => {
+  it("prefers the project's main copy when it can run, then any authenticated machine", () => {
+    expect(
+      defaultDraftMachine(
+        [
+          { environmentId: "replica", connected: true, usable: true, primary: false },
+          { environmentId: "main", connected: true, usable: true, primary: true },
+        ],
+        null,
+      ),
+    ).toBe("main");
     expect(defaultDraftMachine(machines, null)).toBe("authenticated");
     expect(
       defaultDraftMachine(
