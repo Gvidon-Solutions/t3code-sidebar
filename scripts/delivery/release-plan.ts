@@ -17,7 +17,12 @@ export function releasePlan(paths: readonly string[]) {
         ),
     ),
     android: paths.some(
-      (path) => infrastructure.test(path) || shared.test(path) || /^apps\/mobile\//.test(path),
+      (path) =>
+        infrastructure.test(path) ||
+        shared.test(path) ||
+        /^(apps\/mobile\/|scripts\/mobile-android-apk\.mjs$|scripts\/delivery\/android-(?:build|release)\.mjs$)/.test(
+          path,
+        ),
     ),
   };
 }

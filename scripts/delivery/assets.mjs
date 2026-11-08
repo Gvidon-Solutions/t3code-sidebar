@@ -56,6 +56,7 @@ export async function buildAssets({
   }
   let nativeFingerprint = previousFingerprint;
   let mobileUpdate = null;
+  let apk = null;
   if (changes.mobile) {
     if (!config.ota)
       throw new Error(
@@ -89,17 +90,9 @@ export async function buildAssets({
     };
     let fingerprint = resolveFingerprint();
     if (fingerprint !== previousFingerprint) {
-      await run(
-        process.execPath,
-        ["scripts/mobile-android-apk.mjs", "--clean"],
-        config.buildDir,
-        mobileEnv,
-      );
-      artifacts.push(
-        ...readdirSync(join(config.buildDir, "dist/mobile"))
-          .filter((file) => file.endsWith(".apk"))
-          .map((file) => join(config.buildDir, "dist/mobile", file)),
-      );
+      await run(process.execPath, ["scripts/mobile-android-apk.mjs"], config.buildDir, mobileEnv);
+      apk = join(config.buildDir, "dist/mobile/t3-sidebar.apk");
+      artifacts.push(apk);
       fingerprint = resolveFingerprint();
     }
     nativeFingerprint = fingerprint;
@@ -121,6 +114,10 @@ export async function buildAssets({
         mobileDir,
         mobileEnv,
       );
+      const existingApkUrl = existsSync(join(candidate, "catalog.json"))
+        ? JSON.parse(NodeFS.readFileSync(join(candidate, "catalog.json"), "utf8")).apkAsset?.url
+        : undefined;
+      const apkUrl = existingApkUrl ?? config.ota.apkUrl;
       await run(process.execPath, [
         "scripts/delivery/mobile-ota.mjs",
         "publish",
@@ -140,8 +137,9 @@ export async function buildAssets({
         config.ota.key,
         "--certificate",
         config.ota.certificate,
-        ...(config.ota.apkUrl ? ["--apk-url", config.ota.apkUrl] : []),
+        ...(apkUrl ? ["--apk-url", apkUrl] : []),
       ]);
+      if (apk) stageMobileApk(candidate, apk, config.ota.origin);
       mobileUpdate = { store: candidate };
     }
   }
@@ -209,4 +207,24 @@ export async function publishMobileUpdate(store, config, machines) {
       );
     } else copyMobileStore(store, destination);
   }
+}
+
+export function stageMobileApk(store, apk, origin) {
+  const bytes = NodeFS.readFileSync(apk);
+  const hash = NodeCrypto.createHash("sha256").update(bytes).digest("base64url");
+  const url = new URL(`/api/mobile-updates/assets/${hash}`, origin).href;
+  mkdirSync(join(store, "assets"), { recursive: true });
+  copyFileSync(apk, join(store, "assets", hash));
+  const catalogPath = join(store, "catalog.json");
+  const catalog = JSON.parse(NodeFS.readFileSync(catalogPath, "utf8"));
+  catalog.apkUrl = url;
+  catalog.apkAsset = {
+    key: hash,
+    hash,
+    url,
+    contentType: "application/vnd.android.package-archive",
+    fileExtension: "apk",
+  };
+  writeFileSync(catalogPath + ".tmp", JSON.stringify(catalog));
+  renameSync(catalogPath + ".tmp", catalogPath);
 }

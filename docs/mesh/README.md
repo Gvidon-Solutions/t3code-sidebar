@@ -1,5 +1,21 @@
 # T3 Mesh — guide for agents
 
+## Android build cache (A1)
+
+`scripts/delivery/android-build.mjs` owns resource/ABI selection, native fingerprint invalidation
+and APK input keys; `scripts/mobile-android-apk.mjs` runs the profiled Gradle target.
+`android-release.mjs` records source/signing/ABI keys beside release assets and verifies their
+SHA-256 before reusing a previous APK. Public workflow writes Gradle caches only from `ws`.
+Native cache paths enumerate physical package directories: recursive pnpm globs follow dependency
+links and can spend minutes walking the store before archiving any files.
+D1 retains native outputs instead of forcing a clean prebuild. `assets.mjs` stages signed APKs
+with immutable OTA assets; `delivery/MobileOta.ts` serves their catalogued hashes through the
+existing asset route and native-upgrade notice. Promotion still follows successful rollout.
+Generated Android files must not determine prebuild invalidation by mtime: switching refs changes
+mtimes without changing native inputs. Expo 58 defaults to cleaning on prebuild: incremental
+refreshes require `--no-clean`. Preserved Gradle history also requires declaring native fingerprint
+and JS inputs on Expo Updates resource generation. See [delivery.md](../delivery.md#android-builds).
+
 ## Private delivery (D1)
 
 `scripts/delivery/` owns the private builder queue, warm build clone, target allowlist,

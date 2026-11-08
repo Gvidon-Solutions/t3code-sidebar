@@ -111,7 +111,17 @@ describe("self-hosted mobile updates", () => {
         yield* fs.writeFileString(join(root, "certificate.pem"), fixture.certificate);
         yield* fs.writeFileString(
           join(root, "catalog.json"),
-          JSON.stringify({ releases: [first, second], apkUrl: "https://studio.example/app.apk" }),
+          JSON.stringify({
+            releases: [first, second],
+            apkUrl: "https://studio.example/app.apk",
+            apkAsset: {
+              key: "C".repeat(43),
+              hash: "C".repeat(43),
+              contentType: "application/vnd.android.package-archive",
+              url: "https://studio.example/app.apk",
+              fileExtension: "apk",
+            },
+          }),
         );
         const request = {
           "expo-protocol-version": "1",
@@ -134,6 +144,13 @@ describe("self-hosted mobile updates", () => {
           "application/javascript",
         );
         expect((yield* ota.asset("B".repeat(43))).status).toBe(404);
+        yield* fs.writeFileString(join(root, "assets", "C".repeat(43)), "signed-apk");
+        expect((yield* ota.asset("C".repeat(43))).headers["content-type"]).toBe(
+          "application/vnd.android.package-archive",
+        );
+        expect((yield* ota.asset("C".repeat(43))).headers["content-disposition"]).toBe(
+          'attachment; filename="T3-Code-Sidebar.apk"',
+        );
         const status = yield* ota.status("android", "native-a");
         expect(status.body._tag).toBe("Uint8Array");
         if (status.body._tag === "Uint8Array")

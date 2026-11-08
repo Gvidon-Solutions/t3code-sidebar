@@ -110,6 +110,47 @@ The APK also declares the request headers needed for selecting a previous bundle
 either native input needs another APK; an OTA bundle cannot enable it retrospectively.
 Set `ota.apkUrl` to a reachable APK download for the native-update notice.
 
+## Android builds
+
+Run `node scripts/delivery/builder.mjs apk /private/config.json [--clean]` for the APK-only target.
+It uses `scripts/mobile-android-apk.mjs` in the configured persistent build directory and does not roll
+out servers or publish releases. Full clean/hot delivery invokes the same script.
+It compares Expo's native fingerprint before prebuild; unchanged native inputs retain the generated
+project and C++ outputs. Refreshes explicitly use `--no-clean` because Expo 58 otherwise deletes
+Gradle history. Expo Updates resources track the native fingerprint and bundle inputs, so keeping
+that history does not freeze the embedded runtime or asset manifest. The default ABI remains `arm64-v8a`; set `T3_ANDROID_ARCH` to a comma-separated
+ABI list when another device needs it. Public releases keep their existing default and dispatch choices.
+Install ccache on the builder's PATH before the first native build; React Native's CMake integration
+uses it automatically. RN and Hermes themselves use their published prebuilt artifacts.
+
+Gradle uses the daemon (24-hour idle retention), configuration and build caches, parallel workers,
+and a memory-aware heap. `T3_ANDROID_WORKERS` and `T3_ANDROID_JVMARGS` override resource selection.
+The sideload target skips R8, PNG crunching and lintVital. Keep release signing credentials in the
+builder environment; the existing local signing environment file remains supported. App ID,
+version code and signing configuration are unchanged.
+
+Identical source, native fingerprint, ABI, public environment, dotenv files, version and keystore
+reuse the existing APK. Changed inputs invoke Gradle. The APK input marker is written only after a
+successful build. Each invocation records `dist/mobile/android-timings.json`; Gradle writes a local,
+scan-free report under `apps/mobile/android/build/reports/profile`. `--clean` forces prebuild and
+bypasses APK reuse; it does not erase the shared dependency/build caches. Record cache state explicitly
+when comparing cold and warm measurements.
+
+A newly built APK is staged as an immutable mobile-update asset. After healthy rollout, the existing
+incompatible-runtime notice links to that server-hosted APK in both lanes. Clean release uploads still
+attach the signed APK to GitHub; hot deliveries use only the private mobile-update store.
+Web/server output is not interchangeable with an Android Hermes bundle: platform transforms and
+native entry points differ. Android Gradle outputs and Metro's own cache are retained independently.
+
+CI uses the same native fingerprint for native-output and ccache keys. Gradle cache writes are limited
+to `ws`; configure the repository `GRADLE_ENCRYPTION_KEY` secret to persist configuration-cache data
+with setup-gradle. Matching source/native/ABI/signing inputs can reuse a verified APK from a previous release.
+`android-build.json` accompanies the release asset; reuse verifies its SHA-256 before attaching it.
+The reused APK retains its original version name. Hermes optimization stays enabled; the fast target
+omits compiler source maps, which are not shipped with these sideload artifacts. Generated Gradle
+uses provider-backed Node resolution so strict configuration-cache validation remains enabled.
+Profile reports remain local build evidence; no Gradle Build Scan is uploaded.
+
 ## Verification and limits
 
 The release workflow starts Windows as soon as its Linux WSL runtime archive is ready,
