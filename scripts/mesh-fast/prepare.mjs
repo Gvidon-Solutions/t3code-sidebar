@@ -8,10 +8,14 @@ async function prepareLocked() {
     process.env.MESH_FAST_MUTAGEN_CACHE ?? NodePath.join(NodeOS.tmpdir(), "mesh-fast-tools-0.18.1");
   await NodeFSP.mkdir(root, { recursive: true });
   const pnpm = NodePath.join(root, "pnpm-12.14.0");
+  let pnpmReady = false;
   try {
     await NodeFSP.stat(NodePath.join(pnpm, ".mesh-fast-ready"));
+    pnpmReady = true;
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+  }
+  if (!pnpmReady) {
     const response = await fetch("https://registry.npmjs.org/pnpm/-/pnpm-12.14.0.tgz");
     if (!response.ok) throw Error("pnpm fixture download: " + response.status);
     const bytes = Buffer.from(await response.arrayBuffer());
