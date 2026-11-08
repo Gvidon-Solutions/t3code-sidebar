@@ -46,8 +46,17 @@ inactivity alone misses accepted start effects and internal queue promotions.
 WS, MCP and `t3ctl drain`, `t3ctl drain status`, `t3ctl drain cancel` expose the same service. B1 and the
 private systemd transport drain before backup/switch and reopen only after health or rollback.
 Transient updating refusals are never stored as rejected command receipts; client and CLI retries
-retain their command/message IDs. Old targets without drain support fail before being stopped;
-explicit `--now` remains available to skip waiting.
+retain their command/message IDs. The private delivery adapter handles the initial legacy hop
+by polling running threads, including subagents, only when the drain-status tool is missing.
+Its `legacy-idle` journal entry explicitly means there is no admission fence. It rechecks idle
+before stopping, retains backup/health/rollback, and restores the original legacy DB schema.
+Capability is probed again on the next delivery, which uses drain after the upgrade.
+`scripts/delivery/legacy-idle.node-test.mjs` covers selection, busy/timeout handling and restore.
+Explicit `--now` remains available to skip waiting.
+Delivery health normalizes N-1 project-title watermarks using the stored entry value, preserving
+real project ids ending in `.title`. Database rollback clears layout generations and peer cursors:
+restoring a snapshot rewinds sequence numbers, so retaining acknowledgements can strand replicas
+behind changes that peers already consider delivered.
 B1 rechecks its lease after draining: fewer than twelve minutes remaining cancels the fence
 and stops before backup or handoff, even when the configured idle deadline is longer.
 Manual rollback acquires a fresh fence. The staged database restore carries that current
