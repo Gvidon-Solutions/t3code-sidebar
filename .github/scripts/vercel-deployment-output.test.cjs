@@ -8,7 +8,7 @@ const { test } = require("node:test");
 const preview = readFileSync(join(__dirname, "../workflows/web-preview.yml"), "utf8");
 const stepPattern =
   /        name: (?:Build staged deployment|Deploy preview)\n        shell: bash\n        run: \|\n((?:          .*\n|\n)+)/g;
-const steps = [...Array.from(preview.matchAll(stepPattern), (match) => ["web preview", match[1]])];
+const steps = Array.from(preview.matchAll(stepPattern), (match) => ["web preview", match[1]]);
 assert.equal(steps.length, 1, "Expected the preview step");
 
 const url = "https://t3code-fixture-pinglabs.vercel.app";

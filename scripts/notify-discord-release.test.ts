@@ -6,7 +6,6 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
-import * as Schema from "effect/Schema";
 import { Command } from "effect/cli";
 import { HttpClient, HttpClientError, HttpClientResponse, UrlParams } from "effect/http";
 
@@ -47,19 +46,6 @@ const cliArgs = (target: "latest" | "prerelease") => [
 const configLayer = ConfigProvider.layer(
   ConfigProvider.fromEnv({ env: { DISCORD_WEBHOOK_URL: webhookUrl.href } }),
 );
-const PayloadSchema = Schema.fromJsonString(
-  Schema.Struct({
-    content: Schema.String,
-    allowed_mentions: Schema.Struct({
-      parse: Schema.Array(Schema.String),
-      roles: Schema.Array(Schema.String),
-    }),
-    embeds: Schema.Array(
-      Schema.Struct({ title: Schema.String, description: Schema.String, url: Schema.String }),
-    ),
-  }),
-);
-const decodePayload = Schema.decodeUnknownSync(PayloadSchema);
 const payloadDescription = (payloads: ReturnType<typeof buildDiscordReleaseAnnouncement>) =>
   payloads.flatMap((payload) => payload.embeds.map((embed) => embed.description)).join("");
 const captureClient = (requests: string[], status = 204) =>
