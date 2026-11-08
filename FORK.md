@@ -109,6 +109,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — C3 required mesh services and shared server runtime
+
+- Mesh services now have explicit production dependencies and test layers. Updating refusals preserve a `DeliveryUpdatingError` tag through RPC/MCP; clients and the CLI retry that tag.
+- The remote run worker is compiled TypeScript. Older runtimes receive source generated from those same functions. Downloads verify SHA-256 through one helper; SSH options, bounded socket reads and retry schedules share their platform rules. Timer scaling is an injected Context reference, while retention stays fixed.
+- Peer identity upgrade reads belong to the auth service. Server fixture environment names use `MESH_E2E_*`. Shared rules are exercised by delivery, runtime, socket, SSH, timing and identity tests.
+
 ### 2026-11-08 — T1 bounded host admission and reboot recovery
 
 Fast acceptance uses the configured builder host with an eight-mesh default,

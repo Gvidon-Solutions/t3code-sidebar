@@ -18,7 +18,7 @@ and JS inputs on Expo Updates resource generation. See [delivery.md](../delivery
 
 ## Retry and bootstrap lifetimes (F2b)
 
-`mesh/retryBackoff.ts` defines the shared 1–15 second schedule for peer reconnects,
+`mesh/Backoff.ts` defines the shared 1–15 second schedule for peer reconnects,
 layout exchange, bootstrap readiness and fork recovery. Expiry cleanup makes seven attempts,
 logs exhaustion and retains its durable staging record for recovery after restart; committed
 fork intents retain their resumable retry path. Bootstrap polls `pair --check` for readiness
@@ -1021,8 +1021,7 @@ label matching lives only in `meshConfig/migration.ts`. Import defaults to proje
 existing config revisions are untouched. An unrestricted link requires an explicit `files: all`
 config override, whose permissions are listed in the plan before apply.
 
-`meshConfig/sshHost.ts` is the shared SSH destination validator. Run plans, run transport,
-replica routes/endpoints, platform SSH arguments and SSH route checks use it. Destinations are
+`meshConfig/sshHost.ts` owns SSH destination validation and `resolveMeshHost` for managed, existing and disabled modes. `platform/ServerPlatform.ts` owns `sshOptions` and `sshConfigPath`. Run plans, run transport, replica routes/endpoints and SSH route checks use these helpers. Destinations are
 configured aliases or host names, with user and port held separately. SSH argument lists end
 options with `--` before the destination. This keeps a config value from becoming an SSH option
 or changing Mutagen endpoint syntax.
@@ -1101,3 +1100,22 @@ The orphan standalone bootstrap/run/replica bed runners have been retired in fav
 live in `scripts/lib/shell.mjs`; delivery setup stages that dependency with its remote script.
 Round two reads `MESH_E2E_LOCAL_PRIMARY_ROOT`, `MESH_E2E_REVERSE_ROOT`,
 `MESH_E2E_REVERSE_TITLE` and `MESH_E2E_DEMO_TITLE`, matching nightly isolation.
+
+Production layers require delivery admission, mesh config/layout and peer transport. A missing
+layer is a construction error; tests install explicit layers from `testFixtures/meshServices.ts`.
+`DeliveryUpdatingError` is a wire tag carried through RPC and MCP causes. Retry code checks that
+tag, so arbitrary tool text cannot delay a request. The admission SQL and interrupt planning
+share `ADMISSION_GATED_EFFECT_TYPES`.
+
+`MeshTiming.MeshTimeScale` supplies liveness timing through Context; each service captures its
+own timer. Production builds ignore the environment override. `mesh/Backoff.ts` owns capped
+exponential delays and explicit jitter, while `mesh/retention.ts` stays in real elapsed time.
+`platform/Download.ts` verifies archive SHA-256 before publishing bytes and preserves each
+caller's stall/body deadline. `platform/readLine.ts` bounds IPC bytes and time and restores
+trailing stream bytes. `run/RunWorker.ts` is compiled TypeScript; its compatibility source is
+generated from the same worker and platform functions. `auth/PeerIdentities.ts` owns legacy
+identity upgrade queries; replication reads that service instead of auth tables.
+
+Middleware captures only its required service keys with `Context.make`; capturing the whole
+construction context can replace the request scope and prevent cancellation from reaching a
+remote tool. The real peer-network cancellation test covers this boundary.
