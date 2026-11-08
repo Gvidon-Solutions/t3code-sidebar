@@ -1,3 +1,4 @@
+import { authenticatedPeerHops } from "../peer/connection/peerIdentity.ts";
 import {
   AuthAccessTokenType,
   AuthAccessWriteScope,
@@ -1358,12 +1359,7 @@ export const make = Effect.gen(function* () {
     if (
       session.peerLink === true &&
       ((claimed !== undefined && claimed !== peers[0]?.environment_id) ||
-        (hops !== undefined &&
-          (hops.length !== 2 ||
-            hops[1] !== peers[0]?.environment_id ||
-            !hops[0] ||
-            hops[0] === hops[1] ||
-            hops[0] === ownEnvironmentId)))
+        !authenticatedPeerHops(hops, peers[0]!.environment_id, ownEnvironmentId))
     )
       return yield* new ServerAuthInvalidCredentialError({
         peerIdentityMismatch: true,

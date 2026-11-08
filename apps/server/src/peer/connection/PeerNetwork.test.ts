@@ -920,6 +920,7 @@ it.live.each(["none", "outgoing", "machine-binding"] as const)(
         for (const headers of [
           { "t3-peer-environment-id": "studio" },
           { "t3-mesh-hops": "studio,unknown-peer" },
+          { "t3-mesh-hops": "studio" },
           { "t3-mesh-hops": "laptop,laptop" },
         ]) {
           const spoofed = yield* receiver.http.post("/mcp", {

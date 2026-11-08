@@ -800,6 +800,8 @@ existing credentials; only those can acquire a binding on first authenticated us
 local outgoing link or `mesh.machineBinding`. The durable upgrade is logged and listed in
 `meshLayout.status.legacyIdentityUpgrades` and `t3ctl mesh status` (including `--json`); unknown
 peers and new unbound tokens must pair again.
+An HTTP relay request carries `[sender]`; a forwarded call carries `[origin, relay]`. Both
+transports check the list against the bound sender, including the initial one-element form.
 HTTP idempotency namespaces use the authenticated peer ID (or session ID); relay caller IDs
 partition keys only inside that bound relay's namespace. Legacy
 label matching lives only in `meshConfig/migration.ts`. Import defaults to project files;

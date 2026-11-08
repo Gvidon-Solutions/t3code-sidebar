@@ -72,7 +72,7 @@ it.effect("relays across two real peer links and refuses a third hop and a loop"
         Effect.match({ onFailure: (error) => error.code, onSuccess: () => "unexpected" }),
       ),
     ).toBe("thread_not_found");
-    for (const hops of [["A", "other"], ["B"]])
+    for (const hops of [["A", "other"], ["B"], ["other"]])
       expect(
         yield* call(hops).pipe(
           Effect.match({ onFailure: (error) => error.code, onSuccess: () => "unexpected" }),
