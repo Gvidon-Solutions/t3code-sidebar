@@ -1,3 +1,4 @@
+import type { DesktopUiInfo, DesktopUiSelection } from "./desktopUi.ts";
 import * as Schema from "effect/Schema";
 import type { PreviewCaptureFailureEncoded } from "./previewCapture.ts";
 
@@ -1024,6 +1025,10 @@ export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
 export interface DesktopBridge {
+  ui?: {
+    select: (selection: DesktopUiSelection) => Promise<boolean>;
+    getInfo: () => Promise<DesktopUiInfo>;
+  };
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;
   getPathForFile: (file: File) => string;

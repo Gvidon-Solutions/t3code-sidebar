@@ -382,3 +382,27 @@ it.effect("retains but refuses a replicated future config schema before running 
     expect(Object.keys((yield* mesh.read).document)).not.toContain("mesh.machineBinding/studio");
   }).pipe(Effect.scoped, Effect.provide(layer)),
 );
+
+it.effect("rollout timing persists while forced interruption is removed on the next update", () =>
+  Effect.gen(function* () {
+    const config = yield* Config.MeshConfig;
+    yield* config.apply(
+      { schema: 1, machines: {}, t3: { future: true, drain: { newerPolicy: true } } },
+      null,
+    );
+    yield* config.updateVersion("0.1.6", false, { now: true, maxWaitMs: 120000 });
+    expect((yield* config.current)?.doc.t3).toEqual({
+      version: "0.1.6",
+      future: true,
+      drain: { maxWaitMs: 120000, skipForVersion: "0.1.6", newerPolicy: true },
+    });
+    yield* config.updateVersion("0.1.6", false);
+    expect((yield* config.current)?.doc.t3?.drain).toEqual({
+      maxWaitMs: 120000,
+      newerPolicy: true,
+    });
+    const preview = yield* config.updateVersion("0.1.7", true, { now: true });
+    expect("doc" in preview && preview.doc.t3?.drain?.skipForVersion).toBe("0.1.7");
+    expect((yield* config.current)?.doc.t3?.version).toBe("0.1.6");
+  }).pipe(Effect.provide(layer)),
+);

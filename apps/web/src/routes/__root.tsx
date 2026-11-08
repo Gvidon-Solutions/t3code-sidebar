@@ -1,3 +1,4 @@
+import { DesktopUiCoordinator } from "../components/desktop/DesktopUiCoordinator";
 import { MeshLayoutProvider } from "../hooks/useMeshLayout";
 import { PendingMeshDraftCoordinator } from "../components/workspaces/PendingMeshDraftCoordinator";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
@@ -209,6 +210,7 @@ function RootRouteBranch() {
           {primaryEnvironmentAuthenticated || localEnvironmentDisabled ? (
             <DesktopWebLinkCoordinator />
           ) : null}
+          {isElectron ? <DesktopUiCoordinator /> : null}
           {isElectron ? <RunningThreadKeepAlive /> : null}
           <RelayClientInstallDialog />
           <ConnectOnboardingDialog />

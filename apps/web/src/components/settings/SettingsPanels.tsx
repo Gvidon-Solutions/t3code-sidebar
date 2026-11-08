@@ -1,3 +1,4 @@
+import { DesktopUiVersionRow } from "./DesktopUiVersionRow";
 import { useAtomValue } from "@effect/atom-react";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
@@ -2063,6 +2064,7 @@ export function AboutSettingsPanel() {
             />
           </>
         )}
+        {isElectron ? <DesktopUiVersionRow /> : null}
         <MobileAppSettingsRow />
       </SettingsSection>
 

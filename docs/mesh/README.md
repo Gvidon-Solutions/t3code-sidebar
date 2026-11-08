@@ -1,5 +1,64 @@
 # T3 Mesh — guide for agents
 
+## Android build cache (A1)
+
+`scripts/delivery/android-build.mjs` owns resource/ABI selection, native fingerprint invalidation
+and APK input keys; `scripts/mobile-android-apk.mjs` runs the profiled Gradle target.
+`android-release.mjs` records source/signing/ABI keys beside release assets and verifies their
+SHA-256 before reusing a previous APK. Public workflow writes Gradle caches only from `ws`.
+Native cache paths enumerate physical package directories: recursive pnpm globs follow dependency
+links and can spend minutes walking the store before archiving any files.
+D1 retains native outputs instead of forcing a clean prebuild. `assets.mjs` stages signed APKs
+with immutable OTA assets; `delivery/MobileOta.ts` serves their catalogued hashes through the
+existing asset route and native-upgrade notice. Promotion still follows successful rollout.
+Generated Android files must not determine prebuild invalidation by mtime: switching refs changes
+mtimes without changing native inputs. Expo 58 defaults to cleaning on prebuild: incremental
+refreshes require `--no-clean`. Preserved Gradle history also requires declaring native fingerprint
+and JS inputs on Expo Updates resource generation. See [delivery.md](../delivery.md#android-builds).
+
+## Private delivery (D1)
+
+`scripts/delivery/` owns the private builder queue, warm build clone, target allowlist,
+serial rollout and stopped-DB/unit rollback. The t3ctl `delivery-client.mjs` forwards requests
+to a private socket; customer paths never enter public workflow configuration. Targets read
+B1 health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
+`mesh/DeliveryAdmission.ts` fences run creation inside EventSink write transactions and
+serializes provider starts with closing admission. Its operational journal survives restart;
+already accepted dormant starts remain in the outbox without occupying worker slots or spending
+retry attempts. Cancellation wakes the worker and queue promotions. Checking provider-session
+inactivity alone misses accepted start effects and internal queue promotions.
+WS, MCP and `t3ctl drain`, `t3ctl drain status`, `t3ctl drain cancel` expose the same service. B1 and the
+private systemd transport drain before backup/switch and reopen only after health or rollback.
+Transient updating refusals are never stored as rejected command receipts; client and CLI retries
+retain their command/message IDs. Old targets without drain support fail before being stopped;
+explicit `--now` remains available to skip waiting.
+B1 rechecks its lease after draining: fewer than twelve minutes remaining cancels the fence
+and stops before backup or handoff, even when the configured idle deadline is longer.
+Manual rollback acquires a fresh fence. The staged database restore carries that current
+admission row into the restored database before restart; its historical token cannot authorize
+the new operation. Restored health passes before the current fence is released.
+See [delivery.md](../delivery.md) for configuration, commands and limitations.
+
+The public release workflow publishes runtime first; Windows consumes its archive without
+waiting for the Linux installer. Each platform attaches its artifacts independently.
+Server `delivery/` serves signed Expo manifests and immutable assets. Mobile clients match
+native fingerprints, check on launch/foreground and can request a previous compatible bundle.
+Expo also enforces certificate Digital Signature/Code Signing usages and a native allowlist
+of overridable update headers. Those inputs must be baked into the first APK; JavaScript
+cannot repair them through OTA. Publish manifests after building that APK: older manifests
+are correctly ignored in favor of the embedded bundle.
+
+Desktop's stable custom protocol follows the active connected thread/draft server. The
+`app/DesktopUi.ts` service validates saved origins and persists the choice; `ipc/methods/ui.ts`
+accepts only the main application frame. Web's `DesktopUiCoordinator` waits for in-flight sends
+(including server-drain retries), then flushes drafts before reloading for a source/version
+change; About shows UI/shell versions and actual source.
+`ElectronProtocol.ts` pins assets to their document's server, strips local credentials and
+compressed-response transport headers, and loads the bundled copy when the document is offline.
+Relay-only connections without a direct UI route explicitly use the bundled UI. Never mix
+bundled assets into a server document. `apps/desktop/scripts/delivery-ui-proof.mjs` verifies
+server switch, server-only UI update, storage/preload preservation and fallback in real Electron.
+
 Read this before changing anything that touches machines, projects across machines, replicas,
 the shared sidebar layout, thread moves, files on other machines, the `t3` skill or the agent
 instructions. It is the map; the law is `docs/mesh/CONCEPT.md` (v2, wins on conflict) and `docs/sidebar-cross-device.md` §0 (object model,
@@ -587,7 +646,7 @@ Use `t3ctl mesh machines add cloudbox --ssh user@host[:port]`. SSH agent authent
 
 `MeshRuntimeArchive.ts` shares release URL/platform naming and SHA256SUMS parsing with the existing runtime installer. `MeshInstall.ts` executes `platform/ServerPlatform.ts` service plans: Linux systemd user+linger or root system unit, macOS launchd agent, Windows SCM host. The Windows host implements ServiceBase and supervises the launcher process tree.
 
-`t3ctl mesh update VERSION --plan` plans a config edit; without `--plan` it applies it. `MeshRollout.ts` orders bound config names lexically. A candidate obtains durable votes from every configured server before publishing the layout lease (owner/token/expiry). Outstanding votes fence a partitioned owner even after expiry; recovery by that owner releases them only when its launcher has no pending update. The existing protocol-3 launcher backs up the stopped state DB, installs/verifies and trials the selected runtime. Activation starts peer replication before the trial checks version, peer layout convergence and resumed replicas. Failure reason is recorded outside the DB so rollback preserves it; the restored server publishes a stop marker for that config revision before releasing its lease. A new config revision is required to retry. `T3_MESH_TEST_MODE=1` plus `T3_MESH_TEST_FAIL_HEALTH_VERSION` enables the test-only health failure.
+`t3ctl mesh update VERSION --plan` plans a config edit; without `--plan` it applies it. `--max-wait 5m` sets `t3.drain.maxWaitMs`; `--now` binds `t3.drain.skipForVersion` to that target only. A normal update clears the skip flag even for the same version, preserving other policy fields. WS `meshConfig.updateVersion`, MCP `t3_mesh_update` and config plan/apply share the typed policy. `MeshRollout.ts` orders bound config names lexically. A candidate obtains durable votes from every configured server before publishing the layout lease (owner/token/expiry). Outstanding votes fence a partitioned owner even after expiry; recovery by that owner releases them only when its launcher has no pending update. The existing protocol-3 launcher backs up the stopped state DB, installs/verifies and trials the selected runtime. Activation starts peer replication before the trial checks version, peer layout convergence and resumed replicas. Failure reason is recorded outside the DB so rollback preserves it; the restored server publishes a stop marker for that config revision before releasing its lease. A new config revision is required to retry. `T3_MESH_TEST_MODE=1` plus `T3_MESH_TEST_FAIL_HEALTH_VERSION` enables the test-only health failure.
 
 CLI operations have MCP equivalents `t3_mesh_machine_add`, `t3_mesh_update`, `t3_mesh_status` and the credential API. Peer-only update voting accepts trusted full-access links. Test servers set `T3_MESH_AGENT_HOME`, `T3_MESH_SSH_HOME`, private sshd and Mutagen data directories. Native Windows/macOS replica smoke coverage lives in `.github/workflows/mesh-platform-smoke.yml`.
 

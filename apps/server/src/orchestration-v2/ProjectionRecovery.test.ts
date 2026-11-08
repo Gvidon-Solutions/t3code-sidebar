@@ -1,3 +1,4 @@
+import * as DeliveryAdmission from "../mesh/DeliveryAdmission.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -53,6 +54,7 @@ const layerRecoveryTest = ProviderRuntimeRecovery.layer.pipe(
     ),
   ),
   Layer.provide(ServerSettings.layerTest()),
+  Layer.provideMerge(DeliveryAdmission.layer.pipe(Layer.provide(SqlitePersistence.layerMemory))),
 );
 const providerInstanceId = ProviderInstanceId.make("codex");
 const modelSelection = { instanceId: providerInstanceId, model: "gpt-5.4" };
@@ -1406,5 +1408,40 @@ it.effect("startup ends the provider turn of a native child root it cancels", ()
       { root: "cancelled", providerTurn: "cancelled" },
       "a root startup recovery cancelled left its provider turn running",
     );
+  }).pipe(Effect.provide(layerRecoveryTest)),
+);
+
+it.effect("delivery restart preserves accepted sends until the matching drain is cancelled", () =>
+  Effect.gen(function* () {
+    const admission = yield* DeliveryAdmission.DeliveryAdmission;
+    const recovery = yield* ProviderRuntimeRecovery.ProviderRuntimeRecoveryService;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const outbox = yield* EffectOutbox.EffectOutboxV2;
+    const threadId = yield* createThread("delivery-deferred");
+    const runId = yield* createRun(threadId, "starting");
+    const commandId = CommandId.make("delivery-deferred-command");
+    yield* outbox.enqueue([
+      {
+        id: "delivery-deferred-effect",
+        commandId,
+        threadId,
+        request: { type: "provider-turn.start", runId },
+      },
+    ]);
+    yield* admission.drain({ requestId: "delivery-restart", deadlineMs: 1000 });
+    yield* recovery.reconcile("shutdown");
+    yield* recovery.reconcile("startup");
+    const stored = yield* projections.getRuntimeRecoveryProjection(threadId);
+    assert.equal(stored.runs.find((run) => run.id === runId)?.status, "starting");
+    const sql = yield* SqlClient.SqlClient;
+    assert.deepEqual(
+      yield* sql`SELECT status FROM orchestration_v2_effect_outbox WHERE effect_id = 'delivery-deferred-effect'`,
+      [{ status: "pending" }],
+    );
+    yield* admission.cancel("delivery-restart");
+    const claimed = yield* outbox.claimNext({ workerId: "after-delivery" });
+    assert.equal(claimed._tag, "Some");
+    if (claimed._tag === "Some")
+      assert.deepEqual(claimed.value.request, { type: "provider-turn.start", runId });
   }).pipe(Effect.provide(layerRecoveryTest)),
 );

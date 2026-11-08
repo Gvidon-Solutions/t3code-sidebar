@@ -249,10 +249,14 @@ const RPC_AGGREGATES = {
   "threads.move": "mesh",
   "threads.fork": "mesh",
   "threads.forkCatalog": "mesh",
+  "delivery.drain": "delivery",
+  "delivery.drainStatus": "delivery",
+  "delivery.cancelDrain": "delivery",
   [MESH_WS_METHODS.status]: "mesh",
   [MESH_WS_METHODS.configGet]: "mesh",
   [MESH_WS_METHODS.configPlan]: "mesh",
   [MESH_WS_METHODS.configApply]: "mesh",
+  [MESH_WS_METHODS.updateVersion]: "mesh",
   [MESH_WS_METHODS.configStatus]: "mesh",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 

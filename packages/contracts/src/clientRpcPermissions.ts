@@ -25,6 +25,10 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [MESH_WS_METHODS.replicasAdopt]: AuthOrchestrationOperateScope,
   [MESH_WS_METHODS.replicasUnmanaged]: AuthOrchestrationOperateScope,
   [MESH_WS_METHODS.configApply]: AuthSettingsWriteScope,
+  [MESH_WS_METHODS.updateVersion]: AuthSettingsWriteScope,
+  "delivery.drain": AuthSettingsWriteScope,
+  "delivery.drainStatus": AuthSettingsWriteScope,
+  "delivery.cancelDrain": AuthSettingsWriteScope,
   [WS_METHODS.previewClose]: AuthPreviewOperateScope,
   // Stopping a server signals its processes, as closing a terminal does.
   [WS_METHODS.previewStopLocalServer]: AuthTerminalOperateScope,

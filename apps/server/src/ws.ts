@@ -1,3 +1,5 @@
+import { DeliveryAdmission } from "./mesh/DeliveryAdmission.ts";
+import { DeliveryDrainError } from "@t3tools/contracts";
 import { recordLayoutAuthors } from "@t3tools/shared/meshLayout";
 import { ThreadForkService } from "./mesh/ThreadForkService.ts";
 import { ThreadMoveService } from "./mesh/ThreadMoveService.ts";
@@ -1416,6 +1418,11 @@ export const layerWsRpc = (
       const inbox = yield* InboxService.InboxService;
       const mesh = yield* MeshLayoutService;
       const meshReplicator = yield* MeshReplicator;
+      const deliveryAdmission = yield* Effect.serviceOption(DeliveryAdmission);
+      const deliveryService = Effect.fromOption(
+        deliveryAdmission,
+        () => new DeliveryDrainError({ message: "Delivery drain unavailable" }),
+      );
       const meshConfig = yield* Effect.serviceOption(MeshConfig);
       const meshConfigService = Effect.fromOption(
         meshConfig,
@@ -2336,6 +2343,12 @@ export const layerWsRpc = (
               connections,
             })),
           ),
+        "delivery.drain": (input) =>
+          deliveryService.pipe(Effect.flatMap((service) => service.drain(input))),
+        "delivery.drainStatus": () =>
+          deliveryService.pipe(Effect.flatMap((service) => service.status)),
+        "delivery.cancelDrain": ({ requestId }) =>
+          deliveryService.pipe(Effect.flatMap((service) => service.cancel(requestId))),
         [MESH_WS_METHODS.configGet]: () =>
           meshConfigService.pipe(
             Effect.flatMap((config) =>
@@ -2352,6 +2365,10 @@ export const layerWsRpc = (
                 })),
               ),
             ),
+          ),
+        [MESH_WS_METHODS.updateVersion]: ({ version, plan, ...options }) =>
+          meshConfigService.pipe(
+            Effect.flatMap((config) => config.updateVersion(version, plan === true, options)),
           ),
         [MESH_WS_METHODS.configPlan]: ({ doc }) =>
           meshConfigService.pipe(Effect.flatMap((config) => config.plan(doc))),
@@ -3554,6 +3571,7 @@ export const layer = Layer.unwrap(
     const mesh = yield* MeshLayoutService;
     const meshReplicator = yield* MeshReplicator;
     const meshConfig = yield* Effect.serviceOption(MeshConfig);
+    const deliveryAdmission = yield* Effect.serviceOption(DeliveryAdmission);
     const threadForks = yield* ThreadForkService;
     const threadMoves = yield* ThreadMoveService;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
@@ -3650,6 +3668,11 @@ export const layer = Layer.unwrap(
                   PullRequestReviewGuideService.PullRequestReviewGuideService,
                   reviewGuides,
                 ),
+              ),
+              Layer.provide(
+                Option.isSome(deliveryAdmission)
+                  ? Layer.succeed(DeliveryAdmission, deliveryAdmission.value)
+                  : Layer.empty,
               ),
               Layer.provide(Layer.succeed(MeshLayoutService, mesh)),
               Layer.provide(Layer.succeed(MeshReplicator, meshReplicator)),

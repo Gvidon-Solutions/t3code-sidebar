@@ -1,3 +1,4 @@
+import { DeliveryRpcs } from "./delivery.ts";
 import { ThreadMoveRpc } from "./threadHandoff.ts";
 import { ThreadForkRpc, ThreadForkCatalogRpc } from "./threadFork.ts";
 import {
@@ -2253,4 +2254,5 @@ export const WsRpcGroup = RpcGroup.make(
   ThreadForkRpc,
   ThreadForkCatalogRpc,
   ...MeshRpcs,
+  ...DeliveryRpcs,
 ).middleware(RpcScopeAuthorization);

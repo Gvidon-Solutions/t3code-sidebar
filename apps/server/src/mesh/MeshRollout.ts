@@ -1,3 +1,5 @@
+import { DeliveryAdmission } from "./DeliveryAdmission.ts";
+import * as Option from "effect/Option";
 import { MeshTrialFailureExit } from "../platform/ServerPlatform.ts";
 import { MeshStateBackup } from "./MeshStateBackup.ts";
 import * as FileSystem from "effect/FileSystem";
@@ -83,6 +85,7 @@ export const layer = Layer.effect(
     const routed = <S extends Schema.Decoder<unknown>>(input: Parameters<typeof peer.call<S>>[0]) =>
       callRouted({ links, peers: peer, self: mesh.environmentId }, input);
     const selfUpdate = yield* ServerSelfUpdate;
+    const admission = yield* Effect.serviceOption(DeliveryAdmission);
     const backup = yield* MeshStateBackup;
     const replicas = yield* ReplicaRuntime;
     const env = yield* HostProcess.Environment;
@@ -219,6 +222,7 @@ export const layer = Layer.effect(
       if (!(yield* fs.exists(markerFile))) return;
       const marker = yield* decodeMarker(yield* fs.readFileString(markerFile));
       if (marker.previousUpdateId === context.update.id) return;
+      if (Option.isSome(admission)) yield* admission.value.cancel(`mesh:${marker.token}`);
       let reason = context.update.reason ?? context.update.status;
       if (yield* fs.exists(healthFailureFile)) {
         const failure = yield* decodeFailure(yield* fs.readFileString(healthFailureFile));
@@ -260,6 +264,12 @@ export const layer = Layer.effect(
           ]);
         return;
       }
+      if (Option.isNone(admission))
+        return yield* new MeshConfigError({
+          reason: "storage",
+          message: "Delivery admission is unavailable; refusing runtime update",
+        });
+      const drainAdmission = admission.value;
       if (first(state) !== mesh.environmentId)
         return yield* new MeshConfigError({
           reason: "storage",
@@ -348,31 +358,50 @@ export const layer = Layer.effect(
         target,
         previousUpdateId: context?.update?.id ?? null,
       });
-      yield* backup.create(lease.token).pipe(
-        Effect.andThen(
-          selfUpdate.update({ targetVersion: target }, undefined, () =>
+      yield* drainAdmission
+        .drain({
+          requestId: `mesh:${lease.token}`,
+          deadlineMs: revision.doc.t3?.drain?.maxWaitMs ?? 300000,
+          now: revision.doc.t3?.drain?.skipForVersion === target,
+        })
+        .pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              if (DateTime.toEpochMillis(yield* DateTime.now) >= lease.expiresAt - 12 * 60_000)
+                return yield* new MeshConfigError({
+                  reason: "storage",
+                  message:
+                    "Update lease no longer has enough time after draining; runtime stays running",
+                });
+            }),
+          ),
+          Effect.andThen(backup.create(lease.token)),
+          Effect.andThen(
+            selfUpdate.update({ targetVersion: target }, undefined, () =>
+              Effect.sync(() => {
+                handoffRequested = true;
+              }),
+            ),
+          ),
+          Effect.tap(() =>
             Effect.sync(() => {
               handoffRequested = true;
             }),
           ),
-        ),
-        Effect.tap(() =>
-          Effect.sync(() => {
-            handoffRequested = true;
-          }),
-        ),
-        Effect.tapError((error) =>
-          Effect.gen(function* () {
-            handoffRequested = false;
-            yield* write(failedKey(revision.revision), {
-              environmentId: mesh.environmentId,
-              target,
-              reason: error.message,
-            });
-            yield* release(lease, ids);
-          }),
-        ),
-      );
+          Effect.tapError((error) =>
+            Effect.gen(function* () {
+              handoffRequested = false;
+              if (Option.isSome(admission))
+                yield* admission.value.cancel(`mesh:${lease.token}`).pipe(Effect.orDie);
+              yield* write(failedKey(revision.revision), {
+                environmentId: mesh.environmentId,
+                target,
+                reason: error.message,
+              });
+              yield* release(lease, ids);
+            }),
+          ),
+        );
     }).pipe(
       reconcileLock.withPermits(1),
       Effect.mapError((error) =>
@@ -476,6 +505,11 @@ export const layer = Layer.effect(
     );
     const finishTrial = Effect.gen(function* () {
       committed = true;
+      if (Option.isSome(admission)) {
+        const current = yield* admission.value.status;
+        if (current.requestId?.startsWith("mesh:"))
+          yield* admission.value.cancel(current.requestId);
+      }
       const { snapshot } = yield* read;
       const lease = decodeVote(snapshot.document["mesh.updateLease"]?.v);
       if (
