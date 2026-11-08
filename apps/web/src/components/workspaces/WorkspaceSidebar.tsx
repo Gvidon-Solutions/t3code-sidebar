@@ -875,7 +875,7 @@ export default function WorkspaceSidebar() {
     if (driver === null) {
       failureToast(
         "Can't retry this replica",
-        new Error(`Add an SSH route in Settings › Mesh so these machines can reach each other.`),
+        new Error(`Ask an agent to fix the connection between these machines.`),
       );
       return;
     }
@@ -1531,7 +1531,7 @@ export default function WorkspaceSidebar() {
                 role="button"
                 tabIndex={0}
                 draggable={offline === undefined}
-                aria-expanded={open}
+                aria-expanded={offline === undefined ? open : undefined}
                 aria-label={folderRowAriaLabel(folder.label, offline !== undefined)}
                 className={cn(
                   "group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-sm font-medium outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",

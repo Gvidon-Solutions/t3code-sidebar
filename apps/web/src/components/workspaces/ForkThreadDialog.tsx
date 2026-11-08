@@ -12,6 +12,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useRef, useState } from "react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 
+import { plainErrorMessage } from "@t3tools/client-runtime/errors";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
@@ -200,11 +201,9 @@ export function ForkThreadDialog(props: {
       .then((result) =>
         result._tag === "Success"
           ? complete({ value: result.value })
-          : complete({ error: String(squashAtomCommandFailure(result)) }),
+          : complete({ error: plainErrorMessage(squashAtomCommandFailure(result)) }),
       )
-      .catch((error: unknown) =>
-        complete({ error: error instanceof Error ? error.message : String(error) }),
-      );
+      .catch((error: unknown) => complete({ error: plainErrorMessage(error) }));
   };
   const machineIds = new Set<string>([
     ...Object.keys(config?.machines ?? {}),

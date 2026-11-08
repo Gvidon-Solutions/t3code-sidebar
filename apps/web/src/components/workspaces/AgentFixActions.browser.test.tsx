@@ -10,16 +10,24 @@ it("opens a prepared thread and offers a copy fallback", async () => {
   const clipboard = vi.spyOn(navigator, "clipboard", "get").mockReturnValue({
     writeText,
   } as unknown as Clipboard);
-  await using screen = await render(<AgentFixActions prompt={prompt} />, {
-    router: "/settings/mesh",
-  });
+  await using screen = await render(
+    <AgentFixActions
+      prompt={prompt}
+      environmentId="studio"
+      accessibleLabel="Fix cloudbox offline with an agent"
+    />,
+    { router: "/settings/mesh" },
+  );
   await screen.getByRole("button", { name: "Copy prompt", exact: true }).click();
   expect(writeText).toHaveBeenCalledWith(prompt);
   const router = screen.router;
-  await screen.getByRole("button", { name: "Fix with an agent", exact: true }).click();
+  await screen
+    .getByRole("button", { name: "Fix cloudbox offline with an agent", exact: true })
+    .click();
   await vi.waitFor(() => {
     expect(router?.state.location.pathname).toBe("/new");
     expect(new URLSearchParams(router?.state.location.searchStr).get("prompt")).toBe(prompt);
+    expect(new URLSearchParams(router?.state.location.searchStr).get("env")).toBe("studio");
   });
   clipboard.mockRestore();
 });

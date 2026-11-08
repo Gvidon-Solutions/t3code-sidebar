@@ -173,7 +173,7 @@ import {
 } from "../lib/utils";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useAvailableSettingsSearchItems } from "./settings/useAvailableSettingsSearchItems";
-import { resolveThreadVoiceAvailability } from "../voice/voiceAvailability";
+import { resolveComposerVoiceAvailability } from "../voice/voiceAvailability";
 import { toggleThreadVoice, useVoiceModeState, voiceMode } from "../voice/voiceMode";
 import { useTalk } from "../voice/useTalk";
 import {
@@ -1468,10 +1468,17 @@ function OpenCommandPaletteDialog(props: {
     : null;
   const voiceOnActiveThread = voiceTarget !== null && voiceMode.isActiveFor(voiceTarget);
   if (activeThread !== null && voiceTarget !== null && !voiceOnActiveThread) {
-    const voiceAvailability = resolveThreadVoiceAvailability(
-      activeThread,
-      providersByEnvironment.get(activeThread.environmentId) ?? [],
-    );
+    const voiceProviders = providersByEnvironment.get(activeThread.environmentId);
+    const voiceConfig =
+      activeThreadServerConfig && voiceProviders
+        ? { providers: voiceProviders, settings: activeThreadServerConfig.settings }
+        : null;
+    const voiceAvailability = resolveComposerVoiceAvailability({
+      isServerThread: true,
+      threadProviderInstanceId: activeThread.providerInstanceId,
+      config: voiceConfig,
+      projectId: activeThread.projectId,
+    });
     if (voiceAvailability.kind !== "unsupported") {
       actionItems.push({
         kind: "action",

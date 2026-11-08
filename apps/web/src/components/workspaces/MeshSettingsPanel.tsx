@@ -30,7 +30,10 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useNavigate } from "@tanstack/react-router";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
-import { useEnvironments } from "../../state/environments";
+import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
+import { environmentCatalog } from "../../connection/catalog";
+import { useAtomValue } from "@effect/atom-react";
+import { planMeshConnect } from "@t3tools/client-runtime/state/mesh-layout";
 import { SettingsPageContainer, SettingsSection } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
 import {
@@ -272,6 +275,8 @@ function LinkWithDialog(props: {
               Couldn't link: {linkFailure}
             </p>
             <AgentFixActions
+              environmentId={selectedSource}
+              accessibleLabel="Fix linking this machine with an agent"
               prompt={refusedLinkPrompt({
                 source:
                   props.sources.find((entry) => entry.environmentId === selectedSource)?.label ??
@@ -298,6 +303,8 @@ function LinkWithDialog(props: {
 export function MeshSettingsPanel() {
   const mesh = useMeshLayout();
   const navigate = useNavigate();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const agentEnvironmentId = mesh.source ?? primaryEnvironmentId;
   const { machines: allMachines } = useMeshOverview({ config: mesh.config });
   const now = minuteTickToEpochMs(useNowMinute());
   const { active: machines, forgotten } = partitionMeshMachines(
@@ -306,6 +313,9 @@ export function MeshSettingsPanel() {
     now,
   );
   const sources = usePermittedLinkSources();
+  const { environments } = useEnvironments();
+  const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
+  const setEnabled = useAtomCommand(environmentCatalog.setEnabled, { reportFailure: false });
   const [linkOpen, setLinkOpen] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   const live = useReplicaStatuses();
@@ -334,7 +344,44 @@ export function MeshSettingsPanel() {
     problems,
   );
   const openAgent = (prompt: string) => {
-    void navigate({ to: "/new", search: { prompt } as never });
+    void navigate({
+      to: "/new",
+      search: (agentEnvironmentId ? { prompt, env: agentEnvironmentId } : { prompt }) as never,
+    });
+  };
+  const connectPlan = planMeshConnect({
+    machines: machines.map((machine) => ({
+      environmentId: machine.environmentId,
+      label: machine.label,
+    })),
+    connectedEnvironmentIds: new Set(
+      environments
+        .filter((environment) => environment.connection.phase === "connected")
+        .map((environment) => String(environment.environmentId)),
+    ),
+    entries: new Map(
+      [...catalog.entries].map(([environmentId, entry]) => [
+        String(environmentId),
+        { enabled: entry.enabled },
+      ]),
+    ),
+  });
+  const connectAll = async () => {
+    const failed: string[] = [];
+    for (const machine of connectPlan.reconnect) {
+      const result = await setEnabled({
+        environmentId: machine.environmentId as EnvironmentId,
+        enabled: true,
+      });
+      if (result._tag !== "Success") failed.push(machine.label);
+    }
+    if (failed.length > 0) {
+      failureToast(
+        "Couldn't connect every machine",
+        `Ask an agent to fix the connection to ${failed.join(", ")}.`,
+      );
+    }
+    if (connectPlan.missing.length > 0) void navigate({ to: "/settings/connections" });
   };
   return (
     <SettingsPageContainer>
@@ -354,6 +401,17 @@ export function MeshSettingsPanel() {
           >
             Link a machine
           </Button>
+          {connectPlan.needed ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void connectAll();
+              }}
+            >
+              Connect to all machines
+            </Button>
+          ) : null}
         </div>
         <ul className="divide-y divide-border/60">
           {machines.map((machine) => (
@@ -392,7 +450,13 @@ export function MeshSettingsPanel() {
                     {selected.label} · {machineStatus(selected)}
                   </p>
                   <AgentFixActions
-                    prompt={offlineMachinePrompt(selected.label, machineStatus(selected))}
+                    environmentId={agentEnvironmentId}
+                    accessibleLabel={`Fix ${selected.label} offline with an agent`}
+                    prompt={offlineMachinePrompt(
+                      selected.label,
+                      machineStatus(selected),
+                      selected.lastSeenAt == null && selected.lastExchangeAt == null,
+                    )}
                   />
                 </div>
               ) : null}
@@ -402,6 +466,8 @@ export function MeshSettingsPanel() {
                     <span className="min-w-0 flex-1">{project.sentence}</span>
                     {project.canRetry ? (
                       <AgentFixActions
+                        environmentId={agentEnvironmentId}
+                        accessibleLabel={`Fix the copy of ${project.title} on ${selected.label} with an agent`}
                         prompt={replicaProblemPrompt(project.title, selected.label)}
                       />
                     ) : null}
@@ -419,7 +485,9 @@ export function MeshSettingsPanel() {
                       <dd>
                         {row.exact ? (
                           <Tooltip>
-                            <TooltipTrigger render={<span />}>{row.value}</TooltipTrigger>
+                            <TooltipTrigger render={<span tabIndex={0} />}>
+                              {row.value}
+                            </TooltipTrigger>
                             <TooltipPopup>{row.exact}</TooltipPopup>
                           </Tooltip>
                         ) : (
@@ -470,7 +538,11 @@ export function MeshSettingsPanel() {
                   <p>
                     Update to {problem.target} failed on {label}: {problem.reason}
                   </p>
-                  <AgentFixActions prompt={meshUpdatePrompt(problem, label)} />
+                  <AgentFixActions
+                    environmentId={agentEnvironmentId}
+                    accessibleLabel={`Fix the update failure on ${label} with an agent`}
+                    prompt={meshUpdatePrompt(problem, label)}
+                  />
                 </li>
               );
             })}

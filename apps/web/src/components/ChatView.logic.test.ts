@@ -7,6 +7,7 @@ import {
   snapshotComposerSend,
   withMessageContext,
   deriveAvailableRevertTurnCounts,
+  realDraftModelSelection,
 } from "./ChatView.logic";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
 import { ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
@@ -1257,4 +1258,16 @@ describe("deriveAvailableRevertTurnCounts", () => {
     expect(deriveAvailableRevertTurnCounts(projection({ providerSessionId: null })).size).toBe(0);
     expect(deriveAvailableRevertTurnCounts(null).size).toBe(0);
   });
+});
+
+it("ignores the local draft's no-provider placeholder when judging a machine", () => {
+  expect(
+    realDraftModelSelection({
+      instanceId: ProviderInstanceId.make("t3code_no_provider"),
+      model: "",
+    }),
+  ).toBeNull();
+  expect(realDraftModelSelection(null)).toBeNull();
+  const selection = { instanceId: ProviderInstanceId.make("fakeCodex"), model: "fast" };
+  expect(realDraftModelSelection(selection)).toBe(selection);
 });

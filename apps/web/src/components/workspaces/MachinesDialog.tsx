@@ -204,7 +204,7 @@ export function MachinesDialog(props: {
                               }}
                             >
                               {copies.locations && copies.locations.length > 1
-                                ? `Open copies on ${location.environmentId}`
+                                ? `Open copies on ${machineDisplayOf(props.config, location.environmentId, "Unnamed machine").label}`
                                 : "Open copies"}
                             </Button>
                           ))

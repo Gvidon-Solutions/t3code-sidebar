@@ -1,6 +1,10 @@
 import {
+  draftMachineCanHostCopy,
   draftMachineCardSync,
   draftMachineCards,
+  draftMachineCatalogRequests,
+  retainedCatalogRequests,
+  shouldRefreshDraftMachineCatalogs,
   hasUsableDraftModels,
   type DraftMachineCardRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
@@ -47,7 +51,9 @@ export function DraftMachineCards(props: {
   const [catalogs, setCatalogs] = useState<Readonly<Record<string, ReadonlyArray<ServerProvider>>>>(
     {},
   );
-  const requestedCatalogs = useRef(new Set<string>());
+  // One key per project and destination, holding the last tick requested. Bounded
+  // by the machines currently unconnected, unlike a key that carries the tick.
+  const requestedCatalogs = useRef(new Map<string, number>());
   const [catalogRefresh, setCatalogRefresh] = useState(0);
   const projectSettings = useClientSettings(selectProjectGroupingSettings);
   const catalogKey = props.choices
@@ -55,11 +61,20 @@ export function DraftMachineCards(props: {
     .map((choice) => choice.environmentId)
     .join(",");
   const activeProjectEnvironmentId = props.activeProject?.environmentId;
+  // Refresh only while some machine is unconnected: once every catalog is
+  // known there is nothing to poll.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- refreshes a destination catalog so a card stops naming models it now has
   useEffect(() => {
+    if (
+      !shouldRefreshDraftMachineCatalogs({
+        activeProjectEnvironmentId: activeProjectEnvironmentId ?? null,
+        environmentIds: catalogKey.split(",").filter(Boolean),
+      })
+    )
+      return;
     const timer = window.setInterval(() => setCatalogRefresh((tick) => tick + 1), 60_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [activeProjectEnvironmentId, catalogKey]);
   // A machine that connects now reads its catalog from this client again; the
   // cached copy was taken while it was unreachable.
   const connectedKey = props.choices
@@ -70,26 +85,34 @@ export function DraftMachineCards(props: {
   useEffect(() => {
     if (!activeProjectEnvironmentId) return;
     for (const environmentId of connectedKey.split(",").filter(Boolean)) {
-      const prefix = `${activeProjectEnvironmentId}:${environmentId}:`;
-      for (const key of requestedCatalogs.current) {
-        if (key.startsWith(prefix)) requestedCatalogs.current.delete(key);
-      }
+      requestedCatalogs.current.delete(`${activeProjectEnvironmentId}:${environmentId}`);
     }
   }, [activeProjectEnvironmentId, connectedKey]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads each destination catalog over the mesh so a card can name missing models
   useEffect(() => {
     if (!activeProjectEnvironmentId) return;
-    for (const environmentId of catalogKey.split(",").filter(Boolean)) {
-      const key = `${activeProjectEnvironmentId}:${environmentId}:${catalogRefresh}`;
-      if (requestedCatalogs.current.has(key)) continue;
-      requestedCatalogs.current.add(key);
+    const wanted = new Set(
+      draftMachineCatalogRequests({
+        activeProjectEnvironmentId: activeProjectEnvironmentId ?? null,
+        environmentIds: catalogKey.split(",").filter(Boolean),
+      }),
+    );
+    const retained = new Set(retainedCatalogRequests(requestedCatalogs.current.keys(), wanted));
+    for (const key of requestedCatalogs.current.keys()) {
+      if (!retained.has(key)) requestedCatalogs.current.delete(key);
+    }
+    if (wanted.size === 0) return;
+    for (const key of wanted) {
+      if (requestedCatalogs.current.get(key) === catalogRefresh) continue;
+      const environmentId = key.slice(activeProjectEnvironmentId.length + 1);
+      requestedCatalogs.current.set(key, catalogRefresh);
       void loadCatalog({
         environmentId: activeProjectEnvironmentId,
         input: { targetEnvironmentId: environmentId as EnvironmentOption["environmentId"] },
       }).then((result) => {
         if (result._tag === "Success") {
           setCatalogs((current) => ({ ...current, [environmentId]: result.value.providers }));
-        } else {
+        } else if (requestedCatalogs.current.get(key) === catalogRefresh) {
           requestedCatalogs.current.delete(key);
         }
       });
@@ -161,7 +184,11 @@ export function DraftMachineCards(props: {
         connected: choice.connected === true,
         hasUsableModels: hasUsableDraftModels(catalog, projectId as ProjectId | null),
         config: catalog,
-        canHostCopy: choice.supportsMesh === true || props.activeProject?.isScratch === true,
+        canHostCopy: draftMachineCanHostCopy({
+          hasProject: projectId !== null,
+          supportsReplicas: choice.supportsMesh === true,
+          isScratchDraft: props.activeProject?.isScratch === true,
+        }),
         sync,
       };
     }),
@@ -196,8 +223,9 @@ function MachineCard(props: { readonly row: DraftMachineCardRow; readonly onSele
       role="radio"
       aria-checked={row.selected}
       aria-disabled={!row.selectable}
-      disabled={!row.selectable}
-      onClick={props.onSelect}
+      onClick={() => {
+        if (row.selectable) props.onSelect();
+      }}
       data-draft-machine-card={row.environmentId}
       className={cn(
         "flex w-full flex-col gap-1 rounded-xl border px-3 py-2 text-left transition-colors",
