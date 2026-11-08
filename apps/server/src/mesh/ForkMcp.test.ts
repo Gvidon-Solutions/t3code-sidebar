@@ -13,7 +13,7 @@ import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
 import { ThreadForkService } from "./ThreadForkService.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
-import { layerLinkedTest } from "../replicas/MeshLayoutTestLayer.ts";
+import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as Receipts from "../peer/connection/PeerReceipts.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 

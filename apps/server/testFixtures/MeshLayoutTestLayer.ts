@@ -15,7 +15,7 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as Semaphore from "effect/Semaphore";
-import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
+import { MeshLayoutService } from "../src/mesh/MeshLayoutService.ts";
 
 export const layerTest = (
   environmentId: string,

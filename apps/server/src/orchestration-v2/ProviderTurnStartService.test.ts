@@ -1,5 +1,5 @@
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
-import * as ReplicaMeshTest from "../replicas/MeshLayoutTestLayer.ts";
+import * as ReplicaMeshTest from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it, vi } from "vite-plus/test";

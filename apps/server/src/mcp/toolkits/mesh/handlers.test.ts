@@ -1,4 +1,4 @@
-import { layerLinkedTest } from "../../../replicas/MeshLayoutTestLayer.ts";
+import { layerLinkedTest } from "../../../../testFixtures/MeshLayoutTestLayer.ts";
 import { MeshConfig } from "../../../mesh/MeshConfig.ts";
 import { MeshBootstrap } from "../../../mesh/MeshBootstrap.ts";
 import { SecretRequests } from "../../../secrets/SecretRequests.ts";

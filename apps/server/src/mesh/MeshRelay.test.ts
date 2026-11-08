@@ -1,7 +1,7 @@
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
-import { layerTest as layoutTest } from "../replicas/MeshLayoutTestLayer.ts";
+import { layerTest as layoutTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import { it, expect } from "@effect/vitest";
 import { EnvironmentId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";

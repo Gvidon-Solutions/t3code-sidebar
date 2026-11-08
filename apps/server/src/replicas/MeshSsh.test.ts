@@ -11,7 +11,7 @@ import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
-import * as MeshTest from "./MeshLayoutTestLayer.ts";
+import * as MeshTest from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as Ssh from "./MeshSsh.ts";
 
 it.live(

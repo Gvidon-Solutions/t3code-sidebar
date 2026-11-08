@@ -19,7 +19,7 @@ import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
 import { ProjectService } from "../project/ProjectService.ts";
 import { ProviderRegistry } from "../provider/ProviderRegistry.ts";
 import { ReplicaRuntime } from "../replicas/ReplicaRuntime.ts";
-import * as Layout from "../replicas/MeshLayoutTestLayer.ts";
+import * as Layout from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as ForkTransactions from "./ForkTransactions.ts";
 import * as Fork from "./ThreadForkService.ts";
 

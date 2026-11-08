@@ -26,7 +26,7 @@ import { PeerLinks } from "../peer/PeerLinks.ts";
 import { PeerMcpClient } from "../peer/PeerMcpClient.ts";
 import { ReplicaRuntime } from "../replicas/ReplicaRuntime.ts";
 import * as ServerConfig from "../config.ts";
-import * as Layout from "../replicas/MeshLayoutTestLayer.ts";
+import * as Layout from "../../testFixtures/MeshLayoutTestLayer.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import * as Rollout from "./MeshRollout.ts";
 const encode = Schema.encodeEffect(Schema.fromJsonString(Schema.Json));

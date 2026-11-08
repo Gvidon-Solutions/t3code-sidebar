@@ -1,4 +1,4 @@
-import { layerLinkedTest } from "../replicas/MeshLayoutTestLayer.ts";
+import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";

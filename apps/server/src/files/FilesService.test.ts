@@ -1,4 +1,4 @@
-import { linkedTestDocument } from "../replicas/MeshLayoutTestLayer.ts";
+import { linkedTestDocument } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   EnvironmentId,

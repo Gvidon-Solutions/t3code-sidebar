@@ -1,6 +1,6 @@
 import migratePeerIdentities from "../../persistence/Migrations/082_PeerIdentityBindings.ts";
 import { McpDomainAnnotation } from "../../mcp/McpToolDomain.ts";
-import { linkedTestDocument } from "../../replicas/MeshLayoutTestLayer.ts";
+import { linkedTestDocument } from "../../../testFixtures/MeshLayoutTestLayer.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as EffectNodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as ManagedPolicy from "../../policy/ManagedPolicy.ts";

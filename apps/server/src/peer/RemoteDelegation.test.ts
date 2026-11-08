@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
-import * as MeshTest from "../replicas/MeshLayoutTestLayer.ts";
+import * as MeshTest from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";

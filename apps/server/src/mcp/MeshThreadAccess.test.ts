@@ -1,5 +1,5 @@
 import { McpDomainAnnotation } from "./McpToolDomain.ts";
-import { layerLinkedTest } from "../replicas/MeshLayoutTestLayer.ts";
+import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import { expect, it } from "@effect/vitest";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import {

@@ -13,7 +13,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { Tool, Toolkit } from "effect/ai";
-import { layerTest } from "../replicas/MeshLayoutTestLayer.ts";
+import { layerTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
 import * as Access from "../mcp/McpToolAccess.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";

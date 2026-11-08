@@ -1,4 +1,4 @@
-import { layerLinkedTest } from "../../../replicas/MeshLayoutTestLayer.ts";
+import { layerLinkedTest } from "../../../../testFixtures/MeshLayoutTestLayer.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import type * as Tool from "effect/ai/Tool";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
