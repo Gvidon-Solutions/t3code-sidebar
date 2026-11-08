@@ -5,6 +5,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import { ServerSettingsService } from "../serverSettings.ts";
@@ -32,6 +33,8 @@ function instanceBinaryPath(config: unknown): string | undefined {
 }
 
 const sharedSkill = ".agents/skills/t3";
+const skillMarker = ".t3-managed";
+const skillMarkerContents = "This directory is managed by T3 Code.\n";
 
 export function instructionBlock(original: string, body: string) {
   if (body.includes(begin) || body.includes(end))
@@ -62,31 +65,35 @@ export function withoutManagedBlock(original: string): string {
 }
 
 /**
- * The retired installer wrote a "> ..." header plus the shared instructions verbatim; on first
- * adoption that copy is dropped so agents do not read it twice. Owner text outside it stays.
+ * The retired installer wrote the shared instructions verbatim; on first adoption that copy is
+ * dropped so agents do not read them twice. Only a whole paragraph (or run of paragraphs) bounded
+ * by the start/end of the file or blank lines is a candidate, so owner text is never edited
+ * mid-line and an adjacent blockquote stays untouched.
  */
 export function withoutLegacyInstructions(
   original: string,
   instructions: string | undefined,
 ): string {
-  const start = original.indexOf(begin);
-  const stop = original.indexOf(end);
-  if (start >= 0 && stop > start) {
-    const after = stop + end.length;
-    const before = withoutLegacyInstructions(original.slice(0, start), instructions);
-    const rest = withoutLegacyInstructions(original.slice(after), instructions);
-    return (
-      before + original.slice(start, after) + (rest && !rest.startsWith("\n") ? `\n${rest}` : rest)
-    );
-  }
   const text = instructions?.trim();
-  if (!text || start >= 0 || stop >= 0) return original;
-  const at = original.indexOf(text);
-  if (at < 0) return original;
-  const head = original.slice(0, at).replace(/(^|\n)> [^\n]*\n[ \t]*\n?[ \t\r]*$/, "$1");
-  const rest = original.slice(at + text.length).replace(/^[\r\n]+/, "");
-  const kept =
-    head.trim() === "" ? rest : rest === "" ? head : `${head.replace(/\s*$/, "\n\n")}${rest}`;
+  if (!text) return original;
+  // The managed block is the one-shot boundary: once it exists, legacy text is owner history.
+  if (original.includes(begin) || original.includes(end)) return original;
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\r?\n/g, "\\r?\\n");
+  const paragraph = new RegExp(
+    `(?:^|\\r?\\n[ \\t]*\\r?\\n)${escaped}(?=\\r?\\n[ \\t]*\\r?\\n|(?:\\r?\\n)?$)`,
+  );
+  const match = paragraph.exec(original);
+  if (!match) return original;
+  const start = match.index;
+  const matchEnd = start + match[0].length;
+  let head = original.slice(0, start);
+  let rest = original.slice(matchEnd);
+  if (start === 0) {
+    rest = rest.replace(/^\r?\n[ \t]*\r?\n/, "");
+    if (rest === "\n" || rest === "\r\n") rest = "";
+  }
+  if (head.trim() === "") head = "";
+  const kept = `${head}${rest}`;
   return kept.trim() === "" ? "" : kept;
 }
 
@@ -137,18 +144,103 @@ export const layer = Layer.effect(
         if (yield* fs.exists(bundled)) return bundled;
         return yield* path.fromFileUrl(new URL("../../../../agent-kit/skills/t3", import.meta.url));
       }));
-    const copySkill = Effect.fn("MeshAgentKit.copySkill")(function* (
+    const skillFileName = (name: string) =>
+      name === "global" || name === "node_modules" || name.endsWith(".test.mjs");
+    const listSkillFiles = Effect.fn("MeshAgentKit.listSkillFiles")(function* (
+      from: string,
+      relative = "",
+    ): Effect.fn.Return<ReadonlyArray<string>, import("effect/PlatformError").PlatformError> {
+      const files: string[] = [];
+      for (const entry of yield* fs.readDirectoryEntries(from)) {
+        if (skillFileName(entry.name)) continue;
+        const childRelative = relative === "" ? entry.name : `${relative}/${entry.name}`;
+        if (entry.type === "Directory")
+          files.push(...(yield* listSkillFiles(path.join(from, entry.name), childRelative)));
+        else if (entry.type === "File") files.push(childRelative);
+      }
+      return files;
+    });
+    const listExisting = Effect.fn("MeshAgentKit.listExisting")(function* (
+      directory: string,
+      relative = "",
+    ): Effect.fn.Return<
+      ReadonlyArray<{ readonly relative: string; readonly type: string }>,
+      import("effect/PlatformError").PlatformError
+    > {
+      const entries: { relative: string; type: string }[] = [];
+      for (const entry of yield* fs.readDirectoryEntries(directory)) {
+        const childRelative = relative === "" ? entry.name : `${relative}/${entry.name}`;
+        entries.push({ relative: childRelative, type: entry.type });
+        if (entry.type === "Directory")
+          entries.push(...(yield* listExisting(path.join(directory, entry.name), childRelative)));
+      }
+      return entries;
+    });
+    const conflictText = (target: string) => `${target} is not a T3-managed t3 skill`;
+    const syncSkill = Effect.fn("MeshAgentKit.syncSkill")(function* (
       from: string,
       to: string,
+      conflicts: string[],
     ): Effect.fn.Return<void, import("effect/PlatformError").PlatformError> {
-      yield* fs.makeDirectory(to, { recursive: true });
-      for (const entry of yield* fs.readDirectory(from)) {
-        if (entry === "global" || entry === "node_modules" || entry.endsWith(".test.mjs")) continue;
-        const sourcePath = path.join(from, entry);
-        const targetPath = path.join(to, entry);
-        if ((yield* fs.stat(sourcePath)).type === "Directory")
-          yield* copySkill(sourcePath, targetPath);
-        else yield* fs.copyFile(sourcePath, targetPath);
+      const existing = yield* fs.lstat(to).pipe(Effect.option);
+      if (Option.isSome(existing)) {
+        if (existing.value.type !== "Directory") {
+          conflicts.push(conflictText(to));
+          return;
+        }
+        const marker = yield* fs.lstat(path.join(to, skillMarker)).pipe(Effect.option);
+        if (Option.isNone(marker) || marker.value.type !== "File") {
+          conflicts.push(conflictText(to));
+          return;
+        }
+      } else {
+        yield* fs.makeDirectory(to, { recursive: true });
+        yield* fs.writeFileString(path.join(to, skillMarker), skillMarkerContents);
+      }
+      const desired = new Set(yield* listSkillFiles(from));
+      const desiredDirectories = new Set<string>();
+      for (const relative of desired) {
+        const segments = relative.split("/");
+        for (let index = 1; index < segments.length; index++)
+          desiredDirectories.add(segments.slice(0, index).join("/"));
+      }
+      const entries = [...(yield* listExisting(to))].sort((left, right) =>
+        right.relative.localeCompare(left.relative),
+      );
+      for (const entry of entries) {
+        if (entry.relative === skillMarker) continue;
+        const target = path.join(to, entry.relative);
+        if (entry.type === "Directory")
+          if (!desiredDirectories.has(entry.relative))
+            yield* fs.remove(target, { recursive: true });
+        if (
+          (entry.type === "File" || entry.type === "SymbolicLink") &&
+          !desired.has(entry.relative)
+        )
+          yield* fs.remove(target);
+      }
+      for (const relative of desired) {
+        const target = path.join(to, relative);
+        let symlinked = false;
+        const segments = relative.split("/");
+        let ancestor = to;
+        for (let index = 0; index < segments.length - 1; index++) {
+          ancestor = path.join(ancestor, segments[index]!);
+          const info = yield* fs.lstat(ancestor).pipe(Effect.option);
+          if (Option.isSome(info) && info.value.type === "SymbolicLink") {
+            conflicts.push(`${ancestor} is a symbolic link`);
+            symlinked = true;
+            break;
+          }
+        }
+        if (symlinked) continue;
+        const info = yield* fs.lstat(target).pipe(Effect.option);
+        if (Option.isSome(info) && info.value.type !== "File") {
+          conflicts.push(`${target} is a symbolic link or not a file`);
+          continue;
+        }
+        yield* fs.makeDirectory(path.dirname(target), { recursive: true });
+        yield* fs.copyFile(path.join(from, relative), target);
       }
     });
     const reconcile = Effect.fn("MeshAgentKit.reconcile")(
@@ -161,9 +253,9 @@ export const layer = Layer.effect(
             reason: "storage",
             message: "Bundled t3 skill is missing",
           });
+        const conflicts: string[] = [];
         const shared = path.join(home, sharedSkill);
-        yield* fs.makeDirectory(shared, { recursive: true });
-        yield* copySkill(source, shared);
+        yield* syncSkill(source, shared, conflicts);
 
         const current = yield* settings.getSettings.pipe(
           Effect.mapError(
@@ -180,7 +272,9 @@ export const layer = Layer.effect(
           for (const instance of Object.values(current.providerInstances)) {
             if (instance.driver !== harness.driver) continue;
             const binaryPath = instanceBinaryPath(instance.config);
-            if (binaryPath !== undefined && (yield* fs.exists(binaryPath))) return true;
+            if (binaryPath === undefined) continue;
+            const resolved = resolveExecutable(binaryPath, platform, env) ?? binaryPath;
+            if (yield* fs.exists(resolved)) return true;
           }
           return false;
         });
@@ -194,23 +288,49 @@ export const layer = Layer.effect(
           );
         }
 
-        // Skill directories follow installed harnesses; only a positively absent one loses our copy.
+        // Skill directories follow installed harnesses; an unmanaged directory is never replaced.
         for (const harness of harnesses) {
           const destination = path.join(home, harness.home, "skills/t3");
           if (installed.get(harness)) {
-            yield* fs.makeDirectory(destination, { recursive: true });
-            yield* copySkill(source, destination);
-          } else if (yield* fs.exists(destination)) {
-            yield* fs.remove(destination, { recursive: true });
+            yield* syncSkill(source, destination, conflicts);
+            continue;
           }
+          const existing = yield* fs.lstat(destination).pipe(Effect.option);
+          if (Option.isNone(existing)) continue;
+          if (existing.value.type !== "Directory") {
+            conflicts.push(`Agent kit left existing files unchanged: ${conflictText(destination)}`);
+            continue;
+          }
+          const marker = yield* fs.lstat(path.join(destination, skillMarker)).pipe(Effect.option);
+          if (Option.isNone(marker) || marker.value.type !== "File") {
+            conflicts.push(`Agent kit left existing files unchanged: ${conflictText(destination)}`);
+            continue;
+          }
+          yield* fs.remove(destination, { recursive: true });
         }
-        if (doc.agents?.manageInstructions === false) return;
+        if (doc.agents?.manageInstructions === false) {
+          if (conflicts.length > 0)
+            return yield* new MeshConfigError({
+              reason: "validation",
+              message: `Agent kit left existing files unchanged: ${conflicts.join("; ")}`,
+            });
+          return;
+        }
         const body = meshInstructions(doc, local);
         // Validate all files before changing any instruction file.
         const writes = yield* Effect.forEach(harnesses, (harness) =>
           Effect.gen(function* () {
             const filePath = path.join(home, harness.instruction);
-            const original = (yield* fs.exists(filePath)) ? yield* fs.readFileString(filePath) : "";
+            const info = yield* fs.lstat(filePath).pipe(Effect.option);
+            if (Option.isSome(info) && info.value.type !== "File") {
+              conflicts.push(
+                info.value.type === "SymbolicLink"
+                  ? `${filePath} is a symbolic link`
+                  : `${filePath} is not a regular file`,
+              );
+              return undefined;
+            }
+            const original = Option.isSome(info) ? yield* fs.readFileString(filePath) : "";
             if (!installed.get(harness)) {
               const contents = withoutManagedBlock(original);
               return { filePath, original, contents };
@@ -230,7 +350,9 @@ export const layer = Layer.effect(
             return { filePath, original, contents };
           }),
         );
-        for (const { filePath, original, contents } of writes) {
+        for (const write of writes) {
+          if (write === undefined) continue;
+          const { filePath, original, contents } = write;
           if (original === contents) continue;
           if (contents === "") {
             yield* fs.remove(filePath);
@@ -242,6 +364,11 @@ export const layer = Layer.effect(
             Effect.provideService(Path.Path, path),
           );
         }
+        if (conflicts.length > 0)
+          return yield* new MeshConfigError({
+            reason: "validation",
+            message: `Agent kit left existing files unchanged: ${conflicts.join("; ")}`,
+          });
       },
       Effect.mapError((error) =>
         error._tag === "MeshConfigError"

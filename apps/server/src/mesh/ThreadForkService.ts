@@ -59,16 +59,36 @@ import type { PeerCallLimits } from "../peer/PeerMcpClient.ts";
 const failure = (error: { readonly message: string }) =>
   new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message });
 
-/** The source title comes from a peer, so escape it before it becomes markdown link text. */
+const forkLinkProtocols = new Set(["t3-thread:", "http:", "https:"]);
+
+/** A peer supplies the link, so only an actual thread link may become markdown. */
+function forkLink(sourceLink: string): string | undefined {
+  let protocol: string;
+  try {
+    protocol = new URL(sourceLink).protocol;
+  } catch {
+    return undefined;
+  }
+  if (!forkLinkProtocols.has(protocol)) return undefined;
+  return sourceLink.replace(/[\s()[\]]/g, (character) =>
+    character === "(" ? "%28" : character === ")" ? "%29" : encodeURIComponent(character),
+  );
+}
+
+const markdownText = (value: string) =>
+  value
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[\\`*_[\]()<>!]/g, "\\$&");
+
+/** The source title and machine come from a peer, so sanitize them before they become markdown. */
 export function forkMarker(sourceTitle: string, sourceLink: string, sourceMachine: string) {
-  const title = sourceTitle
-    .replaceAll("\\", "\\\\")
-    .replaceAll("[", "\\[")
-    .replaceAll("]", "\\]")
-    .replaceAll("(", "\\(")
-    .replaceAll(")", "\\)");
-  const link = sourceLink.replaceAll("(", "%28").replaceAll(")", "%29");
-  return `Forked from [${title}](${link}) · ${sourceMachine}`;
+  const title = markdownText(sourceTitle);
+  const machine = markdownText(sourceMachine);
+  const link = forkLink(sourceLink);
+  return link === undefined
+    ? `Forked from ${title} · ${machine}`
+    : `Forked from [${title}](${link}) · ${machine}`;
 }
 const invalid = (message: string) =>
   new OrchestratorMcpFailure({ code: "invalid_request", message });
