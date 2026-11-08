@@ -3,7 +3,12 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
-import { androidEnvironment, androidArchitectures, androidBuildKey } from "./android-build.mjs";
+import {
+  androidCachePaths,
+  androidEnvironment,
+  androidArchitectures,
+  androidBuildKey,
+} from "./android-build.mjs";
 
 const digest = (bytes) => NodeCrypto.createHash("sha256").update(bytes).digest("hex");
 const exec = (command, args) =>
@@ -52,6 +57,10 @@ function releaseKey() {
 
 if (process.argv[1] === NodeURL.fileURLToPath(import.meta.url)) {
   const [action, directory] = process.argv.slice(2);
+  if (action === "cache-paths") {
+    console.log(androidCachePaths().join("\n"));
+    process.exit(0);
+  }
   if (["bundle-environment", "update-environment"].includes(action)) {
     console.log(androidEnvironment(process.env, action === "update-environment"));
     process.exit(0);

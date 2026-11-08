@@ -3,6 +3,34 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
+export function androidCachePaths(root = process.cwd()) {
+  const directories = (directory) =>
+    NodeFS.existsSync(directory)
+      ? NodeFS.readdirSync(directory, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => NodePath.join(directory, entry.name))
+      : [];
+  const packages = directories(NodePath.join(root, "apps/mobile/modules"));
+  for (const store of directories(NodePath.join(root, "node_modules/.pnpm"))) {
+    for (const directory of directories(NodePath.join(store, "node_modules"))) {
+      if (NodePath.basename(directory).startsWith("@")) packages.push(...directories(directory));
+      else packages.push(directory);
+    }
+  }
+  return [
+    "apps/mobile/android",
+    ...packages
+      .filter((directory) => NodeFS.existsSync(NodePath.join(directory, "android")))
+      .flatMap((directory) =>
+        ["build", ".cxx"].map((name) =>
+          NodePath.relative(root, NodePath.join(directory, "android", name))
+            .split(NodePath.sep)
+            .join("/"),
+        ),
+      ),
+  ].sort();
+}
+
 export function androidResources(
   env = process.env,
   threads = NodeOS.availableParallelism(),

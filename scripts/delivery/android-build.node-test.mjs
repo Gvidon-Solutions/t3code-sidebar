@@ -12,6 +12,7 @@ const { tmpdir } = NodeOS;
 import * as NodePath from "node:path";
 const { join } = NodePath;
 import {
+  androidCachePaths,
   androidEnvironment,
   androidFingerprint,
   configureAndroidGradle,
@@ -21,6 +22,33 @@ import {
   needsAndroidPrebuild,
   updateAndroidVersion,
 } from "./android-build.mjs";
+
+test("native cache lists physical Android packages without traversing dependency links", () => {
+  const root = mkdtempSync(join(tmpdir(), "android-cache-"));
+  try {
+    const packages = [
+      "node_modules/.pnpm/native@1/node_modules/native",
+      "node_modules/.pnpm/scoped@1/node_modules/@scope/native",
+      "apps/mobile/modules/editor",
+    ];
+    for (const directory of packages)
+      mkdirSync(join(root, directory, "android"), { recursive: true });
+    NodeFS.symlinkSync(root, join(root, "node_modules/.pnpm/native@1/node_modules/loop"), "dir");
+    assert.deepEqual(
+      androidCachePaths(root),
+      [
+        "apps/mobile/android",
+        ...packages.flatMap((directory) => [
+          `${directory}/android/build`,
+          `${directory}/android/.cxx`,
+        ]),
+      ].sort(),
+    );
+    assert.deepEqual(androidCachePaths(join(root, "missing")), ["apps/mobile/android"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("native fingerprint invalidates generated config while identical inputs preserve the native tree", () => {
   const root = mkdtempSync(join(tmpdir(), "android-build-"));

@@ -459,6 +459,15 @@ jobs:
           T3_ANDROID_FINGERPRINT: ${{ steps.native.outputs.fingerprint }}
         run: node scripts/delivery/android-release.mjs restore release-android
 
+      - name: List native cache directories
+        id: native-cache-paths
+        run: |
+          {
+            echo 'paths<<T3_ANDROID_CACHE_PATHS'
+            node scripts/delivery/android-release.mjs cache-paths
+            echo 'T3_ANDROID_CACHE_PATHS'
+          } >> "$GITHUB_OUTPUT"
+
       # The generated project and the native build outputs are the expensive
       # part. The app's outputs live under `android/`; autolinked modules build
       # inside their own package directories, so cache those too. The key
@@ -468,12 +477,7 @@ jobs:
         id: android-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: |
-            apps/mobile/android
-            apps/mobile/modules/**/android/build
-            apps/mobile/modules/**/android/.cxx
-            node_modules/.pnpm/**/android/build
-            node_modules/.pnpm/**/android/.cxx
+          path: ${{ steps.native-cache-paths.outputs.paths }}
           key: sidebar-android-v4-${{ env.ANDROID_ARCH }}-${{ steps.native.outputs.fingerprint }}
           restore-keys: |
             sidebar-android-v4-${{ env.ANDROID_ARCH }}-
