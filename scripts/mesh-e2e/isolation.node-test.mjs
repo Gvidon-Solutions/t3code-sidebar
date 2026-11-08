@@ -144,7 +144,7 @@ NodeTest.test(
   },
 );
 
-NodeTest.test("round helpers resolve only the configured disposable runtime and base", () => {
+NodeTest.test("acceptance helpers resolve only the configured disposable runtime and base", () => {
   const fixture = setup();
   try {
     NodeFS.copyFileSync(

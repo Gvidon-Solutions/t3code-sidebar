@@ -25,7 +25,7 @@ const harnesses = [
 ] as const;
 
 /** A provider instance config is driver-shaped, so read only the absolute binary it names. */
-export function instanceBinaryPath(config: unknown): string | undefined {
+function instanceBinaryPath(config: unknown): string | undefined {
   if (typeof config !== "object" || config === null || !("binaryPath" in config)) return undefined;
   const binaryPath = (config as { binaryPath?: unknown }).binaryPath;
   return typeof binaryPath === "string" && binaryPath.trim() !== "" ? binaryPath : undefined;
