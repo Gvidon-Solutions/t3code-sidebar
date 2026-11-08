@@ -27,6 +27,9 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 UsePAM no
+UseDNS no
+PermitUserRC no
+PermitUserEnvironment no
 AllowUsers ${NodeOS.userInfo().username}
 Subsystem sftp internal-sftp
 `;

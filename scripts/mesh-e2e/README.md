@@ -47,3 +47,35 @@ Run the local isolation checks without any infrastructure:
 ```sh
 node --test scripts/mesh-e2e/isolation.node-test.mjs
 ```
+
+## Fast acceptance and unattended nightly
+
+Run `scripts/mesh-fast/run.sh` (or `pnpm mesh:fast`) for isolated acceptance.
+See [the fast harness guide](../mesh-fast/README.md) for scenario coverage and artifacts.
+Its agreed gate is six minutes on the configured builder; it never acquires the shared bed.
+
+The realistic `acceptance.sh` retains full timers, native runtimes and real providers.
+It acquires the bed lock, runs the existing rounds plus C2/F1 and the realistic matrix.
+The C2/F1 entrypoints are committed as `c2-bed.sh` and `f1-bed.sh`.
+
+Configure the worker host, controller address/port, provider binaries and legacy seed
+filenames in ignored `local.env`. Run `install-nightly.sh` on the controller.
+It installs a pinned private SSH controller and a systemd user timer on the configured
+worker only; it checks the remote hostname before installing. Enable lingering on
+that worker so it runs without a login. The controller checks its real user bus.
+
+On the configured worker, enable with
+`systemctl --user enable --now mesh-nightly.timer`, disable with
+`systemctl --user disable --now mesh-nightly.timer`, and inspect with
+`systemctl --user list-timers mesh-nightly.timer`. Results live below
+`BED_NIGHTLY_ROOT/results`. Successful runs write a summary without posting.
+Failures post one deduplicated attention issue using
+`t3ctl inbox post attention … --key mesh-nightly`; notification errors fail the job.
+
+Physical configuration and per-host operational evidence stay private.
+
+For an existing bed, local.env also owns NODE_A_LOCAL, both runtime roots and
+NODE_A_TUNNEL_UNIT/NODE_B_TUNNEL_UNIT. These overrides preserve already-provisioned
+forwarding instead of selecting nonexistent default units. Keep the private
+inventory in persistent storage; local.env may link to it. After merging, run the
+installer from the permanent checkout before removing the stage worktree.

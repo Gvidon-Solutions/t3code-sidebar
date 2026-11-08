@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import { MeshLayoutError } from "@t3tools/contracts";
 import { validateEntries } from "./validateEntries.ts";
 import * as Schema from "effect/Schema";
@@ -72,6 +73,20 @@ export const layer = Layer.effect(
       ]),
     );
     yield* sql`INSERT OR IGNORE INTO mesh_layout_meta (id, hlc, seq) VALUES (1, ${tick(0, null, environmentId)}, 0)`;
+    const savedClock = (yield* sql<{
+      hlc: string;
+    }>`SELECT hlc FROM mesh_layout_meta WHERE id = 1`)[0]!.hlc;
+    if (isFutureHlc(savedClock, now)) {
+      const recovered = rows.reduce(
+        (clock, row) => (row.hlc > clock ? row.hlc : clock),
+        tick(now, null, environmentId),
+      );
+      yield* sql`UPDATE mesh_layout_meta SET hlc = ${recovered} WHERE id = 1`;
+      yield* Effect.logWarning("Recovered mesh clock after quarantining future rows", {
+        savedClock,
+        recovered,
+      });
+    }
     const state = yield* SubscriptionRef.make({ document, config: materialize(document) });
     const persist = Effect.fn("MeshLayoutService.persist")(function* (entries: MeshLayoutDocument) {
       // Client clocks carry device ids; writer membership records servers, not clock writers.
@@ -186,7 +201,8 @@ export const layer = Layer.effect(
           lock
             .withPermit(
               Effect.gen(function* () {
-                const cutoff = (yield* Clock.currentTimeMillis) - 30 * 24 * 60 * 60 * 1000;
+                const cutoff =
+                  (yield* Clock.currentTimeMillis) - meshMillis(30 * 24 * 60 * 60 * 1000);
                 const expired = (yield* readRows).filter(
                   (row) =>
                     hlcPhysical(row.hlc) < cutoff &&

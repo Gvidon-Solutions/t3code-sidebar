@@ -818,6 +818,134 @@ An inbound connection can become visible before its reciprocal grant notificatio
 the link. NAT acceptance waits for both the direct connection and the stored reachable,
 address-free grant before testing the relay.
 
+## Isolated fast scenarios (T1)
+
+`scripts/mesh-fast/run.sh` owns independent three-server process meshes, private
+homes and OpenSSH servers, and a private Mutagen daemon per replica driver.
+Its scenario registry and coverage boundary are in `scripts/mesh-fast/README.md`.
+The initial config/bindings must converge before applying a test edit; otherwise
+startup identity reconciliation can supersede the revision being asserted.
+`mesh/MeshTiming.ts` scales source-only mesh scheduling; the server pack definition
+unconditionally disables scaling in production artifacts. Default-duration service
+and peer tests continue to run at scale one.
+
+A runner launched from a T3 thread must remove inherited `T3CODE_RUN_*` paths and
+shell hooks before starting fixtures. Otherwise even fixture Git invokes the installed
+server CLI shim, coupling the test environment to the owner’s runtime and adding a
+process launch to every Git call.
+
+### Fast and nightly acceptance (T1)
+
+[`scripts/mesh-fast/README.md`](../../scripts/mesh-fast/README.md) maps the realistic
+bed scenarios and CONCEPT §12 to isolated mini-meshes. `pnpm mesh:fast` owns all
+server state, SSH identities, daemons, private bridges and fault proxies; it never
+uses the shared bed. `MeshTiming.ts` scales test timers while normal production
+bundles ignore the knob. Native fixture builds are explicitly marked test builds.
+The runner reports wall time and JUnit and bounds startup separately from scenario
+concurrency. It deletes complete successful run directories, replacing only compact
+`latest/` reports; three failed runs retain their full diagnostics. Ownership and
+live-process checks protect unrelated paths during retention. Storage defaults to
+the short `/data/mf` path, including its tool cache.
+Use `MESH_FAST_ARTIFACTS_DIR` with a short path to move fixtures to a separate disk.
+Changing global `TMPDIR` can split IPC discovery between installed services and
+their clients; artifact storage must not change that rendezvous directory.
+`lifecycle.mjs` admits one runner per user/host and reclaims only labelled resources
+from a previous boot or dead runner. Boot identity plus process start time prevents
+PID reuse from targeting a live process; cleanup never signals old host PIDs. The
+same local command gates either configured builder host, capped at eight meshes,
+eight server starts and two container starts; host identity is recorded in results.
+`runner-reboot-recovery` proves real Docker cleanup, port reuse and preservation of
+active/foreign resources. An unowned bridge attachment aborts reclamation.
+Allocate all peer routes before taking server startup permits: a three-node mesh
+must not wait for a peer queued behind its own permit budget. Fresh bootstrap's
+private systemd unit also needs test timings and the archive mirror; inheriting
+only the initiating server's environment leaves it dependent on public downloads.
+
+The realistic inventory lives in `scripts/mesh-e2e/bed-config.sh`; shell bed
+helpers use neutral roles and resolve physical destinations through that file.
+`acceptance.sh` holds the shared bed lease for a realistic nightly run.
+`install-nightly.sh` installs the worker timer plus a separate controller SSH
+endpoint; `nightly.mjs` stores summaries and posts the stable `mesh-nightly` inbox
+issue only for failures. The installer never restarts an owner's T3 server.
+It rejects a mismatched worker before installing services. The realistic matrix
+and provider guards use the freshly built product checkout through
+`MESH_FAST_PRODUCT_ROOT`; native build failures cannot select an older installed
+resource monitor.
+
+Two fixture constraints matter: settle private machine claims before pairing,
+otherwise automatic collision reconciliation can supersede a test's config
+revision; reserve ports for the whole command, since releasing a port-zero socket
+can otherwise hand the same port to another concurrently starting fixture.
+
+C2 binding repair and rename can publish a newer config revision after an apply;
+its scenarios wait for the requested binding and equal documents, rather than
+requiring every observer to catch the intermediate revision. Supervisor specs
+are published by rename so fs.watch never parses a truncated JSON file.
+
+The browser runs inside its fixture's stable network namespace: creating and
+removing other Docker bridges otherwise causes Chromium ERR_NETWORK_CHANGED.
+Run the host-based web unit suite while local mesh networking is idle. Before
+pruning passed payloads, wait for the private Mutagen POSIX lock: its listener closes
+before final cache writes finish, so `daemon stop` alone is not an exit barrier.
+`flock` uses a different lock namespace on Linux; the fixture's C helper uses
+`F_SETLKW` so it actually waits for Mutagen's final cache writes.
+Fast R1 commands use real OpenSSH control connections to separate native process
+startup from SSH's three-second connection budget; the control connections and
+all remote process-tree fault assertions remain real. The realistic R1 variant
+uses fresh connections. Provider defaults are disabled in private fixture
+settings, and fake profiles or explicit nightly native profiles are enabled there.
+
+Ordinary fast servers execute the same bundle embedded in the native executable,
+using an immutable Node compilation cache; the native SEA must disable its own
+code cache to support dynamic imports. Bootstrap/rollout and the realistic suite
+retain native execution. Two-machine cases avoid an unused third server, while
+relay and collision cases retain their full topology. Full-mode tests run real,
+checksum-pinned pnpm offline and import the installed local dependency.
+
+Heartbeat polling must scale along with its deadline: a one-second polling tick
+can miss an accelerated heartbeat. `timing-heartbeat` proves this with a real idle
+cutoff above the scaled heartbeat period that the old poller misses. Reading proxy metrics
+must not restart that cutoff; timeout listeners are attached once per socket.
+
+The daemon crash fixture starts its captured foreground daemon before T3 clients
+exist. Stopping an auto-started daemon during capture races clients that can start
+another one. The fixture kills its captured lock owner during staging and verifies
+recovery retains one session.
+
+R1 and bootstrap service ports use the same command-wide allocator as sshd and
+server ports. Probing a free host port separately can select a port already in use
+inside a fixture container, including its private sshd port.
+
+A private SSH HOME does not change sshd's initial working directory for a host
+user. The fixture's forced command enters that private home before running SSH
+or SFTP commands; `replica-ssh` asserts both cwd and HOME through managed routes.
+Bootstrap systemd uses its own cgroup namespace without mounting host cgroups.
+
+A convergence barrier accepts a tombstone collected on every peer. It still
+rejects a missing live write, an older resurrection, or divergent equal clocks.
+The preceding release can expose an epoch-zero migration tombstone while current
+peers collect it; requiring its physical retention creates a false failure.
+Harness OAuth requests share the normal RPC deadline, while the command's global
+wall budget remains authoritative under concurrent authentication work.
+
+Cold Mutagen installation uses a private mirror of the original pinned archive
+in fast tests. The real installer still verifies its digest, extracts the tools
+and completes synchronization. The loopback-only asset override is unavailable
+in production bundles and non-test source execution; nightly retains the public
+release URL. This keeps parallel cold installs independent of GitHub throughput.
+
+Daemon crash evidence reads the captured process's own `fdinfo` lock record for
+its exact private lock path, then kills that PID during real staging. A global
+`/proc/locks` scan can race unrelated lock churn and is unnecessary for ownership.
+
+Native rollout fixtures build their two versions concurrently in independent
+source snapshots, then discard those snapshots after extracting self-contained
+archives. Source-dependent preparation stays inside the agreed six-minute wall budget.
+
+Realistic C2/F1 wrappers retain the runner's short temporary paths. Putting
+Mutagen homes under nested nightly result directories exceeds Unix socket path
+limits; the wrapper's persistent suite log records each private artifact root.
+
 ## X1 upgrade regressions
 
 Client layout snapshot merges canonicalize legacy project keys before materialization, including
@@ -864,6 +992,12 @@ before pausing. Keep that intent when publishing errors. After an interruption t
 and resumes only that marked session, then scans again; an unmarked pause remains intentional.
 Clearing intent before resume completes can strand the copy after a crash. Legacy whole-object
 settings writes leave replica diagnostics to the servers, so older clients cannot erase this intent.
+
+The realistic bed reads its physical infrastructure from ignored local.env.
+The nightly installer retains legacy seeds in private persistent storage.
+The fast lifecycle case cancels a container before node readiness; ownership is
+recorded at spawn, so cancellation cannot lose containers awaiting descriptors.
+Conflict tests await the persisted resolution intent clearing before user pauses.
 
 ## Security boundaries
 
@@ -938,3 +1072,11 @@ The OTA publisher writes the signed native-upgrade payload to `catalog.nativeUpd
 certificate and update origin; `verified-apk.ts` hashes the cached file and grants the Android
 installer read-only access. Legacy unsigned URLs produce no download action. Desktop Settings ›
 About can return from the reduced server UI to trusted local settings without exposing credentials.
+
+T1 integration with the identity migration pairs the actual previous release
+before upgrading one peer; new unbound old clients remain refused. Bootstrap
+fixtures now use private HTTPS trust and pin both host keys and runtime hashes.
+Future-row quarantine must also recover the saved HLC from retained valid rows:
+otherwise the bounded clock refuses every startup write after clock correction.
+Heartbeat scheduling caps a pending-pong wait at the next ping interval, since
+an asynchronous pong can shorten a deadline after its sleep was scheduled.

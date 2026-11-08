@@ -62,15 +62,9 @@ if command -v rustup >/dev/null 2>&1; then
   newest_tc="$(rustup toolchain list 2>/dev/null | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1 || true)"
   [ -n "$newest_tc" ] && CARGO=(cargo "+$newest_tc")
 fi
-if (cd "$BUILD_DIR" && "${CARGO[@]}" build --locked --release --manifest-path native/resource-monitor/Cargo.toml); then
-  cp "${CARGO_TARGET_DIR:-$BUILD_DIR/native/resource-monitor/target}/release/t3-resource-monitor" \
-    "$ARTIFACTS_DIR/resource-monitor/linux-x64/t3-resource-monitor"
-else
-  warn "cargo build failed; falling back to an already-installed resource monitor"
-  fallback="$(ls -1d "$HOME"/.t3-sidebar-server/runtime/versions/*/resource-monitor/linux-x64/t3-resource-monitor 2>/dev/null | sort -V | tail -1 || true)"
-  [ -n "$fallback" ] || die "no resource monitor to package"
-  cp "$fallback" "$ARTIFACTS_DIR/resource-monitor/linux-x64/t3-resource-monitor"
-fi
+(cd "$BUILD_DIR" && "${CARGO[@]}" build --locked --release --manifest-path native/resource-monitor/Cargo.toml)
+cp "${CARGO_TARGET_DIR:-$BUILD_DIR/native/resource-monitor/target}/release/t3-resource-monitor" \
+  "$ARTIFACTS_DIR/resource-monitor/linux-x64/t3-resource-monitor"
 
 SERVER_VERSION="$(jq -r .version "$BUILD_DIR/apps/server/package.json")"
 BUILD_VERSION="${SERVER_VERSION}-mesh.${COMMIT_SHORT}"

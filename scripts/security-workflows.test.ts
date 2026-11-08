@@ -1,5 +1,6 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Reads raw workflow policy without starting an Effect runtime.
 import * as NodeFS from "node:fs";
-import { expect, it } from "vitest";
+import { expect, it } from "vite-plus/test";
 
 const workflow = (name: string) =>
   NodeFS.readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8");

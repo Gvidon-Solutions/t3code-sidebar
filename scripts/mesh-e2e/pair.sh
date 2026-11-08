@@ -39,8 +39,8 @@ mint_nodeA() {
 
 mint_nodeB() {
   local label=$1 out token
-  out="$(nodeB_ssh "~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 pair \
-    --base-dir ~/.t3-sidebar-server --ttl $TTL --label '$label'" 2>&1)" || {
+  out="$(nodeB_ssh "'$NODE_B_RUNTIME_ROOT/$BUILD_VERSION/t3' pair \
+    --base-dir '$NODE_B_BASE_DIR' --ttl $TTL --label '$label'" 2>&1)" || {
     printf '%s\n' "$out" >&2
     return 1
   }

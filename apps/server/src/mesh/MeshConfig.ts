@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import type { MeshVersionUpdateInput } from "@t3tools/contracts";
 import {
   MeshConfigDocument,
@@ -269,7 +270,7 @@ export const layer = Layer.effect(
       Stream.changesWith((a, b) => a.signature === b.signature),
       Stream.mapEffect(() => current),
     );
-    const retries = Stream.fromSchedule(Schedule.spaced("30 seconds")).pipe(
+    const retries = Stream.fromSchedule(Schedule.spaced(meshMillis(30_000))).pipe(
       Stream.filterEffect(() =>
         SubscriptionRef.get(statuses).pipe(
           Effect.map((items) => items.some((item) => item.state === "failed")),

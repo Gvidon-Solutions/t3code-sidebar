@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import { keys } from "@t3tools/shared/meshLayout";
 import { cliArchiveFileName, cliArchivePlatformKey } from "@t3tools/shared/cliRelease";
 import * as DateTime from "effect/DateTime";
@@ -75,7 +76,7 @@ export const layer = Layer.effect(
     const links = yield* PeerLinks;
     const archive = yield* MeshRuntimeArchive;
     const credentials = new Map<string, { credential: BootstrapCredential; expiresAt: number }>();
-    yield* Stream.fromSchedule(Schedule.spaced("1 minute")).pipe(
+    yield* Stream.fromSchedule(Schedule.spaced(meshMillis(60_000))).pipe(
       Stream.runForEach(() =>
         Effect.gen(function* () {
           const now = DateTime.toEpochMillis(yield* DateTime.now);

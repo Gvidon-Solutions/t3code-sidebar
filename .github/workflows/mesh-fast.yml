@@ -1,0 +1,56 @@
+name: Isolated mesh scenarios
+on:
+  workflow_dispatch:
+  push:
+    branches: [ws]
+  pull_request:
+    branches: [ws]
+jobs:
+  mesh-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MESH_FAST_ARTIFACTS_DIR: /data/mf
+      MESH_FAST_MUTAGEN_CACHE: /data/mf/tools
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26.12.1"
+          cache: pnpm
+      - run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - run: sudo apt-get update && sudo apt-get install -y openssh-server patchelf && sudo mkdir -p /run/sshd
+      - run: sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /data/mf
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: |
+            /data/mf/tools/mutagen*
+            /data/mf/tools/browsers
+            /data/mf/tools/previous-*
+            /data/mf/tools/toolchain
+            native/resource-monitor/target
+          key: mesh-fast-tools-v3-${{ runner.os }}-${{ hashFiles('native/resource-monitor/Cargo.lock', 'scripts/mesh-fast/previous.mjs') }}
+      - run: scripts/mesh-fast/setup.sh
+      - id: mesh
+        run: pnpm mesh:fast --jobs 2 --budget-seconds 2700
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && steps.mesh.outputs.artifacts != '' }}
+        with:
+          name: mesh-fast-results
+          path: |
+            ${{ steps.mesh.outputs.artifacts }}/summary.json
+            ${{ steps.mesh.outputs.artifacts }}/runner.json
+            ${{ steps.mesh.outputs.artifacts }}/recovery.json
+            ${{ steps.mesh.outputs.artifacts }}/retention.json
+            ${{ steps.mesh.outputs.artifacts }}/preparation.json
+            ${{ steps.mesh.outputs.artifacts }}/junit.xml
+            ${{ steps.mesh.outputs.artifacts }}/failure.txt
+            ${{ steps.mesh.outputs.artifacts }}/*/failure.txt
+            ${{ steps.mesh.outputs.artifacts }}/*/recovery-proof.json
+            ${{ steps.mesh.outputs.artifacts }}/*/*.log
+            ${{ steps.mesh.outputs.artifacts }}/*/*/*.log
+            ${{ steps.mesh.outputs.artifacts }}/*/phases.jsonl
+            ${{ steps.mesh.outputs.artifacts }}/*/children.jsonl
+            ${{ steps.mesh.outputs.artifacts }}/*/artifacts/shots/*

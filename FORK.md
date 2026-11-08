@@ -109,6 +109,31 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — T1 bounded host admission and reboot recovery
+
+Fast acceptance uses the configured builder host with an eight-mesh default,
+two simultaneous container boots and bounded native/Mutagen workers. A kernel
+admission lock prevents overlapping gates; ownership labels distinguish boots
+and PID generations so a later run safely reclaims abandoned Docker containers,
+bridges and published ports. Active and foreign resources remain intact. Host
+identity and recovery evidence accompany timings. Implementation and real
+subprocess/Docker proofs live in `scripts/mesh-fast/{lifecycle,recovery}.mjs`,
+`lifecycle.test.ts` and the `runner-reboot-recovery` scenario.
+Fresh bootstrap units use the private pinned Mutagen mirror and assert their
+test environment. Measured long scenarios start earlier to avoid a slow final wave.
+The agreed fast gate ceiling is six minutes. Native preparation overlaps web and
+server builds and records cache-build phases. Fixture storage can use a separate
+disk via `MESH_FAST_ARTIFACTS_DIR` without changing service/CLI IPC paths; nested
+recovery verifies the selected directory and deletion after success. The runner
+defaults to `/data/mf`, removes successful run directories itself, and retains
+only compact latest reports plus the last three failed runs with ownership guards.
+Paused supervisors close their
+watchers and reject late restarts; fast cleanup removes only marked payloads and
+preserves external symlink targets. The paused-process regression fails before
+the watcher fix and passes afterward. F2 integration uses pinned HTTPS/bootstrap
+trust and upgrades an already-paired previous release. Focused regressions cover
+clock correction after quarantine and asynchronous-pong heartbeat scheduling.
+
 ### 2026-11-08 — R2 legacy release transition
 
 - **What.** Private delivery can upgrade a released server that predates admission drain.
@@ -1801,6 +1826,20 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   so replacing a connection cannot terminate the server with an unhandled Promise rejection.
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.
+
+### 2026-11-08 — T1 fast mesh acceptance and realistic nightly suite
+
+- **What.** Ports the bed rounds and CONCEPT §12 into isolated fault, replica,
+  crash, run, fork, configuration, bootstrap, rollout and browser scenarios.
+  One command reports each result, wall time and JUnit, retaining failure evidence.
+- **How.** Private homes, sshd, Mutagen daemons, bridges and fault proxies; a
+  production-guarded timer multiplier; deterministic ACP profiles for fast turns.
+  Real provider turns remain nightly. A single bed inventory feeds the realistic
+  wrapper, with a worker user timer and failure-only summary/inbox reporting.
+  Product tests use neutral machine fixtures and shared branding constants.
+- **Where.** Coverage and operation: `scripts/mesh-fast/README.md`; timers:
+  `apps/server/src/mesh/MeshTiming.ts`; nightly:
+  `scripts/mesh-e2e/{acceptance,install-nightly}.sh`; CI: `mesh-fast.yml`.
 
 ### 2026-11-07 — X1 post-release upgrade fixes
 

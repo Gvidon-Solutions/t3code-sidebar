@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import releaseFixture from "./testFixtures/cliRelease.json" with { type: "json" };
 
 import {
   cliReleaseAssetUrl,
@@ -11,10 +12,8 @@ import {
 
 describe("cliRelease", () => {
   it("uses the fork release repository and refuses insecure download overrides", () => {
-    expect(cliReleaseAssetUrl("1.2.3", "runtime.tar.gz")).toBe(
-      "https://github.com/Gvidon-Solutions/t3code-sidebar/releases/download/v1.2.3/runtime.tar.gz",
-    );
-    expect(cliReleaseIndexPageUrl(1)).toContain("repos/Gvidon-Solutions/t3code-sidebar/releases");
+    expect(cliReleaseAssetUrl("1.2.3", "runtime.tar.gz")).toBe(releaseFixture.assetUrl);
+    expect(cliReleaseIndexPageUrl(1)).toContain(releaseFixture.indexPath);
     for (const base of [
       "http://releases.example/download",
       "file:///tmp/runtime",

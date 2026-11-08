@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import { meshRetryDelay } from "./retryBackoff.ts";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -507,7 +508,7 @@ export const layer = Layer.effect(
             filter: (event) => "aggregateKind" in event && event.aggregateKind === "project",
           }),
           1000,
-          "200 millis",
+          Duration.millis(meshMillis(200)),
         ),
         () => push,
       ).pipe(
@@ -518,12 +519,16 @@ export const layer = Layer.effect(
     const changes = Option.isSome(directory)
       ? Stream.merge(mesh.changes, directory.value.changes)
       : mesh.changes;
-    yield* Stream.runForEach(Stream.groupedWithin(changes, 1000, "200 millis"), () =>
-      push.pipe(Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause))),
+    yield* Stream.runForEach(
+      Stream.groupedWithin(changes, 1000, Duration.millis(meshMillis(200))),
+      () =>
+        push.pipe(
+          Effect.catch((cause) => Effect.logError("Mesh change replication failed", cause)),
+        ),
     ).pipe(Effect.forkScoped);
     yield* runSync().pipe(
       Effect.catch((cause) => Effect.logError("Mesh periodic replication failed", cause)),
-      Effect.repeat(Schedule.spaced(Duration.seconds(60))),
+      Effect.repeat(Schedule.spaced(Duration.millis(meshMillis(60_000)))),
       Effect.forkScoped,
     );
     return MeshReplicator.of({ exchange, sync, status });

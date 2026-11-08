@@ -125,7 +125,7 @@ transfer_checksum() {
  [ "$expected" = "$actual" ] && [ "$(vexec stat -c %s "$VPATH/round2-transfer.bin")" = 134217728 ]
 }
 probe a-transfer-checksum transfer_checksum
-probe a-installer vexec sh -c 'test "$(/home/t3/.t3/bin/mutagen version)" = 0.18.1 && sha256sum /home/t3/.t3/bin/mutagen' 
+probe a-installer vexec sh -c 'test "$(/home/t3/.t3/bin/mutagen version)" = 0.18.1 && sha256sum /home/t3/.t3/bin/mutagen'
 probe a-excludes vexec sh -c "test -f '$VPATH/README.md' && test ! -e '$VPATH/.git' && test ! -e '$VPATH/node_modules'"
 wait_edit() {
  local marker=$1 deadline=$((SECONDS+TIMEOUT))
@@ -136,7 +136,7 @@ wait_edit() {
  return 1
 }
 probe a-agent-edit wait_edit "$MARK-a"
-probe f-transfer-cleanup nodeB_ssh "rm -f '$NODE_B_DEMO_DIR/round2-transfer.bin'" 
+probe f-transfer-cleanup nodeB_ssh "rm -f '$NODE_B_DEMO_DIR/round2-transfer.bin'"
 probe b-cli-launch ctl nodeB new --project demo --on "$CLOUD_ENV" --agent codex --model gpt-6-luna --title "$MARK-b" "Use a local shell command in your current CLOUD replica directory to append the exact line $MARK-b to README.md. Mutagen syncs the edit to nodeB. Do not access the primary, request a link, run git, or create other files. Finish after making the local edit."
 probe b-agent-edit wait_edit "$MARK-b"
 # Reverse source endpoint runs through docker exec; no ssh daemon in the container.

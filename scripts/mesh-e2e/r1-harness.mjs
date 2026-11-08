@@ -8,7 +8,7 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeUtil from "node:util";
 const execute = NodeUtil.promisify(NodeChildProcess.execFile);
-const repo = NodePath.resolve(import.meta.dirname, "../..");
+import { productRoot as repo } from "../mesh-fast/paths.mjs";
 const codex = process.env.R1_CODEX_BINARY;
 const opencode = process.env.R1_OPENCODE_BINARY;
 NodeAssert.ok(

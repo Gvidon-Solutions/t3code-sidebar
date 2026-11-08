@@ -13,7 +13,7 @@ const setup = () => {
   const state = NodePath.join(root, "state");
   NodeFS.mkdirSync(bed, { recursive: true });
   NodeFS.mkdirSync(home, { recursive: true });
-  for (const name of ["lib.sh", "deploy.sh", "compose.yaml"])
+  for (const name of ["lib.sh", "bed-config.sh", "deploy.sh", "compose.yaml"])
     NodeFS.copyFileSync(NodePath.join(directory, name), NodePath.join(bed, name));
   const env = { PATH: "/usr/bin:/bin", HOME: home, MESH_E2E_STATE_DIR: state };
   return { root, bed, home, state, env };

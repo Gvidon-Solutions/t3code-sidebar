@@ -13,6 +13,7 @@ import { ReplicaError } from "@t3tools/contracts";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ProcessRunner from "../processRunner.ts";
+import { meshAssetUrl } from "../mesh/MeshTiming.ts";
 
 // https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/SHA256SUMS
 const checksums: Readonly<Record<string, string>> = {
@@ -60,7 +61,9 @@ const make = Effect.gen(function* () {
       });
     const archive = `mutagen_${target}_v0.18.1.tar.gz`;
     const response = yield* http
-      .get(`https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/${archive}`)
+      .get(
+        meshAssetUrl(`https://github.com/mutagen-io/mutagen/releases/download/v0.18.1/${archive}`),
+      )
       .pipe(Effect.timeout("30 seconds"));
     if (response.status !== 200)
       return yield* new ReplicaError({ reason: "mutagen", message: "Mutagen download failed." });

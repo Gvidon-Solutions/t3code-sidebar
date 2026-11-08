@@ -1,3 +1,4 @@
+import { meshMillis } from "./MeshTiming.ts";
 import { DeliveryAdmission } from "./DeliveryAdmission.ts";
 import * as Option from "effect/Option";
 import { MeshTrialFailureExit } from "../platform/ServerPlatform.ts";
@@ -464,8 +465,8 @@ const make = Effect.fn("MeshRollout.make")(function* (
       }
     });
     yield* check.pipe(
-      Effect.retry({ schedule: Schedule.spaced("500 millis"), times: 180 }),
-      Effect.timeout("2 minutes"),
+      Effect.retry({ schedule: Schedule.spaced(meshMillis(500)), times: 180 }),
+      Effect.timeout(meshMillis(120_000)),
     );
   }).pipe(
     Effect.mapError((error) =>
