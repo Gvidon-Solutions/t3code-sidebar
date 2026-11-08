@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   VOICE_THREAD_MODEL,
+  resolveComposerVoiceAvailability,
   resolveThreadVoiceAvailability,
   resolveVoiceThreadModelSelection,
 } from "./voiceAvailability";
@@ -57,5 +58,52 @@ describe("resolveVoiceThreadModelSelection", () => {
 
   it("is null without a voice provider", () => {
     expect(resolveVoiceThreadModelSelection(null, [providers[0]!])).toBeNull();
+  });
+});
+
+describe("resolveComposerVoiceAvailability", () => {
+  const remoteCodex = ProviderInstanceId.make("remote_codex");
+  const remoteProviders = [
+    { instanceId: remoteCodex, supportsVoice: true, enabled: true },
+  ] as unknown as ReadonlyArray<ServerProvider>;
+  const localProviders = [
+    { instanceId: claude, enabled: true },
+  ] as unknown as ReadonlyArray<ServerProvider>;
+
+  it("follows the provider that owns a thread on another machine", () => {
+    expect(
+      resolveComposerVoiceAvailability({
+        isServerThread: true,
+        threadProviderInstanceId: remoteCodex,
+        providers: remoteProviders,
+      }),
+    ).toEqual({ kind: "ready" });
+  });
+
+  it("hides voice on a remote thread whose provider there has none", () => {
+    expect(
+      resolveComposerVoiceAvailability({
+        isServerThread: true,
+        threadProviderInstanceId: claude,
+        providers: remoteProviders,
+      }),
+    ).toEqual({ kind: "unsupported" });
+  });
+
+  it("uses the draft target machine's providers, not this device's", () => {
+    expect(
+      resolveComposerVoiceAvailability({
+        isServerThread: false,
+        threadProviderInstanceId: null,
+        providers: remoteProviders,
+      }),
+    ).toEqual({ kind: "ready" });
+    expect(
+      resolveComposerVoiceAvailability({
+        isServerThread: false,
+        threadProviderInstanceId: null,
+        providers: localProviders,
+      }),
+    ).toEqual({ kind: "unsupported" });
   });
 });

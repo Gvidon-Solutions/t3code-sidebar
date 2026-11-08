@@ -203,6 +203,7 @@ import {
 } from "./ComposerAttachmentStrip";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
+import { ComposerVoiceToggle } from "./ComposerVoiceToggle";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
@@ -232,15 +233,13 @@ import { observeResize } from "~/lib/observeResize";
 
 const isEnvironmentRequestInvalidError = Schema.is(EnvironmentRequestInvalidError);
 import { toastManager } from "../ui/toast";
-import { AudioLinesIcon, BuildingIcon, PlayIcon } from "lucide-react";
+import { BuildingIcon, PlayIcon } from "lucide-react";
 import { Button } from "../ui/button";
-import { Toggle } from "../ui/toggle";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { getTerminalFocusOwner } from "../../lib/terminalFocus";
 import { useManagedPolicy } from "../../state/managedPolicy";
 import { useStartVoiceThread } from "../../voice/useStartVoiceThread";
-import { findVoiceProvider, resolveVoiceAvailability } from "../../voice/voiceAvailability";
+import { resolveComposerVoiceAvailability } from "../../voice/voiceAvailability";
 import {
   toggleThreadVoice,
   useVoicePhaseFor,
@@ -1150,11 +1149,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const voiceThread = activeThread ?? props.activeThreadShell ?? null;
   const voiceProviderInstanceId = voiceThread?.providerInstanceId ?? selectedInstanceId;
   const isServerThread = routeKind === "server";
-  const voiceAvailability = isServerThread
-    ? resolveVoiceAvailability(
-        providerStatuses.find((provider) => provider.instanceId === voiceProviderInstanceId),
-      )
-    : resolveVoiceAvailability(findVoiceProvider(providerStatuses));
+  const voiceAvailability = resolveComposerVoiceAvailability({
+    isServerThread,
+    threadProviderInstanceId: voiceProviderInstanceId,
+    providers: providerStatuses,
+  });
   const voicePhase = useVoicePhaseFor(routeThreadRef);
   const voiceEngaged = voicePhase !== "idle";
   const voiceElsewhere = useVoiceThreadRef() !== null && !voiceEngaged;
@@ -3591,27 +3590,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   }
                   className="flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-2"
                 >
-                  {voiceSupported ? (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Toggle
-                            variant="ghost"
-                            size="sm"
-                            pressed={voiceEngaged}
-                            onPointerDown={(event) => event.preventDefault()}
-                            onPressedChange={() => {
-                              toggleVoice();
-                            }}
-                            aria-label={voiceButtonLabel}
-                          />
-                        }
-                      >
-                        <AudioLinesIcon />
-                      </TooltipTrigger>
-                      <TooltipPopup>{voiceButtonLabel}</TooltipPopup>
-                    </Tooltip>
-                  ) : null}
+                  <ComposerVoiceToggle
+                    supported={voiceSupported}
+                    engaged={voiceEngaged}
+                    label={voiceButtonLabel}
+                    onToggle={toggleVoice}
+                  />
                   <div
                     ref={attachExpandedComposerControls}
                     data-chat-composer-controls="footer"

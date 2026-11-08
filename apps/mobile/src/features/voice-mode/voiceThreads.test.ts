@@ -1,5 +1,5 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import type { ModelSelection, ServerConfig } from "@t3tools/contracts";
+import { ProviderInstanceId, type ModelSelection, type ServerConfig } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { pickTalkProject, resolveVoiceModelSelection } from "./voiceThreads";
@@ -95,5 +95,17 @@ describe("pickTalkProject", () => {
         canTalkIn,
       }),
     ).toBeNull();
+  });
+});
+
+describe("voice on another machine", () => {
+  it("uses the target machine's catalog for a draft", () => {
+    const remote = config(provider("codex", { voice: true, models: ["gpt-6-astra"] }));
+    const selection = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6-astra" };
+    expect(resolveVoiceModelSelection(remote, selection, null)).toEqual(selection);
+  });
+
+  it("hides voice when the target machine has no voice provider", () => {
+    expect(resolveVoiceModelSelection(config(provider("claude")), null, null)).toBeNull();
   });
 });
