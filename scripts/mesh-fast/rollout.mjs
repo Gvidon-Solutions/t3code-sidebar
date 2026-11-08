@@ -4,6 +4,7 @@ import * as NodePath from "node:path";
 import * as NodeHttp from "node:http";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeURL from "node:url";
+import * as NodeEvents from "node:events";
 import { productRoot } from "./paths.mjs";
 const { installPublicRuntime, installSshRuntime } = await import(
   NodeURL.pathToFileURL(
@@ -106,29 +107,35 @@ export const rolloutScenarios = {
       fresh = "mesh-fast-bootstrap-" + process.pid + "-" + NodePath.basename(directory);
       await NodeFSP.mkdir(freshRoot);
       await NodeFSP.writeFile(NodePath.join(freshRoot, ".mesh-fast-node"), "bootstrap fixture\n");
-      await run("docker", [
-        "run",
-        "-d",
-        "--name",
-        fresh,
-        "--privileged",
-        "--cgroupns=private",
-        "--network",
-        mesh.network,
-        "--add-host",
-        "host.docker.internal:" + mesh.gateway,
-        "--tmpfs",
-        "/run",
-        "--tmpfs",
-        "/tmp",
-        "-v",
-        freshRoot + ":" + freshRoot,
-        "-p",
-        `127.0.0.1:${sshPort}:22`,
-        "-p",
-        `127.0.0.1:${apiPort}:${apiPort}`,
-        "mesh-fast-bootstrap:24",
-      ]);
+      const freshCreate = mesh.launchContainer(
+        [
+          "run",
+          "-d",
+          "--name",
+          fresh,
+          "--privileged",
+          "--cgroupns=private",
+          "--network",
+          mesh.network,
+          "--add-host",
+          "host.docker.internal:" + mesh.gateway,
+          "--tmpfs",
+          "/run",
+          "--tmpfs",
+          "/tmp",
+          "-v",
+          freshRoot + ":" + freshRoot,
+          "-p",
+          `127.0.0.1:${sshPort}:22`,
+          "-p",
+          `127.0.0.1:${apiPort}:${apiPort}`,
+          "mesh-fast-bootstrap:24",
+        ],
+        process.env,
+        NodePath.join(directory, "fresh-create.log"),
+      );
+      const [freshCode] = await NodeEvents.once(freshCreate, "close");
+      if (freshCode !== 0) throw Error("Fresh fixture container exited " + freshCode);
       await until(
         "fresh sshd and no T3/Node",
         () =>

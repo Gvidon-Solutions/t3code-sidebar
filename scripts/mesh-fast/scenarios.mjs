@@ -46,6 +46,50 @@ async function converged(nodes, expected) {
   );
 }
 export const scenarios = {
+  "runner-cancel-boot": async (directory) => {
+    const mesh = new MiniMesh(directory);
+    const spawned = new Promise((resolve) => {
+      mesh.onContainerSpawn = resolve;
+    });
+    let pending = true;
+    const startup = mesh.start(["studio"]).then(
+      () => {
+        pending = false;
+        return { started: true };
+      },
+      (error) => {
+        pending = false;
+        return { started: false, error: error.message };
+      },
+    );
+    try {
+      const container = await spawned;
+      NodeAssert.equal(pending, true);
+      NodeAssert.equal(mesh.nodes.length, 0);
+      await mesh.close();
+      const outcome = await startup;
+      NodeAssert.equal(outcome.started, false);
+      await NodeAssert.rejects(
+        run("docker", ["container", "inspect", container.name]),
+        /No such (object|container)/i,
+      );
+      await NodeAssert.rejects(
+        run("docker", ["network", "inspect", mesh.network]),
+        /No such network|network .* not found/i,
+      );
+      await NodeFSP.writeFile(
+        NodePath.join(directory, "cancelled-boot.json"),
+        JSON.stringify({
+          pid: container.child.pid,
+          container: container.name,
+          network: mesh.network,
+          outcome,
+        }),
+      );
+    } finally {
+      await mesh.close();
+    }
+  },
   ...bindingScenarios,
   ...forkScenarios,
   ...networkScenarios,

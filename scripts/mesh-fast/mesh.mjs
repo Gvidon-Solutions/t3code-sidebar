@@ -45,6 +45,7 @@ async function port() {
 export class MiniMesh {
   static active = new Set();
   children = [];
+  containers = [];
   beforeClose = [];
   nodes = [];
   constructor(directory) {
@@ -219,6 +220,16 @@ export class MiniMesh {
       await Promise.all(writes);
     });
     this.children.push({ child, closed, program });
+    return child;
+  }
+
+  launchContainer(args, env, log) {
+    const index = args.indexOf("--name");
+    if (index < 0 || !args[index + 1]) throw Error("Fixture containers require an owned name");
+    const child = this.launch("docker", args, env, log);
+    const spawned = { name: args[index + 1], child };
+    this.containers.push(spawned);
+    this.onContainerSpawn?.(spawned);
     return child;
   }
 
@@ -538,8 +549,7 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
           ],
         }),
       );
-      child = this.launch(
-        "docker",
+      child = this.launchContainer(
         [
           "run",
           "--init",
@@ -729,10 +739,29 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
     await settle(this.beforeClose.map((cleanup) => cleanup()));
     for (const { child, program } of this.children)
       if (program !== "docker" && child.exitCode === null) child.kill("SIGTERM");
+    const created = [];
     await settle(
-      this.nodes
-        .filter((node) => node.container)
-        .map((node) => run("docker", ["stop", "--time", "1", node.container])),
+      this.containers.map(async ({ name, child }) => {
+        const state = await until(
+          "owned container creation settles",
+          async () => {
+            try {
+              await run("docker", ["container", "inspect", name]);
+              return { exists: true };
+            } catch (error) {
+              if (!/No such (object|container)/i.test(error.message)) throw error;
+              return {
+                exists: false,
+                exited: child.exitCode !== null || child.signalCode !== null,
+              };
+            }
+          },
+          (value) => value.exists || value.exited,
+        );
+        if (!state.exists) return;
+        created.push(name);
+        await run("docker", ["stop", "--time", "1", name]);
+      }),
     );
     for (const { child } of this.children) if (child.exitCode === null) child.kill("SIGTERM");
     const timer = setTimeout(() => {
@@ -744,11 +773,7 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
     } finally {
       clearTimeout(timer);
     }
-    await settle(
-      this.nodes
-        .filter((node) => node.container)
-        .map((node) => run("docker", ["rm", node.container])),
-    );
+    await settle(created.map((name) => run("docker", ["rm", "-f", name])));
     if (this.networkCreated) {
       await until(
         "private container network released",
