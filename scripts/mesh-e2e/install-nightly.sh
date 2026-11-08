@@ -4,6 +4,17 @@ export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 . "$(dirname "$0")/lib.sh"
 worker_name=$(worker_ssh 'hostname -s')
 [ "$worker_name" = "$BED_NIGHTLY_HOST" ] || die "Nightly timer target is $worker_name, expected $BED_NIGHTLY_HOST"
+seed_source="${MESH_E2E_NIGHTLY_SEED_DIR:-$STATE_DIR/legacy}"
+seed_destination="$BED_NIGHTLY_ROOT/seed/legacy"
+for file in "$LEGACY_STUDIO_FILE" "$LEGACY_REMOTE_FILE"; do
+  [ -r "$seed_source/$file" ] || die "Nightly legacy seed missing: $seed_source/$file"
+done
+mkdir -p "$seed_destination"
+if [ "$(realpath "$seed_source")" != "$(realpath "$seed_destination")" ]; then
+  for file in "$LEGACY_STUDIO_FILE" "$LEGACY_REMOTE_FILE"; do
+    cp "$seed_source/$file" "$seed_destination/$file"
+  done
+fi
 private="$BED_NIGHTLY_ROOT/controller"
 mkdir -p "$private" "$HOME/.config/systemd/user"
 chmod 700 "$private"

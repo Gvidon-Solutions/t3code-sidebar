@@ -66,7 +66,9 @@ export RUSTUP_TOOLCHAIN=1.95.0
 "$MESH_DIR/build.sh" "${MESH_E2E_NIGHTLY_REF:-xdev}"
 export MESH_FAST_PRODUCT_ROOT="$MESH_E2E_BUILD_DIR"
 "$MESH_DIR/deploy.sh"
-"$MESH_DIR/tunnels.sh" up
+systemctl --user start "$STUDIO_TUNNEL_UNIT"
+worker_ssh "systemctl --user start $WORKER_TUNNEL_UNIT"
+"$MESH_DIR/tunnels.sh" status
 "$MESH_DIR/network-proxies.sh" up
 touch "$root/proxies-up"
 "$MESH_DIR/network-proxies.sh" block

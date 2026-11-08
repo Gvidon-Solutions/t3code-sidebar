@@ -893,3 +893,11 @@ before pausing. Keep that intent when publishing errors. After an interruption t
 and resumes only that marked session, then scans again; an unmarked pause remains intentional.
 Clearing intent before resume completes can strand the copy after a crash. Legacy whole-object
 settings writes leave replica diagnostics to the servers, so older clients cannot erase this intent.
+
+After X1, the active third bed node is a gor container with retained forwarding
+and provider egress. T1 keeps those routes in the committed recovered compose
+and inventory, captures legacy seeds into persistent private storage at install,
+and starts existing forwarding units rather than provisioning SSH again.
+The fast lifecycle case cancels a container before node readiness; ownership is
+recorded at spawn, so cancellation cannot lose containers awaiting descriptors.
+Conflict tests await the persisted resolution intent clearing before user pauses.

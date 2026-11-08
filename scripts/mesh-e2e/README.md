@@ -1,25 +1,14 @@
 # T3 Mesh E2E test bed
 
-Three T3 servers on one build of the fork. gor's **main** server is the first
-node (owner-approved in-place switch); gvidon's and the VPS's are isolated test
-servers. Nothing here touches gvidon `:3774` / `~/.t3-sidebar-server`, Operalia
-or the VPS `t3-ws` stack.
+The active X1 bed has an isolated studio server on the controller, a native worker
+server on gor, and a separate cloudbox container on gor. The original VPS copy is
+stopped. Physical destinations, profile paths, ports and forwarding units are
+defined in [bed-config.sh](bed-config.sh). The committed
+[recovered-compose.json](recovered-compose.json) preserves the relocated mounts,
+provider egress and required outbound loopback route. Builds and fast acceptance
+use their own independent infrastructure.
 
-```
-gvidon ──LAN──▶ gor          gvidon ──WAN──▶ VPS
-   │                                          │
-   └──────────────WAN────────────────────────▶┘
-
-gor ──WAN──▶ VPS             VPS ──ssh tunnel──▶ gor, gvidon
-```
-
-## What runs where
-
-| Machine                         | Server                                                 | Data                    | Port             | Runtime                                           |
-| ------------------------------- | ------------------------------------------------------ | ----------------------- | ---------------- | ------------------------------------------------- |
-| gor (`gor.local`, 192.168.1.10) | **main** systemd --user `t3code-sidebar.service`       | `~/.t3-sidebar-server`  | `127.0.0.1:3774` | `~/.t3-sidebar-server/runtime/versions/<version>` |
-| gvidon (this box)               | isolated systemd --user `t3-mesh-e2e-gv.service`       | `/tmp/t3-mesh-e2e-gv`   | `127.0.0.1:3795` | `~/.t3-mesh-e2e-gv-runtime/<version>`             |
-| VPS 152.89.244.57               | compose project `t3-mesh-e2e`, container `t3-mesh-e2e` | `/opt/t3-mesh-e2e/home` | `127.0.0.1:3791` | inside image `/opt/t3`                            |
+The original VPS layout described below remains rollback history.
 
 The VPS container is `uid 10001`, `cap_drop: ALL`, `no-new-privileges`, 2 GiB
 RAM, 2 CPUs, no `docker.sock`, loopback-only port. Its image is built from
@@ -543,7 +532,9 @@ legacy seed names and runtime roots come from that file. Override its environmen
 variables when using another bed. Fast tests have their own entirely private
 inventory and do not source this configuration.
 
-Run `scripts/mesh-e2e/install-nightly.sh` on the controller to install the nightly
+Run `MESH_E2E_NIGHTLY_SEED_DIR=/path/to/current/legacy scripts/mesh-e2e/install-nightly.sh`
+on the controller to capture the current legacy seed in persistent private storage
+and install the nightly
 user timer on the configured worker (gor). It also creates a separate controller
 sshd service using generated private keys and a forced probe/run command; it does
 not change the owner's SSH files or T3 service. No nightly timer is installed on
@@ -557,7 +548,9 @@ payloads. `MESH_FAST_PRODUCT_ROOT` points that matrix, CLI and native provider
 guards at the freshly built ref, so they test the same product as the shared bed.
 The installer checks the worker's hostname before writing either service.
 It waits five minutes when another stage holds the bed. It copies the
-existing legacy seed into its own state directory and uses its own nightly demo.
+captured legacy seed into its own state directory and uses its own nightly demo.
+It starts the retained forwarding units instead of rewriting their configuration
+or provisioning SSH files. The old temporary X1 presets are unnecessary at runtime.
 It neither takes over an active lease nor sends success notifications.
 
 Results are in `~/.local/share/t3-mesh-nightly/results/<UTC>-<pid>/` on the
