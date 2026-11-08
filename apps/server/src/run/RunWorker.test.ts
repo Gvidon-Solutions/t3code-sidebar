@@ -151,7 +151,18 @@ it.live("tracks a detached job through disconnect, live logs, list and process-g
         const payload = { action, namespace, root, cwd: root, ignores: [], ...extra };
         const child = NodeChildProcess.spawn(process.execPath, [
           "-e",
-          RUN_WORKER_SOURCE,
+          `
+(() => {
+const nativeTimeout = global.setTimeout;
+const nativeKill = process.kill.bind(process);
+const processes = require('node:child_process');
+const nativeSpawn = processes.spawn;
+let stopping = false, recorded = false;
+process.kill = (pid, signal) => { const result = nativeKill(pid, signal); if (signal === 'SIGTERM') stopping = true; return result; };
+processes.spawn = (command, ...args) => { if (command === 'taskkill') stopping = true; return nativeSpawn(command, ...args); };
+global.setTimeout = (callback, delay, ...args) => { if (stopping && !recorded) { recorded = true; require('node:fs').writeFileSync(${JSON.stringify(NodePath.join(root, "grace.json"))}, JSON.stringify(delay)); } return nativeTimeout(callback, delay, ...args); };
+})();
+` + RUN_WORKER_SOURCE,
           "--",
           Buffer.from(JSON.stringify(payload)).toString("base64"),
         ]);
@@ -173,6 +184,7 @@ it.live("tracks a detached job through disconnect, live logs, list and process-g
       let id: string | undefined;
       try {
         const started = await invoke("start", {
+          killGraceMs: 23456,
           args: [
             process.execPath,
             "-e",
@@ -216,6 +228,9 @@ it.live("tracks a detached job through disconnect, live logs, list and process-g
         });
         const logs = await following.result;
         await stop;
+        expect(JSON.parse(await NodeFSP.readFile(NodePath.join(root, "grace.json"), "utf8"))).toBe(
+          23456,
+        );
         expect(logs.at(-1)).toEqual({
           type: "done",
           code: platform === "win32" ? 1 : 143,

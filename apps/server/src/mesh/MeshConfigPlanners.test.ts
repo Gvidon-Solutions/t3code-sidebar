@@ -58,6 +58,7 @@ it.effect(
   "installs display and permission policy and recreates real sessions when ignores/mode change",
   () => {
     const h = makeReplicaHarness();
+    h.validation.flush = Effect.sync(() => h.setSession({ status: "watching" }));
     const dependencies = Layer.effect(
       ReplicaRuntime,
       Effect.map(ProjectReplicaService, (service) => ({

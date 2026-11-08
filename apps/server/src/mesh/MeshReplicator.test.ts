@@ -1,3 +1,4 @@
+import { keys } from "@t3tools/shared/meshLayout";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import { CommandId, EventId } from "@t3tools/contracts";
 import * as PubSub from "effect/PubSub";
@@ -446,7 +447,7 @@ it.effect("restores a wiped store with a new generation without erasing survivin
               );
             if (
               input.environmentId === "laptop" &&
-              Object.hasOwn(decodeExchange(input.arguments).entries, "proj/example.title")
+              Object.hasOwn(decodeExchange(input.arguments).entries, keys.projectTitle("example"))
             )
               yield* Deferred.succeed(pushed, undefined);
             // oxlint-disable-next-line t3code/no-inline-schema-compile -- The peer selects the response schema per call.
