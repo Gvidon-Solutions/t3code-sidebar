@@ -41,9 +41,10 @@ it("names connected machines in a truncated error and lets the keyboard retry th
       <PendingReplicaRow config={DEFAULT_SIDEBAR_WORKSPACES_CONFIG} row={row} onRetry={retry} />
     </div>,
   );
-  const text = "Can't reach Primary machine from QA machine. Check the SSH route in Mesh config";
-  await userEvent.hover(screen.getByText(text));
-  await expect.element(page.getByText(text, { exact: true }).nth(1)).toBeVisible();
+  const short = "Can't reach Primary machine";
+  const detail = "Can't reach Primary machine from QA machine. Check the SSH route in Mesh config";
+  await userEvent.hover(screen.getByText(short));
+  await expect.element(page.getByText(detail, { exact: true }).first()).toBeVisible();
   await userEvent.tab();
   await expect
     .element(screen.getByRole("button", { name: "Retry replica on QA machine" }))

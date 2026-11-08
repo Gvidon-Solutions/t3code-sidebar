@@ -376,7 +376,6 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
       (_, count: string) =>
         `${count} ${count === "1" ? "conflict" : "conflicts"} resolved automatically`,
     );
-  const unreachable = `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Check the SSH route in Mesh config`;
   switch (input.state) {
     case "pending":
       return `Preparing ${input.targetLabel}…`;
@@ -391,10 +390,20 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
     case "paused":
       return "Paused";
     case "error":
-      return input.message && !/reach|route/iu.test(input.message) ? input.message : unreachable;
+      return input.message && !/reach|route/iu.test(input.message)
+        ? input.message
+        : `Can't reach ${input.sourceLabel}`;
     case "removed":
       return "Removed";
   }
+}
+
+/** The full reason for a replica row's tooltip when its one-line copy is shortened. */
+export function replicaStatusDetail(input: ReplicaStatusCopyInput): string {
+  if (input.state === "error" && (!input.message || /reach|route/iu.test(input.message))) {
+    return `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Check the SSH route in Mesh config`;
+  }
+  return replicaStatusCopy(input);
 }
 
 /** Fork: live replica streams and the retry command for one client runtime. */

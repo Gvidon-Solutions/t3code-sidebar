@@ -18,6 +18,7 @@ import {
   replicaStatusCopy,
   representationRow,
   replicaExecutionLabel,
+  replicaStatusDetail,
 } from "./replicas.ts";
 
 const primary = (environmentId: string, path = "/work/demo"): SidebarProjectMount => ({
@@ -318,6 +319,13 @@ describe("replicaStatusCopy", () => {
   it("turns unreachable errors into the Settings › Mesh route hint", () => {
     expect(
       replicaStatusCopy({
+        ...base,
+        state: "error",
+        message: "Boreal cannot reach atlas and back. Add an ssh route.",
+      }),
+    ).toBe("Can't reach atlas");
+    expect(
+      replicaStatusDetail({
         ...base,
         state: "error",
         message: "Boreal cannot reach atlas and back. Add an ssh route.",
