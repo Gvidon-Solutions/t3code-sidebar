@@ -101,23 +101,38 @@ it("shows replica lag and SSH route reasons while keeping absent reports unknown
       lag: { filesBehind: 3, bytesBehind: 64 },
     },
   ];
-  expect(meshMachineDetailRows(machine, config, live)).toEqual([
-    { label: "SSH to Studio", value: "Failed · Host key changed · checked 2026-11-05T00:01:00Z" },
-    { label: "Field notes", value: "watching · 3 files behind · 64 bytes behind" },
+  const now = Date.parse("2026-11-05T00:05:00Z");
+  expect(meshMachineDetailRows(machine, config, live, now)).toEqual([
+    {
+      label: "SSH to Studio",
+      value: "Failed · Host key changed · checked 4 min ago",
+      exact: "2026-11-05T00:01:00Z",
+    },
+    { label: "Field notes", value: "Sync running", exact: "" },
   ]);
   expect(
-    meshMachineDetailRows(machine, config, [
-      { ...live[0]!, state: "error", problems: ["Permission denied"] },
-    ])[1]?.value,
-  ).toContain("Permission denied");
-  expect(meshMachineDetailRows(machine, config, [])[1]?.value).toContain("Lag not reported");
+    meshMachineDetailRows(
+      machine,
+      config,
+      [{ ...live[0]!, state: "error", problems: ["Permission denied"] }],
+      now,
+    )[1]?.value,
+  ).toBe("Can't reach Studio");
+  expect(meshMachineDetailRows(machine, config, [], now)[1]?.value).toBe("Copying files");
   expect(
-    meshMachineDetailRows(machine, config, [
-      {
-        ...live[0]!,
-        state: "error",
-        message: "Cloudbox cannot reach Unknown machine (UN)",
-      },
-    ])[1]?.value,
-  ).toContain("Cloudbox cannot reach Unnamed machine");
+    meshMachineDetailRows(
+      machine,
+      config,
+      [{ ...live[0]!, state: "error", message: "Cloudbox cannot reach Unknown machine (UN)" }],
+      now,
+    )[1]?.value,
+  ).toBe("Can't reach Studio");
+  expect(
+    meshMachineDetailRows(
+      machine,
+      config,
+      [{ ...live[0]!, state: "watching", message: "Manual copy" }],
+      now,
+    )[1]?.value,
+  ).toBe("Not synced automatically");
 });

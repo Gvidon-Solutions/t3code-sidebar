@@ -47,6 +47,7 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { MachineTag } from "./MachineTag";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { meshProjectRows, meshSetupPrompt } from "@t3tools/client-runtime/state/mesh-machines";
 import {
@@ -415,7 +416,16 @@ export function MeshSettingsPanel() {
                   {meshMachineDetailRows(selected, config, live).map((row) => (
                     <div key={row.label}>
                       <dt>{row.label}</dt>
-                      <dd>{row.value}</dd>
+                      <dd>
+                        {row.exact ? (
+                          <Tooltip>
+                            <TooltipTrigger render={<span />}>{row.value}</TooltipTrigger>
+                            <TooltipPopup>{row.exact}</TooltipPopup>
+                          </Tooltip>
+                        ) : (
+                          row.value
+                        )}
+                      </dd>
                     </div>
                   ))}
                 </dl>

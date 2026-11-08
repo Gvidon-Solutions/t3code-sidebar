@@ -426,18 +426,6 @@ export async function linkMeshMachines<A>(input: {
   });
 }
 
-export function meshConnectionText(
-  machine: Pick<MeshMachine, "network">,
-  machines: readonly Pick<MeshMachine, "environmentId" | "label">[],
-): string | null {
-  const state = machine.network;
-  if (!state) return null;
-  if (state.state === "direct") return "Connected directly";
-  if (state.state === "relayed")
-    return `Via ${machines.find((item) => item.environmentId === state.via)?.label ?? "linked machine"}`;
-  return offlineMachineText(state.offlineSince);
-}
-
 export function partitionMeshMachines(
   machines: readonly MeshMachine[],
   config: Pick<SidebarWorkspacesConfig, "machines">,
