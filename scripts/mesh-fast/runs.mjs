@@ -4,21 +4,15 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeNet from "node:net";
 import * as NodeChildProcess from "node:child_process";
-import * as NodeURL from "node:url";
 import { fixture, project, place, content, mutagen, archive, until, rpc } from "./helpers.mjs";
 import { ssh } from "./network.mjs";
 import { allocatePort as port } from "./mesh.mjs";
+import { productRoot } from "./paths.mjs";
 function launch(node, cwd, args, extra = {}) {
   const direct = Boolean(extra.T3CODE_RUN_SSH_CONFIG);
   const child = NodeChildProcess.spawn(
     direct ? process.execPath : NodePath.join(node.base, "run/bin/t3"),
-    [
-      ...(direct
-        ? [NodeURL.fileURLToPath(new URL("../../apps/server/src/bin.ts", import.meta.url))]
-        : []),
-      "run",
-      ...args,
-    ],
+    [...(direct ? [NodePath.join(productRoot, "apps/server/src/bin.ts")] : []), "run", ...args],
     {
       cwd,
       env: { ...node.env, T3CODE_HOME: node.base, ...extra },
