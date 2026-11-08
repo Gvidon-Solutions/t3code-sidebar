@@ -69,6 +69,7 @@ describe("Desktop connected UI source", () => {
           expect(yield* ui.select(cloudbox)).toBe(false);
           for (const httpBaseUrl of [
             "https://intruder.example",
+            "http://studio.example",
             "file:///tmp/app",
             "https://user:secret@studio.example",
           ]) {

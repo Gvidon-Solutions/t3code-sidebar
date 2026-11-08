@@ -29,11 +29,13 @@ function isSnapShotEvent(value: unknown): value is DesktopSnapShotEvent {
   );
 }
 
-exposeClerkBridge({ passkeys: true });
+const trustedUi = location.host === "app" && ["t3code:", "t3code-dev:"].includes(location.protocol);
+if (trustedUi) exposeClerkBridge({ passkeys: true });
 
 // Runs before any app script reads localStorage. See DesktopLegacyLocalStorage.
 try {
-  const legacyItems: unknown = ipcRenderer.sendSync(IpcChannels.TAKE_LEGACY_LOCAL_STORAGE_CHANNEL);
+  const legacyItems: unknown =
+    trustedUi && ipcRenderer.sendSync(IpcChannels.TAKE_LEGACY_LOCAL_STORAGE_CHANNEL);
   if (typeof legacyItems === "object" && legacyItems !== null) {
     if (mergeLegacyLocalStorage(window.localStorage, legacyItems as Record<string, string>)) {
       void ipcRenderer.invoke(IpcChannels.COMPLETE_LEGACY_LOCAL_STORAGE_CHANNEL);
@@ -72,7 +74,7 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
   return result as Awaited<ReturnType<DesktopBridge["ensureSshEnvironment"]>>;
 }
 
-contextBridge.exposeInMainWorld("desktopBridge", {
+const desktopBridge = {
   ui: {
     select: (selection) => ipcRenderer.invoke(IpcChannels.UI_SELECT_CHANNEL, selection),
     getInfo: () => ipcRenderer.invoke(IpcChannels.UI_INFO_CHANNEL),
@@ -442,4 +444,14 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         ipcRenderer.removeListener(IpcChannels.PREVIEW_OPEN_LINK_CHANNEL, wrappedListener);
     },
   },
-} satisfies DesktopBridge);
+} satisfies DesktopBridge;
+if (trustedUi) contextBridge.exposeInMainWorld("desktopBridge", desktopBridge);
+else
+  contextBridge.exposeInMainWorld("desktopShell", {
+    origin: ipcRenderer.sendSync(IpcChannels.UI_SERVER_ORIGIN_CHANNEL),
+    ui: { getInfo: desktopBridge.ui.getInfo },
+    getAppBranding: desktopBridge.getAppBranding,
+    getClientPlatform: desktopBridge.getClientPlatform,
+    getSystemLocale: desktopBridge.getSystemLocale,
+    revealWindow: desktopBridge.revealWindow,
+  });

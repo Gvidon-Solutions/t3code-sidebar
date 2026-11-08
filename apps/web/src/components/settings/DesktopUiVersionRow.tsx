@@ -4,7 +4,7 @@ import { APP_VERSION } from "../../branding";
 import { SettingsRow } from "./settingsLayout";
 
 export function DesktopUiVersionRow() {
-  const ui = window.desktopBridge?.ui;
+  const ui = window.desktopBridge?.ui ?? window.desktopShell?.ui;
   const [source, setSource] = useState<DesktopUiInfo | null>(null);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- reads the Electron shell's actual loaded UI source and fallback status over IPC
   useEffect(() => {

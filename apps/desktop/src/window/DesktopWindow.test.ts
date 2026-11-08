@@ -1,3 +1,4 @@
+import { ElectronProtocol } from "../electron/ElectronProtocol.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
@@ -301,6 +302,7 @@ function layerTest(input: {
   } satisfies ElectronWindow.ElectronWindow["Service"]);
 
   return DesktopWindow.layer.pipe(
+    Layer.provide(Layer.mock(ElectronProtocol)({ trackWindow: () => Effect.void })),
     Layer.provide(
       Layer.mergeAll(
         layerDesktopAssets,
@@ -422,6 +424,7 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
     } satisfies ElectronWindow.ElectronWindow["Service"];
 
     const layer = DesktopWindow.layer.pipe(
+      Layer.provide(Layer.mock(ElectronProtocol)({ trackWindow: () => Effect.void })),
       Layer.provide(
         Layer.mergeAll(
           layerDesktopAssets,

@@ -34,6 +34,17 @@ describe("environmentBootstrap", () => {
     );
   });
 
+  it("uses the isolated server UI origin without a privileged desktop bridge", () => {
+    vi.stubGlobal("window", {
+      location: new URL("t3code://server-7/"),
+      desktopShell: { origin: "https://studio.example/" },
+    });
+    expect(readPrimaryEnvironmentTarget()?.target).toEqual({
+      httpBaseUrl: "https://studio.example/",
+      wsBaseUrl: "wss://studio.example/",
+    });
+  });
+
   it("keeps an uppercase wss scheme secure when deriving the http url", () => {
     vi.stubEnv("VITE_WS_URL", "WSS://remote.example.com");
 

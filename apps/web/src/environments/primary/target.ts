@@ -212,7 +212,7 @@ function resolveConfiguredPrimaryTarget(): PrimaryEnvironmentTarget | null {
 
 function resolveWindowOriginPrimaryTarget(): PrimaryEnvironmentTarget {
   const url = parseTargetUrl({
-    rawValue: window.location.origin,
+    rawValue: window.desktopShell?.origin ?? window.location.origin,
     source: "window-origin",
     urlKind: "http-base-url",
   });

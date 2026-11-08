@@ -17,6 +17,11 @@ vi.mock("electron", () => ({
 }));
 
 import * as ElectronProtocol from "./ElectronProtocol.ts";
+function navigation(url: string, init?: RequestInit) {
+  const request = new Request(url, init);
+  Object.defineProperty(request, "mode", { value: "navigate" });
+  return request;
+}
 
 const layerProtocol = ElectronProtocol.layer.pipe(Layer.provide(NodeServices.layer));
 
@@ -44,7 +49,13 @@ describe("ElectronProtocol", () => {
         clerkFrontendApiHostname: undefined,
       });
       const request = (pathname: string, init?: RequestInit) =>
-        Effect.promise(() => handler!(new Request(`t3code://app${pathname}`, init)));
+        Effect.promise(() =>
+          handler!(
+            init?.headers && new Headers(init.headers).get("accept")?.includes("text/html")
+              ? navigation(`t3code://app${pathname}`, init)
+              : new Request(`t3code://app${pathname}`, init),
+          ),
+        );
 
       const page = yield* request("/settings/connections");
       assert.equal(yield* Effect.promise(() => page.text()), "<html>app</html>");
@@ -206,7 +217,7 @@ describe("ElectronProtocol", () => {
       const page = () =>
         Effect.promise(() =>
           handler!(
-            new Request("t3code://app/", {
+            navigation("t3code://server-1/", {
               headers: {
                 accept: "text/html",
                 cookie: "local=secret",
@@ -218,7 +229,12 @@ describe("ElectronProtocol", () => {
       netFetchMock.mockImplementation(
         async () =>
           new Response("server-v1", {
-            headers: { "content-type": "text/html", "set-cookie": "remote=secret" },
+            headers: {
+              "content-type": "text/html",
+              "t3-desktop-ui-protocol": "1",
+              "t3-desktop-bridge": "reduced-1",
+              "set-cookie": "remote=secret",
+            },
           }),
       );
       const first = yield* page();
@@ -228,25 +244,61 @@ describe("ElectronProtocol", () => {
       assert.isFalse(forwardedHeaders.has("cookie"));
       assert.isFalse(forwardedHeaders.has("authorization"));
       assert.isNull(first.headers.get("set-cookie"));
+      assert.include(first.headers.get("content-security-policy")!, "object-src 'none'");
+      assert.include(
+        first.headers.get("content-security-policy")!,
+        "connect-src 'self' https://studio.example wss://studio.example",
+      );
+      assert.notInclude(
+        first.headers.get("content-security-policy")!,
+        "connect-src 'self' blob: http:",
+      );
       assert.isNull(first.headers.get("content-encoding"));
       assert.isNull(first.headers.get("content-length"));
       desiredOrigin = new URL("https://cloudbox.example/");
-      yield* Effect.promise(() => handler!(new Request("t3code://app/assets/old.js")));
+      yield* Effect.promise(() => handler!(new Request("t3code://server-1/assets/old.js")));
       assert.equal(
         netFetchMock.mock.calls.at(-1)?.[0],
         "https://studio.example/prefix/assets/old.js",
       );
       netFetchMock.mockImplementation(
-        async () => new Response("server-v2", { headers: { "content-type": "text/html" } }),
+        async () =>
+          new Response("server-v2", {
+            headers: {
+              "content-type": "text/html",
+              "t3-desktop-ui-protocol": "1",
+              "t3-desktop-bridge": "reduced-1",
+            },
+          }),
       );
+      yield* Effect.promise(() =>
+        handler!(
+          new Request("t3code://server-1/pretend-document", { headers: { accept: "text/html" } }),
+        ),
+      );
+      assert.equal(
+        netFetchMock.mock.calls.at(-1)?.[0],
+        "https://studio.example/prefix/pretend-document",
+      );
+      yield* Effect.promise(() => handler!(navigation("t3code://server-2/")));
+      assert.equal(yield* protocol.serverOriginFor(1), "https://studio.example/prefix/");
+      assert.equal(yield* protocol.serverOriginFor(2), "https://cloudbox.example/");
       const second = yield* page();
       assert.equal(yield* Effect.promise(() => second.text()), "server-v2");
       assert.equal(netFetchMock.mock.calls.at(-1)?.[0], "https://cloudbox.example/");
       netFetchMock.mockImplementation(async () => new Response("unavailable", { status: 503 }));
       const offline = yield* page();
-      assert.equal(yield* Effect.promise(() => offline.text()), "bundled");
+      assert.equal(offline.status, 302);
+      assert.include(offline.headers.get("location")!, "bundled=1");
       netFetchMock.mockImplementation(
-        async () => new Response("server-v3", { headers: { "content-type": "text/html" } }),
+        async () =>
+          new Response("server-v3", {
+            headers: {
+              "content-type": "text/html",
+              "t3-desktop-ui-protocol": "1",
+              "t3-desktop-bridge": "reduced-1",
+            },
+          }),
       );
       const recovered = yield* page();
       assert.equal(yield* Effect.promise(() => recovered.text()), "server-v3");

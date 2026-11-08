@@ -31,7 +31,8 @@ function desktopUiOrigin(value: string): string {
     url.username ||
     url.password ||
     url.search ||
-    url.hash
+    url.hash ||
+    (url.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
   )
     throw new Error("UI source must be an HTTP(S) base URL without credentials, query or fragment");
   return url.href.replace(/\/$/, "");
@@ -41,6 +42,7 @@ export class DesktopUi extends Context.Service<
   DesktopUi,
   {
     readonly selection: Effect.Effect<DesktopUiSelection | null>;
+    readonly connectionOrigins: Effect.Effect<ReadonlyArray<string>, DesktopUiError>;
     readonly select: (selection: DesktopUiSelection) => Effect.Effect<boolean, DesktopUiError>;
     readonly getInfo: Effect.Effect<DesktopUiInfo>;
     readonly recordSource: (origin: URL | null, reason?: string) => Effect.Effect<void>;
@@ -171,6 +173,26 @@ export const make = Effect.gen(function* () {
     ),
   );
   return DesktopUi.of({
+    connectionOrigins: Effect.gen(function* () {
+      const local = yield* exposure.backendConfig;
+      const raw = yield* catalog.get;
+      const doc = Option.isSome(raw) ? yield* decodeCatalog(raw.value) : null;
+      return [
+        ...new Set([
+          ...(local.port > 0 ? [local.httpBaseUrl.origin] : []),
+          ...(doc?.profiles.flatMap((entry) =>
+            entry._tag === "BearerConnectionProfile" &&
+            !doc.disabledEnvironmentIds.includes(entry.environmentId)
+              ? [new URL(desktopUiOrigin(entry.httpBaseUrl)).origin]
+              : [],
+          ) ?? []),
+        ]),
+      ];
+    }).pipe(
+      Effect.mapError(
+        (cause) => new DesktopUiError({ message: "Cannot resolve authorized UI origins", cause }),
+      ),
+    ),
     selection: restore.pipe(Effect.andThen(Ref.get(selected))),
     select,
     recordSource: Effect.fn("desktop.ui.recordSource")(function* (origin, reason) {

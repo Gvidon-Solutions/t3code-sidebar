@@ -9,7 +9,7 @@ export interface DesktopIpcInvokeEvent {
   readonly senderFrame?: { readonly url: string; readonly parent: unknown | null } | null;
 }
 
-export interface DesktopIpcSyncEvent {
+export interface DesktopIpcSyncEvent extends DesktopIpcInvokeEvent {
   returnValue: unknown;
 }
 
@@ -66,7 +66,7 @@ export interface DesktopIpcMethod<E, R> {
 
 export interface DesktopSyncIpcMethod<E, R> {
   readonly channel: string;
-  readonly handler: () => Effect.Effect<unknown, E, R>;
+  readonly handler: (event?: DesktopIpcInvokeEvent) => Effect.Effect<unknown, E, R>;
 }
 
 export class DesktopIpc extends Context.Service<
@@ -81,7 +81,10 @@ export class DesktopIpc extends Context.Service<
   }
 >()("@t3tools/desktop/ipc/DesktopIpc") {}
 
-export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
+export const make = (
+  ipcMain: DesktopIpcMain,
+  authorize: (event: DesktopIpcInvokeEvent, channel: string) => void,
+): DesktopIpc["Service"] =>
   DesktopIpc.of({
     handle: Effect.fn("desktop.ipc.registerInvoke")(function* <E, R>({
       channel,
@@ -98,6 +101,7 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
             ipcMain.handle(channel, (event, raw) =>
               runPromise(
                 Effect.gen(function* () {
+                  yield* Effect.try(() => authorize(event, channel));
                   yield* Effect.annotateCurrentSpan({ channel });
                   return yield* handler(raw, event);
                 }).pipe(Effect.annotateLogs({ channel }), Effect.withSpan("desktop.ipc.invoke")),
@@ -129,10 +133,11 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
           try: () => {
             ipcMain.removeAllListeners(channel);
             ipcMain.on(channel, (event) => {
+              authorize(event, channel);
               event.returnValue = runSync(
                 Effect.gen(function* () {
                   yield* Effect.annotateCurrentSpan({ channel });
-                  return yield* handler();
+                  return yield* handler(event);
                 }).pipe(
                   Effect.annotateLogs({ channel }),
                   Effect.withSpan("desktop.ipc.invokeSync"),
@@ -153,7 +158,10 @@ export const make = (ipcMain: DesktopIpcMain): DesktopIpc["Service"] =>
     }),
   });
 
-export const layer = (ipcMain: DesktopIpcMain) => Layer.succeed(DesktopIpc, make(ipcMain));
+export const layer = (
+  ipcMain: DesktopIpcMain,
+  authorize: (event: DesktopIpcInvokeEvent, channel: string) => void,
+) => Layer.succeed(DesktopIpc, make(ipcMain, authorize));
 
 export interface DesktopIpcMethodRegistration<
   Payload,
