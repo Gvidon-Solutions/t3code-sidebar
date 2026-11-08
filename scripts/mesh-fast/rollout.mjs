@@ -566,6 +566,14 @@ export const rolloutScenarios = {
         () => mcp(studio, "t3_mesh_status"),
         (value) => JSON.stringify(value).includes("Injected mesh rollout health failure"),
       );
+      for (const name of ["public-install", "ssh-install"]) {
+        const home = NodePath.join(directory, name);
+        await NodeFSP.mkdir(home, { recursive: true });
+        await NodeFSP.writeFile(
+          NodePath.join(home, ".mesh-fast-node"),
+          "runtime installer fixture\n",
+        );
+      }
       const publicRuntime = await installPublicRuntime({
         home: NodePath.join(directory, "public-install"),
         repository: "fixture",

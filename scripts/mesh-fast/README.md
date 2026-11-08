@@ -279,3 +279,7 @@ deterministic failure effect; production sources keep their ordinary layer.
 Adaptive heartbeat waits remain bounded by the next possible ping even when a
 pong arrives asynchronously. On restart, quarantining future rows also recovers
 the saved clock from retained valid rows, so clock correction permits startup.
+
+Successful public/SSH runtime installation fixtures carry the same ownership
+marker as server fixtures, so their installed executables are reclaimed after
+assertions. Failed installation state and all diagnostic logs are retained.
