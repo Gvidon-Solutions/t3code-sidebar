@@ -806,3 +806,8 @@ Heartbeat polling must scale along with its deadline: a one-second polling tick
 can miss an accelerated heartbeat. `timing-heartbeat` proves this with a real idle
 cutoff above the scaled heartbeat period that the old poller misses. Reading proxy metrics
 must not restart that cutoff; timeout listeners are attached once per socket.
+
+The daemon crash fixture starts its captured foreground daemon before T3 clients
+exist. Stopping an auto-started daemon during capture races clients that can start
+another one. The fixture kills its captured lock owner during staging and verifies
+recovery retains one session.

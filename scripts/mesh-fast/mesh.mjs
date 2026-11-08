@@ -325,6 +325,36 @@ const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(a
       "/usr/bin",
       "/bin",
     ].join(NodePath.delimiter);
+    let mutagenDaemon;
+    if (this.captureMutagen === name) {
+      mutagenDaemon = this.launch(
+        NodePath.join(base, "bin/mutagen"),
+        ["daemon", "run"],
+        {
+          ...env,
+          MUTAGEN_DATA_DIRECTORY: NodePath.join(base, "mutagen"),
+          MUTAGEN_SSH_PATH: NodePath.join(base, "mesh/ssh/bin"),
+        },
+        NodePath.join(root, "captured-daemon.log"),
+      );
+      const ready = await until(
+        "controlled daemon startup",
+        async () => {
+          if (mutagenDaemon.exitCode !== null || mutagenDaemon.signalCode !== null)
+            return { exited: true };
+          return new Promise((resolve, reject) => {
+            const socket = NodeNet.connect(NodePath.join(base, "mutagen/daemon/daemon.sock"));
+            socket.once("connect", () => {
+              socket.end();
+              resolve({ ready: true });
+            });
+            socket.once("error", reject);
+          });
+        },
+        (value) => value.exited || value.ready,
+      );
+      if (ready.exited) throw Error("Controlled Mutagen daemon exited before startup");
+    }
     if (inContainer) env.SHELL = "/bin/bash";
     if (this.skewable) {
       env.MESH_FAST_CLOCK_FILE = NodePath.join(home, "clock-offset");
@@ -604,6 +634,7 @@ const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(a
       receipt,
       container,
       inactiveProviders,
+      mutagenDaemon,
       cli: (args) =>
         run(
           useSource ? process.execPath : native,
