@@ -42,6 +42,7 @@ jobs:
             ${{ steps.mesh.outputs.artifacts }}/junit.xml
             ${{ steps.mesh.outputs.artifacts }}/failure.txt
             ${{ steps.mesh.outputs.artifacts }}/*/failure.txt
+            ${{ steps.mesh.outputs.artifacts }}/*/recovery-proof.json
             ${{ steps.mesh.outputs.artifacts }}/*/*.log
             ${{ steps.mesh.outputs.artifacts }}/*/*/*.log
             ${{ steps.mesh.outputs.artifacts }}/*/phases.jsonl

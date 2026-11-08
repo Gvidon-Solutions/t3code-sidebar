@@ -31,9 +31,11 @@ it("admits one host gate, releases a terminated owner, and caps the local defaul
   const exec = NodeUtil.promisify(NodeChildProcess.execFile);
   try {
     expect((await lines.next()).value).toBe("locked");
-    await expect(
-      exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], { env }),
-    ).rejects.toMatchObject({ code: 75, stderr: expect.stringContaining("host admission lock") });
+    for (const entry of ["scripts/mesh-fast/run.sh", "scripts/mesh-fast/setup.sh"])
+      await expect(exec("bash", [entry, "--host-info"], { env })).rejects.toMatchObject({
+        code: 75,
+        stderr: expect.stringContaining("host admission lock"),
+      });
     holder.kill("SIGKILL");
     await closed;
     const result = await exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], { env });

@@ -8,6 +8,7 @@ import { ownership, labelArgs, recoverStale } from "./lifecycle.mjs";
 import { run, until } from "./client.mjs";
 import { allocatePort } from "./mesh.mjs";
 import { containerBoot } from "./boot.mjs";
+import { harnessRoot } from "./paths.mjs";
 
 export async function recoveryScenario(directory) {
   const owner = await ownership();
@@ -68,7 +69,17 @@ export async function recoveryScenario(directory) {
       "--network",
       "none",
     ]);
-    const recovered = await recoverStale(owner);
+    const nextCommand = await run(
+      "bash",
+      [NodePath.join(harnessRoot, "scripts/mesh-fast/run.sh"), "--scenario", "runner-cancel-boot"],
+      { env: { ...process.env, MESH_FAST_STATE_DIR: NodePath.join(directory, "admission") } },
+    );
+    await NodeFSP.writeFile(NodePath.join(directory, "next-command.log"), nextCommand);
+    const nextArtifacts = nextCommand.match(/^Artifacts: (.+)$/m)?.[1];
+    NodeAssert.ok(nextArtifacts, "next real command produced its artifact directory");
+    const recovered = JSON.parse(
+      await NodeFSP.readFile(NodePath.join(nextArtifacts, "recovery.json"), "utf8"),
+    );
     NodeAssert.deepEqual(
       new Set(recovered.containers.map((c) => c.id)),
       new Set([abandoned, reused]),

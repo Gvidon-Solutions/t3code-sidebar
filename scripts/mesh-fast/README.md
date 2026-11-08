@@ -88,7 +88,7 @@ the actual hostname, boot identity, available CPUs and concurrency. Host names
 are evidence, never fixture identities. Treat gor's unexplained hard resets as
 an infrastructure fault; a successful gate does not establish hardware stability.
 
-One user-wide kernel lock admits a single runner across checkouts. A concurrent
+One user-wide kernel lock admits a single runner or provisioning command across checkouts. A concurrent
 command exits 75 before changing Docker resources. The lock releases on process
 death and reboot; no persistent PID lock can strand the next run.
 Every fixture container/bridge carries labels with a stable machine hash, UID,
@@ -104,7 +104,8 @@ reboot. Failed scenario directories remain available for diagnosis.
 `runner-reboot-recovery` exercises this with real running Docker services: a
 previous boot publishes a TCP port with `restart=always`, a reused current PID
 has a different start time, active and foreign containers coexist, and a foreign
-network attachment prevents cleanup. It then verifies removal, port rebinding
+network attachment prevents cleanup. A subsequent real `run.sh` command must
+perform startup recovery; the scenario then verifies removal, port rebinding
 and preservation. `lifecycle.test.ts` kills a real lock owner and proves admission
 is released, concurrent refusal and the eight-mesh default.
 
