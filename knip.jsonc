@@ -28,6 +28,7 @@
         // These fixture scripts are injected into a browser page by path.
         "fixtures/*/*.js",
         "knip-schemas.ts",
+        "resolve-nightly-release.ts",
         "delivery/builder.mjs",
         "delivery/e2e.mjs",
         "delivery/bed-setup.mjs",

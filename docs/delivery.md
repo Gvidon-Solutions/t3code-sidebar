@@ -229,3 +229,15 @@ For SSH accounts without permission to write the root runtime directory, configu
 `uploadDir` writable by that SSH account; the privileged target helper extracts from staging. The
 root Node launcher uses a private tool PATH that omits `gh`; `requireNoGh` makes the rollout
 runner assert that fact. Record the baseline source ref and build before running this helper.
+
+## Android signing boundary
+
+Before enabling Android releases, create the GitHub environment `android-release`, restrict its
+deployment branches to `ws`, and move all `T3_ANDROID_KEYSTORE_*` and `T3_ANDROID_KEY_ALIAS`
+secrets out of repository secrets into that environment. Require owner approval on that
+environment. The Android job also checks `github.ref == 'refs/heads/ws'`; dispatching a different
+ref cannot access signing credentials. Removing repository copies of these secrets is essential.
+
+`android-release.mjs restore` reads release metadata and downloads an APK after matching the
+build key, then verifies SHA-256. It writes only the local output directory and GitHub step
+outputs; it never uploads or changes release assets.
