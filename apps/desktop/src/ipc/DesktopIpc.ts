@@ -133,7 +133,13 @@ export const make = (
           try: () => {
             ipcMain.removeAllListeners(channel);
             ipcMain.on(channel, (event) => {
-              authorize(event, channel);
+              try {
+                authorize(event, channel);
+              } catch (cause) {
+                event.returnValue = null;
+                runSync(Effect.logWarning("Desktop synchronous IPC denied", { channel, cause }));
+                return;
+              }
               event.returnValue = runSync(
                 Effect.gen(function* () {
                   yield* Effect.annotateCurrentSpan({ channel });

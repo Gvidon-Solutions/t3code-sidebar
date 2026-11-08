@@ -1,3 +1,6 @@
+import { it as effectIt } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import { make, type DesktopIpcSyncListener } from "./DesktopIpc.ts";
 import { expect, it } from "vite-plus/test";
 import { authorizeDesktopIpc } from "./rendererTrust.ts";
 import * as Channels from "./channels.ts";
@@ -36,3 +39,40 @@ it("denies every privileged IPC channel to server UI, foreign origins and subfra
     ),
   ).toThrow();
 });
+
+effectIt.effect(
+  "rejects a hostile synchronous credential request without running the handler or crashing main",
+  () =>
+    Effect.gen(function* () {
+      let listener: DesktopIpcSyncListener | undefined;
+      let called = false;
+      const url = "t3code://server-7/";
+      const ipc = make(
+        {
+          removeHandler: () => undefined,
+          handle: () => undefined,
+          removeAllListeners: () => undefined,
+          on: (_channel, callback) => {
+            listener = callback;
+          },
+        },
+        (event, channel) => authorizeDesktopIpc(event, channel, url),
+      );
+      yield* ipc.handleSync({
+        channel: Channels.TAKE_LEGACY_LOCAL_STORAGE_CHANNEL,
+        handler: () =>
+          Effect.sync(() => {
+            called = true;
+            return { token: "private" };
+          }),
+      });
+      const event = {
+        sender: { id: 7 },
+        senderFrame: { url, parent: null },
+        returnValue: undefined as unknown,
+      };
+      expect(() => listener!(event)).not.toThrow();
+      expect(event.returnValue).toBeNull();
+      expect(called).toBe(false);
+    }).pipe(Effect.scoped),
+);
