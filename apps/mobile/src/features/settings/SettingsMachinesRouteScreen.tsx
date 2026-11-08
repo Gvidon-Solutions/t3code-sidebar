@@ -19,7 +19,8 @@ import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { AppText } from "../../components/ui/AppText";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
-import { meshProjectRows } from "@t3tools/client-runtime/state/mesh-machines";
+import { meshProjectRows, meshSetupPrompt } from "@t3tools/client-runtime/state/mesh-machines";
+import * as Linking from "expo-linking";
 
 export function SettingsMachinesRouteScreen() {
   const mesh = useMeshLayout();
@@ -42,6 +43,20 @@ export function SettingsMachinesRouteScreen() {
     machine.connectedHere ||
     machine.network?.state === "direct" ||
     machine.network?.state === "relayed";
+  const statusOf = (machine: (typeof machines)[number]) =>
+    online(machine)
+      ? machine.network?.state === "relayed"
+        ? "Online through another machine"
+        : "Online"
+      : (offlineMachineText(machine.lastSeenAt) ?? "Offline");
+  const setupPrompt = meshSetupPrompt(
+    machines.map((machine) => ({
+      label: machine.label,
+      online: online(machine),
+      detail: statusOf(machine),
+    })),
+    machines.filter((machine) => !online(machine)).map((machine) => `${machine.label} is offline`),
+  );
   return (
     <SettingsScreen title="Mesh">
       <ScreenScrollView contentContainerClassName="gap-3 px-5 py-4">
@@ -49,7 +64,20 @@ export function SettingsMachinesRouteScreen() {
           title={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter(online).length} online`}
         >
           <View className="flex-row flex-wrap gap-2 p-4">
-            <Button label="Link a machine" tone="primary" onPress={() => setLinkOpen(!linkOpen)} />
+            <Button
+              label="Set up the mesh with an agent"
+              tone="primary"
+              onPress={() =>
+                void Linking.openURL(
+                  Linking.createURL("new", { queryParams: { prompt: setupPrompt } }),
+                )
+              }
+            />
+            <Button
+              label="Link a machine"
+              tone="secondary"
+              onPress={() => setLinkOpen(!linkOpen)}
+            />
           </View>
           {linkOpen ? (
             <MeshLinkForm links={links} machines={machines} onDone={() => setLinkOpen(false)} />
@@ -95,15 +123,6 @@ export function SettingsMachinesRouteScreen() {
         {selected ? (
           <Sheet title={selected.label} onClose={() => setDetail(null)}>
             <ScreenScrollView contentContainerClassName="gap-3 p-5">
-              <AppText>
-                Reach path:{" "}
-                {meshConnectionText(selected, machines) ??
-                  (online(selected) ? "Connected directly" : "Offline")}
-              </AppText>
-              {selected.lastError ? (
-                <AppText accessibilityRole="alert">{selected.lastError}</AppText>
-              ) : null}
-              <AppText className="text-xs text-foreground-muted">Machine</AppText>
               <AppText>
                 {online(selected)
                   ? selected.network?.state === "relayed"

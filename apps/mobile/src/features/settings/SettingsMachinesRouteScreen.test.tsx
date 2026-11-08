@@ -17,6 +17,10 @@ vi.mock("../../components/ui/Button", () => ({
   ),
 }));
 vi.mock("../../state/meshReplicas", () => ({ useReplicaStatuses: () => [] }));
+vi.mock("expo-linking", () => ({
+  createURL: () => "t3code://new",
+  openURL: () => Promise.resolve(),
+}));
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
@@ -102,6 +106,7 @@ it("shows machine state and pairing without machine settings fields", () => {
     expect(container.textContent).toContain("Studio (linux · desk:3795)");
     expect(container.textContent).toContain("Studio (darwin · laptop:3795)");
     expect(container.querySelector("input")).toBeNull();
+    expect(container.textContent).toContain("Set up the mesh with an agent");
     act(() =>
       [...container.querySelectorAll("button")]
         .find((button) => button.textContent === "Link a machine")!

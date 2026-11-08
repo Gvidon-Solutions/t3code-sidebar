@@ -47,21 +47,23 @@ import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { MachineTag } from "./MachineTag";
-import { meshProjectRows } from "@t3tools/client-runtime/state/mesh-machines";
-import { linkSourceOptions, linkTargetOptions, meshSetupPrompt } from "./meshSettings.logic";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { meshProjectRows, meshSetupPrompt } from "@t3tools/client-runtime/state/mesh-machines";
+import {
+  linkSourceOptions,
+  linkTargetOptions,
+  meshUpdateProblems,
+  meshUpdatePrompt,
+  offlineMachinePrompt,
+  plainFailureText,
+  refusedLinkPrompt,
+  replicaProblemPrompt,
+  showsLinkSourcePicker,
+} from "./meshSettings.logic";
+import { AgentFixActions } from "./AgentFixActions";
 
 const failureToast = (title: string, description: string) =>
   toastManager.add(stackedThreadToast({ type: "error", title, description }));
-
-/** Error class names never reach a toast; only the sentence a person can act on. */
-function plainFailureText(failure: unknown): string {
-  const message =
-    typeof failure === "object" && failure !== null && "message" in failure
-      ? (failure as { readonly message?: unknown }).message
-      : undefined;
-  const text = typeof message === "string" && message.trim() ? message : String(failure);
-  return text.replace(/^[A-Za-z]*Error:\s*/u, "").trim() || "Try again.";
-}
 
 function usePermittedLinkSources(): ReadonlyArray<{
   readonly environmentId: EnvironmentId;
@@ -87,6 +89,7 @@ function LinkWithDialog(props: {
   const [url, setUrl] = useState("");
   const [pairingCode, setPairingCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [linkFailure, setLinkFailure] = useState<string | null>(null);
   const targetMachine = props.machines.find((machine) => machine.environmentId === target) ?? null;
   const targetEnvironmentId = (targetMachine?.environmentId as EnvironmentId | undefined) ?? null;
   const connected = usePreparedConnection(targetEnvironmentId);
@@ -109,6 +112,7 @@ function LinkWithDialog(props: {
   const submit = async () => {
     if (!ready || selectedSource === null) return;
     setBusy(true);
+    setLinkFailure(null);
     try {
       const result = await linkMeshMachines({
         source: selectedSource,
@@ -135,10 +139,14 @@ function LinkWithDialog(props: {
         reset();
         props.onOpenChange(false);
       } else if (!isAtomCommandInterrupted(result)) {
-        failureToast("Couldn't link", plainFailureText(squashAtomCommandFailure(result)));
+        const reason = plainFailureText(squashAtomCommandFailure(result));
+        setLinkFailure(reason);
+        failureToast("Couldn't link", reason);
       }
     } catch (error) {
-      failureToast("Couldn't link", plainFailureText(error));
+      const reason = plainFailureText(error);
+      setLinkFailure(reason);
+      failureToast("Couldn't link", reason);
     }
     setBusy(false);
   };
@@ -160,7 +168,7 @@ function LinkWithDialog(props: {
         </DialogHeader>
         <DialogPanel>
           <div className="space-y-4">
-            {props.sources.length > 1 ? (
+            {showsLinkSourcePicker(props.sources) ? (
               <label className="block space-y-1.5">
                 <span className="block text-xs font-medium text-foreground">Link from</span>
                 <Select
@@ -257,6 +265,22 @@ function LinkWithDialog(props: {
             )}
           </div>
         </DialogPanel>
+        {linkFailure ? (
+          <div className="px-6 pb-2">
+            <p role="alert" className="text-sm text-destructive">
+              Couldn't link: {linkFailure}
+            </p>
+            <AgentFixActions
+              prompt={refusedLinkPrompt({
+                source:
+                  props.sources.find((entry) => entry.environmentId === selectedSource)?.label ??
+                  "this machine",
+                target: targetMachine?.label ?? url,
+                reason: linkFailure,
+              })}
+            />
+          </div>
+        ) : null}
         <DialogFooter variant="bare">
           <DialogClose disabled={busy} render={<Button variant="outline" type="button" />}>
             Cancel
@@ -296,6 +320,7 @@ export function MeshSettingsPanel() {
         ? "Online through another machine"
         : "Online"
       : (offlineMachineText(machine.lastSeenAt) ?? "Offline");
+  const updateProblems = meshUpdateProblems(mesh.state?.snapshot?.document ?? {});
   const problems = machines
     .filter((machine) => !online(machine))
     .map((machine) => `${machine.label} is offline`);
@@ -360,22 +385,24 @@ export function MeshSettingsPanel() {
               <DialogDescription>{machineStatus(selected)}</DialogDescription>
             </DialogHeader>
             <DialogPanel>
+              {!online(selected) ? (
+                <div className="mb-3 space-y-2 rounded-lg border border-border/60 p-3">
+                  <p className="text-sm text-muted-foreground">
+                    {selected.label} · {machineStatus(selected)}
+                  </p>
+                  <AgentFixActions
+                    prompt={offlineMachinePrompt(selected.label, machineStatus(selected))}
+                  />
+                </div>
+              ) : null}
               <ul className="space-y-2 text-sm">
                 {meshProjectRows(config, selected.environmentId).map((project) => (
-                  <li key={project.key} className="flex items-center gap-2">
+                  <li key={project.key} className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 flex-1">{project.sentence}</span>
                     {project.canRetry ? (
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        onClick={() =>
-                          openAgent(
-                            `Fix the copy of ${project.title} on ${selected.label}. It cannot reach its main copy. Check the replica state and repair it, then report what you changed.`,
-                          )
-                        }
-                      >
-                        Fix with an agent
-                      </Button>
+                      <AgentFixActions
+                        prompt={replicaProblemPrompt(project.title, selected.label)}
+                      />
                     ) : null}
                   </li>
                 ))}
@@ -418,6 +445,27 @@ export function MeshSettingsPanel() {
             </div>
           ))}
         </details>
+      ) : null}
+      {updateProblems.length > 0 ? (
+        <SettingsSection title="Problems">
+          <ul className="space-y-3 px-4 py-3 text-sm">
+            {updateProblems.map((problem) => {
+              const label = machineDisplayOf(
+                config,
+                problem.environmentId,
+                problem.environmentId,
+              ).label;
+              return (
+                <li key={problem.revision} className="space-y-2">
+                  <p>
+                    Update to {problem.target} failed on {label}: {problem.reason}
+                  </p>
+                  <AgentFixActions prompt={meshUpdatePrompt(problem, label)} />
+                </li>
+              );
+            })}
+          </ul>
+        </SettingsSection>
       ) : null}
       <LinkWithDialog
         open={linkOpen}

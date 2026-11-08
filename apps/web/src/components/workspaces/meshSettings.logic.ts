@@ -45,29 +45,75 @@ export function shouldOfferConnect(machine: MeshMachine): boolean {
   return !machine.connectedHere && machine.urls.length > 0;
 }
 
-export interface MeshPromptMachine {
-  readonly label: string;
-  readonly online: boolean;
-  readonly detail?: string | null;
+/** Error class names and transport noise never reach a toast; only the sentence to act on. */
+export function plainFailureText(failure: unknown): string {
+  const message =
+    typeof failure === "object" && failure !== null && "message" in failure
+      ? (failure as { readonly message?: unknown }).message
+      : undefined;
+  const text = typeof message === "string" && message.trim() ? message : String(failure);
+  return text.replace(/^[A-Za-z]*Error:\s*/u, "").trim() || "Try again.";
 }
 
-/** A prepared request for the mesh setup thread: current state, problems and the controls. */
-export function meshSetupPrompt(
-  machines: ReadonlyArray<MeshPromptMachine>,
-  problems: ReadonlyArray<string> = [],
-): string {
-  const list = machines.map(
-    (machine) => `${machine.label} (${machine.online ? "online" : (machine.detail ?? "offline")})`,
-  );
+/** A single-machine client has nothing to choose, so the source picker stays hidden. */
+export function showsLinkSourcePicker(sources: ReadonlyArray<unknown>): boolean {
+  return sources.length > 1;
+}
+
+export interface MeshUpdateProblem {
+  readonly revision: string;
+  readonly environmentId: string;
+  readonly reason: string;
+  readonly target: string;
+}
+
+/** Failed mesh updates recorded by the rollout, shown as problems with an agent action. */
+export function meshUpdateProblems(
+  document: Readonly<Record<string, { readonly v: unknown }>>,
+): MeshUpdateProblem[] {
+  return Object.entries(document).flatMap(([key, entry]) => {
+    if (!key.startsWith("mesh.updateFailure/")) return [];
+    const value = entry.v;
+    if (typeof value !== "object" || value === null) return [];
+    const { environmentId, reason, target } = value as Record<string, unknown>;
+    if (typeof environmentId !== "string" || typeof reason !== "string") return [];
+    return [
+      {
+        revision: decodeURIComponent(key.slice("mesh.updateFailure/".length)),
+        environmentId,
+        reason,
+        target: typeof target === "string" ? target : "the new version",
+      },
+    ];
+  });
+}
+
+export function meshUpdatePrompt(problem: MeshUpdateProblem, machineLabel: string): string {
   return [
-    "Help me set up my T3 mesh.",
-    "",
-    `Machines: ${list.length > 0 ? list.join(", ") : "none yet"}.`,
-    problems.length > 0
-      ? `Problems:\n${problems.map((problem) => `- ${problem}`).join("\n")}`
-      : "No known problems.",
-    "",
-    "The desired state lives in one mesh config. You can read it with `t3ctl mesh config get`, preview with `t3ctl mesh config plan`, apply with `t3ctl mesh config apply`, and check reconciliation with `t3ctl mesh status`. The same tools are available as MCP `t3_mesh_config_get`, `t3_mesh_config_plan`, `t3_mesh_config_apply` and `t3_mesh_status`.",
-    "Ask me what I want the mesh to do, then plan it, show me the plan, and apply it once I agree.",
+    `The T3 update to ${problem.target} failed on ${machineLabel}.`,
+    `Reported reason: ${problem.reason}`,
+    "Check the mesh update status and the diagnostics for that machine, fix the cause, roll the update back if it is stuck, then apply a fresh mesh config revision and report what you changed.",
+  ].join("\n");
+}
+
+export function offlineMachinePrompt(machineLabel: string, status: string): string {
+  return [
+    `${machineLabel} is offline (${status}).`,
+    "Check why this machine cannot reach the mesh, restore its connection, and confirm its projects and copies reconcile again. Report what you changed.",
+  ].join("\n");
+}
+
+export function replicaProblemPrompt(projectTitle: string, machineLabel: string): string {
+  return `Fix the copy of ${projectTitle} on ${machineLabel}. It cannot reach its main copy. Check the replica state and repair it, then report what you changed.`;
+}
+
+export function refusedLinkPrompt(input: {
+  readonly source: string;
+  readonly target: string;
+  readonly reason: string;
+}): string {
+  return [
+    `Linking ${input.target} from ${input.source} failed: ${input.reason}`,
+    "Diagnose the pairing or connection problem, create a fresh pairing code if needed, link the machine, and confirm the mesh layout converges. Report what you changed.",
   ].join("\n");
 }

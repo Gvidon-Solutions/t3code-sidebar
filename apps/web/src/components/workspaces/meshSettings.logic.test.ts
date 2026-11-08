@@ -5,10 +5,13 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   linkSourceOptions,
   linkTargetOptions,
-  meshSetupPrompt,
+  meshUpdateProblems,
+  meshUpdatePrompt,
+  plainFailureText,
+  showsLinkSourcePicker,
   shouldOfferConnect,
 } from "./meshSettings.logic";
-import { meshProjectRows } from "@t3tools/client-runtime/state/mesh-machines";
+import { meshProjectRows, meshSetupPrompt } from "@t3tools/client-runtime/state/mesh-machines";
 
 const environment = (
   environmentId: string,
@@ -154,5 +157,39 @@ describe("meshProjectRows", () => {
         canRetry: true,
       },
     ]);
+  });
+});
+
+describe("mesh problem helpers", () => {
+  it("strips error class names from failure text", () => {
+    expect(
+      plainFailureText({ message: "PeerLinkError: That pairing code is wrong or expired." }),
+    ).toBe("That pairing code is wrong or expired.");
+    expect(plainFailureText(new Error("NetworkError: offline"))).toBe("offline");
+  });
+
+  it("hides the link source picker on a single-machine client", () => {
+    expect(showsLinkSourcePicker([{ environmentId: "a" }])).toBe(false);
+    expect(showsLinkSourcePicker([{ environmentId: "a" }, { environmentId: "b" }])).toBe(true);
+  });
+
+  it("lists failed updates from the layout with an agent prompt", () => {
+    const problems = meshUpdateProblems({
+      "mesh.updateFailure/r7": {
+        v: { environmentId: "cloudbox", reason: "health check failed", target: "0.1.7" },
+      },
+      "other/key": { v: { environmentId: "x", reason: "y" } },
+    });
+    expect(problems).toEqual([
+      {
+        revision: "r7",
+        environmentId: "cloudbox",
+        reason: "health check failed",
+        target: "0.1.7",
+      },
+    ]);
+    expect(meshUpdatePrompt(problems[0]!, "Cloudbox")).toContain(
+      "The T3 update to 0.1.7 failed on Cloudbox.",
+    );
   });
 });
