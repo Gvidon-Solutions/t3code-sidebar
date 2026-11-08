@@ -112,12 +112,21 @@ const mcp = async (node, name, args = {}) => {
       return value;
     };
     const pair = JSON.parse(
-      await node.cli(["auth", "pairing", "create", "--ttl", "10m", "--label", "B1-mcp", "--json"]),
+      await node.cli([
+        "auth",
+        "pairing",
+        "create",
+        "--ttl",
+        "10m",
+        "--label",
+        "mesh-fast-mcp",
+        "--json",
+      ]),
     );
     const meta = await json("/.well-known/oauth-protected-resource/mcp");
-    const redirect = "http://127.0.0.1:1/B1-callback";
+    const redirect = "http://127.0.0.1:1/mesh-fast-callback";
     const client = await json("/oauth/mcp/register", {
-      client_name: "B1-bed",
+      client_name: "mesh-fast-bed",
       redirect_uris: [redirect],
     });
     const verifier = NodeCrypto.randomBytes(32).toString("base64url");
@@ -160,12 +169,12 @@ const mcp = async (node, name, args = {}) => {
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
-        id: "B1-init",
+        id: "mesh-fast-init",
         method: "initialize",
         params: {
           protocolVersion: "2025-06-18",
           capabilities: {},
-          clientInfo: { name: "B1-bed", version: "1" },
+          clientInfo: { name: "mesh-fast-bed", version: "1" },
         },
       }),
     });
@@ -185,7 +194,7 @@ const mcp = async (node, name, args = {}) => {
     },
     body: JSON.stringify({
       jsonrpc: "2.0",
-      id: "B1",
+      id: "mesh-fast",
       method: "tools/call",
       params: { name, arguments: args },
     }),

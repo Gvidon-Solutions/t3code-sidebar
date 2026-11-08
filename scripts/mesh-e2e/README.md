@@ -35,6 +35,10 @@ Provision the container home for its image UID, use a private temporary director
 and provide Node 26 at the configured remote binary directory before deployment.
 Use a unique stage prefix and acquire the shared bed lock through the configured nodeB SSH
 profile before operating shared infrastructure; release it afterward. Keep other stages' data.
+`network-rounds.sh` derives a lock owner from `MESH_E2E_LOCK_OWNER` (default `mesh-network`)
+and passes `MESH_E2E_ROUND1_NAME`, `MESH_E2E_ROUND1_SCRATCH`, `MESH_E2E_ROUND2_NAME`,
+`MESH_E2E_DEMO_TITLE` and `MESH_E2E_ORPHAN_LABEL` to the round scripts; it no longer rewrites
+their text. Isolated daemons share `scripts/lib/managed-sshd.mjs` for their OpenSSH config.
 
 Live unit names, port 3774 and normal T3 state directories are rejected before deployment.
 `MESH_E2E_ALLOW_LIVE=1` is a separate explicit opt-in, never a deployment default or an

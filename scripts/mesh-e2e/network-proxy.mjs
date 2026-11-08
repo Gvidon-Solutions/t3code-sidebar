@@ -20,14 +20,14 @@ function refresh() {
   try {
     state = JSON.parse(NodeFS.readFileSync(stateFile, "utf8"));
   } catch (error) {
-    if (error.code !== "ENOENT") console.error("N1 proxy state:", error);
+    if (error.code !== "ENOENT") console.error("mesh network proxy state:", error);
   }
   if (state.cut) for (const socket of sockets) socket.destroy();
 }
 NodeFS.watchFile(stateFile, { interval: 200 }, refresh);
 refresh();
 const server = NodeHttp.createServer((request, response) => {
-  if (request.url === "/__N1_network") {
+  if (request.url === "/__mesh_network") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ ...counts, state, sockets: sockets.size }));
     return;
@@ -46,7 +46,7 @@ const server = NodeHttp.createServer((request, response) => {
     if (mcp) counts.refusedMcp++;
     if (peerMcp) counts.refusedPeerMcp++;
     response.writeHead(503, { "content-type": "text/plain" });
-    response.end("N1 injected network failure");
+    response.end("mesh network injected network failure");
     return;
   }
   const outgoing = NodeHttp.request(
@@ -121,7 +121,9 @@ server.on("upgrade", (request, socket, head) => {
   outgoing.on("error", () => socket.destroy());
   outgoing.end();
 });
-server.listen(Number(listen), host, () => console.log(`N1 proxy ${listen} -> loopback:${backend}`));
+server.listen(Number(listen), host, () =>
+  console.log(`mesh network proxy ${listen} -> loopback:${backend}`),
+);
 process.on("SIGTERM", () => {
   for (const socket of sockets) socket.destroy();
   server.close(() => process.exit(0));

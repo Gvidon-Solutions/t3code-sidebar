@@ -9,22 +9,23 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeUtil from "node:util";
 const execute = NodeUtil.promisify(NodeChildProcess.execFile);
 import { productRoot as repo } from "../mesh-fast/paths.mjs";
-const codex = process.env.R1_CODEX_BINARY;
-const opencode = process.env.R1_OPENCODE_BINARY;
+import { quote } from "../lib/shell.mjs";
+const codex = process.env.MESH_E2E_CODEX_BINARY;
+const opencode = process.env.MESH_E2E_OPENCODE_BINARY;
 NodeAssert.ok(
   codex && opencode,
-  "Set R1_CODEX_BINARY and R1_OPENCODE_BINARY to installed native executables",
+  "Set MESH_E2E_CODEX_BINARY and MESH_E2E_OPENCODE_BINARY to installed native executables",
 );
-const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "R1-harness-"));
+const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-harness-"));
 const home = NodePath.join(root, "home"),
   base = NodePath.join(root, "server"),
   replica = NodePath.join(root, "replica");
 let server;
 const threads = [];
 const evidence =
-  process.env.R1_HARNESS_EVIDENCE ||
-  NodePath.join(NodeOS.tmpdir(), `R1-harness-evidence-${NodeCrypto.randomUUID()}`);
-const quote = (value) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+  process.env.MESH_E2E_HARNESS_EVIDENCE ||
+  NodePath.join(NodeOS.tmpdir(), `mesh-harness-evidence-${NodeCrypto.randomUUID()}`);
+
 try {
   for (const directory of [
     home + "/.codex",
@@ -36,7 +37,7 @@ try {
     evidence,
   ])
     await NodeFSP.mkdir(directory, { recursive: true, mode: 0o700 });
-  const codexHome = process.env.R1_CODEX_HOME || NodePath.join(NodeOS.homedir(), ".codex");
+  const codexHome = process.env.MESH_E2E_CODEX_HOME || NodePath.join(NodeOS.homedir(), ".codex");
   for (const name of ["auth.json", "models_cache.json"]) {
     await NodeFSP.copyFile(NodePath.join(codexHome, name), NodePath.join(home, ".codex", name));
     await NodeFSP.chmod(NodePath.join(home, ".codex", name), 0o600);
@@ -46,7 +47,7 @@ try {
   });
   const auth = JSON.parse(
     await NodeFSP.readFile(
-      process.env.R1_OPENCODE_AUTH ||
+      process.env.MESH_E2E_OPENCODE_AUTH ||
         NodePath.join(NodeOS.homedir(), ".local/share/opencode/auth.json"),
       "utf8",
     ),
@@ -168,14 +169,14 @@ try {
   const tool = (name, args) => ctl(["tool", name, JSON.stringify(args)]);
   const project = await tool("t3_project_create", {
     workspaceRoot: replica,
-    title: "R1 Harness replica",
+    title: "Mesh harness replica",
   });
   const layout = await ctl(["rpc", "meshLayout.get", "{}"]),
     self = layout.environmentId;
   const logical =
     Object.entries(layout.config.projectMounts).find(([, reps]) =>
       reps.some((rep) => rep.projectId === project.id),
-    )?.[0] ?? `R1-harness-${NodeCrypto.randomUUID()}`;
+    )?.[0] ?? `mesh-harness-harness-${NodeCrypto.randomUUID()}`;
   let clock = Date.now();
   const entry = (v) => ({ v, h: `${clock++}.00000.${self}` });
   const primary = "cloud-primary";
@@ -185,7 +186,7 @@ try {
     JSON.stringify({
       entries: {
         ["machine/" + primary]: entry({ label: "Cloudbox", title: "Cloudbox", tag: "CB" }),
-        ["proj/" + encodeURIComponent(logical)]: entry({ title: "R1 Harness replica" }),
+        ["proj/" + encodeURIComponent(logical)]: entry({ title: "Mesh harness replica" }),
         ["rep/" + encodeURIComponent(logical) + "/" + self]: entry({
           environmentId: self,
           path: replica,
@@ -239,17 +240,17 @@ try {
   await tool("t3_mesh_config_apply", { doc, baseRevision: config.current.revision });
   await manifestReady;
   const models = {
-    codex: process.env.R1_CODEX_MODEL || "gpt-6-luna",
+    codex: process.env.MESH_E2E_CODEX_MODEL || "gpt-6-luna",
     opencode: "deepseek/deepseek-flash",
   };
   for (const provider of ["codex", "opencode"]) {
     const launch = await tool("t3_thread_launch", {
       projectId: project.id,
-      title: `R1 ${provider} lite shims`,
+      title: `Mesh harness ${provider} lite shims`,
       modelSelection: { instanceId: provider, model: models[provider] },
       runtimeMode: "full-access",
       message:
-        "This is an authorized integration test of lite-replica guards. The command names resolve to protective shims which must refuse with 127; the native git/npm binaries must never run. Exercising these refusals is the test, so execute both plain commands even though t3 run is normally correct for real work. Use your native shell tool to run plain git status and plain npm --version as two separate commands in the current directory. Do not use t3 run, SSH, absolute binary paths, or workarounds. Do not modify files or initialize git. After each command, capture its status with code=$? and print R1_EXIT=$code, then exit the shell with that code. Report both exact exit codes and both guard lines, then finish.",
+        "This is an authorized integration test of lite-replica guards. The command names resolve to protective shims which must refuse with 127; the native git/npm binaries must never run. Exercising these refusals is the test, so execute both plain commands even though t3 run is normally correct for real work. Use your native shell tool to run plain git status and plain npm --version as two separate commands in the current directory. Do not use t3 run, SSH, absolute binary paths, or workarounds. Do not modify files or initialize git. After each command, capture its status with code=$? and print MESH_E2E_GUARD_EXIT=$code, then exit the shell with that code. Report both exact exit codes and both guard lines, then finish.",
     });
     threads.push(launch);
   }
@@ -285,13 +286,13 @@ try {
         .find(
           (line) =>
             line.startsWith(
-              "This is a lite replica of R1 Harness replica; the environment is on ",
+              "This is a lite replica of Mesh harness replica; the environment is on ",
             ) && line.endsWith(`. Use: t3 run ${command}`),
         );
       NodeAssert.ok(line, `${provider} did not execute guarded ${command}`);
     }
     NodeAssert.equal(
-      native.match(/R1_EXIT=127/g)?.length,
+      native.match(/MESH_E2E_GUARD_EXIT=127/g)?.length,
       2,
       `${provider} did not expose both native exit codes`,
     );

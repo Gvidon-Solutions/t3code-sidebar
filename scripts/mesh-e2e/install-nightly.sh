@@ -27,8 +27,8 @@ for key in client host; do
 done
 cp "$private/client.pub" "$private/authorized_keys"
 chmod 600 "$private/authorized_keys"
-codex_binary="${R1_CODEX_BINARY:-$(command -v codex)}"
-opencode_binary="${R1_OPENCODE_BINARY:-$(command -v opencode)}"
+codex_binary="${MESH_E2E_CODEX_BINARY:-$(command -v codex)}"
+opencode_binary="${MESH_E2E_OPENCODE_BINARY:-$(command -v opencode)}"
 [ -x "$codex_binary" ] && [ -x "$opencode_binary" ] || die "Native nightly provider binaries are required"
 cat > "$private/entry" <<EOF_ENTRY
 #!/bin/sh
@@ -39,7 +39,7 @@ export XDG_RUNTIME_DIR='$controller_runtime_dir'
 export DBUS_SESSION_BUS_ADDRESS='unix:path=$controller_runtime_dir/bus'
 case "\${SSH_ORIGINAL_COMMAND:-run}" in
  probe) systemctl --user show-environment >/dev/null; printf 'mesh-nightly-controller-ready\n' ;;
- run) export R1_CODEX_BINARY='$codex_binary' R1_OPENCODE_BINARY='$opencode_binary'; export HOME='$HOME'; export PATH='$NODE_A_NODE_BIN_DIR:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'; exec bash '$REPO_ROOT/scripts/mesh-e2e/acceptance.sh' ;;
+ run) export MESH_E2E_CODEX_BINARY='$codex_binary' MESH_E2E_OPENCODE_BINARY='$opencode_binary'; export HOME='$HOME'; export PATH='$NODE_A_NODE_BIN_DIR:/usr/local/bin:/usr/bin:/bin:$HOME/.cargo/bin'; exec bash '$REPO_ROOT/scripts/mesh-e2e/acceptance.sh' ;;
  inbox) body=\$(cat); export HOME='$HOME'; export T3CODE_HOME='$BED_INBOX_HOME'; exec '$(command -v node)' '$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs' inbox post attention 'Mesh nightly failed' --body "\$body" --key mesh-nightly ;;
  *) exit 64 ;;
 esac

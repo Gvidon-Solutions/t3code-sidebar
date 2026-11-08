@@ -3,7 +3,8 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
 import { fixture, config, rpc, until, run, content } from "./helpers.mjs";
-const metrics = (node) => fetch(node.origin + "/__N1_network").then((response) => response.json());
+const metrics = (node) =>
+  fetch(node.origin + "/__mesh_network").then((response) => response.json());
 export async function ssh(from, to, command) {
   const state = await rpc(from, "meshConfig.get");
   const name = Object.entries(state.bindings).find(([, id]) => id === to.id)?.[0];

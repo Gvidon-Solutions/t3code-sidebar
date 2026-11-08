@@ -1,6 +1,9 @@
 import * as NodeChildProcess from "node:child_process";
 export const COMMAND_TIMEOUT_MS = 120_000;
 export const COMMAND_MAX_BUFFER = 32 * 1024 * 1024;
+/** Builds and releases stream more output and legitimately run for minutes. */
+export const LONG_COMMAND_TIMEOUT_MS = 900_000;
+export const LONG_COMMAND_MAX_BUFFER = 64 * 1024 * 1024;
 const POLL_INTERVAL_MS = 250;
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const quote = (value) => "'" + String(value).replaceAll("'", "'\\''") + "'";

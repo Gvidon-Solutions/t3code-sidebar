@@ -4,7 +4,8 @@ import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeChildProcess from "node:child_process";
 import { run, until, rpc, mcp } from "../mesh-fast/client.mjs";
-const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "B1-platform-"));
+import { writeManagedSshdConfig } from "../lib/managed-sshd.mjs";
+const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-platform-"));
 const bin = NodePath.resolve("apps/server/dist/bin.mjs");
 const children = [];
 const logs = [];
@@ -42,17 +43,20 @@ const launch = (command, args, env) => {
 try {
   for (const node of nodes) {
     const directory = NodePath.join(node.home, "sshd");
-    await NodeFSP.mkdir(directory, { recursive: true });
-    await NodeFSP.mkdir(NodePath.join(node.home, ".ssh"));
     await NodeFSP.mkdir(NodePath.join(node.base, "userdata"), { recursive: true });
-    const host = NodePath.join(directory, "ssh_host_ed25519_key");
-    await run("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", host]);
-    const unixPath = (path) => path.replaceAll("\\", "/");
-    const conf = `Port ${node.sshPort}\nListenAddress 127.0.0.1\nHostKey "${unixPath(host)}"\nPidFile "${unixPath(NodePath.join(directory, "pid"))}"\nAuthorizedKeysFile "${unixPath(NodePath.join(node.home, ".ssh/authorized_keys"))}"\nStrictModes no\nSetEnv ${JSON.stringify(`PATH=${process.env.PATH ?? ""}`)}\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\n${windows ? "" : "UsePAM no\n"}Subsystem sftp internal-sftp\n`;
-    const confFile = NodePath.join(directory, "sshd_config");
-    await NodeFSP.writeFile(confFile, conf);
+    const confFile = await writeManagedSshdConfig({
+      home: node.home,
+      port: node.sshPort,
+      directory,
+      pidPath: NodePath.join(directory, "pid"),
+      allowUsers: null,
+      usePam: !windows,
+      quotePaths: true,
+      toSshPath: (path) => path.replaceAll("\\", "/"),
+      extraLines: [`SetEnv ${JSON.stringify(`PATH=${process.env.PATH ?? ""}`)}`],
+    });
     if (windows) {
-      const service = `B1-sshd-${process.pid}-${node.name}`;
+      const service = `mesh-sshd-${process.pid}-${node.name}`;
       const command = `"${sshd}" -f "${confFile}"`;
       await powershell(
         `$ErrorActionPreference='Stop'; New-Service -Name '${service}' -BinaryPathName '${command.replaceAll("'", "''")}'; Start-Service '${service}'`,
@@ -109,7 +113,7 @@ try {
         "--ttl",
         "10m",
         "--label",
-        "B1-platform",
+        "mesh-platform",
         "--token-only",
       ])
     ).split("\n")[0];
@@ -123,7 +127,7 @@ try {
       "--ttl",
       "10m",
       "--label",
-      "B1-platform",
+      "mesh-platform",
       "--json",
     ]),
   );
@@ -143,12 +147,12 @@ try {
       Object.keys(current.bindings).find((name) => current.bindings[name] === node.id),
     ]),
   );
-  const projectRoot = NodePath.join(studio.home, "B1-project");
+  const projectRoot = NodePath.join(studio.home, "mesh-platform-project");
   await NodeFSP.mkdir(projectRoot);
   await run("git", ["init", "-q", projectRoot]);
-  await NodeFSP.writeFile(NodePath.join(projectRoot, "README.md"), "B1-native-replica\n");
+  await NodeFSP.writeFile(NodePath.join(projectRoot, "README.md"), "mesh-platform-replica\n");
   const project = await mcp(studio, "t3_project_create", {
-    title: "B1-native",
+    title: "mesh-platform",
     workspaceRoot: projectRoot,
   });
   await mcp(studio, "t3_project_place", {
@@ -170,7 +174,7 @@ try {
       ]),
     ),
     links: { default: { files: "all", replicas: true, threads: true } },
-    replicas: { rules: [{ project: "B1-native", on: names.laptop, when: "always" }] },
+    replicas: { rules: [{ project: "mesh-platform", on: names.laptop, when: "always" }] },
   };
   await rpc(studio, "meshConfig.apply", { doc, baseRevision: latest.current.revision });
   const snapshot = await until(
@@ -178,18 +182,18 @@ try {
     () => rpc(studio, "meshLayout.get"),
     (value) => {
       const key = Object.keys(value.config.projectTitles).find(
-        (key) => value.config.projectTitles[key] === "B1-native",
+        (key) => value.config.projectTitles[key] === "mesh-platform",
       );
       return value.config.projectMountStatus[key]?.[laptop.id]?.state === "watching";
     },
   );
   const key = Object.keys(snapshot.config.projectTitles).find(
-    (key) => snapshot.config.projectTitles[key] === "B1-native",
+    (key) => snapshot.config.projectTitles[key] === "mesh-platform",
   );
   const target = snapshot.config.projectMounts[key].find((rep) => rep.environmentId === laptop.id);
   if (
     (await NodeFSP.readFile(NodePath.join(target.path, "README.md"), "utf8")) !==
-    "B1-native-replica\n"
+    "mesh-platform-replica\n"
   )
     throw Error("Replica content mismatch");
   const kitStatus = await until(
@@ -249,5 +253,5 @@ try {
     await powershell(
       `$ErrorActionPreference='Stop'; Stop-Service '${service}'; & sc.exe delete '${service}'; if($LASTEXITCODE -ne 0){throw 'Cannot remove fixture SSH service'}`,
     );
-  console.log(`B1 fixture: ${root}`);
+  console.log(`mesh platform fixture: ${root}`);
 }

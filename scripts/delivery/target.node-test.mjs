@@ -220,11 +220,16 @@ test("bed bootstrap refuses unrelated units and pre-existing non-fixture databas
         input: JSON.stringify({ machine: value, archive: "unused" }),
         stdio: ["pipe", "pipe", "pipe"],
       });
-    assert.throws(() => invoke(machine), /only manages D1-prefixed/);
+    assert.throws(() => invoke(machine), /only manages delivery-bed-prefixed/);
     mkdirSync(join(root, "userdata"));
     writeFileSync(join(root, "userdata/statev2.sqlite"), "foreign database");
     assert.throws(
-      () => invoke({ ...machine, unit: "D1-app.service", unitPath: join(root, "D1-app.service") }),
+      () =>
+        invoke({
+          ...machine,
+          unit: "delivery-bed-app.service",
+          unitPath: join(root, "delivery-bed-app.service"),
+        }),
       /pre-existing non-fixture/,
     );
     assert.equal(readFileSync(join(root, "userdata/statev2.sqlite"), "utf8"), "foreign database");

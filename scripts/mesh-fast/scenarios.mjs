@@ -205,7 +205,7 @@ export const scenarios = {
       await mesh.fault(cloudbox, { cut: true });
       await until(
         "proxy partition active",
-        async () => (await fetch(cloudbox.origin + "/__N1_network")).json(),
+        async () => (await fetch(cloudbox.origin + "/__mesh_network")).json(),
         (value) => value.state.cut && value.sockets === 0,
       );
       await until(

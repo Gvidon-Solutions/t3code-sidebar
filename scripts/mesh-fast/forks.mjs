@@ -67,7 +67,7 @@ export const forkScenarios = {
         await mesh.fault(target, { observeCommit: true, reset: true });
         await until(
           "commit proxy installed",
-          async () => (await fetch(target.origin + "/__N1_network")).json(),
+          async () => (await fetch(target.origin + "/__mesh_network")).json(),
           (v) => v.state.observeCommit && v.sockets === 0,
         );
         await mesh.fault(target, { observeCommit: true });
@@ -89,7 +89,7 @@ export const forkScenarios = {
         });
         await until(
           "dropped response retried",
-          async () => (await fetch(target.origin + "/__N1_network")).json(),
+          async () => (await fetch(target.origin + "/__mesh_network")).json(),
           (v) => v.droppedCommitResponses === 1 && v.commitCalls >= 2,
         );
         const read = await mcp(target, "t3_thread_read", { threadId: result.threadId });
@@ -128,7 +128,7 @@ export const forkScenarios = {
             title: "F1-native-source",
             modelSelection: {
               instanceId: "codex",
-              model: process.env.R1_CODEX_MODEL ?? "gpt-6-luna",
+              model: process.env.MESH_E2E_CODEX_MODEL ?? "gpt-6-luna",
             },
             runtimeMode: "full-access",
           })
@@ -144,7 +144,7 @@ export const forkScenarios = {
             instanceId,
             model: real
               ? instanceId === "codex"
-                ? (process.env.R1_CODEX_MODEL ?? "gpt-6-luna")
+                ? (process.env.MESH_E2E_CODEX_MODEL ?? "gpt-6-luna")
                 : "deepseek/deepseek-flash"
               : "fast",
           },

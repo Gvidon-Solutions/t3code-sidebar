@@ -261,21 +261,21 @@ test("private builder reports idle state and refuses another listener or a non-s
 test("the isolated fixture gate refuses production use and records an explicit authorized invocation", () => {
   const root = mkdtempSync(join(tmpdir(), "delivery-gate-"));
   try {
-    const script = new URL("./fixture-gate.mjs", import.meta.url).pathname;
+    const script = new URL("./test-fixtures/fixture-gate.mjs", import.meta.url).pathname;
     assert.throws(
       () =>
         execFileSync(process.execPath, [script], {
           env: { ...process.env, T3_DELIVERY_FIXTURE_GATE: "" },
           stdio: ["ignore", "pipe", "pipe"],
         }),
-      /coordinator-authorized D1/,
+      /isolated delivery transport fixture/,
     );
     const path = join(root, "gate.jsonl");
     execFileSync(process.execPath, [script], {
       env: { ...process.env, T3_DELIVERY_FIXTURE_GATE: "1", T3_DELIVERY_FIXTURE_GATE_LOG: path },
       stdio: ["ignore", "pipe", "pipe"],
     });
-    assert.equal(JSON.parse(readFileSync(path, "utf8")).fixture, "D1 delivery gate");
+    assert.equal(JSON.parse(readFileSync(path, "utf8")).fixture, "delivery bed gate");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
