@@ -7,7 +7,7 @@ export MESH_E2E_SESSION_TTL=${MESH_E2E_SESSION_TTL:-4h}
 export MESH_E2E_ROUND1_WORK="${MESH_E2E_ROUND3_WORK:-/tmp/t3-mesh-e2e-N-round3}"
 . "$(dirname "$0")/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
-BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-N1}
+BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-mesh-network}
 require_bed_lock() {
   local bed_owner
   if ! bed_owner=$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner'); then
@@ -52,7 +52,7 @@ expected_hash=$(sha256sum "$RUNTIME_DIR/t3" | cut -d' ' -f1)
 test "$(sha256sum "$NODE_A_RUNTIME_ROOT/$BUILD_VERSION/t3" | cut -d' ' -f1)" = "$expected_hash" || die 'NODE_A binary differs from build'
 test "$(nodeB_ssh "sha256sum $NODE_B_BIN" | cut -d' ' -f1)" = "$expected_hash" || die 'nodeB binary differs from build'
 test "$(cloud_ssh 'docker inspect -f "{{.Image}}" t3-mesh-e2e')" = "$(docker image inspect -f '{{.Id}}' "$IMAGE")" || die 'Wrong CLOUD image'
-nodeB_ssh 'cat /tmp/N1-network-state.json' | jq -e '.cut==false' > "$WORK/N-proxy-ready.json" || die 'Round three requires network-proxies.sh up'
+nodeB_ssh 'cat /tmp/mesh-network-state.json' | jq -e '.cut==false' > "$WORK/N-proxy-ready.json" || die 'Round three requires network-proxies.sh up'
 for m in nodeA nodeB cloud; do
   cat > "$WORK/N-t3-$m" <<RUNNER
 #!/usr/bin/env bash
@@ -159,11 +159,11 @@ restore_daemon_settings() {
   DAEMON_SETTINGS_ENABLED=
 }
 restore_partition() {
-  cp "$WORK/N-partition-proxy-before-nodeA.json" /tmp/N1-partition-state.json || return 1
-  mv /tmp/N1-partition-state.json /tmp/N1-network-state.json || return 1
-  nodeB_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json" || return 1
-  cloud_put "$WORK/N-partition-proxy-before-cloud.json" "$CLOUD_DIR/tmp/N1-partition-state.json" || return 1
-  cloud_ssh "chmod 644 '$CLOUD_DIR/tmp/N1-partition-state.json' && mv '$CLOUD_DIR/tmp/N1-partition-state.json' '$CLOUD_DIR/tmp/N1-network-state.json'" || return 1
+  cp "$WORK/N-partition-proxy-before-nodeA.json" /tmp/mesh-network-partition-state.json || return 1
+  mv /tmp/mesh-network-partition-state.json /tmp/mesh-network-state.json || return 1
+  nodeB_ssh 'cat > /tmp/mesh-network-partition-state.json && mv /tmp/mesh-network-partition-state.json /tmp/mesh-network-state.json' < "$WORK/N-partition-proxy-before.json" || return 1
+  cloud_put "$WORK/N-partition-proxy-before-cloud.json" "$CLOUD_DIR/tmp/mesh-network-partition-state.json" || return 1
+  cloud_ssh "chmod 644 '$CLOUD_DIR/tmp/mesh-network-partition-state.json' && mv '$CLOUD_DIR/tmp/mesh-network-partition-state.json' '$CLOUD_DIR/tmp/mesh-network-state.json'" || return 1
 }
 resume_container_driver() {
   [ -n "$FROZEN_DRIVER_RECORD" ] || return 0
@@ -413,21 +413,21 @@ for m in nodeA cloud; do
   printf 'PASS N daemon recovered without server restart %s\n' "$m"
 done
 # Cut both peer directions before writing divergent versions, without user pauses.
-cp /tmp/N1-network-state.json "$WORK/N-partition-proxy-before-nodeA.json"
-nodeB_ssh 'cat /tmp/N1-network-state.json' > "$WORK/N-partition-proxy-before.json"
-cloud_ssh "cat '$CLOUD_DIR/tmp/N1-network-state.json'" > "$WORK/N-partition-proxy-before-cloud.json"
+cp /tmp/mesh-network-state.json "$WORK/N-partition-proxy-before-nodeA.json"
+nodeB_ssh 'cat /tmp/mesh-network-state.json' > "$WORK/N-partition-proxy-before.json"
+cloud_ssh "cat '$CLOUD_DIR/tmp/mesh-network-state.json'" > "$WORK/N-partition-proxy-before-cloud.json"
 for state_file in "$WORK"/N-partition-proxy-before*.json; do jq -e '.cut==false' "$state_file" >/dev/null; done
 for m in nodeA cloud; do
   mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-before-partition-$m.json"
   jq -e --arg p "$N_ROOT" 'any(.[]; .beta.path==$p and .paused==false and .alpha.connected==true)' "$WORK/N-before-partition-$m.json" >/dev/null
 done
 PARTITION_ACTIVE=1
-jq '.cut=true' "$WORK/N-partition-proxy-before-nodeA.json" > /tmp/N1-partition-state.json
-mv /tmp/N1-partition-state.json /tmp/N1-network-state.json
+jq '.cut=true' "$WORK/N-partition-proxy-before-nodeA.json" > /tmp/mesh-network-partition-state.json
+mv /tmp/mesh-network-partition-state.json /tmp/mesh-network-state.json
 jq '.cut=true' "$WORK/N-partition-proxy-before-cloud.json" > "$WORK/N-cloud-cut.json"
-cloud_put "$WORK/N-cloud-cut.json" "$CLOUD_DIR/tmp/N1-partition-state.json"
-cloud_ssh "chmod 644 '$CLOUD_DIR/tmp/N1-partition-state.json' && mv '$CLOUD_DIR/tmp/N1-partition-state.json' '$CLOUD_DIR/tmp/N1-network-state.json'"
-jq '.cut=true' "$WORK/N-partition-proxy-before.json" | nodeB_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json'
+cloud_put "$WORK/N-cloud-cut.json" "$CLOUD_DIR/tmp/mesh-network-partition-state.json"
+cloud_ssh "chmod 644 '$CLOUD_DIR/tmp/mesh-network-partition-state.json' && mv '$CLOUD_DIR/tmp/mesh-network-partition-state.json' '$CLOUD_DIR/tmp/mesh-network-state.json'"
+jq '.cut=true' "$WORK/N-partition-proxy-before.json" | nodeB_ssh 'cat > /tmp/mesh-network-partition-state.json && mv /tmp/mesh-network-partition-state.json /tmp/mesh-network-state.json'
 nodeB_ssh "systemctl --user stop $NODE_B_TUNNEL_UNIT"
 for m in nodeA cloud; do
   end=$((SECONDS+TIMEOUT))

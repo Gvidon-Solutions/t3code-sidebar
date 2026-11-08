@@ -1,5 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { nextForkTitle, planForkPlacement } from "@t3tools/client-runtime/state/thread-forks";
+import { runThreadFork } from "@t3tools/client-runtime/state/thread-forks";
 import { type EnvironmentId, type RunId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Haptics from "expo-haptics";
@@ -28,71 +28,78 @@ export function useForkThread() {
       source: { readonly environmentId: EnvironmentId; readonly threadId: ThreadId },
       runId?: RunId,
     ): Promise<boolean> => {
-      const { environmentId } = source;
-      const sameEnvironment = () =>
-        appAtomRegistry
-          .get(environmentThreadShells.threadShellsAtom)
-          .filter((thread) => thread.environmentId === environmentId);
-      const sourceThread = sameEnvironment().find((thread) => thread.id === source.threadId);
-      if (!sourceThread) return false;
-      void Haptics.selectionAsync();
-      const targetThreadId = ThreadId.make(uuidv4());
-      const result = await forkFromRun({
-        environmentId,
-        input: {
-          sourceThreadId: source.threadId,
-          targetThreadId,
-          ...(runId === undefined ? {} : { runId }),
-          title: nextForkTitle(
-            sourceThread.title,
-            sameEnvironment().map((thread) => thread.title),
-          ),
-          creationSource: "mobile",
+      const outcome = await runThreadFork(source, runId, {
+        readThread: (target) => {
+          const found =
+            appAtomRegistry
+              .get(environmentThreadShells.threadShellsAtom)
+              .find(
+                (thread) =>
+                  thread.environmentId === target.environmentId && thread.id === target.threadId,
+              ) ?? null;
+          if (found) void Haptics.selectionAsync();
+          return found;
         },
-      });
-      if (result._tag !== "Success") {
-        const error = Cause.squash(result.cause);
-        Alert.alert(
-          "Could not fork thread",
-          error instanceof Error && error.message.trim().length > 0
-            ? error.message
-            : "The thread could not be forked.",
-        );
-        return false;
-      }
-      const targetAtom = environmentThreadShells.threadShellAtom(
-        scopeThreadRef(environmentId, targetThreadId),
-      );
-      const ready = await waitForThreadShellReady({
-        read: () => appAtomRegistry.get(targetAtom) !== null,
-      });
-      if (!ready) {
-        Alert.alert(
-          "Fork created",
-          "Its thread data did not reach this client. Reconnect and try opening it from the thread list.",
-        );
-        return false;
-      }
-      const placement = planForkPlacement({
-        threads: sameEnvironment().filter((thread) => thread.projectId === sourceThread.projectId),
-        sourceId: source.threadId,
-        forkId: targetThreadId,
-        now: new Date().toISOString(),
-      });
-      // Placement is cosmetic: a failed write leaves the fork on top.
-      await Promise.all(
-        placement.map((write) =>
-          reorderActive({
-            environmentId,
-            input: { threadId: ThreadId.make(write.id), orderKey: write.orderKey },
+        threadsInEnvironment: (environmentId) =>
+          appAtomRegistry
+            .get(environmentThreadShells.threadShellsAtom)
+            .filter((thread) => thread.environmentId === environmentId),
+        createThreadId: () => ThreadId.make(uuidv4()),
+        fork: async (input) => {
+          const result = await forkFromRun({
+            environmentId: source.environmentId,
+            input: { ...input, creationSource: "mobile" },
+          });
+          if (result._tag === "Success") return { ok: true };
+          const error = Cause.squash(result.cause);
+          return {
+            ok: false,
+            interrupted: false,
+            message:
+              error instanceof Error && error.message.trim().length > 0
+                ? error.message
+                : "The thread could not be forked.",
+          };
+        },
+        waitForThread: (target) =>
+          waitForThreadShellReady({
+            read: () =>
+              appAtomRegistry.get(
+                environmentThreadShells.threadShellAtom(
+                  scopeThreadRef(target.environmentId, target.threadId),
+                ),
+              ) !== null,
           }),
-        ),
-      );
-      selectDetail({
-        name: "Thread",
-        params: { environmentId: String(environmentId), threadId: String(targetThreadId) },
+        reorder: (target, orderKey) =>
+          reorderActive({
+            environmentId: target.environmentId,
+            input: { threadId: target.threadId, orderKey },
+          }),
+        now: () => new Date().toISOString(),
       });
-      return true;
+      switch (outcome.kind) {
+        case "forked":
+          selectDetail({
+            name: "Thread",
+            params: {
+              environmentId: String(outcome.target.environmentId),
+              threadId: String(outcome.target.threadId),
+            },
+          });
+          return true;
+        case "source-missing":
+        case "interrupted":
+          return false;
+        case "failed":
+          Alert.alert("Could not fork thread", outcome.message);
+          return false;
+        case "created-unavailable":
+          Alert.alert(
+            "Fork created",
+            "Its thread data did not reach this client. Reconnect and try opening it from the thread list.",
+          );
+          return false;
+      }
     },
     [forkFromRun, selectDetail, reorderActive],
   );

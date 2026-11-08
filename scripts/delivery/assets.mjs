@@ -1,4 +1,5 @@
 import { verifyMobileAssets } from "./target.mjs";
+import { LONG_COMMAND_TIMEOUT_MS, quote } from "../lib/shell.mjs";
 import * as NodeChildProcess from "node:child_process";
 const { execFileSync } = NodeChildProcess;
 import * as NodeFS from "node:fs";
@@ -7,7 +8,6 @@ const { cpSync, copyFileSync, mkdirSync, readdirSync, renameSync, writeFileSync,
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
 const { join, resolve } = NodePath;
-const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 export function changedArtifacts(paths) {
   paths = paths.filter(
     (path) =>
@@ -72,7 +72,7 @@ export async function buildAssets({
     const exec = (command, args, options) =>
       execFileSync(command, args, {
         encoding: "utf8",
-        timeout: 900_000,
+        timeout: LONG_COMMAND_TIMEOUT_MS,
         ...options,
         env: { ...process.env, ...mobileEnv },
       });
@@ -160,7 +160,7 @@ function copyMobileStore(store, destination) {
 
 export async function publishMobileUpdate(store, config, machines) {
   const exec = (command, args, options = {}) =>
-    execFileSync(command, args, { encoding: "utf8", timeout: 900_000, ...options });
+    execFileSync(command, args, { encoding: "utf8", timeout: LONG_COMMAND_TIMEOUT_MS, ...options });
   copyMobileStore(store, config.ota.store);
   for (const machine of machines) {
     const destination = join(machine.home, "mobile-updates");

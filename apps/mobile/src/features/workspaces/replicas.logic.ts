@@ -1,7 +1,9 @@
 import {
-  pendingRows,
+  machineChoiceId,
+  machineChoiceText,
+  machineChoices,
+  pendingRowsForProject,
   replicaDriverEnvironment,
-  replicaMachineChoices,
   replicaStatusCopy,
   type MeshMachineInfo,
   type ReplicaMachineChoice,
@@ -15,26 +17,13 @@ import type {
 
 // Fork: the phone's "new thread on a machine" menu entries and pending replica rows.
 
-export interface MobileMachineInput {
-  readonly environmentId: string;
-  readonly label: string;
-  readonly connected: boolean;
-  readonly supportsMesh: boolean;
-}
+export type MobileMachineInput = MeshMachineInfo;
 
 export function mobileMachineChoices(
   config: SidebarWorkspacesConfig,
   machines: ReadonlyArray<MobileMachineInput>,
 ): ReplicaMachineChoice[] {
-  const infos: MeshMachineInfo[] = machines.map((machine) => ({
-    environmentId: machine.environmentId,
-    label: machine.label,
-    connected: machine.connected,
-    supportsMesh: machine.supportsMesh,
-  }));
-  return replicaMachineChoices(config, infos, (environmentId, fallbackLabel) =>
-    machineDisplayOf(config, environmentId, fallbackLabel),
-  );
+  return machineChoices(config, machines);
 }
 
 export interface MachineSubaction {
@@ -48,10 +37,8 @@ export function machineSubactions(
   choices: ReadonlyArray<ReplicaMachineChoice>,
 ): MachineSubaction[] {
   return choices.map((choice) => ({
-    id: `machine:${choice.environmentId}`,
-    title: choice.disabled
-      ? `${choice.tag}  ${choice.label} (${choice.reason})`
-      : `${choice.tag}  ${choice.label}`,
+    id: machineChoiceId(choice),
+    title: machineChoiceText(choice),
     disabled: choice.disabled,
   }));
 }
@@ -75,31 +62,29 @@ export function mobilePendingReplicaItems(
   liveStatuses: ReadonlyArray<ReplicaLiveStatus>,
   projectKey: string,
 ): MobilePendingReplicaItem[] {
-  return pendingRows(config, liveStatuses)
-    .filter((row) => row.logicalKey === projectKey)
-    .map((row) => {
-      const display = machineDisplayOf(config, row.rep.environmentId, row.rep.environmentId);
-      const sourceLabel = row.rep.source
-        ? machineDisplayOf(config, row.rep.source, row.rep.source).label
-        : "the source";
-      return {
-        key: `replica:${row.logicalKey}:${row.rep.environmentId}`,
-        projectKey: row.logicalKey,
-        environmentId: row.rep.environmentId,
-        tag: display.tag,
-        label: display.label,
-        color: display.color,
-        text: replicaStatusCopy({
-          state: row.status.state,
-          progress: row.progress,
-          conflicts: row.conflicts,
-          message: row.message,
-          targetLabel: display.label,
-          sourceLabel,
-        }),
+  return pendingRowsForProject(config, liveStatuses, projectKey).map((row) => {
+    const display = machineDisplayOf(config, row.rep.environmentId, row.rep.environmentId);
+    const sourceLabel = row.rep.source
+      ? machineDisplayOf(config, row.rep.source, row.rep.source).label
+      : "the source";
+    return {
+      key: `replica:${row.logicalKey}:${row.rep.environmentId}`,
+      projectKey: row.logicalKey,
+      environmentId: row.rep.environmentId,
+      tag: display.tag,
+      label: display.label,
+      color: display.color,
+      text: replicaStatusCopy({
         state: row.status.state,
+        progress: row.progress,
         conflicts: row.conflicts,
-        retryEnvironmentId: replicaDriverEnvironment(config, row.rep),
-      };
-    });
+        message: row.message,
+        targetLabel: display.label,
+        sourceLabel,
+      }),
+      state: row.status.state,
+      conflicts: row.conflicts,
+      retryEnvironmentId: replicaDriverEnvironment(config, row.rep),
+    };
+  });
 }

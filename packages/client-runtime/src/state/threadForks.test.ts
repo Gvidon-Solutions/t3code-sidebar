@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { EnvironmentThreadShell } from "./models.ts";
-import { canForkThreadFromMenu, nextForkTitle, planForkPlacement } from "./threadForks.ts";
+import {
+  canForkThreadFromMenu,
+  nextForkTitle,
+  planForkPlacement,
+  runThreadFork,
+} from "./threadForks.ts";
 import { sortActiveThreadsByOrderKey } from "./threadSort.ts";
 
 const NOW = "2026-10-12T12:00:00.000Z";
@@ -139,5 +144,99 @@ describe("planForkPlacement", () => {
     expect(planForkPlacement({ threads, sourceId: "source", forkId: "fork", now: NOW })).toEqual(
       [],
     );
+  });
+});
+
+describe("runThreadFork", () => {
+  const source = {
+    environmentId: "studio" as never,
+    threadId: "source" as never,
+  };
+
+  function deps(overrides: Record<string, unknown> = {}) {
+    const calls: string[] = [];
+    const reorders: Array<[string, string]> = [];
+    let created: EnvironmentThreadShell | null = null;
+    const arrive = () => {
+      created ??= shell("new", {
+        title: "Work (2)",
+        projectId: "project",
+        activeOrderKey: "a2",
+      });
+    };
+    return {
+      calls,
+      reorders,
+      deps: {
+        readThread: () => shell("source", { title: "Work", projectId: "project" }),
+        threadsInEnvironment: () =>
+          [
+            shell("source", { title: "Work", projectId: "project", activeOrderKey: "a0" }),
+            shell("older", { title: "Work (1)", projectId: "project", activeOrderKey: "a1" }),
+            ...(created ? [created] : []),
+          ] as EnvironmentThreadShell[],
+        createThreadId: () => "new" as never,
+        fork: async (input: { readonly title: string }) => {
+          calls.push(`fork:${input.title}`);
+          return { ok: true as const };
+        },
+        waitForThread: async () => {
+          arrive();
+          return true;
+        },
+        reorder: async (target: { readonly threadId: string }, orderKey: string) => {
+          reorders.push([String(target.threadId), orderKey]);
+        },
+        now: () => NOW,
+        ...overrides,
+      },
+    };
+  }
+
+  it("names, waits for and places the fork under its source", async () => {
+    const setup = deps();
+    const outcome = await runThreadFork(source, undefined, setup.deps as never);
+    expect(outcome).toEqual({
+      kind: "forked",
+      target: { environmentId: "studio", threadId: "new" },
+    });
+    expect(setup.calls).toEqual(["fork:Work (2)"]);
+    expect(setup.reorders.map(([id]) => id)).toContain("new");
+  });
+
+  it("reports a missing source without creating anything", async () => {
+    const setup = deps({ readThread: () => null });
+    expect(await runThreadFork(source, undefined, setup.deps as never)).toEqual({
+      kind: "source-missing",
+    });
+    expect(setup.calls).toEqual([]);
+  });
+
+  it("keeps an interruption distinguishable from a failure", async () => {
+    const setup = deps({
+      fork: async () => ({ ok: false, interrupted: true, message: "stopped" }),
+    });
+    expect(await runThreadFork(source, undefined, setup.deps as never)).toEqual({
+      kind: "interrupted",
+    });
+  });
+
+  it("surfaces a fork failure message", async () => {
+    const setup = deps({
+      fork: async () => ({ ok: false, interrupted: false, message: "destination is offline" }),
+    });
+    expect(await runThreadFork(source, undefined, setup.deps as never)).toEqual({
+      kind: "failed",
+      message: "destination is offline",
+    });
+  });
+
+  it("reports a created fork whose shell never reached this client", async () => {
+    const setup = deps({ waitForThread: async () => false });
+    expect(await runThreadFork(source, undefined, setup.deps as never)).toEqual({
+      kind: "created-unavailable",
+      target: { environmentId: "studio", threadId: "new" },
+    });
+    expect(setup.reorders).toEqual([]);
   });
 });

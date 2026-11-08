@@ -30,13 +30,13 @@ import * as HostProcess from "../../packages/shared/src/HostProcess.ts";
 import { cleanAgentOptions } from "./agent-options.mjs";
 import { rollout, waitForHealthy } from "./rollout.mjs";
 import { buildAssets, publishMobileUpdate } from "./assets.mjs";
+import { LONG_COMMAND_MAX_BUFFER, LONG_COMMAND_TIMEOUT_MS, quote } from "../lib/shell.mjs";
 
-const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 const exec = (command, args, options = {}) =>
   execFileSync(command, args, {
     encoding: "utf8",
-    timeout: 900_000,
-    maxBuffer: 64 * 1024 * 1024,
+    timeout: LONG_COMMAND_TIMEOUT_MS,
+    maxBuffer: LONG_COMMAND_MAX_BUFFER,
     ...options,
   });
 const atomic = (path, value) => {
@@ -124,9 +124,12 @@ export function machineAdapter(machine, archive, version, id, now = false, maxWa
     const text = machine.ssh
       ? ssh([`${quote(machine.node)} ${quote(remoteScript)}`], {
           input,
-          timeout: Math.max(900_000, maxWaitMs + 120_000),
+          timeout: Math.max(LONG_COMMAND_TIMEOUT_MS, maxWaitMs + 120_000),
         })
-      : exec(machine.node, [target], { input, timeout: Math.max(900_000, maxWaitMs + 120_000) });
+      : exec(machine.node, [target], {
+          input,
+          timeout: Math.max(LONG_COMMAND_TIMEOUT_MS, maxWaitMs + 120_000),
+        });
     return JSON.parse(text);
   };
   return {

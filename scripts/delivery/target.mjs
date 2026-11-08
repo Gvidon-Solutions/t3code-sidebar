@@ -1,5 +1,5 @@
 import * as NodeChildProcess from "node:child_process";
-const { execFileSync } = NodeChildProcess;
+import { COMMAND_TIMEOUT_MS, runSync } from "../lib/shell.mjs";
 import * as NodeFS from "node:fs";
 const { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } =
   NodeFS;
@@ -52,10 +52,8 @@ export async function waitForLegacyIdle({
   }
 }
 
-const run = (command, args, env, timeout = 120_000) =>
-  execFileSync(command, args, {
-    encoding: "utf8",
-    maxBuffer: 32 * 1024 * 1024,
+const run = (command, args, env, timeout = COMMAND_TIMEOUT_MS) =>
+  runSync(command, args, {
     timeout,
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],

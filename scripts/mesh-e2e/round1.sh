@@ -37,13 +37,15 @@ NODE_B_BIN="$NODE_B_RUNTIME_ROOT/$BUILD_VERSION/t3"
 CLOUD_BIN="/opt/t3/dist/bin.mjs"
 
 RUN_TS="${MESH_E2E_STAGE_PREFIX:+$MESH_E2E_STAGE_PREFIX-}$(date -u +%Y%m%dT%H%M%SZ)"
-SCRATCH="round1-$RUN_TS"
-SCRATCH_NAME="r1-$RUN_TS"
-SCRATCH_NAME_A="r1-a-$RUN_TS"
-SCRATCH_NAME_B="r1-b-$RUN_TS"
-SCRATCH_NAME_C="r1-c-$RUN_TS"
-OLD_A="round1-old-$RUN_TS"
-OLD_B="round1-oldb-$RUN_TS"
+ROUND1_NAME="${MESH_E2E_ROUND1_NAME:-round1}"
+ROUND1_SCRATCH="${MESH_E2E_ROUND1_SCRATCH:-r1}"
+SCRATCH="$ROUND1_NAME-$RUN_TS"
+SCRATCH_NAME="$ROUND1_SCRATCH-$RUN_TS"
+SCRATCH_NAME_A="$ROUND1_SCRATCH-a-$RUN_TS"
+SCRATCH_NAME_B="$ROUND1_SCRATCH-b-$RUN_TS"
+SCRATCH_NAME_C="$ROUND1_SCRATCH-c-$RUN_TS"
+OLD_A="$ROUND1_NAME-old-$RUN_TS"
+OLD_B="$ROUND1_NAME-oldb-$RUN_TS"
 
 PASS=0
 FAIL=0
@@ -91,8 +93,8 @@ const opt = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : fallback;
 };
-const origin = opt("origin", process.env.R1_ORIGIN || "").replace(/\/$/, "");
-const token = opt("token", process.env.R1_TOKEN || "");
+const origin = opt("origin", process.env.MESH_E2E_WS_ORIGIN || "").replace(/\/$/, "");
+const token = opt("token", process.env.MESH_E2E_WS_TOKEN || "");
 if (!origin || !token) {
   console.error("ws.mjs: --origin and --token are required");
   process.exit(2);
@@ -775,7 +777,7 @@ check "replicas.status returns the live replica stream on every server" test "$r
 echo "== step 7: files =="
 NODE_B_HOME="$(nodeB_ssh 'printf %s "$HOME"')"
 NODE_B_README="$NODE_B_DEMO_DIR/README.md"
-CLOUD_README="/home/t3/round1-e2e.txt"
+CLOUD_README="/home/t3/$ROUND1_NAME-e2e.txt"
 nodeB_ssh "printf 'a\\000b\\n' > '$NODE_B_DEMO_DIR/binary.bin'; truncate -s 70M '$NODE_B_DEMO_DIR/large.bin'" >/dev/null 2>&1
 cloud_ssh "docker exec t3-mesh-e2e sh -c 'printf \"round1 file from cloud\\n\" > $CLOUD_README'" >/dev/null 2>&1
 
@@ -825,7 +827,7 @@ else
   record_fail "files.list completes on nodeB" "$(printf '%s' "$list_nodeB" | head -c 300)"
 fi
 list_cloud="$(ws_rpc nodeA files.list "{\"environmentId\":\"$CLOUD_ENV\",\"partialPath\":\"/home/t3/\",\"limit\":200}" 2>&1 || true)"
-if printf '%s' "$list_cloud" | jq -e '.entries | map(.name) | index("round1-e2e.txt") != null' >/dev/null 2>&1; then
+if printf '%s' "$list_cloud" | jq -e --arg name "$ROUND1_NAME-e2e.txt" '.entries | map(.name) | index($name) != null' >/dev/null 2>&1; then
   record_pass "files.list completes on cloud through nodeA"
 else
   record_fail "files.list completes on cloud through nodeA" "$(printf '%s' "$list_cloud" | head -c 300)"

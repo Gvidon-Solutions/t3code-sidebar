@@ -1,55 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
-[ "$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner')" = N1 ] || die "N1 must hold the bed lock"
+STAGE=${MESH_E2E_STAGE_PREFIX:-network}
+BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-$STAGE}
+[ "$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner')" = "$BED_LOCK_OWNER" ] || die "$BED_LOCK_OWNER must hold the bed lock"
 round=${1:-1}
 case "$round" in 1|2) ;; *) die "Usage: network-rounds.sh 1|2";; esac
-export N1_BED_WORK=${N1_BED_WORK:-/tmp/N1-network-rounds}
-export N1_BED_SOURCE=$MESH_DIR
-export N1_BED_PROJECT=N1-network-demo
-export N1_BED_NODE_B_HOME
-N1_BED_NODE_B_HOME=$(nodeB_ssh 'printf %s "$HOME"')
-mkdir -p "$N1_BED_WORK/scripts"
-node --input-type=module <<'JS'
-import fs from "node:fs";
-import path from "node:path";
-const source = process.env.N1_BED_SOURCE;
-const target = path.join(process.env.N1_BED_WORK, "scripts");
-for (const name of ["round1.sh", "round2.sh"]) {
-  let text = fs.readFileSync(path.join(source, name), "utf8");
-  text = text.replaceAll("/home/dev", process.env.N1_BED_NODE_B_HOME)
-    .replaceAll("xdev-e2e/demo", process.env.N1_BED_PROJECT)
-    .replaceAll("round1-", "N1-round1-").replaceAll("r1-", "N1-r1-")
-    .replaceAll("round2-primary", "N1-round2-primary")
-    .replaceAll("round2-orphan", "N1-round2-orphan")
-    .replaceAll("round2-conflict", "N1-round2-conflict")
-    .replaceAll("round2-transfer", "N1-round2-transfer")
-    .replaceAll('MARK="round2-', 'MARK="N1-round2-')
-    .replaceAll("t3-env=orphan", "t3-env=N1-orphan")
-    .replaceAll('"title":"demo"', '"title":"N1-network-demo"')
-    .replaceAll('title: "demo"', 'title: "N1-network-demo"')
-    .replaceAll("--project demo", "--project N1-network-demo");
-  text = text.replace('CTL="$HOME/.agents/skills/t3-next/scripts/t3ctl.mjs"', 'CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"');
-  fs.writeFileSync(path.join(target, name), text, { mode: 0o700 });
-}
-const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
-fs.writeFileSync(path.join(target, "lib.sh"), `. ${quote(path.join(source, "lib.sh"))}\nMESH_DIR=${quote(target)}\n`, { mode: 0o700 });
-JS
+export MESH_E2E_BED_WORK=${MESH_E2E_BED_WORK:-/tmp/$STAGE-network-rounds}
+export MESH_E2E_BED_PROJECT=${MESH_E2E_BED_PROJECT:-$STAGE-network-demo}
+export MESH_E2E_ROUND1_NAME=$STAGE-round1
+export MESH_E2E_ROUND1_SCRATCH=$STAGE-r1
+export MESH_E2E_ROUND2_NAME=$STAGE-round2
+export MESH_E2E_DEMO_TITLE=$STAGE-network-demo
+export MESH_E2E_ORPHAN_LABEL=$STAGE-orphan
+export MESH_E2E_STAGE_PREFIX=$STAGE
+export MESH_E2E_ROUND1_WORK="$MESH_E2E_BED_WORK/round1"
+export MESH_E2E_ROUND2_WORK="$MESH_E2E_BED_WORK/round2"
+mkdir -p "$MESH_E2E_BED_WORK"
 nodeB_ssh 'bash -s' <<EOF
 set -euo pipefail
 export PATH=$NODE_B_NODE_BIN_DIR:\$PATH
-root="\$HOME/$N1_BED_PROJECT"
+root="\$HOME/$MESH_E2E_BED_PROJECT"
 mkdir -p "\$root/node_modules" "\$root/.venv"
 printf 'module.exports = 1;\n' > "\$root/node_modules/x.js"
-printf 'N1 excluded fixture\n' > "\$root/.venv/a"
+printf '$STAGE excluded fixture\n' > "\$root/.venv/a"
 if [ ! -d "\$root/.git" ]; then
   git init -q "\$root"
-  printf '# mesh e2e demo N1\n' > "\$root/README.md"
+  printf '# mesh e2e demo $STAGE\n' > "\$root/README.md"
   printf 'node_modules/\n.venv/\n' > "\$root/.gitignore"
   git -C "\$root" add README.md .gitignore
-  git -C "\$root" -c user.name='Mesh test' -c user.email=mesh@example.test commit -qm 'N1 network fixture'
+  git -C "\$root" -c user.name='Mesh test' -c user.email=mesh@example.test commit -qm '$STAGE network fixture'
 fi
 EOF
-export MESH_E2E_ROUND1_WORK="$N1_BED_WORK/round1"
-export MESH_E2E_ROUND2_WORK="$N1_BED_WORK/round2"
-exec bash "$N1_BED_WORK/scripts/round$round.sh"
+exec bash "$MESH_DIR/round$round.sh"

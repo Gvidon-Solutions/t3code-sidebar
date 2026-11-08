@@ -7,6 +7,7 @@ import * as NodeUtil from "node:util";
 import * as NodeAssert from "node:assert/strict";
 import { machineAdapter, readConfig } from "./builder.mjs";
 import { rollout } from "./rollout.mjs";
+import { LONG_COMMAND_TIMEOUT_MS } from "../lib/shell.mjs";
 
 const { values } = NodeUtil.parseArgs({
   options: {
@@ -25,8 +26,8 @@ if (!values.config || !values.out)
     "Usage: e2e.mjs --config PRIVATE.json --out PRIVATE-DIR --scenario rollout|lanes [--archive FILE --version VERSION] [--force-health-failure]",
   );
 const config = readConfig(values.config);
-if (config.machines.some((machine) => !/^(D1-|t3-d1-)/.test(machine.unit)))
-  throw new Error("Delivery acceptance only allows D1-prefixed isolated units");
+if (config.machines.some((machine) => !/^delivery-bed-/.test(machine.unit)))
+  throw new Error("Delivery acceptance only allows delivery-bed-prefixed isolated units");
 const output = NodePath.resolve(values.out);
 NodeFS.mkdirSync(output, { recursive: true, mode: 0o700 });
 const events = [];
@@ -38,7 +39,11 @@ const record = async (event) => {
   console.log(JSON.stringify(event));
 };
 const exec = (command, args, options = {}) =>
-  NodeChildProcess.execFileSync(command, args, { encoding: "utf8", timeout: 900_000, ...options });
+  NodeChildProcess.execFileSync(command, args, {
+    encoding: "utf8",
+    timeout: LONG_COMMAND_TIMEOUT_MS,
+    ...options,
+  });
 const cli = NodeURL.fileURLToPath(
   new URL("../../agent-kit/skills/t3/scripts/t3ctl.mjs", import.meta.url),
 );
@@ -67,7 +72,7 @@ async function waitForRunningReplay(threadId) {
     "--ttl",
     "2m",
     "--label",
-    "D1-events",
+    "delivery-bed-events",
     "--token-only",
     "--base-dir",
     machine.home,
@@ -79,20 +84,23 @@ async function waitForRunningReplay(threadId) {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
   });
-  if (!response.ok) throw new Error(`D1 event ticket returned ${response.status}`);
+  if (!response.ok) throw new Error(`delivery bed event ticket returned ${response.status}`);
   const { ticket } = await response.json();
   const socket = new WebSocket(
     `${machine.origin.replace(/^http/, "ws")}/ws?wsTicket=${encodeURIComponent(ticket)}&orchestrationProtocol=2&clientSurface=cli`,
   );
   await new Promise((resolveRunning, rejectRunning) => {
     let settled = false;
-    const deadline = setTimeout(() => finish(new Error("D1 Replay never reached running")), 60_000);
+    const deadline = setTimeout(
+      () => finish(new Error("delivery bed Replay never reached running")),
+      60_000,
+    );
     const finish = (error) => {
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
       if (socket.readyState === WebSocket.OPEN)
-        socket.send(JSON.stringify({ _tag: "Interrupt", requestId: "D1-running" }));
+        socket.send(JSON.stringify({ _tag: "Interrupt", requestId: "delivery-bed-running" }));
       socket.close();
       if (error) rejectRunning(error);
       else resolveRunning();
@@ -101,7 +109,7 @@ async function waitForRunningReplay(threadId) {
       socket.send(
         JSON.stringify({
           _tag: "Request",
-          id: "D1-running",
+          id: "delivery-bed-running",
           tag: "orchestration.subscribeThread",
           payload: { threadId },
           headers: [],
@@ -109,10 +117,10 @@ async function waitForRunningReplay(threadId) {
       ),
     );
     socket.addEventListener("error", (event) =>
-      finish(new Error("D1 Replay event connection failed", { cause: event.error })),
+      finish(new Error("delivery bed Replay event connection failed", { cause: event.error })),
     );
     socket.addEventListener("close", () => {
-      if (!settled) finish(new Error("D1 Replay event stream closed before running"));
+      if (!settled) finish(new Error("delivery bed Replay event stream closed before running"));
     });
     socket.addEventListener("message", (event) => {
       for (const line of String(event.data).split("\n")) {
@@ -122,7 +130,7 @@ async function waitForRunningReplay(threadId) {
           socket.send(JSON.stringify({ _tag: "Pong" }));
           continue;
         }
-        if (message.requestId !== "D1-running") continue;
+        if (message.requestId !== "delivery-bed-running") continue;
         if (message._tag === "Chunk") {
           for (const item of message.values) {
             const runs =
@@ -136,15 +144,19 @@ async function waitForRunningReplay(threadId) {
               return;
             }
             if (runs.some((run) => ["completed", "failed", "interrupted"].includes(run.status))) {
-              finish(new Error("D1 Replay finished before the admission wait could be observed"));
+              finish(
+                new Error(
+                  "delivery bed Replay finished before the admission wait could be observed",
+                ),
+              );
               return;
             }
           }
-          socket.send(JSON.stringify({ _tag: "Ack", requestId: "D1-running" }));
+          socket.send(JSON.stringify({ _tag: "Ack", requestId: "delivery-bed-running" }));
         } else if (message._tag === "Exit" || message._tag === "Defect")
           finish(
             new Error(
-              `D1 Replay event subscription ended: ${JSON.stringify(message.exit ?? message.defect)}`,
+              `delivery bed Replay event subscription ended: ${JSON.stringify(message.exit ?? message.defect)}`,
             ),
           );
       }
@@ -155,7 +167,7 @@ const started = Date.now();
 if (values.scenario === "rollout") {
   if (!values.archive || !values.version)
     throw new Error("Rollout proof needs the genuine built archive and its runtime version");
-  const id = `D1-${Date.now()}`;
+  const id = `delivery-bed-${Date.now()}`;
   const adapters = config.machines.map((machine) =>
     machineAdapter(
       machine,
@@ -169,10 +181,10 @@ if (values.scenario === "rollout") {
   if (values["exercise-idle-wait"]) {
     const drain = adapters[0].drain;
     adapters[0].drain = async () => {
-      const brief = NodePath.join(output, "D1-drain-wait.md");
+      const brief = NodePath.join(output, "delivery-bed-drain-wait.md");
       NodeFS.writeFileSync(
         brief,
-        "D1 isolated admission-drain fixture. Replay this recorded turn; do not modify any repository.",
+        "delivery bed isolated admission-drain fixture. Replay this recorded turn; do not modify any repository.",
         { mode: 0o600 },
       );
       const thread = isolatedReplay([
@@ -233,7 +245,7 @@ if (values.scenario === "rollout") {
     sshTargets: config.machines.filter((machine) => machine.ssh).length,
   });
   if (values["force-health-failure"]) {
-    const rejectedVersion = `${values.version}-D1-rejected`;
+    const rejectedVersion = `${values.version}-delivery-bed-rejected`;
     const failed = config.machines.map((machine) =>
       machineAdapter(
         machine,
@@ -266,28 +278,24 @@ if (values.scenario === "rollout") {
     await record({ proof: "actual health mismatch restores previous runtime and stops rollout" });
   }
 } else if (values.scenario === "lanes") {
-  if (
-    config.machines.some(
-      (machine) => !machine.unit.startsWith("D1-") && !machine.unit.startsWith("t3-d1-"),
-    )
-  )
-    throw new Error("Full lane proof only allows explicitly D1-prefixed isolated units");
+  if (config.machines.some((machine) => !machine.unit.startsWith("delivery-bed-")))
+    throw new Error("Full lane proof only allows explicitly delivery-bed-prefixed isolated units");
   if (config.cleanAgent?.agent !== "devReplay")
     throw new Error("Lane proof requires isolated devReplay clean agent, never a production agent");
   const origin = config.cleanAgent.environment?.T3CTL_ORIGIN;
   if (!origin || !config.machines.some((machine) => machine.origin === origin))
     throw new Error("Clean agent must point explicitly at an allowlisted isolated origin");
-  const source = NodePath.join(output, "D1-source");
+  const source = NodePath.join(output, "delivery-bed-source");
   exec("git", ["clone", "--shared", "--no-checkout", config.repository, source]);
-  exec("git", ["-C", source, "checkout", "-b", "D1-delivery-fixture", values.ref]);
-  exec("git", ["-C", source, "config", "user.name", "D1 Delivery Fixture"]);
+  exec("git", ["-C", source, "checkout", "-b", "delivery-bed-delivery-fixture", values.ref]);
+  exec("git", ["-C", source, "config", "user.name", "Delivery Bed Fixture"]);
   exec("git", ["-C", source, "config", "user.email", "delivery@example.invalid"]);
   const titleFile = NodePath.join(
     source,
     "apps/mobile/src/features/settings/SettingsAboutRouteScreen.tsx",
   );
   const before = NodeFS.readFileSync(titleFile, "utf8");
-  const marker = `About · D1 hot ${Date.now()}`;
+  const marker = `About · delivery bed hot ${Date.now()}`;
   NodeAssert.match(before, /<SettingsScreen title="About">/);
   NodeFS.writeFileSync(
     titleFile,
@@ -320,7 +328,7 @@ if (values.scenario === "rollout") {
   const hotCommandMs = Date.now() - hotStarted;
   NodeAssert.equal(
     exec("git", ["-C", source, "branch", "--show-current"]).trim(),
-    "D1-delivery-fixture",
+    "delivery-bed-delivery-fixture",
   );
   NodeAssert.equal(exec("git", ["-C", source, "status", "--porcelain"]), dirtyBefore);
   const hotBranches = exec("git", [
@@ -376,7 +384,7 @@ if (values.scenario === "rollout") {
     "commit",
     "--no-verify",
     "-m",
-    "test: D1 isolated clean delivery",
+    "test: delivery bed isolated clean delivery",
   ]);
   const cleanCommit = exec("git", ["-C", source, "rev-parse", "HEAD"]).trim();
   exec("git", ["-C", config.repository, "fetch", source, cleanCommit]);

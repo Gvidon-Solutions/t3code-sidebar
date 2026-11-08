@@ -15,13 +15,13 @@ export async function realProviders(mesh) {
     await NodeFSP.mkdir(NodePath.join(node.home, ".config/opencode"), { recursive: true });
     await NodeFSP.copyFile(
       NodePath.join(
-        process.env.R1_CODEX_HOME ?? NodePath.join(NodeOS.homedir(), ".codex"),
+        process.env.MESH_E2E_CODEX_HOME ?? NodePath.join(NodeOS.homedir(), ".codex"),
         "auth.json",
       ),
       NodePath.join(node.home, ".codex/auth.json"),
     );
     await NodeFSP.copyFile(
-      process.env.R1_OPENCODE_AUTH ??
+      process.env.MESH_E2E_OPENCODE_AUTH ??
         NodePath.join(NodeOS.homedir(), ".local/share/opencode/auth.json"),
       NodePath.join(node.home, ".local/share/opencode/auth.json"),
     );
@@ -29,8 +29,8 @@ export async function realProviders(mesh) {
       await NodeFSP.chmod(NodePath.join(node.home, relative), 0o600);
     const profiles = { ...node.inactiveProviders };
     for (const driver of ["codex", "opencode"]) {
-      const source = process.env["R1_" + driver.toUpperCase() + "_BINARY"];
-      NodeAssert.ok(source, "R1_" + driver.toUpperCase() + "_BINARY is required");
+      const source = process.env["MESH_E2E_" + driver.toUpperCase() + "_BINARY"];
+      NodeAssert.ok(source, "MESH_E2E_" + driver.toUpperCase() + "_BINARY is required");
       const binaryPath = NodePath.join(node.home, driver + "-native");
       await NodeFSP.copyFile(source, binaryPath);
       await NodeFSP.chmod(binaryPath, 0o700);

@@ -1,10 +1,9 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { nextForkTitle, planForkPlacement } from "@t3tools/client-runtime/state/thread-forks";
-import type { RunId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import { runThreadFork } from "@t3tools/client-runtime/state/thread-forks";
+import type { RunId, ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useThreadActions } from "../../hooks/useThreadActions";
@@ -26,49 +25,43 @@ export function useForkThread() {
   const { reorderActiveThread } = useThreadActions();
 
   return async (source: ScopedThreadRef, runId?: RunId): Promise<string | null> => {
-    const sourceThread = readThreadShell(source);
-    if (!sourceThread) return "This thread is no longer available.";
-    const { environmentId } = source;
-    const sameEnvironment = () =>
-      readThreadShells().filter((thread) => thread.environmentId === environmentId);
-    const targetThreadId = newThreadId();
-    const targetRef = scopeThreadRef(environmentId, targetThreadId);
-    const result = await forkFromRun({
-      environmentId,
-      input: {
-        sourceThreadId: source.threadId,
-        targetThreadId,
-        ...(runId === undefined ? {} : { runId }),
-        title: nextForkTitle(
-          sourceThread.title,
-          sameEnvironment().map((thread) => thread.title),
-        ),
+    const outcome = await runThreadFork(source, runId, {
+      readThread: (target) => readThreadShell(target),
+      threadsInEnvironment: (environmentId) =>
+        readThreadShells().filter((thread) => thread.environmentId === environmentId),
+      createThreadId: newThreadId,
+      fork: async (input) => {
+        const result = await forkFromRun({ environmentId: source.environmentId, input });
+        if (result._tag === "Success") return { ok: true };
+        if (isAtomCommandInterrupted(result)) {
+          return { ok: false, interrupted: true, message: "" };
+        }
+        const error = squashAtomCommandFailure(result);
+        return {
+          ok: false,
+          interrupted: false,
+          message: error instanceof Error ? error.message : "Failed to fork this thread.",
+        };
       },
+      waitForThread: (target) => waitForThreadShell(target),
+      reorder: (target, orderKey) => reorderActiveThread(target, orderKey),
+      now: () => new Date().toISOString(),
     });
-    if (result._tag === "Failure") {
-      if (isAtomCommandInterrupted(result)) return null;
-      const error = squashAtomCommandFailure(result);
-      return error instanceof Error ? error.message : "Failed to fork this thread.";
+    switch (outcome.kind) {
+      case "forked":
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(outcome.target),
+        });
+        return null;
+      case "source-missing":
+        return "This thread is no longer available.";
+      case "interrupted":
+        return null;
+      case "failed":
+        return outcome.message;
+      case "created-unavailable":
+        return "The fork was created, but its thread data did not reach this client. Reconnect and try opening it from the sidebar.";
     }
-    if (!(await waitForThreadShell(targetRef))) {
-      return "The fork was created, but its thread data did not reach this client. Reconnect and try opening it from the sidebar.";
-    }
-    const placement = planForkPlacement({
-      threads: sameEnvironment().filter((thread) => thread.projectId === sourceThread.projectId),
-      sourceId: source.threadId,
-      forkId: targetThreadId,
-      now: new Date().toISOString(),
-    });
-    // Placement is cosmetic: a failed write leaves the fork on top.
-    await Promise.all(
-      placement.map((write) =>
-        reorderActiveThread(scopeThreadRef(environmentId, write.id as ThreadId), write.orderKey),
-      ),
-    );
-    await navigate({
-      to: "/$environmentId/$threadId",
-      params: buildThreadRouteParams(targetRef),
-    });
-    return null;
   };
 }

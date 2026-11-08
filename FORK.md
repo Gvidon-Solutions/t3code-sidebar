@@ -1890,3 +1890,17 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   client's RPC/MCP implementation. Round two accepts isolated source paths and titles.
 - **Where.** `peer/connection/peerIdentity.ts`, `platform/mutagenRelease.ts`, `mesh/retention.ts`,
   contracts `baseSchemas.ts`, `scripts/lib/shell.mjs` and mesh acceptance scripts.
+
+### 2026-11-08 — C4 shared client orchestration and neutral fixture names
+
+- **What.** Web and mobile keep only their platform adapters for durable draft launch, sidebar
+  forks and replica machine choice; the rest of the orchestration is shared client-runtime code.
+- **How.** `launchPendingDraft`/`pendingDraftMachines`, `runThreadFork`, shared machine-choice,
+  pending-row, lag, candidate, remove and adopt helpers; internal layout transforms moved off the
+  public entry and dead helpers removed. Delivery and mesh scripts share one managed-sshd writer
+  and shell helpers, `bed-target.mjs` absorbs bed setup, round scripts take neutral environment
+  parameters instead of text rewriting, and stage-coded fixture names are gone.
+- **Where.** `packages/client-runtime/src/state/{meshLayout/*,threadForks.ts,meshLayoutClientInternals.ts}`,
+  `apps/{web,mobile}/src/**/PendingMeshDraftCoordinator.tsx`, `useForkThread.ts`,
+  `replicas.logic.ts`, Machines views, `scripts/lib/{shell,managed-sshd}.mjs`,
+  `scripts/delivery/{bed-target,e2e}.mjs` and `scripts/mesh-e2e/`.

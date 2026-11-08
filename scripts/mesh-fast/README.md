@@ -64,7 +64,7 @@ keys, sshd and Mutagen data. The mesh owns a Docker bridge with a small explicit
 private subnet; host listeners bind loopback or that bridge's gateway. No port is
 published on the LAN. Studio refuses inbound peer connections and only dials
 out; laptop reaches it through cloudbox. SSH uses the real managed configuration
-and authenticated N1 byte pipes. Nothing uses an existing T3 server, physical
+and authenticated mesh network byte pipes. Nothing uses an existing T3 server, physical
 machine identity, owner's SSH configuration, VPS or Mutagen daemon.
 
 The harness accepts a machine-name array (`MiniMesh.start(names)`); scenarios
@@ -207,7 +207,7 @@ Small transfers retain the real staging or byte-counter fault milestone.
 | Old script / requirement                                     | Fast scenario                                                                                                                  | Asserted behavior                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Runner lifecycle                                             | `runner-cancel-boot`                                                                                                           | Cancels immediately after spawning a real container, before node readiness; the captured container and bridge must both be gone.                                                                                                                                                                                                        |
-| T1 timing knob                                               | `timing-heartbeat`                                                                                                             | Real N1 peers send six heartbeat frames without an idle drop; the cutoff exposes an unscaled polling tick.                                                                                                                                                                                                                              |
+| T1 timing knob                                               | `timing-heartbeat`                                                                                                             | Real mesh peers send six heartbeat frames without an idle drop; the cutoff exposes an unscaled polling tick.                                                                                                                                                                                                                            |
 | round1 steps 3–5                                             | `layout-legacy-edits`                                                                                                          | Independent legacy seeds merge into one main workspace; every source project alias survives; concurrent rename, placement and reorder survive; fold/default/quiet settings and workspace deletion propagate.                                                                                                                            |
 | round1 legacy mirror, concurrent old client                  | `layout-legacy-concurrent`                                                                                                     | Whole-settings clients cannot erase concurrent granular writes; settings equals materialized document in a stable read window.                                                                                                                                                                                                          |
 | round1 offline edits; round3 partition                       | `layout-partition`                                                                                                             | Both leaves observe the hub offline, retain independent edits, merge after healing, and propagate a tombstone.                                                                                                                                                                                                                          |
@@ -249,7 +249,7 @@ now live in `bindings.mjs` and `forks.mjs`; runtime execution reads committed
 files only. `scripts/mesh-e2e/c2-bed.sh` and `f1-bed.sh` run the same assertions
 at scale 1 from the configured nightly artifact directory. The latter also runs
 the content-reading fork through native Codex and OpenCode, using private copies
-of their credentials and binaries. Provider paths are the same `R1_*` settings
+of their credentials and binaries. Provider paths use the same `MESH_E2E_*` settings
 as the realistic harness. These wrappers create isolated infrastructure and do
 not use the shared three-machine bed.
 
@@ -280,7 +280,7 @@ resetting browser requests. Private sshd explicitly disables account rc files,
 account environment files and reverse DNS; `replica-ssh` checks sshd's effective
 configuration as well as real managed SSH transfers.
 
-Fast R1 reuses scoped, real OpenSSH control connections for its command and
+Fast acceptance reuses scoped, real OpenSSH control connections for its command and
 process-tree checks. The cut case kills the captured managed ProxyCommand, and
 the offline case uses a fresh connection. The realistic variant retains fresh
 connections throughout; the product's three-second SSH timeout is unchanged.

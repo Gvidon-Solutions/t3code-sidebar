@@ -383,19 +383,6 @@ export function meshFooterText(status: MeshFooterStatus): string | null {
   return `Mesh · ${status.tag} unreachable${status.minutes > 0 ? ` for ${status.minutes} min` : ""}`;
 }
 
-/** How long since this machine's layout last changed hands, in words. */
-export function meshMachineLastSync(machine: MeshMachine, now: number): string {
-  if (machine.lastExchangeAt === null) return "Never synced";
-  const at = Date.parse(machine.lastExchangeAt);
-  if (!Number.isFinite(at)) return "Never synced";
-  const minutes = Math.max(0, Math.floor((now - at) / 60_000));
-  if (minutes < 1) return "Synced just now";
-  if (minutes < 60) return `Synced ${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Synced ${hours} h ago`;
-  return `Synced ${Math.floor(hours / 24)} d ago`;
-}
-
 export async function linkMeshMachines<A>(input: {
   readonly source: EnvironmentId;
   readonly target: {

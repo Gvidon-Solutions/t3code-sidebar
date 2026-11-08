@@ -2,11 +2,11 @@
 set -euo pipefail
 action=${1:-}
 export MESH_E2E_HELPERS_ONLY=1
-export MESH_E2E_ROUND1_WORK=${N1_BED_OPS:-/tmp/N1-network-ops}
+export MESH_E2E_ROUND1_WORK=${MESH_E2E_BED_OPS:-/tmp/mesh-network-ops}
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
 set -euo pipefail
-BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-N1}
+BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-mesh-network}
 require_bed_lock() {
   local owner
   owner=$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner') || return 1
@@ -28,7 +28,7 @@ NODE_A_ENV=$(descriptor_env "$NODE_A_ORIGIN")
 NODE_B_ENV=$(descriptor_env "$NODE_B_ORIGIN")
 CLOUD_ENV=$(descriptor_env "$CLOUD_ORIGIN")
 binary="$NODE_A_RUNTIME_ROOT/$BUILD_VERSION/t3"
-proof=/tmp/N1-network-proof
+proof=/tmp/mesh-network-proof
 wait_connection() {
   local state=$1 direction=${2:-} deadline=$((SECONDS+90))
   while [ "$SECONDS" -lt "$deadline" ]; do
@@ -41,12 +41,12 @@ wait_connection() {
 }
 read_proof() {
   ws_rpc nodeA files.read "$(jq -nc --arg e "$CLOUD_ENV" --arg p "$proof" '{environmentId:$e,absolutePath:$p}')" > "$WORK/read-proof.json"
-  jq -e '.contents=="N1 persistent relay"' "$WORK/read-proof.json" >/dev/null
+  jq -e '.contents=="mesh network persistent relay"' "$WORK/read-proof.json" >/dev/null
 }
 metrics() {
   local machine
   for machine in nodeA nodeB cloud; do
-    curl -fsS "$(origin_of "$machine")/__N1_network" > "$WORK/final-proxy-$machine.json"
+    curl -fsS "$(origin_of "$machine")/__mesh_network" > "$WORK/final-proxy-$machine.json"
     jq -e '.state.denyMcp==true' "$WORK/final-proxy-$machine.json" >/dev/null
     jq -e '.peerMcp==.refusedPeerMcp' "$WORK/final-proxy-$machine.json" >/dev/null
   done
@@ -56,11 +56,11 @@ ssh_options() {
   identity=$(cat "$WORK/ssh-identity.path")
   ssh_user=$(cat "$WORK/ssh-user")
   printf -v proxy_command '%q mesh pipe %q --base-dir %q' "$binary" "$CLOUD_ENV" "$NODE_A_BASE_DIR"
-  ssh_args=(-F /dev/null -i "$identity" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WORK/ssh-known-hosts" -o "ProxyCommand=$proxy_command" "$ssh_user@N1-network-target")
+  ssh_args=(-F /dev/null -i "$identity" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WORK/ssh-known-hosts" -o "ProxyCommand=$proxy_command" "$ssh_user@mesh-network-target")
 }
 case "$action" in
   nat)
-    cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false,\"denyPeer\":true}\\n' > '$CLOUD_DIR/tmp/N1-network-state.json'"
+    cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false,\"denyPeer\":true}\\n' > '$CLOUD_DIR/tmp/mesh-network-state.json'"
     [ "$(curl -s -o "$WORK/inbound-peer-refusal.txt" -w '%{http_code}' "$CLOUD_ORIGIN/peer")" = 503 ]
     ws_rpc nodeB peerLinks.list '{}' > "$WORK/nat-nodeB-links.json"
     if jq -e --arg e "$CLOUD_ENV" '.links[] | select(.environmentId==$e)' "$WORK/nat-nodeB-links.json" >/dev/null; then
@@ -85,7 +85,7 @@ case "$action" in
     jq -e --arg e "$CLOUD_ENV" '.connections[] | select(.environmentId==$e and .state=="direct" and .direction=="inbound")' "$WORK/nat-nodeB-status.json" >/dev/null
     jq -e --arg e "$CLOUD_ENV" '.links[] | select(.environmentId==$e and (.urls|length)==0 and .status=="reachable")' "$WORK/nat-nodeB-links.json" > "$WORK/nat-reverse-grant.json"
     wait_connection relayed
-    cloud_ssh "docker exec t3-mesh-e2e sh -c 'printf %s \"N1 persistent relay\" > $proof'"
+    cloud_ssh "docker exec t3-mesh-e2e sh -c 'printf %s \"mesh network persistent relay\" > $proof'"
     read_proof
     metrics
     printf 'PASS bed NAT: inbound peer connections refused; CLOUD dials nodeB; reverse grant has no address; nodeA calls CLOUD via nodeB\n'
@@ -96,17 +96,17 @@ case "$action" in
     ssh_user=$(jq -r --arg e "$CLOUD_ENV" '.config.machines[$e].reported.user' "$WORK/ssh-layout.json")
     [[ "$ssh_user" =~ ^[a-zA-Z0-9_.-]+$ ]] || die "Invalid reported SSH user"
     printf '%s\n' "$ssh_user" > "$WORK/ssh-user"
-    N1_SSH_PREPARE_ONLY=1 node "$MESH_DIR/network-ssh.mjs" "$binary" "$NODE_A_BASE_DIR" "$CLOUD_ENV" "$ssh_user" "$WORK/ssh-host-keys.json" > "$WORK/ssh-prepare.log"
+    MESH_E2E_SSH_PREPARE_ONLY=1 node "$MESH_DIR/network-ssh.mjs" "$binary" "$NODE_A_BASE_DIR" "$CLOUD_ENV" "$ssh_user" "$WORK/ssh-host-keys.json" > "$WORK/ssh-prepare.log"
     public_key=$(sed -n 's/^AUTHORIZED_KEY_FILE=//p' "$WORK/ssh-prepare.log")
     [ -f "$public_key" ]
     printf '%s\n' "${public_key%.pub}" > "$WORK/ssh-identity.path"
-    cat "$public_key" | cloud_ssh "cat > '$CLOUD_DATA/.ssh/N1_authorized_keys'; chmod 600 '$CLOUD_DATA/.ssh/N1_authorized_keys'; chown 10001:10001 '$CLOUD_DATA/.ssh/N1_authorized_keys'"
-    cloud_ssh "cat > '$CLOUD_DIR/tmp/N1-sshd_config'" <<EOF
+    cat "$public_key" | cloud_ssh "cat > '$CLOUD_DATA/.ssh/mesh_network_authorized_keys'; chmod 600 '$CLOUD_DATA/.ssh/mesh_network_authorized_keys'; chown 10001:10001 '$CLOUD_DATA/.ssh/mesh_network_authorized_keys'"
+    cloud_ssh "cat > '$CLOUD_DIR/tmp/mesh-network-sshd_config'" <<EOF
 Port 22
 ListenAddress 127.0.0.1
 HostKey /etc/ssh/ssh_host_ed25519_key
-PidFile /tmp/N1-sshd.pid
-AuthorizedKeysFile /home/t3/.ssh/authorized_keys /home/t3/.ssh/N1_authorized_keys
+PidFile /tmp/mesh-network-sshd.pid
+AuthorizedKeysFile /home/t3/.ssh/authorized_keys /home/t3/.ssh/mesh_network_authorized_keys
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 UsePAM no
@@ -114,18 +114,18 @@ StrictModes yes
 AllowUsers $ssh_user
 Subsystem sftp internal-sftp
 EOF
-    cloud_ssh "chmod 644 '$CLOUD_DIR/tmp/N1-sshd_config'; docker exec t3-mesh-e2e /usr/sbin/sshd -t -f /tmp/N1-sshd_config"
-    cloud_ssh "docker exec -d t3-mesh-e2e sh -c 'if [ -s /tmp/N1-sshd.pid ] && kill -0 \"\$(cat /tmp/N1-sshd.pid)\" 2>/dev/null; then exit 0; fi; exec /usr/sbin/sshd -D -e -f /tmp/N1-sshd_config'"
+    cloud_ssh "chmod 644 '$CLOUD_DIR/tmp/mesh-network-sshd_config'; docker exec t3-mesh-e2e /usr/sbin/sshd -t -f /tmp/mesh-network-sshd_config"
+    cloud_ssh "docker exec -d t3-mesh-e2e sh -c 'if [ -s /tmp/mesh-network-sshd.pid ] && kill -0 \"\$(cat /tmp/mesh-network-sshd.pid)\" 2>/dev/null; then exit 0; fi; exec /usr/sbin/sshd -D -e -f /tmp/mesh-network-sshd_config'"
     for machine in nodeA nodeB; do
       ws_rpc "$machine" meshLayout.status '{}' | jq -Sc '[.connections[] | select(.state=="direct") | {environmentId,connectedAt}] | sort_by(.environmentId)' > "$WORK/ssh-before-$machine.json"
     done
-    N1_SSH_IDENTITY=$(cat "$WORK/ssh-identity.path") node "$MESH_DIR/network-ssh.mjs" "$binary" "$NODE_A_BASE_DIR" "$CLOUD_ENV" "$ssh_user" "$WORK/ssh-host-keys.json"
+    MESH_E2E_SSH_IDENTITY=$(cat "$WORK/ssh-identity.path") node "$MESH_DIR/network-ssh.mjs" "$binary" "$NODE_A_BASE_DIR" "$CLOUD_ENV" "$ssh_user" "$WORK/ssh-host-keys.json"
     for machine in nodeA nodeB; do
       ws_rpc "$machine" meshLayout.status '{}' | jq -Sc '[.connections[] | select(.state=="direct") | {environmentId,connectedAt}] | sort_by(.environmentId)' > "$WORK/ssh-after-$machine.json"
       cmp "$WORK/ssh-before-$machine.json" "$WORK/ssh-after-$machine.json"
     done
     printf 'PASS all persistent peer connections survived SSH transfer interruption\n'
-    jq -r '.[] | "N1-network-target "+.' "$WORK/ssh-host-keys.json" > "$WORK/ssh-known-hosts"
+    jq -r '.[] | "mesh-network-target "+.' "$WORK/ssh-host-keys.json" > "$WORK/ssh-known-hosts"
     metrics
     ;;
   faults)
@@ -137,7 +137,7 @@ EOF
 exec /usr/bin/ssh -o StrictHostKeyChecking=yes -o UpdateHostKeys=no "$@"
 EOF
     chmod 700 "$readonly_ssh/ssh"
-    dropin="$HOME/.config/systemd/user/$NODE_A_TUNNEL_UNIT.d/92-N1-readonly-ssh.conf"
+    dropin="$HOME/.config/systemd/user/$NODE_A_TUNNEL_UNIT.d/92-mesh-network-readonly-ssh.conf"
     mkdir -p "$(dirname "$dropin")"
     printf '[Service]\nEnvironment=PATH=%s:/usr/bin:/bin\n' "$readonly_ssh" > "$dropin"
     systemctl --user daemon-reload
@@ -156,7 +156,7 @@ EOF
     systemctl --user stop "$NODE_A_TUNNEL_UNIT"
     wait_connection offline
     jq -e --arg e "$CLOUD_ENV" '.connections[] | select(.environmentId==$e and .offlineSince!=null and .lastError!=null)' "$WORK/current-status.json" > "$WORK/tunnel-offline.json"
-    for elapsed in 30 60 90 120 150 180; do sleep 30; printf 'N1 bed tunnel cut: %s/180 seconds\n' "$elapsed"; done
+    for elapsed in 30 60 90 120 150 180; do sleep 30; printf 'mesh network bed tunnel cut: %s/180 seconds\n' "$elapsed"; done
     require_bed_lock || die 'Bed lock lost during tunnel cut'
     systemctl --user start "$NODE_A_TUNNEL_UNIT"
     tunnel_stopped=0
@@ -167,7 +167,7 @@ EOF
     restarts=$(cloud_ssh 'docker inspect -f "{{.RestartCount}}" t3-mesh-e2e')
     ws_rpc nodeB meshLayout.status '{}' > "$WORK/before-kill-status.json"
     connected_at=$(jq -r --arg e "$CLOUD_ENV" '.connections[] | select(.environmentId==$e and .state=="direct") | .connectedAt' "$WORK/before-kill-status.json")
-    pid=$(cloud_ssh 'docker exec t3-mesh-e2e cat /tmp/N1-server-spawn.pid')
+    pid=$(cloud_ssh 'docker exec t3-mesh-e2e cat /tmp/mesh-network-server-spawn.pid')
     [[ "$pid" =~ ^[0-9]+$ ]] && [ "$pid" -gt 1 ] || die "Invalid captured server PID"
     require_bed_lock || die 'Bed lock lost before server crash'
     cloud_ssh "docker exec t3-mesh-e2e kill -9 '$pid'"
@@ -191,7 +191,7 @@ EOF
     printf 'PASS bed SIGKILL: automatic restart count %s -> %s, relay and SSH recovered\n' "$restarts" "$after"
     ;;
   restore)
-    cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false,\"denyPeer\":false}\\n' > '$CLOUD_DIR/tmp/N1-network-state.json'"
+    cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false,\"denyPeer\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-state.json'"
     ws_rpc nodeB peerLinks.unlink "$(jq -nc --arg e "$CLOUD_ENV" '{environmentId:$e}')" > "$WORK/restore-unlink.json"
     for attempt in $(seq 1 60); do
       ws_rpc cloud peerLinks.list '{}' > "$WORK/restore-cloud-links.json"

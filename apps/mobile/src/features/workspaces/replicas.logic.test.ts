@@ -1,9 +1,5 @@
 import upgradeFixture from "../../../../../packages/client-runtime/src/state/meshLayout/fixtures/upgrade.json";
 import { materialize, merge, migrateLogicalProjectIds } from "@t3tools/shared/meshLayout";
-import {
-  emptyMeshLayoutState,
-  mergeMeshLayoutSnapshot,
-} from "@t3tools/client-runtime/state/mesh-layout-client";
 import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
 import { describe, expect, it } from "vite-plus/test";
 import {
@@ -127,18 +123,7 @@ it("keeps the unreachable primary beside its replica after a phone cache upgrade
     },
   };
   const migrated = migrateLogicalProjectIds(merge(cachedDocument, upgradeFixture.document));
-  const state = mergeMeshLayoutSnapshot(
-    {
-      ...emptyMeshLayoutState(),
-      snapshot: {
-        environmentId: "studio",
-        document: migrated,
-        config: materialize(migrated),
-      },
-    },
-    { ...upgradeFixture, config: materialize(upgradeFixture.document) },
-  );
-  const config = state.snapshot!.config;
+  const config = materialize(migrated);
   const strip = projectMachineStrip(
     config,
     {

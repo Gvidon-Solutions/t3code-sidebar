@@ -374,7 +374,7 @@ for (const target of ["studio", "cloudbox", "laptop"])
             file = "transfer.bin";
           if (phase === "mount") await write(p.root, file, payload);
           else await place(driver, p);
-          const traffic = await (await fetch(mesh.nodes[1].origin + "/__N1_network")).json();
+          const traffic = await (await fetch(mesh.nodes[1].origin + "/__mesh_network")).json();
           await mesh.fault(mesh.nodes[1], { pausePipeAfterBytes: traffic.pipeBytes + 512 * 1024 });
           const placing = (phase === "mount" ? place(driver, p) : Promise.resolve()).then(
             (value) => ({ value }),
@@ -417,7 +417,7 @@ replicaScenarios["crash-mutagen"] = (directory) =>
         rep = await place(driver, p);
       const daemon = driver.mutagenDaemon;
       NodeAssert.ok(daemon);
-      const traffic = await (await fetch(mesh.nodes[1].origin + "/__N1_network")).json();
+      const traffic = await (await fetch(mesh.nodes[1].origin + "/__mesh_network")).json();
       await mesh.fault(mesh.nodes[1], { pausePipeAfterBytes: traffic.pipeBytes + 512 * 1024 });
       const bytes = NodeCrypto.randomBytes(
         (process.env.MESH_FAST_REALISTIC === "1" ? 256 : 2) * 1024 * 1024,

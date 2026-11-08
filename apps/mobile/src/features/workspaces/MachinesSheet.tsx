@@ -1,7 +1,10 @@
 import { AdoptReplicaAction } from "./AdoptReplicaAction";
 import { useNavigation } from "@react-navigation/native";
 import {
+  removeRepresentationCopy,
+  representationCandidates,
   representationRow,
+  replicaLagText,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import {
@@ -59,9 +62,7 @@ export function MachinesSheet(props: {
   const reps: ReadonlyArray<SidebarProjectMount> =
     props.config.projectMounts[props.projectKey] ?? [];
   const present = new Set(reps.map((rep) => rep.environmentId));
-  const candidates = props.machines.filter(
-    (machine) => !machine.disabled && !present.has(machine.environmentId),
-  );
+  const candidates = representationCandidates(props.machines, present);
   return (
     <Sheet title="Machines" onClose={props.onClose}>
       <ScrollView
@@ -150,16 +151,13 @@ export function MachinesSheet(props: {
               </Text>
               {rep.role === "replica" ? (
                 <Text className="text-xs text-foreground-muted">
-                  {(() => {
-                    const lag = props.liveStatuses.find(
+                  {replicaLagText(
+                    props.liveStatuses.find(
                       (item) =>
                         item.environmentId === rep.environmentId &&
                         item.logicalKey === props.projectKey,
-                    )?.lag;
-                    return lag
-                      ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}`
-                      : "Lag not reported";
-                  })()}
+                    )?.lag,
+                  )}
                 </Text>
               ) : null}
               {row.status.skippedPaths?.length ? (
@@ -193,8 +191,8 @@ export function MachinesSheet(props: {
                   tone="secondary"
                   onPress={() =>
                     Dialog.confirm({
-                      title: `Remove this ${rep.role}?`,
-                      message: `${rep.role === "replica" ? "Synchronization stops and the replica is removed from this mesh folder." : "Removing the primary leaves replicas without their git and build machine. Choose another primary before continuing."} Files already on the machine stay where they are.`,
+                      title: removeRepresentationCopy(rep.role).title,
+                      message: removeRepresentationCopy(rep.role).message,
                       confirmText: "Remove",
                       destructive: true,
                       onConfirm: () => props.onRemove(rep.environmentId),

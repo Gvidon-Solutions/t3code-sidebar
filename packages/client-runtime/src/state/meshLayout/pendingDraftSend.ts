@@ -14,6 +14,7 @@ import {
 import { draftModelUnavailableReason } from "./draftMachine.ts";
 import { replicaProjectId } from "./replicas.ts";
 import type { ReplicaLiveStatus } from "@t3tools/contracts";
+import type { StartThreadTurnInput } from "../../operations/commands.ts";
 
 export const PendingDraftAttachment = Schema.Struct({
   id: Schema.String,
@@ -58,6 +59,25 @@ export interface PendingDraftMesh {
       readonly config: Pick<ServerConfig, "settings" | "providers"> | null;
     }
   >;
+}
+
+/** One connected server's draft-delivery facts, as both clients report them. */
+export interface PendingDraftMachineInput {
+  readonly environmentId: EnvironmentId;
+  readonly connected: boolean;
+  readonly config: Pick<ServerConfig, "settings" | "providers"> | null;
+}
+
+/** The machine map the outbox reconciles against; web and mobile build the same shape. */
+export function pendingDraftMachines(
+  environments: ReadonlyArray<PendingDraftMachineInput>,
+): PendingDraftMesh["machines"] {
+  return new Map(
+    environments.map((environment) => [
+      environment.environmentId,
+      { connected: environment.connected, config: environment.config },
+    ]),
+  );
 }
 
 /** Stored IDs are also the server's launch receipt keys, including after response loss. */
@@ -193,7 +213,7 @@ export class PendingDraftOutbox {
   }
 }
 
-export function pendingDraftStartInput(
+function pendingDraftStartInput(
   send: PendingDraftSend,
   projectId: string,
   attachments: readonly import("@t3tools/contracts").ChatAttachment[],
@@ -247,7 +267,7 @@ export function pendingDraftStartInput(
   };
 }
 
-export async function uploadPendingDraftAttachments(
+async function uploadPendingDraftAttachments(
   send: PendingDraftSend,
   upload: (attachment: PendingDraftAttachment) => Promise<string>,
 ): Promise<import("@t3tools/contracts").ChatAttachment[]> {
@@ -260,4 +280,19 @@ export async function uploadPendingDraftAttachments(
       sizeBytes: attachment.sizeBytes,
     })),
   );
+}
+
+/**
+ * Uploads a stored draft's attachments with the platform's byte transport, then hands the
+ * complete launch command to the app's command runner. Each app supplies only those two
+ * adapters; the receipt IDs and start input stay shared.
+ */
+export async function launchPendingDraft(input: {
+  readonly send: PendingDraftSend;
+  readonly projectId: string;
+  readonly upload: (attachment: PendingDraftAttachment) => Promise<string>;
+  readonly startTurn: (command: StartThreadTurnInput) => Promise<void>;
+}): Promise<void> {
+  const attachments = await uploadPendingDraftAttachments(input.send, input.upload);
+  await input.startTurn(pendingDraftStartInput(input.send, input.projectId, attachments));
 }

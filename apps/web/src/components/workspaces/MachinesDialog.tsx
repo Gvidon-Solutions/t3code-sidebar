@@ -2,7 +2,10 @@ import { AdoptReplicaAction } from "./AdoptReplicaAction";
 import { EnvironmentId } from "@t3tools/contracts";
 import { openOpenFileDialog } from "../files/openFileDialogState";
 import {
+  removeRepresentationCopy,
+  representationCandidates,
   representationRow,
+  replicaLagText,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
@@ -60,9 +63,7 @@ export function MachinesDialog(props: {
     props.config.projectMounts[props.logicalKey] ?? [];
   const removingRole = reps.find((rep) => rep.environmentId === removing)?.role ?? "replica";
   const present = new Set(reps.map((rep) => rep.environmentId));
-  const candidates = props.machines.filter(
-    (machine) => !machine.disabled && !present.has(machine.environmentId),
-  );
+  const candidates = representationCandidates(props.machines, present);
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogPopup className="max-w-xl">
@@ -114,16 +115,13 @@ export function MachinesDialog(props: {
                     </div>
                     {rep.role === "replica" ? (
                       <span className="text-xs text-muted-foreground">
-                        {(() => {
-                          const lag = props.liveStatuses.find(
+                        {replicaLagText(
+                          props.liveStatuses.find(
                             (item) =>
                               item.environmentId === rep.environmentId &&
                               item.logicalKey === props.logicalKey,
-                          )?.lag;
-                          return lag
-                            ? `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`}`
-                            : "Lag not reported";
-                        })()}
+                          )?.lag,
+                        )}
                       </span>
                     ) : null}
                     {status.status.skippedPaths?.length ? (
@@ -245,12 +243,9 @@ export function MachinesDialog(props: {
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this {removingRole}?</AlertDialogTitle>
+            <AlertDialogTitle>{removeRepresentationCopy(removingRole).title}</AlertDialogTitle>
             <AlertDialogDescription>
-              {removingRole === "replica"
-                ? "Synchronization stops and the replica is removed from this mesh folder."
-                : "Removing the primary leaves replicas without their git and build machine. Choose another primary before continuing."}{" "}
-              Files already on the machine stay where they are.
+              {removeRepresentationCopy(removingRole).message}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

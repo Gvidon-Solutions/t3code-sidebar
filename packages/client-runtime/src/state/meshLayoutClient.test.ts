@@ -20,11 +20,7 @@ import { machineTag, mergeSuggestionsFor, offlineLogicalProjects } from "./meshL
 import { addWorkspace } from "./sidebarWorkspaces.ts";
 import {
   MeshLayoutStore,
-  acknowledgeMeshLayoutEntries,
-  editMeshLayout,
   emptyMeshLayoutState,
-  isPermanentMeshLayoutFailure,
-  mergeMeshLayoutSnapshot,
   parseMeshLayoutCache,
   pickMeshSource,
   serializeMeshLayoutCache,
@@ -34,6 +30,12 @@ import {
   type MeshLayoutSnapshot,
   type MeshLayoutSourceEnvironment,
 } from "./meshLayoutClient.ts";
+import {
+  acknowledgeMeshLayoutEntries,
+  editMeshLayout,
+  isPermanentMeshLayoutFailure,
+  mergeMeshLayoutSnapshot,
+} from "./meshLayoutClientInternals.ts";
 
 const env = (id: string): EnvironmentId => id as EnvironmentId;
 
