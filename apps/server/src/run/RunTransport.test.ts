@@ -65,7 +65,7 @@ process.stdout.write(JSON.stringify(results));`;
         expect(rows[0]?.result?.code).toBe(23);
         expect(rows[0]?.result?.ignored).toEqual(["dist/first", "dist/second"]);
         expect(rows[0]?.args).toContain(
-          "-T -L 127.0.0.1:3000:127.0.0.1:3000 -L 127.0.0.1:8080:127.0.0.1:8080 t3-studio",
+          "-T -L 127.0.0.1:3000:127.0.0.1:3000 -L 127.0.0.1:8080:127.0.0.1:8080 -- t3-studio",
         );
         expect(rows[1]?.result?.code).toBe(255);
         expect(rows[1]?.args).toContain("-tt -L");
