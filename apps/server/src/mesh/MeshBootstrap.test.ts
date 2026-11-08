@@ -30,12 +30,20 @@ it.effect(
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "B1-bootstrap-" });
       const calls: ProcessRunInput[] = [];
       let installed = false;
-      let failService = true;
+      let failProbe = true;
       let downloads = 0;
       const doc = {
         schema: 1,
         t3: { version: "0.1.5" },
-        machines: { cloudbox: { bootstrap: { ssh: "studio@cloudbox:2222" } } },
+        machines: {
+          cloudbox: {
+            reach: { address: "https://cloudbox.example" },
+            bootstrap: {
+              ssh: "studio@cloudbox:2222",
+              hostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBRZ",
+            },
+          },
+        },
       };
       yield* Effect.gen(function* () {
         const mesh = yield* MeshLayoutService;
@@ -44,6 +52,20 @@ it.effect(
         yield* mesh.apply({
           "mesh.config": { h, v: { revision: "r1", doc, author: "studio", writtenAt: "" } },
         });
+        for (const machine of [
+          { bootstrap: doc.machines.cloudbox.bootstrap },
+          {
+            reach: { address: "http://cloudbox.example" },
+            bootstrap: doc.machines.cloudbox.bootstrap,
+          },
+          { reach: doc.machines.cloudbox.reach, bootstrap: { ssh: "studio@cloudbox" } },
+        ])
+          expect(
+            (yield* bootstrap
+              .reconcile("cloudbox", { ...doc, machines: { cloudbox: machine } })
+              .pipe(Effect.result))._tag,
+          ).toBe("Failure");
+        expect(calls).toHaveLength(0);
         yield* bootstrap.credential("cloudbox", {
           kind: "password",
           value: "one-time-private-value",
@@ -56,10 +78,13 @@ it.effect(
             JSON.stringify(entry.v).includes("one-time-private-value"),
           ),
         ).toBe(false);
+        expect(calls[0]?.args).toContain("StrictHostKeyChecking=yes");
+        expect(calls[0]?.args).not.toContain("StrictHostKeyChecking=accept-new");
         expect(calls[0]?.args).toContain("PubkeyAuthentication=no");
         expect(calls[0]?.args).toContain("PreferredAuthentications=password,keyboard-interactive");
         const firstCount = calls.length;
-        failService = false;
+        expect(calls.filter((call) => call.args.at(-1)?.startsWith("uname"))).toHaveLength(1);
+        failProbe = false;
         yield* bootstrap.reconcile("cloudbox", doc);
         expect(
           calls.slice(firstCount).every((call) => call.env?.T3_BOOTSTRAP_PASSWORD === undefined),
@@ -89,14 +114,15 @@ it.effect(
                       const command = input.args.at(-1)!;
                       if (command.includes("--version")) return result("t3 v0.1.5\n");
                       if (command.startsWith("uname"))
-                        return result("Linux\nx86_64\n/home/studio\n");
+                        return failProbe
+                          ? result("", 255)
+                          : result("Linux\nx86_64\n/home/studio\n");
                       if (command.includes("test ! -f"))
                         return result(installed ? "installed" : "");
                       if (input.stdin) {
                         installed = true;
                         return result();
                       }
-                      if (command.includes("__mesh-install") && failService) return result("", 255);
                       if (command.includes("'pair'"))
                         return result("Token: private-pairing-token\n");
                       return result();
@@ -113,6 +139,7 @@ it.effect(
                   link: (input) =>
                     Effect.sync(() => {
                       expect(input.pairingCode).toBe("private-pairing-token");
+                      expect(input.url).toBe("https://cloudbox.example/");
                       return {
                         environmentId: EnvironmentId.make("cloudbox-id"),
                         label: "Cloudbox",
