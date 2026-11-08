@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   InboxAgentCommentInput,
@@ -22,6 +23,7 @@ const shared = {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     InboxService.InboxService,

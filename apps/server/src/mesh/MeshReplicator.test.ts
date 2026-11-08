@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { keys } from "@t3tools/shared/meshLayout";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import { CommandId, EventId } from "@t3tools/contracts";
@@ -17,7 +18,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
-import * as Sqlite from "../persistence/Sqlite.ts";
+
 import * as SqlClient from "effect/sql/SqlClient";
 import * as Settings from "../serverSettings.ts";
 import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
@@ -109,9 +110,8 @@ it.effect(
             return yield* Schema.decodeEffect(input.success)(result).pipe(Effect.orDie);
           }),
         });
-        const links = Layer.mock(PeerLinks)({
-          enabled: Effect.succeed(true),
-          list: Effect.sync(() =>
+        const links = (() => {
+          const list = Effect.sync(() =>
             ready
               ? adjacent.map(
                   (other) =>
@@ -128,8 +128,17 @@ it.effect(
                     }) satisfies PeerLinkSummary,
                 )
               : [],
-          ),
-        });
+          );
+          return Layer.mock(PeerLinks)({
+            enabled: Effect.succeed(true),
+            list,
+            ids: Effect.map(list, (peers) => peers.map((peer) => peer.environmentId)),
+            get: (id) =>
+              Effect.map(list, (peers) =>
+                Option.fromNullishOr(peers.find((peer) => peer.environmentId === id)),
+              ),
+          });
+        })();
         const env = Layer.succeed(ServerEnvironment, {
           getEnvironmentId: Effect.succeed(EnvironmentId.make(id)),
           getDescriptor: Effect.succeed(descriptorOf(id, id)),
@@ -150,8 +159,8 @@ it.effect(
                 }),
                 env,
                 Settings.layerTest({ linkedEnvironmentsEnabled: true }),
-                Sqlite.layerMemory,
-                ApplicationEvents.layer.pipe(Layer.provide(Sqlite.layerMemory)),
+                MeshTestServices.layerMemory,
+                ApplicationEvents.layer.pipe(Layer.provide(MeshTestServices.layerMemory)),
               ),
             ),
             Layer.fresh,
@@ -260,7 +269,7 @@ it.effect(
       yield* a.mesh.apply(snapshot.document);
       yield* settle;
       expect(yield* c.mesh.read).toEqual(snapshot);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("reports peer watermarks and retains old tombstones while a linked peer is offline", () =>
@@ -273,10 +282,18 @@ it.effect("reports peer watermarks and retains old tombstones while a linked pee
           new OrchestratorMcpFailure({ code: "orchestration_error", message: "laptop offline" }),
         ),
     });
-    const links = Layer.mock(PeerLinks)({
-      enabled: Effect.succeed(true),
-      list: Effect.sync(() => linked),
-    });
+    const links = (() => {
+      const list = Effect.sync(() => linked);
+      return Layer.mock(PeerLinks)({
+        enabled: Effect.succeed(true),
+        list,
+        ids: Effect.map(list, (peers) => peers.map((peer) => peer.environmentId)),
+        get: (id) =>
+          Effect.map(list, (peers) =>
+            Option.fromNullishOr(peers.find((peer) => peer.environmentId === id)),
+          ),
+      });
+    })();
     const env = Layer.succeed(ServerEnvironment, {
       getEnvironmentId: Effect.succeed(EnvironmentId.make("A")),
       getDescriptor: Effect.succeed(descriptorOf("A", "A")),
@@ -290,7 +307,7 @@ it.effect("reports peer watermarks and retains old tombstones while a linked pee
             links,
             env,
             Settings.layerTest({ linkedEnvironmentsEnabled: true }),
-            Sqlite.layerMemory,
+            MeshTestServices.layerMemory,
           ),
         ),
         Layer.fresh,
@@ -386,7 +403,7 @@ it.effect("reports peer watermarks and retains old tombstones while a linked pee
     linked = linked.filter((peer) => peer.environmentId !== "readonly-peer");
     yield* replicator.sync;
     expect((yield* mesh.read).document["machine/deleted"]).toBeUndefined();
-  }).pipe(Effect.scoped),
+  }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("restores a wiped store with a new generation without erasing surviving replicas", () =>
@@ -402,15 +419,14 @@ it.effect("restores a wiped store with a new generation without erasing survivin
     const pushed = yield* Deferred.make<void>();
     const createNode = Effect.fn("test.createNode")(function* (id: string) {
       const deps = Layer.mergeAll(
-        Sqlite.layerMemory,
+        MeshTestServices.layerMemory,
         Settings.layerTest({ linkedEnvironmentsEnabled: true }),
         Layer.succeed(ServerEnvironment, {
           getEnvironmentId: Effect.succeed(EnvironmentId.make(id)),
           getDescriptor: Effect.succeed(descriptorOf(id, id)),
         }),
-        Layer.mock(PeerLinks)({
-          enabled: Effect.succeed(true),
-          list: Effect.sync(() =>
+        (() => {
+          const list = Effect.sync(() =>
             [...nodes.keys()]
               .filter((other) => other !== id)
               .map((other) => ({
@@ -424,8 +440,17 @@ it.effect("restores a wiped store with a new generation without erasing survivin
                 lastReachedAt: null,
                 lastError: null,
               })),
-          ),
-        }),
+          );
+          return Layer.mock(PeerLinks)({
+            enabled: Effect.succeed(true),
+            list,
+            ids: Effect.map(list, (peers) => peers.map((peer) => peer.environmentId)),
+            get: (id) =>
+              Effect.map(list, (peers) =>
+                Option.fromNullishOr(peers.find((peer) => peer.environmentId === id)),
+              ),
+          });
+        })(),
         Layer.succeed(PeerMcpClient, {
           call: Effect.fn("test.exchange")(function* <S extends Schema.Decoder<unknown>>(input: {
             environmentId: EnvironmentId;
@@ -501,7 +526,7 @@ it.effect("restores a wiped store with a new generation without erasing survivin
     yield* laptop.replicator.sync;
     expect((yield* laptop.mesh.read).config.projectTitles.example).toBe("Example");
     expect(yield* studio.mesh.read).toEqual(yield* laptop.mesh.read);
-  }).pipe(Effect.scoped),
+  }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("retries a failed push promptly instead of waiting for the next period", () =>
@@ -518,16 +543,14 @@ it.effect("retries a failed push promptly instead of waiting for the next period
     let refused = 0;
     const createNode = Effect.fn("test.createRetryNode")(function* (id: string) {
       const deps = Layer.mergeAll(
-        Sqlite.layerMemory,
+        MeshTestServices.layerMemory,
         Settings.layerTest({ linkedEnvironmentsEnabled: true }),
         Layer.succeed(ServerEnvironment, {
           getEnvironmentId: Effect.succeed(EnvironmentId.make(id)),
           getDescriptor: Effect.succeed(descriptorOf(id, id)),
         }),
-        Layer.mock(PeerLinks)({
-          enabled: Effect.succeed(true),
-          changes: Stream.fromPubSub(connectionChanges),
-          list: Effect.sync(() =>
+        (() => {
+          const list = Effect.sync(() =>
             id !== "studio"
               ? []
               : [
@@ -543,8 +566,18 @@ it.effect("retries a failed push promptly instead of waiting for the next period
                     lastError: null,
                   } satisfies PeerLinkSummary,
                 ],
-          ),
-        }),
+          );
+          return Layer.mock(PeerLinks)({
+            enabled: Effect.succeed(true),
+            changes: Stream.fromPubSub(connectionChanges),
+            list,
+            ids: Effect.map(list, (peers) => peers.map((peer) => peer.environmentId)),
+            get: (id) =>
+              Effect.map(list, (peers) =>
+                Option.fromNullishOr(peers.find((peer) => peer.environmentId === id)),
+              ),
+          });
+        })(),
         Layer.succeed(PeerMcpClient, {
           call: Effect.fn("test.retryExchange")(function* <
             S extends Schema.Decoder<unknown>,
@@ -631,5 +664,5 @@ it.effect("retries a failed push promptly instead of waiting for the next period
     expect((yield* nodes.get("chatbox")!.mesh.read).config.machines.studio?.label).toBe(
       "After reconnect",
     );
-  }).pipe(Effect.scoped),
+  }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );

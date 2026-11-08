@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import { assert, describe, it } from "@effect/vitest";
 import {
   EventId,
@@ -20,7 +22,6 @@ import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as EventSink from "./EventSink.ts";
 import * as EventStore from "./EventStore.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
@@ -221,10 +222,11 @@ describe("EventSink run outcomes", () => {
         }),
       );
       const layer = EventSink.layer.pipe(
+        Layer.provide(RequiredAdmission.layer),
         Layer.provideMerge(pausedLookup),
         Layer.provideMerge(
           Layer.mergeAll(EventStore.layer, ProjectionStore.layer).pipe(
-            Layer.provideMerge(SqlitePersistence.layerMemory),
+            Layer.provideMerge(MeshTestServices.layerMemory),
           ),
         ),
       );

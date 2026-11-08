@@ -1,3 +1,6 @@
+import { PeerMcpClient } from "../../../peer/PeerMcpClient.ts";
+import { PeerLinks } from "../../../peer/PeerLinks.ts";
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   OrchestratorMcpFailure,
@@ -23,6 +26,9 @@ const UiOpenTool = Tool.make("ui_open", {
   failure: OrchestratorMcpFailure,
   failureMode: "return",
   dependencies: [
+    PeerLinks,
+    PeerMcpClient,
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     UiRequests.UiRequests,

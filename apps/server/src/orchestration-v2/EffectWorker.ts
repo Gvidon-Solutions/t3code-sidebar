@@ -1,4 +1,4 @@
-import { isDeliveryUpdating } from "@t3tools/contracts";
+import { isDeliveryUpdating, DeliveryUpdatingError } from "@t3tools/contracts";
 import { CommandId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -812,7 +812,7 @@ export const layerWithOptions = (
               .retry({
                 effectId: effect.id,
                 workerId,
-                error: "T3_UPDATING: delivery admission is closed",
+                error: new DeliveryUpdatingError().message,
                 delayMs: 0,
                 preserveAttempt: true,
               })

@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { ServerEnvironment } from "../../../environment/ServerEnvironment.ts";
 import { descriptorOf } from "../../../peer/PeerLinks.testkit.ts";
@@ -157,93 +158,96 @@ it.effect.each([
       expect(result).toHaveProperty("project.logicalTitle", "primary");
   }).pipe(
     Effect.provide(
-      Layer.mergeAll(
-        NodeCrypto.layer,
-        Layer.mock(ServerEnvironment)({
-          getDescriptor: Effect.succeed(descriptorOf("local", "Worker")),
-        }),
-        Layer.succeed(McpInvocationContext, {
-          environmentId: EnvironmentId.make("local"),
-          requestNamespace: "self",
-          thread: {
-            threadId: shell.id,
-            providerInstanceId: ProviderInstanceId.make("codex"),
-            providerSessionId: "self",
-          },
-          client: undefined,
-          issuedAt: 0,
-          capabilities: new Set(["orchestration" as const]),
-        }),
-        Layer.mock(ThreadManagementService)({
-          getThreadShell: () => Effect.succeed(shell),
-          getProjectThreadRecords: () =>
-            Effect.succeed({
-              ...idleThreadProjection(shell),
-              subagents: [
-                {
-                  id: NodeId.make("task"),
-                  threadId: shell.id,
-                  runId: null,
-                  parentNodeId: NodeId.make("root"),
-                  origin: "app_owned",
-                  createdBy: "agent",
-                  driver: ProviderDriverKind.make("codex"),
-                  providerInstanceId: shell.providerInstanceId,
-                  providerThreadId: null,
-                  childThreadId: null,
-                  remoteChild: {
-                    environmentId: EnvironmentId.make("remote"),
-                    threadId: ThreadId.make("mcp:remote-child"),
-                    label: "Remote",
-                  },
-                  nativeTaskRef: null,
-                  prompt: "task",
-                  title: "Task",
-                  model: null,
-                  status: "running",
-                  result: null,
-                  startedAt: null,
-                  completedAt: null,
-                  updatedAt: shell.updatedAt,
-                },
-              ],
-            }),
-          listProjectThreads: () => Effect.succeed([child]),
-        }),
-        Layer.mock(ProjectService)({
-          getById: () =>
-            Effect.succeed(
-              role === "no project"
-                ? Option.none()
-                : Option.some({
-                    id: shell.projectId,
-                    title: role === "allocated replica" ? "copy" : "Example",
-                    workspaceRoot: "/copy",
-                    defaultModelSelection: null,
-                    scripts: [],
-                    createdAt: "2026-01-01T00:00:00Z",
-                    updatedAt: "2026-01-01T00:00:00Z",
-                    deletedAt: null,
-                  }),
-            ),
-        }),
-        Layer.mock(MeshLayoutService)({
-          environmentId: "local",
-          read: Effect.succeed({ config, document: {} }),
-        }),
-        Layer.mock(ProjectReplicaService)({
-          status: Effect.succeed([
-            {
-              logicalKey: role === "alias" ? "canonical" : "repo",
-              environmentId: "local",
-              sessionName: "t3-repo-local",
-              state: "conflict",
-              conflicts: ["file"],
-              problems: [],
-              updatedAt: "",
+      Layer.provideMerge(
+        Layer.mergeAll(
+          NodeCrypto.layer,
+          Layer.mock(ServerEnvironment)({
+            getDescriptor: Effect.succeed(descriptorOf("local", "Worker")),
+          }),
+          Layer.succeed(McpInvocationContext, {
+            environmentId: EnvironmentId.make("local"),
+            requestNamespace: "self",
+            thread: {
+              threadId: shell.id,
+              providerInstanceId: ProviderInstanceId.make("codex"),
+              providerSessionId: "self",
             },
-          ]),
-        }),
+            client: undefined,
+            issuedAt: 0,
+            capabilities: new Set(["orchestration" as const]),
+          }),
+          Layer.mock(ThreadManagementService)({
+            getThreadShell: () => Effect.succeed(shell),
+            getProjectThreadRecords: () =>
+              Effect.succeed({
+                ...idleThreadProjection(shell),
+                subagents: [
+                  {
+                    id: NodeId.make("task"),
+                    threadId: shell.id,
+                    runId: null,
+                    parentNodeId: NodeId.make("root"),
+                    origin: "app_owned",
+                    createdBy: "agent",
+                    driver: ProviderDriverKind.make("codex"),
+                    providerInstanceId: shell.providerInstanceId,
+                    providerThreadId: null,
+                    childThreadId: null,
+                    remoteChild: {
+                      environmentId: EnvironmentId.make("remote"),
+                      threadId: ThreadId.make("mcp:remote-child"),
+                      label: "Remote",
+                    },
+                    nativeTaskRef: null,
+                    prompt: "task",
+                    title: "Task",
+                    model: null,
+                    status: "running",
+                    result: null,
+                    startedAt: null,
+                    completedAt: null,
+                    updatedAt: shell.updatedAt,
+                  },
+                ],
+              }),
+            listProjectThreads: () => Effect.succeed([child]),
+          }),
+          Layer.mock(ProjectService)({
+            getById: () =>
+              Effect.succeed(
+                role === "no project"
+                  ? Option.none()
+                  : Option.some({
+                      id: shell.projectId,
+                      title: role === "allocated replica" ? "copy" : "Example",
+                      workspaceRoot: "/copy",
+                      defaultModelSelection: null,
+                      scripts: [],
+                      createdAt: "2026-01-01T00:00:00Z",
+                      updatedAt: "2026-01-01T00:00:00Z",
+                      deletedAt: null,
+                    }),
+              ),
+          }),
+          Layer.mock(MeshLayoutService)({
+            environmentId: "local",
+            read: Effect.succeed({ config, document: {} }),
+          }),
+          Layer.mock(ProjectReplicaService)({
+            status: Effect.succeed([
+              {
+                logicalKey: role === "alias" ? "canonical" : "repo",
+                environmentId: "local",
+                sessionName: "t3-repo-local",
+                state: "conflict",
+                conflicts: ["file"],
+                problems: [],
+                updatedAt: "",
+              },
+            ]),
+          }),
+        ),
+        MeshTestServices.required,
       ),
     ),
   );

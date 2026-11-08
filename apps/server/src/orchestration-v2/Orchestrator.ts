@@ -1,4 +1,5 @@
-import { isDeliveryUpdating, DELIVERY_UPDATING } from "@t3tools/contracts";
+import { ADMISSION_GATED_EFFECT_TYPES } from "@t3tools/contracts";
+import { isDeliveryUpdating, DeliveryUpdatingError } from "@t3tools/contracts";
 import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 import { planForkLinked, planForkRecord } from "../mesh/forkRecord.ts";
 import type {
@@ -209,8 +210,7 @@ export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDi
   },
 ) {
   override get message(): string {
-    if (isDeliveryUpdating(this.cause))
-      return `${DELIVERY_UPDATING}: server is updating; retry this command`;
+    if (isDeliveryUpdating(this.cause)) return new DeliveryUpdatingError().message;
     return `Failed to dispatch orchestration command ${this.commandType} (${this.commandId}).`;
   }
 }
@@ -1064,7 +1064,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const runtimePolicy = yield* RuntimePolicyV2;
   const threadForkService = yield* ThreadForkServiceV2;
   const threadDispatch = yield* ThreadCommandExecutor.ThreadCommandExecutor;
-  const deliveryAdmission = yield* Effect.serviceOption(DeliveryAdmission);
+  const deliveryAdmission = yield* DeliveryAdmission;
   // Read once: the policy is fixed for the server's life, and dispatch takes it as an input.
   const { managedPolicy } = serverSettings;
   const runtimeModeCeiling: RuntimeModeCeiling | undefined =
@@ -1651,11 +1651,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         readonly queuedRunId?: RunId;
       },
     ) {
-      if (
-        Option.isSome(deliveryAdmission) &&
-        (yield* deliveryAdmission.value.status.pipe(Effect.orDie)).phase !== "open"
-      )
-        return;
+      if ((yield* deliveryAdmission.status.pipe(Effect.orDie)).phase !== "open") return;
       if (!(yield* projectionStore.canStartQueuedRun(threadId))) return;
       const projection = yield* readCommandProjection(threadId);
       if (
@@ -11687,7 +11683,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       yield* stopRemainingWork();
       yield* Ref.update(effects, (existing) => [...existing, ...otherProviderInterrupts]);
       return {
-        effectTypes: ["provider-turn.start", "provider-turn.restart"],
+        effectTypes: ADMISSION_GATED_EFFECT_TYPES,
         reason: `Run ${run.id} was interrupted before its provider turn started.`,
       } satisfies {
         readonly effectTypes: ReadonlyArray<OrchestrationEffectRequestV2["type"]>;
@@ -14251,8 +14247,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const shellProjectionError = (cause: unknown) =>
     new OrchestratorProjectionError({ threadId: ThreadId.make("thread:shell"), cause });
 
-  if (Option.isSome(deliveryAdmission))
-    yield* deliveryAdmission.value.onOpen(resumeQueuedRuns.pipe(Effect.asVoid, Effect.orDie));
+  yield* deliveryAdmission.onOpen(resumeQueuedRuns.pipe(Effect.asVoid, Effect.orDie));
   return OrchestratorV2.of({
     resumeQueuedRuns,
     recoverDelegatedTasks,
@@ -14463,6 +14458,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
 export const layer: Layer.Layer<
   OrchestratorV2,
   never,
+  | DeliveryAdmission
   | CheckpointServiceV2
   | FileSystem.FileSystem
   | Path.Path

@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   OrchestratorMcpFailure,
@@ -56,6 +57,7 @@ const DeviceOpenTool = Tool.make("device_open", {
   success: DeviceToolOpenResult,
   failure: DeviceToolFailure,
   dependencies: [
+    MeshLayoutService,
     ...dependencies,
     FileSystem.FileSystem,
     Path.Path,

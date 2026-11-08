@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import { makeSubagentChildThread } from "@t3tools/provider-core/server/subagentProjection";
@@ -25,7 +26,7 @@ import * as Stream from "effect/Stream";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as McpSessionRegistryTestkit from "../mcp/McpSessionRegistry.testkit.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ProjectEnrichmentService from "../project/ProjectEnrichmentService.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
@@ -116,7 +117,7 @@ const layerTest = Layer.mergeAll(RuntimeLayer.layer, RuntimeLayer.layerEventSink
   ),
   Layer.provide(McpSessionRegistryTestkit.layer),
   Layer.provide(McpProviderSessions.layer),
-  Layer.provide(SqlitePersistence.layerMemory),
+  Layer.provide(MeshTestServices.layerMemory),
   Layer.provide(layerCheckpointStoreTest),
   Layer.provide(layerServerConfig),
   Layer.provide(ServerSettings.layerTest()),
@@ -322,7 +323,15 @@ describe("ThreadSettlementCascadeV2", () => {
       for (const threadId of [parent, child, task, grandchild]) {
         assert.equal((yield* threadOf(threadId)).settledOverride, "settled", threadId);
       }
-    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+      ),
+    ),
   );
 
   it.effect("an automatic settlement settles the subagents too", () =>
@@ -343,7 +352,15 @@ describe("ThreadSettlementCascadeV2", () => {
       yield* cascade.drain;
 
       assert.equal((yield* threadOf(child)).settledOverride, "settled");
-    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+      ),
+    ),
   );
 
   it.effect("a subagent that is still running stays active while the others settle", () =>
@@ -371,7 +388,15 @@ describe("ThreadSettlementCascadeV2", () => {
       assert.isNull(left.settledAt);
       // Its own subagents stay with it until it settles.
       assert.isNull((yield* threadOf(runningChild)).settledOverride);
-    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+      ),
+    ),
   );
 
   it.effect("settling again reaches a subagent that was still running the first time", () =>
@@ -415,7 +440,15 @@ describe("ThreadSettlementCascadeV2", () => {
       yield* cascade.drain;
 
       assert.equal((yield* threadOf(straggler)).settledOverride, "settled");
-    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+      ),
+    ),
   );
 
   it.effect("un-settling a thread un-settles its settled subagents, not archived ones", () =>
@@ -453,7 +486,15 @@ describe("ThreadSettlementCascadeV2", () => {
       const stillArchived = yield* threadOf(archived);
       assert.isNotNull(stillArchived.archivedAt);
       assert.equal(stillArchived.settledOverride, "settled");
-    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+      ),
+    ),
   );
 
   it.effect("settling a subagent leaves its parent alone", () =>
@@ -474,6 +515,14 @@ describe("ThreadSettlementCascadeV2", () => {
 
       assert.equal((yield* threadOf(child)).settledOverride, "settled");
       assert.isNull((yield* threadOf(parent)).settledOverride);
-    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+      ),
+    ),
   );
 });

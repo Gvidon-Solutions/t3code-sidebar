@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "./MeshLayoutService.ts";
 import { relayHopsAllowed, PEER_HOPS_ERROR } from "../peer/connection/peerIdentity.ts";
 import { forwardedCallLimits } from "./MeshLinkPermissions.ts";
 import {
@@ -41,12 +42,9 @@ export const layer = Layer.effect(
   MeshRelay,
   Effect.gen(function* () {
     const links = yield* PeerLinks;
-    const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
-    const status = Effect.suspend(
-      () =>
-        (Option.isSome(transport) ? transport.value.get()?.status : undefined) ??
-        Effect.succeed([]),
-    );
+    const mesh = yield* MeshLayoutService;
+    const transport = yield* PeerTransport.PeerTransport;
+    const status = Effect.suspend(() => transport.get()?.status ?? Effect.succeed([]));
     const peers = yield* PeerMcpClient;
     const self = yield* (yield* ServerEnvironment).getEnvironmentId;
     const routes = links.list.pipe(
@@ -69,7 +67,9 @@ export const layer = Layer.effect(
           !["t3_mesh_update_vote", "t3_mesh_update_health"].includes(input.tool))
       )
         return yield* refused;
-      const narrowed = yield* forwardedCallLimits(input.tool, limits, input.environmentId);
+      const narrowed = yield* forwardedCallLimits(input.tool, limits, input.environmentId).pipe(
+        Effect.provideService(MeshLayoutService, mesh),
+      );
       const target = yield* links.get(input.environmentId).pipe(Effect.mapError(() => refused));
       if (Option.isNone(target)) return yield* refused;
       return yield* peers.call({

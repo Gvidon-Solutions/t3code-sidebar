@@ -1,3 +1,4 @@
+import { DeliveryUpdatingError } from "./delivery.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
@@ -881,5 +882,6 @@ export class OrchestratorMcpFailure extends Schema.TaggedError<OrchestratorMcpFa
       "target_required",
     ]),
     message: Schema.String,
+    cause: Schema.optionalKey(DeliveryUpdatingError),
   },
 ) {}

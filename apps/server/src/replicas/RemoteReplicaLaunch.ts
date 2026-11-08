@@ -15,11 +15,10 @@ export const resolveLaunchProject = Effect.fn("RemoteReplicaLaunch.resolveLaunch
     environmentId: EnvironmentId,
     authorizePlacement: Effect.Effect<void, OrchestratorMcpFailure> = Effect.void,
   ) {
-    const runtime = yield* Effect.serviceOption(Runtime.ReplicaRuntime);
-    if (Option.isNone(runtime)) return projectId;
-    const projects = yield* Effect.serviceOption(ProjectService.ProjectService);
-    if (Option.isNone(projects)) return projectId;
-    const local = yield* projects.value.getById(projectId).pipe(
+    const runtime = yield* Runtime.ReplicaRuntime;
+    const projects = yield* ProjectService.ProjectService;
+
+    const local = yield* projects.getById(projectId).pipe(
       Effect.mapError(
         (cause) =>
           new ReplicaError({
@@ -31,7 +30,7 @@ export const resolveLaunchProject = Effect.fn("RemoteReplicaLaunch.resolveLaunch
     );
     // A caller can already be naming a project id belonging to the destination server.
     if (Option.isNone(local) || local.value.id !== projectId) return projectId;
-    const replicas = yield* runtime.value.get;
+    const replicas = yield* runtime.get;
     const known = yield* replicas.machines(projectId);
     const existing = known.representations.find((rep) => rep.environmentId === environmentId);
     if (existing?.projectId) return ProjectId.make(existing.projectId);

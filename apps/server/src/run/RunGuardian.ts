@@ -1,4 +1,4 @@
-import { meshRetryDelay } from "../mesh/retryBackoff.ts";
+import { meshRetryDelay } from "../mesh/Backoff.ts";
 import { RunRemoteError } from "./RunRemoteError.ts";
 // @effect-diagnostics globalDate:off -- Standalone guardian diagnostics use the native clock without an Effect runtime.
 // @effect-diagnostics nodeBuiltinImport:off -- The detached forwarding guardian writes its own diagnostic log outside synchronized files.

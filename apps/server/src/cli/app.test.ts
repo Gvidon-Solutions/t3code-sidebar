@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- The integration fixture binds the same platform socket or named pipe as the CLI.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeEvents from "node:events";
@@ -167,7 +168,7 @@ describe("t3 server command safety", () => {
           expect(yield* pathExists(baseDir)).toBe(false);
         }
       }),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("refuses manual startup over a live server before creating directories", () =>
@@ -214,7 +215,7 @@ describe("t3 server command safety", () => {
           ]);
         }
       }),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 });
 
@@ -270,7 +271,7 @@ describe("t3 app", () => {
             }).pipe(Effect.scoped),
           "/tmp",
         );
-      }),
+      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("uses T3CODE_HOME or --base-dir and sends the default or explicit path", () =>
@@ -291,7 +292,7 @@ describe("t3 app", () => {
         ]);
         expect(desktop.received.every((request) => request.platform === platform)).toBe(true);
       }).pipe(Effect.scoped),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("prefers the installed desktop app when a dev desktop is also running", () =>
@@ -306,7 +307,7 @@ describe("t3 app", () => {
         expect(desktop.received).toHaveLength(1);
         expect(development.received).toHaveLength(0);
       }).pipe(Effect.provideService(HostProcess.HomeDirectory, root), Effect.scoped),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("finds the dev desktop when the default desktop socket is absent", () =>
@@ -321,7 +322,7 @@ describe("t3 app", () => {
         expect(development.received).toHaveLength(2);
         expect(yield* pathExists(baseDir)).toBe(false);
       }).pipe(Effect.provideService(HostProcess.HomeDirectory, root), Effect.scoped),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("never searches a dev state directory for an explicit T3 home", () =>
@@ -337,7 +338,7 @@ describe("t3 app", () => {
         expect(envError).toMatchObject({ _tag: "DesktopAppUnreachableError" });
         expect(development.received).toHaveLength(0);
       }).pipe(Effect.provideService(HostProcess.HomeDirectory, root), Effect.scoped),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect.each(["failure", "invalid"] as const)(
@@ -385,6 +386,6 @@ describe("t3 app", () => {
             });
           }
         }).pipe(Effect.provideService(HostProcess.HomeDirectory, root), Effect.scoped),
-      ),
+      ).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 });

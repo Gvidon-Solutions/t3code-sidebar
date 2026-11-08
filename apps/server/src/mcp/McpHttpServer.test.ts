@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
@@ -33,7 +34,7 @@ import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as McpOAuth from "../auth/McpOAuth.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
-import * as Sqlite from "../persistence/Sqlite.ts";
+
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 
 import * as DeviceService from "../device/DeviceService.ts";
@@ -85,7 +86,9 @@ const layerTest = McpHttpServer.layerPreviewToolkit.pipe(
   Layer.provideMerge(McpToolAccessTestkit.liveThreadsLayer),
   Layer.provideMerge(PreviewAutomationBroker.layer),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-http-server-test-" })),
-  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+  Layer.provideMerge(
+    Layer.mergeAll(Layer.merge(NodeServices.layer, MeshTestServices.platform), NodeCrypto.layer),
+  ),
 );
 const layerPullRequestsTest = McpHttpServer.layerPullRequestsToolkit.pipe(
   Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
@@ -96,7 +99,7 @@ const layerPullRequestsTest = McpHttpServer.layerPullRequestsToolkit.pipe(
       Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
       Layer.mock(Orchestrator.OrchestratorV2)({}),
       Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
-      NodeServices.layer,
+      Layer.merge(NodeServices.layer, MeshTestServices.platform),
       NodeCrypto.layer,
     ),
   ),
@@ -193,44 +196,59 @@ it.effect.each([
       });
       expect(JSON.stringify(result)).not.toContain("private hub output");
     }).pipe(
+      Effect.scoped,
       Effect.provide(
-        McpHttpServer.layerDeviceToolkit.pipe(
-          Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-          Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
-          Layer.provide(
-            Layer.mock(DeviceService.DeviceService)({
-              locateSession: () => Effect.succeedNone,
-              sessionsForThread: () =>
-                Effect.succeed(
-                  open
-                    ? [
-                        {
-                          threadId,
-                          hostId: "local",
-                          deviceId: DeviceId.make("phone"),
-                          platform: "ios",
-                          openedAt: "2026-10-23T00:00:00Z",
-                        },
-                      ]
-                    : [],
+        Layer.provideMerge(
+          Layer.provideMerge(
+            McpHttpServer.layerDeviceToolkit.pipe(
+              Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+              Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+              Layer.provide(
+                Layer.mock(DeviceService.DeviceService)({
+                  locateSession: () => Effect.succeedNone,
+                  sessionsForThread: () =>
+                    Effect.succeed(
+                      open
+                        ? [
+                            {
+                              threadId,
+                              hostId: "local",
+                              deviceId: DeviceId.make("phone"),
+                              platform: "ios",
+                              openedAt: "2026-10-23T00:00:00Z",
+                            },
+                          ]
+                        : [],
+                    ),
+                  screenshot: () =>
+                    Effect.fail(
+                      new DeviceOperationError({
+                        operation: "screenshot",
+                        reason:
+                          "rejected" in options && options.rejected
+                            ? "hub_rejected"
+                            : "request_failed",
+                        cause: new Error("private hub output"),
+                      }),
+                    ),
+                }),
+              ),
+              Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
+              Layer.provide(
+                ServerConfig.layerTest(process.cwd(), { prefix: "t3-device-mcp-test-" }),
+              ),
+              Layer.provide(
+                Layer.mergeAll(
+                  Layer.merge(NodeServices.layer, MeshTestServices.platform),
+                  NodeCrypto.layer,
                 ),
-              screenshot: () =>
-                Effect.fail(
-                  new DeviceOperationError({
-                    operation: "screenshot",
-                    reason:
-                      "rejected" in options && options.rejected ? "hub_rejected" : "request_failed",
-                    cause: new Error("private hub output"),
-                  }),
-                ),
-            }),
+              ),
+            ),
+            MeshTestServices.platform,
           ),
-          Layer.provide(Layer.mock(ProjectService.ProjectService)({})),
-          Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-device-mcp-test-" })),
-          Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+          MeshTestServices.required,
         ),
       ),
-      Effect.scoped,
     ),
 );
 
@@ -263,7 +281,7 @@ const layerRecordingTools = (calls: Array<unknown>) => {
         McpToolAccessTestkit.liveThreadsLayer,
         Layer.mock(OrchestratorMcpService.OrchestratorMcpService)({}),
         Layer.mock(ProjectService.ProjectService)({}),
-        NodeServices.layer,
+        Layer.merge(NodeServices.layer, MeshTestServices.platform),
         NodeCrypto.layer,
       ),
     ),
@@ -319,7 +337,14 @@ it.effect.each([{}, { includeImage: false }])(
           },
         });
       }),
-    ).pipe(Effect.provide(layerTest)),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(layerTest, MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );
 
 it.effect.each([
@@ -434,7 +459,14 @@ it.effect.each([
       expect(nextDefault.structuredContent).not.toHaveProperty("accessibilityTree");
       expect(requests).toBe(7);
     }),
-  ).pipe(Effect.provide(layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("refuses preview tools to a client outside a thread before they run", () =>
@@ -456,7 +488,14 @@ it.effect("refuses preview tools to a client outside a thread before they run", 
     expect(click.content).toEqual([
       { type: "text", text: expect.stringContaining("needs an agent running inside T3 Code") },
     ]);
-  }).pipe(Effect.provide(layerTest)),
+  }).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("advertises the compact input schema for every registered tool", () =>
@@ -468,7 +507,14 @@ it.effect("advertises the compact input schema for every registered tool", () =>
     for (const { tool } of server.tools) {
       expect(tool.inputSchema, tool.name).toEqual(advertisedJsonSchema(tools[tool.name]!));
     }
-  }).pipe(Effect.provide(layerTest)),
+  }).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("checks each preview_act action against that action's own input", () =>
@@ -491,7 +537,14 @@ it.effect("checks each preview_act action against that action's own input", () =
       yield* callTool("preview_act", { action: "type", selector: "#name", text: "Ada" });
       expect(inputs.at(-2)).toEqual({ selector: "#name", text: "Ada" });
     }),
-  ).pipe(Effect.provide(layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("decodes null optional arguments the way it decodes omitted ones", () => {
@@ -508,7 +561,9 @@ it.effect("decodes null optional arguments the way it decodes omitted ones", () 
     expect(calls[1]).toEqual(calls[0]);
     expect(calls[3]).toEqual(calls[2]);
     expect(calls[4]).toStrictEqual({ projectId: "project-1", projectIcon: null });
-  }).pipe(Effect.provide(layerRecordingTools(calls)));
+  }).pipe(
+    Effect.provide(Layer.provideMerge(layerRecordingTools(calls), MeshTestServices.required)),
+  );
 });
 
 it.effect(
@@ -537,7 +592,9 @@ it.effect(
         { ...thread, limit: 100, runLimit: 50, maxCharsPerItem: 50_000 },
         { ...thread, limit: 7, runLimit: 1, maxCharsPerItem: 1 },
       ]);
-    }).pipe(Effect.provide(layerRecordingTools(calls)));
+    }).pipe(
+      Effect.provide(Layer.provideMerge(layerRecordingTools(calls), MeshTestServices.required)),
+    );
   },
 );
 
@@ -554,7 +611,9 @@ it.effect.each(["limit", "runLimit", "maxCharsPerItem"])(
 
       expect(String(rejected)).toContain("greater than or equal to 1");
       expect(calls).toEqual([]);
-    }).pipe(Effect.provide(layerRecordingTools(calls)));
+    }).pipe(
+      Effect.provide(Layer.provideMerge(layerRecordingTools(calls), MeshTestServices.required)),
+    );
   },
 );
 
@@ -596,7 +655,14 @@ it.effect(
       expect(denied.content).toEqual([
         { type: "text", text: "MCP credential does not grant the pull-requests capability." },
       ]);
-    }).pipe(Effect.provide(layerPullRequestsTest)),
+    }).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(layerPullRequestsTest, MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );
 
 it.effect("bounds large ARIA trees without dropping every server locator", () =>
@@ -617,7 +683,14 @@ it.effect("bounds large ARIA trees without dropping every server locator", () =>
         McpHttpServer.MAX_SNAPSHOT_TEXT_BYTES,
       );
     }),
-  ).pipe(Effect.provide(layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("keeps the snapshot text under the agent's output ceiling", () =>
@@ -684,7 +757,14 @@ it.effect("keeps the snapshot text under the agent's output ceiling", () =>
         omitted: expect.arrayContaining(["60 older console entries"]),
       });
     }),
-  ).pipe(Effect.provide(layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 // regression: #10501 keep preview snapshots usable by the agent
@@ -719,7 +799,14 @@ it.effect("bounds the snapshot text even when nothing but logs and the title are
       expect(noticeText).toContain("url or title after 2048 characters");
       expect(noticeText).toContain("console entries text after 500 characters");
     }),
-  ).pipe(Effect.provide(layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 // regression: #13558 preview snapshots overflowed the agent's tool output
@@ -758,7 +845,14 @@ it.effect("bounds page text made of wide characters before dropping locators", (
         "visibleText after 4000 characters",
       );
     }),
-  ).pipe(Effect.provide(layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("terminates HTTP MCP sessions with DELETE", () =>
@@ -834,7 +928,14 @@ it.effect("terminates HTTP MCP sessions with DELETE", () =>
       });
       expect(reusedSessionResponse.status).toBe(404);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("admits provider and OAuth client credentials and points only clients at OAuth", () =>
@@ -981,7 +1082,14 @@ it.effect("admits provider and OAuth client credentials and points only clients 
       expect(deadProvider.status).toBe(401);
       expect(deadProvider.headers["www-authenticate"]).toBe('Bearer error="invalid_token"');
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("accepts case-insensitive MCP bearer schemes and diagnoses rejected credentials", () => {
@@ -993,12 +1101,14 @@ it.effect("accepts case-insensitive MCP bearer schemes and diagnoses rejected cr
         getEnvironmentId: Effect.succeed(environmentId),
       }),
     ),
-    Layer.provideMerge(Sqlite.layerMemory),
+    Layer.provideMerge(MeshTestServices.layerMemory),
     Layer.provide(ServerSecretStore.layer),
     Layer.provide(ManagedPolicy.layerTest()),
     Layer.provideMerge(ServerEnvironment.layerIdentity),
     Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-auth-header-test-" })),
-    Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(Layer.merge(NodeServices.layer, MeshTestServices.platform), NodeCrypto.layer),
+    ),
   );
   return Effect.scoped(
     Effect.gen(function* () {
@@ -1076,9 +1186,12 @@ it.effect("accepts case-insensitive MCP bearer schemes and diagnoses rejected cr
     }),
   ).pipe(
     Effect.provide(
-      layerAuth.pipe(
-        Layer.provideMerge(NodeHttpServer.layerTest),
-        Layer.provideMerge(Logger.layer([logger], { mergeWithExisting: false })),
+      Layer.provideMerge(
+        layerAuth.pipe(
+          Layer.provideMerge(NodeHttpServer.layerTest),
+          Layer.provideMerge(Logger.layer([logger], { mergeWithExisting: false })),
+        ),
+        MeshTestServices.required,
       ),
     ),
   );
@@ -1205,7 +1318,14 @@ it.effect("hides tools for links and refuses another environment while the beta 
         content: [{ text: expect.stringContaining("cannot reach linked environments") }],
       });
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("lists pull request watch tools only to threads that are not delegated children", () =>
@@ -1247,7 +1367,7 @@ it.effect("lists pull request watch tools only to threads that are not delegated
             Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
             Layer.mock(Orchestrator.OrchestratorV2)({}),
             Layer.mock(ProjectionStore.ProjectionStoreV2)({}),
-            NodeServices.layer,
+            Layer.merge(NodeServices.layer, MeshTestServices.platform),
             NodeCrypto.layer,
           ),
         ),
@@ -1295,7 +1415,14 @@ it.effect("lists pull request watch tools only to threads that are not delegated
       expect(childTools).not.toContain("watch_pull_request");
       expect(childTools).not.toContain("unwatch_pull_request");
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect(
@@ -1449,5 +1576,12 @@ it.effect(
         expect(yield* start(undefined, {}, { "t3-files-limit": "outside" })).toBe(400);
         expect(yield* start(undefined, {}, { "t3-replicas-limit": "false" })).toBe("auto/default");
       }),
-    ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
 );

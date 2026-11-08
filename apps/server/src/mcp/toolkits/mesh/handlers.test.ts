@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
 import { layerLinkedTest } from "../../../../testFixtures/MeshLayoutTestLayer.ts";
 import { MeshConfig } from "../../../mesh/MeshConfig.ts";
 import { MeshBootstrap } from "../../../mesh/MeshBootstrap.ts";
@@ -130,18 +131,24 @@ it.effect(
       expect(updatedDoc.machines.cloudbox?.bootstrap?.ssh).toBe("studio@cloudbox:2222");
     }).pipe(
       Effect.provide(
-        Layer.mergeAll(
-          NodeServices.layer,
-          Config.layerTest("studio"),
-          Layer.mock(Threads.ThreadManagementService)({}),
-          Layer.succeed(McpInvocationContext, {
-            environmentId: EnvironmentId.make("studio"),
-            requestNamespace: "client:test",
-            thread: undefined,
-            client: { sessionId: "owner", label: "Owner", access: "full-access" },
-            issuedAt: 0,
-            capabilities: new Set(["orchestration" as const]),
-          }),
+        Layer.provideMerge(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              NodeServices.layer,
+              Config.layerTest("studio"),
+              Layer.mock(Threads.ThreadManagementService)({}),
+              Layer.succeed(McpInvocationContext, {
+                environmentId: EnvironmentId.make("studio"),
+                requestNamespace: "client:test",
+                thread: undefined,
+                client: { sessionId: "owner", label: "Owner", access: "full-access" },
+                issuedAt: 0,
+                capabilities: new Set(["orchestration" as const]),
+              }),
+            ),
+            MeshTestServices.services,
+          ),
+          MeshTestServices.required,
         ),
       ),
     ),
@@ -172,42 +179,48 @@ it.effect("consumes one-time password references once and never returns the cred
     });
   }).pipe(
     Effect.provide(
-      Layer.unwrap(
-        Effect.sync(() => {
-          let consumed = false;
-          return Layer.mergeAll(
-            NodeServices.layer,
-            Config.layerTest("studio"),
-            Layer.mock(Threads.ThreadManagementService)({}),
-            Layer.mock(SecretRequests)({
-              consume: () =>
-                consumed
-                  ? Effect.fail(new SecretRequestError({ reason: "ref_unavailable" }))
-                  : Effect.sync(() => {
-                      consumed = true;
-                      return "private-one-use-password";
-                    }),
-            }),
-            Layer.mock(MeshBootstrap)({
-              credential: (name, credential) =>
-                Effect.sync(() => {
-                  expect(name).toBe("cloudbox");
-                  expect(credential).toEqual({
-                    kind: "password",
-                    value: "private-one-use-password",
-                  });
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.unwrap(
+            Effect.sync(() => {
+              let consumed = false;
+              return Layer.mergeAll(
+                NodeServices.layer,
+                Config.layerTest("studio"),
+                Layer.mock(Threads.ThreadManagementService)({}),
+                Layer.mock(SecretRequests)({
+                  consume: () =>
+                    consumed
+                      ? Effect.fail(new SecretRequestError({ reason: "ref_unavailable" }))
+                      : Effect.sync(() => {
+                          consumed = true;
+                          return "private-one-use-password";
+                        }),
                 }),
+                Layer.mock(MeshBootstrap)({
+                  credential: (name, credential) =>
+                    Effect.sync(() => {
+                      expect(name).toBe("cloudbox");
+                      expect(credential).toEqual({
+                        kind: "password",
+                        value: "private-one-use-password",
+                      });
+                    }),
+                }),
+                Layer.succeed(McpInvocationContext, {
+                  environmentId: EnvironmentId.make("studio"),
+                  requestNamespace: "client:test",
+                  thread: undefined,
+                  client: { sessionId: "owner", label: "Owner", access: "full-access" },
+                  issuedAt: 0,
+                  capabilities: new Set(["orchestration" as const]),
+                }),
+              );
             }),
-            Layer.succeed(McpInvocationContext, {
-              environmentId: EnvironmentId.make("studio"),
-              requestNamespace: "client:test",
-              thread: undefined,
-              client: { sessionId: "owner", label: "Owner", access: "full-access" },
-              issuedAt: 0,
-              capabilities: new Set(["orchestration" as const]),
-            }),
-          );
-        }),
+          ),
+          MeshTestServices.services,
+        ),
+        MeshTestServices.required,
       ),
     ),
   ),

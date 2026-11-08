@@ -1,6 +1,7 @@
+import { MeshTimeScale } from "../mesh/MeshTiming.ts";
 import { virtualEnvironmentPython } from "../platform/ServerPlatform.ts";
 import { ReplicaError } from "@t3tools/contracts";
-import { meshRetryDelay } from "../mesh/retryBackoff.ts";
+import { meshRetryDelay } from "../mesh/Backoff.ts";
 import * as Clock from "effect/Clock";
 import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
@@ -80,6 +81,7 @@ export class ReplicaEnvironment extends Context.Service<
 export const layer = Layer.effect(
   ReplicaEnvironment,
   Effect.gen(function* () {
+    const timeScale = yield* MeshTimeScale;
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const digest = yield* Digest.Digest;
@@ -179,7 +181,12 @@ export const layer = Layer.effect(
                     attempts: attempts + 1,
                     retryAt:
                       (yield* Clock.currentTimeMillis) +
-                      meshRetryDelay(attempts, 1, { initialMs: 60000, maxMs: 15 * 60000 }),
+                      meshRetryDelay(
+                        attempts,
+                        1,
+                        { initialMs: 60000, maxMs: 15 * 60000 },
+                        timeScale,
+                      ),
                   }),
                 );
               }),

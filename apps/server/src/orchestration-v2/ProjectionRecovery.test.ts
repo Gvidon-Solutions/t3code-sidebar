@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import * as DeliveryAdmission from "../mesh/DeliveryAdmission.ts";
 import { assert, it } from "@effect/vitest";
 import {
@@ -26,7 +28,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as Statement from "effect/sql/Statement";
 
 import delegatedRecoveryIndexes from "../persistence/Migrations/079_DelegatedRecoveryIndexes.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ServerSettings from "../serverSettings.ts";
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EffectOutbox from "./EffectOutbox.ts";
@@ -37,24 +39,27 @@ import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderRuntimeRecovery from "./ProviderRuntimeRecoveryService.ts";
 import { restartContinuationRun } from "./RestartContinuation.ts";
 
-const layerTest = Layer.mergeAll(ProjectionStore.layer, EffectOutbox.layer).pipe(
-  Layer.provideMerge(SqlitePersistence.layerMemory),
-);
+const layerTest = Layer.mergeAll(
+  ProjectionStore.layer,
+  EffectOutbox.layer.pipe(Layer.provide(RequiredAdmission.layer)),
+).pipe(Layer.provideMerge(MeshTestServices.layerMemory));
 const layerRecoveryTest = ProviderRuntimeRecovery.layer.pipe(
+  Layer.provide(RequiredAdmission.layer),
   Layer.provideMerge(
     EventSink.layer.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provideMerge(
         Layer.mergeAll(
           EventStore.layer,
           ProjectionStore.layer,
-          EffectOutbox.layer,
+          EffectOutbox.layer.pipe(Layer.provide(RequiredAdmission.layer)),
           IdAllocator.layer,
-        ).pipe(Layer.provideMerge(SqlitePersistence.layerMemory)),
+        ).pipe(Layer.provideMerge(MeshTestServices.layerMemory)),
       ),
     ),
   ),
   Layer.provide(ServerSettings.layerTest()),
-  Layer.provideMerge(DeliveryAdmission.layer.pipe(Layer.provide(SqlitePersistence.layerMemory))),
+  Layer.provideMerge(DeliveryAdmission.layer.pipe(Layer.provide(MeshTestServices.layerMemory))),
 );
 const providerInstanceId = ProviderInstanceId.make("codex");
 const modelSelection = { instanceId: providerInstanceId, model: "gpt-5.4" };

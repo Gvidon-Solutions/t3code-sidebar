@@ -1,7 +1,7 @@
 import { ThreadForkService } from "../../../mesh/ThreadForkService.ts";
 import { ThreadMoveService } from "../../../mesh/ThreadMoveService.ts";
 import { assertNotLinked } from "../../linkOrigin.ts";
-import * as Option from "effect/Option";
+
 import { CommandId as HandoffCommandId, EnvironmentId } from "@t3tools/contracts";
 import {
   type CommandId,
@@ -151,9 +151,9 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       const caller = yield* readCaller();
       yield* assertNotLinked(caller, "move conversations through other links.");
       const { projection } = yield* readThread(input.threadId);
-      const service = yield* Effect.serviceOption(ThreadMoveService);
-      if (Option.isNone(service)) return yield* unavailable();
-      return yield* service.value.move({
+      const service = yield* ThreadMoveService;
+
+      return yield* service.move({
         commandId: yield* newCommandId(),
         threadId: projection.thread.id,
         projectId: input.projectId,
@@ -166,9 +166,9 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
       const caller = yield* readCaller();
       yield* assertNotLinked(caller, "fork conversations through other links.");
       const { projection } = yield* readThread(input.threadId);
-      const service = yield* Effect.serviceOption(ThreadForkService);
-      if (Option.isNone(service)) return yield* unavailable();
-      return yield* service.value.fork(
+      const service = yield* ThreadForkService;
+
+      return yield* service.fork(
         {
           ...(input.clientRequestId
             ? {

@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../testFixtures/meshServices.ts";
 import migratePeerIdentities from "../../persistence/Migrations/082_PeerIdentityBindings.ts";
 import { McpDomainAnnotation } from "../../mcp/McpToolDomain.ts";
 import { linkedTestDocument } from "../../../testFixtures/MeshLayoutTestLayer.ts";
@@ -136,7 +137,7 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
           }),
         ),
       ),
-      Layer.provideMerge(Config.layerTest(process.cwd(), { prefix: "n1-network-" })),
+      Layer.provideMerge(Config.layerTest(process.cwd(), { prefix: "mesh-network-" })),
       Layer.provideMerge(
         Layer.mergeAll(NodeServices.layer, EffectNodeCrypto.layer, ManagedPolicy.layerTest()),
       ),
@@ -473,7 +474,7 @@ it.live(
       ).toBe("Failure");
       yield* studio.sessions.stop;
       yield* cloudbox.sessions.stop;
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 const pairNetwork = Effect.fn("test.pairNetwork")(function* (
@@ -514,8 +515,8 @@ it.live("pushes layout as authenticated events when layout MCP calls are disable
     yield* Fiber.join(linked);
     const source = studio.mesh!;
     const destination = cloudbox.mesh!;
-    const key = "custom/N1-event";
-    const forgedKey = "custom/N1-forged";
+    const key = "custom/mesh-event";
+    const forgedKey = "custom/mesh-forged";
     const forgedPublished = yield* cloudbox.transport.activity.pipe(
       Stream.filter(
         (activity) =>
@@ -547,7 +548,7 @@ it.live("pushes layout as authenticated events when layout MCP calls are disable
     expect((yield* destination.read).document[forgedKey]).toBeUndefined();
     yield* studio.sessions.stop;
     yield* cloudbox.sessions.stop;
-  }).pipe(Effect.scoped),
+  }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 it.live(
@@ -582,7 +583,7 @@ it.live(
       expect(yield* studio.client.call(maximumKey)).toEqual({ count: 2 });
       yield* studio.sessions.stop;
       yield* cloudbox.sessions.stop;
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 it.live("converges simultaneous real WebSocket dials to the same authenticated connection", () =>
@@ -658,7 +659,7 @@ it.live("converges simultaneous real WebSocket dials to the same authenticated c
     ).toEqual({ count: 2 });
     yield* studio.sessions.stop;
     yield* cloudbox.sessions.stop;
-  }).pipe(Effect.scoped),
+  }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 it.live("reaches an incoming-only machine through one relay for calls and a local IPC pipe", () =>
@@ -896,7 +897,7 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
     expect(offline.message).toContain("No live peer connection reaches");
     yield* cloudbox.sessions.stop;
     yield* laptop.sessions.stop;
-  }).pipe(Effect.scoped),
+  }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 it.live.each(["none", "outgoing", "machine-binding"] as const)(
@@ -962,7 +963,10 @@ it.live.each(["none", "outgoing", "machine-binding"] as const)(
           expect(spoofed.status).toBe(403);
         }
       }
-    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Layer.provideMerge(NodeServices.layer, MeshTestServices.required)),
+    ),
 );
 
 it.live("upgrades mutual legacy link records without pairing again", () =>
@@ -1012,5 +1016,8 @@ it.live("upgrades mutual legacy link records without pairing again", () =>
       ).toEqual([{ environment_id: sender.id, source: "legacy-local-link" }]);
       expect(yield* receiver.sql`SELECT * FROM peer_legacy_identity_candidates`).toEqual([]);
     }
-  }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(Layer.provideMerge(NodeServices.layer, MeshTestServices.required)),
+  ),
 );

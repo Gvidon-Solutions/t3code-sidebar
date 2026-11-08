@@ -1,3 +1,4 @@
+import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
 import { PEER_HOPS_HEADER, parseHops } from "../peer/connection/peerIdentity.ts";
 import * as PeerReceipts from "../peer/connection/PeerReceipts.ts";
 import { PeerConnectionError } from "../peer/connection/PeerSessions.ts";
@@ -233,13 +234,13 @@ const linkedEnvironmentsOff = HttpServerResponse.jsonUnsafe(
 );
 
 const makeMcpAuthMiddleware = Effect.gen(function* () {
-  const permissionContext = yield* Effect.context<never>();
-  const receipts = yield* Effect.serviceOption(PeerReceipts.PeerReceipts);
-  const forks = yield* Effect.serviceOption(ThreadForkService);
-  const meshReplicator = yield* Effect.serviceOption(MeshReplicator);
-  const meshRelay = yield* Effect.serviceOption(MeshRelay);
+  const permissionContext = yield* Effect.context<MeshLayoutService>();
+  const receipts = yield* PeerReceipts.PeerReceipts;
+  const forks = yield* ThreadForkService;
+  const meshReplicator = yield* MeshReplicator;
+  const meshRelay = yield* MeshRelay;
   const registry = yield* McpSessionRegistry.McpSessionRegistry;
-  const clients = yield* Effect.serviceOption(McpClientAuthenticator);
+  const clients = yield* McpClientAuthenticator;
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const runtimeModeCeiling = serverSettings.managedPolicy?.limits?.maxRuntimeMode;
   const linksEnabled = serverSettings.getSettings.pipe(
@@ -253,9 +254,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const authentication = yield* Effect.gen(function* () {
       return (
         (yield* registry.resolve(token)) ??
-        (Option.isSome(clients) && token.length > 0
-          ? yield* clients.value.authenticate(request)
-          : undefined)
+        (token.length > 0 ? yield* clients.authenticate(request) : undefined)
       );
     }).pipe(Effect.result);
     if (authentication._tag === "Failure")
@@ -278,7 +277,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
       return unauthorized({
         request,
         presentedToken: token.length > 0,
-        offerOAuth: Option.isSome(clients) && !looksLikeProviderToken(token),
+        offerOAuth: !looksLikeProviderToken(token),
       });
     }
     const asked = withModeLimit(invocation, request);
@@ -329,8 +328,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
         Effect.map(normalizeMcpHttpResponse),
       );
     });
-    if (!peer || !key || request.method !== "POST" || Option.isNone(receipts))
-      return yield* dispatch;
+    if (!peer || !key || request.method !== "POST") return yield* dispatch;
     const body = yield* request.json.pipe(Effect.orDie);
     if (
       typeof body !== "object" ||
@@ -378,7 +376,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
           },
         });
     }
-    return yield* receipts.value
+    return yield* receipts
       .run(
         from!,
         scopedKey ?? key,
@@ -391,6 +389,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
           permissions,
         }),
         dispatch.pipe(
+          Effect.provideContext(permissionContext),
           Effect.catchCause((cause) =>
             Effect.fail(
               new PeerConnectionError({
@@ -441,7 +440,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
           ),
         ),
       );
-  }) satisfies McpAuthMiddleware;
+  }, Effect.provideContext(permissionContext)) satisfies McpAuthMiddleware;
 }).pipe(Effect.withSpan("McpHttpServer.makeAuthMiddleware"));
 
 const layerMcpAuthMiddleware = HttpRouter.middleware<{
@@ -994,6 +993,7 @@ const isDeviceToolError = Schema.is(DeviceToolError);
 
 const registerHtmlPreview = Effect.fn("McpHttpServer.registerHtmlPreview")(function* () {
   const htmlRender = yield* HtmlRender.HtmlRender;
+  const mesh = yield* MeshLayoutService;
   const threads = yield* ThreadManagementService.ThreadManagementService;
   const built = yield* decodeAsAdvertised(HtmlPreviewToolkit);
   yield* registerImageTool(
@@ -1005,6 +1005,7 @@ const registerHtmlPreview = Effect.fn("McpHttpServer.registerHtmlPreview")(funct
     (effect) =>
       effect.pipe(
         Effect.provideService(HtmlRender.HtmlRender, htmlRender),
+        Effect.provideService(MeshLayoutService, mesh),
         Effect.provideService(ThreadManagementService.ThreadManagementService, threads),
       ),
     "preview",
@@ -1367,12 +1368,15 @@ export const layerDeviceToolkit = Layer.mergeAll(
 );
 
 // Fork: agent inbox.
+/** @internal */
 export const layerInboxToolkit = toolkitRegistration(InboxToolkit, InboxHandlers.layer);
 
 // Fork: show things on the owner's screen.
+/** @internal */
 export const layerUiToolkit = toolkitRegistration(UiToolkit, UiHandlers.layer);
 
 // Fork: read and list files on another machine over a peer link.
+/** @internal */
 export const layerFilesToolkit = toolkitRegistration(FilesToolkit, FilesHandlers.layer);
 
 /**

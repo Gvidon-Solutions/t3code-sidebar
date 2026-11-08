@@ -1,8 +1,21 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
+import * as Effect from "effect/Effect";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
-export const DELIVERY_UPDATING = "T3_UPDATING";
+export class DeliveryUpdatingError extends Schema.TaggedError<DeliveryUpdatingError>()(
+  "DeliveryUpdatingError",
+  {
+    message: Schema.String.pipe(
+      Schema.withConstructorDefault(Effect.succeed("Server is updating; retry this command")),
+    ),
+  },
+) {}
+
+export const ADMISSION_GATED_EFFECT_TYPES = [
+  "provider-turn.start",
+  "provider-turn.restart",
+] as const;
 export const DeliveryDrainInput = Schema.Struct({
   requestId: TrimmedNonEmptyString,
   now: Schema.optionalKey(Schema.Boolean),
@@ -44,12 +57,7 @@ export function isDeliveryUpdating(error: unknown): boolean {
   let current = error;
   while (typeof current === "object" && current !== null && !seen.has(current)) {
     seen.add(current);
-    if (
-      "message" in current &&
-      typeof current.message === "string" &&
-      current.message.includes(DELIVERY_UPDATING)
-    )
-      return true;
+    if ("_tag" in current && current._tag === "DeliveryUpdatingError") return true;
     current = "cause" in current ? current.cause : null;
   }
   return false;

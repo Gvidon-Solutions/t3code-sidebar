@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 // @effect-diagnostics nodeBuiltinImport:off - CLI integration exercises Node HTTP and filesystem boundaries.
 // @effect-diagnostics anyUnknownInErrorContext:off - Sidebar fork: with the fork's server types the
 // checker gives up on `cli` in this file and reports `any`; the resolved requirements match upstream.
@@ -192,7 +193,14 @@ describe("t3 pair", () => {
           assert.include(output, "Pairing URL: https://pair-test.tail.ts.net/pair#token=");
         }),
       "::1",
-    ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+          MeshTestServices.layerMemory,
+        ),
+      ),
+    ),
   );
 
   it.effect("mints a token and prints a QR pairing URL for a live server", () =>
@@ -237,7 +245,6 @@ describe("t3 pair", () => {
         assert.deepEqual(credentials[0]?.scopes, AuthStandardClientScopes);
       }),
     ).pipe(
-      Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       Effect.provideService(HostProcess.Environment, {
         ...process.env,
         [SERVICE_LAUNCHER_CONTEXT_ENV]: JSON.stringify({
@@ -251,6 +258,12 @@ describe("t3 pair", () => {
         on: () => undefined,
         off: () => undefined,
       }),
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+          MeshTestServices.layerMemory,
+        ),
+      ),
     ),
   );
 
@@ -272,7 +285,14 @@ describe("t3 pair", () => {
 
         assert.include(output, "Pairing URL: http://localhost:5733/pair#token=");
       }),
-    ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+          MeshTestServices.layerMemory,
+        ),
+      ),
+    ),
   );
 
   it.effect("refuses --tailscale before turning on Serve when the policy keeps clients local", () =>
@@ -316,7 +336,7 @@ describe("t3 pair", () => {
           "Example Corp's policy does not allow remote clients, so Tailscale Serve cannot be turned on.",
         );
       }),
-    ).pipe(Effect.provide(NodeServices.layer)),
+    ).pipe(Effect.provide(Layer.provideMerge(NodeServices.layer, MeshTestServices.layerMemory))),
   );
 
   it.effect("ignores runtime state whose recorded pid is no longer alive", () =>
@@ -342,7 +362,14 @@ describe("t3 pair", () => {
         );
         assert.include(rendered, "No running T3 Code server found.");
       }),
-    ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+          MeshTestServices.layerMemory,
+        ),
+      ),
+    ),
   );
 
   // regression: #10516 minting opens the target database with this checkout's
@@ -382,7 +409,14 @@ describe("t3 pair", () => {
           "server-runtime.json",
         ]);
       }),
-    ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+          MeshTestServices.layerMemory,
+        ),
+      ),
+    ),
   );
 
   // regression: #15492 an older CLI minted into a V1 database the protocol 2
@@ -416,7 +450,14 @@ describe("t3 pair", () => {
         }),
       "127.0.0.1",
       { ...testDescriptor, serverVersion: "0.0.45", orchestrationProtocolVersion: 1 },
-    ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+          MeshTestServices.layerMemory,
+        ),
+      ),
+    ),
   );
 
   // Without the capability `tailscale serve` blocks on an enablement URL, so
@@ -468,7 +509,14 @@ describe("t3 pair", () => {
         assert.include(String(error), "https://login.tailscale.com/admin/dns");
         assert.deepEqual(tailscaleCalls, [["status", "--json"]]);
       }),
-    ).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+          MeshTestServices.layerMemory,
+        ),
+      ),
+    ),
   );
 });
 
@@ -510,7 +558,7 @@ describe("auth scope options", () => {
         assert.deepEqual(issued.scopes, ["orchestration:read", "access:read"]);
         assert.lengthOf(listed, 1);
         assert.deepEqual(listed[0]?.scopes, issued.scopes);
-      }),
+      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect.each(
@@ -538,7 +586,7 @@ describe("auth scope options", () => {
       }
       assert.equal(scopeError.option, "scope");
       assert.equal(scopeError.value, "admin");
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 });
 
@@ -572,7 +620,7 @@ describe("auth pairing create --base-url", () => {
           runCli(["auth", "pairing", "list", "--base-dir", baseDir, "--json"]),
         );
         assert.deepEqual(JSON.parse(listOutput), []);
-      }),
+      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect.each(["http://192.168.1.5:3773", "https://example.com", "http:localhost:3773"])(
@@ -598,7 +646,7 @@ describe("auth pairing create --base-url", () => {
         };
 
         assert.equal(issued.pairUrl, `${new URL(baseUrl).origin}/pair#token=${issued.credential}`);
-      }),
+      }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 });
 
@@ -637,6 +685,6 @@ describe("scripted auth output", () => {
       } else {
         assert.match(output.trim(), /^[\w-]+\.[\w-]+/);
       }
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 });

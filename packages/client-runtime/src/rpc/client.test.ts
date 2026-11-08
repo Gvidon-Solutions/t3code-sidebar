@@ -1,4 +1,5 @@
-import { DeliveryDrainError } from "@t3tools/contracts";
+import { DeliveryUpdatingError } from "@t3tools/contracts";
+
 import * as TestClock from "effect/testing/TestClock";
 import {
   EnvironmentId,
@@ -427,9 +428,7 @@ it.effect(
         "delivery.drain": (payload: unknown) => {
           inputs.push(payload);
           return Deferred.succeed(refused, undefined).pipe(
-            Effect.andThen(
-              Effect.fail(new DeliveryDrainError({ message: "T3_UPDATING: draining" })),
-            ),
+            Effect.andThen(Effect.fail(new DeliveryUpdatingError())),
           );
         },
       } as unknown as WsRpcProtocolClient;

@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import * as ReplicaMeshTest from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -135,6 +137,7 @@ function startWithMissingWorktree(
   const createWorktree = vi.fn(() => Effect.succeed({} as never));
   const listLocalBranchNames = vi.fn(() => Effect.succeed(["feature/restore"]));
   const layer = ProviderTurnStart.layer.pipe(
+    Layer.provide(MeshTestServices.services),
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ContextHandoffService.ContextHandoffServiceV2)({}),
@@ -204,7 +207,7 @@ function startWithMissingWorktree(
     return yield* (yield* ProviderTurnStart.ProviderTurnStartServiceV2)
       .start({ threadId, runId })
       .pipe(Effect.flip);
-  }).pipe(Effect.provide(layer), Effect.runPromise);
+  }).pipe(Effect.provide(layer), MeshTestServices.runPromise);
   return {
     start,
     pruneWorktrees,
@@ -915,6 +918,7 @@ function makeLocalCommandHarness(input: {
     }),
   );
   const layer = ProviderTurnStart.layer.pipe(
+    Layer.provide(MeshTestServices.services),
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ContextHandoffService.ContextHandoffServiceV2)({
@@ -1237,7 +1241,15 @@ effectIt.effect(
         },
       ]);
       expect(JSON.stringify(harness.events)).not.toContain("private git diagnostic");
-    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.merge(NodeServices.layer, MeshTestServices.platform),
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
 );
 
 effectIt.effect("recovers an abandoned failed turn before continuing its native conversation", () =>
@@ -1495,7 +1507,15 @@ effectIt.effect.each(["cleanup-first", "startup-first"])(
           runtimePolicy: expect.objectContaining({ cwd: worktreePath }),
         }),
       );
-    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.merge(NodeServices.layer, MeshTestServices.platform),
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
 );
 
 effectIt.effect("reads current startup state after waiting for the workspace lease", () =>

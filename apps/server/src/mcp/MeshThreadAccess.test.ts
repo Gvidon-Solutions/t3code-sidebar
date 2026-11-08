@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import { expect, it } from "@effect/vitest";
@@ -77,12 +78,18 @@ it.effect(
       lastReachedAt: null,
       lastError: null,
     });
-    const links = Layer.mock(PeerLinks)({
-      enabled: Effect.succeed(true),
-      list: Effect.succeed([peer("relay"), peer("offline")]),
-      get: (id) =>
-        Effect.succeed(id === "relay" || id === "offline" ? Option.some(peer(id)) : Option.none()),
-    });
+    const links = (() => {
+      const list = Effect.succeed([peer("relay"), peer("offline")]);
+      return Layer.mock(PeerLinks)({
+        enabled: Effect.succeed(true),
+        list,
+        get: (id) =>
+          Effect.succeed(
+            id === "relay" || id === "offline" ? Option.some(peer(id)) : Option.none(),
+          ),
+        ids: Effect.map(list, (peers) => peers.map((peer) => peer.environmentId)),
+      });
+    })();
     const peers = Layer.succeed(PeerMcpClient, {
       call: (input) => {
         calls.push(input);
@@ -274,7 +281,10 @@ it.effect(
       );
     }).pipe(
       Effect.provide(
-        Layer.mergeAll(dependencies, Forwarding.layer.pipe(Layer.provide(dependencies))),
+        Layer.provideMerge(
+          Layer.mergeAll(dependencies, Forwarding.layer.pipe(Layer.provide(dependencies))),
+          MeshTestServices.services,
+        ),
       ),
     );
   },

@@ -1,4 +1,5 @@
-import { meshMillis } from "./MeshTiming.ts";
+import { sshOptions } from "../platform/ServerPlatform.ts";
+import { meshTimer, MeshTimeScale } from "./MeshTiming.ts";
 import { keys } from "@t3tools/shared/meshLayout";
 import { cliArchiveFileName, cliArchivePlatformKey } from "@t3tools/shared/cliRelease";
 import * as DateTime from "effect/DateTime";
@@ -15,7 +16,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Semaphore from "effect/Semaphore";
 import * as Schedule from "effect/Schedule";
-import { meshRetrySchedule } from "./retryBackoff.ts";
+import { meshRetrySchedule } from "./Backoff.ts";
 import { ProcessRunner } from "../processRunner.ts";
 import { ServerConfig } from "../config.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
@@ -66,6 +67,8 @@ export class MeshBootstrap extends Context.Service<
 export const layer = Layer.effect(
   MeshBootstrap,
   Effect.gen(function* () {
+    const meshMillis = yield* meshTimer;
+    const timeScale = yield* MeshTimeScale;
     const runner = yield* ProcessRunner;
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -214,12 +217,13 @@ export const layer = Layer.effect(
               const result = yield* runner.run({
                 command: "ssh",
                 args: [
-                  "-F",
-                  clientPlatform === "win32" ? "NUL" : "/dev/null",
+                  ...sshOptions({
+                    configPath: clientPlatform === "win32" ? "NUL" : "/dev/null",
+                    batchMode: secret.kind !== "password",
+                  }),
                   "-o",
                   `GlobalKnownHostsFile=${clientPlatform === "win32" ? "NUL" : "/dev/null"}`,
-                  "-o",
-                  `BatchMode=${secret.kind === "password" ? "no" : "yes"}`,
+
                   "-o",
                   "NumberOfPasswordPrompts=1",
                   ...(secret.kind === "password"
@@ -230,12 +234,7 @@ export const layer = Layer.effect(
                         "PreferredAuthentications=password,keyboard-interactive",
                       ]
                     : []),
-                  "-o",
-                  "ConnectTimeout=10",
-                  "-o",
-                  "ServerAliveInterval=15",
-                  "-o",
-                  "ServerAliveCountMax=2",
+
                   "-o",
                   "StrictHostKeyChecking=yes",
                   "-o",
@@ -379,7 +378,7 @@ export const layer = Layer.effect(
                   "--check",
                 ]),
               ).pipe(
-                Effect.retry({ schedule: meshRetrySchedule, times: 7 }),
+                Effect.retry({ schedule: meshRetrySchedule(timeScale), times: 7 }),
                 Effect.timeoutOrElse({
                   duration: "2 minutes",
                   orElse: () =>

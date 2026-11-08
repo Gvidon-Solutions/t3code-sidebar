@@ -188,7 +188,7 @@ const linkLimitsHold = (peer: { readonly capabilities: ExecutionEnvironmentCapab
 const make = Effect.gen(function* () {
   const changes = yield* PubSub.unbounded<void>();
   const sql = yield* SqlClient.SqlClient;
-  const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
+  const transport = yield* PeerTransport.PeerTransport;
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const random = yield* SecureRandom.SecureRandom;
   const digest = yield* Digest.Digest;
@@ -562,7 +562,7 @@ const make = Effect.gen(function* () {
       ),
     );
     if (Option.isNone(answered)) {
-      const network = Option.isSome(transport) ? transport.value.get() : undefined;
+      const network = transport.get();
       const reachable =
         network &&
         (yield* network.status).some(
@@ -648,7 +648,7 @@ const make = Effect.gen(function* () {
 
   const unlink: PeerLinks["Service"]["unlink"] = Effect.fn("PeerLinks.unlink")(
     function* (environmentId, options) {
-      const network = Option.isSome(transport) ? transport.value.get() : undefined;
+      const network = transport.get();
       if (network)
         yield* network.revoke(environmentId, options?.notifyPeer ?? true).pipe(
           Effect.mapError(
@@ -750,15 +750,13 @@ const make = Effect.gen(function* () {
     );
 
   return PeerLinks.of({
-    changes: Option.isSome(transport)
-      ? Stream.merge(
-          Stream.fromPubSub(changes),
-          transport.value.activity.pipe(
-            Stream.filter((activity) => activity.kind === "connected"),
-            Stream.map(() => undefined),
-          ),
-        )
-      : Stream.fromPubSub(changes),
+    changes: Stream.merge(
+      Stream.fromPubSub(changes),
+      transport.activity.pipe(
+        Stream.filter((activity) => activity.kind === "connected"),
+        Stream.map(() => undefined),
+      ),
+    ),
     enabled,
     link,
     describe: describeUrl,

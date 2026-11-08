@@ -1,9 +1,9 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { assert, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import { listLinkedPullRequestThreads } from "./linkedThreads.ts";
 
 const encodePayload = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
@@ -177,5 +177,5 @@ it.effect(
         }),
         { threads: [] },
       );
-    }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );

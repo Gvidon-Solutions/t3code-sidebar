@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
 import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
@@ -162,9 +163,12 @@ it.effect(
     }).pipe(
       Effect.scoped,
       Effect.provide(
-        Layer.merge(
-          NodeHttpServer.layerTest,
-          layerLinkedTest("B", { cloudbox: "B", laptop: "laptop" }),
+        Layer.provideMerge(
+          Layer.merge(
+            NodeHttpServer.layerTest,
+            layerLinkedTest("B", { cloudbox: "B", laptop: "laptop" }),
+          ),
+          MeshTestServices.required,
         ),
       ),
     ),

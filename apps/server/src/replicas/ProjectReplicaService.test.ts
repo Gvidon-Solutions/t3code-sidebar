@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as FileSystem from "effect/FileSystem";
 import { ReplicaError } from "@t3tools/contracts";
 import * as Runtime from "./ReplicaRuntime.ts";
@@ -147,7 +148,7 @@ it.effect(
         ).toBe(false);
         expect(h.registrations()).toBe(1);
       }).pipe(Effect.provide(h.layer));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 it.effect("only the replica drives even when the primary is reachable from both sides", () =>
   Effect.gen(function* () {
@@ -167,7 +168,7 @@ it.effect("only the replica drives even when the primary is reachable from both 
           .pipe(Effect.isFailure),
       ).toBe(true);
     }).pipe(Effect.provide(replica.layer));
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 it.effect("recovers an existing labeled session without creating it after service restart", () =>
   Effect.gen(function* () {
@@ -184,7 +185,7 @@ it.effect("recovers an existing labeled session without creating it after servic
       expect(h.created).toHaveLength(1);
       expect(h.registrations()).toBe(1);
     }).pipe(Effect.provide(Layer.fresh(h.layer)));
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect(
@@ -198,7 +199,8 @@ it.effect(
         false,
         Ref.update(lists, (n) => n + 1),
       );
-      const runtime = Runtime.withRuntime(h.layer).pipe(
+      const runtime = Runtime.layer.pipe(
+        Layer.provideMerge(h.layer),
         Layer.provide(
           ServerConfig.layerTest("/tmp", "/tmp/t3-replica-runtime-test").pipe(
             Layer.provide(NodeServices.layer),
@@ -248,7 +250,7 @@ it.effect(
         expect(h.registrations()).toBe(1);
         expect(h.created).toHaveLength(1);
       }).pipe(Effect.provide(runtime));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect(
@@ -295,8 +297,8 @@ it.effect(
         expect(
           (yield* service
             .place({ project: "repo", machine: "NP", action: "remove" })
-            .pipe(Effect.flip)).message,
-        ).toContain("driver");
+            .pipe(Effect.flip)).reason,
+        ).toBe("unreachable");
         expect(
           (yield* mesh.read).config.projectMounts.repo!.some(
             (rep) => rep.environmentId === "newPeer",
@@ -306,7 +308,7 @@ it.effect(
           yield* service.place({ project: "repo", machine: "missing" }).pipe(Effect.isFailure),
         ).toBe(true);
       }).pipe(Effect.provide(h.layer));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect(
@@ -336,7 +338,7 @@ it.effect(
         expect(h.registrations()).toBe(1);
         expect(h.created).toEqual([]);
       }).pipe(Effect.provide(h.layer));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect(
@@ -372,7 +374,7 @@ it.effect(
         expect((yield* service.status)[0]?.state).toBe("mounting");
         expect(h.created).toHaveLength(1);
       }).pipe(Effect.provide(h.layer));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect(
@@ -422,7 +424,7 @@ it.effect(
           expect((yield* service.status)[0]?.state).toBe("watching");
         }).pipe(Effect.provide(h.layer));
       }
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("legacy route edits cannot change the replica driver or remove its session", () =>
@@ -447,7 +449,7 @@ it.effect("legacy route edits cannot change the replica driver or remove its ses
       yield* service.reconcile;
       expect(h.terminated).toHaveLength(0);
     }).pipe(Effect.provide(Layer.fresh(h.layer)));
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect(
@@ -479,7 +481,7 @@ it.effect(
         yield* TestClock.adjust("30 seconds");
         expect(yield* Ref.get(attempts)).toBe(2);
       }).pipe(Effect.scoped, Effect.provide(h.layer));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("preserves the losing version under the project conflict policy on either driver", () =>
@@ -513,7 +515,7 @@ it.effect("preserves the losing version under the project conflict policy on eit
         expect(h.created).toHaveLength(1);
       }).pipe(Effect.provide(h.layer));
     }
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("after restart terminates the session of a duplicate path claim", () => {
@@ -540,7 +542,7 @@ it.effect("after restart terminates the session of a duplicate path claim", () =
     expect(
       (yield* mesh.read).config.projectMounts.repo?.some((rep) => rep.environmentId === "replica"),
     ).toBe(false);
-  }).pipe(Effect.provide(h.layer));
+  }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
 });
 
 it.effect(
@@ -591,7 +593,7 @@ it.effect(
       yield* service.place({ project: "repo", machine: "replica", ignores: ["!cache", "cache"] });
       yield* service.reconcile;
       expect(h.created).toHaveLength(beforeReorder + 1);
-    }).pipe(Effect.provide(h.layer));
+    }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
   },
 );
 
@@ -651,7 +653,7 @@ it.effect.each(["failure", "success"] as const)(
       expect(
         (yield* service.status).some((status) => status.message === "Previous folder differs"),
       ).toBe(false);
-    }).pipe(Effect.scoped, Effect.provide(h.layer));
+    }).pipe(Effect.scoped, Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
   },
 );
 
@@ -670,7 +672,7 @@ it.effect("keeps an unmounted legacy project's id when its local record is first
     const placed = yield* service.place({ project: "primary", machine: "replica" });
     expect(placed.logicalKey).toBe("canonical");
     expect((yield* mesh.read).config.projectTitles.canonical).toBe("Shared renamed title");
-  }).pipe(Effect.provide(h.layer));
+  }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
 });
 
 it.effect(
@@ -718,7 +720,7 @@ it.effect(
         message: "Source disconnected",
       });
       expect(h.preserved).toHaveLength(0);
-    }).pipe(Effect.provide(h.layer));
+    }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
   },
 );
 
@@ -740,7 +742,7 @@ it.effect(
       expect(h.created[1]?.ignores).toContain("new-ignore");
       expect(h.validation.pending).toEqual([]);
       expect(h.terminated).toHaveLength(1);
-    }).pipe(Effect.provide(h.layer));
+    }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
   },
 );
 
@@ -777,7 +779,7 @@ it.effect("a shared daemon inspection failure never fabricates errors for health
     failed = true;
     expect(yield* service.reconcile.pipe(Effect.isFailure)).toBe(true);
     expect((yield* mesh.read).config.projectMountStatus).toEqual(before);
-  }).pipe(Effect.provide(h.layer));
+  }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
 });
 it.effect("a missing foreign adoption session only blocks its own replica", () => {
   const h = harness();
@@ -805,7 +807,7 @@ it.effect("a missing foreign adoption session only blocks its own replica", () =
     const statuses = (yield* mesh.read).config.projectMountStatus;
     expect(statuses.repo?.replica?.message).toContain("disappeared");
     expect(statuses.another?.replica?.state).toBe("watching");
-  }).pipe(Effect.provide(h.layer));
+  }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
 });
 
 it.effect("newest-wins compares each conflict independently and archives both losing sides", () => {
@@ -846,7 +848,7 @@ it.effect("newest-wins compares each conflict independently and archives both lo
         ?.map((entry) => entry.environmentId)
         .sort(),
     ).toEqual(["replica", "source"]);
-  }).pipe(Effect.provide(h.layer));
+  }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
 });
 
 it.effect("a stalled replica times out without blocking another replica's session", () =>
@@ -889,7 +891,7 @@ it.effect("a stalled replica times out without blocking another replica's sessio
       expect(statuses.map((status) => status.state).sort()).toEqual(["error", "mounting"]);
       expect(statuses.find((status) => status.state === "error")?.message).toContain("timed out");
     }).pipe(Effect.provide(h.layer));
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 it.effect(
   "explicit removal refuses unsynced file paths and retains the representation until clean",
@@ -912,7 +914,7 @@ it.effect(
       yield* service.reconcile;
       expect((yield* mesh.read).config.projectMounts.repo).toHaveLength(1);
       expect(h.terminated).toHaveLength(1);
-    }).pipe(Effect.provide(h.layer));
+    }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
   },
 );
 
@@ -951,7 +953,7 @@ it.effect("retains a representation's own ignores while config migration is inco
         expect.arrayContaining(["/large-data", "*.weights", "*.cache"]),
       );
     }).pipe(Effect.provide(h.layer));
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect.each(["managed", "existing"] as const)(
@@ -1000,7 +1002,7 @@ it.effect.each(["managed", "existing"] as const)(
         adoption: { environmentId: "replica", sessionIdentifier: "manual-copy" },
       });
       expect((yield* mesh.read).config.projectMounts.repo).toContainEqual(adopted.representation);
-    }).pipe(Effect.provide(h.layer));
+    }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
   },
 );
 
@@ -1065,5 +1067,5 @@ it.effect("recovers interrupted automatic conflict resolution without resuming u
         "resolvingConflicts",
       );
     }).pipe(Effect.provide(Layer.fresh(ReplicaService.layer)));
-  }).pipe(Effect.provide(h.layer));
+  }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
 });

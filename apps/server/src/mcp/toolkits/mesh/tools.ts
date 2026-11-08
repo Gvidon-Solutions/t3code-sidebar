@@ -1,3 +1,9 @@
+import { SecretRequests } from "../../../secrets/SecretRequests.ts";
+import { MeshBootstrap } from "../../../mesh/MeshBootstrap.ts";
+import { MeshRollout } from "../../../mesh/MeshRollout.ts";
+import { MeshConfig } from "../../../mesh/MeshConfig.ts";
+import { DeliveryAdmission } from "../../../mesh/DeliveryAdmission.ts";
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   DeliveryDrainInput,
@@ -36,6 +42,12 @@ const shared = {
   failure: Schema.Union([OrchestratorMcpFailure, MeshConfigError]),
   failureMode: "return" as const,
   dependencies: [
+    MeshRollout,
+    MeshBootstrap,
+    SecretRequests,
+    MeshLayoutService,
+    MeshConfig,
+    DeliveryAdmission,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
   ],
@@ -44,7 +56,16 @@ const shared = {
 import { RunRuntimeInfo } from "../../../run/RunProtocol.ts";
 const RunRuntimeTool = Tool.make("t3_run_runtime", {
   ...shared,
-  dependencies: [...shared.dependencies, Path.Path],
+  dependencies: [
+    MeshRollout,
+    MeshBootstrap,
+    SecretRequests,
+    MeshLayoutService,
+    MeshConfig,
+    DeliveryAdmission,
+    ...shared.dependencies,
+    Path.Path,
+  ],
   description:
     "Read the primary's runtime and terminal module for an authenticated replica connection. Run commands with t3 run.",
   parameters: Tool.EmptyParams,

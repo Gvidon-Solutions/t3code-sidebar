@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import * as NodeSqlite from "node:sqlite";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -71,7 +73,7 @@ import * as TurnItemPositionStore from "./TurnItemPositionStore.ts";
 const isLiveStreamBufferError = Schema.is(LiveStreamBufferError);
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
-const layerDatabase = SqlitePersistence.layerMemory;
+const layerDatabase = MeshTestServices.layerMemory;
 const layerEventStoreProvided = EventStore.layer.pipe(Layer.provideMerge(layerDatabase));
 const layerProjectionStoreProvided = ProjectionStore.layer.pipe(Layer.provideMerge(layerDatabase));
 const layerStoresProvided = Layer.mergeAll(
@@ -79,12 +81,23 @@ const layerStoresProvided = Layer.mergeAll(
   layerEventStoreProvided,
   layerProjectionStoreProvided,
 );
-const layerEventSinkProvided = EventSink.layer.pipe(Layer.provide(layerStoresProvided));
-const layerEffectOutboxProvided = EffectOutbox.layer.pipe(Layer.provide(layerDatabase));
+const layerEventSinkProvided = EventSink.layer.pipe(
+  Layer.provide(RequiredAdmission.layer),
+  Layer.provide(layerStoresProvided),
+);
+const layerEffectOutboxProvided = EffectOutbox.layer.pipe(
+  Layer.provide(RequiredAdmission.layer),
+  Layer.provide(layerDatabase),
+);
 const layerCommandReceiptStoreProvided = CommandReceiptStore.layer.pipe(
   Layer.provide(layerDatabase),
 );
-const layerIsolatedOutbox = Layer.fresh(EffectOutbox.layer.pipe(Layer.provideMerge(layerDatabase)));
+const layerIsolatedOutbox = Layer.fresh(
+  EffectOutbox.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
+    Layer.provideMerge(layerDatabase),
+  ),
+);
 const layerProjectionMaintenanceProvided = ProjectionMaintenance.layer.pipe(
   Layer.provide(layerDatabase),
 );
@@ -3233,6 +3246,7 @@ it.effect("publishes live events in commit order across concurrent writers", () 
       }),
     ).pipe(Layer.provide(layerEffectOutboxProvided));
     const layerEventSink = EventSink.layerFromStores.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provide(
         Layer.mergeAll(
           layerStoresProvided,
@@ -3519,6 +3533,7 @@ it.effect.each(["cancel transaction", "fail transaction", "cancel publication"] 
         }),
       ).pipe(Layer.provide(layerEffectOutboxProvided));
       const layerEventSink = EventSink.layerFromStores.pipe(
+        Layer.provide(RequiredAdmission.layer),
         Layer.provide(
           Layer.mergeAll(
             layerStoresProvided,

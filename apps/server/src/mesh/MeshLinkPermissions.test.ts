@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { expect, it } from "@effect/vitest";
 import {
@@ -254,7 +255,10 @@ it.effect(
       ).toBe("none");
     }).pipe(
       Effect.provide(
-        Layer.merge(scope, layerTest("studio-env", DEFAULT_SIDEBAR_WORKSPACES_CONFIG)),
+        Layer.provideMerge(
+          Layer.merge(scope, layerTest("studio-env", DEFAULT_SIDEBAR_WORKSPACES_CONFIG)),
+          MeshTestServices.required,
+        ),
       ),
     ),
 );

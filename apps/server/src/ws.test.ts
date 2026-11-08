@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../testFixtures/meshServices.ts";
 import * as RpcAuthorization from "./auth/RpcAuthorization.ts";
 import * as MeshLayoutLive from "./mesh/MeshLayoutServiceLive.ts";
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
@@ -139,7 +140,7 @@ import * as ManagedPolicy from "./policy/ManagedPolicy.ts";
 import * as ThreadManagement from "./orchestration-v2/ThreadManagementService.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
-import * as SqlitePersistence from "./persistence/Sqlite.ts";
+
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as ProjectEnrichment from "./project/ProjectEnrichmentService.ts";
 import * as ProjectService from "./project/ProjectService.ts";
@@ -190,7 +191,7 @@ it.effect("resends late editors without rolling back updates already sent", () =
       assert.equal(second.config.shellRevealInFileManagerKind, "file-explorer");
       assert.deepEqual(second.config.settings, { enableProviderUpdateChecks: false } as never);
     }
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("resends a reveal kind and remote targets that outlast the snapshot timeout", () =>
@@ -222,7 +223,7 @@ it.effect("resends a reveal kind and remote targets that outlast the snapshot ti
       assert.deepEqual(remote.config.remoteOpenTargets, targets);
       assert.equal(remote.config.shellRevealInFileManagerKind, "file-explorer");
     }
-  }).pipe(Effect.scoped),
+  }).pipe(Effect.scoped, Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("runs editor, remote open target and direct endpoint discovery side by side", () =>
@@ -254,11 +255,11 @@ it.effect("runs editor, remote open target and direct endpoint discovery side by
       remoteOpenTargets: [],
       directEndpoints: [],
     });
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 const ReplayTestLayer = OrchestrationEventStore.layer.pipe(
-  Layer.provideMerge(SqlitePersistence.layerMemory),
+  Layer.provideMerge(MeshTestServices.layerMemory),
 );
 
 it.live.each(["thread", "shell"] as const)(
@@ -372,7 +373,10 @@ it.live.each(["thread", "shell"] as const)(
         items.flatMap((item) => (item.sequence === undefined ? [] : [item.sequence])),
         [after!.sequence, liveSequence],
       );
-    }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Layer.provideMerge(ReplayTestLayer, MeshTestServices.required)),
+    ),
 );
 
 it.effect("coalesces streaming replay before synchronization and the live tail", () =>
@@ -440,7 +444,10 @@ it.effect("coalesces streaming replay before synchronization and the live tail",
         [completed!.sequence + 1, "Next"],
       ],
     );
-  }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(Layer.provideMerge(ReplayTestLayer, MeshTestServices.required)),
+  ),
 );
 
 it.effect("shell groups read distinct threads once and keep each event's own sequence", () =>
@@ -565,7 +572,10 @@ it.effect("shell groups read distinct threads once and keep each event's own seq
       ["scalar:thread:active"],
       ["scalar:thread:missing"],
     ]);
-  }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(Layer.provideMerge(ReplayTestLayer, MeshTestServices.required)),
+  ),
 );
 
 it.effect("shell snapshots omit idle children and older settled threads only on request", () =>
@@ -668,7 +678,10 @@ it.effect("shell snapshots omit idle children and older settled threads only on 
     assert.deepEqual(withoutOld?.olderSettled?.counts, [
       { projectId: ProjectId.make("project"), count: 1 },
     ]);
-  }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(Layer.provideMerge(ReplayTestLayer, MeshTestServices.required)),
+  ),
 );
 
 // Build the production RPC layer; unrelated capabilities fail if this test calls them.
@@ -765,13 +778,15 @@ const layerConfigSources = Layer.mergeAll(
     Layer.provide(Layer.merge(ServerSecretStore.layer, ManagedPolicy.layerTest())),
   ),
 ).pipe(
-  Layer.provideMerge(Layer.fresh(SqlitePersistence.layerMemory)),
+  Layer.provideMerge(Layer.fresh(MeshTestServices.layerMemory)),
   Layer.provideMerge(
     Layer.fresh(
       ServerConfigModule.layerTest(process.cwd(), { prefix: "t3-config-subscription-test-" }),
     ),
   ),
-  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+  Layer.provideMerge(
+    Layer.mergeAll(Layer.merge(NodeServices.layer, MeshTestServices.platform), NodeCrypto.layer),
+  ),
 );
 
 it.effect.each([
@@ -1021,14 +1036,17 @@ it.effect.each([
       yield* server.write(0, { _tag: "Interrupt", requestId, interruptors: [] });
       if (direct) yield* Deferred.await(directStopped);
     }).pipe(
+      Effect.scoped,
       Effect.provide(
-        Layer.mergeAll(
-          Layer.fresh(layerConfigSources),
-          Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)({}),
-          Layer.mock(ServerBrowser.ServerBrowser)({}),
+        Layer.provideMerge(
+          Layer.mergeAll(
+            Layer.fresh(layerConfigSources),
+            Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)({}),
+            Layer.mock(ServerBrowser.ServerBrowser)({}),
+          ),
+          MeshTestServices.required,
         ),
       ),
-      Effect.scoped,
     ),
 );
 
@@ -1234,14 +1252,17 @@ it.effect("on-demand clients get provider config without workspace snapshots", (
     );
     yield* server.write(0, { _tag: "Interrupt", requestId: configRequest, interruptors: [] });
   }).pipe(
+    Effect.scoped,
     Effect.provide(
-      Layer.mergeAll(
-        Layer.fresh(layerConfigSources),
-        Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)({}),
-        Layer.mock(ServerBrowser.ServerBrowser)({}),
+      Layer.provideMerge(
+        Layer.mergeAll(
+          Layer.fresh(layerConfigSources),
+          Layer.mock(PreviewAutomationBroker.PreviewAutomationBroker)({}),
+          Layer.mock(ServerBrowser.ServerBrowser)({}),
+        ),
+        MeshTestServices.required,
       ),
     ),
-    Effect.scoped,
   ),
 );
 
@@ -1299,7 +1320,10 @@ it.effect.each(["thread", "shell"] as const)(
         Effect.exit,
       );
       assert.deepEqual(Exit.isFailure(exit) ? Cause.squash(exit.cause) : exit, "snapshot");
-    }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Layer.provideMerge(ReplayTestLayer, MeshTestServices.required)),
+    ),
 );
 
 // A prune pass can delete replayed rows after the boundary check; the read must not be trusted.
@@ -1379,7 +1403,10 @@ it.effect.each(["thread", "shell"] as const)(
       yield* Deferred.succeed(releaseRead, undefined);
       const exit = yield* Fiber.join(fiber);
       assert.deepEqual(Exit.isFailure(exit) ? Cause.squash(exit.cause) : exit, "snapshot");
-    }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Layer.provideMerge(ReplayTestLayer, MeshTestServices.required)),
+    ),
 );
 
 // A thread idle since before the boundary missed nothing; resuming must not resend its body.
@@ -1416,7 +1443,10 @@ it.effect("thread resume at its own high-water below the pruned boundary skips t
     );
     // A snapshot load dies with "snapshot", so success means the resume replayed nothing.
     assert.isTrue(Exit.isSuccess(exit));
-  }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(Layer.provideMerge(ReplayTestLayer, MeshTestServices.required)),
+  ),
 );
 
 it.effect(
@@ -1555,26 +1585,29 @@ it.effect(
       assert.equal(other.quietAfterDays, 23);
       assert.deepEqual((yield* mesh.read).config, other);
     }).pipe(
+      Effect.scoped,
       Effect.provide(
-        MeshLayoutLive.layer.pipe(
-          Layer.provideMerge(
-            Layer.mergeAll(
-              Layer.fresh(layerConfigSources),
-              Layer.mock(ServerEnvironment.ServerEnvironment)({
-                getEnvironmentId: Effect.succeed(EnvironmentId.make("studio")),
-                getDescriptor: Effect.succeed({
-                  environmentId: EnvironmentId.make("studio"),
-                  label: "Studio",
-                  platform: { os: "linux", arch: "x64" },
-                  serverVersion: "0.0.0",
-                  capabilities: { repositoryIdentity: false },
+        Layer.provideMerge(
+          MeshLayoutLive.layer.pipe(
+            Layer.provideMerge(
+              Layer.mergeAll(
+                Layer.fresh(layerConfigSources),
+                Layer.mock(ServerEnvironment.ServerEnvironment)({
+                  getEnvironmentId: Effect.succeed(EnvironmentId.make("studio")),
+                  getDescriptor: Effect.succeed({
+                    environmentId: EnvironmentId.make("studio"),
+                    label: "Studio",
+                    platform: { os: "linux", arch: "x64" },
+                    serverVersion: "0.0.0",
+                    capabilities: { repositoryIdentity: false },
+                  }),
                 }),
-              }),
-              Layer.mock(ServerBrowser.ServerBrowser)({}),
+                Layer.mock(ServerBrowser.ServerBrowser)({}),
+              ),
             ),
           ),
+          MeshTestServices.required,
         ),
       ),
-      Effect.scoped,
     ),
 );

@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as DocumentText from "../provider/DocumentText.ts";
 import { NodeHttpServer } from "@effect/platform-node";
@@ -211,7 +212,11 @@ const serveBox = (seen: Ref.Ref<Seen>, linkSession: Ref.Ref<string>) =>
       McpHttpServer.layerThreadToolkit,
     )
       .pipe(
-        Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
+        Layer.provide(
+          DocumentText.layer.pipe(
+            Layer.provideMerge(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
+          ),
+        ),
         Layer.provide(NodeCrypto.layer),
         Layer.provide(
           layerLinkedTest(
@@ -235,12 +240,12 @@ const serveBox = (seen: Ref.Ref<Seen>, linkSession: Ref.Ref<string>) =>
         Layer.provide(boxProjects(seen)),
         Layer.provide(
           ServerConfig.layerTest(process.cwd(), { prefix: "t3-peer-forwarding-box-" }).pipe(
-            Layer.provide(NodeServices.layer),
+            Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
           ),
         ),
       )
       .pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
         Layer.provide(
           Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
         ),
@@ -280,7 +285,11 @@ const makeLaptop = Effect.gen(function* () {
     McpHttpServer.layerProjectRegistration,
     McpHttpServer.layerThreadToolkit,
   ).pipe(
-    Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
+    Layer.provide(
+      DocumentText.layer.pipe(
+        Layer.provideMerge(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
+      ),
+    ),
     Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
     Layer.provide(Layer.mock(ThreadSearch.ThreadSearch)({})),
     Layer.provide(Layer.mock(ThreadLaunch.ThreadLaunchService)({})),
@@ -291,10 +300,10 @@ const makeLaptop = Effect.gen(function* () {
     Layer.provide(Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({})),
     Layer.provide(
       ServerConfig.layerTest(process.cwd(), { prefix: "t3-peer-forwarding-laptop-" }).pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
       ),
     ),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
     Layer.provide(PeerForwarding.layer),
     Layer.provide(Layer.succeedContext(linking)),
     Layer.provide(NodeCrypto.layer),
@@ -443,7 +452,17 @@ it.effect("an agent here works on a linked environment's threads within its own 
         `delegated-tasks.stop ${boxThread}`,
       ]);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("keeps a forwarded wait short and its retries scoped to the caller", () =>
@@ -495,7 +514,17 @@ it.effect("keeps a forwarded wait short and its retries scoped to the caller", (
       expect(other).not.toBe(first);
       expect(first).not.toContain("same-key");
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("launches in a linked environment with the caller's modes, retry-safe", () =>
@@ -548,7 +577,17 @@ it.effect("launches in a linked environment with the caller's modes, retry-safe"
       expect(yield* Ref.get(b.bearers)).toEqual([]);
       expect((yield* Ref.get(seen)).launches).toHaveLength(2);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("brings a repository to a linked environment, only through full access", () =>
@@ -597,7 +636,17 @@ it.effect("brings a repository to a linked environment, only through full access
       expect((yield* Ref.get(seen)).clones).toHaveLength(1);
       expect((yield* Ref.get(seen)).projects).toHaveLength(1);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("runs any tool that takes a linked environment there", () =>
@@ -632,7 +681,17 @@ it.effect("runs any tool that takes a linked environment there", () =>
         runtimeMode: "full-access",
       });
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );
 
 it.effect("refuses what a linked environment cannot take before anything leaves", () =>
@@ -704,5 +763,15 @@ it.effect("refuses what a linked environment cannot take before anything leaves"
       }
       expect(yield* Ref.get(b.bearers)).toEqual([]);
     }),
-  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(
+          Layer.provideMerge(NodeHttpServer.layerTest, MeshTestServices.layerMemory),
+          MeshTestServices.platform,
+        ),
+        MeshTestServices.required,
+      ),
+    ),
+  ),
 );

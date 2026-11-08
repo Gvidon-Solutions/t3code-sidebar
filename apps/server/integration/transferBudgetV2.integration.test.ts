@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../src/mesh/DeliveryAdmission.ts";
 // @effect-diagnostics nodeBuiltinImport:off - Measures real local HTTP/WebSocket sockets.
 import * as NodeHttp from "node:http";
 import * as NodeUtil from "node:util";
@@ -40,7 +42,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { HttpRouter, HttpServer } from "effect/http";
 import { Rpc, RpcGroup, RpcServer, RpcSerialization } from "effect/rpc";
 import * as ServerEnvironment from "../src/environment/ServerEnvironment.ts";
-import * as SqlitePersistence from "../src/persistence/Sqlite.ts";
+
 import * as OrchestrationEventStore from "../src/persistence/OrchestrationEventStore.ts";
 import * as EventStore from "../src/orchestration-v2/EventStore.ts";
 import * as EventSink from "../src/orchestration-v2/EventSink.ts";
@@ -97,10 +99,11 @@ const decodeShellSnapshot = Schema.decodeUnknownEffect(
 );
 
 const layerPersistence = EventSink.layer.pipe(
+  Layer.provide(RequiredAdmission.layer),
   Layer.provideMerge(EventStore.layerFromOrchestrationEventStore),
   Layer.provideMerge(ProjectionStore.layer),
   Layer.provideMerge(OrchestrationEventStore.layer),
-  Layer.provideMerge(SqlitePersistence.layerMemory),
+  Layer.provideMerge(MeshTestServices.layerMemory),
 );
 const layerManagement = Layer.unwrap(
   Effect.gen(function* () {

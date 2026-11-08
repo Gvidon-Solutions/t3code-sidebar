@@ -23,7 +23,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
 import * as PeerLinks from "./PeerLinks.ts";
-import * as PeerSessions from "./connection/PeerSessions.ts";
+
 import * as PeerTransport from "./connection/PeerTransport.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 
@@ -151,9 +151,9 @@ const make = Effect.gen(function* () {
   const links = yield* PeerLinks.PeerLinks;
   const digest = yield* Digest.Digest;
   const random = yield* SecureRandom.SecureRandom;
-  const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
+  const transport = yield* PeerTransport.PeerTransport;
   const httpClient = yield* HttpClient.HttpClient;
-  const environment = yield* Effect.serviceOption(ServerEnvironment.ServerEnvironment);
+  const environment = yield* ServerEnvironment.ServerEnvironment;
   // One MCP session per peer and address, reused across calls. The peer keeps
   // sessions in memory, so a restart there answers 404 and we start a new one.
   const sessions = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
@@ -401,10 +401,7 @@ const make = Effect.gen(function* () {
         ].includes(input.tool)
           ? { ...input.arguments, clientRequestId: key }
           : input.arguments;
-      const optionalSessions: Effect.Effect<Option.Option<PeerSessions.PeerSessions["Service"]>> =
-        Effect.serviceOption(PeerSessions.PeerSessions);
-      const captured = Option.isSome(transport) ? transport.value.get() : undefined;
-      const sessions = captured === undefined ? yield* optionalSessions : Option.some(captured);
+      const sessions = Option.fromNullishOr(transport.get());
       const useConnection =
         Option.isSome(sessions) &&
         (yield* sessions.value.status).some(
@@ -442,9 +439,7 @@ const make = Effect.gen(function* () {
           url: resolved.url,
           token: resolved.token,
           ...(key === undefined ? {} : { idempotencyKey: key }),
-          ...(Option.isSome(environment)
-            ? { callerEnvironmentId: String(yield* environment.value.getEnvironmentId) }
-            : {}),
+          callerEnvironmentId: String(yield* environment.getEnvironmentId),
           tool: input.tool,
           arguments: argumentsWithIdentity,
           limits: input.limits,
@@ -476,7 +471,7 @@ const make = Effect.gen(function* () {
   return PeerMcpClient.of({
     call,
     connectionAvailable: Effect.fn("PeerMcpClient.connectionAvailable")((environmentId) => {
-      const network = Option.isSome(transport) ? transport.value.get() : undefined;
+      const network = transport.get();
       return network
         ? network.status.pipe(
             Effect.map((states) =>

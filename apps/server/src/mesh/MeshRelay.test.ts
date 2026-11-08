@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
@@ -43,44 +44,52 @@ it.effect.each(["full-access", "read-only", "approval-required"] as const)(
       ).toMatchObject({ code: "capability_denied" });
     }).pipe(
       Effect.provide(
-        layer.pipe(
-          Layer.provide(
-            Layer.mergeAll(
-              Layer.succeed(ServerEnvironment, {
-                getEnvironmentId: Effect.succeed(EnvironmentId.make("B")),
-                getDescriptor: Effect.succeed(descriptorOf("B", "B")),
-              }),
-              Layer.mock(PeerLinks)({
-                list: Effect.succeed([
-                  {
-                    environmentId: EnvironmentId.make("C"),
-                    access,
-                    status: "reachable",
-                    label: "C",
-                    urls: [],
-                    linkedAt: DateTime.makeUnsafe(0),
-                    expiresAt: DateTime.makeUnsafe(9999999999999),
-                    lastReachedAt: null,
-                    lastError: null,
-                  },
-                ]),
-                get: () =>
-                  Effect.succeedSome({
-                    environmentId: EnvironmentId.make("C"),
-                    access,
-                    label: "C",
-                    urls: [],
-                    linkedAt: DateTime.makeUnsafe(0),
-                    expiresAt: DateTime.makeUnsafe(9999999999999),
-                    lastReachedAt: null,
-                    lastError: null,
-                  }),
-              }),
-              Layer.succeed(PeerMcpClient, {
-                call: (input) => Effect.succeed({ hops: input.hops } as typeof input.success.Type),
-              }),
+        Layer.provideMerge(
+          layer.pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                Layer.succeed(ServerEnvironment, {
+                  getEnvironmentId: Effect.succeed(EnvironmentId.make("B")),
+                  getDescriptor: Effect.succeed(descriptorOf("B", "B")),
+                }),
+                (() => {
+                  const list = Effect.succeed([
+                    {
+                      environmentId: EnvironmentId.make("C"),
+                      access,
+                      status: "reachable" as const,
+                      label: "C",
+                      urls: [],
+                      linkedAt: DateTime.makeUnsafe(0),
+                      expiresAt: DateTime.makeUnsafe(9999999999999),
+                      lastReachedAt: null,
+                      lastError: null,
+                    },
+                  ]);
+                  return Layer.mock(PeerLinks)({
+                    list,
+                    get: () =>
+                      Effect.succeedSome({
+                        environmentId: EnvironmentId.make("C"),
+                        access,
+                        label: "C",
+                        urls: [],
+                        linkedAt: DateTime.makeUnsafe(0),
+                        expiresAt: DateTime.makeUnsafe(9999999999999),
+                        lastReachedAt: null,
+                        lastError: null,
+                      }),
+                    ids: Effect.map(list, (peers) => peers.map((peer) => peer.environmentId)),
+                  });
+                })(),
+                Layer.succeed(PeerMcpClient, {
+                  call: (input) =>
+                    Effect.succeed({ hops: input.hops } as typeof input.success.Type),
+                }),
+              ),
             ),
           ),
+          MeshTestServices.platform,
         ),
       ),
     ),
@@ -169,50 +178,53 @@ it.effect(
       ).toEqual({ files: "projects", replicas: false });
     }).pipe(
       Effect.provide(
-        layer.pipe(
-          Layer.provideMerge(
-            Layer.mergeAll(
-              layoutTest("B", DEFAULT_SIDEBAR_WORKSPACES_CONFIG),
-              Layer.succeed(McpInvocationContext, {
-                environmentId: EnvironmentId.make("B"),
-                issuedAt: 0,
-                requestNamespace: "relay-test",
-                thread: undefined,
-                client: {
-                  sessionId: "link",
-                  label: "Studio",
-                  peerEnvironmentId: EnvironmentId.make("A"),
-                  linked: true,
-                  access: "full-access",
-                },
-                capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
-              }),
-              Layer.succeed(ServerEnvironment, {
-                getEnvironmentId: Effect.succeed(EnvironmentId.make("B")),
-                getDescriptor: Effect.succeed(descriptorOf("B", "Cloudbox")),
-              }),
-              Layer.mock(PeerLinks)({
-                get: () =>
-                  Effect.succeedSome({
-                    environmentId: EnvironmentId.make("C"),
-                    label: "Laptop",
-                    urls: [],
+        Layer.provideMerge(
+          layer.pipe(
+            Layer.provideMerge(
+              Layer.mergeAll(
+                layoutTest("B", DEFAULT_SIDEBAR_WORKSPACES_CONFIG),
+                Layer.succeed(McpInvocationContext, {
+                  environmentId: EnvironmentId.make("B"),
+                  issuedAt: 0,
+                  requestNamespace: "relay-test",
+                  thread: undefined,
+                  client: {
+                    sessionId: "link",
+                    label: "Studio",
+                    peerEnvironmentId: EnvironmentId.make("A"),
+                    linked: true,
                     access: "full-access",
-                    linkedAt: DateTime.makeUnsafe(0),
-                    expiresAt: DateTime.makeUnsafe(9999999999999),
-                    lastReachedAt: null,
-                    lastError: null,
-                  }),
-              }),
-              Layer.succeed(PeerMcpClient, {
-                call: (input) =>
-                  Effect.succeed({
-                    ...(input.limits.files ? { files: input.limits.files } : {}),
-                    ...(input.limits.replicas === false ? { replicas: false } : {}),
-                  } as typeof input.success.Type),
-              }),
+                  },
+                  capabilities: new Set<import("../mcp/McpInvocationContext.ts").McpCapability>(),
+                }),
+                Layer.succeed(ServerEnvironment, {
+                  getEnvironmentId: Effect.succeed(EnvironmentId.make("B")),
+                  getDescriptor: Effect.succeed(descriptorOf("B", "Cloudbox")),
+                }),
+                Layer.mock(PeerLinks)({
+                  get: () =>
+                    Effect.succeedSome({
+                      environmentId: EnvironmentId.make("C"),
+                      label: "Laptop",
+                      urls: [],
+                      access: "full-access",
+                      linkedAt: DateTime.makeUnsafe(0),
+                      expiresAt: DateTime.makeUnsafe(9999999999999),
+                      lastReachedAt: null,
+                      lastError: null,
+                    }),
+                }),
+                Layer.succeed(PeerMcpClient, {
+                  call: (input) =>
+                    Effect.succeed({
+                      ...(input.limits.files ? { files: input.limits.files } : {}),
+                      ...(input.limits.replicas === false ? { replicas: false } : {}),
+                    } as typeof input.success.Type),
+                }),
+              ),
             ),
           ),
+          MeshTestServices.platform,
         ),
       ),
     ),

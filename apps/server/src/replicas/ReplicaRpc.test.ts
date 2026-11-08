@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import { it, expect } from "@effect/vitest";
 import {
@@ -88,5 +89,5 @@ it.effect(
           AuthOrchestrationOperateScope,
         ]);
       }).pipe(Effect.provide(h.layer));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );

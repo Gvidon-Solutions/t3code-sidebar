@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { DeliveryAdmission } from "./DeliveryAdmission.ts";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
@@ -33,7 +34,7 @@ const encode = Schema.encodeEffect(Schema.fromJsonString(Schema.Json));
 const decodeVote = Schema.decodeUnknownEffect(MeshUpdateVoteInput);
 const fixture = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
-  const root = yield* fs.makeTempDirectoryScoped({ prefix: "B1-rollout-" });
+  const root = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-rollout-" });
   const mesh = yield* MeshLayoutService;
   const services = new Map<string, Rollout.MeshRollout["Service"]>();
   const requested: string[] = [];
@@ -209,7 +210,7 @@ const fixture = Effect.gen(function* () {
   };
 });
 const testLayer = Layout.layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG).pipe(
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
 );
 it.effect(
   "serializes concurrent candidates and releases each lease only after the new version passes health",
@@ -247,7 +248,15 @@ it.effect(
         expect((yield* f.mesh.read).document["mesh.updateLease"]?.v).toBeNull();
       }
       expect(f.requested).toEqual(["cloudbox", "laptop", "studio"]);
-    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(testLayer, MeshTestServices.platform),
+          MeshTestServices.services,
+        ),
+      ),
+    ),
 );
 it.effect(
   "persists the health failure across a database restore, stops the rollout and leaves later servers untouched",
@@ -283,7 +292,15 @@ it.effect(
         "Rollout stopped",
       );
       expect(f.requested).toEqual(["cloudbox"]);
-    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(testLayer, MeshTestServices.platform),
+          MeshTestServices.services,
+        ),
+      ),
+    ),
 );
 
 it.effect("resumes the same lease after interruption before the launcher accepts the handoff", () =>
@@ -303,7 +320,15 @@ it.effect("resumes the same lease after interruption before the launcher accepts
     f.backupBlocks.delete("cloudbox");
     yield* f.services.get("cloudbox")!.reconcile;
     expect(f.requested).toEqual(["cloudbox"]);
-  }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(testLayer, MeshTestServices.platform),
+        MeshTestServices.services,
+      ),
+    ),
+  ),
 );
 
 it.effect("refuses runtime handoff before backup when admission is unavailable", () =>
@@ -315,7 +340,15 @@ it.effect("refuses runtime handoff before backup when admission is unavailable",
     expect(f.requested).toEqual([]);
     expect(f.steps).toEqual([]);
     expect((yield* f.mesh.read).document["mesh.updateLease"]).toBeUndefined();
-  }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(testLayer, MeshTestServices.platform),
+        MeshTestServices.services,
+      ),
+    ),
+  ),
 );
 
 it.effect(
@@ -344,7 +377,15 @@ it.effect(
       expect(f.requested).toEqual([]);
       expect(f.cancelled).toEqual(["cloudbox"]);
       expect((yield* f.mesh.read).document["mesh.updateLease"]?.v).toBeNull();
-    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(testLayer, MeshTestServices.platform),
+          MeshTestServices.services,
+        ),
+      ),
+    ),
 );
 
 it.effect.each([
@@ -380,5 +421,13 @@ it.effect.each([
     expect(f.deadlines).toEqual(policy.expected);
     expect(f.forced).toEqual([policy.skipForVersion === "0.1.6"]);
     expect(f.requested).toEqual(["cloudbox"]);
-  }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(testLayer, MeshTestServices.platform),
+        MeshTestServices.services,
+      ),
+    ),
+  ),
 );

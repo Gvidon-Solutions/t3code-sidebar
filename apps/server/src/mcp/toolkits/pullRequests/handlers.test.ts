@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
 import {
   EnvironmentId,
   ProjectId,
@@ -234,7 +235,7 @@ describe("pull request toolkit handlers", () => {
         threadId: THREAD_ID,
       });
       expect(yield* Ref.get(harness.commands)).toEqual([]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("links by URL with source agent on the token's thread", () =>
@@ -260,7 +261,7 @@ describe("pull request toolkit handlers", () => {
           source: "agent",
         },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("watching an unlinked pull request links it first", () =>
@@ -278,7 +279,7 @@ describe("pull request toolkit handlers", () => {
           link: { url: "https://github.com/t3tools/t3code/pull/9", source: "agent" },
         },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("refuses to watch a merged pull request and stops an existing watch", () =>
@@ -312,7 +313,7 @@ describe("pull request toolkit handlers", () => {
       expect(yield* Ref.get(harness.commands)).toMatchObject([
         { type: "thread.pull-request.watch", number: 3, watching: false },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("watches a pull request saved as closed, since it may have reopened", () =>
@@ -327,7 +328,7 @@ describe("pull request toolkit handlers", () => {
       expect(yield* Ref.get(harness.commands)).toMatchObject([
         { type: "thread.pull-request.watch", number: 1, watching: true },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("refuses a watch from a subagent thread, whose parent owns the pull request", () =>
@@ -347,7 +348,7 @@ describe("pull request toolkit handlers", () => {
         .pipe(Effect.flip);
       expect(error).toMatchObject({ _tag: "PullRequestWatchFromSubagentError" });
       expect(yield* Ref.get(harness.commands)).toEqual([]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("asks a subagent thread to end with its PR report after it links", () =>
@@ -366,7 +367,7 @@ describe("pull request toolkit handlers", () => {
         url: "https://github.com/t3tools/t3code/pull/124",
       });
       expect(result).toMatchObject({ number: 124, next: CHILD_PULL_REQUEST_REPORT_NEXT });
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("canonicalizes GitCafe links independently of the thread's project host", () =>
@@ -399,7 +400,7 @@ describe("pull request toolkit handlers", () => {
           }
         }
       }
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("builds the URL in the project host's own shape", () =>
@@ -434,7 +435,7 @@ describe("pull request toolkit handlers", () => {
         number: 9,
       });
       expect(onGitHub.url).toBe("https://github.com/acme/web/pull/9");
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("links a URL but not a bare number when the project's host is unknown", () =>
@@ -468,7 +469,7 @@ describe("pull request toolkit handlers", () => {
       expect(yield* Ref.get(harness.commands)).toMatchObject([
         { type: "thread.pull-request.link", number: 123, url: supplied },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("treats a duplicate link as alreadyLinked rather than an error", () =>
@@ -482,7 +483,7 @@ describe("pull request toolkit handlers", () => {
         url: "https://github.com/t3tools/t3code/pull/123",
       });
       expect(result.alreadyLinked).toBe(true);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("unlinks a linked pull request and reports a missing one as wasLinked=false", () =>
@@ -511,7 +512,7 @@ describe("pull request toolkit handlers", () => {
       expect(yield* Ref.get(harness.commands)).toMatchObject([
         { type: "thread.pull-request.unlink", number: 5 },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("reports a dismissed stack member as not linked and leaves it dismissed", () =>
@@ -525,7 +526,7 @@ describe("pull request toolkit handlers", () => {
       });
       expect(result.wasLinked).toBe(false);
       expect(yield* Ref.get(harness.commands)).toEqual([]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("links several pull requests in one call", () =>
@@ -547,7 +548,7 @@ describe("pull request toolkit handlers", () => {
         { type: "thread.pull-request.link", number: 2, source: "agent" },
         { type: "thread.pull-request.link", number: 3, source: "agent" },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("unlinks every visible pull request in the given states in one call", () =>
@@ -580,7 +581,7 @@ describe("pull request toolkit handlers", () => {
         { type: "thread.pull-request.unlink", number: 1 },
         { type: "thread.pull-request.unlink", number: 3 },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it("reports an older Forgejo link's HTTP port when listing thread links", () => {
@@ -633,7 +634,7 @@ describe("pull request toolkit handlers", () => {
         { kind: "derived", numbers: [1, 2, 3] },
         { kind: "derived", numbers: [10] },
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 });
 
@@ -722,7 +723,7 @@ describe("pull request guide tools", () => {
           ["project-web", 7],
           [PROJECT_ID, 12],
         ]);
-      }),
+      }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("reports an unreadable entry on its own and still writes the rest of the batch", () =>
@@ -739,7 +740,7 @@ describe("pull request guide tools", () => {
       expect(result.guides[0]?.detail).toContain("not a recognised pull request URL");
       expect(result.guides[1]?.detail).toContain("Pass either url");
       expect((yield* Ref.get(harness.guideRequests)).map((ref) => ref.number)).toEqual([5]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("finds an Azure DevOps checkout for a pull request named by its full path", () =>
@@ -767,6 +768,6 @@ describe("pull request guide tools", () => {
       expect((yield* Ref.get(harness.guideRequests)).map((ref) => ref.projectId)).toEqual([
         "project-azure",
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
   );
 });

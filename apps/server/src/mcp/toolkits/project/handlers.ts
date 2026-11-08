@@ -42,7 +42,7 @@ import { ProjectToolkit } from "./tools.ts";
 const isAboveCeilingError = Schema.is(OrchestratorRuntimeModeAboveCeilingError);
 
 function projectFailure(error: Project.ProjectServiceError) {
-  if (error._tag === "ProjectOperationError") return unavailable();
+  if (error._tag === "ProjectOperationError") return unavailable(error);
   const message =
     error._tag === "ProjectNotFoundError"
       ? "The project was not found."
@@ -91,13 +91,13 @@ const access = Effect.gen(function* () {
 const sharedProjectTitles = Effect.fn("mcp.sharedProjectTitles")(function* (
   projects: readonly ProjectRecord[],
 ) {
-  const mesh = yield* Effect.serviceOption(MeshLayout.MeshLayoutService);
-  if (Option.isNone(mesh)) return projects;
-  const config = (yield* mesh.value.read).config;
+  const mesh = yield* MeshLayout.MeshLayoutService;
+
+  const config = (yield* mesh.read).config;
   return projects.map((project) => {
     const key = logicalProjectKeyForRecord(
       config,
-      { ...project, environmentId: mesh.value.environmentId },
+      { ...project, environmentId: mesh.environmentId },
       "",
     );
     const title = config.projectTitles[key]?.trim() || project.title;
@@ -148,8 +148,8 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
         );
       if (input.live === false) return result;
       const scope = yield* McpInvocationContext.McpInvocationContext;
-      const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
-      if (Option.isNone(forwarding)) return result;
+      const forwarding = yield* PeerForwarding.PeerForwarding;
+
       const drivers = [
         ...new Set(
           result.representations.flatMap((rep) =>
@@ -162,7 +162,7 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
       const remote = yield* Effect.forEach(
         drivers,
         (driver) =>
-          forwarding.value
+          forwarding
             .call(scope, ProjectToolkit.tools.t3_project_machines, EnvironmentId.make(driver), {
               project: result.logicalKey,
               live: false,
@@ -377,7 +377,7 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
                 message: error.cause.message,
               });
             }
-            return unavailable();
+            return unavailable(error);
           }),
         );
         const thread = result.projection.thread;
@@ -470,15 +470,15 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
       const project = yield* projects
         .update({ ...input, commandId: yield* newCommandId() })
         .pipe(Effect.mapError(projectFailure));
-      const mesh = yield* Effect.serviceOption(MeshLayout.MeshLayoutService);
-      if (input.title !== undefined && Option.isSome(mesh)) {
+      const mesh = yield* MeshLayout.MeshLayoutService;
+      if (input.title !== undefined) {
         const title = input.title;
-        yield* mesh.value
+        yield* mesh
           .edit((config) => {
             const key = Object.keys(config.projectMounts).find((key) =>
               config.projectMounts[key]?.some(
                 (rep) =>
-                  rep.environmentId === mesh.value.environmentId &&
+                  rep.environmentId === mesh.environmentId &&
                   (rep.projectId === input.projectId || rep.path === project.workspaceRoot),
               ),
             );

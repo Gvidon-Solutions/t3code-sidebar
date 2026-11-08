@@ -1,5 +1,6 @@
-import { meshMillis } from "./MeshTiming.ts";
-import { meshRetryDelay } from "./retryBackoff.ts";
+import * as PeerIdentities from "../auth/PeerIdentities.ts";
+import { meshTimer, MeshTimeScale } from "./MeshTiming.ts";
+import { meshRetryDelay } from "./Backoff.ts";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -74,18 +75,19 @@ export class MeshReplicator extends Context.Service<
 export const layer = Layer.effect(
   MeshReplicator,
   Effect.gen(function* () {
+    const meshMillis = yield* meshTimer;
+    const timeScale = yield* MeshTimeScale;
     const sql = yield* SqlClient.SqlClient;
     const random = yield* SecureRandom.SecureRandom;
     const mesh = yield* MeshLayoutService;
     const peers = yield* PeerMcpClient;
     const links = yield* PeerLinks;
+    const identities = yield* PeerIdentities.PeerIdentities;
     const settings = yield* ServerSettingsService;
-    const transport = yield* Effect.serviceOption(PeerTransport.PeerTransport);
-    const directory = yield* Effect.serviceOption(MeshProjectDirectory);
-    const projects = yield* Effect.serviceOption(ProjectService);
-    const applicationEvents = yield* Effect.serviceOption(
-      ApplicationEvents.OrchestrationEventStore,
-    );
+    const transport = yield* PeerTransport.PeerTransport;
+    const directory = yield* MeshProjectDirectory;
+    const projects = yield* ProjectService;
+    const applicationEvents = yield* ApplicationEvents.OrchestrationEventStore;
     yield* sql`CREATE TABLE IF NOT EXISTS mesh_layout_generation (id TEXT PRIMARY KEY, generation TEXT NOT NULL)`;
     yield* sql`INSERT OR IGNORE INTO mesh_layout_generation(id,generation) VALUES ('local',${yield* random.uuidV4().pipe(Effect.orDie)})`;
     const generation = (yield* sql<{
@@ -110,10 +112,9 @@ export const layer = Layer.effect(
     });
     const peerCatalogClocks = new Map<string, typeof CatalogClocks.Type>();
     const captureCatalogs = Effect.fn("MeshReplicator.captureCatalogs")(function* () {
-      if (Option.isNone(directory)) return [] as readonly ProjectCatalog[];
-      if (Option.isSome(projects)) {
+      {
         yield* Effect.gen(function* () {
-          const snapshot = yield* projects.value.snapshot;
+          const snapshot = yield* projects.snapshot;
           const handles: ProjectHandle[] = snapshot.projects
             .filter((project) => project.deletedAt === null)
             .map((project) => ({
@@ -139,11 +140,11 @@ export const layer = Layer.effect(
                 : {}),
             }))
             .sort((a, b) => a.id.localeCompare(b.id));
-          const previous = (yield* directory.value.read).find(
+          const previous = (yield* directory.read).find(
             (catalog) => catalog.environmentId === mesh.environmentId,
           );
           if (!NodeUtil.isDeepStrictEqual(previous?.projects, handles))
-            yield* directory.value.accept([
+            yield* directory.accept([
               { environmentId: mesh.environmentId, h: yield* mesh.nextHlc, projects: handles },
             ]);
         }).pipe(
@@ -152,7 +153,7 @@ export const layer = Layer.effect(
           ),
         );
       }
-      return yield* directory.value.read;
+      return yield* directory.read;
     });
     const clocks = (catalogs: readonly ProjectCatalog[]) =>
       Object.fromEntries(catalogs.map((catalog) => [catalog.environmentId, catalog.h]));
@@ -225,11 +226,7 @@ export const layer = Layer.effect(
         last_error: string | null;
       }>`SELECT environment_id, sent_seq, received_seq, last_exchange_at, last_error FROM mesh_peer_state ORDER BY environment_id`;
       return {
-        legacyIdentityUpgrades: yield* sql<{
-          sessionId: string;
-          environmentId: string;
-          boundAt: string;
-        }>`SELECT session_id AS sessionId, environment_id AS environmentId, bound_at AS boundAt FROM peer_session_identities WHERE source = 'legacy-local-link' ORDER BY session_id`,
+        legacyIdentityUpgrades: yield* identities.legacyUpgrades,
         quarantine: yield* sql<{
           key: string;
           reason: string;
@@ -261,12 +258,11 @@ export const layer = Layer.effect(
           });
         yield* observeGeneration(input.fromEnvironmentId, input.generation);
         yield* mesh.apply(input.entries as MeshLayoutDocument, input.fromEnvironmentId);
-        if (Option.isSome(directory))
-          yield* directory.value.accept(
-            (input.projectCatalogs ?? []).filter(
-              (catalog) => catalog.environmentId !== mesh.environmentId,
-            ),
-          );
+        yield* directory.accept(
+          (input.projectCatalogs ?? []).filter(
+            (catalog) => catalog.environmentId !== mesh.environmentId,
+          ),
+        );
         const acknowledged =
           input.acknowledgedGeneration === generation || input.generation === undefined
             ? input.ackReceivedSeq
@@ -285,12 +281,8 @@ export const layer = Layer.effect(
         return {
           ...output,
           generation,
-          ...(Option.isSome(directory)
-            ? {
-                projectCatalogs: newerCatalogs(catalogs, input.knownProjects),
-                knownProjects: clocks(catalogs),
-              }
-            : {}),
+          projectCatalogs: newerCatalogs(catalogs, input.knownProjects),
+          knownProjects: clocks(catalogs),
         };
       },
       Effect.mapError((cause) =>
@@ -323,12 +315,8 @@ export const layer = Layer.effect(
       const outgoing = yield* changesSince(watermark.sent_seq);
       const catalogs = yield* captureCatalogs();
       return {
-        ...(Option.isSome(directory)
-          ? {
-              projectCatalogs: newerCatalogs(catalogs, peerCatalogClocks.get(id)),
-              knownProjects: clocks(catalogs),
-            }
-          : {}),
+        projectCatalogs: newerCatalogs(catalogs, peerCatalogClocks.get(id)),
+        knownProjects: clocks(catalogs),
         generation,
         acknowledgedGeneration: (yield* sql<{
           generation: string;
@@ -364,12 +352,11 @@ export const layer = Layer.effect(
                 if (incoming.knownProjects)
                   peerCatalogClocks.set(peer.environmentId, incoming.knownProjects);
                 yield* mesh.apply(incoming.entries as MeshLayoutDocument, peer.environmentId);
-                if (Option.isSome(directory))
-                  yield* directory.value.accept(
-                    (incoming.projectCatalogs ?? []).filter(
-                      (catalog) => catalog.environmentId !== mesh.environmentId,
-                    ),
-                  );
+                yield* directory.accept(
+                  (incoming.projectCatalogs ?? []).filter(
+                    (catalog) => catalog.environmentId !== mesh.environmentId,
+                  ),
+                );
                 const changedGeneration = yield* observeGeneration(
                   peer.environmentId,
                   incoming.generation,
@@ -386,7 +373,7 @@ export const layer = Layer.effect(
                   Effect.gen(function* () {
                     const failures = (retries.get(peer.environmentId)?.failures ?? 0) + 1;
                     const now = yield* Clock.currentTimeMillis;
-                    const after = now + meshRetryDelay(failures - 1);
+                    const after = now + meshRetryDelay(failures - 1, 1, undefined, timeScale);
                     retries.set(peer.environmentId, { failures, after });
                     yield* sql`INSERT INTO mesh_peer_state(environment_id, last_error) VALUES (${peer.environmentId}, ${String(cause)}) ON CONFLICT(environment_id) DO UPDATE SET last_error = excluded.last_error`;
                     yield* Effect.logWarning("Mesh peer exchange failed", cause);
@@ -413,9 +400,8 @@ export const layer = Layer.effect(
     const sync: Effect.Effect<void, MeshLayoutError> = runSync();
     let fallbackToken: object | undefined;
     const push = Effect.gen(function* () {
-      if (Option.isNone(transport)) return yield* sync;
       if (!(yield* enabled)) return;
-      const network = transport.value.get();
+      const network = transport.get();
       const now = yield* DateTime.now;
       let fallback = false;
       for (const id of yield* links.ids) {
@@ -466,22 +452,21 @@ export const layer = Layer.effect(
         });
       yield* exchange(input);
     });
-    if (Option.isSome(transport))
-      yield* Stream.runForEach(
-        transport.value.activity.pipe(
-          Stream.filter((activity) => activity.kind === "event"),
-          Stream.filter((activity) => activity.name === LAYOUT_PUSH_EVENT),
-        ),
-        (activity) =>
-          receivePush(activity).pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("Peer layout push rejected", {
-                from: activity.environmentId,
-                error,
-              }),
-            ),
+    yield* Stream.runForEach(
+      transport.activity.pipe(
+        Stream.filter((activity) => activity.kind === "event"),
+        Stream.filter((activity) => activity.name === LAYOUT_PUSH_EVENT),
+      ),
+      (activity) =>
+        receivePush(activity).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Peer layout push rejected", {
+              from: activity.environmentId,
+              error,
+            }),
           ),
-      ).pipe(Effect.forkScoped);
+        ),
+    ).pipe(Effect.forkScoped);
 
     if (links.changes)
       yield* Stream.runForEach(links.changes, () =>
@@ -489,8 +474,8 @@ export const layer = Layer.effect(
           Effect.catch((cause) => Effect.logError("Mesh link replication failed", cause)),
         ),
       ).pipe(Effect.forkScoped);
-    if (Option.isSome(applicationEvents) && Option.isSome(projects)) {
-      const afterSequence = yield* applicationEvents.value.latestApplicationSequence.pipe(
+    {
+      const afterSequence = yield* applicationEvents.latestApplicationSequence.pipe(
         Effect.mapError(
           (cause) =>
             new MeshLayoutError({
@@ -502,7 +487,7 @@ export const layer = Layer.effect(
       );
       yield* Stream.runForEach(
         Stream.groupedWithin(
-          applicationEvents.value.streamProjectedApplicationEvents({
+          applicationEvents.streamProjectedApplicationEvents({
             afterSequence,
             project: (event) => ({ sequence: event.sequence }),
             filter: (event) => "aggregateKind" in event && event.aggregateKind === "project",
@@ -516,9 +501,7 @@ export const layer = Layer.effect(
         Effect.forkScoped,
       );
     }
-    const changes = Option.isSome(directory)
-      ? Stream.merge(mesh.changes, directory.value.changes)
-      : mesh.changes;
+    const changes = Stream.merge(mesh.changes, directory.changes);
     yield* Stream.runForEach(
       Stream.groupedWithin(changes, 1000, Duration.millis(meshMillis(200))),
       () =>
@@ -533,7 +516,7 @@ export const layer = Layer.effect(
     );
     return MeshReplicator.of({ exchange, sync, status });
   }).pipe(Effect.provide(NodeCrypto.layer)),
-);
+).pipe(Layer.provide(PeerIdentities.layer));
 
 const decodeJson = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
 const isMeshError = Schema.is(MeshLayoutError);

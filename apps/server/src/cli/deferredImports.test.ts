@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 // @effect-diagnostics nodeBuiltinImport:off - CLI integration uses temporary Node paths.
 import * as NodePath from "node:path";
 
@@ -54,7 +55,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
         yield* runCli(args);
       }
       assert.deepEqual(hooks.importsAttempted, []);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("fails a server start on a broken import before resolving config", () =>
@@ -69,7 +70,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
       }
 
       assert.isFalse(yield* fs.exists(baseDir));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("keeps server state when the offline project runtime fails to import", () =>
@@ -96,7 +97,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
       assert.isTrue(Exit.hasDies(exit));
       assert.isTrue(yield* fs.exists(runtimeStatePath));
       assert.isFalse(yield* fs.exists(NodePath.join(baseDir, "userdata", "server-owner.sqlite")));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("forwards live project mutations without importing the offline runtime", () =>
@@ -143,7 +144,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
       assert.isTrue(Exit.isSuccess(exit));
       assert.equal(mutations, 1);
       assert.deepEqual(hooks.importsAttempted, []);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 
   it.effect("never starts the history worker after an interrupted import", () =>
@@ -163,6 +164,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("CLI deferred imp
         ["getSessionMessages", "session", undefined],
         ["forkSession", "session", '{"dir":"/repo"}'],
       ]);
-    }),
+    }).pipe(Effect.provide(MeshTestServices.layerMemory)),
   );
 });

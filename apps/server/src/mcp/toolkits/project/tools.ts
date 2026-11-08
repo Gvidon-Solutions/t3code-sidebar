@@ -1,3 +1,6 @@
+import { PeerForwarding } from "../../../peer/PeerForwarding.ts";
+import { ReplicaRuntime } from "../../../replicas/ReplicaRuntime.ts";
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import * as Digest from "effect/crypto/Digest";
 import { ProjectPlaceInput, ProjectPlaceResult, ProjectMachinesResult } from "@t3tools/contracts";
@@ -45,6 +48,9 @@ const shared = {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
+    PeerForwarding,
+    ReplicaRuntime,
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     ProjectService.ProjectService,
@@ -89,7 +95,13 @@ const ProjectCreateTool = Tool.make("t3_project_create", {
     workspaceRoot: Schema.optional(ProjectCreatePayload.fields.workspaceRoot),
   }),
   success: Schema.Struct({ ...Project.fields, commitError: Schema.optional(Schema.String) }),
-  dependencies: [...shared.dependencies, ManagedProjectFolders.ManagedProjectFolders],
+  dependencies: [
+    PeerForwarding,
+    ReplicaRuntime,
+    MeshLayoutService,
+    ...shared.dependencies,
+    ManagedProjectFolders.ManagedProjectFolders,
+  ],
 })
   .annotate(McpDomainAnnotation, "filesystem")
   .annotate(Tool.Destructive, true);
@@ -112,7 +124,13 @@ const ProjectDeleteTool = Tool.make("t3_project_delete", {
     projectId: ProjectId,
     force: Schema.optionalKey(Schema.Boolean),
   }),
-  dependencies: [...shared.dependencies, ProjectCloneTracker.ProjectCloneTracker],
+  dependencies: [
+    PeerForwarding,
+    ReplicaRuntime,
+    MeshLayoutService,
+    ...shared.dependencies,
+    ProjectCloneTracker.ProjectCloneTracker,
+  ],
 })
   .annotate(McpDomainAnnotation, "filesystem")
   .annotate(Tool.Destructive, true);
@@ -126,6 +144,9 @@ const ProjectCloneTool = Tool.make("t3_project_clone", {
   }),
   success: SourceControlCloneRepositoryResult,
   dependencies: [
+    PeerForwarding,
+    ReplicaRuntime,
+    MeshLayoutService,
     ...shared.dependencies,
     SourceControlRepositoryService.SourceControlRepositoryService,
   ],
@@ -175,6 +196,9 @@ const ThreadLaunchTool = Tool.make("t3_thread_launch", {
     status: Schema.NullOr(OrchestrationV2RunStatus),
   }),
   dependencies: [
+    PeerForwarding,
+    ReplicaRuntime,
+    MeshLayoutService,
     ...shared.dependencies,
     ThreadLaunchService.ThreadLaunchService,
     ManagedProjectFolders.ManagedProjectFolders,

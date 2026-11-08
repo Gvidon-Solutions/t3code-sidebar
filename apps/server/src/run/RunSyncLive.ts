@@ -24,14 +24,20 @@ const get = ReplicaRuntime.getService.pipe(
       }),
   ),
 );
-export const layer = Layer.succeed(RunSync, {
-  flush: Effect.fn("RunSync.flush")(function* (replica) {
-    return yield* (yield* get).flush(replica);
+export const layer = Layer.effect(
+  RunSync,
+  Effect.gen(function* () {
+    const service = yield* get;
+    return RunSync.of({
+      flush: Effect.fn("RunSync.flush")(function* (replica) {
+        return yield* service.flush(replica);
+      }),
+      conflicts: Effect.fn("RunSync.conflicts")(function* (replica) {
+        return yield* service.conflicts(replica);
+      }),
+      problems: Effect.fn("RunSync.problems")(function* (replica) {
+        return yield* service.problems(replica);
+      }),
+    });
   }),
-  conflicts: Effect.fn("RunSync.conflicts")(function* (replica) {
-    return yield* (yield* get).conflicts(replica);
-  }),
-  problems: Effect.fn("RunSync.problems")(function* (replica) {
-    return yield* (yield* get).problems(replica);
-  }),
-});
+);

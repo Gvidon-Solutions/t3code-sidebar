@@ -135,6 +135,8 @@ export class ProviderTurnStartServiceV2 extends Context.Service<
 export const layer: Layer.Layer<
   ProviderTurnStartServiceV2,
   never,
+  | DeliveryAdmission
+  | MeshLayoutService
   | EventSink.EventSinkV2
   | ContextHandoffService.ContextHandoffServiceV2
   | IdAllocator.IdAllocatorV2
@@ -162,7 +164,8 @@ export const layer: Layer.Layer<
     const projects = yield* ProjectService.ProjectService;
     const providerAuth = yield* ProviderAuthService.ProviderAuthService;
     const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
-    const admission = yield* Effect.serviceOption(DeliveryAdmission);
+    const admission = yield* DeliveryAdmission;
+    const mesh = yield* MeshLayoutService;
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
@@ -1616,25 +1619,16 @@ export const layer: Layer.Layer<
           ],
         });
       });
-      const mesh = yield* Effect.serviceOption(MeshLayoutService);
-      const replicaDetail = Option.isSome(mesh)
-        ? replicaContextNote(
-            (yield* mesh.value.read).config,
-            mesh.value.environmentId,
-            projection.thread.projectId,
-          )
-        : "";
-      const replicaNote = Option.isSome(mesh)
-        ? threadContextNote(
-            projection.thread.id,
-            meshMachineLabel(
-              (yield* mesh.value.read).config,
-              mesh.value.environmentId,
-              "this machine",
-            ),
-            replicaDetail,
-          )
-        : "";
+      const replicaDetail = replicaContextNote(
+        (yield* mesh.read).config,
+        mesh.environmentId,
+        projection.thread.projectId,
+      );
+      const replicaNote = threadContextNote(
+        projection.thread.id,
+        meshMachineLabel((yield* mesh.read).config, mesh.environmentId, "this machine"),
+        replicaDetail,
+      );
       const startWithHandoffs = Effect.fn("ProviderTurnStartService.startWithHandoffs")(
         function* (turnInput: Parameters<typeof session.startTurn>[0], compact = false) {
           const delivery = yield* deliverContextHandoffs({
@@ -1799,13 +1793,15 @@ export const layer: Layer.Layer<
           if (providerTurn !== undefined) yield* providerTurn;
         },
         (effect, input) =>
-          (Option.isSome(admission) ? admission.value.withStart(effect) : effect).pipe(
-            Effect.mapError((cause) =>
-              isProviderTurnStartError(cause)
-                ? cause
-                : new ProviderTurnStartError({ runId: input.runId, cause }),
+          admission
+            .withStart(effect)
+            .pipe(
+              Effect.mapError((cause) =>
+                isProviderTurnStartError(cause)
+                  ? cause
+                  : new ProviderTurnStartError({ runId: input.runId, cause }),
+              ),
             ),
-          ),
       ),
     });
   }),

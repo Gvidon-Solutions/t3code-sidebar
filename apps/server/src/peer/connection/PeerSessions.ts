@@ -1,5 +1,5 @@
-import { meshMillis } from "../../mesh/MeshTiming.ts";
-import { meshRetryDelay } from "../../mesh/retryBackoff.ts";
+import { meshTimer, MeshTimeScale } from "../../mesh/MeshTiming.ts";
+import { meshRetryDelay } from "../../mesh/Backoff.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalErrorInEffectCatch:off globalErrorInEffectFailure:off effectFnOpportunity:off runEffectInsideEffect:off -- The peer manager owns Node Duplex pipes, synchronous wire callbacks and its own retry clock; transport failures are intentionally plain Errors.
 import { authenticatedPeerHops, relayHopsAllowed, PEER_HOPS_ERROR } from "./peerIdentity.ts";
 import * as NodeNet from "node:net";
@@ -273,9 +273,11 @@ export const makeChannel = (
     readonly pipe: (target: string, stream: NodeStream.Duplex) => void;
     readonly onClose: (reason: Error) => void;
   },
+  timeScale = 1,
 ) => {
   let channel: PeerChannel | undefined;
   channel = new PeerChannel({
+    timeScale,
     send: (frame) => wire.send(frame),
     close: (reason) => {
       wire.close(reason);
@@ -316,12 +318,16 @@ const defaultPipeConnector = Layer.succeed(
 );
 
 export const make = Effect.gen(function* () {
+  const meshMillis = yield* meshTimer;
+  const timeScale = yield* MeshTimeScale;
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const self = yield* environment.getEnvironmentId;
   const descriptor = yield* environment.getDescriptor;
   const clock = yield* Clock.Clock;
   const nowMs = () => Number(clock.currentTimeNanosUnsafe() / 1_000_000n);
-  const callbackContext = yield* Effect.context<Scope.Scope>();
+  const callbackContext = yield* Effect.context<
+    Scope.Scope | MeshLayoutService.MeshLayoutService
+  >();
   const callbackScope = yield* Effect.scope;
   const run = Effect.runPromiseWith(callbackContext);
   const fork = Effect.runForkWith(callbackContext);
@@ -334,9 +340,9 @@ export const make = Effect.gen(function* () {
   const connector = yield* PeerPipeConnector;
   const factsReporter = yield* PeerFacts.PeerFactsReporter;
   const dispatcher = yield* PeerCallDispatcher;
-  const mesh = yield* Effect.serviceOption(MeshLayoutService.MeshLayoutService);
+  const mesh = yield* MeshLayoutService.MeshLayoutService;
   const events = yield* PubSub.unbounded<PeerEvent>();
-  const slot = yield* Effect.serviceOption(PeerTransport.PeerTransport);
+  const slot = yield* PeerTransport.PeerTransport;
 
   const live = new Map<string, Live>();
   let stopped = false;
@@ -346,7 +352,7 @@ export const make = Effect.gen(function* () {
   const retainedRelays = new Set<string>();
   const reachableRelays = new Set<string>();
   const relayErrors = new Map<string, string>();
-  const credentials = yield* Effect.serviceOption(PeerCredentials.PeerCredentials);
+  const credentials = yield* PeerCredentials.PeerCredentials;
 
   const selfFacts = yield* factsReporter.collect;
   const selfId = String(self);
@@ -371,8 +377,8 @@ export const make = Effect.gen(function* () {
       }
     }
   };
-  if (Option.isSome(mesh)) {
-    const previous = (yield* mesh.value.read).config;
+  {
+    const previous = (yield* mesh.read).config;
     const states = previous.machines[selfId]?.reported?.connections ?? [];
     for (const environmentId of Object.keys(previous.machines)) {
       if (environmentId === selfId) continue;
@@ -392,36 +398,34 @@ export const make = Effect.gen(function* () {
 
   /** Facts are reported, never edited: only `reported` changes in the machine entry. */
   const rememberFacts = (environmentId: string, facts: PeerFacts.PeerFacts) =>
-    Option.isNone(mesh)
-      ? Effect.void
-      : mesh.value
-          .edit((config) => {
-            const previous = config.machines?.[environmentId] ?? {};
-            return {
-              ...config,
-              machines: {
-                ...config.machines,
-                [environmentId]: {
-                  ...previous,
-                  reported: {
-                    ...toReported(facts),
-                    ...(facts.sshRoutes === undefined && previous.reported?.sshRoutes !== undefined
-                      ? { sshRoutes: previous.reported.sshRoutes }
-                      : {}),
-                  },
-                },
+    mesh
+      .edit((config) => {
+        const previous = config.machines?.[environmentId] ?? {};
+        return {
+          ...config,
+          machines: {
+            ...config.machines,
+            [environmentId]: {
+              ...previous,
+              reported: {
+                ...toReported(facts),
+                ...(facts.sshRoutes === undefined && previous.reported?.sshRoutes !== undefined
+                  ? { sshRoutes: previous.reported.sshRoutes }
+                  : {}),
               },
-            };
-          })
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("Peer facts could not be written to the layout", {
-                environmentId,
-                error,
-              }),
-            ),
-            Effect.asVoid,
-          );
+            },
+          },
+        };
+      })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("Peer facts could not be written to the layout", {
+            environmentId,
+            error,
+          }),
+        ),
+        Effect.asVoid,
+      );
 
   const notify = (entry: Live, name: string, body: unknown) =>
     Effect.try(() => {
@@ -444,9 +448,7 @@ export const make = Effect.gen(function* () {
 
   const routesOf = () => [...live.keys()];
   const ownFacts = Effect.fn("PeerSessions.ownFacts")(function* () {
-    const sshRoutes = Option.isSome(mesh)
-      ? (yield* mesh.value.read).config.machines[selfId]?.reported?.sshRoutes
-      : undefined;
+    const sshRoutes = (yield* mesh.read).config.machines[selfId]?.reported?.sshRoutes;
     return {
       ...selfFacts,
       connections: yield* status,
@@ -683,8 +685,7 @@ export const make = Effect.gen(function* () {
       return;
     }
     yield* PubSub.publish(events, { environmentId: from, name, body });
-    if (Option.isSome(slot))
-      yield* slot.value.publish({ kind: "event", environmentId: from, name, body });
+    yield* slot.publish({ kind: "event", environmentId: from, name, body });
   });
 
   const attach = Effect.fn("PeerSessions.attach")(function* (
@@ -710,55 +711,60 @@ export const make = Effect.gen(function* () {
       live.delete(env);
       existing.channel.close(new Error("Replaced by a newer peer connection"));
     }
-    const channel = makeChannel(wire, nowMs, {
-      call: async (body, signal) => {
-        const decoded = decodeCallBody(body);
-        return run(dispatchCall(decoded, env, signal), { signal });
-      },
-      event: (name, body) => {
-        runBackground(
-          handleEvent(env, name, body).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning("Peer event failed", { env, name, cause }),
+    const channel = makeChannel(
+      wire,
+      nowMs,
+      {
+        call: async (body, signal) => {
+          const decoded = decodeCallBody(body);
+          return run(dispatchCall(decoded, env, signal), { signal });
+        },
+        event: (name, body) => {
+          runBackground(
+            handleEvent(env, name, body).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("Peer event failed", { env, name, cause }),
+              ),
             ),
-          ),
-        );
-      },
-      pipe: (target, stream) => {
-        const controller = new AbortController();
-        stream.once("close", () => controller.abort());
-        stream.on("error", (error) => {
-          runBackground(Effect.logDebug("Peer pipe closed", { env, error }));
-        });
-        runBackground(
-          handlePipe(env, target, stream).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() => stream.destroy(new Error(messageOf(error), { cause: error }))),
-            ),
-            Effect.catchCause((cause) =>
-              Effect.sync(() => stream.destroy(new Error("Peer pipe target failed", { cause }))),
-            ),
-          ),
-          { signal: controller.signal },
-        );
-      },
-      onClose: (reason) => {
-        if (live.get(env)?.channel === channel) {
-          live.delete(env);
-          updateRelayState(reason.message);
-          for (const other of live.values()) {
-            runBackground(notify(other, "peer.routes", { routes: routesOf() }));
-          }
-          offlineSince.set(env, DateTime.formatIso(DateTime.nowUnsafe()));
-          attempt.set(env, {
-            attempt: attempt.get(env)?.attempt ?? 0,
-            nextAt: nowMs(),
-            lastError: reason.message,
+          );
+        },
+        pipe: (target, stream) => {
+          const controller = new AbortController();
+          stream.once("close", () => controller.abort());
+          stream.on("error", (error) => {
+            runBackground(Effect.logDebug("Peer pipe closed", { env, error }));
           });
-          runBackground(reportOwnState());
-        }
+          runBackground(
+            handlePipe(env, target, stream).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => stream.destroy(new Error(messageOf(error), { cause: error }))),
+              ),
+              Effect.catchCause((cause) =>
+                Effect.sync(() => stream.destroy(new Error("Peer pipe target failed", { cause }))),
+              ),
+            ),
+            { signal: controller.signal },
+          );
+        },
+        onClose: (reason) => {
+          if (live.get(env)?.channel === channel) {
+            live.delete(env);
+            updateRelayState(reason.message);
+            for (const other of live.values()) {
+              runBackground(notify(other, "peer.routes", { routes: routesOf() }));
+            }
+            offlineSince.set(env, DateTime.formatIso(DateTime.nowUnsafe()));
+            attempt.set(env, {
+              attempt: attempt.get(env)?.attempt ?? 0,
+              nextAt: nowMs(),
+              lastError: reason.message,
+            });
+            runBackground(reportOwnState());
+          }
+        },
       },
-    });
+      timeScale,
+    );
     const entry: Live = {
       environmentId: env,
       direction,
@@ -789,7 +795,7 @@ export const make = Effect.gen(function* () {
       name: "peer.connected",
       body: { direction },
     });
-    if (Option.isSome(slot)) yield* slot.value.publish({ kind: "connected", environmentId: env });
+    yield* slot.publish({ kind: "connected", environmentId: env });
     for (const other of live.values())
       if (other !== entry) yield* notify(other, "peer.routes", { routes: routesOf() });
   });
@@ -957,7 +963,7 @@ export const make = Effect.gen(function* () {
         });
       closeLive(environmentId, new Error("Unlinked"));
     }
-    if (Option.isSome(credentials)) yield* credentials.value.revoke(environmentId);
+    yield* credentials.revoke(environmentId);
     grants.delete(environmentId);
   });
 
@@ -1004,7 +1010,7 @@ export const make = Effect.gen(function* () {
       const changed = state.lastError !== message || !offlineSince.has(env);
       attempt.set(env, {
         attempt: nextAttempt,
-        nextAt: nowMs() + meshRetryDelay(nextAttempt - 1, jitter),
+        nextAt: nowMs() + meshRetryDelay(nextAttempt - 1, jitter, undefined, timeScale),
         lastError: message,
       });
       if (!offlineSince.has(env)) offlineSince.set(env, DateTime.formatIso(DateTime.nowUnsafe()));
@@ -1015,9 +1021,7 @@ export const make = Effect.gen(function* () {
     const ids = (yield* links.enabled) ? yield* links.ids : [];
     retainedRelays.clear();
     for (const id of ids) retainedRelays.add(String(id));
-    if (Option.isSome(mesh))
-      for (const id of Object.keys((yield* mesh.value.read).config.machines))
-        retainedRelays.add(id);
+    for (const id of Object.keys((yield* mesh.read).config.machines)) retainedRelays.add(id);
     updateRelayState();
 
     for (const [id, fiber] of dialWorkers) {
@@ -1096,9 +1100,9 @@ export const make = Effect.gen(function* () {
     start,
     stop,
   });
-  if (Option.isSome(slot)) {
-    slot.value.set(service);
-    yield* Effect.addFinalizer(() => Effect.sync(() => slot.value.set(undefined)));
+  {
+    slot.set(service);
+    yield* Effect.addFinalizer(() => Effect.sync(() => slot.set(undefined)));
   }
   yield* reportOwnState();
   return service;

@@ -1,5 +1,5 @@
 import { DeliveryAdmission } from "../../../mesh/DeliveryAdmission.ts";
-import { DeliveryDrainError } from "@t3tools/contracts";
+
 import { MeshBootstrap } from "../../../mesh/MeshBootstrap.ts";
 import { MeshRollout } from "../../../mesh/MeshRollout.ts";
 import { SecretRequests } from "../../../secrets/SecretRequests.ts";
@@ -7,7 +7,6 @@ import { McpInvocationContext } from "../../McpInvocationContext.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import { bindingsFromLayout } from "@t3tools/shared/meshConfig";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 
 import * as MeshConfig from "../../../mesh/MeshConfig.ts";
 import * as MeshLayout from "../../../mesh/MeshLayoutService.ts";
@@ -15,64 +14,21 @@ import * as McpToolAccess from "../../McpToolAccess.ts";
 import * as RunRuntimeInfo from "../../../run/RunRuntimeInfo.ts";
 import { MeshToolkit } from "./tools.ts";
 
-const optional = Effect.serviceOption(MeshConfig.MeshConfig).pipe(
-  Effect.map((option) => Option.map(option, (value) => value as MeshConfig.MeshConfigService)),
-);
-const service = optional.pipe(
-  Effect.flatMap((option) =>
-    Effect.fromOption(
-      option,
-      () =>
-        new OrchestratorMcpFailure({
-          code: "orchestration_error",
-          message: "The mesh config service is not available on this server.",
-        }),
-    ),
-  ),
-);
+const service = MeshConfig.MeshConfig;
 
 const snapshot = Effect.gen(function* () {
   const config = yield* service;
-  const mesh = yield* Effect.serviceOption(MeshLayout.MeshLayoutService);
+  const mesh = yield* MeshLayout.MeshLayoutService;
   const current = yield* config.current;
   return {
     current: current ?? null,
-    bindings: Option.isSome(mesh) ? bindingsFromLayout((yield* mesh.value.read).document) : {},
+    bindings: bindingsFromLayout((yield* mesh.read).document),
   };
 });
 
-const rollout = Effect.serviceOption(MeshRollout).pipe(
-  Effect.flatMap((value) =>
-    Effect.fromOption(
-      value,
-      () =>
-        new OrchestratorMcpFailure({
-          code: "orchestration_error",
-          message: "Mesh rollout is unavailable",
-        }),
-    ),
-  ),
-);
-const bootstrap = Effect.serviceOption(MeshBootstrap).pipe(
-  Effect.flatMap((value) =>
-    Effect.fromOption(
-      value,
-      () =>
-        new OrchestratorMcpFailure({
-          code: "orchestration_error",
-          message: "Mesh bootstrap is unavailable",
-        }),
-    ),
-  ),
-);
-const admission = Effect.serviceOption(DeliveryAdmission).pipe(
-  Effect.flatMap((value) =>
-    Effect.fromOption(
-      value,
-      () => new DeliveryDrainError({ message: "Delivery drain unavailable" }),
-    ),
-  ),
-);
+const rollout = MeshRollout;
+const bootstrap = MeshBootstrap;
+const admission = DeliveryAdmission;
 export const layer = McpToolAccess.toLayer(MeshToolkit, {
   t3_delivery_drain: McpToolAccess.writes((input) =>
     admission.pipe(Effect.flatMap((service) => service.drain(input))),
@@ -113,23 +69,16 @@ export const layer = McpToolAccess.toLayer(MeshToolkit, {
             code: "invalid_request",
             message: "Password bootstrap requires a one-use secretRef and its projectId",
           });
-        const secrets = yield* Effect.serviceOption(SecretRequests);
-        if (secrets._tag === "None")
-          return yield* new OrchestratorMcpFailure({
-            code: "orchestration_error",
-            message: "One-time secret API is unavailable",
-          });
-        value = yield* secrets.value
-          .consume({ ref: input.secretRef, projectId: input.projectId })
-          .pipe(
-            Effect.mapError(
-              () =>
-                new OrchestratorMcpFailure({
-                  code: "invalid_request",
-                  message: "Bootstrap secret reference is invalid, expired or already consumed",
-                }),
-            ),
-          );
+        const secrets = yield* SecretRequests;
+        value = yield* secrets.consume({ ref: input.secretRef, projectId: input.projectId }).pipe(
+          Effect.mapError(
+            () =>
+              new OrchestratorMcpFailure({
+                code: "invalid_request",
+                message: "Bootstrap secret reference is invalid, expired or already consumed",
+              }),
+          ),
+        );
       }
       if (input.kind === "key" && !value)
         return yield* new OrchestratorMcpFailure({

@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../testFixtures/meshServices.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- The test fabricates the wire boundary directly.
 import {
   EnvironmentId,
@@ -265,7 +266,10 @@ describe("PeerSessions", () => {
         const state = (yield* Queue.take(updates)).machines[SELF]?.reported?.connections?.[0];
         expect(state).toMatchObject({ state: "offline", lastError: "Fixture tunnel disappeared" });
         expect(state?.offlineSince).toBeTypeOf("string");
-      }).pipe(Effect.scoped),
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(Layer.provideMerge(MeshTestServices.platform, MeshTestServices.required)),
+      ),
   );
 
   it.effect("keeps the deterministic side of two simultaneous connections", () =>
@@ -324,7 +328,10 @@ describe("PeerSessions", () => {
           ),
         ),
       );
-    }).pipe(Effect.scoped),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Layer.provideMerge(MeshTestServices.platform, MeshTestServices.required)),
+    ),
   );
 
   it.effect("sends calls and events over a direct connection", () =>
@@ -352,7 +359,15 @@ describe("PeerSessions", () => {
       expect(
         peer.sent.some((frame) => frame.type === "event" && frame.name === "layout.push"),
       ).toBe(true);
-    }).pipe(Effect.provide(testLayer([B])), Effect.scoped),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(testLayer([B]), MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
   );
 
   it.effect("relays a call and a pipe when the peer has a route", () =>
@@ -396,7 +411,15 @@ describe("PeerSessions", () => {
         environmentId: D,
         target: "sshd",
       });
-    }).pipe(Effect.provide(testLayer([C, D])), Effect.scoped),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(testLayer([C, D]), MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
   );
 
   it.effect("reports direct, relayed and offline peers", () =>
@@ -436,7 +459,15 @@ describe("PeerSessions", () => {
       const lost = afterClose.find((state) => state.environmentId === C);
       expect(lost).toMatchObject({ state: "offline", lastError: "Fixture relay unavailable" });
       expect(lost?.offlineSince).toBeTypeOf("string");
-    }).pipe(Effect.provide(testLayer([B, C, E])), Effect.scoped),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(testLayer([B, C, E]), MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
+    ),
   );
 });
 
@@ -511,5 +542,6 @@ it.effect("backs off each link independently and caps reconnect delay at fifteen
   }).pipe(
     Effect.scoped,
     Effect.provideService(Random.Random, { nextIntUnsafe: () => 0, nextDoubleUnsafe: () => 1 }),
+    Effect.provide(Layer.provideMerge(MeshTestServices.platform, MeshTestServices.required)),
   ),
 );

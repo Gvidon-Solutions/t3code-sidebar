@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import { expect, it } from "@effect/vitest";
 import {
@@ -333,10 +334,13 @@ it.effect.each([
   call(tool, scope, args).pipe(
     Effect.map((outcome) => expect(outcome).toBe(expected)),
     Effect.provide(
-      probeServer(
-        Layer.mock(ThreadManagement.ThreadManagementService)({
-          getThreadShell: (threadId) => Effect.succeed(shells.get(threadId) ?? null),
-        }),
+      Layer.provideMerge(
+        probeServer(
+          Layer.mock(ThreadManagement.ThreadManagementService)({
+            getThreadShell: (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+          }),
+        ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -362,11 +366,14 @@ it.effect("refuses a change when the calling thread cannot be read", () =>
   call("writes", supervised).pipe(
     Effect.map((outcome) => expect(outcome).toBe("orchestration_error")),
     Effect.provide(
-      probeServer(
-        Layer.mock(ThreadManagement.ThreadManagementService)({
-          getThreadShell: (threadId) =>
-            Effect.fail(new OrchestratorProjectionError({ threadId, cause: "unreadable" })),
-        }),
+      Layer.provideMerge(
+        probeServer(
+          Layer.mock(ThreadManagement.ThreadManagementService)({
+            getThreadShell: (threadId) =>
+              Effect.fail(new OrchestratorProjectionError({ threadId, cause: "unreadable" })),
+          }),
+        ),
+        MeshTestServices.required,
       ),
     ),
   ),
@@ -463,7 +470,7 @@ it.effect.each([
 ] as const)("a linked %s from %o with %o: %s", ([tool, scope, args, expected]) =>
   call(tool, scope, args).pipe(
     Effect.map((outcome) => expect(outcome).toBe(expected)),
-    Effect.provide(linkedProbeServer),
+    Effect.provide(Layer.provideMerge(linkedProbeServer, MeshTestServices.required)),
   ),
 );
 
@@ -480,5 +487,5 @@ it.effect("refuses a linked environment to a tool that acts as its calling threa
       ),
     ).pipe(Effect.scoped, Effect.exit);
     expect(Exit.isFailure(built) && Cause.hasDies(built.cause)).toBe(true);
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );

@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
@@ -152,7 +153,7 @@ const layerTest = McpHttpServer.layerDeviceToolkit.pipe(
   Layer.provideMerge(layerDeviceServiceMock),
   Layer.provide(layerProjectsMock),
   Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-device-toolkit-test-" })),
-  Layer.provide(NodeServices.layer),
+  Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
 );
 
 it.effect("registers the device tools and returns the screenshot as image content", () =>
@@ -239,7 +240,7 @@ it.effect("registers the device tools and returns the screenshot as image conten
         },
       ]);
     }),
-  ).pipe(Effect.provide(layerTest)),
+  ).pipe(Effect.provide(Layer.provideMerge(layerTest, MeshTestServices.required))),
 );
 
 it.effect("rejects unavailable agent access before booting or opening a device", () => {
@@ -271,15 +272,18 @@ it.effect("rejects unavailable agent access before booting or opening a device",
   }).pipe(
     Effect.scoped,
     Effect.provide(
-      McpHttpServer.layerDeviceToolkit.pipe(
-        Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
-        Layer.provideMerge(McpToolAccessTestkit.liveThreadsLayer),
-        Layer.provide(layerUnavailable),
-        Layer.provide(layerProjectsMock),
-        Layer.provide(
-          ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-device-toolkit-test-" }),
+      Layer.provideMerge(
+        McpHttpServer.layerDeviceToolkit.pipe(
+          Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+          Layer.provideMerge(McpToolAccessTestkit.liveThreadsLayer),
+          Layer.provide(layerUnavailable),
+          Layer.provide(layerProjectsMock),
+          Layer.provide(
+            ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-device-toolkit-test-" }),
+          ),
+          Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
         ),
-        Layer.provide(NodeServices.layer),
+        MeshTestServices.required,
       ),
     ),
   );
@@ -419,7 +423,7 @@ describe("device targeting across hosts", () => {
           Layer.provide(
             ServerConfig.layerTest(process.cwd(), { prefix: "t3-mcp-device-toolkit-test-" }),
           ),
-          Layer.provide(NodeServices.layer),
+          Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
         ),
       ),
     );
@@ -440,7 +444,7 @@ describe("device targeting across hosts", () => {
           { hostId: "mac-mini", deviceId: "MAC-UDID" },
         ]);
       }),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("binds the launcher to the id the device booted with", () => {
@@ -467,7 +471,7 @@ describe("device targeting across hosts", () => {
             return Option.some("/state/device/targets/thread-device/agent-device");
           }),
       },
-    );
+    ).pipe(Effect.provide(MeshTestServices.required));
   });
 
   it.effect("says a device closed during device_open was closed, not that its host is down", () =>
@@ -482,7 +486,7 @@ describe("device targeting across hosts", () => {
           );
         }),
       { agentLauncher: () => Effect.succeedNone },
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("refuses a device id that exists on two hosts and names both", () =>
@@ -500,7 +504,7 @@ describe("device targeting across hosts", () => {
           expect(opened).toEqual([]);
         }),
       { locateDevice: () => Effect.fail(onTwoHosts) },
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("keeps an explicit hostId and says which host has the device", () =>
@@ -517,7 +521,7 @@ describe("device targeting across hosts", () => {
           expect(opened).toEqual([]);
         }),
       { locateDevice: () => Effect.fail(onTheMac) },
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("says no host has a device id, naming the host it was asked on", () =>
@@ -536,7 +540,7 @@ describe("device targeting across hosts", () => {
         );
         expect(opened).toEqual([]);
       }),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("screenshots an open device by id on whichever host it is on", () =>
@@ -549,7 +553,7 @@ describe("device targeting across hosts", () => {
         expect(byLabel.isError).toBe(false);
         expect(byLabel.structuredContent).toMatchObject({ device: { hostId: "mac-mini" } });
       }),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("says why device_screenshot failed instead of a generic error", () =>
@@ -568,7 +572,7 @@ describe("device targeting across hosts", () => {
           );
         }),
       { locateSession: () => Effect.fail(onTheMac) },
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("tells an agent to open a device id before screenshotting it", () =>
@@ -580,7 +584,7 @@ describe("device targeting across hosts", () => {
           "Device MAC-UDID is not open in this thread. Call device_open first.",
         );
       }),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("tells an agent with no open device to call device_open before a screenshot", () =>
@@ -593,7 +597,7 @@ describe("device targeting across hosts", () => {
           error: { _tag: "DeviceToolUnavailableError" },
         });
       }),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("refuses to close an id open on two hosts instead of closing both", () =>
@@ -610,7 +614,7 @@ describe("device targeting across hosts", () => {
           expect(closed).toEqual([]);
         }),
       { locateSession: () => Effect.fail(onTwoHosts) },
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 
   it.effect("closes an open device on its host and treats an unopened one as closed", () =>
@@ -628,6 +632,6 @@ describe("device targeting across hosts", () => {
           { hostId: "mac-mini", deviceId: undefined },
         ]);
       }),
-    ),
+    ).pipe(Effect.provide(MeshTestServices.required)),
   );
 });

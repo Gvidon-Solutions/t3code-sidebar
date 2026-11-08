@@ -1,12 +1,13 @@
+import { DeliveryUpdatingError, isDeliveryUpdating } from "@t3tools/contracts";
 import { DeliveryAdmission } from "./mesh/DeliveryAdmission.ts";
-import { DeliveryDrainError } from "@t3tools/contracts";
+
 import { recordLayoutAuthors } from "@t3tools/shared/meshLayout";
 import { ThreadForkService } from "./mesh/ThreadForkService.ts";
 import { ThreadMoveService } from "./mesh/ThreadMoveService.ts";
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
 import { MeshConfig } from "./mesh/MeshConfig.ts";
 import { validateClientEntries } from "./mesh/validateEntries.ts";
-import { MESH_WS_METHODS, MeshConfigError, ServerSettingsError } from "@t3tools/contracts";
+import { MESH_WS_METHODS, ServerSettingsError } from "@t3tools/contracts";
 import * as ReplicaRpc from "./replicas/ReplicaRpc.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -1418,16 +1419,10 @@ export const layerWsRpc = (
       const inbox = yield* InboxService.InboxService;
       const mesh = yield* MeshLayoutService;
       const meshReplicator = yield* MeshReplicator;
-      const deliveryAdmission = yield* Effect.serviceOption(DeliveryAdmission);
-      const deliveryService = Effect.fromOption(
-        deliveryAdmission,
-        () => new DeliveryDrainError({ message: "Delivery drain unavailable" }),
-      );
-      const meshConfig = yield* Effect.serviceOption(MeshConfig);
-      const meshConfigService = Effect.fromOption(
-        meshConfig,
-        () => new MeshConfigError({ reason: "storage", message: "Mesh config is unavailable." }),
-      );
+      const deliveryAdmission = yield* DeliveryAdmission;
+      const deliveryService = Effect.succeed(deliveryAdmission);
+      const meshConfig = yield* MeshConfig;
+      const meshConfigService = Effect.succeed(meshConfig);
       const meshSnapshot = (
         snapshot: import("./mesh/MeshLayoutService.ts").MeshLayoutSnapshot,
       ) => ({ ...snapshot, environmentId: mesh.environmentId });
@@ -2090,7 +2085,7 @@ export const layerWsRpc = (
                       commandType: command.type,
                       message: detail ?? "Failed to dispatch orchestration V2 command",
                       ...(detail === undefined ? {} : { detail }),
-                      cause,
+                      cause: isDeliveryUpdating(cause) ? new DeliveryUpdatingError() : cause,
                     });
                   }),
                 ),
@@ -3570,8 +3565,8 @@ export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const mesh = yield* MeshLayoutService;
     const meshReplicator = yield* MeshReplicator;
-    const meshConfig = yield* Effect.serviceOption(MeshConfig);
-    const deliveryAdmission = yield* Effect.serviceOption(DeliveryAdmission);
+    const meshConfig = yield* MeshConfig;
+    const deliveryAdmission = yield* DeliveryAdmission;
     const threadForks = yield* ThreadForkService;
     const threadMoves = yield* ThreadMoveService;
     const serverBrowser = yield* ServerBrowser.ServerBrowser;
@@ -3669,18 +3664,10 @@ export const layer = Layer.unwrap(
                   reviewGuides,
                 ),
               ),
-              Layer.provide(
-                Option.isSome(deliveryAdmission)
-                  ? Layer.succeed(DeliveryAdmission, deliveryAdmission.value)
-                  : Layer.empty,
-              ),
+              Layer.provide(Layer.succeed(DeliveryAdmission, deliveryAdmission)),
               Layer.provide(Layer.succeed(MeshLayoutService, mesh)),
               Layer.provide(Layer.succeed(MeshReplicator, meshReplicator)),
-              Layer.provide(
-                Option.isSome(meshConfig)
-                  ? Layer.succeed(MeshConfig, meshConfig.value)
-                  : Layer.empty,
-              ),
+              Layer.provide(Layer.succeed(MeshConfig, meshConfig)),
               Layer.provide(Layer.succeed(ThreadForkService, threadForks)),
               Layer.provide(Layer.succeed(ThreadMoveService, threadMoves)),
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),

@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
@@ -24,7 +25,7 @@ import { createPendingAttachmentId } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -163,7 +164,7 @@ it.effect("one problem is one issue: a repeat updates it, and only news makes it
       assert.equal(issue.alertSequence, issue.lastSequence);
       assert.lengthOf(yield* inbox.list({}), 1);
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect(
@@ -209,7 +210,7 @@ it.effect(
           ["created", "comment", "comment", "waiting_cleared"],
         );
       }).pipe(Effect.provide(layer));
-    }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("a failed delivery is recorded on the comment instead of failing it", () =>
@@ -227,7 +228,7 @@ it.effect("a failed delivery is recorded on the comment instead of failing it", 
       assert.equal(delivery?.status, "failed");
       assert.include(delivery?.error ?? "", "archived");
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("a resolved problem that returns reopens the same issue; the creator hears both", () =>
@@ -273,7 +274,7 @@ it.effect("a resolved problem that returns reopens the same issue; the creator h
         [fixer, "The problem came back"],
       ]);
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("closing as not relevant tells the agent, and a repeat does not reopen it", () =>
@@ -309,7 +310,7 @@ it.effect("closing as not relevant tells the agent, and a repeat does not reopen
       const undone = yield* inbox.undismiss(issueId);
       assert.equal(undone.state, "open");
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("the first comment on an issue without a thread starts the responsible thread", () =>
@@ -347,7 +348,7 @@ it.effect("the first comment on an issue without a thread starts the responsible
       assert.equal(detail.issue.responsibleThreadId, launch?.threadId);
       assert.deepEqual(detail.issue.threadIds, [launch!.threadId!]);
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("an issue waiting for the owner rises again once a day, silently", () =>
@@ -380,7 +381,7 @@ it.effect("an issue waiting for the owner rises again once a day, silently", () 
       assert.isTrue(reminded.issue.activityAt > issue.activityAt);
       assert.equal(yield* inbox.remindDue, 0);
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect("rejects comments on unknown issues with a message the agent can act on", () =>
@@ -393,7 +394,7 @@ it.effect("rejects comments on unknown issues with a message the agent can act o
         .pipe(Effect.flip);
       assert.equal(error.message, "Inbox issue issue-missing was not found.");
     }).pipe(Effect.provide(layer));
-  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+  }).pipe(Effect.provide(MeshTestServices.services)),
 );
 
 it.effect(
@@ -436,5 +437,5 @@ it.effect(
         assert.isNull(comment.text);
         assert.deepEqual(comment.attachments, [delivered!]);
       }).pipe(Effect.provide(layer));
-    }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+    }).pipe(Effect.provide(MeshTestServices.services)),
 );

@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
@@ -55,7 +56,7 @@ it.effect.each([
         Effect.provide(
           Layer.merge(
             ServerConfig.layerTest(process.cwd(), { prefix: "t3-preview-controls-" }).pipe(
-              Layer.provide(NodeServices.layer),
+              Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
             ),
             NodeCrypto.layer,
           ),
@@ -64,7 +65,12 @@ it.effect.each([
       const tab = yield* manager.open({ threadId, url: "http://localhost:3000" });
       const layerDependencies = Layer.mergeAll(
         PreviewAutomationBroker.layer.pipe(
-          Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.merge(NodeServices.layer, MeshTestServices.platform),
+              NodeCrypto.layer,
+            ),
+          ),
         ),
         Layer.succeed(Preview.PreviewManager, manager),
         Layer.succeed(McpInvocationContext.McpInvocationContext, scope),
@@ -101,5 +107,5 @@ it.effect.each([
         expect((yield* manager.list({ threadId })).sessions).toEqual([tab]);
       }
     }),
-  ),
+  ).pipe(Effect.provide(Layer.provideMerge(MeshTestServices.platform, MeshTestServices.required))),
 );

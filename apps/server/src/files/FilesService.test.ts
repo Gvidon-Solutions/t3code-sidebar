@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { linkedTestDocument } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
@@ -29,7 +30,7 @@ const layerTest = Layer.empty.pipe(
       prefix: "t3-files-service-test-",
     }),
   ),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.merge(NodeServices.layer, MeshTestServices.platform)),
 );
 
 const makeTempDir = Effect.gen(function* () {

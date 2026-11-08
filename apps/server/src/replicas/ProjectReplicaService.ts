@@ -1,4 +1,5 @@
-import { meshMillis } from "../mesh/MeshTiming.ts";
+import { resolveMeshHost } from "@t3tools/shared/meshConfig";
+import { meshTimer } from "../mesh/MeshTiming.ts";
 import { resolveSshHost } from "@t3tools/shared/meshConfig";
 import { ReplicaEnvironment } from "./ReplicaEnvironment.ts";
 import { EnvironmentId, ProjectPlaceResult } from "@t3tools/contracts";
@@ -106,10 +107,11 @@ const placementMatches = (config: SidebarWorkspacesConfig, key: string, rep: Sid
   );
 
 const make = Effect.gen(function* () {
+  const meshMillis = yield* meshTimer;
   const mesh = yield* MeshLayoutService;
-  const links = yield* Effect.serviceOption(PeerLinks);
-  const peers = yield* Effect.serviceOption(PeerMcpClient);
-  const directory = yield* Effect.serviceOption(MeshProjectDirectory);
+  const links = yield* PeerLinks;
+  const peers = yield* PeerMcpClient;
+  const directory = yield* MeshProjectDirectory;
   const paths = yield* ReplicaPaths.ReplicaPaths;
   const runner = yield* MutagenRunner.MutagenRunner;
   const localEnvironment = yield* ReplicaEnvironment;
@@ -164,8 +166,10 @@ const make = Effect.gen(function* () {
         reason: "unreachable",
         message: "Primary machine has not joined the mesh config.",
       });
-    const host =
-      desired?.ssh?.mode === "existing" ? desired.machines[name]?.ssh?.host : `t3-${name}`;
+    const host = yield* Effect.try({
+      try: () => resolveMeshHost(desired, name),
+      catch: (cause) => new ReplicaError({ reason: "unreachable", message: String(cause) }),
+    });
     if (!host)
       return yield* new ReplicaError({
         reason: "unreachable",
@@ -1059,10 +1063,8 @@ const make = Effect.gen(function* () {
       config.projectTitles[name] || name,
       mesh.environmentId,
       snapshot.projects,
-      Option.isSome(links) && Option.isSome(peers)
-        ? { links: links.value, peers: peers.value }
-        : undefined,
-      Option.isSome(directory) ? yield* directory.value.read : [],
+      { links: links, peers: peers },
+      yield* directory.read,
     );
     const logicalKey = found.logicalKey;
     const representations = [...(config.projectMounts[logicalKey] ?? [])];
@@ -1097,8 +1099,7 @@ const make = Effect.gen(function* () {
   const resolveProject = Effect.fn("ProjectReplicaService.resolveProject")(function* (
     name: string,
   ) {
-    if (Option.isNone(directory)) return yield* resolveProjectOnce(name);
-    const catalog = directory.value;
+    const catalog = directory;
     return yield* resolveProjectOnce(name).pipe(
       Effect.catchIf(
         (error) => error.reason === "not_found" || error.reason === "unreachable",
@@ -1201,13 +1202,8 @@ const make = Effect.gen(function* () {
                 message: "Cannot verify unsynced changes: the replica driver is unavailable.",
               });
             if (driver !== mesh.environmentId) {
-              if (Option.isNone(links) || Option.isNone(peers))
-                return yield* new ReplicaError({
-                  reason: "unreachable",
-                  message: "Cannot reach the replica driver to verify unsynced changes.",
-                });
               return yield* callRouted(
-                { links: links.value, peers: peers.value, self: mesh.environmentId },
+                { links: links, peers: peers, self: mesh.environmentId },
                 {
                   environmentId: EnvironmentId.make(driver),
                   tool: "t3_project_place",
@@ -1582,17 +1578,16 @@ const make = Effect.gen(function* () {
             const target = input.machine ? yield* resolveMachine(config, input.machine) : undefined;
             const { document } = yield* mesh.read;
             const desired = configFromLayout(document);
-            const routes = Object.fromEntries(
-              Object.entries(bindingsFromLayout(document)).flatMap(([name, id]) => {
-                const host =
-                  desired?.ssh?.mode === "existing"
-                    ? desired.machines[name]?.ssh?.host
-                    : desired?.ssh?.mode === "off"
-                      ? undefined
-                      : `t3-${name}`;
-                return host ? [[id, host]] : [];
-              }),
-            );
+            const routes = yield* Effect.try({
+              try: () =>
+                Object.fromEntries(
+                  Object.entries(bindingsFromLayout(document)).flatMap(([name, id]) => {
+                    const host = resolveMeshHost(desired, name);
+                    return host ? [[id, host]] : [];
+                  }),
+                ),
+              catch: (cause) => new ReplicaError({ reason: "unreachable", message: String(cause) }),
+            });
             const sides = adoptionSides(routes, mesh.environmentId, allReps, session, target);
             if (!sides)
               return yield* new ReplicaError({

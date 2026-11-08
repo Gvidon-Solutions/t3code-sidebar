@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 import { DeliveryAdmission } from "../mesh/DeliveryAdmission.ts";
 import { assert, it, vi } from "@effect/vitest";
 import {
@@ -53,6 +55,7 @@ it.effect("expires orphaned runtime requests before command readiness", () => {
     nodes: [],
   } as unknown as OrchestrationV2ThreadProjection;
   const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.mergeAll(
@@ -81,7 +84,7 @@ it.effect("expires orphaned runtime requests before command readiness", () => {
       assert.equal(command.events[0].payload.status, "expired");
       assert.equal(command.events[0].payload.responseCapability.type, "not_resumable");
     }
-  }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
 });
 
 it.effect("preserves async questions across startup and shutdown", () => {
@@ -105,6 +108,7 @@ it.effect("preserves async questions across startup and shutdown", () => {
   } as unknown as OrchestrationV2ThreadProjection;
   const commitCommand = vi.fn(() => Effect.die("an async question needs no process-loss write"));
   const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.mergeAll(
@@ -130,7 +134,7 @@ it.effect("preserves async questions across startup and shutdown", () => {
     assert.equal((yield* recovery.reconcile("startup")).closedRequests, 0);
     assert.equal((yield* recovery.reconcile("startup")).closedRequests, 0);
     assert.isFalse(commitCommand.mock.calls.length > 0);
-  }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
 });
 
 it.effect(
@@ -175,6 +179,7 @@ it.effect(
       ],
     } as unknown as OrchestrationV2ThreadProjection;
     const layer = ProviderRuntimeRecovery.layer.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provide(ServerSettings.layerTest()),
       Layer.provide(
         Layer.mergeAll(
@@ -247,7 +252,7 @@ it.effect(
             event.payload.pendingBackgroundTasks?.length === 0,
         ),
       );
-    }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
   },
 );
 
@@ -320,6 +325,7 @@ it.effect(
       ],
     } as unknown as OrchestrationV2ThreadProjection;
     const layer = ProviderRuntimeRecovery.layer.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provide(ServerSettings.layerTest()),
       Layer.provide(
         Layer.mergeAll(
@@ -357,7 +363,7 @@ it.effect(
         })),
         [{ runId: claudeRunId, kinds: ["subagent", "task"] }],
       );
-    }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
   },
 );
 
@@ -386,6 +392,7 @@ it.effect("cancels a stale waiting run when no checkpoint capture can finish it"
     turnItems: [],
   } as unknown as OrchestrationV2ThreadProjection;
   const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.mergeAll(
@@ -417,7 +424,7 @@ it.effect("cancels a stale waiting run when no checkpoint capture can finish it"
     assert.equal(summary.terminalizedRuns, 1);
     const runEvent = committedInput?.events.find((event) => event.type === "run.updated");
     assert.equal(runEvent?.type === "run.updated" ? runEvent.payload.status : null, "cancelled");
-  }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
 });
 
 it.effect("recovery closes a secret card's form but leaves a link card open", () => {
@@ -462,6 +469,7 @@ it.effect("recovery closes a secret card's form but leaves a link card open", ()
     ],
   } as unknown as OrchestrationV2ThreadProjection;
   const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.mergeAll(
@@ -500,7 +508,7 @@ it.effect("recovery closes a secret card's form but leaves a link card open", ()
       cards.some((card) => card.type === "link_request"),
       false,
     );
-  }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
 });
 
 it.effect.each(["queued", "preparing"] as const)("recovers $0 work after restart", (status) => {
@@ -553,6 +561,7 @@ it.effect.each(["queued", "preparing"] as const)("recovers $0 work after restart
     turnItems: [],
   } as unknown as OrchestrationV2ThreadProjection;
   const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.mergeAll(
@@ -608,7 +617,7 @@ it.effect.each(["queued", "preparing"] as const)("recovers $0 work after restart
       assert.isUndefined(attemptEvent);
       assert.isUndefined(nodeEvent);
     }
-  }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
 });
 
 it.effect(
@@ -687,6 +696,7 @@ it.effect(
       ],
     } as unknown as OrchestrationV2ThreadProjection;
     const layer = ProviderRuntimeRecovery.layer.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provide(ServerSettings.layerTest()),
       Layer.provide(
         Layer.mergeAll(
@@ -758,7 +768,7 @@ it.effect(
           ["proposed_plan", false],
         ],
       );
-    }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
   },
 );
 
@@ -809,6 +819,7 @@ it.effect("cancels workflow members and child roots without run ids after restar
   } as unknown as OrchestrationV2ThreadProjection;
   const committed: Array<Parameters<EventSink.EventSinkV2["Service"]["commitCommand"]>[0]> = [];
   const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.mergeAll(
@@ -850,7 +861,7 @@ it.effect("cancels workflow members and child roots without run ids after restar
         [childThreadId, "node.updated", "cancelled"],
       ],
     );
-  }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
 });
 
 it.effect(
@@ -974,6 +985,7 @@ it.effect(
       ],
     } as unknown as OrchestrationV2ThreadProjection;
     const layer = ProviderRuntimeRecovery.layer.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provide(ServerSettings.layerTest()),
       Layer.provide(
         Layer.mergeAll(
@@ -1055,7 +1067,7 @@ it.effect(
           : null,
         "idle",
       );
-    }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
   },
 );
 
@@ -1131,6 +1143,7 @@ it.effect(
       ],
     } as unknown as OrchestrationV2ThreadProjection;
     const layer = ProviderRuntimeRecovery.layer.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provide(ServerSettings.layerTest()),
       Layer.provide(
         Layer.mergeAll(
@@ -1179,7 +1192,7 @@ it.effect(
         nodeCancels.map((event) => event.type === "node.updated" && event.payload.id).sort(),
         [orphanWaitNodeId, persistentMonitorNodeId].sort(),
       );
-    }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
   },
 );
 
@@ -1261,6 +1274,7 @@ it.effect(
       ],
     } as unknown as OrchestrationV2ThreadProjection;
     const layer = ProviderRuntimeRecovery.layer.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provide(ServerSettings.layerTest()),
       Layer.provide(
         Layer.mergeAll(
@@ -1325,7 +1339,7 @@ it.effect(
           (event) => event.type === "node.updated" && event.payload.id === doneSubagentNodeId,
         ),
       );
-    }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
   },
 );
 
@@ -1418,6 +1432,7 @@ it.effect("leaves delegated tasks to their own child threads after process loss"
     ],
   } as unknown as OrchestrationV2ThreadProjection;
   const layer = ProviderRuntimeRecovery.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(ServerSettings.layerTest()),
     Layer.provide(
       Layer.mergeAll(
@@ -1474,7 +1489,7 @@ it.effect("leaves delegated tasks to their own child threads after process loss"
         : [],
     );
     assert.deepEqual(noted, [`subagent ${nativeSubagentId}`]);
-  }).pipe(Effect.provide(layer));
+  }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
 });
 
 it.effect(
@@ -1484,6 +1499,7 @@ it.effect(
     let reads = 0;
     const failure = new DeliveryDrainError({ message: "Admission unavailable" });
     const layer = ProviderRuntimeRecovery.layer.pipe(
+      Layer.provide(RequiredAdmission.layer),
       Layer.provide(ServerSettings.layerTest()),
       Layer.provide(
         Layer.mergeAll(
@@ -1529,6 +1545,6 @@ it.effect(
       reads = 0;
       yield* recovery.recover;
       assert.equal(reads, 1);
-    }).pipe(Effect.provide(layer));
+    }).pipe(Effect.provide(Layer.provideMerge(layer, MeshTestServices.services)));
   },
 );

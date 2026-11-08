@@ -1,3 +1,4 @@
+import { isDeliveryUpdating, DeliveryUpdatingError } from "@t3tools/contracts";
 import * as Digest from "effect/crypto/Digest";
 import type { ProjectionRecordField } from "../orchestration-v2/ProjectionStore.ts";
 import {
@@ -40,27 +41,32 @@ export const threadNotFound = Effect.fn("OrchestratorMcpService.threadNotFound")
   });
 });
 
-export const unavailable = () =>
+export const unavailable = (cause?: unknown) =>
   new OrchestratorMcpFailure({
     code: "orchestration_error",
-    message: "The operation could not be completed.",
+    message: isDeliveryUpdating(cause)
+      ? new DeliveryUpdatingError().message
+      : "The operation could not be completed.",
+    ...(isDeliveryUpdating(cause) ? { cause: new DeliveryUpdatingError() } : {}),
   });
 
 export const dispatchFailure = (
   error: OrchestratorV2Error | ThreadManagement.ThreadManagementProviderInstanceDisabledError,
 ) =>
-  error._tag === "ThreadManagementProviderInstanceDisabledError" ||
-  error._tag === "OrchestratorRuntimeModeAboveCeilingError"
-    ? new OrchestratorMcpFailure({ code: "invalid_request", message: error.message })
-    : (error._tag === "OrchestratorDispatchError" ||
-          error._tag === "OrchestratorCommandRejectedError") &&
-        typeof error.cause === "string" &&
-        error.cause.length > 0
-      ? new OrchestratorMcpFailure({
-          code: "orchestration_error",
-          message: Array.from(error.cause).slice(0, 1000).join(""),
-        })
-      : unavailable();
+  isDeliveryUpdating(error)
+    ? unavailable(error)
+    : error._tag === "ThreadManagementProviderInstanceDisabledError" ||
+        error._tag === "OrchestratorRuntimeModeAboveCeilingError"
+      ? new OrchestratorMcpFailure({ code: "invalid_request", message: error.message })
+      : (error._tag === "OrchestratorDispatchError" ||
+            error._tag === "OrchestratorCommandRejectedError") &&
+          typeof error.cause === "string" &&
+          error.cause.length > 0
+        ? new OrchestratorMcpFailure({
+            code: "orchestration_error",
+            message: Array.from(error.cause).slice(0, 1000).join(""),
+          })
+        : unavailable();
 
 export interface CallerLimits {
   readonly runtimeMode: RuntimeMode;

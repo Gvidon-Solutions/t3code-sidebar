@@ -1,3 +1,5 @@
+import * as MeshTestServices from "../../../testFixtures/meshServices.ts";
+import * as RequiredAdmission from "../../mesh/DeliveryAdmission.ts";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -18,7 +20,7 @@ import type { SqlError } from "effect/sql/SqlError";
 
 import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
 import * as ServerConfig from "../../config.ts";
-import * as SqlitePersistence from "../../persistence/Sqlite.ts";
+
 import * as ServerSettings from "../../serverSettings.ts";
 import * as ManagedPolicy from "../../policy/ManagedPolicy.ts";
 import * as ThreadManagementService from "../ThreadManagementService.ts";
@@ -293,14 +295,14 @@ export function layerWithRegistry<Error>(
   const layerServerConfig = Layer.effect(
     ServerConfig.ServerConfig,
     makeReplayServerConfig(scenario.name).pipe(Effect.orDie),
-  ).pipe(Layer.provide(NodeServices.layer));
+  ).pipe(Layer.provide(Layer.merge(NodeServices.layer, MeshTestServices.platform)));
   const layerRuntimeBase =
     scenario.runtimePolicyOverride === undefined
       ? RuntimePolicy.layer
       : RuntimePolicy.layerWithOverride(scenario.runtimePolicyOverride).pipe(
           Layer.provide(RuntimePolicy.layer),
         );
-  const layerDatabase = options.databaseLayer ?? SqlitePersistence.layerMemory;
+  const layerDatabase = options.databaseLayer ?? MeshTestServices.layerMemory;
   // Share one continuation queue across adapters, orchestrator, and worker through layer memoization.
   const layerContinuationRequests =
     options.runContinuationWorker === true ? ProviderContinuationRequests.layer : Layer.empty;
@@ -325,10 +327,11 @@ export function layerWithRegistry<Error>(
     ProjectionStore.layer,
     ProjectStore.layer,
     CommandReceiptStore.layer,
-    EffectOutbox.layer,
+    EffectOutbox.layer.pipe(Layer.provide(RequiredAdmission.layer)),
     TurnItemPositionStore.layer,
   ).pipe(Layer.provide(layerDatabase));
   const layerEventSinkProvided = EventSink.layerFromStores.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(Layer.mergeAll(layerStores, layerDatabase)),
   );
   const layerRuntime = RuntimePolicy.layerEnforcingCeiling.pipe(
@@ -350,7 +353,13 @@ export function layerWithRegistry<Error>(
         ThreadCommandExecutor.layer,
         GitVcsDriver.layer.pipe(
           Layer.provide(layerServerConfig),
-          Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.merge(NodeServices.layer, MeshTestServices.platform),
+              NodeCrypto.layer,
+            ),
+          ),
+          Layer.provide(layerDatabase),
         ),
       ),
     ),
@@ -358,11 +367,16 @@ export function layerWithRegistry<Error>(
   const layerVcsDriverRegistry = VcsDriverRegistry.layer.pipe(
     Layer.provide(VcsProcess.layer),
     Layer.provide(layerServerConfig),
-    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+    Layer.provide(
+      Layer.mergeAll(Layer.merge(NodeServices.layer, MeshTestServices.platform), NodeCrypto.layer),
+    ),
+    Layer.provide(layerDatabase),
   );
   const layerCheckpointStore = CheckpointStore.layer.pipe(
     Layer.provide(layerVcsDriverRegistry),
-    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+    Layer.provide(
+      Layer.mergeAll(Layer.merge(NodeServices.layer, MeshTestServices.platform), NodeCrypto.layer),
+    ),
   );
   const layerCheckpointServiceProvided = CheckpointService.layer.pipe(
     Layer.provide(Layer.mergeAll(layerCheckpointStore, IdAllocator.layer)),
@@ -414,6 +428,7 @@ export function layerWithRegistry<Error>(
     ),
   );
   const layerProviderTurnStartServiceProvided = ProviderTurnStartService.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(
       Layer.mergeAll(
         layerContextHandoffServiceProvided,
@@ -477,6 +492,7 @@ export function layerWithRegistry<Error>(
     }),
   );
   const layerOrchestratorProvided = Orchestrator.layer.pipe(
+    Layer.provide(RequiredAdmission.layer),
     Layer.provide(
       Layer.mergeAll(
         layerCheckpointServiceProvided,
@@ -545,7 +561,10 @@ export function layerWithRegistry<Error>(
     layerCommandOutputHubProvided,
   ).pipe(
     Layer.provide(ProviderTurnStartServiceTestkit.layer),
-    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
+    Layer.provide(
+      Layer.mergeAll(Layer.merge(NodeServices.layer, MeshTestServices.platform), NodeCrypto.layer),
+    ),
+    Layer.provide(layerDatabase),
   );
 
   if (options.runEffectWorker === false) {
@@ -555,24 +574,29 @@ export function layerWithRegistry<Error>(
   const layerStartupRecovery: Layer.Layer<
     never,
     MigrationError | PlatformError.PlatformError | SqlError
-  > =
+  > = (
     options.recoverOnStartup === true
       ? Layer.effectDiscard(
           ProviderRuntimeRecoveryService.ProviderRuntimeRecoveryService.use(
             (recovery) => recovery.recover,
           ).pipe(Effect.orDie),
         ).pipe(
-          Layer.provide(ProviderRuntimeRecoveryService.layer),
+          Layer.provide(
+            ProviderRuntimeRecoveryService.layer.pipe(Layer.provide(RequiredAdmission.layer)),
+          ),
           Layer.provide(
             Layer.mergeAll(
               layerStores,
+              layerDatabase,
               layerEventSinkProvided,
+              layerDatabase,
               IdAllocator.layer,
               layerServerSettings,
             ),
           ),
         )
-      : Layer.empty;
+      : Layer.empty
+  ).pipe(Layer.provide(layerDatabase));
   return Layer.effect(
     Orchestrator.OrchestratorV2,
     Effect.gen(function* () {

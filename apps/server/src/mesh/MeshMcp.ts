@@ -18,8 +18,8 @@ const protocolNames = new Set<string>(Object.values(protocols).map((tool) => too
 export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(function* (
   request: HttpServerRequest.HttpServerRequest,
   limited: McpInvocationContext.McpInvocationScope,
-  meshReplicator: Option.Option<MeshReplicator["Service"]>,
-  meshRelay: Option.Option<MeshRelay["Service"]>,
+  meshReplicator: MeshReplicator["Service"],
+  meshRelay: MeshRelay["Service"],
   linkedEnvironments: boolean,
 ) {
   if (request.method === "POST") {
@@ -42,17 +42,16 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
             { status: 403 },
           );
         const relay = meshRelay;
-        if (Option.isNone(relay))
-          return HttpServerResponse.jsonUnsafe({ error: "mesh_unavailable" }, { status: 503 });
+
         const result = yield* (
           call.value.params.name === protocols.routes.name
             ? decodeRouteOptions(call.value.params.arguments).pipe(Option.getOrUndefined)
                 ?.details === true
-              ? Effect.all({ routes: relay.value.routes, connections: relay.value.status })
-              : relay.value.routes
+              ? Effect.all({ routes: relay.routes, connections: relay.status })
+              : relay.routes
             : decodeRelay(call.value.params.arguments).pipe(
                 Effect.flatMap((input) =>
-                  relay.value
+                  relay
                     .relay(input, parseHops(request.headers[PEER_HOPS_HEADER]) ?? [], {
                       ...McpInvocationContext.clientModeCeiling(limited.client),
                       ...(limited.client?.filesLimit ? { files: limited.client.filesLimit } : {}),
@@ -102,10 +101,9 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
         );
       }
       const replicator = meshReplicator;
-      if (Option.isNone(replicator))
-        return HttpServerResponse.jsonUnsafe({ error: "mesh_unavailable" }, { status: 503 });
+
       const result = yield* decodeExchange(call.value.params.arguments).pipe(
-        Effect.flatMap((input) => replicator.value.exchange(input)),
+        Effect.flatMap((input) => replicator.exchange(input)),
         Effect.match({
           onFailure: (error) => ({
             content: [

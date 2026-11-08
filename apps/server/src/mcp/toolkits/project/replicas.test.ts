@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../../../testFixtures/meshServices.ts";
 import { layerLinkedTest } from "../../../../testFixtures/MeshLayoutTestLayer.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import type * as Tool from "effect/ai/Tool";
@@ -175,5 +176,5 @@ it.effect(
         ).toBe(true);
         expect(h.terminated).toEqual([]);
       }).pipe(Effect.provide(dependencies));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );

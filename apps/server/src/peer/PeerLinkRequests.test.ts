@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
@@ -46,7 +47,7 @@ import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterReg
 import * as ProviderContinuationRequests from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
@@ -133,7 +134,7 @@ const scope: McpInvocationContext.McpInvocationScope = {
 const makeLaptop = Effect.gen(function* () {
   const linking = yield* layerLinkingEnvironment(laptop).pipe(Layer.build);
   // The orchestrator's own database, apart from the one links are kept in.
-  const database = yield* SqlitePersistence.layerMemory.pipe(Layer.build);
+  const database = yield* MeshTestServices.layerMemory.pipe(Layer.build);
   const layerDatabase = Layer.succeedContext(database);
   const layerOrchestrator = Layer.mergeAll(
     layerDatabase,
@@ -591,6 +592,13 @@ it.live("the agent asks without waiting, and the user links the box after its tu
       expect((yield* a.orchestrator.getThreadProjection(threadId)).turnItems).toHaveLength(before);
       expect((yield* outcomeMessages(a)).messages).toHaveLength(1);
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -606,6 +614,13 @@ it.live("a retry of a pending request returns pending and shows no second card",
       );
       expect(cards).toHaveLength(1);
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -629,6 +644,13 @@ it.live("a new MCP credential reusing a clientRequestId gets a card of its own",
       );
       expect(cards).toHaveLength(2);
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -648,6 +670,13 @@ it.live("a declined request links nothing and tells the agent", () =>
       });
       expect(messages[0]!.text).toContain("declined");
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -697,6 +726,13 @@ it.live("stopping the thread closes its open card, which then takes no answer", 
       // The user stopped the thread: nothing wakes the agent.
       expect((yield* outcomeMessages(a)).messages).toHaveLength(0);
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -718,6 +754,13 @@ it.live("a request that read the run before Stop shows no card once Stop lands",
       );
       expect(cards.map((card) => card.id)).toEqual([open.id]);
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -733,6 +776,13 @@ it.live("a card shows up only while its run is going, and takes an answer after"
       yield* a.requests.answer({ threadId, turnItemId: card.id, answer: { type: "decline" } });
       expect(yield* cardOf(a)).toMatchObject({ linkStatus: "declined" });
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -757,6 +807,13 @@ it.live("a steer that restarts the turn leaves its open card answerable", () =>
       });
       expect((yield* outcomeMessages(a)).messages).toHaveLength(1);
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -824,6 +881,13 @@ it.live("a slow machine holds up only its own card's answer", () =>
         expect(failed).toMatchObject({ linkStatus: "failed" });
       }),
     ),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -841,6 +905,13 @@ it.live("archiving the thread closes its open card", () =>
       });
       expect(yield* cardOf(a)).toMatchObject({ status: "cancelled", linkStatus: "cancelled" });
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -870,6 +941,13 @@ it.live("a code the box refuses fails the request with its reason, and links not
       expect(Option.isNone(yield* a.links.get(box.environmentId))).toBe(true);
       expect(yield* storedText(a)).not.toContain("not-a-real-code");
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -881,6 +959,13 @@ it.live("an agent below full access may not ask, and no card is shown", () =>
       expect(errorOf(refused)).toMatchObject({ code: "capability_denied" });
       expect(yield* cardOf(a)).toBeUndefined();
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -893,6 +978,13 @@ it.live("work another environment's link started may not ask, and no card is sho
       expect(errorOf(refused).message).toContain("T3 Code · Desk");
       expect(yield* cardOf(a)).toBeUndefined();
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -933,6 +1025,13 @@ it.live(
         });
         expect((yield* outcomeMessages(a)).messages[0]!.text).toContain("linked Box");
       }),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
     ),
 );
 
@@ -955,6 +1054,13 @@ it.live("naming a machine that is already linked returns the link at once, with 
       const both = yield* a.call({ environmentId: box.environmentId, url: b.url });
       expect(errorOf(both)).toMatchObject({ code: "invalid_request" });
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -984,6 +1090,13 @@ it.live("a retry naming a machine linked meanwhile closes the card it left as li
       });
       expect((yield* a.orchestrator.getThreadShell(threadId))?.pendingRuntimeRequest).toBeNull();
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -1007,6 +1120,13 @@ it.live("a link that expired goes through the card, so the user can link it agai
       expect(yield* cardOf(a)).toMatchObject({ linkStatus: "failed" });
       expect((yield* outcomeMessages(a)).messages[0]!.text).toContain("expired");
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -1020,6 +1140,13 @@ it.live("a link made before links were fenced goes through the card, as an expir
       expect(asked.structuredContent).toMatchObject({ status: "pending" });
       yield* pendingCard(a);
     }),
+  ).pipe(
+    Effect.provide(
+      Layer.provideMerge(
+        Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+        MeshTestServices.required,
+      ),
+    ),
   ),
 );
 
@@ -1046,5 +1173,12 @@ it.live(
         });
         expect((yield* b.linkedSessions).length).toBe(1);
       }),
+    ).pipe(
+      Effect.provide(
+        Layer.provideMerge(
+          Layer.provideMerge(MeshTestServices.layerMemory, MeshTestServices.platform),
+          MeshTestServices.required,
+        ),
+      ),
     ),
 );

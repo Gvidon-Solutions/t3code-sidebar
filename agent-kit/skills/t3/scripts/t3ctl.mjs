@@ -740,7 +740,14 @@ export function unitRuntimeExecutable(unit) {
 export async function retryUpdatingCall(call, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {
   for (;;) {
     const result = await call();
-    if (!result.isError || !(result.content || []).some((item) => item.type === "text" && item.text.includes("T3_UPDATING:"))) return result;
+    const updating = (value) => value !== null && typeof value === "object" &&
+      (value._tag === "DeliveryUpdatingError" || Object.values(value).some(updating));
+    const tagged = updating(result.structuredContent) || (result.content || []).some((item) => {
+      if (item.type !== "text" || !/^[\s]*[\[{]/.test(item.text)) return false;
+      try { return updating(JSON.parse(item.text)); }
+      catch (error) { console.warn(`Cannot decode MCP retry metadata: ${error.message}`); return false; }
+    });
+    if (!result.isError || !tagged) return result;
     await wait(1000);
   }
 }

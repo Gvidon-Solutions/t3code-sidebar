@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import { ScheduledTaskUpsertInput } from "@t3tools/contracts";
@@ -10,7 +11,7 @@ import { afterEach, vi } from "vite-plus/test";
 
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
@@ -106,7 +107,7 @@ it.effect.each([
   }).pipe(
     // Keep the real scheduler parked while exercising finite service actions.
     Effect.provideService(ServerActivation, Effect.never),
-    Effect.provide(SqlitePersistence.layerMemory),
+    Effect.provide(MeshTestServices.services),
   ),
 );
 
@@ -129,7 +130,7 @@ it.effect.each([
     }).pipe(Effect.provide(serviceLayer));
   }).pipe(
     Effect.provideService(ServerActivation, Effect.never),
-    Effect.provide(SqlitePersistence.layerMemory),
+    Effect.provide(MeshTestServices.services),
   ),
 );
 
@@ -179,7 +180,7 @@ it.effect("runs a one-time schedule once and rejects past times", () =>
     }).pipe(Effect.provide(slowLaunchLayer));
   }).pipe(
     Effect.provideService(ServerActivation, Effect.never),
-    Effect.provide(SqlitePersistence.layerMemory),
+    Effect.provide(MeshTestServices.services),
   ),
 );
 
@@ -255,7 +256,7 @@ it.effect.each([
       }).pipe(Effect.provide(layer));
     }).pipe(
       Effect.provideService(ServerActivation, Effect.never),
-      Effect.provide(SqlitePersistence.layerMemory),
+      Effect.provide(MeshTestServices.services),
     ),
 );
 
@@ -279,7 +280,7 @@ it.effect("keeps a one-time run after a restart interrupts an earlier manual run
     }).pipe(Effect.provide(serviceLayer));
   }).pipe(
     Effect.provideService(ServerActivation, Effect.never),
-    Effect.provide(SqlitePersistence.layerMemory),
+    Effect.provide(MeshTestServices.services),
   ),
 );
 
@@ -311,6 +312,6 @@ it.effect("reports the stored task when the row was replaced during the run", ()
     }).pipe(Effect.provide(layer));
   }).pipe(
     Effect.provideService(ServerActivation, Effect.never),
-    Effect.provide(SqlitePersistence.layerMemory),
+    Effect.provide(MeshTestServices.services),
   ),
 );

@@ -1,3 +1,4 @@
+import * as RequiredAdmission from "../mesh/DeliveryAdmission.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -52,7 +53,10 @@ it.effect(
       const layerStores = Layer.mergeAll(EventStore.layer, ProjectionStore.layer).pipe(
         Layer.provideMerge(layerDatabase),
       );
-      const layerSink = EventSink.layer.pipe(Layer.provide(layerStores));
+      const layerSink = EventSink.layer.pipe(
+        Layer.provide(RequiredAdmission.layer),
+        Layer.provide(layerStores),
+      );
       const layerImporter = LegacyV1ThreadImporter.layer.pipe(
         Layer.provideMerge(Layer.mergeAll(layerStores, layerSink)),
       );

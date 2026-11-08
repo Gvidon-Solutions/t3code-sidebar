@@ -1,3 +1,4 @@
+import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import { lookupMeshProject } from "./meshProjectLookup.ts";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import * as FileSystem from "effect/FileSystem";
@@ -50,12 +51,16 @@ it.effect.each([
       };
       const calls: { environmentId: string; tool: string }[] = [];
       const peers = Layer.mergeAll(
-        Layer.mock(PeerLinks)({
-          enabled: Effect.succeed(true),
-          list: Effect.succeed([source]),
-          get: (id) =>
-            Effect.succeed(id === source.environmentId ? Option.some(source) : Option.none()),
-        }),
+        (() => {
+          const list = Effect.succeed([source]);
+          return Layer.mock(PeerLinks)({
+            enabled: Effect.succeed(true),
+            list,
+            get: (id) =>
+              Effect.succeed(id === source.environmentId ? Option.some(source) : Option.none()),
+            ids: Effect.map(list, (peers) => peers.map((peer) => peer.environmentId)),
+          });
+        })(),
         Layer.succeed(
           PeerMcpClient,
           PeerMcpClient.of({
@@ -161,7 +166,7 @@ it.effect.each([
           projectId: remote.id,
         });
       }).pipe(Effect.scoped, Effect.provide(h.layer.pipe(Layer.provideMerge(peers))));
-    }),
+    }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("rejects ambiguous unbound project names rather than allocating a second project", () =>
@@ -184,7 +189,7 @@ it.effect("rejects ambiguous unbound project names rather than allocating a seco
       ]).pipe(Effect.flip);
       expect(error.message).toContain("More than one project");
     }
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );
 
 it.effect("retains logical projects with zero representations in layout lookup", () =>
@@ -197,5 +202,5 @@ it.effect("retains logical projects with zero representations in layout lookup",
       logicalKey: "logical",
       records: [],
     });
-  }),
+  }).pipe(Effect.provide(MeshTestServices.required)),
 );

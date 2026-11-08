@@ -1,3 +1,4 @@
+import { DeliveryUpdatingError } from "./delivery.ts";
 import {
   ThreadHandoffState,
   HandoffEntry,
@@ -3956,7 +3957,7 @@ export class OrchestrationV2DispatchCommandError extends Schema.TaggedError<Orch
     commandType: Schema.String,
     message: Schema.String,
     detail: Schema.optional(Schema.String),
-    cause: Schema.optional(Schema.Defect()),
+    cause: Schema.optional(Schema.Union([DeliveryUpdatingError, Schema.Defect()])),
   },
 ) {}
 

@@ -1,3 +1,10 @@
+import { ThreadForkService } from "../../../mesh/ThreadForkService.ts";
+import { ThreadMoveService } from "../../../mesh/ThreadMoveService.ts";
+import { ServerEnvironment } from "../../../environment/ServerEnvironment.ts";
+import { ProjectService } from "../../../project/ProjectService.ts";
+import { PeerLinks } from "../../../peer/PeerLinks.ts";
+import { ReplicaRuntime } from "../../../replicas/ReplicaRuntime.ts";
+import { MeshLayoutService } from "../../../mesh/MeshLayoutService.ts";
 import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import * as Digest from "effect/crypto/Digest";
 import {
@@ -64,6 +71,13 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
+    ThreadMoveService,
+    ThreadForkService,
+    ReplicaRuntime,
+    PeerLinks,
+    ProjectService,
+    ServerEnvironment,
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     SecureRandom.SecureRandom,
@@ -80,6 +94,13 @@ const commandTool = {
   failure: OrchestratorMcpFailure,
   failureMode: "return" as const,
   dependencies: [
+    ThreadMoveService,
+    ThreadForkService,
+    ReplicaRuntime,
+    PeerLinks,
+    ProjectService,
+    ServerEnvironment,
+    MeshLayoutService,
     McpInvocationContext.McpInvocationContext,
     ThreadManagementService.ThreadManagementService,
     SecureRandom.SecureRandom,
@@ -270,7 +291,17 @@ const ThreadSearchTool = Tool.make("t3_thread_search", {
       }),
     ),
   }),
-  dependencies: [...commandTool.dependencies, ThreadSearch.ThreadSearch],
+  dependencies: [
+    ThreadMoveService,
+    ThreadForkService,
+    ReplicaRuntime,
+    PeerLinks,
+    ProjectService,
+    ServerEnvironment,
+    MeshLayoutService,
+    ...commandTool.dependencies,
+    ThreadSearch.ThreadSearch,
+  ],
 })
   .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Readonly, true)
@@ -292,7 +323,17 @@ const ScheduledTaskRunTool = Tool.make("run_scheduled_task_now", {
     runCount: NonNegativeInt,
     nextRunAt: ScheduledTask.fields.nextRunAt,
   }),
-  dependencies: [...commandTool.dependencies, ScheduledTaskService.ScheduledTaskService],
+  dependencies: [
+    ThreadMoveService,
+    ThreadForkService,
+    ReplicaRuntime,
+    PeerLinks,
+    ProjectService,
+    ServerEnvironment,
+    MeshLayoutService,
+    ...commandTool.dependencies,
+    ScheduledTaskService.ScheduledTaskService,
+  ],
 })
   .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Destructive, true)
