@@ -107,6 +107,12 @@ it("maps Windows replicas to POSIX primaries without depending on the local OS",
   expect(resolveRunPlan({ ...data, cwd: "D:\\copies\\app" })).toEqual({ kind: "local" });
 });
 
+it("names disabled SSH instead of blaming a missing existing-mode host", () => {
+  expect(() => resolveRunPlan({ ...input(), sshMode: "off" })).toThrow(
+    "Mesh SSH is disabled; t3 run cannot reach the primary.",
+  );
+});
+
 it("uses the user's configured host in existing SSH mode and refuses an absent host", () => {
   const data = {
     ...input(),

@@ -78,7 +78,7 @@ export function targetOperation(input) {
   });
 }
 
-export const shellQuote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+export const shellQuote = (value) => "'" + String(value).replaceAll("'", "'\\''") + "'";
 
 export function sshTransport(machines, source, target, command, visited = [], remote = false) {
   const hop = `${source}->${target.id}`;

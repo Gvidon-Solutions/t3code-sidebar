@@ -9,7 +9,7 @@ import { providers, completed } from "./threads.mjs";
 async function launch(node, p) {
   const source = await mcp(node, "t3_thread_launch", {
     projectId: p.id,
-    title: "F1-source",
+    title: "fork-source",
     message: "fixture",
     modelSelection: { instanceId: "fakeCodex", model: "fast" },
     runtimeMode: "full-access",
@@ -56,13 +56,13 @@ async function journals(node) {
   }
 }
 export const forkScenarios = {
-  "f1-dropped-commit": (directory) =>
+  "fork-dropped-commit": (directory) =>
     fixture(
       directory,
       async (mesh) => {
         await providers(mesh);
         const [studio, target] = mesh.nodes,
-          p = await project(mesh, "F1-retry"),
+          p = await project(mesh, "fork-retry"),
           source = await launch(studio, p);
         await mesh.fault(target, { observeCommit: true, reset: true });
         await until(
@@ -114,18 +114,18 @@ export const forkScenarios = {
       },
       { names: ["studio", "cloudbox"] },
     ),
-  "f1-replica-content": (directory) =>
+  "fork-replica-content": (directory) =>
     fixture(directory, async (mesh) => {
       const real = process.env.MESH_FAST_REAL_PROVIDERS === "1";
       await (real ? realProviders(mesh) : providers(mesh));
       const [studio, , target] = mesh.nodes,
-        p = await project(mesh, "F1-content");
+        p = await project(mesh, "fork-content");
       const marker = NodeCrypto.randomBytes(24).toString("hex");
       await NodeFSP.writeFile(NodePath.join(p.root, "README.md"), marker);
       const source = real
         ? await mcp(studio, "t3_thread_launch", {
             projectId: p.id,
-            title: "F1-native-source",
+            title: "fork-native-source",
             modelSelection: {
               instanceId: "codex",
               model: process.env.MESH_E2E_CODEX_MODEL ?? "gpt-6-luna",
@@ -178,13 +178,13 @@ export const forkScenarios = {
         items(history),
       );
     }),
-  "f1-offline-atomic": (directory) =>
+  "fork-offline-atomic": (directory) =>
     fixture(
       directory,
       async (mesh) => {
         await providers(mesh);
         const [studio, target] = mesh.nodes,
-          p = await project(mesh, "F1-offline"),
+          p = await project(mesh, "fork-offline"),
           source = await launch(studio, p);
         const before = await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 });
         const history = await mcp(studio, "t3_thread_read", { threadId: source.threadId });
@@ -218,13 +218,13 @@ export const forkScenarios = {
       },
       { names: ["studio", "cloudbox"] },
     ),
-  "f1-pending-expiry": (directory) =>
+  "fork-pending-expiry": (directory) =>
     fixture(
       directory,
       async (mesh) => {
         await providers(mesh);
         const [studio, target] = mesh.nodes,
-          p = await project(mesh, "F1-pending"),
+          p = await project(mesh, "fork-pending"),
           source = await launch(studio, p),
           peer = await receiver(studio, target),
           id = NodeCrypto.randomUUID();

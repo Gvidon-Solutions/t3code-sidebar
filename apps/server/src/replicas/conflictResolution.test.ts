@@ -48,7 +48,7 @@ describe("conflict copies", () => {
 });
 
 it("reads portable per-path modification times and refuses traversal or symlink parents", () => {
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "C1-mtime-"));
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "config-mtime-"));
   try {
     NodeFS.writeFileSync(NodePath.join(root, "first"), "a");
     NodeFS.writeFileSync(NodePath.join(root, "second"), "b");

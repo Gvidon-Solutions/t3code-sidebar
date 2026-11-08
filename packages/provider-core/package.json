@@ -147,6 +147,10 @@
       "types": "./src/server/snapshotProbe.ts",
       "import": "./src/server/snapshotProbe.ts"
     },
+    "./server/testFlags": {
+      "types": "./src/server/testFlags.ts",
+      "import": "./src/server/testFlags.ts"
+    },
     "./server/snapshotSettings": {
       "types": "./src/server/snapshotSettings.ts",
       "import": "./src/server/snapshotSettings.ts"

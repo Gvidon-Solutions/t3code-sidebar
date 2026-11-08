@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { detectServerUnit, installPublicRuntime, installSshRuntime } from "./server-runtime.mjs";
+import { shellQuote } from "./agents-sync.mjs";
 // Uses MCP for agent tools and WebSocket RPC for UI operations.
 // Nothing reads the server's sqlite; nothing here restarts the server except `server restart`.
 import * as NodeChildProcess from "node:child_process";
@@ -1381,7 +1382,6 @@ function replicaStateText(row) {
   return `${state}${progress}${conflicts ? `, ${conflicts} conflict(s)` : ""}${message ? ` — ${message}` : ""}`;
 }
 
-const shellQuote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 // `bin` stays unquoted so the remote shell expands `~`; arguments are quoted.
 function remoteCommand(bin, args) {
   return [bin, ...args.map(shellQuote)].join(" ");
@@ -4381,7 +4381,7 @@ SIDEBAR WORKSPACES (tiles)
 
 SESSIONS, SETTINGS, SERVER
   scan [filter] | import <P|path> [--add --title T]    import Codex/Claude sessions from disk
-  settings [get [dot.path]] | settings set '{"key": value}'
+  settings [get [dot.path]] | settings set '{"key": value}'   merge a patch; null in providerInstances removes that instance
   server status | logs [--n 80] | versions
   server install <N|latest>               download fork build sidebar.N's server runtime (no restart)
   server restart --yes | server use <version> --yes    ONLY with the owner's explicit go-ahead

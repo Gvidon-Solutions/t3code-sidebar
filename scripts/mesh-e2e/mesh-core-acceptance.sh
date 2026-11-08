@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# T3 Mesh E2E — round 1, stages 3–8 on the three-machine bed.
+# Mesh core acceptance on the three-machine bed.
 #
 # Re-runs, against the already seeded bed from `scripts/mesh-e2e/README.md`:
-#   3. mesh settings on every server, nodeA↔nodeB and nodeB↔cloud links (not nodeA↔cloud)
-#   4. convergence, one "main", no lost project keys, legacy settings = materialize(doc)
-#   5. concurrent, offline and mid-sync edits
-#   6. layout RPC regression and the replicas.status stream
-#   7. files.read/files.list across the mesh
-#   8. an old client's whole-object settings write next to a concurrent mesh edit
+#   1. mesh settings on every server, nodeA↔nodeB and nodeB↔cloud links (not nodeA↔cloud)
+#   2. convergence, one "main", no lost project keys, legacy settings = materialize(doc)
+#   3. concurrent, offline and mid-sync edits
+#   4. layout RPC regression and the replicas.status stream
+#   5. files.read/files.list across the mesh
+#   6. an old client's whole-object settings write next to a concurrent mesh edit
 #
 # Exit code 0 only when every check passed. The bed is left running and linked.
 #
-# Usage: scripts/mesh-e2e/round1.sh [--timeout SECONDS]
+# Usage: scripts/mesh-e2e/mesh-core-acceptance.sh [--timeout SECONDS]
 set -uo pipefail
 
 # shellcheck source=lib.sh
@@ -22,7 +22,7 @@ load_build_env
 require_bins
 NODE_B_BASE_DIR=${MESH_E2E_NODE_B_BASE_DIR:-$NODE_B_BASE_DIR}
 
-TIMEOUT="${MESH_E2E_ROUND1_TIMEOUT:-60}"
+TIMEOUT="${MESH_E2E_CORE_TIMEOUT:-60}"
 if [ "${1:-}" = "--timeout" ]; then
   TIMEOUT="${2:-60}"
 fi
@@ -31,14 +31,14 @@ NODE_A_ORIGIN="http://127.0.0.1:$NODE_A_PORT"
 NODE_B_ORIGIN="http://127.0.0.1:$NODE_B_LOCAL"
 CLOUD_ORIGIN="http://127.0.0.1:$CLOUD_LOCAL"
 LEGACY_DIR="$STATE_DIR/legacy"
-WORK="${MESH_E2E_ROUND1_WORK:-/tmp/t3-mesh-e2e-round1}"
+WORK="${MESH_E2E_CORE_WORK:-/tmp/t3-mesh-e2e-core}"
 WS="$WORK/ws.mjs"
 NODE_B_BIN="$NODE_B_RUNTIME_ROOT/$BUILD_VERSION/t3"
 CLOUD_BIN="/opt/t3/dist/bin.mjs"
 
-RUN_TS="${MESH_E2E_STAGE_PREFIX:+$MESH_E2E_STAGE_PREFIX-}$(date -u +%Y%m%dT%H%M%SZ)"
-ROUND1_NAME="${MESH_E2E_ROUND1_NAME:-round1}"
-ROUND1_SCRATCH="${MESH_E2E_ROUND1_SCRATCH:-r1}"
+RUN_TS="${MESH_E2E_FIXTURE_PREFIX:+$MESH_E2E_FIXTURE_PREFIX-}$(date -u +%Y%m%dT%H%M%SZ)"
+ROUND1_NAME="${MESH_E2E_CORE_NAME:-core}"
+ROUND1_SCRATCH="${MESH_E2E_CORE_SCRATCH:-r1}"
 SCRATCH="$ROUND1_NAME-$RUN_TS"
 SCRATCH_NAME="$ROUND1_SCRATCH-$RUN_TS"
 SCRATCH_NAME_A="$ROUND1_SCRATCH-a-$RUN_TS"
@@ -83,7 +83,7 @@ mkdir -p "$WORK/node_modules/@t3tools"
 ln -sfn "$REPO_ROOT/packages/shared" "$WORK/node_modules/@t3tools/shared"
 cat >"$WS" <<'NODE'
 #!/usr/bin/env node
-// Minimal T3 WebSocket RPC client for the mesh E2E bed (round1.sh writes this at runtime).
+// Minimal T3 WebSocket RPC client for the mesh E2E bed (mesh-core-acceptance.sh writes this at runtime).
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { between, keys, materialize, canonical } from "@t3tools/shared/meshLayout";
 
@@ -358,11 +358,11 @@ mint_token_once() { # mint_token_once nodeA|nodeB|cloud
   printf -v quoted_base '%q' "$NODE_B_BASE_DIR"
   case "$1" in
     nodeA) "$NODE_A_RUNTIME_ROOT/$BUILD_VERSION/t3" auth session issue --base-dir "$NODE_A_BASE_DIR" \
-      --ttl "$ttl" --label mesh-e2e-round1 --token-only 2>/dev/null ;;
+      --ttl "$ttl" --label mesh-e2e-core --token-only 2>/dev/null ;;
     nodeB) nodeB_ssh "$NODE_B_BIN auth session issue --base-dir $quoted_base --ttl $quoted_ttl \
-      --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
+      --label mesh-e2e-core --token-only" 2>/dev/null ;;
     cloud) cloud_ssh "docker exec t3-mesh-e2e node $CLOUD_BIN auth session issue \
-      --base-dir /home/t3/.t3 --ttl $quoted_ttl --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
+      --base-dir /home/t3/.t3 --ttl $quoted_ttl --label mesh-e2e-core --token-only" 2>/dev/null ;;
   esac
 }
 mint_token() { # mint_token nodeA|nodeB|cloud — a just-restarted server can answer empty once
@@ -779,7 +779,7 @@ NODE_B_HOME="$(nodeB_ssh 'printf %s "$HOME"')"
 NODE_B_README="$NODE_B_DEMO_DIR/README.md"
 CLOUD_README="/home/t3/$ROUND1_NAME-e2e.txt"
 nodeB_ssh "printf 'a\\000b\\n' > '$NODE_B_DEMO_DIR/binary.bin'; truncate -s 70M '$NODE_B_DEMO_DIR/large.bin'" >/dev/null 2>&1
-cloud_ssh "docker exec t3-mesh-e2e sh -c 'printf \"round1 file from cloud\\n\" > $CLOUD_README'" >/dev/null 2>&1
+cloud_ssh "docker exec t3-mesh-e2e sh -c 'printf \"mesh core file from cloud\\n\" > $CLOUD_README'" >/dev/null 2>&1
 
 read_file() { # read_file <environment-id> <path>
   ws_rpc nodeA files.read "{\"environmentId\":\"$1\",\"absolutePath\":\"$2\"}"
@@ -793,13 +793,13 @@ fi
 if printf '%s' "$read_result" | jq -e '.contents | contains("mesh e2e demo")' >/dev/null 2>&1; then :; fi
 
 read_cloud="$(read_file "$CLOUD_ENV" "$CLOUD_README" 2>"$WORK/file-cloud.err" || true)"
-if printf '%s' "$read_cloud" | jq -e '.contents | contains("round1 file from cloud")' >/dev/null 2>&1; then
+if printf '%s' "$read_cloud" | jq -e '.contents | contains("mesh core file from cloud")' >/dev/null 2>&1; then
   record_pass "files.read on cloud through nodeA (relayed via nodeB)"
 else
   record_fail "files.read on cloud through nodeA (relayed via nodeB)" "$(printf '%s' "$read_cloud" | head -c 400)"
 fi
 
-missing="$(read_file "$NODE_B_ENV" "$NODE_B_DEMO_DIR/definitely-missing-round1" 2>&1 || true)"
+missing="$(read_file "$NODE_B_ENV" "$NODE_B_DEMO_DIR/definitely-missing-core" 2>&1 || true)"
 if printf '%s' "$missing" | jq -e '.message | fromjson | .[] | select(.error.reason == "not_found")' >/dev/null; then
   record_pass "files.read missing file is an error"
 else

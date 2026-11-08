@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Config acceptance on an already deployed bed; leaves only C1-prefixed fixtures.
+# Config acceptance on an already deployed bed; leaves only config-prefixed fixtures.
 set -euo pipefail
 export MESH_E2E_HELPERS_ONLY=1
-export MESH_E2E_ROUND1_WORK="${MESH_E2E_CONFIG_WORK:-/tmp/t3-mesh-e2e-C1}"
-. "$(dirname "$0")/round1.sh"
+export MESH_E2E_CORE_WORK="${MESH_E2E_CONFIG_WORK:-/tmp/t3-mesh-e2e-config}"
+. "$(dirname "$0")/mesh-core-acceptance.sh"
 set -euo pipefail
 unset MESH_E2E_HELPERS_ONLY
-BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-C1}
+BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-mesh-config}
 [ "$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner')" = "$BED_LOCK_OWNER" ] || die "acquire the $BED_LOCK_OWNER bed lock first"
 chmod 700 "$WORK"
 CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
@@ -43,7 +43,7 @@ T_NODE_B=$(mint_token nodeB)
 T_CLOUD=$(mint_token cloud)
 NODE_B_ENV=$(descriptor_env "$NODE_B_ORIGIN")
 CLOUD_ENV=$(descriptor_env "$CLOUD_ORIGIN")
-TITLE="C1-config-$RUN_TS"
+TITLE="config-$RUN_TS"
 ROOT="/tmp/$TITLE"
 nodeB_ssh "mkdir -p '$ROOT/node_modules'; git init -q '$ROOT'; printf '%s\\n' '$TITLE' > '$ROOT/README.md'; printf 'node_modules/\\n' > '$ROOT/.gitignore'; printf 'ignored\\n' > '$ROOT/node_modules/private'; git -C '$ROOT' rev-parse --is-inside-work-tree"
 ctl nodeB tool t3_project_create "$(jq -nc --arg title "$TITLE" --arg root "$ROOT" '{title:$title,workspaceRoot:$root}')" > "$WORK/project.json"
@@ -51,14 +51,14 @@ PROJECT=$(jq -er '.id' "$WORK/project.json")
 ctl nodeB tool t3_project_place "$(jq -nc --arg project "$PROJECT" --arg machine "$NODE_B_ENV" --arg path "$ROOT" '{project:$project,machine:$machine,role:"primary",path:$path}')" > "$WORK/primary.json"
 ctl nodeB mesh config get --json > "$WORK/before.json"
 TARGET=$(jq -er --arg env "$CLOUD_ENV" '.bindings|to_entries[]|select(.value==$env)|.key' "$WORK/before.json")
-NEW_LABEL=$(jq -r --arg target "$TARGET" 'if .current.doc.machines[$target].label=="C1" then "C1+" else "C1" end' "$WORK/before.json")
+NEW_LABEL=$(jq -r --arg target "$TARGET" 'if .current.doc.machines[$target].label=="CF" then "CF+" else "CF" end' "$WORK/before.json")
 ws_get nodeB > "$WORK/layout-before.json"
 jq -e --arg title "$TITLE" --arg env "$CLOUD_ENV" '
   .config as $c | [$c.projectTitles|to_entries[]|select(.value==$title)|.key] as $keys |
   [$keys[] as $key | $c.projectMounts[$key][]? | select(.environmentId==$env)] | length==0
 ' "$WORK/layout-before.json" >/dev/null || die 'an existing rule already placed this fixture; the new rule cannot be proved'
 jq --arg target "$TARGET" --arg title "$TITLE" --arg label "$NEW_LABEL" '
-  .current.doc | .machines[$target].title = ((.machines[$target].title // $target) + " C1") |
+  .current.doc | .machines[$target].title = ((.machines[$target].title // $target) + " config") |
   .machines[$target].label = $label |
   .replicas.rules = ((.replicas.rules // []) + [{project:$title,on:$target,when:"always"}])
 ' "$WORK/before.json" > "$WORK/desired.json"
@@ -70,7 +70,7 @@ jq -e '.actions|length>0' "$WORK/ws-plan.json" >/dev/null
 BASE=$(jq -er '.current.revision' "$WORK/before.json")
 echo '$ t3ctl mesh config apply --file desired.json --base <observed revision>'
 ctl nodeB mesh config apply --file "$WORK/desired.json" --base "$BASE" --json > "$WORK/applied.json"
-jq '{revision, renamed: .doc.machines | to_entries | map(select((.value.title//"")|endswith(" C1"))) | map({name:.key,title:.value.title,label:.value.label}), rule: .doc.replicas.rules[-1]}' "$WORK/applied.json"
+jq '{revision, renamed: .doc.machines | to_entries | map(select((.value.title//"")|endswith(" config"))) | map({name:.key,title:.value.title,label:.value.label}), rule: .doc.replicas.rules[-1]}' "$WORK/applied.json"
 REVISION=$(jq -er '.revision' "$WORK/applied.json")
 echo '$ meshConfig.apply (WS, same desired state, current base)'
 ws_rpc nodeB meshConfig.apply "$(jq -nc --slurpfile doc "$WORK/desired.json" --arg base "$REVISION" '{doc:$doc[0],baseRevision:$base}')" > "$WORK/ws-applied.json"
@@ -124,4 +124,4 @@ ws_rpc nodeB meshConfig.status '{}' > "$WORK/ws-status.json"
 jq -e '.servers|length>=2' "$WORK/ws-status.json" >/dev/null
 jq -e '.configStatus.servers|length>=2' "$WORK/status.json" >/dev/null
 jq '{servers:[.configStatus.servers[]|{environmentId,revision,states:[.actions[].state]|unique}]}' "$WORK/status.json"
-echo "PASS C1 config rename, stale base refusal, three-server convergence and real replica ($TITLE)"
+echo "PASS config rename, stale base refusal, three-server convergence and real replica ($TITLE)"

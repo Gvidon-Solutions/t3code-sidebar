@@ -510,6 +510,41 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
     }).pipe(Effect.provide(layerServerSettings())),
   );
 
+  it.effect("merges a provider instance patch per key and removes one with null", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+      const kept = ProviderInstanceId.make("acpRegistry_kept");
+      const removed = ProviderInstanceId.make("acpRegistry_removed");
+      yield* serverSettings.updateSettings({
+        providerInstances: {
+          [kept]: {
+            driver: ProviderDriverKind.make("acpRegistry"),
+            displayName: "Kept",
+            config: { agentId: "kept", distribution: "auto" },
+          },
+          [removed]: {
+            driver: ProviderDriverKind.make("acpRegistry"),
+            displayName: "Removed",
+            config: { agentId: "removed", distribution: "auto" },
+          },
+        },
+      });
+      yield* serverSettings.updateSettings({
+        providerInstances: {
+          [kept]: {
+            driver: ProviderDriverKind.make("acpRegistry"),
+            displayName: "Kept edited",
+            config: { agentId: "kept", distribution: "auto" },
+          },
+          [removed]: null,
+        },
+      });
+      const settings = yield* serverSettings.getSettings;
+      assert.equal(settings.providerInstances[kept]?.displayName, "Kept edited");
+      assert.isFalse(Object.hasOwn(settings.providerInstances, removed));
+    }).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("creates provider instances atomically without overwriting a concurrent add", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsModule.ServerSettingsService;

@@ -60,7 +60,7 @@ it.effect(
         params: {
           protocolVersion: "2025-06-18",
           capabilities: {},
-          clientInfo: { name: "C1-test", version: "1" },
+          clientInfo: { name: "config-test", version: "1" },
         },
       });
       const session = initialized.headers["mcp-session-id"];

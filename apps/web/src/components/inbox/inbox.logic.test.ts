@@ -148,11 +148,11 @@ describe("mergeInboxEnvironments", () => {
 
 describe("collectInboxAlertsByEnvironment", () => {
   it("does not replay a late environment's old news, and announces what is new", () => {
-    const gvidonOnly = mergeInboxEnvironments(
+    const firstMachineOnly = mergeInboxEnvironments(
       [{ environmentId: studio, environmentLabel: "studio", snapshot: snapshot([issue("a")]) }],
       null,
     );
-    const first = collectInboxAlertsByEnvironment(new Map(), gvidonOnly.environments);
+    const first = collectInboxAlertsByEnvironment(new Map(), firstMachineOnly.environments);
     expect(first.alerts).toEqual([]);
 
     // nodeB connects later with an unseen issue: its first snapshot only sets marks.
@@ -161,7 +161,7 @@ describe("collectInboxAlertsByEnvironment", () => {
         { environmentId: studio, environmentLabel: "studio", snapshot: snapshot([issue("a")]) },
         { environmentId: nodeB, environmentLabel: "nodeB", snapshot: snapshot([issue("old")]) },
       ],
-      gvidonOnly,
+      firstMachineOnly,
     );
     const second = collectInboxAlertsByEnvironment(first.marks, both.environments);
     expect(second.alerts).toEqual([]);

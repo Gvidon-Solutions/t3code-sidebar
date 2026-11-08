@@ -136,11 +136,20 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ### 2026-11-08 — C3 required mesh services and shared server runtime
 
+### 2026-11-08 — Server hardening and repository cleanliness
+
+- **What.** Agent-kit reconciliation keeps a harness's skill and managed block whenever its home directory or a configured provider `binaryPath` exists, so a short service-manager PATH cannot delete them; removal touches only our block. Settings patches can delete one provider instance with `null`. Delivery retries recognise the legacy `T3_UPDATING` marker from older peers. The voice test flag is ignored in production builds. Fork markers escape peer-supplied titles. One invalid SSH route no longer fails adoption between healthy machines, and the run plan names disabled SSH accurately. Peer credential labels include the peer's machine label. The background worker control socket reports only parse and signal errors as invalid requests.
+- **How.** `MeshAgentKit` reads provider instances; `ServerSettingsPatch.providerInstances` accepts `null` tombstones; provider-core owns one production-gated voice-flag helper; replica routes are built per machine with skipped-route reasons; `isDeliveryUpdating` checks the tag first, then the legacy message. The bundled-worker smoke test runs `t3 run` exec and background start from the built server.
+- **Where.** `apps/server/src/mesh/{MeshAgentKit,ThreadForkService}.ts`, `apps/server/src/replicas/ProjectReplicaService.ts`, `apps/server/src/run/{RunPlan,RunWorker}.ts`, `apps/server/src/peer/connection/PeerCredentials.ts`, `packages/contracts/src/{delivery,settings}.ts`, `packages/provider-core/src/server/testFlags.ts`, `scripts/mesh-e2e/platform-smoke.mjs`.
+- **Cleanliness.** Removed the private development logs (`docs/mesh-conformance.md`, `docs/mesh-agent-eval.*`), renamed stage-coded scripts by function, replaced stage-coded fixture prefixes, made the mobile pairing script read the configured bed, unified shell quoting and sleep helpers, and extended the public-repo leakage test with non-Latin machine names and neutral test names. App ids (`com.gvidon.*`) and the fork repository name stay as the owner decided.
+
+### 2026-11-08 — Required mesh services and shared server runtime
+
 - Mesh services now have explicit production dependencies and test layers. Updating refusals preserve a `DeliveryUpdatingError` tag through RPC/MCP; clients and the CLI retry that tag.
 - The remote run worker is compiled TypeScript. Older runtimes receive source generated from those same functions. Downloads verify SHA-256 through one helper; SSH options, bounded socket reads and retry schedules share their platform rules. Timer scaling is an injected Context reference, while retention stays fixed.
 - Peer identity upgrade reads belong to the auth service. Server fixture environment names use `MESH_E2E_*`. Shared rules are exercised by delivery, runtime, socket, SSH, timing and identity tests.
 
-### 2026-11-08 — T1 bounded host admission and reboot recovery
+### 2026-11-08 — Bounded host admission and reboot recovery
 
 Fast acceptance uses the configured builder host with an eight-mesh default,
 two simultaneous container boots and bounded native/Mutagen workers. A kernel
@@ -165,7 +174,7 @@ the watcher fix and passes afterward. F2 integration uses pinned HTTPS/bootstrap
 trust and upgrades an already-paired previous release. Focused regressions cover
 clock correction after quarantine and asynchronous-pong heartbeat scheduling.
 
-### 2026-11-08 — R2 legacy release transition
+### 2026-11-08 — Legacy release transition
 
 - **What.** Private delivery can upgrade a released server that predates admission drain.
 - **How.** A missing drain-status tool selects a bounded running-thread idle check, repeated
@@ -176,7 +185,7 @@ clock correction after quarantine and asynchronous-pong heartbeat scheduling.
   reset so peers resend changes acknowledged after the snapshot.
 - **Where.** `scripts/delivery/target.mjs`, `rollout.mjs`, `legacy-idle.node-test.mjs`.
 
-### 2026-11-08 — F2b layout and replica-run data-loss fixes
+### 2026-11-08 — Layout and replica-run data-loss fixes
 
 - **What.** Offline edits survive derived-config upgrades; rejected optimistic writes roll back,
   and authorization failures stay queued. Invalid representation keys cannot crash the sidebar.
@@ -209,7 +218,7 @@ clock correction after quarantine and asynchronous-pong heartbeat scheduling.
   location have focused regressions. OTA serving and publishing verify content hashes and cache
   catalog indexes; provider recovery logs include causes and mobile layout failures show a dialog.
 
-### 2026-11-08 — F2a security and repository privacy
+### 2026-11-08 — Security and repository privacy
 
 - **What.** Public sources contain neutral infrastructure examples. Linked callers, server-delivered
   desktop UI, bootstrap downloads and native mobile upgrades have explicit trust boundaries.
@@ -228,17 +237,17 @@ clock correction after quarantine and asynchronous-pong heartbeat scheduling.
   the real Electron hostile-server proof cover these boundaries. See docs/mesh/README.md and
   docs/delivery.md for setup, including the owner's one-time GitHub environment configuration.
 
-### 2026-11-08 — A1 Android build caching and private APK delivery
+### 2026-11-08 — Android build caching and private APK delivery
 
 - **What.** Local Android builds retain native outputs, reuse identical APKs and publish native
   upgrades through the existing private mobile-update notice. Public CI caches by native fingerprint.
 - **How.** Content-based prebuild invalidation, bounded machine-aware Gradle workers/heap, warm
   daemon, configuration/build caches and scan-free profiles. APKs use the existing signing plugin
   and app identity; hot-lane APKs are immutable OTA-store assets promoted after healthy rollout.
-- **Where.** `scripts/delivery/android-{build,release}.mjs`, `scripts/mobile-android-apk.mjs`, D1 assets,
+- **Where.** `scripts/delivery/android-{build,release}.mjs`, `scripts/mobile-android-apk.mjs`, delivery assets,
   server `delivery/MobileOta.ts`/catalog, `sidebar-desktop.yml`, `docs/delivery.md`.
 
-### 2026-11-07 — D1 private delivery and independent release artifacts
+### 2026-11-07 — Private delivery and independent release artifacts
 
 - **What.** Private clean/hot builder lanes, serial idle-window delivery with stopped-DB backup
   and rollback, self-hosted signed mobile updates, and server-served desktop UI with bundled
@@ -249,23 +258,23 @@ clock correction after quarantine and asynchronous-pong heartbeat scheduling.
   Desktop follows its active connected thread/draft server through validated main-frame IPC,
   preserves the stable storage/preload origin and displays UI/shell versions and source in About.
   Server drain atomically fences run admission, preserves dormant sends across restarts and
-  lets active turns finish until a deadline. B1 and private delivery share it; clients retry
-  transient updating refusals with stable IDs. B1 stores the idle deadline in mesh config and
+  lets active turns finish until a deadline. The delivery service and private delivery share it; clients retry
+  transient updating refusals with stable IDs. The delivery service stores the idle deadline in mesh config and
   binds `--now` to one target version; the next normal update clears that permission.
 - **Where.** `scripts/delivery/`, `docs/delivery.md`, t3ctl delivery client, server `delivery/`,
   mobile update lifecycle/settings, desktop `app/DesktopUi`, protocol/bootstrap and IPC, web
   `DesktopUiCoordinator`/About source row, and `sidebar-desktop.yml`.
 
-### 2026-11-05 — B1 mesh rollout and platform runtime
+### 2026-11-05 — Mesh rollout and platform runtime
 
-Config-driven SSH bootstrap installs a verified runtime and native service, establishes mutual trust and binds its configured name. Runtime versions roll in lexical machine order under a replicated, unanimously granted lease, with the protocol-3 DB backup and rollback launcher and mesh health checks. Servers distribute their bundled skill and managed instruction blocks, migrate installed legacy instructions once, and read model aliases from config. The shared ServerPlatform boundary absorbs R1 RunPlatform and S1 PeerPlatform, native service plans and Windows managed SSH transports. CLI/MCP interfaces, fake service-manager tests, native macOS/Windows CI replica smoke and isolated B1 bed scenarios live beside the mesh services and scripts. See docs/mesh/README.md.
+Config-driven SSH bootstrap installs a verified runtime and native service, establishes mutual trust and binds its configured name. Runtime versions roll in lexical machine order under a replicated, unanimously granted lease, with the protocol-3 DB backup and rollback launcher and mesh health checks. Servers distribute their bundled skill and managed instruction blocks, migrate installed legacy instructions once, and read model aliases from config. The shared ServerPlatform boundary absorbs the replica command and peer platforms, native service plans and Windows managed SSH transports. CLI/MCP interfaces, fake service-manager tests, native macOS/Windows CI replica smoke and isolated delivery bed scenarios live beside the mesh services and scripts. See docs/mesh/README.md.
 
-### 2026-11-05 — R1 replica command execution
+### 2026-11-05 — Replica command execution
 
 - **What.** `t3 run` executes lite-replica commands in the primary environment with live output,
   exact exit status, conflict refusal, background jobs and loopback port forwarding. Threads
   receive the runtime command and configurable guards for commands requiring that environment.
-- **How.** Resolve through the local server; flush and inspect S1's public sync APIs; use managed
+- **How.** Resolve through the local server; flush and inspect the replicas v2 sync APIs; use managed
   `t3-<name>` SSH under the user's login shell. A supervisor owns each foreground process group;
   detached primary jobs have list/logs/stop and a replica forwarding guardian. Flush back and
   name ignored outputs. Shell-only guards preserve native harness Git discovery.
@@ -273,11 +282,11 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
   discovery; provider-core environment injection, Codex/OpenCode/ACP shell seams;
   `packages/contracts/src/meshConfig.ts`, `agent-kit/skills/t3/SKILL.md`.
 
-### 2026-11-05 — Managed SSH and replicas v2 (Stage S1)
+### 2026-11-05 — Managed SSH and replicas v2
 
 - **What.** Mesh-managed keys, pinned `t3-<name>` SSH hosts over persistent pipes,
   per-peer route status and managed/existing/off modes replace the route matrix.
-  U1 receives route checks through reported `sshRoutes` and Mutagen transfer lag through
+  Settings receive route checks through reported `sshRoutes` and Mutagen transfer lag through
   `ReplicaLiveStatus.lag`, including byte counts when the total is known.
   Replicas run star sessions on their own servers. Full replicas install and refresh
   environments from lock files; lite replicas receive explicit `t3 run` guidance.
@@ -290,15 +299,15 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
   client driver selection and removal of SSH route editors; standalone `t3ctl` managed-host
   resolution and retry routing; `scripts/mesh-e2e/` isolated bed.
 
-### 2026-11-04 — Mesh config core (Stage C1)
+### 2026-11-04 — Mesh config core
 
 - **What.** The mesh is now configured by one desired-state document. Machines, link permissions, replica rules, ignores and conflict policy come from it; a one-time migration writes the first revision from existing settings. Authority is gone from layout, clients, CLI and MCP. Link permissions are enforced on the receiving server, and read-only links cannot read files outside project folders.
 - **How.** `mesh.config`/history/bindings/status are validated layout entries. The `MeshConfig` service validates schema and references, plans with registered planners, applies with optimistic concurrency (stale base gets a path diff), rolls back as a new revision, keeps fifty revisions and publishes per-server action status. Planners cover display, links, replica placement through `ProjectReplicaService`, representation ignores and conflict policy; SSH and bootstrap add planners later. The schema accepts JSON or YAML and preserves unknown fields. The receiver resolves the authenticated peer environment id (intersecting candidate policies for ambiguous N-1 labels) and applies `effectiveLinkPermissions`; file checks realpath first, replica and thread handlers check their permission, and an unknown peer gets defaults. Existing links migrate to `files: all`.
 - **Where.** `packages/contracts/src/meshConfig.ts`, `packages/shared/src/meshConfig/`, server `mesh/{MeshConfig,MeshConfigPlanners,MeshConfigMigration,MeshLinkPermissions}.ts`, shared `meshLayout/registry.ts`, server `mesh/migration/layoutMigration.ts`, `files/FilesService.ts`, `mcp/toolkits/mesh/`; web/mobile Mesh settings and authority pickers; `agent-kit/skills/t3`.
 
-### 2026-11-04 — N1 persistent peer connections and SSH byte pipes
+### 2026-11-04 — Persistent peer connections and SSH byte pipes
 
-- **L1 integration.** Layout pushes use authenticated connection events, and connection-up
+- **Layout integration.** Layout pushes use authenticated connection events, and connection-up
   activity resets the replicator backoff through PeerLinks.changes. Reconnect/periodic watermark
   exchanges preserve acknowledgement and tombstone safety.
 
@@ -313,22 +322,22 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
   resets leave the link up even when older pipe frames are still in flight.
 - **Where.** Server peer/connection services, PeerMcpClient, mesh routing and MCP receipt boundary;
   contracts and client-runtime machine state; web/mobile Mesh settings and t3ctl mesh status.
-  The t3 mesh pipe CLI bridges local private IPC to the peer's loopback sshd; its S1 contract is
+  The t3 mesh pipe CLI bridges local private IPC to the peer's loopback sshd; its pipe contract is
   documented in docs/mesh/README.md.
 
-### 2026-11-04 — T3 Mesh — Stage F1 fork to machine, local-only move
+### 2026-11-04 — T3 Mesh — Fork to machine, local-only move
 
 - **What.** A thread can be forked to another machine as a new thread with any harness/model/effort; the original stays put and keeps running. Cross-machine "move" is gone. Moving between projects on one machine is a plain local move and needs no model.
 - **How.** Fork ensures the destination representation (place replica, wait for sync), flushes the session, copies the transcript through the last completed turn and its attachments, creates the thread with `<title> (fork)`, records links both ways (`meshFork`/`meshForks`), and optionally sends a first message. Target ids are deterministic; target preparation persists an invisible, non-runnable pending fork and a commit token for ten minutes. Commit atomically publishes the thread, history and optional first message. A durable source outbox retries commit with capped backoff; token receipts make retries idempotent. Pending leases and commit intents recover after restart; uncommitted forks expire and delete staging locally. The old handoff receiver and its undo/archive flow were removed; archived "moved to" messages still render as ordinary thread links. Web and Android add "Fork to machine…" with machine titles/labels and target model availability obtained through the source mesh connection; the same-machine move dialog uses project and machine titles. `t3ctl` gains `fork --on` and `move --project`.
 - **Where.** contracts `threadFork.ts`/`threadHandoffData.ts`; server `mesh/{ThreadForkService,ForkTransactions,ForkMcp,ForkUploads,forkBundle,forkTransport,forkRecord,ThreadMoveService}.ts`, orchestrator `thread.fork.record`/`thread.fork.linked`; client-runtime `threadCommands`, `meshLayout/threadMove`; web `ForkThreadDialog`, thread menu, sidebar drag and move dialog; mobile `ForkThreadSheet`, move sheet and thread menu; `agent-kit/skills/t3`.
 
-### 2026-11-03 — T3 Mesh — Stage N authority and automatic conflict copies
+### 2026-11-03 — T3 Mesh — authority and automatic conflict copies
 
 - **What:** a configurable authority, automatic conflict copies, stable project identities, explicit replica folders, safe takeover of manual Mutagen sessions, and recovery across server/daemon/tunnel interruptions.
 - **How:** the existing CRDT carries `mesh.authority`, server membership, browser-edit authorship and `proj/<id>.title`. Legacy project keys migrate deterministically to opaque ids and remain aliases; existing session identities survive migration. The driver keeps two-way-safe, preserves the losing files locally or over SSH, then resets and flushes. Manual sessions are paused before takeover and terminated only after private sync watches. Requested paths are validated without reallocating them; obsolete asynchronous checks cannot replace a corrected request. First placements reuse migrated title/repository aliases through one shared record-identity helper; MCP lists and details read the same shared title without rewriting local storage. Scan problems carry non-fatal skipped-file counts and bounded paths; blockers retain messages and failures stay scoped to one copy. Project lookup reads layout metadata, paginated peer records over the existing relay and minimal project catalogs gossiped through existing mesh exchanges, including incoming-only machines; it preserves the actual source machine and never enrolls a representation during a read. Moves prefer a local representation and can prepare one before moving. CLI service control detects user/system units and installs from public releases or linked caches without requiring `gh` authentication.
-- **Where:** shared `meshLayout`, contracts, server `mesh/`, `replicas/` and thread context; shared client grouping/moves/status and the `projectEntities.ts` title reader, web/mobile Mesh and Machines; `agent-kit/skills/t3`; isolated-bed `scripts/mesh-e2e/round3*.sh`. The rule-by-rule test ledger is [mesh-conformance.md](docs/mesh-conformance.md).
+- **Where:** shared `meshLayout`, contracts, server `mesh/`, `replicas/` and thread context; shared client grouping/moves/status and the `projectEntities.ts` title reader, web/mobile Mesh and Machines; `agent-kit/skills/t3`; isolated-bed resilience scripts.
 
-### 2026-11-03 — T3 Mesh — Stage P draft machine selection
+### 2026-11-03 — T3 Mesh — draft machine selection
 
 - **What:** new-thread composers offer machine tags, connection state and project-copy availability. Drafts retain their text while a replica mounts; a send waits for registration. Model availability offers a machine or local-model correction.
 - **How:** both clients reuse logical project resolution and the replica plan, consume replica status for progress and Retry, and persist sends before acknowledgement in a shared outbox, delivered by app-root workers after navigation or restart. Fixed receipt IDs make response-loss retries idempotent. Device preferences remember the project’s selected machine. Provider catalogs follow the destination and unavailable mobile models stay visible and disabled with their reason. Machine names prefer mesh layout identities and label collisions are disambiguated and logged.
@@ -384,29 +393,29 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
   `apps/web/src/components/{chat/{ChatComposer,useComposerMenuItems},files/{BrowserDocumentFrame,AttachmentFilePreview.browser.test},settings/SettingsPanels}.tsx`,
   `packages/contracts/src/{environment,index}.ts`.
 
-### 2026-11-03 — T3 Mesh — Stage K project machine strips
+### 2026-11-03 — T3 Mesh — Project machine strips
 
 - **What:** project folder rows show primary and replica machine tags, sync status and overflow; all scratch threads share one “No project” folder on web and mobile, including the drawer.
 - **How:** a shared pure strip model combines layout representations, live replica status and legacy member environments. Identical chips show primaries, one ⇄ separator, then replicas; only unsynced replicas have status dots. Three chips fit before overflow. Strips open Machines; scratch creation uses the selected machine’s scratch project rather than creating a replica.
 - **Where:** `packages/client-runtime/src/state/meshLayout/projectMachineStrip.ts`, `projectGrouping.ts`; web `components/workspaces/{ProjectMachineStrip,WorkspaceSidebar}`; mobile `features/workspaces/{ProjectMachineStrip,WorkspaceChrome,workspaceNavigator,useWorkspaceHome}`, `HomeScreen` and `WorkspaceDrawer`.
 
-### 2026-11-03 — T3 Mesh — Stage J global agent instructions
+### 2026-11-03 — T3 Mesh — global agent instructions
 
 - **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to nodeB.
 - **How:** staged `t3ctl agents sync/status` uses local file operations or pinned SSH routes, with offline render/diff/backup/isolation tests and real Codex/OpenCode eval evidence. Mesh routing resolves configured names and project paths, searches across machines, and runs git on a replica’s primary. General dispatch rules cover API prerequisites and execution location; compact skill tables are excluded from the formatter.
-- **Where:** `agent-kit/skills/t3/`, `agent-kit/skills/t3/global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live studio/Cloudbox configuration changed.
+- **Where:** `agent-kit/skills/t3/`, `agent-kit/skills/t3/global/GLOBAL.md`. No product contracts or live machine configuration changed.
 
-### 2026-11-03 — T3 Mesh — Stage M session identity and thread access
+### 2026-11-03 — T3 Mesh — session identity and thread access
 
 - **What:** agents can identify their thread and project representation, query threads across the mesh, and address remote threads by id alone. The staged CLI supports the same commands and current pending-question tools.
 - **How:** read-only `t3_thread_self` reads local layout, replica runtime and thread lineage; each mesh turn receives a compact identity note (≤600 bytes). MCP routing probes unknown ids through `callRouted`, caches locations and fans out list/search with concurrency four, deadlines and partial failures. Link credentials and mode checks remain authoritative; a full-access intermediary can relay reads to a fenced destination, whose own credential refuses writes. The tool-list budget grows by 242 bytes for the self tool; the dynamic note has its own measured 600-byte ceiling, avoiding full layout injection.
 - **Where:** server `mcp/toolkits/thread/self.ts`, `mesh/MeshThreadAccess.ts`, `McpToolAccess.ts`, UI toolkit, `mesh/MeshRelay.ts` and `replicas/ReplicaInstructions.ts`; seams in turn start, Claude's read-only allowlist and additive MCP list/search result fields. Staged skill review copy: `agent-kit/skills/t3/`. No mesh CRDT contracts or service interfaces changed.
 
-### 2026-11-02 — T3 Mesh — round 2 replica acceptance
+### 2026-11-02 — T3 Mesh — Replica acceptance
 
 - **What:** real Mutagen replica acceptance across nodeB, isolated studio and the VPS container, including staged `t3ctl-next`.
 - **How:** Settings-model SSH routes, authenticated MCP launches, live status, file and session assertions, conflict/retry, restart, removal and orphan checks. Build-current mode avoids the shared build checkout; deploy copies only the staged skill.
-- **Where:** `scripts/mesh-e2e/round2.sh`, `round2-routes.sh` and the accompanying run report/log. Product code is unchanged.
+- **Where:** `scripts/mesh-e2e/replica-acceptance.sh` and the accompanying run report/log. Product code is unchanged.
 
 ### 2026-11-03 — T3 Mesh — cross-device QA corrections
 
@@ -431,27 +440,27 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 - **Where:** web `components/workspaces/{MachineTag,PendingReplicaRow,MeshFooterStatus}.tsx`
   and `MachineTag.browser.test.tsx`. No mesh contracts or server interfaces change.
 
-### 2026-11-02 — T3 Mesh — round 1 E2E
+### 2026-11-02 — T3 Mesh — Mesh core E2E
 
 - **What:** repeatable three-machine layout, link, restart, file-routing and old-client checks.
 - **How:** authenticated WebSocket RPCs against the isolated mesh bed, document/config hashes,
   legacy key-set comparisons, concurrent edits and server recovery; nonzero exit on failures.
-- **Where:** `scripts/mesh-e2e/round1.sh` and its recorded `round1.log`; no product changes.
+- **Where:** `scripts/mesh-e2e/mesh-core-acceptance.sh` and its recorded core log; no product changes.
 
-### 2026-11-02 — T3 Mesh — Stage I settings and status
+### 2026-11-02 — T3 Mesh — Settings and status
 
 - **What:** Settings › Mesh replaces Machines on web and mobile; old Machines routes remain aliases. Machine cards edit names, tags, colors and SSH routes and show connections, peer links, versions, last exchange, replicas and conflicts. Guided full-access linking mints a code on a connected target; manual codes cover other machines. Connect opens the pairing form with the known address, unlink asks for confirmation, and the workspace footer opens Mesh.
 - **How:** a shared machine union and status model reads layout, representations, every connected server’s links and per-peer replication watermarks. `meshLayout.status` exposes read-only replication state and refreshes once a minute while observed. The mesh switch writes both server flags together.
 - **Where:** `packages/client-runtime/src/state/meshMachines.ts`, `packages/contracts/src/meshLayout.ts`, server `mesh/MeshReplicator.ts` and `ws.ts`; web `components/workspaces/Mesh*`, `hooks/useMeshOverview.ts`, settings routes/nav/search and pairing form; mobile `features/settings/{SettingsMachinesRouteScreen,MeshLinkForm,mesh-settings.logic}`, `features/workspaces/{useMeshOverview,MeshFooterStatus,WorkspaceChrome}`, stack/search and ConnectionsNew prefill.
 
-### 2026-11-02 — T3 Mesh — Stage F skills: `t3ctl` and the `t3` skill
+### 2026-11-02 — T3 Mesh — Mesh skills: `t3ctl` and the `t3` skill
 
 - **What.** The `t3` skill can drive the whole mesh by name: list machines and links, link/unlink,
   place a project on a machine (primary or Mutagen replica) and retry it, start a thread on another
   machine, search/list/status across every linked machine, open a thread or file on any machine,
   print a file from any machine, and migrate legacy layouts through the shared adoption path.
-  Machine names resolve from environment id/prefix, label, tag, ssh alias, or Russian voice forms
-  («гвидон», «гора», «опералия»). `doctor` gained a mesh section.
+  Machine names resolve generically from environment id/prefix, label, tag, ssh alias and
+  transliteration. `doctor` gained a mesh section.
 - **How.** `t3ctl` keeps using only the server's MCP and WebSocket RPCs: `meshLayout.get/apply`,
   `replicas.status/retry`, `files.read`, `peerLinks.*`, `t3_thread_search/list/read`,
   `t3_project_place`, `t3_thread_launch` with `environmentId`, and `ui_open` with a target
@@ -463,7 +472,7 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
   `scripts/selftest.sh`); staged test-bed installs go to `~/.agents/skills/t3-next`. No server
   contracts or app code changed.
 
-### 2026-11-02 — T3 Mesh — Stage C server replication
+### 2026-11-02 — T3 Mesh — Server replication
 
 - **What:** persistent shared sidebar layout, legacy settings compatibility, server gossip and two-hop tool routing.
 - **How:** LWW entries retain HLC conflict resolution; local SQLite sequence watermarks drive replication over full-access peer links. Mesh-only MCP calls stay outside agent tool lists. Old settings writes become per-entry diffs and materialized settings remain readable by old clients.
@@ -539,7 +548,7 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
   reconciles on startup, layout changes and every 30 seconds; reserved destination paths survive
   restart. State RPCs require project operation permission. MCP places/lists representations,
   waits for registration before a remote launch, and replica prompts name the primary's SSH command.
-  Stage C supplies the MeshLayoutService port; older graphs return a disabled error without it.
+  server replication supplies the MeshLayoutService port; older graphs return a disabled error without it.
 - **Where.** `apps/server/src/replicas/`; seams: server runtime, WebSocket/MCP handlers,
   `peer/RemoteDelegation.ts`, `ProviderTurnStartService.ts`, contracts and the capability descriptor.
   Tests include a CRDT test layer, RPC/MCP/runtime integration and real local Mutagen synchronization.
@@ -1751,7 +1760,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `apps/web/src/components/AppSidebarLayout.tsx`, `apps/web/src/components/settings/SettingsPanels.tsx`
   and `settingsSearch.ts`; UI in `apps/web/src/components/workspaces/`.
 
-### 2026-11-03 — T3 Mesh — Stage L project moves and names
+### 2026-11-03 — T3 Mesh — Project moves and names
 
 - **What.** Move an idle thread between projects or linked machines from the workspace sidebar or
   the phone's long-press menu. Web supports dragging onto a project and undoing the move.
@@ -1768,19 +1777,19 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   and MCP thread/project toolkits; shared `meshLayout`; client-runtime
   project grouping/thread commands; web `workspaces` and mobile `workspaces`/thread menus.
 
-### 2026-11-03 — Stage L move with target model
+### 2026-11-03 — Move with target model
 
 - Move confirmation on web and mobile reuses the composer model/options picker against the destination environment. It preserves the current selection or chooses the destination catalog default with a notice.
 - `threads.move`, MCP `t3_thread_move` and `t3ctl move --agent/--model/--effort` carry the target selection. Local moves update it atomically; cross-machine moves import plain conversation context into the selected harness. Forks discard source handoff ownership so they can move independently.
 - Implementation: workspace move dialogs/sheets, shared `meshLayout/moveModel`, `ThreadHandoffService`, orchestration move command and `ThreadForkService`.
 
-### 2026-11-03 — Stage P customer-independent machine configuration
+### 2026-11-03 — Customer-independent machine configuration
 
 - **What.** Machine aliases are editable in Settings › Mesh on web/desktop and mobile, and with `t3ctl machines alias`. Machine names and provider defaults come from customer configuration.
 - **How.** Optional aliases share the existing `machine/*` CRDT entry. The CLI matches ids, labels, tags, aliases and SSH destinations without a built-in machine dictionary, preserves other machine fields, and advances beyond observed layout clocks. Unspecified thread model/permissions stay with the destination's defaults; explicit model discovery targets that machine. Agent-kit installation and instruction sync use registry-defined SSH routes, relays, home-relative paths and remote Node commands.
 - **Where.** `SidebarMachine`, client-runtime machine display/overview helpers, web `MeshSettingsPanel`, mobile `SettingsMachinesRouteScreen`, and `agent-kit/`. Regression fixtures use synthetic customer names and paths; personal installation data stays in `agent-kit/skills/t3/global/`.
 
-### 2026-11-04 — Stage L1 layout replication hardening
+### 2026-11-04 — Layout replication hardening
 
 - **What.** Layout entries validate against known family schemas while newer families remain
   opaque. Corrupt stored entries are quarantined; clock rejection counts and examples are visible
@@ -1794,13 +1803,13 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `MeshLayoutServiceLive.ts`, `MeshReplicator.ts` and `mesh/migration/`; client-runtime
   `MeshLayoutStore`, web/mobile `useMeshLayout` providers and application roots.
 
-### 2026-11-05 — Stage U1 mesh state and config editing
+### 2026-11-05 — Mesh state and config editing
 
 - **What.** Settings › Mesh presents machine state and opens a YAML config editor on web and
   mobile. Plan/apply uses optimistic revision checks; history restoration uses the same flow.
   Forgotten machine facts can be removed separately from active links. Compact machine rows merge
   repeated connections by environment ID and keep opaque hostnames out of display names. Apply
-  summaries group human action names by revision; lag and SSH route checks accept S1 reports.
+  summaries group human action names by revision; lag and SSH route checks accept peer reports.
   Migration metadata lives outside the editable YAML, including existing history revisions.
 - **How.** Both editors share a client-runtime controller. Replica git ownership is shown as
   `git on <machine> · t3 run`; longer project names collapse the machine strip. Fork machine
@@ -1809,7 +1818,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `BranchToolbar`; mobile `settings/SettingsMachinesRouteScreen`, `MeshConfigSheet`, thread
   context pickers; shared `meshConfigEditor`, `meshMachines`, `meshLayout/replicas`.
 
-### 2026-11-05 — Stage C2 machine name collision recovery
+### 2026-11-05 — Machine name collision recovery
 
 - **What.** Independently installed servers with equal hostnames keep distinct mesh names;
   older unbound servers repair their identity on startup. Moving a machine's config key keeps
@@ -1819,7 +1828,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** Shared `meshConfig/identity`, server `MeshConfig`/`MeshConfigMigration`, shared layout
   registry/diff, client-runtime machine displays, web and mobile Mesh settings.
 
-### 2026-11-05 — B1 managed agent instructions and schema refusal
+### 2026-11-05 — Managed agent instructions and schema refusal
 
 - **What.** Servers reconcile bundled t3 skills and managed mesh instruction blocks from config.
   A future-schema config is retained for forwarding and reported as unsupported without running
@@ -1830,13 +1839,13 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** Server `mesh/MeshAgentKit.ts`, `MeshConfigPlanners.ts`, `MeshConfig.ts`, config
   contracts and `scripts/build-cli-archive.ts`.
 
-### 2026-11-05 — B1 shared server platform boundary
+### 2026-11-05 — Shared server platform boundary
 
 - **What.** Replica SSH and remote command execution use one server platform module.
-- **How.** Consolidates R1 login shells, invocation resolution and worker/guardian IPC with S1 SSH wrappers, private mesh sockets and conflict-copy naming; old module files are removed.
+- **How.** Consolidates replica command login shells, invocation resolution and worker/guardian IPC with peer SSH wrappers, private mesh sockets and conflict-copy naming; old module files are removed.
 - **Where.** `apps/server/src/platform/ServerPlatform.ts`; existing run, peer and replica platform tests now import it directly.
 
-### 2026-11-07 — W1 upstream v0.1.7 integration into Mesh v2
+### 2026-11-07 — Upstream v0.1.7 integration into Mesh v2
 
 - **What.** Integrates upstream v0.1.7 and managed policy with every Mesh v2 stage.
 - **How.** Peer refusals preserve link health on both persistent and HTTP transports; address
@@ -1858,7 +1867,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.
 
-### 2026-11-08 — T1 fast mesh acceptance and realistic nightly suite
+### 2026-11-08 — Fast mesh acceptance and realistic nightly suite
 
 - **What.** Ports the bed rounds and CONCEPT §12 into isolated fault, replica,
   crash, run, fork, configuration, bootstrap, rollout and browser scenarios.
@@ -1872,7 +1881,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `apps/server/src/mesh/MeshTiming.ts`; nightly:
   `scripts/mesh-e2e/{acceptance,install-nightly}.sh`; CI: `mesh-fast.yml`.
 
-### 2026-11-07 — X1 post-release upgrade fixes
+### 2026-11-07 — Post-release upgrade fixes
 
 - **What.** Preserves project machine chips through legacy cache upgrades, avoids false offline
   footer reports, uses existing SSH hosts for remote commands, preserves replica ignores and
@@ -1890,13 +1899,13 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** Client-runtime mesh state, mobile fixtures, server run/mesh/replica services,
   contracts defaults, shared config migration and mesh acceptance scripts.
 
-### 2026-11-08 — X1 bound SSH routes during adoption
+### 2026-11-08 — Bound SSH routes during adoption
 
 - **What:** Existing sync sessions remain adoptable after machine display titles change.
 - **How:** Resolve their endpoints through the stable machine bindings and managed or existing SSH hosts; ambiguous hosts remain rejected.
 - **Where:** `apps/server/src/replicas/adoptionModel.ts`, `ProjectReplicaService.ts` and their tests.
 
-### 2026-11-08 — C3 public repository hygiene
+### 2026-11-08 — Public repository hygiene
 
 - **What.** Remove captured bed output and personal fixture names from public sources.
 - **How.** The leakage guard covers private hosts, project names and legacy server paths in
@@ -1905,7 +1914,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** `scripts/public-repo-leakage.test.ts`, `scripts/security-workflows.test.ts`,
   `.github/workflows/`, mesh evaluation and workspace fixtures.
 
-### 2026-11-08 — C3 shared mesh primitives
+### 2026-11-08 — Shared mesh primitives
 
 - **What.** Keep hop identity checks and pinned Mutagen release metadata consistent across
   transports and installation fixtures. Retention durations remain real time in accelerated tests.
@@ -1916,7 +1925,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** `peer/connection/peerIdentity.ts`, `platform/mutagenRelease.ts`, `mesh/retention.ts`,
   contracts `baseSchemas.ts`, `scripts/lib/shell.mjs` and mesh acceptance scripts.
 
-### 2026-11-08 — C4 shared client orchestration and neutral fixture names
+### 2026-11-08 — Shared client orchestration and neutral fixture names
 
 - **What.** Web and mobile keep only their platform adapters for durable draft launch, sidebar
   forks and replica machine choice; the rest of the orchestration is shared client-runtime code.
@@ -1930,7 +1939,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `replicas.logic.ts`, Machines views, `scripts/lib/{shell,managed-sshd}.mjs`,
   `scripts/delivery/{bed-target,e2e}.mjs` and `scripts/mesh-e2e/`.
 
-### 2026-11-08 — Stage U3 new-thread machine cards and panel git honesty
+### 2026-11-08 — New-thread machine cards and panel git honesty
 
 - **What.** A new thread shows one calm card per machine that can run the project, with the
   main copy as the default. Cards name the copy state ("Synced", "Copying files…", "Out of

@@ -58,6 +58,13 @@ export function isDeliveryUpdating(error: unknown): boolean {
   while (typeof current === "object" && current !== null && !seen.has(current)) {
     seen.add(current);
     if ("_tag" in current && current._tag === "DeliveryUpdatingError") return true;
+    // N-1 peers and clients signal the same state through this message marker.
+    if (
+      "message" in current &&
+      typeof current.message === "string" &&
+      current.message.includes("T3_UPDATING")
+    )
+      return true;
     current = "cause" in current ? current.cause : null;
   }
   return false;

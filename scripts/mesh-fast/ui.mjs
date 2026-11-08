@@ -6,14 +6,14 @@ import { fixture, project, mcp, run, rpc } from "./helpers.mjs";
 import { providers, completed } from "./threads.mjs";
 const repo = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
 export const uiScenarios = {
-  "f1-web-journey": (directory) =>
+  "fork-web-journey": (directory) =>
     fixture(
       directory,
       async (mesh) => {
         await providers(mesh);
         const [studio, empty] = mesh.nodes,
-          p = await project(mesh, "F1-source"),
-          target = await project(mesh, "F1-target");
+          p = await project(mesh, "fork-source"),
+          target = await project(mesh, "fork-target");
         await rpc(studio, "meshLayout.apply", {
           entries: Object.fromEntries(
             Object.entries({
@@ -26,7 +26,7 @@ export const uiScenarios = {
         });
         const thread = await mcp(studio, "t3_thread_launch", {
           projectId: p.id,
-          title: "F1 Drag with history",
+          title: "Fork drag with history",
           message: "FAST_WRITE:ui-history",
           modelSelection: { instanceId: "fakeCodex", model: "fast" },
           runtimeMode: "full-access",
@@ -79,13 +79,13 @@ export const uiScenarios = {
           ...Object.entries(env).flatMap(([key, value]) => ["-e", key + "=" + value]),
           studio.container,
           "/usr/local/bin/node",
-          NodePath.join(repo, "scripts/mesh-e2e/f1-web.mjs"),
+          NodePath.join(repo, "scripts/mesh-e2e/fork-web.mjs"),
           "--origin",
           studio.origin,
           "--storage-state",
           storage,
           "--thread-title",
-          "F1 Drag with history",
+          "Fork drag with history",
           "--thread-id",
           thread.threadId,
           "--target-title",

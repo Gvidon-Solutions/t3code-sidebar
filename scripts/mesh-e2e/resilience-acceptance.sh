@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Destructive resilience acceptance, exclusively on the shared isolated bed.
 set -Eeuo pipefail
-trap 'printf "FAIL N round3 line %s, stack %s, exit %s\n" "$LINENO" "${BASH_LINENO[*]}" "$?" >&2' ERR
+trap 'printf "FAIL resilience line %s, stack %s, exit %s\n" "$LINENO" "${BASH_LINENO[*]}" "$?" >&2' ERR
 export MESH_E2E_HELPERS_ONLY=1
 export MESH_E2E_SESSION_TTL=${MESH_E2E_SESSION_TTL:-4h}
-export MESH_E2E_ROUND1_WORK="${MESH_E2E_ROUND3_WORK:-/tmp/t3-mesh-e2e-N-round3}"
-. "$(dirname "$0")/round1.sh"
+export MESH_E2E_CORE_WORK="${MESH_E2E_RESILIENCE_WORK:-/tmp/t3-mesh-e2e-N-resilience}"
+. "$(dirname "$0")/mesh-core-acceptance.sh"
 unset MESH_E2E_HELPERS_ONLY
 BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-mesh-network}
 require_bed_lock() {
@@ -29,9 +29,9 @@ ws_rpc() {
   token=$(token_of "$machine")
   node "$WS" rpc "$method" "$payload" ${first:+"$first"} --origin "$(origin_of "$machine")" --token "$token" --timeout 240000
 }
-printf '%s' "$$" > "$WORK/N-round3-runner.pid"
+printf '%s' "$$" > "$WORK/N-resilience-runner.pid"
 set -e
-TIMEOUT=${MESH_E2E_ROUND3_TIMEOUT:-900}
+TIMEOUT=${MESH_E2E_RESILIENCE_TIMEOUT:-900}
 PARTITION_ACTIVE=0
 CRASH_TARGET=
 MOUNT_WATCH_PID=
@@ -74,7 +74,7 @@ ctl() {
 }
 T_NODE_A=$(mint_token nodeA); T_NODE_B=$(mint_token nodeB); T_CLOUD=$(mint_token cloud)
 NODE_A_ENV=$(descriptor_env "$NODE_A_ORIGIN"); NODE_B_ENV=$(descriptor_env "$NODE_B_ORIGIN"); CLOUD_ENV=$(descriptor_env "$CLOUD_ORIGIN")
-N_KEY="N-$RUN_TS"; N_ROOT="${MESH_E2E_ROUND3_FIXTURES:-/var/tmp/t3-mesh-round3}/$N_KEY"; N_FILE="$N_ROOT/conflict"
+N_KEY="N-$RUN_TS"; N_ROOT="${MESH_E2E_RESILIENCE_FIXTURES:-/var/tmp/t3-mesh-resilience}/$N_KEY"; N_FILE="$N_ROOT/conflict"
 rexec() {
   local m=$1; shift
   case "$m" in
@@ -311,7 +311,7 @@ assert_converged() {
   CRASH_TARGET=
   CRASH_PEERS=()
 }
-. "$MESH_DIR/round3-features.sh"
+. "$MESH_DIR/resilience-features.sh"
 # Crash each server while its own representation is first mounting, then mid-sync.
 for m in nodeA nodeB cloud; do
   for replica in nodeA cloud; do
@@ -361,7 +361,7 @@ for m in nodeA nodeB cloud; do
 done
 # Kill only a private daemon PID captured when this script launched it.
 driver_signal="/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs"
-cloud_put "$MESH_DIR/round3-driver.mjs" "$CLOUD_DIR/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs"
+cloud_put "$MESH_DIR/resilience-driver.mjs" "$CLOUD_DIR/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs"
 cloud_ssh "chmod 644 '$CLOUD_DIR/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs'"
 for m in nodeA cloud; do
   base=$(base_of "$m")
@@ -471,6 +471,6 @@ jq -n \
   --arg knownHostsFile "${MESH_E2E_RUNTIME_SSH_KNOWN_HOSTS:-$CLOUD_DATA/.ssh/known_hosts}" \
   '{destination:$destination,identityFile:$identityFile,knownHostsFile:$knownHostsFile}' > "$WORK/N-runtime-ssh.json"
 cloud_put "$WORK/N-runtime-ssh.json" "$runtime_root/ssh-copy.json"
-cloud_put "$MESH_DIR/round3-runtime.sh" "$runtime_root/round3-runtime.sh"
-cloud_ssh "tar -xzf '$runtime_root/N-runtime-scripts.tar.gz' -C '$runtime_root'; bash '$runtime_root/round3-runtime.sh' '$runtime_root'" | tee "$WORK/N-system-services.log"
-printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, primary, 6 restart orders; evidence %s\n' "$WORK"
+cloud_put "$MESH_DIR/resilience-runtime.sh" "$runtime_root/resilience-runtime.sh"
+cloud_ssh "tar -xzf '$runtime_root/N-runtime-scripts.tar.gz' -C '$runtime_root'; bash '$runtime_root/resilience-runtime.sh' '$runtime_root'" | tee "$WORK/N-system-services.log"
+printf 'PASS resilience: crash/mount/sync, daemon, partition/conflicts, primary, 6 restart orders; evidence %s\n' "$WORK"

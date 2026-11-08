@@ -34,6 +34,7 @@ import {
   type ProviderInstance,
 } from "@t3tools/provider-core/server/driver";
 import { providerModelsFromSettings } from "@t3tools/provider-core/server/snapshotProbe";
+import { testVoiceProviderEnabled } from "@t3tools/provider-core/server/testFlags";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
 import {
   haveProviderSnapshotSettingsChanged,
@@ -209,7 +210,7 @@ function baseSnapshot(
     continuation: { groupKey: input.continuationKey },
     supportsTextGeneration: false,
     // The deterministic fixture agent reports voice under the mesh test flag only.
-    ...(process.env.T3_MESH_TEST_VOICE_PROVIDER === "1" ? { supportsVoice: true } : {}),
+    ...(testVoiceProviderEnabled() ? { supportsVoice: true } : {}),
     enabled: input.settings.enabled,
     installed: input.installed,
     version: input.version,

@@ -22,6 +22,7 @@ import { readCustomModelEntries } from "@t3tools/shared/model";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { createProviderVersionAdvisory } from "./maintenanceResolver.ts";
 import { collectUint8StreamText } from "./collectStreamText.ts";
+import { testVoiceProviderEnabled } from "./testFlags.ts";
 
 const WINDOWS_COMMAND_NOT_FOUND_PATTERNS = [
   /is not recognized as an internal or external command/i,
@@ -255,7 +256,7 @@ export function buildServerProvider(input: {
     ...(input.presentation.supportedRuntimeModes === undefined
       ? {}
       : { supportedRuntimeModes: [...input.presentation.supportedRuntimeModes] }),
-    ...(input.presentation.supportsVoice || process.env.T3_MESH_TEST_VOICE_PROVIDER === "1"
+    ...(input.presentation.supportsVoice || testVoiceProviderEnabled()
       ? { supportsVoice: true }
       : {}),
     enabled: input.enabled,

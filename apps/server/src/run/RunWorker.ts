@@ -507,6 +507,7 @@ export function runWorkerMain(
         socket.on("error", (e) => emit({ type: "error", message: e.message }));
         void readSocketLine(socket, { maxBytes: 1024, timeoutMs: 3000 }).then(
           (line) => {
+            let signal: "SIGINT" | "SIGTERM";
             try {
               const request = JSON.parse(line) as { signal?: unknown };
               if (request.signal === "status") {
@@ -515,15 +516,17 @@ export function runWorkerMain(
               }
               if (request.signal !== "SIGINT" && request.signal !== "SIGTERM")
                 throw Error("Invalid signal");
-              stop(request.signal);
-              socket.end("ok\n");
+              signal = request.signal;
             } catch {
               socket.end("invalid request\n");
               emit({
                 type: "err",
                 data: Buffer.from("Invalid background control request\n").toString("base64"),
               });
+              return;
             }
+            stop(signal);
+            socket.end("ok\n");
           },
           (error) => {
             emit({ type: "error", message: String(error) });

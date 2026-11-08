@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by round3.sh: every folder, project, thread and session belongs to this N run.
+# Sourced by resilience-acceptance.sh: every folder, project, thread and session belongs to this N run.
 set -euo pipefail
 # Duplicate path claims use LWW, independently of the receiver or old authority.
 rexec cloud mkdir -p "$N_ROOT-duplicate-claim"
@@ -147,7 +147,7 @@ test "$(rexec nodeA cat "$feature_root-adopt-target/both")" = N-authority-wins
 rexec nodeB sh -c "rg -l 'N-adopt-loser' '$feature_root-adopt/.t3-conflicts'" > "$WORK/N-adopt-copies.log"
 test "$(rexec nodeB cat "$feature_root-adopt/both")" = N-authority-wins
 wait_converged 'N feature acceptance after adoption'
-. "$MESH_DIR/round3-live-regressions.sh"
+. "$MESH_DIR/resilience-live-regressions.sh"
 printf 'PASS N features: explicit/refused paths, display titles, local/copy moves, ignores/transports, adopted conflict copies; evidence %s\n' "$WORK"
 
 assert_feature_recovery() {

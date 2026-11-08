@@ -124,6 +124,6 @@ async function collisions(directory, reverseJoins) {
   );
 }
 export const bindingScenarios = {
-  "c2-concurrent-forward": (directory) => collisions(directory, false),
-  "c2-concurrent-reverse": (directory) => collisions(directory, true),
+  "machine-name-concurrent-forward": (directory) => collisions(directory, false),
+  "machine-name-concurrent-reverse": (directory) => collisions(directory, true),
 };

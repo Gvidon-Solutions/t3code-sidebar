@@ -297,11 +297,11 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
   `~/.codex/AGENTS.md` (and other harnesses' global files that exist), kept identical in content:
   the machines, their roles, the mesh, the `t3` skill and when to use it, Mutagen rules (git and
   builds on the primary), how to open threads/files on any machine.
-- Behaviour eval: a list of Russian voice-style requests ("создай тред в проекте X на Cloudbox
-  на соннете", "открой тред про маунт", "покажи файл README из X на гвидоне", "сделай X репликой на
-  горе", "что сейчас работает на всех машинах") run as real threads on the test bed with several
-  harnesses (Claude, Codex, DeepSeek 1017); pass = right tool calls, first action within seconds, no
-  wandering. Fix skills/instructions until all pass.
+- Behaviour eval: voice-style requests ("start a thread in project X on cloudbox", "open the
+  thread about the mount", "show README from X on studio", "make X a replica on laptop", "what is
+  running on every machine") run as real threads on the test bed with several harnesses; pass =
+  right tool calls, first action within seconds, no wandering. Fix skills/instructions until all
+  pass.
 
 ## Stages and owners
 

@@ -1578,22 +1578,27 @@ const make = Effect.gen(function* () {
             const target = input.machine ? yield* resolveMachine(config, input.machine) : undefined;
             const { document } = yield* mesh.read;
             const desired = configFromLayout(document);
-            const routes = yield* Effect.try({
-              try: () =>
-                Object.fromEntries(
-                  Object.entries(bindingsFromLayout(document)).flatMap(([name, id]) => {
-                    const host = resolveMeshHost(desired, name);
-                    return host ? [[id, host]] : [];
-                  }),
-                ),
-              catch: (cause) => new ReplicaError({ reason: "unreachable", message: String(cause) }),
-            });
+            const routeProblems: string[] = [];
+            const routes = Object.fromEntries(
+              Object.entries(bindingsFromLayout(document)).flatMap(([name, id]) => {
+                try {
+                  const host = resolveMeshHost(desired, name);
+                  return host ? [[id, host]] : [];
+                } catch (cause) {
+                  routeProblems.push(
+                    `${name}: ${cause instanceof Error ? cause.message : String(cause)}`,
+                  );
+                  return [];
+                }
+              }),
+            );
             const sides = adoptionSides(routes, mesh.environmentId, allReps, session, target);
             if (!sides)
               return yield* new ReplicaError({
                 reason: "unreachable",
-                message:
-                  "This session must connect a primary folder of this project to another linked machine. Add its SSH route in Settings › Mesh, or choose the destination machine.",
+                message: routeProblems.length
+                  ? `An SSH route needed for this session is unusable (${routeProblems.join("; ")}). Fix it in Settings › Mesh, or choose the destination machine.`
+                  : "This session must connect a primary folder of this project to another linked machine. Add its SSH route in Settings › Mesh, or choose the destination machine.",
               });
             for (const [other, mounts] of Object.entries(config.projectMounts))
               if (

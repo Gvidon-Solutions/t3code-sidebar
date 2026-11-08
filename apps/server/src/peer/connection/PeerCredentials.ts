@@ -78,8 +78,11 @@ export const layer = Layer.effect(
         if (Option.isSome(stored) && active)
           return { token: new TextDecoder().decode(stored.value), expiresAt: previous.expires_at };
       }
+      const peer = yield* sql<{
+        label: string;
+      }>`SELECT label FROM peer_environment_links WHERE environment_id = ${environmentId}`;
       const issued = yield* auth.issueMcpClientSession({
-        label: "Linked machine",
+        label: `Linked machine${peer[0]?.label ? ` · ${peer[0].label}` : ""}`,
         access,
         peerLink: true,
         peerEnvironmentId: environmentId,

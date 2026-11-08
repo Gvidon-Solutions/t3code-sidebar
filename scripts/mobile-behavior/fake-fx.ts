@@ -8,6 +8,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeReadline from "node:readline";
+import { sleep } from "../lib/shell.mjs";
 
 const MODEL = "eval/scripted";
 
@@ -22,7 +23,6 @@ interface Message {
 
 const controlDir = process.env.T3_EVAL_FX_CONTROL_DIR ?? "";
 const send = (message: object) => process.stdout.write(`${JSON.stringify(message)}\n`);
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const update = (sessionId: string, value: object) =>
   send({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: value } });
 

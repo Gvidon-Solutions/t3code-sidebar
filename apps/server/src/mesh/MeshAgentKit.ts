@@ -7,16 +7,29 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
+import { ServerSettingsService } from "../serverSettings.ts";
 
 const begin = "<!-- t3-mesh begin -->";
 const end = "<!-- t3-mesh end -->";
 
 /** Harnesses whose skill and instruction files the agent kit owns. */
 const harnesses = [
-  { binary: "claude", home: ".claude", instruction: ".claude/CLAUDE.md" },
-  { binary: "codex", home: ".codex", instruction: ".codex/AGENTS.md" },
-  { binary: "opencode", home: ".config/opencode", instruction: ".config/opencode/AGENTS.md" },
+  { binary: "claude", driver: "claudeAgent", home: ".claude", instruction: ".claude/CLAUDE.md" },
+  { binary: "codex", driver: "codex", home: ".codex", instruction: ".codex/AGENTS.md" },
+  {
+    binary: "opencode",
+    driver: "opencode",
+    home: ".config/opencode",
+    instruction: ".config/opencode/AGENTS.md",
+  },
 ] as const;
+
+/** A provider instance config is driver-shaped, so read only the absolute binary it names. */
+function instanceBinaryPath(config: unknown): string | undefined {
+  if (typeof config !== "object" || config === null || !("binaryPath" in config)) return undefined;
+  const binaryPath = (config as { binaryPath?: unknown }).binaryPath;
+  return typeof binaryPath === "string" && binaryPath.trim() !== "" ? binaryPath : undefined;
+}
 
 const sharedSkill = ".agents/skills/t3";
 
@@ -39,15 +52,12 @@ export function instructionBlock(original: string, body: string) {
     : original.slice(0, start) + block + original.slice(stop + end.length);
 }
 
-/** Removes only our managed block, leaving every other line of an instruction file intact. */
-function withoutManagedBlock(original: string): string {
+/** Removes only our managed block, leaving every other byte of an instruction file intact. */
+export function withoutManagedBlock(original: string): string {
   const start = original.indexOf(begin);
   const stop = original.indexOf(end);
   if (start < 0 || stop < start) return original;
-  const before = original.slice(0, start);
-  let after = original.slice(stop + end.length).replace(/^\r?\n/, "");
-  if (/\r?\n$/.test(before)) after = after.replace(/^(?:\r?\n)+/, "");
-  const joined = before.replace(/[ \t]+$/, "") + after;
+  const joined = original.slice(0, start) + original.slice(stop + end.length);
   return joined.trim() === "" ? "" : joined;
 }
 
@@ -117,8 +127,7 @@ export const layer = Layer.effect(
     const executable = yield* HostProcess.ExecutablePath;
     const platform = yield* HostProcess.Platform;
     const resolveExecutable = yield* SpawnExecutableResolution;
-    const harnessInstalled = (harness: (typeof harnesses)[number]) =>
-      resolveExecutable(harness.binary, platform, env) !== undefined;
+    const settings = yield* ServerSettingsService;
     const packaged = path.join(path.dirname(executable), "agent-kit/skills/t3");
     const source =
       env.T3_MESH_AGENT_SOURCE ??
@@ -156,12 +165,36 @@ export const layer = Layer.effect(
         yield* fs.makeDirectory(shared, { recursive: true });
         yield* copySkill(source, shared);
 
+        const current = yield* settings.getSettings.pipe(
+          Effect.mapError(
+            (error) =>
+              new MeshConfigError({
+                reason: "storage",
+                message: `Cannot read provider settings for the agent kit: ${error.message}`,
+              }),
+          ),
+        );
+        const providerBinaryExists = Effect.fn("MeshAgentKit.providerBinaryExists")(function* (
+          harness: (typeof harnesses)[number],
+        ) {
+          for (const instance of Object.values(current.providerInstances)) {
+            if (instance.driver !== harness.driver) continue;
+            const binaryPath = instanceBinaryPath(instance.config);
+            if (binaryPath !== undefined && (yield* fs.exists(binaryPath))) return true;
+          }
+          return false;
+        });
         const installed = new Map<(typeof harnesses)[number], boolean>();
         for (const harness of harnesses) {
-          installed.set(harness, harnessInstalled(harness));
+          installed.set(
+            harness,
+            resolveExecutable(harness.binary, platform, env) !== undefined ||
+              (yield* providerBinaryExists(harness)) ||
+              (yield* fs.exists(path.join(home, harness.home))),
+          );
         }
 
-        // Skill directories follow installed harnesses; a removed harness loses only our copy.
+        // Skill directories follow installed harnesses; only a positively absent one loses our copy.
         for (const harness of harnesses) {
           const destination = path.join(home, harness.home, "skills/t3");
           if (installed.get(harness)) {

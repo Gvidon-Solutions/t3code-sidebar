@@ -25,24 +25,24 @@ scripts/mesh-e2e/teardown.sh
 ```
 
 `build.sh` stages a runtime and Docker image; `deploy.sh` installs only the bed units and
-container. `pair.sh` links those servers and configures the fixture routes. Round scripts
+container. `pair.sh` links those servers and configures the fixture routes. Acceptance scripts
 exercise replication, files, networking and restart recovery using fixture projects.
-Round one expects seeded legacy snapshots at `STATE_DIR/legacy/studio.json` and
+Core acceptance expects seeded legacy snapshots at `STATE_DIR/legacy/studio.json` and
 `cloudbox.json`: include one `main` workspace, an independent workspace and at least two
 registered logical projects with placements. Its outside-project file cases require an explicit
 `files: all` grant in the isolated bed config. A fresh profile does not inherit those fixtures.
 Provision the container home for its image UID, use a private temporary directory for IPC,
 and provide Node 26 at the configured remote binary directory before deployment.
-Use a unique stage prefix and acquire the shared bed lock through the configured nodeB SSH
-profile before operating shared infrastructure; release it afterward. Keep other stages' data.
-`network-rounds.sh` derives a lock owner from `MESH_E2E_LOCK_OWNER` (default `mesh-network`)
-and passes `MESH_E2E_ROUND1_NAME`, `MESH_E2E_ROUND1_SCRATCH`, `MESH_E2E_ROUND2_NAME`,
-`MESH_E2E_DEMO_TITLE` and `MESH_E2E_ORPHAN_LABEL` to the round scripts; it no longer rewrites
+Use a unique fixture prefix and acquire the shared bed lock through the configured nodeB SSH
+profile before operating shared infrastructure; release it afterward. Keep other runs' data.
+`network-acceptance.sh` derives a lock owner from `MESH_E2E_LOCK_OWNER` (default `mesh-network`)
+and passes `MESH_E2E_CORE_NAME`, `MESH_E2E_CORE_SCRATCH`, `MESH_E2E_REPLICA_NAME`,
+`MESH_E2E_DEMO_TITLE` and `MESH_E2E_ORPHAN_LABEL` to the acceptance scripts; it no longer rewrites
 their text. Isolated daemons share `scripts/lib/managed-sshd.mjs` for their OpenSSH config.
 
 Live unit names, port 3774 and normal T3 state directories are rejected before deployment.
 `MESH_E2E_ALLOW_LIVE=1` is a separate explicit opt-in, never a deployment default or an
-approval inferred from running a round. It does not authorize an agent to bypass the owner's
+approval inferred from running an acceptance suite. It does not authorize an agent to bypass the owner's
 restart rules. `teardown.sh --purge` removes only fixture state and owned keys, and keeps
 administrator SSH configuration intact.
 
@@ -59,8 +59,8 @@ See [the fast harness guide](../mesh-fast/README.md) for scenario coverage and a
 Its agreed gate is six minutes on the configured builder; it never acquires the shared bed.
 
 The realistic `acceptance.sh` retains full timers, native runtimes and real providers.
-It acquires the bed lock, runs the existing rounds plus C2/F1 and the realistic matrix.
-The C2/F1 entrypoints are committed as `c2-bed.sh` and `f1-bed.sh`.
+It acquires the bed lock, runs the acceptance suites plus the machine-name and fork beds and the realistic matrix.
+The machine-name and fork entrypoints are committed as `machine-name-bed.sh` and `fork-bed.sh`.
 
 Configure the worker host, controller address/port, provider binaries and legacy seed
 filenames in ignored `local.env`. Run `install-nightly.sh` on the controller.
@@ -82,4 +82,4 @@ For an existing bed, local.env also owns NODE_A_LOCAL, both runtime roots and
 NODE_A_TUNNEL_UNIT/NODE_B_TUNNEL_UNIT. These overrides preserve already-provisioned
 forwarding instead of selecting nonexistent default units. Keep the private
 inventory in persistent storage; local.env may link to it. After merging, run the
-installer from the permanent checkout before removing the stage worktree.
+installer from the permanent checkout before removing the temporary worktree.

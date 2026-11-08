@@ -1,6 +1,6 @@
 # T3 Mesh — guide for agents
 
-## Android build cache (A1)
+## Android build cache
 
 `scripts/delivery/android-build.mjs` owns resource/ABI selection, native fingerprint invalidation
 and APK input keys; `scripts/mobile-android-apk.mjs` runs the profiled Gradle target.
@@ -8,7 +8,7 @@ and APK input keys; `scripts/mobile-android-apk.mjs` runs the profiled Gradle ta
 SHA-256 before reusing a previous APK. Public workflow writes Gradle caches only from `ws`.
 Native cache paths enumerate physical package directories: recursive pnpm globs follow dependency
 links and can spend minutes walking the store before archiving any files.
-D1 retains native outputs instead of forcing a clean prebuild. `assets.mjs` stages signed APKs
+The delivery pipeline retains native outputs instead of forcing a clean prebuild. `assets.mjs` stages signed APKs
 with immutable OTA assets; `delivery/MobileOta.ts` serves their catalogued hashes through the
 existing asset route and native-upgrade notice. Promotion still follows successful rollout.
 Generated Android files must not determine prebuild invalidation by mtime: switching refs changes
@@ -16,7 +16,7 @@ mtimes without changing native inputs. Expo 58 defaults to cleaning on prebuild:
 refreshes require `--no-clean`. Preserved Gradle history also requires declaring native fingerprint
 and JS inputs on Expo Updates resource generation. See [delivery.md](../delivery.md#android-builds).
 
-## Retry and bootstrap lifetimes (F2b)
+## Retry and bootstrap lifetimes
 
 `mesh/Backoff.ts` defines the shared 1–15 second schedule for peer reconnects,
 layout exchange, bootstrap readiness and fork recovery. Expiry cleanup makes seven attempts,
@@ -30,12 +30,12 @@ config. `MeshConfigMigration` suppresses standalone config seeding while that co
 identity migration proceeds normally after it arrives. `MeshInstall` writes the marker into the
 new service environment. Ordinary standalone installations omit it.
 
-## Private delivery (D1)
+## Private delivery
 
 `scripts/delivery/` owns the private builder queue, warm build clone, target allowlist,
 serial rollout and stopped-DB/unit rollback. The t3ctl `delivery-client.mjs` forwards requests
 to a private socket; customer paths never enter public workflow configuration. Targets read
-B1 health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
+Delivery health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
 `mesh/DeliveryAdmission.ts` fences run creation inside EventSink write transactions and
 allows concurrent provider starts while drain exclusively waits for all admitted starts.
 Abandoned persisted fences expire at startup one minute after their deadline. Admission
@@ -43,7 +43,7 @@ failures stay typed during outbox/runtime recovery; deferred ids are read once p
 already accepted dormant starts remain in the outbox without occupying worker slots or spending
 retry attempts. Cancellation wakes the worker and queue promotions. Checking provider-session
 inactivity alone misses accepted start effects and internal queue promotions.
-WS, MCP and `t3ctl drain`, `t3ctl drain status`, `t3ctl drain cancel` expose the same service. B1 and the
+WS, MCP and `t3ctl drain`, `t3ctl drain status`, `t3ctl drain cancel` expose the same service. The delivery service and the
 private systemd transport drain before backup/switch and reopen only after health or rollback.
 Transient updating refusals are never stored as rejected command receipts; client and CLI retries
 retain their command/message IDs. The private delivery adapter handles the initial legacy hop
@@ -57,7 +57,7 @@ Delivery health normalizes N-1 project-title watermarks using the stored entry v
 real project ids ending in `.title`. Database rollback clears layout generations and peer cursors:
 restoring a snapshot rewinds sequence numbers, so retaining acknowledgements can strand replicas
 behind changes that peers already consider delivered.
-B1 rechecks its lease after draining: fewer than twelve minutes remaining cancels the fence
+The delivery service rechecks its lease after draining: fewer than twelve minutes remaining cancels the fence
 and stops before backup or handoff, even when the configured idle deadline is longer.
 Manual rollback acquires a fresh fence. The staged database restore carries that current
 admission row into the restored database before restart; its historical token cannot authorize
@@ -244,7 +244,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   A linked thread's header shows its machine tag only, never a peer label or environment id.
   The composer voice toggle follows the thread's provider on its own machine and, for a draft,
   the target machine's provider catalog; the fixture agent reports voice only when
-  `T3_MESH_TEST_VOICE_PROVIDER=1` is set.
+  `T3_MESH_TEST_VOICE_PROVIDER=1` is set, and production builds ignore that flag.
 
 ### Client draft, voice and prompt rules (F3b)
 
@@ -294,7 +294,7 @@ manifest proves the cwd is outside a lite replica. Missing or invalid manifests 
 
 The runtime CLI and private local-server socket live in `apps/server/src/run/Run{Cli,Client,Ipc,Control}.ts`.
 `RunPlan` maps the nearest representation's relative cwd onto its primary. `RunPreparation`
-consumes S1's public `flush/conflicts/problems(replica)` API through `RunSyncLive`. `RunTransport`
+consumes the replicas v2 public `flush/conflicts/problems(replica)` API through `RunSyncLive`. `RunTransport`
 uses managed `t3-<name>` hosts; `RunWorker` owns process groups and the primary's job registry.
 `RunGuardian` keeps background forwards alive and flushes completion; `ServerPlatform` owns launch
 quoting and IPC addresses. `RunOutput` maps complete root prefixes across UTF-8 chunks while
@@ -332,6 +332,12 @@ files. Missing directories are created. Malformed or repeated markers fail recon
 before instruction files are written. `agents.manageInstructions: false` disables instruction
 writes while skill installation remains enabled. Instruction errors appear in normal config status.
 
+A harness counts as installed when its binary resolves on the server's PATH, when a provider
+instance for its driver names an existing absolute `config.binaryPath`, or when its home
+directory exists. A short service-manager PATH therefore cannot remove a customer's skill or
+managed block. Only a positively absent harness loses our skill directory and block, and
+removing the block never trims text outside it.
+
 Isolated servers must set `T3_MESH_AGENT_HOME` to their sandbox home; `T3_MESH_AGENT_SOURCE`
 can select a fixture skill. CLI release archives carry `agent-kit/skills/t3` next to the
 executable, excluding the legacy personal `global` directory. Source development resolves the
@@ -359,17 +365,17 @@ Never format `agent-kit/skills/t3/**`. Keep the skill general and compact.
   old knip baseline; add no new knip findings.
 - Three-machine bed: `scripts/mesh-e2e/README.md` (nodeB main server + isolated studio :3795 +
   VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
-  `round1.sh` (layout, links, files, old clients), `round2.sh` (replicas on real Mutagen, t3ctl),
-  `round3.sh` (crashes, partitions, duplicate claims). They must stay green.
+  `mesh-core-acceptance.sh` (layout, links, files, old clients), `replica-acceptance.sh` (replicas on real Mutagen, t3ctl),
+  `resilience-acceptance.sh` (crashes, partitions, duplicate claims). They must stay green.
   Runners and fault-proxy units use the configured bed base, runtime root and unit, never an
-  installed server's legacy paths. `MESH_E2E_STAGE_PREFIX` namespaces fixture timestamps;
-  round two uses this checkout's t3ctl. `isolation.node-test.mjs` verifies helper resolution.
-  `config.sh` verifies C1 config planning/apply, stale-base refusal, label/title convergence on
-  three servers and a real registered replica. It requires the C1 bed lock and an existing
-  deployment; `MESH_E2E_ARTIFACTS` selects its build metadata. Fixtures are C1-prefixed.
-- Agent behaviour eval: `docs/mesh-agent-eval.md` records the earlier bed methodology. After
-  changing SKILL.md or GLOBAL.md, run model-level routing cases using customer-defined machine
-  identities/aliases and configured models; do not make old owner-name translations part of the product contract.
+  installed server's legacy paths. `MESH_E2E_FIXTURE_PREFIX` namespaces fixture timestamps;
+  Replica acceptance uses this checkout's t3ctl. `isolation.node-test.mjs` verifies helper resolution.
+  `config.sh` verifies mesh config planning/apply, stale-base refusal, label/title convergence on
+  three servers and a real registered replica. It requires the config bed lock and an existing
+  deployment; `MESH_E2E_ARTIFACTS` selects its build metadata. Fixtures are config-prefixed.
+- Agent behaviour: after changing SKILL.md or GLOBAL.md, run model-level routing cases using
+  customer-defined machine identities/aliases and configured models; do not make personal
+  name translations part of the product contract.
 
 ## Operating configured installations
 
@@ -442,7 +448,7 @@ catalog, not a machine name or an assumed operating system.
   full thread records alone misses links disappearing from the sidebar and mobile menus.
 - Fork cleanup removes chunk directories and temporary pending attachment blobs; claimed copies
   belong to the destination thread. Even a same-machine fork must copy attachments independently.
-- The F1 flush boundary uses the existing replica driver lookup and Mutagen runner. When the
+- The fork flush boundary uses the existing replica driver lookup and Mutagen runner. When the
   session is driven elsewhere it routes a link-only flush to that driver; a primary has no session.
   The replica server owns the session; a primary has no session.
 
@@ -470,7 +476,7 @@ catalog, not a machine name or an assumed operating system.
 - Quiesce and drain replica reconciliation before constructing conflicting test files: it
   automatically resumes paused sessions and can otherwise overwrite a fixture during setup.
 
-## Mesh config core (Stage C1)
+## Mesh config core
 
 The desired state is `docs/mesh/CONCEPT.md` §9. `packages/contracts/src/meshConfig.ts` is the open
 Effect schema and revision/status envelope; unknown fields survive every round trip. Both JSON and
@@ -508,7 +514,7 @@ Registered planners (`mesh/MeshConfigPlanners.ts`):
 | `ignores`   | per-project ignore changes                  | writes merged ignores and recreates affected sessions                               |
 | `replicas`  | place/remove actions for config rules       | calls `ProjectReplicaService.place`, including `action: remove`                     |
 
-S1 registers the `ssh` planner; B1 (bootstrap, updates, agent instructions) adds planners through the same port; nothing
+The managed SSH layer registers the `ssh` planner; the bootstrap, update and agent-instruction layer adds planners through the same port; nothing
 else should grow a second reconciliation path. Every action has a sixty-second deadline, failures do
 not cancel other actions, and status keeps `done` / `in_progress` / `failed` plus the reason, for
 every server.
@@ -547,7 +553,7 @@ Queued observations always reconcile the current revision; reported machine fact
 config work. Project actions retry only that project's driven sessions, so an unrelated stalled
 replica cannot hold a config action behind a full-mesh scan.
 
-N1 transports must preserve the optional `PeerCallLimits.files` and `replicas` ceilings
+Peer transports must preserve the optional `PeerCallLimits.files` and `replicas` ceilings
 (`T3-Files-Limit` / `T3-Replicas-Limit` on HTTP) and the authenticated `peerEnvironmentId` in the
 receiving invocation context. The fork receiver passes the replica ceiling through placement and
 persisted transactions: a thread may use an existing representation while a denied link cannot
@@ -558,7 +564,12 @@ use `meshConfig.apply` with a base revision. Migration-only identity and per-pai
 protected alongside config and bindings. Explicit `machines.<name>.ssh.host` remains public for
 existing SSH mode. Older documents remain readable; startup extracts their internal migration fields.
 
-## Persistent peer connections and S1 pipes
+Settings patches merge `providerInstances` per instance; `null` deletes that instance, so a
+client can remove one without replacing the whole map. `t3ctl settings set` accepts the same
+tombstone. Delivery-updating errors keep the `DeliveryUpdatingError` tag and also accept the
+legacy `T3_UPDATING` message marker from N-1 peers and clients.
+
+## Persistent peer connections and SSH pipes
 
 A link maintains one authenticated WebSocket at GET /peer. PeerSessions reconciles each link
 independently; the lower environment ID's outbound socket wins simultaneous dials. A peer
@@ -588,13 +599,13 @@ Code boundaries:
 - PeerFacts reads system public SSH host keys, global sshd port (including Include files), OS,
   architecture, version and user; absent keys are reported as absent. ServerPlatform owns system
   paths and private local socket permissions. Facts and connection observations are written to
-  machine/<env>.reported; labels and reach policy belong to C1's mesh config.
+  machine/<env>.reported; labels and reach policy belong to the mesh config.
 
-S1 calls PeerSessions.openPipe({ environmentId, target: "sshd", signal? }). It returns an
+A caller invokes PeerSessions.openPipe({ environmentId, target: "sshd", signal? }). It returns an
 Effect of a Node Duplex or a typed PeerConnectionError. The target always connects to the
 receiving machine's loopback sshd, at its reported port (22 by default). It requires a full-access
 link. Relay selection is transparent, takes at most one hop, and never permits arbitrary TCP
-hosts or ports. This is a byte transport; S1 supplies OpenSSH authentication and pins the public
+hosts or ports. This is a byte transport; the caller supplies OpenSSH authentication and pins the public
 host keys received in facts. There is no SSH implementation or private SSH key in the pipe.
 
 Honor write() backpressure or use pipeline(). Each direction starts with 256 KiB of receiver
@@ -624,13 +635,13 @@ time. The shared client machine builder chooses current observations before stal
 facts; web/desktop Settings, mobile Settings and t3ctl mesh status consume these states.
 t3_mesh_routes keeps its N-1 array result by default; details:true adds connections alongside
 routes. Link enablement and mode limits are checked before receipt replay in McpHttpServer;
-C1's receiving-side permissions must run at that same boundary. F1's receive-fork requests and
+The receiving-side permissions must run at that same boundary. the fork receiver requests and
 thread transfers retain creation keys across MCP session renewal and recover pending receipts.
-L1 pushes authenticated `mesh.layout.push` events through PeerTransport; incoming events use
+Layout replication pushes authenticated `mesh.layout.push` events through PeerTransport; incoming events use
 the same generation, identity and catalog validation as exchanges. PeerLinks.changes includes
 connection-up activity, resetting replication backoff. Confirmed MCP watermark exchanges on
 reconnect and every 60 seconds retain acknowledgement/GC safety; disconnected peers use the
-HTTP fallback without blocking event pushes to connected peers. F1's creating calls must retain
+HTTP fallback without blocking event pushes to connected peers. Fork creating calls must retain
 the same idempotency key across a retry.
 
 PeerChannel, PeerSessions, PeerWire, PeerFacts, PeerReceipts and PeerNetwork tests cover framing,
@@ -640,12 +651,12 @@ reachability and one-hop relay. PeerNetwork disables external POST /mcp after co
 checks a 200 MiB relay transfer by byte count and SHA-256.
 The CLI subprocess test checks binary stdio, nonzero refusal, stderr diagnostics and that no
 database is opened by the ProxyCommand process.
-The shared-bed runners live in scripts/mesh-e2e: network-rounds.sh runs both acceptance rounds;
+The shared-bed runners live in scripts/mesh-e2e: network-acceptance.sh runs both acceptance suites;
 network-bed.sh exercises blocked inbound peers, native SSH transfers/interruption, a three-minute
 tunnel cut and automatic server restart. The fault proxy rejects peer HTTP MCP separately from
 local agent/CLI MCP. See that directory's README for isolation and cleanup.
 
-### Machine name collision recovery (C2)
+### Machine name collision recovery
 
 `mesh.machineClaim/<environmentId>` retains each join's requested slug and initial machine
 settings independently of the name-indexed bindings. `meshConfig/identity.ts` allocates names
@@ -657,7 +668,7 @@ moves its binding and claim in the apply transaction. Forget tombstones the clai
 Never resolve independent joins by LWW of the binding alone: that loses the displaced identity.
 Web and mobile share duplicate-title hints and compact offline ages in client-runtime.
 
-### Managed SSH and replicas v2 (S1)
+### Managed SSH and replicas v2
 
 `replicas/MeshSsh.ts` owns the server key under `<baseDir>/mesh/ssh` and the
 `ssh` planner in `MeshConfigPlanners.ts`. `peer/connection/PeerFacts.ts` publishes
@@ -729,7 +740,7 @@ a clean removal terminates only the owned session and retains the files.
 session; false means no local session is owned and the caller must resolve the
 driver. `conflicts(ref)` returns conflict roots; `problems(ref)` returns transport,
 transition and scan-problem paths. Inspection rejects missing sessions and requests
-sent to a non-driver. R1 inspects after flush; F1 forwards flush to the replica server.
+sent to a non-driver. The replica command runner inspects after flush; the fork path forwards flush to the replica server.
 Mutagen's list argument is a **label selector**, not a session name: list managed
 sessions and then select the name when inspecting/removing a single session.
 
@@ -765,16 +776,16 @@ a cold fixture cache performs one bounded download before starting the private d
 
 ### Shared server platform boundary
 
-`platform/ServerPlatform.ts` replaces R1 `RunPlatform.ts` and S1 `PeerPlatform.ts`.
+`platform/ServerPlatform.ts` replaces the replica command and peer platforms.
 Run launchers and peer/replica transports import it directly, including the shim's lazy native-invocation import. It owns login shell quoting, Windows batch/PTY invocation,
 private IPC paths and modes, SSH wrappers and conflict-copy names. The worker source
 fragment stays in this boundary because it executes on the primary without module imports.
 Existing `run/RunPlatform.test.ts`, `replicas/ReplicaPlatform.test.ts`, peer-facts,
 IPC and conflict-copy tests exercise the shared implementation.
 
-### Bootstrap and rolling updates (B1)
+### Bootstrap and rolling updates
 
-`MeshBootstrap.ts` reconciles unbound `machines.<name>.bootstrap` entries. The server that can authenticate to the target detects OS/architecture, verifies the mesh-version release against an independently pinned `t3.runtimeChecksums[archive filename]`, installs a platform service, obtains a pairing credential locally on the target, establishes N1 mutual trust and writes a C2 name binding. Individual step statuses are replicated under `mesh.bootstrapStatus`; a target-side lock and an installation sentinel make retries resumable. SSH keys and host pins live beneath the server base directory, apart from managed SSH blocks.
+`MeshBootstrap.ts` reconciles unbound `machines.<name>.bootstrap` entries. The server that can authenticate to the target detects OS/architecture, verifies the mesh-version release against an independently pinned `t3.runtimeChecksums[archive filename]`, installs a platform service, obtains a pairing credential locally on the target, establishes mutual trust and writes a machine name binding. Individual step statuses are replicated under `mesh.bootstrapStatus`; a target-side lock and an installation sentinel make retries resumable. SSH keys and host pins live beneath the server base directory, apart from managed SSH blocks.
 
 Use `t3ctl mesh machines add cloudbox --ssh user@host[:port]`. SSH agent authentication is automatic; `--identity-file PATH` supplies a key path once. Passwords use the existing one-time secret API: request a secret, then call `t3_mesh_bootstrap_credential` with `kind: password`, `secretRef` and `projectId` (CLI flags `--secret-ref`/`--project-id`). Passwords are consumed into memory, passed only through SSH_ASKPASS's child environment and discarded after the attempt. Unused credentials expire after five minutes. They are never layout/config fields or status text. Authentication failure requires a fresh secret. Bootstrap requires service-manager permissions; Linux user services also require permission to enable linger.
 
@@ -793,7 +804,7 @@ protocol-3 launchers, including N-1 launchers, restore the DB immediately instea
 of waiting for the generic preparation timeout. The runtime startup tests assert
 activation → mesh health → launcher commit → lease release.
 
-## W1 upstream v0.1.7 integration
+## Upstream v0.1.7 integration
 
 Upstream migration ids 77–79 are reserved; MeshLayout is 80 and PeerConnections is 81.
 `persistence/Migrations.ts` reconciles legacy fork history before the migrator reads its highest
@@ -820,36 +831,36 @@ Its temporary root honors `TMPDIR` so large SSH transfer artifacts can stay off 
 reconciliation and service restarts must not generate new layout entries for an unchanged
 status; otherwise background reports prevent the mesh from becoming quiescent.
 
-The bed's `convergence.mjs` captures an all-entry HLC barrier for rounds with live
-reports; the default round-one check still requires complete document equality.
+The bed's `convergence.mjs` captures an all-entry HLC barrier for runs with live
+reports; the default core check still requires complete document equality.
 This avoids comparing sequential reads as if they were an atomic distributed snapshot.
-Round 2 provisions SSH through `meshConfig.apply` and probes bound `t3-<name>` aliases;
+Replica acceptance provisions SSH through `meshConfig.apply` and probes bound `t3-<name>` aliases;
 the legacy raw-route/key installer is no longer part of that acceptance path.
 
 Explicit folder comparison in `ProjectReplicaService.place` must use the same v2 ignore policy
 as reconciliation. Otherwise a populated replica that correctly excludes an ignored file is
 rejected when selected again. The existing in-flight-placement test covers that policy boundary.
-Round-three fixtures configure ignores and conflict policies through `meshConfig.apply`; their
+Resilience fixtures configure ignores and conflict policies through `meshConfig.apply`; their
 adoption daemon uses the isolated server HOME, with a guard against the owner's HOME.
 
 Bed conflict scenarios await the resolver’s preserved copy and converged contents; a forced Mutagen flush
-can race its intentional pause. R1 canonicalizes local fixture paths before publishing mappings,
+can race its intentional pause. The replica command fixtures canonicalize local fixture paths before publishing mappings,
 because a process reports its physical cwd beneath a symlinked temp root. Its login fixture writes
 the profile in both the SSH account’s passwd home and the isolated runtime HOME.
-Round three checks lock ownership before destructive operations and leaves shared services untouched
+Resilience checks lock ownership before destructive operations and leaves shared services untouched
 if a host reboot removes the lock. Crash workloads remain 128/256 MiB with mandatory
 active-staging and file-hash assertions.
 Network acceptance also fences RPC operations and tunnel cleanup after a lost lock.
-R1 accepts a run only after automatic conflict resolution, or exit 75 while conflicts remain;
+Replica command acceptance considers a run only after automatic conflict resolution, or exit 75 while conflicts remain;
 both paths must converge to the primary and preserve the actual losing file without fixture repair.
-Round-one diagnostics refresh every node even when earlier snapshots differ, so failure output
+Core diagnostics refresh every node even when earlier snapshots differ, so failure output
 cannot accidentally show an older snapshot for a later node.
 Its legacy-mirror assertion brackets the settings read with two equal materializations on one
 connection; ongoing status reports cannot invalidate an older, separately captured snapshot.
 Raw workspace fixtures allocate fractional ranks instead of reusing `zzzz`; otherwise a routine
 config diff can repair tied ranks and legitimately compete with the concurrent reorder under test.
 
-The round-three daemon fixture keeps its isolated server stopped until the foreground
+The resilience daemon fixture keeps its isolated server stopped until the foreground
 fault-test daemon owns the private lock, then starts the server before killing the captured daemon.
 A socket can still be opening while its daemon already holds the lock; lock ownership is the
 readiness boundary for deciding whether an old daemon needs stopping. The legacy
@@ -869,13 +880,13 @@ Peer callback bridges use scope-owned `runForkWith` fibers and error reporting. 
 aborted `runPromiseWith` can still reject after interruption handling; discarding that Promise
 can terminate Node when an in-flight pipe closes during connection replacement. Awaited RPC
 calls retain their Promise results. The tie-break test cancels an in-flight connector, and
-round three also verifies that crashing one server leaves the others' restart counters unchanged.
+Resilience also verifies that crashing one server leaves the others' restart counters unchanged.
 
 An inbound connection can become visible before its reciprocal grant notification commits
 the link. NAT acceptance waits for both the direct connection and the stored reachable,
 address-free grant before testing the relay.
 
-## Isolated fast scenarios (T1)
+## Isolated fast scenarios
 
 `scripts/mesh-fast/run.sh` owns independent three-server process meshes, private
 homes and OpenSSH servers, and a private Mutagen daemon per replica driver.
@@ -891,7 +902,7 @@ shell hooks before starting fixtures. Otherwise even fixture Git invokes the ins
 server CLI shim, coupling the test environment to the owner’s runtime and adding a
 process launch to every Git call.
 
-### Fast and nightly acceptance (T1)
+### Fast and nightly acceptance (mesh fast suite)
 
 [`scripts/mesh-fast/README.md`](../../scripts/mesh-fast/README.md) maps the realistic
 bed scenarios and CONCEPT §12 to isolated mini-meshes. `pnpm mesh:fast` owns all
@@ -934,7 +945,7 @@ otherwise automatic collision reconciliation can supersede a test's config
 revision; reserve ports for the whole command, since releasing a port-zero socket
 can otherwise hand the same port to another concurrently starting fixture.
 
-C2 binding repair and rename can publish a newer config revision after an apply;
+Machine binding repair and rename can publish a newer config revision after an apply;
 its scenarios wait for the requested binding and equal documents, rather than
 requiring every observer to catch the intermediate revision. Supervisor specs
 are published by rename so fs.watch never parses a truncated JSON file.
@@ -946,9 +957,9 @@ pruning passed payloads, wait for the private Mutagen POSIX lock: its listener c
 before final cache writes finish, so `daemon stop` alone is not an exit barrier.
 `flock` uses a different lock namespace on Linux; the fixture's C helper uses
 `F_SETLKW` so it actually waits for Mutagen's final cache writes.
-Fast R1 commands use real OpenSSH control connections to separate native process
+Fast replica commands use real OpenSSH control connections to separate native process
 startup from SSH's three-second connection budget; the control connections and
-all remote process-tree fault assertions remain real. The realistic R1 variant
+all remote process-tree fault assertions remain real. The realistic replica variant
 uses fresh connections. Provider defaults are disabled in private fixture
 settings, and fake profiles or explicit nightly native profiles are enabled there.
 
@@ -969,7 +980,7 @@ exist. Stopping an auto-started daemon during capture races clients that can sta
 another one. The fixture kills its captured lock owner during staging and verifies
 recovery retains one session.
 
-R1 and bootstrap service ports use the same command-wide allocator as sshd and
+Replica command and bootstrap service ports use the same command-wide allocator as sshd and
 server ports. Probing a free host port separately can select a port already in use
 inside a fixture container, including its private sshd port.
 
@@ -999,11 +1010,11 @@ Native rollout fixtures build their two versions concurrently in independent
 source snapshots, then discard those snapshots after extracting self-contained
 archives. Source-dependent preparation stays inside the agreed six-minute wall budget.
 
-Realistic C2/F1 wrappers retain the runner's short temporary paths. Putting
+Realistic machine-name and fork wrappers retain the runner's short temporary paths. Putting
 Mutagen homes under nested nightly result directories exceeds Unix socket path
 limits; the wrapper's persistent suite log records each private artifact root.
 
-## X1 upgrade regressions
+## Upgrade regressions
 
 Client layout snapshot merges canonicalize legacy project keys before materialization, including
 offline caches; otherwise competing legacy representations can take the primary path away from
@@ -1036,7 +1047,7 @@ The bed guide records the alternate routing and the single-active-identity const
 Independent acceptance profiles set `MESH_E2E_GV_BASE_DIR` and `MESH_E2E_GOR_BASE_DIR`
 consistently for credentials, CLI runners, SSH and daemon probes; mixing bases can query the
 preserved profile while testing another server.
-Round-two acceptance follows project pagination and budgets the full server readiness window;
+Replica acceptance follows project pagination and budgets the full server readiness window;
 its 128 MiB canary now checks both SHA-256 and replica size.
 
 Local SSH pipe sockets disable Nagle: separate small SSH records otherwise wait for TCP delayed
@@ -1129,7 +1140,7 @@ certificate and update origin; `verified-apk.ts` hashes the cached file and gran
 installer read-only access. Legacy unsigned URLs produce no download action. Desktop Settings ›
 About can return from the reduced server UI to trusted local settings without exposing credentials.
 
-T1 integration with the identity migration pairs the actual previous release
+The mesh fast suite integration with the identity migration pairs the actual previous release
 before upgrading one peer; new unbound old clients remain refused. Bootstrap
 fixtures now use private HTTPS trust and pin both host keys and runtime hashes.
 Future-row quarantine must also recover the saved HLC from retained valid rows:
@@ -1158,9 +1169,9 @@ live in `scripts/lib/shell.mjs`, including named command timeouts and buffers; d
 stages that dependency with its remote script. `scripts/lib/managed-sshd.mjs` writes the isolated
 OpenSSH configuration for the delivery bed, platform smoke and both bed runners.
 `scripts/delivery/bed-target.mjs` now both stages fixtures and applies one target, so the former
-bed-setup entry point is gone. Round scripts take neutral `MESH_E2E_*_NAME`,
+bed-setup entry point is gone. Acceptance scripts take neutral `MESH_E2E_*_NAME`,
 `MESH_E2E_DEMO_TITLE` and `MESH_E2E_ORPHAN_LABEL` values instead of rewriting fixture text.
-Round two reads `MESH_E2E_LOCAL_PRIMARY_ROOT`, `MESH_E2E_REVERSE_ROOT`,
+Replica acceptance reads `MESH_E2E_LOCAL_PRIMARY_ROOT`, `MESH_E2E_REVERSE_ROOT`,
 `MESH_E2E_REVERSE_TITLE` and `MESH_E2E_DEMO_TITLE`, matching nightly isolation.
 
 Production layers require delivery admission, mesh config/layout and peer transport. A missing
@@ -1178,7 +1189,9 @@ exponential delays and explicit jitter, while `mesh/retention.ts` stays in real 
 `platform/Download.ts` verifies archive SHA-256 before publishing bytes and preserves each
 caller's stall/body deadline. `platform/readLine.ts` bounds IPC bytes and time and restores
 trailing stream bytes. `run/RunWorker.ts` is compiled TypeScript; its compatibility source is
-generated from the same worker and platform functions. `auth/PeerIdentities.ts` owns legacy
+generated from the same worker and platform functions. `RunWorkerBundle.test.ts` bundles that
+module with the shipped minifier and runs its exec and background-start actions, so a bundle
+that hoists or renames helpers fails before release. `auth/PeerIdentities.ts` owns legacy
 identity upgrade queries; replication reads that service instead of auth tables.
 
 Middleware captures only its required service keys with `Context.make`; capturing the whole

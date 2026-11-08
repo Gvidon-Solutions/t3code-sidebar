@@ -16,6 +16,7 @@ import {
   type ProjectScopedServerSettingKey,
   ProjectSettingsOverrides,
   ProviderDriverKind,
+  type ProviderInstanceConfig,
   ProviderInstanceId,
   type ServerProvider,
   ServerSettings,
@@ -383,8 +384,9 @@ export function applyServerSettingsPatch(
     backgroundActivityProfile,
     backgroundActivity,
     worktreeCleanup: worktreeCleanupPatch,
-    // Merged per entry below; its `null` removals must not reach deepMerge.
+    // Merged per entry below; their `null` removals must not reach deepMerge.
     usageLimitSources: usageLimitSourcesPatch,
+    providerInstances: providerInstancesPatch,
     secretProviders: secretProvidersPatch,
     sourceControlHosts: sourceControlHostsPatch,
     usagePriceOverrides: usagePriceOverridesPatch,
@@ -536,11 +538,11 @@ export function applyServerSettingsPatch(
     ...(backgroundActivity === undefined && backgroundActivityPatch !== undefined
       ? { backgroundActivity: backgroundActivityPatch }
       : {}),
-    ...(patch.providerInstances !== undefined
+    ...(providerInstancesPatch !== undefined
       ? {
-          providerInstances: mergeSettingsEntries(
+          providerInstances: mergeSettingsEntries<ProviderInstanceConfig>(
             current.providerInstances,
-            patch.providerInstances,
+            providerInstancesPatch,
           ),
         }
       : {}),
