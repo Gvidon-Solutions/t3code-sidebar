@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it } from "@effect/vitest";
 import { missingBarrierEntries } from "./convergence.ts";
 
 it("accepts fully collected tombstones while rejecting missing writes, stale resurrection and divergent equal clocks", () => {
