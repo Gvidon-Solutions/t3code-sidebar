@@ -51,7 +51,7 @@ ws_rpc cloudbox meshConfig.get '{}' | jq -e --arg project "$feature_title" '.cur
 end=$((SECONDS+TIMEOUT))
 while :; do
   ws_get cloudbox > "$WORK/N-manual-metadata.json"
-  if jq -e --arg key "$feature_id" --arg env "$CLOUDBOX_ENV" 'any((.config.projectMounts[$key] // [])[]; .environmentId==$env and .transport=="manual" and .projectId!=null and ((.ignores // []) | index("*.cache")!=null))' "$WORK/N-manual-metadata.json" >/dev/null; then break; fi
+  if jq -e --arg key "$feature_id" --arg env "$CLOUDBOX_ENV" 'any((.config.projectMounts[$key] // [])[]; .environmentId==$env and .transport=="manual" and .projectId!=null)' "$WORK/N-manual-metadata.json" >/dev/null; then break; fi
   [ "$SECONDS" -lt "$end" ] || die 'Manual representation metadata did not finish'
   sleep 1
 done
@@ -125,8 +125,8 @@ const [pid,home]=process.argv.slice(2);
 if(!fs.readFileSync(`/proc/${pid}/environ`,'utf8').split('\0').includes(`HOME=${home}`)) throw Error('Foreign daemon HOME must match the isolated server');
 JS
 foreign_mut() { require_bed_lock || return 1; rexec studio env -u MUTAGEN_DATA_DIRECTORY HOME="$foreign_home" MUTAGEN_SSH_PATH="$STUDIO_BASE_DIR/mesh/ssh/bin" "$(mut_bin studio)" "$@"; }
-gor_name=$(ws_rpc studio meshConfig.get '{}' | jq -er --arg env "$WORKER_ENV" '.bindings|to_entries[]|select(.value==$env)|.key')
-foreign_mut sync create --name "$foreign_name" --mode two-way-safe --ignore-vcs --ignore .t3-conflicts "$feature_root-adopt-target" "t3-$gor_name:$feature_root-adopt" > "$WORK/N-foreign-created.log"
+worker_name=$(ws_rpc studio meshConfig.get '{}' | jq -er --arg env "$WORKER_ENV" '.bindings|to_entries[]|select(.value==$env)|.key')
+foreign_mut sync create --name "$foreign_name" --mode two-way-safe --ignore-vcs --ignore .t3-conflicts "$feature_root-adopt-target" "t3-$worker_name:$feature_root-adopt" > "$WORK/N-foreign-created.log"
 foreign_mut sync flush "$foreign_name" > "$WORK/N-foreign-flushed.log"
 foreign_mut sync pause "$foreign_name" > "$WORK/N-foreign-paused.log"
 rexec worker sh -c "printf 'N-adopt-loser' > '$feature_root-adopt/both'"

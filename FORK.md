@@ -1752,3 +1752,27 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** Coverage and operation: `scripts/mesh-fast/README.md`; timers:
   `apps/server/src/mesh/MeshTiming.ts`; nightly:
   `scripts/mesh-e2e/{acceptance,install-nightly}.sh`; CI: `mesh-fast.yml`.
+
+### 2026-11-07 — X1 post-release upgrade fixes
+
+- **What.** Preserves project machine chips through legacy cache upgrades, avoids false offline
+  footer reports, uses existing SSH hosts for remote commands, preserves replica ignores and
+  seeds code-only defaults for new meshes. Managed instructions identify their own machine.
+  Interrupted automatic conflict resolution recovers its owned pause without resuming user pauses.
+  Legacy settings writes preserve concurrent workspace renames while repairing sort collisions
+  and keep separate RPC-client baselines advanced from the merged response.
+  Bed uploads share the configured SSH/sudo transport when the third node moves hosts.
+  Acceptance profiles isolate state while preserving the shared bed's existing data.
+  Local SSH sockets send split records promptly instead of waiting for delayed TCP ACKs.
+- **How.** Canonicalizes cached layout keys, prefers live connectivity, resolves migration titles
+  from the project catalog, and keeps representation ignores until config owns every pattern;
+  clearing that legacy copy allows later ignore removals. Ignore plans leave native
+  representations untouched when no legacy ignore field exists.
+- **Where.** Client-runtime mesh state, mobile fixtures, server run/mesh/replica services,
+  contracts defaults, shared config migration and mesh acceptance scripts.
+
+### 2026-11-08 — X1 bound SSH routes during adoption
+
+- **What:** Existing sync sessions remain adoptable after machine display titles change.
+- **How:** Resolve their endpoints through the stable machine bindings and managed or existing SSH hosts; ambiguous hosts remain rejected.
+- **Where:** `apps/server/src/replicas/adoptionModel.ts`, `ProjectReplicaService.ts` and their tests.

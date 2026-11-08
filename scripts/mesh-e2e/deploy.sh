@@ -30,14 +30,18 @@ cloudbox_ssh "install -d -m 700 '$CLOUDBOX_DIR' '$CLOUDBOX_DATA'"
 
 log "transferring image $IMAGE to the VPS"
 docker save "$IMAGE" | gzip -1 | cloudbox_ssh 'gunzip | docker load'
-sed "s|image: t3-mesh-e2e:dev|image: $IMAGE|" "$MESH_DIR/compose.yaml" | cloudbox_ssh "cat > '$CLOUDBOX_DIR/compose.yaml'"
+sed "s|t3-mesh-e2e:dev|$IMAGE|" "$BED_COMPOSE_TEMPLATE" | cloudbox_ssh "cat > '$CLOUDBOX_DIR/compose.yaml'"
 
 log "preserving VPS temporary project folders across container recreation"
 cloudbox_ssh 'bash -s' <<EOF
 set -euo pipefail
 install -d -m 1777 '$CLOUDBOX_DIR/tmp' '$CLOUDBOX_DIR/var-tmp'
 if docker container inspect t3-mesh-e2e >/dev/null 2>&1; then
-  docker exec t3-mesh-e2e sh -c 'printf "%s\\n" "$COMMIT" > /tmp/N-deploy-$COMMIT_SHORT'
+  if [ "\$(docker inspect -f '{{.State.Running}}' t3-mesh-e2e)" = true ]; then
+    docker exec t3-mesh-e2e sh -c 'printf "%s\\n" "$COMMIT" > /tmp/N-deploy-$COMMIT_SHORT'
+  else
+    printf '%s\n' '$COMMIT' > '$CLOUDBOX_DIR/tmp/N-deploy-$COMMIT_SHORT'
+  fi
   mounted=\$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/tmp"}}{{.Source}}{{end}}{{end}}' t3-mesh-e2e)
   var_mounted=\$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/tmp"}}{{.Source}}{{end}}{{end}}' t3-mesh-e2e)
   if [ "\$mounted" != '$CLOUDBOX_DIR/tmp' ] || [ "\$var_mounted" != '$CLOUDBOX_DIR/var-tmp' ]; then
@@ -173,7 +177,7 @@ if [ "$current_ref" != "runtime/versions/$BUILD_VERSION" ]; then
   if ! worker_ssh "test -n \"\$(find ~/.config/systemd/user -maxdepth 1 -name '$WORKER_UNIT.bak-t3-mesh-e2e-*' -print -quit)\""; then
     worker_ssh "cp -p ~/.config/systemd/user/$WORKER_UNIT ~/.config/systemd/user/$WORKER_UNIT.bak-t3-mesh-e2e-\$(date -u +%Y%m%dT%H%M%SZ)"
   fi
-  worker_ssh "sed -i 's|^ExecStart=.*|ExecStart=%h/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 serve --base-dir %h/.t3-sidebar-server --host 127.0.0.1 --port $WORKER_PORT --no-browser|' ~/.config/systemd/user/$WORKER_UNIT"
+  worker_ssh "sed -i 's|^ExecStart=.*|ExecStart=%h/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3 serve --base-dir $WORKER_BASE_DIR --host 127.0.0.1 --port $WORKER_PORT --no-browser|' ~/.config/systemd/user/$WORKER_UNIT"
 fi
 worker_ssh "systemctl --user daemon-reload && systemctl --user reset-failed $WORKER_UNIT && systemctl --user restart $WORKER_UNIT" >/dev/null
 WORKER_STOPPED=0

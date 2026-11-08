@@ -68,12 +68,34 @@ export async function remoteRun(
     shell: resolved.shell,
     stdio: ["pipe", "pipe", "pipe"],
   });
+  const closed = new Promise<number | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
   let done: { code: number; ignored: readonly string[] } | undefined;
   let id: string | undefined;
   const ignored: string[] = [];
   let reason = "";
   let fatal = false;
   let protocolError: Error | undefined;
+  let forcedClose = false;
+  let closeDeadline: ReturnType<typeof setTimeout> | undefined;
+  let consuming = false;
+  // A ProxyCommand descendant can retain stdio after SSH exits; drain output before closing it.
+  const closeIdlePipes = () => {
+    closeDeadline = setTimeout(() => {
+      if (consuming || child.stdout.readableLength > 0) {
+        closeIdlePipes();
+        return;
+      }
+      forcedClose = true;
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.stderr.destroy();
+    }, 1000);
+    closeDeadline.unref();
+  };
+  child.once("exit", closeIdlePipes);
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let ready = request.action !== "exec";
   const pendingControls: object[] = [];
@@ -152,14 +174,20 @@ export async function remoteRun(
         while ((boundary = pending.indexOf("\n")) >= 0) {
           const line = pending.slice(0, boundary);
           pending = pending.slice(boundary + 1);
-          await consumeLine(line);
+          consuming = true;
+          try {
+            await consumeLine(line);
+          } finally {
+            consuming = false;
+          }
         }
         if (pending.length > 1024 * 1024) throw new Error("Run frame exceeds its size limit.");
       }
       pending += decoder.end();
       if (pending) await consumeLine(pending);
     } catch (cause) {
-      protocolError = new Error("The primary returned an invalid run frame.", { cause });
+      if (!forcedClose)
+        protocolError = new Error("The primary returned an invalid run frame.", { cause });
       child.kill("SIGTERM");
     }
   })();
@@ -176,10 +204,7 @@ export async function remoteRun(
   process.on("SIGTERM", terminate);
   options.signal?.addEventListener("abort", abort, { once: true });
   try {
-    const status = await new Promise<number | null>((resolve, reject) => {
-      child.once("error", reject);
-      child.once("close", resolve);
-    });
+    const status = await closed;
     await reading;
     if (cancelled !== undefined) return { code: cancelled, ignored: [] };
     if (protocolError) throw protocolError;
@@ -191,6 +216,7 @@ export async function remoteRun(
     }
     return { ...done, ...(id ? { id } : {}) };
   } finally {
+    clearTimeout(closeDeadline);
     clearInterval(heartbeat);
     if (options.tty && input?.isTTY) input.setRawMode(raw);
     input?.removeListener("data", data);

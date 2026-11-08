@@ -117,6 +117,15 @@ const ws = new WebSocket(
 const pending = new Map();
 let seq = 0;
 let connected = false;
+ws.addEventListener("close", () => {
+  connected = false;
+  for (const [id, request] of pending) {
+    if (request.matches) {
+      pending.delete(id);
+      request.resolve({ ok: false, error: "replica stream closed before the requested transition" });
+    }
+  }
+});
 ws.onmessage = (event) => {
   for (const line of String(event.data).split("\n")) {
     if (!line.trim()) continue;
@@ -128,7 +137,21 @@ ws.onmessage = (event) => {
     const request = pending.get(message.requestId);
     if (!request) continue;
     if (message._tag === "Chunk") {
-      request.chunks.push(...message.values);
+      if (request.matches) {
+        request.chunks = message.values;
+        if (!request.ready) {
+          request.ready = true;
+          writeFileSync(request.readyFile, "ready");
+          ws.send(JSON.stringify({ _tag: "Ack", requestId: message.requestId }));
+          continue;
+        }
+        if (!message.values.some(request.matches)) {
+          ws.send(JSON.stringify({ _tag: "Ack", requestId: message.requestId }));
+          continue;
+        }
+      } else {
+        request.chunks.push(...message.values);
+      }
       if (request.firstChunk) {
         pending.delete(message.requestId);
         ws.send(JSON.stringify({ _tag: "Interrupt", requestId: message.requestId }));
@@ -138,7 +161,9 @@ ws.onmessage = (event) => {
       }
     } else if (message._tag === "Exit") {
       pending.delete(message.requestId);
-      if (request.firstChunk && message.exit._tag === "Success" && request.chunks.length > 0) {
+      if (request.matches) {
+        request.resolve({ ok: false, error: "replica stream ended before the requested transition" });
+      } else if (request.firstChunk && message.exit._tag === "Success" && request.chunks.length > 0) {
         request.resolve({ ok: true, value: request.chunks });
       } else if (message.exit._tag === "Success") {
         request.resolve({ ok: true, value: message.exit.value });
@@ -165,7 +190,7 @@ try {
 }
 
 let nextId = 0;
-const rpc = (method, payload = {}, { first = false } = {}) =>
+const rpc = (method, payload = {}, { first = false, matches, readyFile } = {}) =>
   new Promise((resolve, reject) => {
     if (!connected) return reject(new Error("websocket closed"));
     const id = String(nextId++);
@@ -176,6 +201,9 @@ const rpc = (method, payload = {}, { first = false } = {}) =>
     pending.set(id, {
       chunks: [],
       firstChunk: first,
+      matches,
+      readyFile,
+      ready: false,
       resolve: (value) => {
         clearTimeout(timer);
         resolve(value);
@@ -255,6 +283,15 @@ try {
     const method = argv[1];
     const value = await call(method, parseJson(argv[2]), { first: argv.includes("--first") });
     console.log(JSON.stringify(value, null, 2));
+  } else if (command === "wait-replica") {
+    const [logicalKey, environmentId, state, readyFile] = argv.slice(1);
+    if (!logicalKey || !environmentId || !state || !readyFile) fail("wait-replica needs logical key, environment id, state and ready file");
+    const value = await call("replicas.status", {}, {
+      first: true,
+      readyFile,
+      matches: (snapshot) => snapshot.replicas.some((row) => row.logicalKey === logicalKey && row.environmentId === environmentId && row.state === state),
+    });
+    console.log(JSON.stringify(value, null, 2));
   } else if (command === "get") {
     const value = await snapshot();
     if (canonical(materialize(value.document)) !== canonical(value.config)) fail("server config differs from materialize(document)");
@@ -313,12 +350,13 @@ descriptor_version() { # descriptor_version <origin>
 }
 
 mint_token_once() { # mint_token_once studio|worker|cloudbox
-  local ttl=${MESH_E2E_SESSION_TTL:-30m} quoted_ttl
+  local ttl=${MESH_E2E_SESSION_TTL:-30m} quoted_ttl quoted_base
   printf -v quoted_ttl '%q' "$ttl"
+  printf -v quoted_base '%q' "$WORKER_BASE_DIR"
   case "$1" in
     studio) "$STUDIO_RUNTIME_ROOT/$BUILD_VERSION/t3" auth session issue --base-dir "$STUDIO_BASE_DIR" \
       --ttl "$ttl" --label mesh-e2e-round1 --token-only 2>/dev/null ;;
-    worker) worker_ssh "$WORKER_BIN auth session issue --base-dir ~/.t3-sidebar-server --ttl $quoted_ttl \
+    worker) worker_ssh "$WORKER_BIN auth session issue --base-dir $quoted_base --ttl $quoted_ttl \
       --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
     cloudbox) cloudbox_ssh "docker exec t3-mesh-e2e node $CLOUDBOX_BIN auth session issue \
       --base-dir /home/t3/.t3 --ttl $quoted_ttl --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
@@ -335,11 +373,12 @@ mint_token() { # mint_token studio|worker|cloudbox — a just-restarted server c
 }
 
 pair_code() { # pair_code studio|worker|cloudbox
-  local out
+  local out quoted_base
+  printf -v quoted_base '%q' "$WORKER_BASE_DIR"
   case "$1" in
     studio) out="$("$STUDIO_RUNTIME_ROOT/$BUILD_VERSION/t3" auth pairing create --base-dir "$STUDIO_BASE_DIR" \
       --ttl 20m --label mesh-e2e-link --json 2>/dev/null)" ;;
-    worker) out="$(worker_ssh "$WORKER_BIN auth pairing create --base-dir ~/.t3-sidebar-server \
+    worker) out="$(worker_ssh "$WORKER_BIN auth pairing create --base-dir $quoted_base \
       --ttl 20m --label mesh-e2e-link --json" 2>/dev/null)" ;;
     cloudbox) out="$(cloudbox_ssh "docker exec t3-mesh-e2e node $CLOUDBOX_BIN auth pairing create \
       --base-dir /home/t3/.t3 --ttl 20m --label mesh-e2e-link --json" 2>/dev/null)" ;;
@@ -541,31 +580,31 @@ ensure_link studio worker "$WORKER_ORIGIN" "$WORKER_ENV"
 ensure_link worker cloudbox "$CLOUDBOX_ORIGIN" "$CLOUDBOX_ENV"
 
 # studio↔cloudbox must stay unlinked so traffic has to go through worker.
-gv_has_vps="$(link_exists studio "$CLOUDBOX_ENV" && echo yes || echo no)"
-vps_has_gv="$(link_exists cloudbox "$STUDIO_ENV" && echo yes || echo no)"
-if [ "$gv_has_vps" = yes ]; then
+studio_has_vps="$(link_exists studio "$CLOUDBOX_ENV" && echo yes || echo no)"
+cloudbox_has_gv="$(link_exists cloudbox "$STUDIO_ENV" && echo yes || echo no)"
+if [ "$studio_has_vps" = yes ]; then
   ws_rpc studio peerLinks.unlink "{\"environmentId\":\"$CLOUDBOX_ENV\"}" >/dev/null 2>&1
-  gv_has_vps=no
+  studio_has_vps=no
 fi
-if [ "$vps_has_gv" = yes ]; then
+if [ "$cloudbox_has_gv" = yes ]; then
   ws_rpc cloudbox peerLinks.unlink "{\"environmentId\":\"$STUDIO_ENV\"}" >/dev/null 2>&1
-  vps_has_gv=no
+  cloudbox_has_gv=no
 fi
-check "no studio↔cloudbox link" test "$gv_has_vps$vps_has_gv" = nono
+check "no studio↔cloudbox link" test "$studio_has_vps$cloudbox_has_gv" = nono
 
 # Wait until both links answer; the mesh exchange then starts on its own.
 link_start="$(now_ms)"
 links_ok=0
 for _ in $(seq 1 "$TIMEOUT"); do
-  gv_ok="$(ws_rpc studio peerLinks.list '{}' 2>/dev/null | jq -r --arg id "$WORKER_ENV" '.links[] | select(.environmentId == $id) | .status' || true)"
-  gor_ok="$(ws_rpc worker peerLinks.list '{}' 2>/dev/null | jq -r --arg id "$CLOUDBOX_ENV" '.links[] | select(.environmentId == $id) | .status' || true)"
-  if [ "$gv_ok" = reachable ] && [ "$gor_ok" = reachable ]; then links_ok=1; break; fi
+  studio_ok="$(ws_rpc studio peerLinks.list '{}' 2>/dev/null | jq -r --arg id "$WORKER_ENV" '.links[] | select(.environmentId == $id) | .status' || true)"
+  worker_ok="$(ws_rpc worker peerLinks.list '{}' 2>/dev/null | jq -r --arg id "$CLOUDBOX_ENV" '.links[] | select(.environmentId == $id) | .status' || true)"
+  if [ "$studio_ok" = reachable ] && [ "$worker_ok" = reachable ]; then links_ok=1; break; fi
   sleep 1
 done
 if [ "$links_ok" = 1 ]; then
   record_pass "links reachable" "studio→worker and worker→cloudbox in $(elapsed_ms "$link_start")ms"
 else
-  record_fail "links reachable" "studio→worker=$gv_ok worker→cloudbox=$gor_ok"
+  record_fail "links reachable" "studio→worker=$studio_ok worker→cloudbox=$worker_ok"
 fi
 
 # ---------------------------------------------------------------------------

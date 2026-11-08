@@ -28,7 +28,7 @@ systemctl --user disable --now t3-mesh-e2e.service >/dev/null 2>&1 || true
 systemctl --user reset-failed t3-mesh-e2e-tunnels.service t3-mesh-e2e.service >/dev/null 2>&1 || true
 rm -f ~/.config/systemd/user/t3-mesh-e2e-tunnels.service ~/.config/systemd/user/t3-mesh-e2e.service
 rm -f ~/.local/share/t3-mesh-e2e/tunnels-worker.sh
-rm -f ~/.ssh/t3_mesh_e2e_vps_known_hosts
+rm -f ~/.ssh/t3_mesh_e2e_cloudbox_known_hosts
 systemctl --user daemon-reload
 EOF
 

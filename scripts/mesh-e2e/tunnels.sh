@@ -17,9 +17,9 @@ set -euo pipefail
 
 STUDIO_RUNNER="$HOME/.local/share/t3-mesh-e2e/tunnels-studio.sh"
 WORKER_RUNNER='$HOME/.local/share/t3-mesh-e2e/tunnels-worker.sh'
-WORKER_CLOUDBOX_KNOWN='$HOME/.ssh/t3_mesh_e2e_vps_known_hosts'
+WORKER_CLOUDBOX_KNOWN='$HOME/.ssh/t3_mesh_e2e_cloudbox_known_hosts'
 
-write_gv_runner() {
+write_studio_runner() {
   mkdir -p "$(dirname "$STUDIO_RUNNER")"
   cat >"$STUDIO_RUNNER" <<EOF
 #!/usr/bin/env bash
@@ -44,7 +44,7 @@ EOF
   chmod 755 "$STUDIO_RUNNER"
 }
 
-write_gv_unit() {
+write_studio_unit() {
   mkdir -p "$HOME/.config/systemd/user"
   cat >"$HOME/.config/systemd/user/$STUDIO_TUNNEL_UNIT" <<EOF
 [Unit]
@@ -64,7 +64,7 @@ WantedBy=default.target
 EOF
 }
 
-write_gor_runner() {
+write_worker_runner() {
   worker_ssh 'mkdir -p ~/.local/share/t3-mesh-e2e'
   worker_ssh "cat > $WORKER_RUNNER" <<EOF
 #!/usr/bin/env bash
@@ -84,7 +84,7 @@ EOF
   worker_ssh "chmod 755 $WORKER_RUNNER"
 }
 
-write_gor_unit() {
+write_worker_unit() {
   worker_ssh "mkdir -p ~/.config/systemd/user && cat > ~/.config/systemd/user/$WORKER_TUNNEL_UNIT" <<EOF
 [Unit]
 Description=T3 Mesh E2E worker tunnels
@@ -103,7 +103,7 @@ WantedBy=default.target
 EOF
 }
 
-prepare_gor_vps_known_hosts() {
+prepare_worker_cloudbox_known_hosts() {
   local known
   known="$(ssh-keygen -F "$CLOUDBOX_HOST" -f "$HOME/.local/share/vpn-ops/known_hosts" 2>/dev/null || true)"
   if [ -z "$known" ]; then
@@ -152,18 +152,18 @@ container_ssh_check() {
 
 cmd_up() {
   log "preparing worker VPS host key"
-  prepare_gor_vps_known_hosts
+  prepare_worker_cloudbox_known_hosts
 
   log "writing studio tunnel unit"
-  write_gv_runner
-  write_gv_unit
+  write_studio_runner
+  write_studio_unit
   systemctl --user daemon-reload
   systemctl --user enable --now "$STUDIO_TUNNEL_UNIT" >/dev/null
   systemctl --user restart "$STUDIO_TUNNEL_UNIT"
 
   log "writing worker tunnel unit"
-  write_gor_runner
-  write_gor_unit
+  write_worker_runner
+  write_worker_unit
   worker_ssh "systemctl --user daemon-reload && systemctl --user enable --now $WORKER_TUNNEL_UNIT && systemctl --user restart $WORKER_TUNNEL_UNIT" >/dev/null
 
   log "waiting for local forwards"

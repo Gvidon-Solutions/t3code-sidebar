@@ -17,15 +17,25 @@ it("migrates once by value and preserves concurrent fields when an old client ed
   expect(materialize(migrated)).not.toHaveProperty("meshAuthority");
   const concurrent = merge(migrated, {
     "proj/example.title": { v: "Shared", h: "0000000000001.00000.cloudbox" },
+    "repstatus/example/studio": {
+      v: { state: "paused", updatedAt: "", resolvingConflicts: "owned-session" },
+      h: "0000000000001.00000.studio",
+    },
   });
   const before = materialize(concurrent);
   const legacyUpdate = {
     ...before,
     projectTitles: {},
+    projectMountStatus: { example: { studio: { state: "watching" as const, updatedAt: "" } } },
     quietAfterDays: 11,
     meshAuthority: "laptop",
   };
   const delta = legacySettingsDiff(before, legacyUpdate, concurrent, "0000000000002.00000.studio");
   expect(Object.keys(delta)).toEqual(["ws.quietAfterDays"]);
-  expect(materialize(merge(concurrent, delta)).projectTitles.example).toBe("Shared");
+  const result = materialize(merge(concurrent, delta));
+  expect(result.projectTitles.example).toBe("Shared");
+  expect(result.projectMountStatus.example?.studio).toMatchObject({
+    state: "paused",
+    resolvingConflicts: "owned-session",
+  });
 });

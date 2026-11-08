@@ -1,4 +1,8 @@
-import { MeshConfigDocument, MeshConfigRevision } from "@t3tools/contracts";
+import {
+  DEFAULT_REPLICA_IGNORES,
+  MeshConfigDocument,
+  MeshConfigRevision,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { parse, stringify } from "yaml";
 
@@ -18,6 +22,7 @@ export const defaultAgentAliases = () => ({
 export const defaults = (): MeshConfigDocument => ({
   schema: 1,
   machines: {},
+  replicas: { ignore: [...DEFAULT_REPLICA_IGNORES] },
   agents: { aliases: defaultAgentAliases() },
 });
 const decodeConfig = Schema.decodeUnknownSync(MeshConfigDocument, { errors: "all" });

@@ -10,7 +10,8 @@ unset MESH_E2E_HELPERS_ONLY
 export MESH_E2E_SSH_CONTROL_DIR="${MESH_E2E_SSH_CONTROL_DIR:-$WORK/round2-ssh}"
 mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
 chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
-TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-120}
+TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-900}
+RPC_TIMEOUT=${MESH_E2E_ROUND2_RPC_TIMEOUT:-900}
 PASS=0; FAIL=0; FAILED=()
 CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
 for m in "${BED_MACHINES[@]}"; do
@@ -31,9 +32,21 @@ ctl() {
  local machine=$1; shift
  local base="$STUDIO_BASE_DIR"
  case "$machine" in worker) base="$WORKER_BASE_DIR";; cloudbox) base="$CLOUDBOX_BASE_DIR";; esac
- XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" T3CTL_T3_BIN="$WORK/t3-$machine" timeout 180 node "$CTL" "$@"
+ XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" T3CTL_T3_BIN="$WORK/t3-$machine" timeout "$RPC_TIMEOUT" node "$CTL" "$@"
 }
 tool() { local machine=$1 name=$2; shift 2; ctl "$machine" tool "$name" "$@"; }
+all_projects() {
+ local machine=$1 cursor merged="$WORK/all-projects-$1.json" next="$WORK/next-projects-$1.json"
+ tool "$machine" t3_project_list '{"limit":100}' > "$merged" || return
+ cursor=$(jq -r '.nextCursor // empty' "$merged") || return
+ while [ -n "$cursor" ]; do
+  tool "$machine" t3_project_list "$(jq -nc --argjson cursor "$cursor" '{limit:100,cursor:$cursor}')" > "$next" || return
+  jq -s '{projects:(.[0].projects+.[1].projects),nextCursor:.[1].nextCursor}' "$merged" "$next" > "$merged.tmp" || return
+  mv "$merged.tmp" "$merged" || return
+  cursor=$(jq -r '.nextCursor // empty' "$merged") || return
+ done
+ cat "$merged"
+}
 probe() {
  local name=$1; shift
  local start; start=$(now_ms)
@@ -67,13 +80,14 @@ wait_converged 'routes converge'
 probe route-studio-worker wait_ssh ssh -F "$STUDIO_BASE_DIR/home/.ssh/config" -o BatchMode=yes -o ConnectTimeout=10 "t3-$WORKER_NAME" hostname
 probe route-cloudbox-worker wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$WORKER_NAME" hostname
 probe route-cloudbox-studio wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$STUDIO_NAME" hostname
-probe route-worker-cloudbox wait_ssh worker_ssh "ssh -o BatchMode=yes -o ConnectTimeout=10 t3-$CLOUDBOX_NAME hostname"
+printf -v worker_ssh_config '%q' "$WORKER_BASE_DIR/home/.ssh/config"
+probe route-worker-cloudbox wait_ssh worker_ssh "ssh -F $worker_ssh_config -o BatchMode=yes -o ConnectTimeout=10 t3-$CLOUDBOX_NAME hostname"
 if ! ws_rpc worker peerLinks.list '{}' | jq -e --arg e "$STUDIO_ENV" '.links[] | select(.environmentId==$e and .access=="full-access")' > "$WORK/worker-studio-link.json"; then
  code=$(pair_code studio)
  probe link-worker-studio ws_rpc worker peerLinks.link "$(jq -nc --arg code "$code" --arg e "$STUDIO_ENV" '{url:"http://127.0.0.1:13795",pairingCode:$code,access:"full-access",expectedEnvironmentId:$e}')"
 fi
 
-probe projects tool worker t3_project_list '{"limit":100}'
+probe projects all_projects worker
 worker_ssh "mkdir -p '$BED_DEMO_ROOT/node_modules'; git init -q '$BED_DEMO_ROOT'; touch '$BED_DEMO_ROOT/README.md'"
 DEMO=$(jq -r --arg root "$BED_DEMO_ROOT" '.. | objects | select(.workspaceRoot? == $root) | .id' "$WORK/projects.out" | head -1)
 if [ -z "$DEMO" ]; then
@@ -85,10 +99,10 @@ KEY=$(jq -r .logicalKey "$WORK/demo-primary.json")
 MARK="${MESH_E2E_RUN_PREFIX:-round2}-$RUN_TS"
 LAUNCH=$(jq -nc --arg p "$DEMO" --arg e "$CLOUDBOX_ENV" --arg key "$MARK-a" --arg msg "In your current working directory on this VPS replica, use a local shell command to append the exact line $MARK-a to README.md. Mutagen syncs this local edit back to worker. Do not access the primary, request a machine link, run git, or create other files. Finish after making the local edit." '{projectId:$p,environmentId:$e,clientRequestId:$key,title:$key,message:$msg,modelSelection:{instanceId:"codex",model:"gpt-6-luna"},runtimeMode:"full-access"}')
 wait_replica() {
- local m=$1 key=$2 env=$3 state=$4 deadline=$((SECONDS+TIMEOUT))
+ local m=$1 key=$2 env=$3 state=$4 copies=${5:-} deadline=$((SECONDS+TIMEOUT))
  while [ "$SECONDS" -lt "$deadline" ]; do
   ws_rpc "$m" replicas.status '{}' --first > "$WORK/status-$m.json" || return
-  if jq -e --arg k "$key" --arg e "$env" --arg s "$state" '.. | objects | select(.logicalKey?==$k and .environmentId?==$e and .state?==$s)' "$WORK/status-$m.json" >/dev/null; then cat "$WORK/status-$m.json"; return 0; fi
+  if jq -e --arg k "$key" --arg e "$env" --arg s "$state" --arg copies "$copies" '.. | objects | select(.logicalKey?==$k and .environmentId?==$e and .state?==$s and ($copies=="" or (.conflictCopies.path? // "")!=""))' "$WORK/status-$m.json" >/dev/null; then cat "$WORK/status-$m.json"; return 0; fi
   sleep 2
  done
  cat "$WORK/status-$m.json"; return 1
@@ -104,6 +118,16 @@ if wait "$launch_pid"; then record_pass a-mcp-launch "$(elapsed_ms "$launch_star
 probe a-machines tool worker t3_project_machines "$(jq -nc --arg p "$KEY" '{project:$p}')"
 VPATH=$(jq -r --arg e "$CLOUDBOX_ENV" '.representations[]? | select(.environmentId==$e) | .path' "$WORK/a-machines.out")
 probe a-watching wait_replica cloudbox "$KEY" "$CLOUDBOX_ENV" watching
+transfer_checksum() {
+ local source_file quoted_source expected actual
+ source_file=$(jq -r --arg e "$WORKER_ENV" '.representations[] | select(.environmentId==$e) | .path' "$WORK/a-machines.out")/round2-transfer.bin
+ printf -v quoted_source '%q' "$source_file"
+ expected=$(worker_ssh "sha256sum $quoted_source" | cut -d' ' -f1) || return
+ actual=$(vexec sha256sum "$VPATH/round2-transfer.bin" | cut -d' ' -f1) || return
+ printf '128 MiB primary=%s replica=%s\n' "$expected" "$actual"
+ [ "$expected" = "$actual" ] && [ "$(vexec stat -c %s "$VPATH/round2-transfer.bin")" = 134217728 ]
+}
+probe a-transfer-checksum transfer_checksum
 probe a-installer vexec sh -c 'test "$(/home/t3/.t3/bin/mutagen version)" = 0.18.1 && sha256sum /home/t3/.t3/bin/mutagen' 
 probe a-excludes vexec sh -c "test -f '$VPATH/README.md' && test ! -e '$VPATH/.git' && test ! -e '$VPATH/node_modules'"
 wait_edit() {
@@ -120,7 +144,7 @@ probe b-cli-launch ctl worker new --project "$BED_DEMO_TITLE" --on "$CLOUDBOX_EN
 probe b-agent-edit wait_edit "$MARK-b"
 # Reverse source endpoint runs through docker exec; no ssh daemon in the container.
 probe c-cloudbox-source vexec sh -c 'mkdir -p "$1"; cd "$1"; test -d .git || git init -q; printf "reverse primary\n" > README.md; mkdir -p node_modules; touch node_modules/excluded' sh "$BED_REVERSE_ROOT"
-probe c-projects tool cloudbox t3_project_list '{"limit":100}'
+probe c-projects all_projects cloudbox
 cp "$WORK/c-projects.out" "$WORK/cloudbox-projects.json"
 REV=$(jq -r --arg root "$BED_REVERSE_ROOT" '.. | objects | select(.workspaceRoot?==$root) | .id' "$WORK/cloudbox-projects.json" | head -1)
 if [ -z "$REV" ]; then
@@ -214,7 +238,7 @@ probe e-alpha worker_ssh "printf 'alpha-$MARK\n' > $BED_DEMO_ROOT/round2-conflic
 probe e-beta vexec sh -c "printf 'beta-$MARK\n' > '$VPATH/round2-conflict.txt'"
 probe e-resume mut sync resume "$SESSION"
 probe e-enable ws_rpc cloudbox server.updateSettings '{"patch":{"replicasEnabled":true}}'
-probe e-recovered wait_replica cloudbox "$KEY" "$CLOUDBOX_ENV" watching
+probe e-recovered wait_replica cloudbox "$KEY" "$CLOUDBOX_ENV" watching copies
 probe e-flush mut sync flush "$SESSION"
 probe e-content vexec grep -F "alpha-$MARK" "$VPATH/round2-conflict.txt"
 probe e-preserved-loser vexec sh -c 'find "$1/.t3-conflicts" -type f -name round2-conflict.txt -exec cat {} \; | grep -F "$2"' sh "$VPATH" "beta-$MARK"
@@ -225,7 +249,7 @@ probe f-restart cloudbox_ssh 'docker restart t3-mesh-e2e'
 probe f-health wait_health "$CLOUDBOX_ORIGIN" 60
 probe f-recovered wait_replica cloudbox "$KEY" "$CLOUDBOX_ENV" watching
 probe f-sessions mut sync list --label-selector t3-logical --template '{{json .}}'
-probe f-projects tool cloudbox t3_project_list '{"limit":100}'
+probe f-projects all_projects cloudbox
 probe f-one-project jq -e --arg path "$VPATH" '[.. | objects | select(.workspaceRoot?==$path)] | length==1' "$WORK/f-projects.out"
 probe f-one-session jq -e --arg s "$SESSION" '[.[]|select(.name==$s)]|length==1' "$WORK/f-sessions.out"
 STUDIO_PROJECT=$(jq -r --arg e "$STUDIO_ENV" --arg k "$KEY" '.config.projectMounts[$k][] | select(.environmentId==$e) | .projectId' "$WORK/grouping.json")
@@ -260,7 +284,7 @@ wait_gone() {
 }
 probe g-terminated wait_gone
 probe g-files-kept vexec test -f "$VPATH/README.md"
-probe g-project-list tool cloudbox t3_project_list '{"limit":100}'
+probe g-project-list all_projects cloudbox
 probe g-project-kept jq -e --arg path "$VPATH" '.. | objects | select(.workspaceRoot?==$path)' "$WORK/g-project-list.out"
 probe g-orphan-create vexec sh -c 'mkdir -p /home/t3/round2-orphan-a /home/t3/round2-orphan-b; export MUTAGEN_DATA_DIRECTORY=/home/t3/.t3/mutagen; if /home/t3/.t3/bin/mutagen sync list --label-selector t3-env=orphan --template "{{json .}}" | jq -e "length > 0"; then exit 0; fi; /home/t3/.t3/bin/mutagen sync create --name round2-orphan -l t3-logical=deadbeef -l t3-env=orphan /home/t3/round2-orphan-a /home/t3/round2-orphan-b'
 wait_orphan() {

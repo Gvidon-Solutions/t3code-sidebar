@@ -49,18 +49,18 @@ echo "runtime $BUILD_VERSION"
 echo ""
 
 echo "== units / container =="
-gv_state="$(systemctl --user is-active "$STUDIO_UNIT" 2>/dev/null || true)"
-gv_tunnel_state="$(systemctl --user is-active "$STUDIO_TUNNEL_UNIT" 2>/dev/null || true)"
-gor_state="$(worker_ssh "systemctl --user is-active $WORKER_UNIT" 2>/dev/null || true)"
-gor_tunnel_state="$(worker_ssh "systemctl --user is-active $WORKER_TUNNEL_UNIT" 2>/dev/null || true)"
-vps_state="$(cloudbox_ssh "docker inspect -f '{{.State.Status}} {{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}' t3-mesh-e2e" 2>/dev/null || true)"
-[ "$gv_state" = active ] && pass "studio server unit $STUDIO_UNIT active" || fail "studio server unit $STUDIO_UNIT: ${gv_state:-missing}"
-[ "$gv_tunnel_state" = active ] && pass "studio tunnel unit active" || fail "studio tunnel unit: ${gv_tunnel_state:-missing}"
-[ "$gor_state" = active ] && pass "worker server unit $WORKER_UNIT active" || fail "worker server unit $WORKER_UNIT: ${gor_state:-missing}"
-[ "$gor_tunnel_state" = active ] && pass "worker tunnel unit active" || fail "worker tunnel unit: ${gor_tunnel_state:-missing}"
-case "$vps_state" in
-  running*) pass "VPS container t3-mesh-e2e $vps_state" ;;
-  *) fail "VPS container t3-mesh-e2e: ${vps_state:-missing}" ;;
+studio_state="$(systemctl --user is-active "$STUDIO_UNIT" 2>/dev/null || true)"
+studio_tunnel_state="$(systemctl --user is-active "$STUDIO_TUNNEL_UNIT" 2>/dev/null || true)"
+worker_state="$(worker_ssh "systemctl --user is-active $WORKER_UNIT" 2>/dev/null || true)"
+worker_tunnel_state="$(worker_ssh "systemctl --user is-active $WORKER_TUNNEL_UNIT" 2>/dev/null || true)"
+cloudbox_state="$(cloudbox_ssh "docker inspect -f '{{.State.Status}} {{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}' t3-mesh-e2e" 2>/dev/null || true)"
+[ "$studio_state" = active ] && pass "studio server unit $STUDIO_UNIT active" || fail "studio server unit $STUDIO_UNIT: ${studio_state:-missing}"
+[ "$studio_tunnel_state" = active ] && pass "studio tunnel unit active" || fail "studio tunnel unit: ${studio_tunnel_state:-missing}"
+[ "$worker_state" = active ] && pass "worker server unit $WORKER_UNIT active" || fail "worker server unit $WORKER_UNIT: ${worker_state:-missing}"
+[ "$worker_tunnel_state" = active ] && pass "worker tunnel unit active" || fail "worker tunnel unit: ${worker_tunnel_state:-missing}"
+case "$cloudbox_state" in
+  running*) pass "VPS container t3-mesh-e2e $cloudbox_state" ;;
+  *) fail "VPS container t3-mesh-e2e: ${cloudbox_state:-missing}" ;;
 esac
 echo ""
 
@@ -94,10 +94,10 @@ fi
 echo ""
 
 echo "== mutagen =="
-gor_mutagen="$(worker_ssh '~/.local/bin/mutagen version' 2>/dev/null || true)"
-vps_mutagen="$(cloudbox_ssh "docker exec t3-mesh-e2e mutagen version" 2>/dev/null || true)"
-[ "$gor_mutagen" = "$MUTAGEN_VERSION" ] && pass "worker mutagen $gor_mutagen" || fail "worker mutagen: ${gor_mutagen:-missing}"
-[ "$vps_mutagen" = "$MUTAGEN_VERSION" ] && pass "cloudbox mutagen $vps_mutagen" || fail "cloudbox mutagen: ${vps_mutagen:-missing}"
+worker_mutagen="$(worker_ssh '~/.local/bin/mutagen version' 2>/dev/null || true)"
+cloudbox_mutagen="$(cloudbox_ssh "docker exec t3-mesh-e2e mutagen version" 2>/dev/null || true)"
+[ "$worker_mutagen" = "$MUTAGEN_VERSION" ] && pass "worker mutagen $worker_mutagen" || fail "worker mutagen: ${worker_mutagen:-missing}"
+[ "$cloudbox_mutagen" = "$MUTAGEN_VERSION" ] && pass "cloudbox mutagen $cloudbox_mutagen" || fail "cloudbox mutagen: ${cloudbox_mutagen:-missing}"
 echo ""
 
 echo "== ports =="

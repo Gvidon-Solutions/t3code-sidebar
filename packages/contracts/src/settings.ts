@@ -1,3 +1,4 @@
+import { DEFAULT_REPLICA_IGNORES } from "./sidebarWorkspaces.ts";
 import { EasDeviceHostConfigs, SimlockDeviceHostConfigs, SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthOrchestrationOperateScope,
@@ -1321,18 +1322,7 @@ export const ServerSettings = Schema.Struct({
   mutagenPath: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   replicaRoot: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   replicaIgnores: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(
-      Effect.succeed([
-        "/node_modules",
-        "/.venv",
-        "/dist",
-        "/build",
-        "/target",
-        "/.t3",
-        "/.t3-conflicts",
-        "node_modules",
-      ]),
-    ),
+    Schema.withDecodingDefault(Effect.succeed([...DEFAULT_REPLICA_IGNORES])),
   ),
   linkedEnvironmentsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   sidebarAutoSettleKeepPullRequests: Schema.Boolean.pipe(

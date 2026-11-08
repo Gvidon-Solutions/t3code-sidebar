@@ -32,7 +32,20 @@ cloudbox_ssh() {
   if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
     control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/cloudbox")
   fi
-  ssh -F "$CLOUDBOX_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$CLOUDBOX_HOST" "$@"
+  local remote_command identity=()
+  if [ -n "$CLOUDBOX_SSH_KEY" ]; then identity=(-i "$CLOUDBOX_SSH_KEY" -o IdentitiesOnly=yes); fi
+  if [ "$CLOUDBOX_SUDO" = 1 ]; then
+    printf -v remote_command '%q' "$*"
+    ssh -F "$CLOUDBOX_SSH_CONFIG" "${identity[@]}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$CLOUDBOX_HOST" "sudo -n bash -c $remote_command"
+  else
+    ssh -F "$CLOUDBOX_SSH_CONFIG" "${identity[@]}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$CLOUDBOX_HOST" "$@"
+  fi
+}
+
+cloudbox_put() {
+  local destination
+  printf -v destination '%q' "$2"
+  cloudbox_ssh "cat > $destination" < "$1"
 }
 
 require_bins() {

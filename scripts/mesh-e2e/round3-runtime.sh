@@ -81,8 +81,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 const root=process.argv[2];
 const { installSshRuntime }=await import(pathToFileURL(root+'/scripts/server-runtime.mjs'));
-const run=(command,args,options)=>execFileSync(command,command==='ssh' ? ['-o','UserKnownHostsFile='+process.env.MESH_RUNTIME_KNOWN_HOSTS+'',...args] : args,options);
-const result=installSshRuntime({home:root+'/ssh-copy',want:'0.0.4-N',destination:process.env.MESH_RUNTIME_COPY_DEST,identityFile:process.env.MESH_RUNTIME_COPY_KEY,remoteHome:root+'-source',run});
+const route=JSON.parse(fs.readFileSync(root+'/ssh-copy.json','utf8'));
+const run=(command,args,options)=>execFileSync(command,command==='ssh' ? ['-F','/dev/null','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+route.knownHostsFile,...args] : args,options);
+const result=installSshRuntime({home:root+'/ssh-copy',want:'0.0.4-N',destination:route.destination,identityFile:route.identityFile,remoteHome:root+'-source',run});
 if(!fs.existsSync(result.path+'/t3')) throw Error('SSH runtime missing');
 console.log('PASS N runtime copied from linked worker over SSH without gh');
 JS

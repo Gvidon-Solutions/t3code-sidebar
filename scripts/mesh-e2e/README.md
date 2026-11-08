@@ -26,6 +26,77 @@ RAM, 2 CPUs, no `docker.sock`, loopback-only port. Its image is built from
 `scripts/mesh-e2e/Dockerfile` (a copy of `deploy/t3-ws/Dockerfile` plus Mutagen
 0.18.1 with a pinned SHA-256 and OpenSSH).
 
+### Alternate third node after a VPS memory failure
+
+Before raising a container limit, check the VPS with `free -g`. X1 observed only
+1 GiB free (2 GiB available), with repeated cgroup OOM kills at the 2 GiB limit.
+The third server therefore moved to a separate gor container, preserving its
+identity and mounted home, temporary projects and conflict copies. The original
+VPS container stays stopped; never run both copies of the same identity.
+The alternative uses 4 GiB RAM, 4 CPUs and the same unprivileged/container security
+settings. It changes no other VPS stack and requires no gor kernel change.
+
+The X1 alternative is `/tmp/X1-third-bed/compose.yaml` on gor, container
+`t3-mesh-e2e`, loopback port 3791. The native gor server remains a separate node.
+The preset `/tmp/X1-third.env` exports `VPS_HOST`, `VPS_SSH_CONFIG`,
+`MESH_E2E_VPS_DIR`, `MESH_E2E_VPS_SUDO=1` and `MESH_E2E_GOR_TUNNEL_UNIT`;
+source it before the round scripts. The latter selects the gor forwarding unit
+for partition/restore checks instead of starting the old VPS tunnel.
+`vps_ssh` then runs the third-node commands with passwordless sudo, and
+`vps_put` streams files through that same connection instead of bypassing it
+with scp. The artifact directory in the preset selects the tested build.
+For redeployment the preset also sets `MESH_E2E_REUSE_NETWORK=1` and
+`MESH_E2E_COMPOSE_TEMPLATE=/tmp/X1-third-compose-template.json`. The template keeps
+the relocated mounts, 4 GiB/4 CPU limits and provider egress; `deploy.sh` replaces
+its `t3-mesh-e2e:dev` image placeholder with the build image. Without a template,
+deployment uses the standard VPS compose file.
+
+The gvidon test-tunnel override `99-X1-third.conf` forwards ports 13797/13791
+through gor and reverses 13795/22023 to the isolated gvidon server/SSH.
+On gor, `t3-mesh-X1-third-ports.service` forwards the container bridge routes
+13797, 13795, 22022 and 22023, plus the runner's loopback 13791 to port 3791.
+The former gor-to-VPS test-tunnel unit is disabled and stopped to avoid a port collision;
+a reboot otherwise restarts it and occupies the relocated route’s reverse-forward port.
+These are bed-only units. The original stopped VPS data remains available at
+`/opt/t3-mesh-e2e`; the gor copy preserves file ownership.
+
+Provider traffic from the relocated container uses the original VPS egress: direct gor
+egress returned HTTP 403 from the provider. The container sets `HTTP_PROXY`, `HTTPS_PROXY`
+and `ALL_PROXY` to the isolated CONNECT bridge on `172.17.0.1:14444`, with private mesh
+addresses excluded through `NO_PROXY`. TLS passes through unchanged. Gvidon’s
+`t3-mesh-X1-provider-{socks,connect,forward}.service` units and gor’s
+`t3-mesh-X1-provider-egress.service` own this route; keep them running for agent acceptance.
+They add no listeners or configuration to any other VPS stack.
+
+The recovered container’s base command retains its loopback `13797` route to the gor bridge.
+Fault injection adds a separate incoming proxy: while it is active, recreate the container
+with both `compose.yaml` and `X1-N1-compose.yaml`. Recreating from the base file alone
+removes that overlay; taking fault proxies down must retain the required outbound route.
+
+For acceptance, `/tmp/X1-fresh.env` selects independent X1 profiles on the same ports.
+Gvidon uses `/tmp/X1-fresh-studio`; gor’s base and the third container’s home/tmp/var-tmp
+mounts live below `~/.local/share/t3-mesh-e2e/X1-recovered` on gor. The preset supplies the
+absolute base paths, matching compose template, fixture state and private runtime-copy SSH route.
+These options apply to RPC credentials, CLI wrappers, SSH checks, fault proxies and daemon
+inspection; an old CLI base directory can silently query another profile.
+
+Gor rebooted on the unchanged 7.0.0-38 kernel during X1’s final repeat and cleared `/tmp`,
+including the relocated copies and temporary test credentials. The profiles were rebuilt from
+a consistent private mesh snapshot, with jobs/auth sessions removed and new private keys;
+links are explicitly paired again. Persistent profile storage prevents a reboot from deleting
+the recovered layout and credentials. It does not prevent a reboot from aborting a test.
+The original VPS data in `/opt/t3-mesh-e2e` and gor’s original home-based state remain intact.
+The earlier stopped container objects preserve their root filesystems, but their old gor `/tmp`
+bind mounts were cleared. Native-unit backups are in `/tmp/X1-shared-profile-backups` on gvidon
+and under the recovered root on gor. Never start profiles on the same ports simultaneously.
+
+X1 observed a 2.3 MiB shared layout, sustained receiver-window backpressure, and a
+256 MiB staging recovery exceeding the 900-second deadline. A fresh three-node profile
+sent a checked 16 MiB through a persistent peer connection in 2.7 seconds, versus
+102 seconds in the shared profile. The later build also disables Nagle, so this is not
+a controlled comparison of layout size alone. Fresh acceptance keeps other stages' data intact; it does not claim
+to fix throughput under that accumulated layout load.
+
 Both `/home/t3` and `/tmp` persist on the VPS host. On the first deployment with
 the `/tmp` mount, `deploy.sh` copies the stopped container's existing temporary
 folders with ownership intact before recreating it, then verifies its canary.
@@ -158,6 +229,18 @@ adoption fixture uses `newest-wins` with explicit file mtimes. Foreign sessions
 live in the isolated server HOME; the runner verifies that HOME before creating one.
 Each recovery deadline defaults to 900 seconds because the staging-crash scenarios
 transfer 256 MiB through the relay. Set `MESH_E2E_ROUND3_TIMEOUT` to override it.
+Mount-crash checks subscribe to replica status before placing the replica and wait for
+a subsequent `mounting` event. Placement runs through a surviving control server;
+waiting until both placements finish can miss this transient state entirely.
+Daemon preparation temporarily disables replica reconciliation and stops the old daemon
+while T3 is still available to close its SSH pipes. The original enable setting is restored
+before killing the captured daemon, including on setup failure.
+The container daemon check pauses only the recorded T3 process, keeping `docker exec`
+available. It records and validates the process start time before resuming, including
+error cleanup; native servers use their isolated systemd unit instead.
+Partition injection cuts every node’s peer proxy, since either endpoint can initiate a
+connection; stopping one forwarding unit does not sever every route in alternate topologies.
+Each proxy’s original state is saved and restored independently.
 Round 3 requests four-hour test sessions (`MESH_E2E_SESSION_TTL`) so credentials
 remain valid across those transfers and the six restart orders.
 Use `MESH_E2E_LIVE_REPORTS=1` for round one on a populated bed with ongoing status writers;
@@ -505,3 +588,15 @@ runner's short temporary roots so Mutagen Unix sockets fit the kernel path limit
 credential/model settings as `r1-harness.mjs`. It adds actual native provider
 file-reading forks after the deterministic transaction/UI cases. No `/tmp`
 ad-hoc source is required.
+
+Round two follows project-list cursors when reusing a populated bed. Its command and
+sync deadlines default to 900 seconds, matching the server’s 15-minute replica readiness
+budget rather than cutting off a slow 128 MiB transfer after 180 seconds.
+`MESH_E2E_ROUND2_RPC_TIMEOUT` and `MESH_E2E_ROUND2_TIMEOUT` override those bounds.
+The transfer check compares both SHA-256 hashes and requires exactly 128 MiB on the replica.
+
+Round three’s runtime-copy fixture accepts `MESH_E2E_RUNTIME_SSH_DESTINATION`,
+`MESH_E2E_RUNTIME_SSH_IDENTITY` and `MESH_E2E_RUNTIME_SSH_KNOWN_HOSTS` for a
+relocated bed. Use a private bed account/key and a known-host file pinned from that
+bed’s host key. The route is copied into the disposable runtime fixture; it never
+reads or changes the administrator’s SSH configuration.

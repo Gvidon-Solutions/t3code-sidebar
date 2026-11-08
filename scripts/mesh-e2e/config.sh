@@ -7,10 +7,11 @@ export MESH_E2E_ROUND1_WORK="${MESH_E2E_CONFIG_WORK:-/tmp/t3-mesh-e2e-C1}"
 . "$(dirname "$0")/round1.sh"
 set -euo pipefail
 unset MESH_E2E_HELPERS_ONLY
-[ "$(worker_ssh 'cat /tmp/mesh-bed.lock/owner')" = "${MESH_E2E_LOCK_OWNER:-C1}" ] || die 'acquire the C1 bed lock first'
+BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-C1}
+[ "$(worker_ssh 'cat /tmp/mesh-bed.lock/owner')" = "$BED_LOCK_OWNER" ] || die "acquire the $BED_LOCK_OWNER bed lock first"
 chmod 700 "$WORK"
 CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
-WORKER_DATA_DIR=$(worker_ssh 'printf "%s" "$HOME/.t3-sidebar-server"')
+WORKER_DATA_DIR="$WORKER_BASE_DIR"
 for machine in worker cloudbox; do
   cat > "$WORK/t3-$machine" <<EOF
 #!/usr/bin/env bash

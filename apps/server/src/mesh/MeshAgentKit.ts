@@ -60,11 +60,15 @@ export function withoutLegacyInstructions(
   return kept.trim() === "" ? "" : kept;
 }
 
-function meshInstructions(doc: MeshConfigDocument) {
+export function meshInstructions(
+  doc: MeshConfigDocument,
+  local?: { readonly title: string; readonly label: string },
+) {
   const machines = Object.entries(doc.machines)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, machine]) => `${name}${machine.label ? ` (${machine.label})` : ""}`);
   return [
+    ...(local ? [`This machine: ${local.title} (${local.label}).`] : []),
     `Mesh machines: ${machines.join(", ") || "none configured"}.`,
     "Read ~/.agents/skills/t3/SKILL.md before operating the mesh.",
     "Projects have primary and replica representations. In a lite replica, run builds, tests, git and dependency tools with t3 run -- <command>; the environment stays on the primary.",
@@ -76,7 +80,10 @@ export class MeshAgentKit extends Context.Service<
   MeshAgentKit,
   {
     readonly legacyInstructions: Effect.Effect<string | undefined, MeshConfigError>;
-    readonly reconcile: (doc: MeshConfigDocument) => Effect.Effect<void, MeshConfigError>;
+    readonly reconcile: (
+      doc: MeshConfigDocument,
+      local?: { readonly title: string; readonly label: string },
+    ) => Effect.Effect<void, MeshConfigError>;
   }
 >()("t3/mesh/MeshAgentKit") {}
 
@@ -113,7 +120,10 @@ export const layer = Layer.effect(
       }
     });
     const reconcile = Effect.fn("MeshAgentKit.reconcile")(
-      function* (doc: MeshConfigDocument) {
+      function* (
+        doc: MeshConfigDocument,
+        local?: { readonly title: string; readonly label: string },
+      ) {
         if (!(yield* fs.exists(path.join(source, "SKILL.md"))))
           return yield* new MeshConfigError({
             reason: "storage",
@@ -124,7 +134,7 @@ export const layer = Layer.effect(
           yield* copySkill(source, destination);
         }
         if (doc.agents?.manageInstructions === false) return;
-        const body = meshInstructions(doc);
+        const body = meshInstructions(doc, local);
         // Validate all files before changing any instruction file.
         const writes = yield* Effect.forEach(files, (file) =>
           Effect.gen(function* () {

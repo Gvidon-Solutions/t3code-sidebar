@@ -561,3 +561,29 @@ it("keeps equal titles distinct even when platform and hostname are identical", 
     "Studio (linux · studio:3795) · 2",
   ]);
 });
+
+it("does not label a directly connected machine unreachable because a server's peer report failed", () => {
+  const machines = buildMeshMachines({
+    config: base,
+    connections: [{ environmentId: "boreal", label: "Studio", connected: true }],
+    peerStates: [
+      {
+        environmentId: "boreal",
+        lastExchangeAt: null,
+        lastError: "old peer route failed",
+        sentSeq: 0,
+        receivedSeq: 0,
+      },
+    ],
+  });
+  expect(deriveMeshFooterStatus({ enabled: true, machines, now: 0 })).toMatchObject({
+    kind: "synced",
+  });
+  expect(
+    deriveMeshFooterStatus({
+      enabled: true,
+      machines: machines.map((m) => ({ ...m, connectedHere: false })),
+      now: 0,
+    }),
+  ).toMatchObject({ kind: "unreachable" });
+});

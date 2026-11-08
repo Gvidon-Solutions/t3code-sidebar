@@ -715,10 +715,11 @@ connection; ongoing status reports cannot invalidate an older, separately captur
 Raw workspace fixtures allocate fractional ranks instead of reusing `zzzz`; otherwise a routine
 config diff can repair tied ranks and legitimately compete with the concurrent reorder under test.
 
-The round-three daemon fixture suspends its verified isolated server process only while
-starting the foreground fault-test daemon, then resumes it before the crash. Background
-status readers can otherwise win the private daemon lock. The legacy replicasEnabled setting
-does not disable reconciliation when v2 config is active. EXIT cleanup resumes a suspended server.
+The round-three daemon fixture keeps its isolated server stopped until the foreground
+fault-test daemon owns the private lock, then starts the server before killing the captured daemon.
+A socket can still be opening while its daemon already holds the lock; lock ownership is the
+readiness boundary for deciding whether an old daemon needs stopping. The legacy
+replicasEnabled setting does not disable reconciliation when v2 config is active.
 
 Sequential transport acceptance waits for manual-folder policy metadata and its delivery
 before requesting SSHFS on the same representation key. Otherwise a concurrent ignores
@@ -845,3 +846,50 @@ archives. Source-dependent preparation stays inside the five-minute wall budget.
 Realistic C2/F1 wrappers retain the runner's short temporary paths. Putting
 Mutagen homes under nested nightly result directories exceeds Unix socket path
 limits; the wrapper's persistent suite log records each private artifact root.
+
+## X1 upgrade regressions
+
+Client layout snapshot merges canonicalize legacy project keys before materialization, including
+offline caches; otherwise competing legacy representations can take the primary path away from
+an opaque logical project. `meshLayout/fixtures/upgrade.json` exercises that mixed shape.
+The footer uses current direct client or peer connectivity before historical route failures.
+Legacy whole-object edits repair sort collisions without copying stale fields over concurrent
+workspace renames; the shared layout diff preserves the current row when only its sort is repaired.
+The legacy settings RPC keeps each client’s last returned layout separately and advances it to
+the merged response, so another client’s read and a later whole-object write cannot reset that base.
+
+`RunPlan` selects configured SSH hosts in existing mode. `RunTransport` owns SSH completion
+listeners from spawn. Config migration resolves missing layout titles through the local project
+catalog; replica reconciliation retains representation-specific ignores until the config contains
+every pattern. It then clears the legacy copy so later config removals take effect.
+Bed transport checks verify ignores in config; migrated representations no longer duplicate them.
+Ignore reconciliation preserves a native representation’s clock when it has no legacy ignores;
+adding an empty legacy field can otherwise race with an operator’s new placement.
+New settings and mesh configs seed `DEFAULT_REPLICA_IGNORES` (code-only); existing explicit lists
+are preserved. Agent-kit reconciliation receives the local identity from the server binding.
+
+Bed command fixtures set their own run socket and manifest as well as the home directory.
+An agent thread already has run variables; inheriting its socket makes a raw fixture CLI resolve
+against the caller’s server instead of the isolated bed.
+Deployment also resumes a stopped test VPS container, preserving its mounted temporary folders
+before recreation.
+
+The acceptance runner can place its third container on another administrator SSH host with
+`MESH_E2E_VPS_DIR` and `MESH_E2E_VPS_SUDO`; uploads use the same privileged transport.
+The bed guide records the alternate routing and the single-active-identity constraint.
+Independent acceptance profiles set `MESH_E2E_GV_BASE_DIR` and `MESH_E2E_GOR_BASE_DIR`
+consistently for credentials, CLI runners, SSH and daemon probes; mixing bases can query the
+preserved profile while testing another server.
+Round-two acceptance follows project pagination and budgets the full server readiness window;
+its 128 MiB canary now checks both SHA-256 and replica size.
+
+Local SSH pipe sockets disable Nagle: separate small SSH records otherwise wait for TCP delayed
+ACKs even on loopback. The real relay/IPC test exercises split records before its 200 MiB canary.
+
+Existing-session adoption resolves SSH endpoints from machine bindings and the configured SSH mode, just like replica creation. Display titles and labels can change independently of a managed `t3-<name>` alias or an existing SSH host; using them to identify endpoints rejects valid reversed sessions.
+
+Automatic conflict resolution records its Mutagen session id in `repstatus.resolvingConflicts`
+before pausing. Keep that intent when publishing errors. After an interruption the driver resets
+and resumes only that marked session, then scans again; an unmarked pause remains intentional.
+Clearing intent before resume completes can strand the copy after a crash. Legacy whole-object
+settings writes leave replica diagnostics to the servers, so older clients cannot erase this intent.

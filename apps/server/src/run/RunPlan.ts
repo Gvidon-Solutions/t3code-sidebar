@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Representation mapping must support both Windows and POSIX paths regardless of the server OS.
 import * as NodePath from "node:path";
-import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
+import type { MeshConfigDocument, SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { projectPolicy, defaults } from "@t3tools/shared/meshConfig";
 
 const pathApi = (root: string) =>
@@ -18,6 +18,8 @@ export function resolveRunPlan(input: {
   readonly environmentId: string;
   readonly cwd: string;
   readonly bindings: Readonly<Record<string, string>>;
+  readonly machines?: MeshConfigDocument["machines"];
+  readonly desiredConfig?: MeshConfigDocument;
   readonly sshMode?: "managed" | "existing" | "off";
 }) {
   const matches = Object.entries(input.config.projectMounts)
@@ -47,6 +49,9 @@ export function resolveRunPlan(input: {
   const machine = names[0]!;
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(machine))
     throw new Error("The primary machine name is invalid.");
+  const host =
+    input.sshMode === "existing" ? input.machines?.[machine]?.ssh?.host : `t3-${machine}`;
+  if (!host) throw new Error("The primary needs a configured SSH host in existing mode.");
   return {
     kind: "remote",
     logicalKey: match.logicalKey,
@@ -54,13 +59,16 @@ export function resolveRunPlan(input: {
     primaryEnvironmentId: primary.environmentId,
     title: input.config.projectTitles[match.logicalKey] || "Untitled project",
     machine,
-    host: `t3-${machine}`,
+    host,
     primaryRoot: primary.path,
     replicaRoot: match.replica.path,
     platform: input.config.machines[primary.environmentId]?.reported?.platform.os ?? "posix",
     ignores: [
       ...new Set([
-        ...projectPolicy(defaults(), input.config.projectTitles[match.logicalKey] ?? "").ignore,
+        ...projectPolicy(
+          input.desiredConfig ?? defaults(),
+          input.config.projectTitles[match.logicalKey] ?? "",
+        ).ignore,
         ...(match.replica.ignores ?? []),
       ]),
     ],

@@ -303,7 +303,7 @@ const defaultPipeConnector = Layer.succeed(
         try: (signal) =>
           new Promise<NodeStream.Duplex>((resolve, reject) => {
             const socket = NodeNet.createConnection(
-              { host, port, allowHalfOpen: true, signal },
+              { host, port, allowHalfOpen: true, noDelay: true, signal },
               () => resolve(socket),
             );
             socket.once("error", reject);
