@@ -418,6 +418,8 @@ test("refuses corrupt staged OTA bytes before replacing a catalog", async () => 
     mkdirSync(join(home, "mobile-updates"), { recursive: true });
     const key = NodeCrypto.createHash("sha256").update("correct").digest("base64url");
     writeFileSync(join(source, "assets", key), "corrupt");
+    writeFileSync(join(source, "certificate.pem"), "certificate");
+    writeFileSync(join(source, "catalog.json"), "candidate");
     writeFileSync(join(home, "mobile-updates", "catalog.json"), "original");
     await assert.rejects(
       targetOperation({ home, runtimeDir: root, mobileStore: source }, "publishMobile"),
