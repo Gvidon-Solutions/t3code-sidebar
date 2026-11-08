@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
+import releaseFixture from "./testFixtures/cliRelease.json" with { type: "json" };
 
 import {
-  CLI_RELEASES_PAGE_URL,
   cliReleaseAssetUrl,
   cliReleaseDownloadBaseUrl,
   cliReleaseIndexPageUrl,
@@ -12,10 +12,8 @@ import {
 
 describe("cliRelease", () => {
   it("uses the fork release repository and refuses insecure download overrides", () => {
-    expect(cliReleaseAssetUrl("1.2.3", "runtime.tar.gz")).toBe(
-      `${CLI_RELEASES_PAGE_URL}/download/v1.2.3/runtime.tar.gz`,
-    );
-    expect(cliReleaseIndexPageUrl(1)).toContain(`repos${new URL(CLI_RELEASES_PAGE_URL).pathname}`);
+    expect(cliReleaseAssetUrl("1.2.3", "runtime.tar.gz")).toBe(releaseFixture.assetUrl);
+    expect(cliReleaseIndexPageUrl(1)).toContain(releaseFixture.indexPath);
     for (const base of [
       "http://releases.example/download",
       "file:///tmp/runtime",
