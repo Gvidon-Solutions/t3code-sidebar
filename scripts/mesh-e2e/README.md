@@ -499,7 +499,8 @@ forced command intentionally names the checkout that owns the wrapper.
 
 C2/F1 assertions are committed in `../mesh-fast/bindings.mjs`, `forks.mjs` and
 this directory's `f1-web.mjs`. Run `c2-bed.sh` or `f1-bed.sh` for their realistic
-scale-1 variants; both read `bed-config.sh` for their private artifact root.
+scale-1 variants; both read `bed-config.sh` for their tool cache. They keep the
+runner's short temporary roots so Mutagen Unix sockets fit the kernel path limit.
 `f1-bed.sh` requires `R1_CODEX_BINARY`, `R1_OPENCODE_BINARY` and the same optional
 credential/model settings as `r1-harness.mjs`. It adds actual native provider
 file-reading forks after the deterministic transaction/UI cases. No `/tmp`
