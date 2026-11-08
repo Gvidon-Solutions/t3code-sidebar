@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   OrchestratorMcpFailure,
   DeviceToolCloseInput,
@@ -41,6 +42,7 @@ const DeviceListTool = Tool.make("device_list", {
   failure: DeviceToolFailure,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "List devices")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -62,6 +64,7 @@ const DeviceOpenTool = Tool.make("device_open", {
     ProjectService.ProjectService,
   ],
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Open device")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
@@ -76,6 +79,7 @@ export const DeviceScreenshotTool = Tool.make("device_screenshot", {
   failure: DeviceToolFailure,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Screenshot device")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -90,6 +94,7 @@ const DeviceCloseTool = Tool.make("device_close", {
   failure: DeviceToolFailure,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Close device")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, true)

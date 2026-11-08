@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
@@ -112,23 +113,23 @@ const probe = {
   ],
 };
 const ProbeToolkit = Toolkit.make(
-  Tool.make("reads", probe),
-  Tool.make("reads_as_caller", probe),
-  Tool.make("acts_as_caller", probe),
-  Tool.make("writes", probe),
-  Tool.make("writes_with_capability", probe),
+  Tool.make("reads", probe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("reads_as_caller", probe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("acts_as_caller", probe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("writes", probe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("writes_with_capability", probe).annotate(McpDomainAnnotation, "mesh"),
   Tool.make("writes_threads", {
     ...probe,
     parameters: Schema.Struct({ threadId: Schema.optional(ThreadId) }),
-  }),
+  }).annotate(McpDomainAnnotation, "mesh"),
   Tool.make("starts_threads", {
     ...probe,
     parameters: Schema.Struct({
       runtimeMode: Schema.optional(RuntimeMode),
       interactionMode: Schema.optional(ProviderInteractionMode),
     }),
-  }),
-  Tool.make("writes_environment", probe),
+  }).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("writes_environment", probe).annotate(McpDomainAnnotation, "mesh"),
 );
 const ran = Effect.succeed({ ran: "ran" });
 const probeHandlers: McpToolAccess.Handlers<typeof ProbeToolkit.tools> = {
@@ -370,12 +371,12 @@ const linkedProbe = {
   }),
 };
 const LinkedProbeToolkit = Toolkit.make(
-  Tool.make("reads", linkedProbe),
-  Tool.make("writes", linkedProbe),
-  Tool.make("writes_with_capability", linkedProbe),
-  Tool.make("writes_threads", linkedProbe),
-  Tool.make("starts_threads", linkedProbe),
-  Tool.make("writes_environment", linkedProbe),
+  Tool.make("reads", linkedProbe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("writes", linkedProbe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("writes_with_capability", linkedProbe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("writes_threads", linkedProbe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("starts_threads", linkedProbe).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("writes_environment", linkedProbe).annotate(McpDomainAnnotation, "mesh"),
 );
 /** Runs here, and tells whether `environmentId` reached the handler. */
 const ranHere = <P extends object>(params: P) =>
@@ -455,7 +456,9 @@ it.effect.each([
 
 it.effect("refuses a linked environment to a tool that acts as its calling thread", () =>
   Effect.gen(function* () {
-    const CallerToolkit = Toolkit.make(Tool.make("acts_as_caller", linkedProbe));
+    const CallerToolkit = Toolkit.make(
+      Tool.make("acts_as_caller", linkedProbe).annotate(McpDomainAnnotation, "mesh"),
+    );
     const built = yield* Layer.build(
       McpToolAccess.HandlersLayer.layer(
         McpToolAccess.toLayer(CallerToolkit, {

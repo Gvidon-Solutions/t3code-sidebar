@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import * as Digest from "effect/crypto/Digest";
 import {
   OrchestratorMcpEnvironmentTarget,
@@ -69,6 +70,7 @@ const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
     Digest.Digest,
   ],
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Organize a thread")
   .annotate(Tool.Strict, true)
   .annotate(Tool.Destructive, true);
@@ -116,7 +118,9 @@ const QueueTool = Tool.make("t3_queue", {
     queueEntry,
     OrchestrationV2DispatchCommandResult,
   ]),
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Destructive, true);
 
 const question = Schema.Struct({
   id: Schema.String,
@@ -151,6 +155,7 @@ const PendingRequestTool = Tool.make("t3_pending_request", {
     OrchestrationV2DispatchCommandResult,
   ]),
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
@@ -170,7 +175,9 @@ const ThreadConfigureTool = Tool.make("t3_thread_configure", {
     modelSelection: Schema.optional(ModelSelection),
   }),
   success: Schema.Union([threadConfiguration, OrchestrationV2DispatchCommandResult]),
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Destructive, true);
 
 const ThreadMoveTool = Tool.make("t3_thread_move", {
   ...commandTool,
@@ -183,7 +190,9 @@ const ThreadMoveTool = Tool.make("t3_thread_move", {
     modelSelection: Schema.optional(ModelSelection),
   }),
   success: ThreadMoveResult,
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Destructive, true);
 
 const ThreadForkTool = Tool.make("t3_thread_fork", {
   ...commandTool,
@@ -201,7 +210,9 @@ const ThreadForkTool = Tool.make("t3_thread_fork", {
     clientRequestId: Schema.optional(Schema.String),
   }),
   success: ThreadForkResult,
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Destructive, true);
 
 const ThreadTransferTool = Tool.make("t3_thread_transfer", {
   ...commandTool,
@@ -228,7 +239,9 @@ const ThreadTransferTool = Tool.make("t3_thread_transfer", {
       ),
     }),
   ]),
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Destructive, true);
 
 const ThreadSearchTool = Tool.make("t3_thread_search", {
   ...commandTool,
@@ -259,6 +272,7 @@ const ThreadSearchTool = Tool.make("t3_thread_search", {
   }),
   dependencies: [...commandTool.dependencies, ThreadSearch.ThreadSearch],
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 
@@ -280,6 +294,7 @@ const ScheduledTaskRunTool = Tool.make("run_scheduled_task_now", {
   }),
   dependencies: [...commandTool.dependencies, ScheduledTaskService.ScheduledTaskService],
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
@@ -351,7 +366,9 @@ const ThreadSelfTool = Tool.make("t3_thread_self", {
   failure: OrchestratorMcpFailure,
   failureMode: "return",
   dependencies: commandTool.dependencies,
-}).annotate(Tool.Readonly, true);
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Readonly, true);
 
 export const ThreadToolkit = Toolkit.make(
   ThreadSelfTool,

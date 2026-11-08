@@ -1,3 +1,4 @@
+import { layerLinkedTest } from "../../../replicas/MeshLayoutTestLayer.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import type * as Tool from "effect/ai/Tool";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
@@ -21,7 +22,13 @@ const client = (access: AuthMcpClientAccess, linked = false) =>
     environmentId: EnvironmentId.make("source"),
     requestNamespace: "client:replica-test",
     thread: undefined,
-    client: { sessionId: "replica-test", label: "test", access, linked },
+    client: {
+      sessionId: "replica-test",
+      label: "test",
+      access,
+      linked,
+      ...(linked ? { peerEnvironmentId: EnvironmentId.make("replica") } : {}),
+    },
     issuedAt: 0,
     capabilities: new Set(["orchestration" as const]),
   });
@@ -135,7 +142,16 @@ it.effect(
         expect(denied.at(-1)?.result).toMatchObject({ code: "capability_denied" });
         const fenced = yield* tools
           .handle("t3_project_place", { project: "repo", machine: "NP", action: "remove" })
-          .pipe(Stream.unwrap, Stream.runCollect, Effect.provide(client("auto", true)));
+          .pipe(
+            Stream.unwrap,
+            Stream.runCollect,
+            Effect.provide(
+              Layer.merge(
+                client("auto", true),
+                layerLinkedTest("source", { source: "source", replica: "replica" }),
+              ),
+            ),
+          );
         expect(fenced.at(-1)?.result).toMatchObject({
           code: "capability_denied",
           message: expect.stringContaining("linked environment"),

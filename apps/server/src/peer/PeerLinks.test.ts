@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { type ExecutionEnvironmentDescriptor, OrchestratorMcpFailure } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
@@ -48,13 +49,13 @@ const ProbeToolkit = Toolkit.make(
     failure: OrchestratorMcpFailure,
     failureMode: "return",
     dependencies: [McpInvocationContext.McpInvocationContext],
-  }),
+  }).annotate(McpDomainAnnotation, "mesh"),
   Tool.make("refuse", {
     description: "Always refuses.",
     success: Probe,
     failure: OrchestratorMcpFailure,
     failureMode: "return",
-  }),
+  }).annotate(McpDomainAnnotation, "mesh"),
 );
 
 const probeHandlers = McpToolAccess.toLayer(ProbeToolkit, {

@@ -1,3 +1,4 @@
+import { layerLinkedTest } from "../../../replicas/MeshLayoutTestLayer.ts";
 import { MeshConfig } from "../../../mesh/MeshConfig.ts";
 import { MeshBootstrap } from "../../../mesh/MeshBootstrap.ts";
 import { SecretRequests } from "../../../secrets/SecretRequests.ts";
@@ -50,6 +51,7 @@ it.effect(
         client: {
           sessionId: "peer",
           label: "Laptop",
+          peerEnvironmentId: EnvironmentId.make("laptop"),
           linked: true,
           access: "full-access" as const,
         },
@@ -69,6 +71,7 @@ it.effect(
           Stream.unwrap,
           Stream.runCollect,
           Effect.provideService(McpInvocationContext, linkedScope),
+          Effect.provide(layerLinkedTest("studio", { studio: "studio", laptop: "laptop" })),
         );
       const runtime = yield* decodeRuntime(allowedRuntime.at(-1)?.result);
       expect(runtime.command.length).toBeGreaterThan(0);

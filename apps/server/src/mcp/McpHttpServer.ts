@@ -271,14 +271,18 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const key = request.headers["t3-idempotency-key"];
     const peer = invocation.client?.linked === true;
     const from = invocation.client?.peerEnvironmentId ?? invocation.client?.sessionId;
+    const hops = request.headers["t3-mesh-hops"]?.split(",");
+    const relayCaller = hops?.length === 2 && hops[1] === from ? hops[0] : undefined;
+    // Relay callers partition keys only within the authenticated relay's namespace.
+    const scopedKey = relayCaller === undefined ? key : encodeJsonText([relayCaller, key]);
     let sequence = 0;
     const callInvocation =
       peer && key && from
         ? {
             ...limited,
-            requestNamespace: `peer:${encodeJsonText([from, key])}`,
+            requestNamespace: `peer:${encodeJsonText([from, scopedKey])}`,
             peerCommandIdentity: {
-              namespace: `peer:${encodeJsonText([from, key])}`,
+              namespace: `peer:${encodeJsonText([from, scopedKey])}`,
               next: () => sequence++,
             },
           }
@@ -359,7 +363,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     return yield* receipts.value
       .run(
         from!,
-        key,
+        scopedKey ?? key,
         encodeJsonText({
           body,
           modes: request.headers[McpInvocationContext.MODE_LIMIT_HEADER],

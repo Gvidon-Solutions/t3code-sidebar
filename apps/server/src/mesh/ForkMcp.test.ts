@@ -1,10 +1,6 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
-import {
-  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-  EnvironmentId,
-  OrchestratorMcpFailure,
-} from "@t3tools/contracts";
+import { EnvironmentId, OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
@@ -17,7 +13,7 @@ import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
 import { ThreadForkService } from "./ThreadForkService.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
-import { layerTest } from "../replicas/MeshLayoutTestLayer.ts";
+import { layerLinkedTest } from "../replicas/MeshLayoutTestLayer.ts";
 import * as Receipts from "../peer/connection/PeerReceipts.ts";
 import * as Sqlite from "../persistence/Sqlite.ts";
 
@@ -59,6 +55,7 @@ it.effect(
                     label: "test",
                     access: token === "readonly" ? "read-only" : "full-access",
                     linked: token !== "agent",
+                    peerEnvironmentId: EnvironmentId.make("laptop"),
                   },
                 };
                 return Effect.succeed(scope);
@@ -167,7 +164,7 @@ it.effect(
       Effect.provide(
         Layer.merge(
           NodeHttpServer.layerTest,
-          layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG),
+          layerLinkedTest("B", { cloudbox: "B", laptop: "laptop" }),
         ),
       ),
     ),

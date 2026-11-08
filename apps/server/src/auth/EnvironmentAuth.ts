@@ -34,6 +34,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as HttpServerRequest from "effect/http/HttpServerRequest";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -716,6 +717,7 @@ export const make = Effect.gen(function* () {
   const policy = yield* EnvironmentAuthPolicy.EnvironmentAuthPolicy;
   const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
   const sessions = yield* SessionStore.SessionStore;
+  const sql = yield* SqlClient.SqlClient;
   const secretStore = yield* ServerSecretStore.ServerSecretStore;
   const digest = yield* Digest.Digest;
   const descriptor = yield* policy.getDescriptor();
@@ -1298,33 +1300,45 @@ export const make = Effect.gen(function* () {
       return yield* authenticateRequest(request);
     });
 
-  const authenticateMcpClient: EnvironmentAuth["Service"]["authenticateMcpClient"] = (request) => {
+  const authenticateMcpClient: EnvironmentAuth["Service"]["authenticateMcpClient"] = Effect.fn(
+    "EnvironmentAuth.authenticateMcpClient",
+  )(function* (request) {
     const token = parseBearerToken(request);
-    if (token === null) return Effect.fail(new ServerAuthMissingCredentialError({}));
-    return sessions.verify(token).pipe(
-      mapSessionVerificationErrors,
-      Effect.flatMap((session) =>
-        session.subject === MCP_CLIENT_SUBJECT && session.method === "bearer-access-token"
-          ? Effect.succeed({
-              sessionId: session.sessionId,
-              label: session.client.label ?? "MCP client",
-              access: session.scopes.includes(AuthOrchestrationOperateScope)
-                ? (session.runtimeModeCeiling ?? "approval-required")
-                : "read-only",
-              peerLink: session.peerLink === true,
-              ...(session.peerEnvironmentId
-                ? { peerEnvironmentId: session.peerEnvironmentId }
-                : {}),
-            } satisfies McpClientSession)
-          : Effect.fail(
-              new ServerAuthInvalidCredentialError({
-                diagnostic: "Only MCP client sessions are accepted here.",
-              }),
+    if (token === null) return yield* new ServerAuthMissingCredentialError({});
+    const session = yield* sessions.verify(token).pipe(mapSessionVerificationErrors);
+    if (session.subject !== MCP_CLIENT_SUBJECT || session.method !== "bearer-access-token")
+      return yield* new ServerAuthInvalidCredentialError({
+        diagnostic: "Only MCP client sessions are accepted here.",
+      });
+    const peers =
+      session.peerLink === true
+        ? yield* sql<{
+            environment_id: string;
+          }>`SELECT environment_id FROM peer_incoming_sessions WHERE session_id = ${session.sessionId} UNION SELECT environment_id FROM peer_reverse_grants WHERE session_id = ${session.sessionId}`.pipe(
+            Effect.mapError(
+              (cause) =>
+                new SessionStore.SessionCredentialVerificationError({
+                  sessionId: session.sessionId,
+                  cause,
+                }),
             ),
-      ),
-      Effect.withSpan("EnvironmentAuth.authenticateMcpClient"),
-    );
-  };
+            mapSessionVerificationErrors,
+          )
+        : [];
+    if (peers.length > 1)
+      return yield* new ServerAuthInvalidCredentialError({
+        diagnostic: "The peer session has conflicting link identities.",
+      });
+    return {
+      sessionId: session.sessionId,
+      label: session.client.label ?? "MCP client",
+      access: session.scopes.includes(AuthOrchestrationOperateScope)
+        ? (session.runtimeModeCeiling ?? "approval-required")
+        : "read-only",
+      peerLink: session.peerLink === true,
+      ...(peers[0] ? { peerEnvironmentId: peers[0].environment_id } : {}),
+    } satisfies McpClientSession;
+  });
 
   const issueMcpClientSession: EnvironmentAuth["Service"]["issueMcpClientSession"] = (input) =>
     sessions

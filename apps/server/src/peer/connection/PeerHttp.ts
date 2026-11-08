@@ -54,6 +54,9 @@ export const layer = Layer.unwrap(
           (session.peerEnvironmentId === undefined && !request.headers["t3-peer-environment-id"])
         )
           return refused(403, "This credential is not a T3 Code peer link.");
+        const claimedId = request.headers["t3-peer-environment-id"];
+        if (session.peerEnvironmentId && claimedId && claimedId !== session.peerEnvironmentId)
+          return refused(403, "The peer token is bound to another environment");
         const callerId = session.peerEnvironmentId ?? request.headers["t3-peer-environment-id"]!;
         const environmentId = EnvironmentId.make(callerId);
         const bound = yield* credentials.bind(callerId, session.sessionId).pipe(Effect.result);

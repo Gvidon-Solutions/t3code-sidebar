@@ -1,3 +1,4 @@
+import { mcpDomainByName, linkAllowsDomain } from "../mcp/McpToolDomain.ts";
 import {
   bindingsFromLayout,
   configFromLayout,
@@ -11,7 +12,7 @@ import { MeshLayoutService } from "./MeshLayoutService.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import type { PeerCallLimits } from "../peer/PeerMcpClient.ts";
 
-const defaults = { files: "projects" as const, replicas: true, threads: true };
+const defaults = { files: "all" as const, replicas: true, threads: true };
 const fileRank = { none: 0, projects: 1, all: 2 };
 export const linkPermissions = Effect.fn("MeshLinkPermissions.read")(function* (
   targetEnvironmentId?: string,
@@ -54,34 +55,24 @@ export const forwardedCallLimits = Effect.fn("MeshLinkPermissions.forwardedCallL
 ) {
   const local = yield* linkPermissions();
   const target = targetEnvironmentId ? yield* linkPermissions(targetEnvironmentId) : local;
-  const threads =
-    tool.startsWith("t3_thread_") ||
-    tool.startsWith("t3_attachment_") ||
-    [
-      "t3_queue",
-      "t3_pending_request",
-      "create_threads",
-      "delegate_task",
-      "task_status",
-      "task_cancel",
-    ].includes(tool);
-  const replicas =
-    tool === "t3_project_place" || tool === "t3_replica_adopt" || tool === "t3_run_runtime";
-  const files = tool === "t3_files_read" || tool === "t3_files_list";
+  const domain = mcpDomainByName(tool);
+  const scope = yield* Effect.serviceOption(McpInvocationContext);
+  const identified =
+    !local.linked || (Option.isSome(scope) && scope.value.client?.peerEnvironmentId !== undefined);
+  const incoming = limits.files ?? "all";
+  const ceiling = fileRank[local.files] < fileRank[target.files] ? local.files : target.files;
+  const files = fileRank[incoming] < fileRank[ceiling] ? incoming : ceiling;
+  const replicas = local.replicas && target.replicas && limits.replicas !== false;
   if (
-    (threads && (!local.threads || !target.threads)) ||
-    (replicas && (!local.replicas || !target.replicas || limits.replicas === false)) ||
-    (files && (local.files === "none" || target.files === "none" || limits.files === "none"))
+    !linkAllowsDomain(
+      domain,
+      { files, replicas, threads: local.threads && target.threads },
+      identified,
+    )
   )
     return yield* new OrchestratorMcpFailure({
       code: "capability_denied",
       message: "This mesh link does not allow the forwarded operation.",
     });
-  const incoming = limits.files ?? "all";
-  const ceiling = fileRank[local.files] < fileRank[target.files] ? local.files : target.files;
-  return {
-    ...limits,
-    files: fileRank[incoming] < fileRank[ceiling] ? incoming : ceiling,
-    replicas: local.replicas && target.replicas && limits.replicas !== false,
-  };
+  return { ...limits, files, replicas };
 });

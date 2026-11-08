@@ -355,7 +355,6 @@ const make = Effect.gen(function* () {
       }
       // RFC 7591 allows ignoring unsupported registration options; all clients use public PKCE.
       const peerLink = metadata.software_id === MCP_PEER_LINK_SOFTWARE_ID;
-      const peerEnvironmentId = peerLink ? metadata.environment_id?.trim() : undefined;
       if (peerLink && !(yield* linksEnabled)) {
         return yield* new AuthMcpRegistrationError({
           error: "invalid_client_metadata",
@@ -364,11 +363,10 @@ const make = Effect.gen(function* () {
         });
       }
       return {
-        clientId: signClientId(name, redirectUris, peerLink, peerEnvironmentId || undefined),
+        clientId: signClientId(name, redirectUris, peerLink, undefined),
         name,
         redirectUris,
         peerLink,
-        ...(peerEnvironmentId ? { peerEnvironmentId } : {}),
       };
     },
   );

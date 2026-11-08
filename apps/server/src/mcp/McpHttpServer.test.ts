@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
@@ -879,7 +880,7 @@ it.effect("admits provider and OAuth client credentials and points only clients 
           failure: OrchestratorMcpFailure,
           failureMode: "return",
           dependencies: [McpInvocationContext.McpInvocationContext],
-        }),
+        }).annotate(McpDomainAnnotation, "mesh"),
       );
       const serverLayer = McpHttpServer.layerMcpTransport(
         McpHttpServer.toolkitRegistration(
@@ -1105,14 +1106,16 @@ it.effect("hides tools for links and refuses another environment while the beta 
           success: Schema.Struct({ links: Schema.Number }),
           failure: OrchestratorMcpFailure,
           failureMode: "return",
-        }).annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenWhileLinksOff),
+        })
+          .annotate(McpDomainAnnotation, "mesh")
+          .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenWhileLinksOff),
         Tool.make("where", {
           description: "Says where it ran.",
           parameters: Schema.Struct({ environmentId: OrchestratorMcpEnvironmentTarget }),
           success: Schema.Struct({ ranIn: Schema.String }),
           failure: OrchestratorMcpFailure,
           failureMode: "return",
-        }),
+        }).annotate(McpDomainAnnotation, "mesh"),
       );
       const settingsContext = yield* Layer.build(ServerSettings.layerTest());
       const settings = Context.get(settingsContext, ServerSettings.ServerSettingsService);
@@ -1324,7 +1327,7 @@ it.effect(
               McpInvocationContext.McpInvocationContext,
               ThreadManagementService.ThreadManagementService,
             ],
-          }),
+          }).annotate(McpDomainAnnotation, "mesh"),
         );
         const serverLayer = McpHttpServer.layerMcpTransport(
           McpHttpServer.toolkitRegistration(

@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
 import { OrchestratorMcpFailure, EnvironmentId } from "@t3tools/contracts";
@@ -20,13 +21,13 @@ import * as Relay from "./MeshRelay.ts";
 
 const result = Schema.Struct({ ok: Schema.Boolean });
 const toolkit = Toolkit.make(
-  Tool.make("missing", { success: result, failure: OrchestratorMcpFailure, failureMode: "return" }),
+  Tool.make("missing", { success: result, failure: OrchestratorMcpFailure, failureMode: "return" }).annotate(McpDomainAnnotation, "mesh"),
   Tool.make("probe", {
     description: "Probe relay destination",
     success: result,
     failure: OrchestratorMcpFailure,
     failureMode: "return",
-  }),
+  }).annotate(McpDomainAnnotation, "mesh"),
 );
 const tools = Mcp.toolkitRegistration(
   toolkit,

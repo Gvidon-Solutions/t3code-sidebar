@@ -13,6 +13,7 @@ import { expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Redacted from "effect/Redacted";
 
 import * as ServerConfig from "../config.ts";
@@ -113,6 +114,36 @@ const makeDpopKey = () => {
 it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
   "EnvironmentAuth.layer",
   (it) => {
+    it.effect(
+      "resolves peer identity from its authenticated link record instead of session claims",
+      () =>
+        Effect.gen(function* () {
+          const auth = yield* EnvironmentAuth.EnvironmentAuth;
+          const sql = yield* SqlClient.SqlClient;
+          const issued = yield* auth.issueMcpClientSession({
+            label: "Cloudbox",
+            access: "full-access",
+            peerLink: true,
+            peerEnvironmentId: "forged-target",
+            client: { deviceType: "bot" },
+          });
+          const request = makeBearerRequest(issued.token);
+          expect(yield* auth.authenticateMcpClient(request)).not.toHaveProperty(
+            "peerEnvironmentId",
+          );
+          yield* sql`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${issued.sessionId}, 'trusted-peer')`;
+          expect(yield* auth.authenticateMcpClient(request)).toMatchObject({
+            peerEnvironmentId: "trusted-peer",
+          });
+          expect(
+            yield* auth.authenticateMcpClient({
+              ...request,
+              headers: { ...request.headers, "t3-peer-environment-id": "another-forged-peer" },
+            }),
+          ).toMatchObject({ peerEnvironmentId: "trusted-peer" });
+        }).pipe(Effect.provide(layerEnvironmentAuth())),
+    );
+
     it.effect("uses the reusable dev cookie without overriding a normal scoped cookie", () =>
       Effect.gen(function* () {
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;

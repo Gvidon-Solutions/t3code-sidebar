@@ -1,3 +1,5 @@
+import { McpDomainAnnotation } from "../../mcp/McpToolDomain.ts";
+import { linkedTestDocument } from "../../replicas/MeshLayoutTestLayer.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as EffectNodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as ManagedPolicy from "../../policy/ManagedPolicy.ts";
@@ -75,19 +77,28 @@ const toolkit = Toolkit.make(
     success: Answer,
     failure: OrchestratorMcpFailure,
     failureMode: "return",
-  }),
+  }).annotate(McpDomainAnnotation, "mesh"),
   Tool.make("t3_limits_fixture", {
     description: "Reports receiving call limits.",
     success: LimitsAnswer,
-  }),
-  Tool.make("t3_thread_fixture", { description: "Reads one thread fixture.", success: Answer }),
-  Tool.make("t3_create_fixture", { description: "Creates one fixture.", success: Answer }),
-  Tool.make("t3_wait_fixture", { description: "Waits until cancelled.", success: Answer }),
+  }).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("t3_thread_fixture", {
+    description: "Reads one thread fixture.",
+    success: Answer,
+  }).annotate(McpDomainAnnotation, "threads"),
+  Tool.make("t3_create_fixture", { description: "Creates one fixture.", success: Answer }).annotate(
+    McpDomainAnnotation,
+    "mesh",
+  ),
+  Tool.make("t3_wait_fixture", { description: "Waits until cancelled.", success: Answer }).annotate(
+    McpDomainAnnotation,
+    "mesh",
+  ),
   Tool.make("schedule_task", {
     description: "Schedules an idempotent fixture action.",
     parameters: Schema.Struct({ clientRequestId: Schema.optional(Schema.String) }),
     success: Answer,
-  }),
+  }).annotate(McpDomainAnnotation, "threads"),
 );
 
 const serve = Effect.fn("test.servePeerNetwork")(function* (
@@ -257,11 +268,24 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
       Layer.fresh,
     ),
   );
+  const configuredMesh = Context.get(context, MeshLayoutService);
+  const configuredClock = yield* configuredMesh.nextHlc;
+  yield* configuredMesh.apply(
+    linkedTestDocument(
+      { studio: "studio", cloudbox: "cloudbox", laptop: "laptop" },
+      configuredClock,
+    ),
+  );
   const server = Context.get(context, HttpServer.HttpServer);
   const address = server.address;
   if (address._tag === "UnixPathAddress") return yield* Effect.die("Expected TCP test server");
   return {
     name,
+    bindSession: (sessionId: string, environmentId: string) =>
+      Context.get(
+        common,
+        SqlClient.SqlClient,
+      )`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${sessionId}, ${environmentId})`,
     id: descriptor.environmentId,
     baseDir: Context.get(common, Config.ServerConfig).baseDir,
     blockHttp: () => {
@@ -301,6 +325,7 @@ it.live(
         peerLink: true,
         client: { deviceType: "bot" },
       });
+      yield* cloudbox.bindSession(legacy.sessionId, studio.id);
       yield* studio.links.acceptGrant({
         environmentId: cloudbox.id,
         label: cloudbox.name,

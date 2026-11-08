@@ -384,8 +384,8 @@ it.live("signs in a hosted agent with an https callback that asked for a client 
         label: "Hosted bot",
         access: "approval-required",
         peerLink: true,
-        peerEnvironmentId: "cloudbox-environment",
       });
+      expect(signedIn).not.toHaveProperty("peerEnvironmentId");
     }),
   ),
 );

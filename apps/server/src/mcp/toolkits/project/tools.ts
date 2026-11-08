@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import * as Digest from "effect/crypto/Digest";
 import { ProjectPlaceInput, ProjectPlaceResult, ProjectMachinesResult } from "@t3tools/contracts";
 import { McpAttachmentInput } from "../attachment/input.ts";
@@ -64,6 +65,7 @@ const ProjectListTool = Tool.make("t3_project_list", {
     nextCursor: Schema.NullOr(NonNegativeInt),
   }),
 })
+  .annotate(McpDomainAnnotation, "mesh")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 const ProjectReadTool = Tool.make("t3_project_read", {
@@ -74,6 +76,7 @@ const ProjectReadTool = Tool.make("t3_project_read", {
     projectId: ProjectId,
   }),
 })
+  .annotate(McpDomainAnnotation, "mesh")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 const ProjectCreateTool = Tool.make("t3_project_create", {
@@ -87,7 +90,9 @@ const ProjectCreateTool = Tool.make("t3_project_create", {
   }),
   success: Schema.Struct({ ...Project.fields, commitError: Schema.optional(Schema.String) }),
   dependencies: [...shared.dependencies, ManagedProjectFolders.ManagedProjectFolders],
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "filesystem")
+  .annotate(Tool.Destructive, true);
 const ProjectUpdateTool = Tool.make("t3_project_update", {
   ...shared,
   description: "Update one project's settings. Omitted fields are unchanged.",
@@ -96,7 +101,9 @@ const ProjectUpdateTool = Tool.make("t3_project_update", {
     projectId: ProjectId,
     ...ProjectUpdatePayload.fields,
   }),
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "filesystem")
+  .annotate(Tool.Destructive, true);
 const ProjectDeleteTool = Tool.make("t3_project_delete", {
   ...shared,
   description: "Delete one project. Nonempty needs `force: true`. Folder on disk stays.",
@@ -106,7 +113,9 @@ const ProjectDeleteTool = Tool.make("t3_project_delete", {
     force: Schema.optionalKey(Schema.Boolean),
   }),
   dependencies: [...shared.dependencies, ProjectCloneTracker.ProjectCloneTracker],
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "filesystem")
+  .annotate(Tool.Destructive, true);
 const ProjectCloneTool = Tool.make("t3_project_clone", {
   ...shared,
   description:
@@ -121,6 +130,7 @@ const ProjectCloneTool = Tool.make("t3_project_clone", {
     SourceControlRepositoryService.SourceControlRepositoryService,
   ],
 })
+  .annotate(McpDomainAnnotation, "filesystem")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 const ThreadLaunchTool = Tool.make("t3_thread_launch", {
@@ -177,6 +187,7 @@ const ThreadLaunchTool = Tool.make("t3_thread_launch", {
     Digest.Digest,
   ],
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 
@@ -187,7 +198,9 @@ const ProjectPlaceTool = Tool.make("t3_project_place", {
   parameters: ProjectPlaceInput,
   success: ProjectPlaceResult,
   dependencies: shared.dependencies,
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "replicas")
+  .annotate(Tool.Destructive, true);
 const ProjectMachinesTool = Tool.make("t3_project_machines", {
   ...shared,
   description:
@@ -200,6 +213,7 @@ const ProjectMachinesTool = Tool.make("t3_project_machines", {
   success: ProjectMachinesResult,
   dependencies: shared.dependencies,
 })
+  .annotate(McpDomainAnnotation, "mesh")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 

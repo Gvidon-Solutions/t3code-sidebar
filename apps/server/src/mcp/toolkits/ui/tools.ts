@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   OrchestratorMcpFailure,
   UiOpenInput,
@@ -27,6 +28,7 @@ const UiOpenTool = Tool.make("ui_open", {
     UiRequests.UiRequests,
   ],
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Open on screen")
   .annotate(Tool.Destructive, false);
 
@@ -47,6 +49,7 @@ const VoiceControlTool = Tool.make("voice_control", {
   failureMode: "return",
   dependencies: voiceDependencies(),
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Control voice conversation")
   .annotate(Tool.Destructive, false);
 
@@ -59,6 +62,7 @@ const VoiceMoveTool = Tool.make("voice_move", {
   failureMode: "return",
   dependencies: voiceDependencies(),
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Move voice conversation")
   .annotate(Tool.Destructive, false);
 
