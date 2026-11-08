@@ -1,6 +1,6 @@
 import { File, Paths } from "expo-file-system";
 import { getContentUriAsync } from "expo-file-system/legacy";
-import { Linking } from "react-native";
+import { startActivityAsync } from "expo-intent-launcher";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex } from "@noble/hashes/utils";
 import type { VerifiedApk } from "./native-update-verification";
@@ -23,7 +23,11 @@ export async function installVerifiedApk(apk: VerifiedApk): Promise<void> {
     }
     if (bytesToHex(digest.digest()) !== apk.sha256)
       throw new Error("APK SHA-256 verification failed");
-    await Linking.openURL(await getContentUriAsync(downloaded.uri));
+    await startActivityAsync("android.intent.action.VIEW", {
+      data: await getContentUriAsync(downloaded.uri),
+      flags: 1,
+      type: "application/vnd.android.package-archive",
+    });
   } catch (error) {
     if (downloaded.exists) downloaded.delete();
     throw error;

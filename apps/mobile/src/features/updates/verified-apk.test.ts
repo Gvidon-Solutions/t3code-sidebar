@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vite-plus/test";
 import { installVerifiedApk } from "./verified-apk";
 import { File } from "expo-file-system";
-import { Linking } from "react-native";
+import { startActivityAsync } from "expo-intent-launcher";
 
 vi.mock("expo-file-system", () => ({
   Paths: { cache: "/cache" },
@@ -13,7 +13,7 @@ vi.mock("expo-file-system", () => ({
 vi.mock("expo-file-system/legacy", () => ({
   getContentUriAsync: vi.fn(async () => "content://verified-apk"),
 }));
-vi.mock("react-native", () => ({ Linking: { openURL: vi.fn() } }));
+vi.mock("expo-intent-launcher", () => ({ startActivityAsync: vi.fn() }));
 
 it("refuses corrupt APK bytes before opening the installer and removes the download", async () => {
   vi.clearAllMocks();
@@ -44,9 +44,13 @@ it("refuses corrupt APK bytes before opening the installer and removes the downl
   vi.mocked(File.downloadFileAsync).mockResolvedValueOnce(downloaded("corrupt") as unknown as File);
   await expect(installVerifiedApk(apk)).rejects.toThrow("SHA-256");
   expect(remove).toHaveBeenCalledOnce();
-  expect(Linking.openURL).not.toHaveBeenCalled();
+  expect(startActivityAsync).not.toHaveBeenCalled();
   vi.mocked(File.downloadFileAsync).mockResolvedValueOnce(downloaded("abc") as unknown as File);
   await installVerifiedApk(apk);
-  expect(Linking.openURL).toHaveBeenCalledWith("content://verified-apk");
+  expect(startActivityAsync).toHaveBeenCalledWith("android.intent.action.VIEW", {
+    data: "content://verified-apk",
+    flags: 1,
+    type: "application/vnd.android.package-archive",
+  });
   expect(close).toHaveBeenCalledTimes(2);
 });

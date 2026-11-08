@@ -84,7 +84,7 @@ export function installSelfHostedUpdateStatus() {
         notified = true;
         const certificate: unknown = Constants.expoConfig?.extra?.mobileUpdateCertificate;
         const apk =
-          typeof certificate === "string"
+          Platform.OS === "android" && typeof certificate === "string"
             ? verifiedNativeUpdate(status, url, certificate, Updates.runtimeVersion ?? "")
             : undefined;
         Dialog.alert(

@@ -83,17 +83,15 @@ it("checks a private OTA server on a short foreground transition after restoring
   vi.clearAllMocks();
   vi.mocked(AsyncStorage.getItem).mockResolvedValue(null);
   vi.mocked(installAppUpdateChecks).mockReturnValue(() => undefined);
-  using _fetch = vi
-    .spyOn(globalThis, "fetch")
-    .mockImplementation(
-      async () =>
-        new Response(
-          JSON.stringify({
-            requiresNativeUpdate: true,
-            apkUrl: "https://attacker.example/app.apk",
-          }),
-        ),
-    );
+  using _fetch = vi.spyOn(globalThis, "fetch").mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          requiresNativeUpdate: true,
+          apkUrl: "https://attacker.example/app.apk",
+        }),
+      ),
+  );
   const dispose = installSelfHostedUpdateStatus();
   try {
     await vi.waitFor(() => expect(installAppUpdateChecks).toHaveBeenCalledOnce());

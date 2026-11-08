@@ -683,6 +683,9 @@ importers:
       expo-image-picker:
         specifier: ~58.0.10
         version: 58.0.10(expo@58.0.14)
+      expo-intent-launcher:
+        specifier: ~58.0.3
+        version: 58.0.3(expo@58.0.14)
       expo-keep-awake:
         specifier: ~58.0.3
         version: 58.0.3(expo@58.0.14)(react@19.3.0)
@@ -8974,6 +8977,11 @@ packages:
     peerDependenciesMeta:
       react-native-web:
         optional: true
+
+  expo-intent-launcher@58.0.3:
+    resolution: {integrity: sha512-m+InwjvC5z9mAEqNhOmen5TkAFU6vqGdr+CSL9XSQmEpT1YfanJsHg9mc8P5g5mCepKk39If7v9vz8v9iekrsg==}
+    peerDependencies:
+      expo: '*'
 
   expo-json-utils@58.0.1:
     resolution: {integrity: sha512-jNHNElOUPz2/vW3CbDKRn6tTF6eE9wwVbh/Isnqp5c/CdTcONzFVR3YHN3WQ05PnkmieyEqVfeOusOd1X9FDtQ==}
@@ -18704,6 +18712,10 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1)(utf-8-validate@6.0.6))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.0)(supports-color@8.1.1)(utf-8-validate@6.0.6)
       sf-symbols-typescript: 2.2.0
+
+  expo-intent-launcher@58.0.3(expo@58.0.14):
+    dependencies:
+      expo: 58.0.14(277a83826bb26ba15256633fefeb0bc2)
 
   expo-json-utils@58.0.1: {}
 
