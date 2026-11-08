@@ -42,6 +42,13 @@ export interface MachinesDialogMachine {
   readonly reason: string | null;
 }
 
+function plainCopyStatus(state: string, fallback: string): string {
+  if (state === "watching") return fallback === "Synced" ? "Synced" : fallback;
+  if (state === "mounting" || state === "pending") return "Copying files…";
+  if (state === "paused") return "Paused";
+  return fallback;
+}
+
 function middleEllipsis(value: string, max = 56): string {
   if (value.length <= max) return value;
   const head = Math.ceil((max - 1) / 2);
@@ -157,7 +164,9 @@ export function MachinesDialog(props: {
                             : "text-muted-foreground"
                         }
                       >
-                        {status.text}
+                        {copies
+                          ? `${status.status.conflicts || 1} conflict${(status.status.conflicts || 1) === 1 ? "" : "s"} resolved (copies kept)`
+                          : plainCopyStatus(status.status.state, status.text)}
                       </span>
                       {copies
                         ? (copies.locations ?? [copies]).map((location) => (

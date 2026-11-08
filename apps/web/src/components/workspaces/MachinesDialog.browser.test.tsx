@@ -63,9 +63,7 @@ it("opens the preserved versions on the losing machine from the last automatic r
     />,
     { router: false },
   );
-  await expect
-    .element(page.getByText("1 conflict resolved automatically · copies in .t3-conflicts"))
-    .toBeVisible();
+  await expect.element(page.getByText("1 conflict resolved (copies kept)")).toBeVisible();
   await userEvent.click(page.getByRole("button", { name: "Open copies on replica" }));
   expect(onOpenChange).toHaveBeenCalledWith(false);
   expect(useOpenFileDialogStore.getState().initialEnvironmentId).toBe(
