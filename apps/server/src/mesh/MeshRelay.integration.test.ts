@@ -21,7 +21,11 @@ import * as Relay from "./MeshRelay.ts";
 
 const result = Schema.Struct({ ok: Schema.Boolean });
 const toolkit = Toolkit.make(
-  Tool.make("missing", { success: result, failure: OrchestratorMcpFailure, failureMode: "return" }).annotate(McpDomainAnnotation, "mesh"),
+  Tool.make("missing", {
+    success: result,
+    failure: OrchestratorMcpFailure,
+    failureMode: "return",
+  }).annotate(McpDomainAnnotation, "mesh"),
   Tool.make("probe", {
     description: "Probe relay destination",
     success: result,

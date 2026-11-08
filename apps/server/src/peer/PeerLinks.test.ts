@@ -83,16 +83,40 @@ const serveB = (descriptor: ExecutionEnvironmentDescriptor) =>
 /** Environment A, which links to B. */
 const makeA = (
   descriptor: ExecutionEnvironmentDescriptor,
+  peer: ServedPeer | undefined,
   secrets?: typeof ServerSecretStore.layer,
 ) =>
   layerLinkingEnvironment(descriptor, secrets).pipe(
     Layer.build,
-    Effect.map((context) => ({
-      links: Context.get(context, PeerLinks.PeerLinks),
-      peer: Context.get(context, PeerMcpClient.PeerMcpClient),
-      sql: Context.get(context, SqlClient.SqlClient),
-      settings: Context.get(context, ServerSettings.ServerSettingsService),
-    })),
+    Effect.map((context) => {
+      const links = Context.get(context, PeerLinks.PeerLinks);
+      return {
+        links: PeerLinks.PeerLinks.of({
+          ...links,
+          link: (input) =>
+            links
+              .link(input)
+              .pipe(
+                Effect.tap((link) =>
+                  peer
+                    ? links
+                        .resolve(link.environmentId)
+                        .pipe(
+                          Effect.flatMap((resolved) =>
+                            peer
+                              .bindIdentity(resolved.token, descriptor.environmentId)
+                              .pipe(Effect.orDie),
+                          ),
+                        )
+                    : Effect.void,
+                ),
+              ),
+        }),
+        peer: Context.get(context, PeerMcpClient.PeerMcpClient),
+        sql: Context.get(context, SqlClient.SqlClient),
+        settings: Context.get(context, ServerSettings.ServerSettingsService),
+      };
+    }),
   );
 
 const laptop = descriptorOf("environment-laptop", "Laptop");
@@ -163,7 +187,7 @@ it.effect("links with a pairing code, and the peer holds its agents to the limit
   Effect.scoped(
     Effect.gen(function* () {
       const b = yield* serveB(box);
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, b);
 
       const refused = yield* a.links
         .link({ url: b.url, pairingCode: "not-a-code", access: "auto" })
@@ -210,7 +234,7 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const b = yield* serveB(box);
-        const a = yield* makeA(laptop);
+        const a = yield* makeA(laptop, b);
         const pairing = yield* b.auth.issuePairingCredential();
         const link = a.links.link({ url: b.url, pairingCode: pairing.credential, access: "auto" });
 
@@ -266,7 +290,7 @@ it.effect("a link whose row cannot be stored keeps none of its token", () =>
           }),
         ),
       );
-      const a = yield* makeA(laptop, noted);
+      const a = yield* makeA(laptop, b, noted);
       yield* a.sql`
         CREATE TRIGGER refuse_link BEFORE INSERT ON peer_environment_links
         BEGIN SELECT RAISE(ABORT, 'database or disk is full'); END
@@ -285,7 +309,7 @@ it.effect("two links racing to one peer leave the stored access matching the tok
   Effect.scoped(
     Effect.gen(function* () {
       const b = yield* serveB(box);
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, b);
       const [first, second] = yield* Effect.all(
         [b.auth.issuePairingCredential(), b.auth.issuePairingCredential()],
         { concurrency: 2 },
@@ -354,7 +378,7 @@ it.effect("never follows a peer's redirect with the pairing code", () =>
               }),
             ),
       );
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, b);
       const pairing = yield* b.auth.issuePairingCredential();
       yield* a.links
         .link({ url: front, pairingCode: pairing.credential, access: "auto" })
@@ -369,7 +393,7 @@ it.effect("never sends a link's token to an address that stops answering as that
   Effect.scoped(
     Effect.gen(function* () {
       const b = yield* serveB(box);
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, b);
       const pairing = yield* b.auth.issuePairingCredential();
       yield* a.links.link({ url: b.url, pairingCode: pairing.credential, access: "auto" });
       yield* probe(a);
@@ -417,7 +441,7 @@ it.effect("cancelling a descriptor probe aborts its request and leaves later res
         box,
         Layer.merge(McpHttpServer.toolkitRegistration(ProbeToolkit, probeHandlers), holdDescriptor),
       );
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, b);
       const pairing = yield* b.auth.issuePairingCredential();
       yield* a.links.link({ url: b.url, pairingCode: pairing.credential, access: "auto" });
       yield* Ref.set(b.bearers, []);
@@ -441,7 +465,7 @@ it.effect("reads one stored link without asking the peer", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const b = yield* serveB(box);
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, b);
       const pairing = yield* b.auth.issuePairingCredential();
       yield* a.links.link({ url: b.url, pairingCode: pairing.credential, access: "auto" });
       yield* Ref.set(b.probes, 0);
@@ -458,7 +482,7 @@ it.effect("a linked peer that is renamed shows its new name", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const b = yield* serveB(box);
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, b);
       const pairing = yield* b.auth.issuePairingCredential();
       yield* a.links.link({ url: b.url, pairingCode: pairing.credential, access: "auto" });
 
@@ -479,7 +503,7 @@ it.effect("tells the agent to link again once the peer revokes the link or it ex
   Effect.scoped(
     Effect.gen(function* () {
       const b = yield* serveB(box);
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, b);
       const pairing = yield* b.auth.issuePairingCredential();
       yield* a.links.link({ url: b.url, pairingCode: pairing.credential, access: "auto" });
       yield* probe(a);
@@ -540,7 +564,7 @@ it.effect(
         const b = yield* serveB(
           descriptorOf("environment-box", "Box", { mcpModeLimitHeader: false }),
         );
-        const a = yield* makeA(laptop);
+        const a = yield* makeA(laptop, b);
         const pairing = yield* b.auth.issuePairingCredential();
         const older = yield* a.links
           .link({ url: b.url, pairingCode: pairing.credential, access: "auto" })
@@ -590,7 +614,7 @@ it.effect(
       Effect.gen(function* () {
         const impostor = yield* serveApart(descriptorOf("environment-impostor", "Impostor"));
         const b = yield* serveB(box);
-        const a = yield* makeA(laptop);
+        const a = yield* makeA(laptop, b);
         const pairing = yield* b.auth.issuePairingCredential();
         const linked = yield* a.links.link({
           url: impostor.url,
@@ -612,7 +636,7 @@ it.effect("linking a picked machine that answers nowhere names it and links noth
   Effect.scoped(
     Effect.gen(function* () {
       const impostor = yield* serveApart(descriptorOf("environment-impostor", "Impostor"));
-      const a = yield* makeA(laptop);
+      const a = yield* makeA(laptop, undefined);
       const failed = yield* a.links
         .link({
           url: impostor.url,

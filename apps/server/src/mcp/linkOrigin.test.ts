@@ -189,12 +189,16 @@ const layerTools = Layer.mergeAll(
       ),
     ),
     Layer.provide(
-      layerLinkedTest("environment:box", {
-        cloudbox: "environment:box",
-        laptop: "laptop",
-        desk: "desk",
-        trusted: "trusted",
-      }),
+      layerLinkedTest(
+        "environment:box",
+        {
+          cloudbox: "environment:box",
+          laptop: "laptop",
+          desk: "desk",
+          trusted: "trusted",
+        },
+        "all",
+      ),
     ),
     Layer.provide(NodeServices.layer),
   );

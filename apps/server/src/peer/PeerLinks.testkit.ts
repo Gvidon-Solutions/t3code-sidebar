@@ -149,7 +149,7 @@ export const servePeer = <E, R, S = never>(
                 Context.get(
                   authContext,
                   SqlClient.SqlClient,
-                )`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${client.sessionId}, ${environmentId}) ON CONFLICT(session_id) DO UPDATE SET environment_id=excluded.environment_id`,
+                )`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${client.sessionId}, ${environmentId}) ON CONFLICT(session_id) DO NOTHING`,
             ),
           ),
       /** Its settings, as for turning its Linked environments beta off. */

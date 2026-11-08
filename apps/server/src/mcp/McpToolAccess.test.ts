@@ -235,10 +235,22 @@ const fullAccessClient = clientCaller("full-access");
 const readOnlyClient = clientCaller("read-only");
 const linkedClient: McpInvocationContext.McpInvocationScope = {
   ...supervisedClient,
-  client: { ...supervisedClient.client!, linked: true },
+  client: {
+    ...supervisedClient.client!,
+    linked: true,
+    peerEnvironmentId: EnvironmentId.make("laptop"),
+  },
 };
 // A full-access link's agents can do anything this environment's user can.
 const fullAccessLinkedClient: McpInvocationContext.McpInvocationScope = {
+  ...fullAccessClient,
+  client: {
+    ...fullAccessClient.client!,
+    linked: true,
+    peerEnvironmentId: EnvironmentId.make("laptop"),
+  },
+};
+const unidentifiedLinkedClient = {
   ...fullAccessClient,
   client: { ...fullAccessClient.client!, linked: true },
 };
@@ -279,6 +291,7 @@ it.effect.each([
   ["writes", linkedClient, {}, "capability_denied"],
   ["writes_with_capability", linkedClient, {}, "capability_denied"],
   ["writes", fullAccessLinkedClient, {}, "ran"],
+  ["writes", unidentifiedLinkedClient, {}, "capability_denied"],
   ["writes_with_capability", fullAccessLinkedClient, {}, "ran"],
 
   ["writes_threads", supervised, {}, "ran"],
