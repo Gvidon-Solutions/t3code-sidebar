@@ -333,7 +333,12 @@ it("hides local git controls for a replica and retains controls for a primary", 
     },
   };
   screen.render(
-    <ReplicaWorkspaceControls config={config} environmentId="cloudbox" projectId="copy">
+    <ReplicaWorkspaceControls
+      config={config}
+      environmentId="cloudbox"
+      projectId="copy"
+      layoutLoading={false}
+    >
       <button>Branch · Current checkout</button>
     </ReplicaWorkspaceControls>,
   );
@@ -345,6 +350,7 @@ it("hides local git controls for a replica and retains controls for a primary", 
       environmentId="cloudbox"
       projectId="primary"
       projectEnvironmentId="studio"
+      layoutLoading={false}
     >
       <button>Branch · Current checkout</button>
     </ReplicaWorkspaceControls>,
@@ -352,11 +358,40 @@ it("hides local git controls for a replica and retains controls for a primary", 
   expect(screen.container.textContent).toBe("");
   expect(screen.container.querySelector("button")).toBeNull();
   screen.render(
-    <ReplicaWorkspaceControls config={config} environmentId="studio" projectId="primary">
+    <ReplicaWorkspaceControls
+      config={config}
+      environmentId="studio"
+      projectId="primary"
+      layoutLoading={false}
+    >
       <button>Branch · Current checkout</button>
     </ReplicaWorkspaceControls>,
   );
   expect(screen.container.textContent).toBe("Branch · Current checkout");
+  // No mesh at all: the folder is an ordinary project and git shows.
+  screen.render(
+    <ReplicaWorkspaceControls
+      config={null}
+      environmentId="studio"
+      projectId="primary"
+      layoutLoading={false}
+    >
+      <button>Branch · Current checkout</button>
+    </ReplicaWorkspaceControls>,
+  );
+  expect(screen.container.textContent).toBe("Branch · Current checkout");
+  // A mesh source is loading: wait rather than guess it is a primary.
+  screen.render(
+    <ReplicaWorkspaceControls
+      config={null}
+      environmentId="studio"
+      projectId="primary"
+      layoutLoading
+    >
+      <button>Branch · Current checkout</button>
+    </ReplicaWorkspaceControls>,
+  );
+  expect(screen.container.textContent).toBe("");
 });
 it("keeps old phone connections collapsed until Unavailable is expanded", () => {
   using screen = setup();
@@ -424,6 +459,11 @@ it("blocks removing a main copy while another copy exists and offers to promote 
       onRetry={vi.fn()}
     />,
   );
+  expect(screen.container.textContent).toContain("Main");
+  expect(screen.container.textContent).toContain("Copy");
+  expect(screen.container.textContent).toContain("Make main copy");
+  expect(screen.container.textContent).not.toContain("Primary");
+  expect(screen.container.textContent).not.toContain("Replica");
   mocks.alert.mockReset();
   screen.click("Remove");
   const [, message, buttons] = mocks.alert.mock.calls[0] as [
@@ -494,7 +534,7 @@ it("warns before removing a primary, omits Adopt when synced, and opens conflict
   expect(confirmation.message).toContain("ordinary folder");
   act(confirmation.onConfirm);
   expect(remove).toHaveBeenCalledWith("studio");
-  screen.click("Open copies on cloudbox");
+  screen.click("Open copies on Unnamed machine");
   expect(mocks.navigate).toHaveBeenCalledWith(
     "OpenFile",
     expect.objectContaining({ environmentId: "cloudbox", cwd: "/cloud/.t3-conflicts/copy" }),

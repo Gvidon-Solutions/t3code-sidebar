@@ -108,7 +108,7 @@ export function MachinesSheet(props: {
                       key={`${location.environmentId}:${location.path}`}
                       label={
                         copies.locations && copies.locations.length > 1
-                          ? `Open copies on ${location.environmentId}`
+                          ? `Open copies on ${machineDisplayOf(props.config, location.environmentId, "Unnamed machine").label}`
                           : "Open copies"
                       }
                       tone="secondary"
@@ -132,7 +132,7 @@ export function MachinesSheet(props: {
                   {label}
                 </Text>
                 <Text className="text-xs text-foreground-muted">
-                  {rep.role === "primary" ? "Primary" : "Replica"}
+                  {rep.role === "primary" ? "Main" : "Copy"}
                 </Text>
               </View>
               <Text className="font-mono text-xs text-foreground-muted" numberOfLines={2}>
@@ -160,7 +160,7 @@ export function MachinesSheet(props: {
               <View className="flex-row flex-wrap gap-2">
                 {rep.role === "replica" ? (
                   <Button
-                    label="Make primary"
+                    label="Make main copy"
                     tone="secondary"
                     onPress={() => props.onMakePrimary(rep.environmentId)}
                   />

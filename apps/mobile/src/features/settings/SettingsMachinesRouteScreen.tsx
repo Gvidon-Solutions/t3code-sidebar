@@ -13,18 +13,34 @@ import {
 } from "@t3tools/client-runtime/state/mesh-machines";
 import { useMeshOverview } from "../workspaces/useMeshOverview";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { useEnvironments } from "../../state/environments";
+import { MeshAgentFixActions } from "../workspaces/MeshAgentFixActions";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { MeshLinkForm } from "./MeshLinkForm";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { AppText } from "../../components/ui/AppText";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
-import { meshProjectRows, meshSetupPrompt } from "@t3tools/client-runtime/state/mesh-machines";
+import {
+  meshProjectRows,
+  meshSetupPrompt,
+  meshUpdateProblems,
+  meshUpdatePrompt,
+  offlineMachinePrompt,
+  replicaProblemPrompt,
+} from "@t3tools/client-runtime/state/mesh-machines";
 import * as Linking from "expo-linking";
 
 export function SettingsMachinesRouteScreen() {
   const mesh = useMeshLayout();
   const { config } = mesh;
   const { machines: allMachines, links } = useMeshOverview({ config });
+  const { environments } = useEnvironments();
+  const agentEnvironmentId =
+    mesh.source ??
+    environments.find((environment) => environment.connection.phase === "connected")
+      ?.environmentId ??
+    null;
   const now = useNowMinuteMs();
   const { active: machines, forgotten } = partitionMeshMachines(
     allMachines,
@@ -56,6 +72,7 @@ export function SettingsMachinesRouteScreen() {
     })),
     machines.filter((machine) => !online(machine)).map((machine) => `${machine.label} is offline`),
   );
+  const updateProblems = meshUpdateProblems(mesh.state?.snapshot?.document ?? {});
   return (
     <SettingsScreen title="Mesh">
       <ScreenScrollView contentContainerClassName="gap-3 px-5 py-4">
@@ -66,11 +83,18 @@ export function SettingsMachinesRouteScreen() {
             <Button
               label="Set up the mesh with an agent"
               tone="primary"
-              onPress={() =>
+              disabled={mesh.source === null}
+              onPress={() => {
+                if (mesh.source === null) return;
                 void Linking.openURL(
-                  Linking.createURL("new", { queryParams: { prompt: setupPrompt } }),
-                )
-              }
+                  Linking.createURL("new", {
+                    queryParams: {
+                      prompt: setupPrompt,
+                      ...(agentEnvironmentId ? { env: agentEnvironmentId } : {}),
+                    },
+                  }),
+                );
+              }}
             />
             <Button
               label="Link a machine"
@@ -121,9 +145,34 @@ export function SettingsMachinesRouteScreen() {
                     : "Online"
                   : (offlineMachineText(selected.lastSeenAt) ?? "Offline")}
               </AppText>
+              {!online(selected) ? (
+                <View className="gap-2">
+                  <AppText>
+                    {selected.label} · {statusOf(selected)}
+                  </AppText>
+                  <MeshAgentFixActions
+                    environmentId={agentEnvironmentId}
+                    accessibilityLabel={`Fix ${selected.label} offline with an agent`}
+                    prompt={offlineMachinePrompt(
+                      selected.label,
+                      statusOf(selected),
+                      selected.lastSeenAt == null && selected.lastExchangeAt == null,
+                    )}
+                  />
+                </View>
+              ) : null}
               <View className="gap-2">
                 {meshProjectRows(base, selected.environmentId, live).map((row) => (
-                  <AppText key={row.key}>{row.sentence}</AppText>
+                  <View key={row.key} className="gap-2">
+                    <AppText>{row.sentence}</AppText>
+                    {row.canRetry ? (
+                      <MeshAgentFixActions
+                        environmentId={agentEnvironmentId}
+                        accessibilityLabel={`Fix the copy of ${row.title} on ${selected.label} with an agent`}
+                        prompt={replicaProblemPrompt(row.title, selected.label)}
+                      />
+                    ) : null}
+                  </View>
                 ))}
               </View>
               <Button
@@ -141,6 +190,29 @@ export function SettingsMachinesRouteScreen() {
                 : null}
             </ScreenScrollView>
           </Sheet>
+        ) : null}
+        {updateProblems.length > 0 ? (
+          <SettingsSection title="Problems">
+            {updateProblems.map((problem) => {
+              const label = machineDisplayOf(
+                base,
+                problem.environmentId,
+                problem.environmentId,
+              ).label;
+              return (
+                <View key={problem.revision} className="gap-2 border-t border-border-subtle p-4">
+                  <AppText>
+                    Update to {problem.target} failed on {label}: {problem.reason}
+                  </AppText>
+                  <MeshAgentFixActions
+                    environmentId={agentEnvironmentId}
+                    accessibilityLabel={`Fix the update failure on ${label} with an agent`}
+                    prompt={meshUpdatePrompt(problem, label)}
+                  />
+                </View>
+              );
+            })}
+          </SettingsSection>
         ) : null}
         {forgotten.length ? (
           <SettingsSection>

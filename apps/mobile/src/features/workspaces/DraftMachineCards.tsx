@@ -41,8 +41,9 @@ export function DraftMachineCards(props: {
           accessibilityState={{ checked: row.selected, disabled: !row.selectable }}
           accessibilityLabel={`${row.label}, ${row.primary ? "Main, " : ""}${row.text}`}
           accessibilityHint={row.hint ?? undefined}
-          disabled={!row.selectable}
-          onPress={() => props.onSelect(row.environmentId)}
+          onPress={() => {
+            if (row.selectable) props.onSelect(row.environmentId);
+          }}
           testID={`draft-machine-card-${row.environmentId}`}
           className={cn(
             "min-w-[150px] max-w-[240px] flex-1 gap-0.5 rounded-xl border px-3 py-2",

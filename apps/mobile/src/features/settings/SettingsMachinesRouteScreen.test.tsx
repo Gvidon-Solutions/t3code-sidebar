@@ -1,30 +1,43 @@
+const mocks = vi.hoisted(() => ({
+  source: "studio" as string | null,
+  document: {} as Record<string, { h: string; v: unknown }>,
+  openURL: vi.fn(),
+}));
+
 vi.mock("../../components/ui/Sheet", () => ({
   Sheet: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("../../components/ui/Button", () => ({
   Button: ({
     label,
+    accessibilityLabel,
     onPress,
     disabled,
   }: {
     label: string;
+    accessibilityLabel?: string;
     onPress: () => void;
     disabled?: boolean;
   }) => (
-    <button disabled={disabled} onClick={onPress}>
+    <button aria-label={accessibilityLabel ?? label} disabled={disabled} onClick={onPress}>
       {label}
     </button>
   ),
 }));
 vi.mock("../../state/meshReplicas", () => ({ useReplicaStatuses: () => [] }));
 vi.mock("expo-linking", () => ({
-  createURL: () => "t3code://new",
-  openURL: () => Promise.resolve(),
+  createURL: (path: string, options: { queryParams?: Record<string, string> }) =>
+    `${path}?${new URLSearchParams(options.queryParams).toString()}`,
+  openURL: mocks.openURL,
 }));
+vi.mock("../../lib/copyTextWithHaptic", () => ({ copyTextWithHaptic: vi.fn() }));
 import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
-import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
 import { buildMeshMachines } from "@t3tools/client-runtime/state/mesh-machines";
 
 vi.mock("react-native", () => ({
@@ -63,16 +76,19 @@ vi.mock("./components/SettingsSection", () => ({
 vi.mock("./MeshLinkForm", () => ({ MeshLinkForm: () => <div>Pairing code</div> }));
 vi.mock("../../state/mesh-layout", () => ({ meshLayoutAtoms: { configStatus: () => null } }));
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: null, error: null }) }));
+vi.mock("../../state/environments", () => ({ useEnvironments: () => ({ environments: [] }) }));
 vi.mock("../workspaces/useMeshLayout", () => ({
-  useMeshLayout: () => ({ source: "studio", config: DEFAULT_SIDEBAR_WORKSPACES_CONFIG }),
+  useMeshLayout: () => ({
+    source: mocks.source,
+    config: config(),
+    state: { snapshot: { document: mocks.document } },
+    edit: vi.fn(),
+  }),
 }));
 vi.mock("../workspaces/useMeshOverview", () => ({
   useMeshOverview: () => ({
     machines: buildMeshMachines({
-      config: {
-        ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-        machines: { studio: { title: "Studio" }, cloudbox: { title: "Studio" } },
-      },
+      config: config(),
       connections: [
         {
           environmentId: "studio",
@@ -96,24 +112,89 @@ vi.mock("../workspaces/useMeshOverview", () => ({
 }));
 import { SettingsMachinesRouteScreen } from "./SettingsMachinesRouteScreen";
 
-it("shows machine state and pairing without machine settings fields", () => {
+function config(): SidebarWorkspacesConfig {
+  return {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { studio: { title: "Studio" }, cloudbox: { title: "Studio" } },
+  };
+}
+
+function renderScreen() {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const container = document.createElement("div");
   const root = createRoot(container);
+  return {
+    container,
+    render() {
+      act(() => root.render(<SettingsMachinesRouteScreen />));
+    },
+    dispose() {
+      act(() => root.unmount());
+    },
+  };
+}
+
+it("shows machine state and pairing without machine settings fields", () => {
+  mocks.source = "studio";
+  mocks.document = {};
+  const screen = renderScreen();
   try {
-    act(() => root.render(<SettingsMachinesRouteScreen />));
-    expect(container.textContent).toContain("2 machines · 2 online");
-    expect(container.textContent).toContain("Studio (linux · desk:3795)");
-    expect(container.textContent).toContain("Studio (darwin · laptop:3795)");
-    expect(container.querySelector("input")).toBeNull();
-    expect(container.textContent).toContain("Set up the mesh with an agent");
+    screen.render();
+    expect(screen.container.textContent).toContain("2 machines · 2 online");
+    expect(screen.container.textContent).toContain("Studio (linux · desk:3795)");
+    expect(screen.container.textContent).toContain("Studio (darwin · laptop:3795)");
+    expect(screen.container.querySelector("input")).toBeNull();
+    expect(screen.container.textContent).toContain("Set up the mesh with an agent");
     act(() =>
-      [...container.querySelectorAll("button")]
+      [...screen.container.querySelectorAll("button")]
         .find((button) => button.textContent === "Link a machine")!
         .click(),
     );
-    expect(container.textContent).toContain("Pairing code");
+    expect(screen.container.textContent).toContain("Pairing code");
   } finally {
-    act(() => root.unmount());
+    screen.dispose();
+  }
+});
+
+it("shows a failed update with a project-aware agent action", () => {
+  mocks.source = "studio";
+  mocks.openURL.mockReset();
+  mocks.document = {
+    "mesh.updateFailure/r7": {
+      h: "1",
+      v: { environmentId: "studio", reason: "health check failed", target: "0.1.7" },
+    },
+  };
+  const screen = renderScreen();
+  try {
+    screen.render();
+    expect(screen.container.textContent).toContain(
+      "Update to 0.1.7 failed on Studio: health check failed",
+    );
+    const fix = [...screen.container.querySelectorAll("button")].find(
+      (button) =>
+        button.getAttribute("aria-label") === "Fix the update failure on Studio with an agent",
+    );
+    expect(fix).toBeDefined();
+    act(() => fix!.click());
+    expect(mocks.openURL).toHaveBeenCalledWith(expect.stringContaining("env=studio"));
+  } finally {
+    screen.dispose();
+  }
+});
+
+it("disables the setup action without a mesh source", () => {
+  mocks.source = null;
+  mocks.document = {};
+  const screen = renderScreen();
+  try {
+    screen.render();
+    const setup = [...screen.container.querySelectorAll("button")].find(
+      (button) => button.getAttribute("aria-label") === "Set up the mesh with an agent",
+    );
+    expect(setup).toBeDefined();
+    expect(setup!.disabled).toBe(true);
+  } finally {
+    screen.dispose();
   }
 });
