@@ -9,6 +9,7 @@ import { expect, it } from "vite-plus/test";
 import { defaultJobs } from "./lifecycle.mjs";
 
 it("admits one host gate, releases a terminated owner, and caps the local default at eight", async () => {
+  const cwd = NodePath.resolve(import.meta.dirname, "../..");
   const state = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-host-lease-"));
   const env = { ...process.env, MESH_FAST_STATE_DIR: state };
   const holder = NodeChildProcess.spawn(
@@ -32,13 +33,13 @@ it("admits one host gate, releases a terminated owner, and caps the local defaul
   try {
     expect((await lines.next()).value).toBe("locked");
     for (const entry of ["scripts/mesh-fast/run.sh", "scripts/mesh-fast/setup.sh"])
-      await expect(exec("bash", [entry, "--host-info"], { env })).rejects.toMatchObject({
+      await expect(exec("bash", [entry, "--host-info"], { env, cwd })).rejects.toMatchObject({
         code: 75,
         stderr: expect.stringContaining("host admission lock"),
       });
     holder.kill("SIGKILL");
     await closed;
-    const result = await exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], { env });
+    const result = await exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], { env, cwd });
     const host: { hostname: string; cores: number; jobs: number; containerBoots: number } =
       JSON.parse(result.stdout);
     expect(host.hostname).toBe(NodeOS.hostname());
@@ -50,7 +51,8 @@ it("admits one host gate, releases a terminated owner, and caps the local defaul
     delete defaultEnv.MESH_FAST_ARTIFACTS_DIR;
     delete defaultEnv.MESH_FAST_MUTAGEN_CACHE;
     const defaults = JSON.parse(
-      (await exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], { env: defaultEnv })).stdout,
+      (await exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], { env: defaultEnv, cwd }))
+        .stdout,
     ) as {
       artifactsDirectory: string;
       cacheDirectory: string;
@@ -61,6 +63,7 @@ it("admits one host gate, releases a terminated owner, and caps the local defaul
     const configured = JSON.parse(
       (
         await exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], {
+          cwd,
           env: { ...defaultEnv, MESH_FAST_ARTIFACTS_DIR: artifactsDirectory },
         })
       ).stdout,
@@ -70,7 +73,7 @@ it("admits one host gate, releases a terminated owner, and caps the local defaul
     const directEnv: NodeJS.ProcessEnv = { ...env };
     delete directEnv.MESH_FAST_HOST_LEASE_FD;
     await expect(
-      exec(process.execPath, ["scripts/mesh-fast/run.mjs", "--host-info"], { env: directEnv }),
+      exec(process.execPath, ["scripts/mesh-fast/run.mjs", "--host-info"], { env: directEnv, cwd }),
     ).rejects.toMatchObject({ stderr: expect.stringContaining("through run.sh") });
   } finally {
     holder.stdin.end();

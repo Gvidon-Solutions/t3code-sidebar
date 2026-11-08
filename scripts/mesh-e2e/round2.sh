@@ -9,6 +9,11 @@ unset MESH_E2E_HELPERS_ONLY
 export MESH_E2E_SSH_CONTROL_DIR="${MESH_E2E_SSH_CONTROL_DIR:-$WORK/round2-ssh}"
 mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
 chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
+RUN_PREFIX=${MESH_E2E_RUN_PREFIX:-mesh-acceptance}
+LOCAL_PRIMARY_ROOT=${MESH_E2E_LOCAL_PRIMARY_ROOT:-$WORK/second-primary}
+REVERSE_ROOT=${MESH_E2E_REVERSE_ROOT:-/tmp/$RUN_PREFIX/reverse}
+REVERSE_TITLE=${MESH_E2E_REVERSE_TITLE:-$RUN_PREFIX-reverse}
+DEMO_TITLE=${MESH_E2E_DEMO_TITLE:-demo}
 TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-900}
 RPC_TIMEOUT=${MESH_E2E_ROUND2_RPC_TIMEOUT:-900}
 PASS=0; FAIL=0; FAILED=()
@@ -89,7 +94,7 @@ fi
 probe projects all_projects nodeB
 DEMO=$(jq -r --arg root "$NODE_B_DEMO_DIR" '.. | objects | select(.workspaceRoot? == $root) | .id' "$WORK/projects.out" | head -1)
 if [ -z "$DEMO" ]; then
- probe register-demo tool nodeB t3_project_create "$(jq -nc --arg root "$NODE_B_DEMO_DIR" '{title:"demo",workspaceRoot:$root}')"
+ probe register-demo tool nodeB t3_project_create "$(jq -nc --arg root "$NODE_B_DEMO_DIR" --arg title "$DEMO_TITLE" '{title:$title,workspaceRoot:$root}')"
  DEMO=$(jq -r '.id // empty' "$WORK/register-demo.out")
 fi
 KEY=$(node --input-type=module -e 'import {createHash} from "node:crypto"; console.log("lp-"+createHash("sha256").update(process.argv[1]).digest("hex"))' "$NODE_B_ENV:${NODE_B_DEMO_DIR}")
@@ -137,21 +142,21 @@ wait_edit() {
 }
 probe a-agent-edit wait_edit "$MARK-a"
 probe f-transfer-cleanup nodeB_ssh "rm -f '$NODE_B_DEMO_DIR/round2-transfer.bin'"
-probe b-cli-launch ctl nodeB new --project demo --on "$CLOUD_ENV" --agent codex --model gpt-6-luna --title "$MARK-b" "Use a local shell command in your current CLOUD replica directory to append the exact line $MARK-b to README.md. Mutagen syncs the edit to nodeB. Do not access the primary, request a link, run git, or create other files. Finish after making the local edit."
+probe b-cli-launch ctl nodeB new --project "$DEMO_TITLE" --on "$CLOUD_ENV" --agent codex --model gpt-6-luna --title "$MARK-b" "Use a local shell command in your current CLOUD replica directory to append the exact line $MARK-b to README.md. Mutagen syncs the edit to nodeB. Do not access the primary, request a link, run git, or create other files. Finish after making the local edit."
 probe b-agent-edit wait_edit "$MARK-b"
 # Reverse source endpoint runs through docker exec; no ssh daemon in the container.
-probe c-cloud-source vexec sh -c 'mkdir -p /home/t3/round2-primary; cd /home/t3/round2-primary; test -d .git || git init -q; printf "reverse primary\n" > README.md; mkdir -p node_modules; touch node_modules/excluded'
+probe c-cloud-source vexec sh -c 'mkdir -p "$1"; cd "$1"; test -d .git || git init -q; printf "reverse primary\n" > README.md; mkdir -p node_modules; touch node_modules/excluded' sh "$REVERSE_ROOT"
 probe c-projects all_projects cloud
 cp "$WORK/c-projects.out" "$WORK/cloud-projects.json"
-REV=$(jq -r '.. | objects | select(.workspaceRoot?=="/home/t3/round2-primary") | .id' "$WORK/cloud-projects.json" | head -1)
+REV=$(jq -r --arg root "$REVERSE_ROOT" '.. | objects | select(.workspaceRoot?==$root) | .id' "$WORK/cloud-projects.json" | head -1)
 if [ -z "$REV" ]; then
- probe c-register tool cloud t3_project_create '{"title":"round2-primary","workspaceRoot":"/home/t3/round2-primary"}'
+ probe c-register tool cloud t3_project_create "$(jq -nc --arg title "$REVERSE_TITLE" --arg root "$REVERSE_ROOT" '{title:$title,workspaceRoot:$root}')"
  REV=$(jq -r '.id // empty' "$WORK/c-register.out")
 else
  probe c-register jq -e --arg id "$REV" '.. | objects | select(.id?==$id)' "$WORK/cloud-projects.json"
 fi
 probe c-place tool cloud t3_project_place "$(jq -nc --arg p "$REV" --arg m "$NODE_A_ENV" '{project:$p,machine:$m,wait:90}')"
-REV_KEY=$(node --input-type=module -e 'import {createHash} from "node:crypto"; console.log("lp-"+createHash("sha256").update(process.argv[1]).digest("hex"))' "$CLOUD_ENV:/home/t3/round2-primary")
+REV_KEY=$(node --input-type=module -e 'import {createHash} from "node:crypto"; console.log("lp-"+createHash("sha256").update(process.argv[1]).digest("hex"))' "$CLOUD_ENV:$REVERSE_ROOT")
 probe c-watching wait_replica nodeA "$REV_KEY" "$NODE_A_ENV" watching
 CPATH=$(jq -r '.representation.path' "$WORK/c-place.out")
 reverse_files() { test -f "$CPATH/README.md" && test ! -e "$CPATH/.git" && test ! -e "$CPATH/node_modules" && grep -F 'reverse primary' "$CPATH/README.md"; }
@@ -160,13 +165,13 @@ probe c-files reverse_files
 checkout_demo() {
  local ssh_command
  printf -v ssh_command '%q ' ssh -F "$NODE_B_SSH_CONFIG" -i "$NODE_B_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no
- if [ ! -d /tmp/t3-mesh-round2-primary/.git ]; then
-  GIT_SSH_COMMAND="$ssh_command" git clone -q "$NODE_B_HOST:${NODE_B_DEMO_DIR}" /tmp/t3-mesh-round2-primary || return
+ if [ ! -d "$LOCAL_PRIMARY_ROOT/.git" ]; then
+  GIT_SSH_COMMAND="$ssh_command" git clone -q "$NODE_B_HOST:${NODE_B_DEMO_DIR}" "$LOCAL_PRIMARY_ROOT" || return
  fi
- git -C /tmp/t3-mesh-round2-primary rev-parse --is-inside-work-tree
+ git -C "$LOCAL_PRIMARY_ROOT" rev-parse --is-inside-work-tree
 }
 probe d-checkout checkout_demo
-probe d-place tool nodeB t3_project_place "$(jq -nc --arg p "$KEY" --arg m "$NODE_A_ENV" '{project:$p,machine:$m,role:"primary",path:"/tmp/t3-mesh-round2-primary",wait:90}')"
+probe d-place tool nodeB t3_project_place "$(jq -nc --arg p "$KEY" --arg m "$NODE_A_ENV" --arg root "$LOCAL_PRIMARY_ROOT" '{project:$p,machine:$m,role:"primary",path:$root,wait:90}')"
 wait_converged 'three representations converge'
 ws_get nodeB > "$WORK/grouping.json"
 grouping() (
@@ -255,7 +260,7 @@ for m in nodeA nodeB; do
  probe "h-fixture-$m" tool "$m" t3_thread_launch "$(jq -nc --arg p "$p" --arg t "$MARK-$m" '{projectId:$p,title:$t,modelSelection:{instanceId:"codex",model:"gpt-6-luna"}}')"
 done
 for m in nodeA nodeB cloud; do
- case "$m" in nodeA) e=$NODE_A_ENV; path=/tmp/t3-mesh-round2-primary/README.md;; nodeB) e=$NODE_B_ENV; path=${NODE_B_DEMO_DIR}/README.md;; cloud) e=$CLOUD_ENV; path=$VPATH/README.md;; esac
+ case "$m" in nodeA) e=$NODE_A_ENV; path="$LOCAL_PRIMARY_ROOT/README.md";; nodeB) e=$NODE_B_ENV; path=${NODE_B_DEMO_DIR}/README.md;; cloud) e=$CLOUD_ENV; path=$VPATH/README.md;; esac
  probe "h-cat-$m" ctl nodeB cat "$path" --on "$e"
  probe "h-open-$m" ctl nodeB open-file "$path" --on "$e"
  probe "h-open-target-$m" grep -F "$e" "$WORK/h-open-$m.out"

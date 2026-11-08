@@ -1,18 +1,10 @@
 #!/usr/bin/env node
-import * as NodeChildProcess from "node:child_process";
+import { runSync as run, quote } from "../lib/shell.mjs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 import { readConfig } from "./builder.mjs";
 
-const run = (command, args, options = {}) =>
-  NodeChildProcess.execFileSync(command, args, {
-    encoding: "utf8",
-    timeout: 120_000,
-    maxBuffer: 32 * 1024 * 1024,
-    ...options,
-  });
-const quote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 const targetSource = NodeURL.fileURLToPath(new URL("./bed-target.mjs", import.meta.url));
 const scripts = NodeURL.fileURLToPath(
   new URL("../../agent-kit/skills/t3/scripts/", import.meta.url),
@@ -56,13 +48,18 @@ for (const machine of config.machines) {
     const check = `test "$(cat ${quote(lock)})" = ${quote(values["bed-lock-owner"])} || exit 75\n`;
     const binaryDir = NodePath.join(machine.home, "bin"),
       kit = NodePath.dirname(machine.ctl);
-    ssh(check + `mkdir -p ${quote(binaryDir)} ${quote(kit)}`);
+    const lib = NodePath.join(machine.home, "lib");
+    ssh(check + `mkdir -p ${quote(binaryDir)} ${quote(kit)} ${quote(lib)}`);
     const upload = (source, dest) =>
       run("scp", [...(machine.scpArgs ?? []), source, `${machine.ssh}:${dest}`]);
     const node = NodePath.join(binaryDir, "node26");
     upload(process.execPath, node);
     ssh(check + `chmod 0755 ${quote(node)}`);
     upload(targetSource, NodePath.join(binaryDir, "bed-target.mjs"));
+    upload(
+      NodeURL.fileURLToPath(new URL("../lib/shell.mjs", import.meta.url)),
+      NodePath.join(lib, "shell.mjs"),
+    );
     upload(NodePath.join(scripts, "t3ctl.mjs"), machine.ctl);
     upload(NodePath.join(scripts, "server-runtime.mjs"), NodePath.join(kit, "server-runtime.mjs"));
     input.archive = NodePath.join(machine.home, "D1-baseline.tar.gz");

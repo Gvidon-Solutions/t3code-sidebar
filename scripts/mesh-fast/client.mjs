@@ -1,49 +1,6 @@
-import * as NodeChildProcess from "node:child_process";
+import { run, until } from "../lib/shell.mjs";
 import * as NodeEvents from "node:events";
 import * as NodeCrypto from "node:crypto";
-const run = (command, args, options = {}) =>
-  new Promise((resolve, reject) => {
-    const child = NodeChildProcess.spawn(command, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      ...options,
-    });
-    let out = "",
-      err = "";
-    child.stdout?.on("data", (chunk) => {
-      out += chunk;
-    });
-    child.stderr?.on("data", (chunk) => {
-      err += chunk;
-    });
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0
-        ? resolve(out.trim())
-        : reject(
-            Object.assign(Error(`${command}: ${code}: ${err.slice(-2000)} ${out.slice(-1000)}`), {
-              code,
-              stdout: out,
-              stderr: err,
-            }),
-          ),
-    );
-  });
-
-const until = async (description, read, accepts, timeout = 120000) => {
-  const deadline = Date.now() + timeout;
-  let value;
-  while (Date.now() < deadline) {
-    try {
-      value = await read();
-      if (accepts(value)) return value;
-    } catch (error) {
-      value = error.message;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw Error(`${description}: ${JSON.stringify(value).slice(-3000)}`);
-};
-
 async function connectRpc(node, key) {
   const response = await fetch(node.origin + "/api/auth/websocket-ticket", {
     method: "POST",

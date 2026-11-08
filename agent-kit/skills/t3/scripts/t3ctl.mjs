@@ -931,7 +931,8 @@ class Mcp {
     if (res.structuredContent !== undefined) return res.structuredContent;
     try {
       return JSON.parse(text);
-    } catch {
+    } catch (error) {
+      console.warn(`${name}: response is not JSON: ${error.message}`);
       return text;
     }
   }
@@ -1558,8 +1559,8 @@ async function resolveThread(ref, { projectRef, includeArchived } = {}) {
     try {
       const t = (await m.call("t3_thread_read", { threadId: r, limit: 1 })).thread;
       if (t) return { ...t, project: t.projectId };
-    } catch {
-      /* fall through */
+    } catch (error) {
+      console.warn(`Direct thread lookup failed; searching titles: ${error.message}`);
     }
   }
   const projects = await listProjects();
