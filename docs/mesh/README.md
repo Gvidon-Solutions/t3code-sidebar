@@ -194,6 +194,8 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   the mesh, so clients need no separate connection to each destination. Catalog reads never
   place replicas or stage threads and time out after thirty seconds.
   Fork works on the same machine too. Old handoff "move" data still renders as ordinary links.
+  The fork marker escapes peer titles (including newlines and backticks) and machine labels, and
+  emits a Markdown link only for `t3-thread:` or `http(s)` URLs.
 - **Draft machine selection.** Web `components/chat/useDraftEnvironmentRouting.ts` and mobile
   `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen
   machine with `planThreadOnMachine`. Replica status supplies progress and registration; the
@@ -210,10 +212,9 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   tools or text, and justify growth).
 - **Config editing.** The mesh is configured by agents, not by UI forms. Settings › Mesh (web
   and mobile) lists machines with a plain status and launches a prepared thread ("Set up the mesh
-  with an agent"); the agent uses `t3ctl mesh config …` or the `t3_mesh_config_*` tools. The former
-  web `MeshConfigDialog` and mobile `MeshConfigSheet` are gone. The shared editor logic remains in
-  `client-runtime/state/meshConfigEditor.ts` for any future surface. Stale applies retain the draft and show the
-  server diff; reload rebases local changes over the latest document and requires a new plan.
+  with an agent", or "Fix with an agent" when status is unhealthy); the agent uses
+  `t3ctl mesh config …` or the `t3_mesh_config_*` tools. Stale applies retain the draft and show
+  the server diff; reload rebases local changes over the latest document and requires a new plan.
   Restoring a layout history revision follows the same plan/apply path. Apply requires a successful
   plan of the current text. Settings groups apply actions by revision and merges client connections
   by the descriptor environment ID. Machine details read optional replica lag and reported SSH
@@ -326,11 +327,19 @@ keys, daemon state and containers. The runtime tests use neutral project/machine
 ## Runtime agent-kit reconciliation
 
 `mesh/MeshAgentKit.ts` installs the bundled skill into the shared and Claude/Codex/OpenCode
-skill directories through the config `agents/kit` planner action. It writes only the
-`<!-- t3-mesh begin -->` … `<!-- t3-mesh end -->` block in the three harness instruction
+skill directories through the config `agents/kit` planner action. Every managed skill directory
+carries a `.t3-managed` marker and is synced exactly, so files removed from the bundle disappear.
+A `skills/t3` directory without that marker, a symlinked skill directory, or a symlinked
+instruction file is left untouched and reported as a config validation failure. It writes only
+the `<!-- t3-mesh begin -->` … `<!-- t3-mesh end -->` block in the three harness instruction
 files. Missing directories are created. Malformed or repeated markers fail reconciliation
 before instruction files are written. `agents.manageInstructions: false` disables instruction
 writes while skill installation remains enabled. Instruction errors appear in normal config status.
+
+Legacy shared instructions are dropped only as a whole paragraph (or run of paragraphs) bounded
+by the file edge or blank lines, and only before the managed block exists. A mid-line mention,
+owner text beside the paragraph, and an adjacent blockquote stay untouched; the one-time
+migration never edits a file that already has our block.
 
 A harness counts as installed when its binary resolves on the server's PATH, when a provider
 instance for its driver names an existing absolute `config.binaryPath`, or when its home
@@ -363,6 +372,13 @@ Never format `agent-kit/skills/t3/**`. Keep the skill general and compact.
   `vp lint` 0 errors, `typecheck` in contracts/shared/client-runtime/server/mobile and
   `vp exec tsc --noEmit -p apps/web/tsconfig.json`. Commit with `--no-verify` only because of the
   old knip baseline; add no new knip findings.
+- Script wiring: `scripts/referenced-scripts.test.ts` fails when a script path named from
+  `scripts/*.{sh,mjs,cjs}`, a `knip.jsonc` entry, or a repository document does not exist, or when
+  a shell script assembles a script filename from a variable.
+- Release builds refuse to start when any `T3CODE_*_TEST_BUILD*` flag is enabled:
+  `apps/server/scripts/cli.ts`, `scripts/build-cli-archive.ts` and
+  `scripts/build-desktop-artifact.ts` call `scripts/lib/release-env.ts`; `scripts/release-env.test.ts`
+  proves the subprocess exit and message.
 - Three-machine bed: `scripts/mesh-e2e/README.md` (nodeB main server + isolated studio :3795 +
   VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
   `mesh-core-acceptance.sh` (layout, links, files, old clients), `replica-acceptance.sh` (replicas on real Mutagen, t3ctl),
@@ -564,10 +580,12 @@ use `meshConfig.apply` with a base revision. Migration-only identity and per-pai
 protected alongside config and bindings. Explicit `machines.<name>.ssh.host` remains public for
 existing SSH mode. Older documents remain readable; startup extracts their internal migration fields.
 
-Settings patches merge `providerInstances` per instance; `null` deletes that instance, so a
-client can remove one without replacing the whole map. `t3ctl settings set` accepts the same
-tombstone. Delivery-updating errors keep the `DeliveryUpdatingError` tag and also accept the
-legacy `T3_UPDATING` message marker from N-1 peers and clients.
+Settings patches merge `providerInstances` per instance; `null` deletes that instance. A map that
+omits an instance keeps the saved one: sending the whole map no longer removes anything, so
+clients send only the changed instance through the shared `buildProviderInstancePatch`.
+`t3ctl settings set` accepts the same tombstone. Delivery-updating errors keep the
+`DeliveryUpdatingError` tag and also accept a legacy message that starts with `T3_UPDATING:`
+from N-1 peers and clients; the substring elsewhere in tool or user text is not a refusal.
 
 ## Persistent peer connections and SSH pipes
 
@@ -651,7 +669,8 @@ reachability and one-hop relay. PeerNetwork disables external POST /mcp after co
 checks a 200 MiB relay transfer by byte count and SHA-256.
 The CLI subprocess test checks binary stdio, nonzero refusal, stderr diagnostics and that no
 database is opened by the ProxyCommand process.
-The shared-bed runners live in scripts/mesh-e2e: network-acceptance.sh runs both acceptance suites;
+The shared-bed runners live in scripts/mesh-e2e: network-acceptance.sh [core|replica|all] seeds
+the fixture and dispatches to mesh-core-acceptance.sh or replica-acceptance.sh;
 network-bed.sh exercises blocked inbound peers, native SSH transfers/interruption, a three-minute
 tunnel cut and automatic server restart. The fault proxy rejects peer HTTP MCP separately from
 local agent/CLI MCP. See that directory's README for isolation and cleanup.
@@ -745,8 +764,9 @@ Mutagen's list argument is a **label selector**, not a session name: list manage
 sessions and then select the name when inspecting/removing a single session.
 
 `run/RunWorker` keeps completed background records for seven days and bounds each
-journal to 10 MiB. `T3CODE_RUN_RETENTION_MS`, `T3CODE_RUN_LOG_BYTES` and
-`T3CODE_RUN_KILL_GRACE_MS` override those limits (termination defaults to ten seconds).
+journal to 10 MiB. A background control request whose stop throws is reported as an error frame
+and closes that socket; it must not escape the promise as an unhandled rejection.
+`T3CODE_RUN_RETENTION_MS`, `T3CODE_RUN_LOG_BYTES` and `T3CODE_RUN_KILL_GRACE_MS` override those limits (termination defaults to ten seconds).
 Journal rotation preserves complete frames; observers recover completion from the durable
 record. A missing supervisor marks the outcome lost instead of reconnecting forever.
 The forwarding guardian stops for missing jobs, backs off transient failures and caps its log.
@@ -1151,7 +1171,9 @@ an asynchronous pong can shorten a deadline after its sleep was scheduled.
 ## Public source hygiene
 
 `scripts/public-repo-leakage.test.ts` checks tracked text and compressed fixtures for private
-infrastructure and fixture names. Keep run output outside tracked sources and use neutral
+infrastructure and fixture names, including the VPS address prefix, T3 state directories outside the
+fixture home, owner home paths, bare machine names and VPN host suffixes. Keep run output outside
+tracked sources and use neutral
 identities in evaluation captures. `scripts/security-workflows.test.ts` checks all workflows
 for explicit repository read permissions and immutable external actions; Node setup uses
 `package.json` as its version source.

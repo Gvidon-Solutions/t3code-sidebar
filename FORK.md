@@ -109,6 +109,36 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — Server correctness and repository cleanliness (audit round 4)
+
+- **What.** Mesh acceptance scripts dispatch to the renamed suites instead of missing round
+  scripts. Agent-kit skill directories carry a `.t3-managed` marker; an unmanaged or symlinked
+  destination and a symlinked instruction file are left alone and reported. Legacy shared
+  instructions are removed only as a whole paragraph before the managed block exists. Settings
+  patches send only the changed provider instance (shared `buildProviderInstancePatch`; `null`
+  deletes) and omission no longer removes. Release builds refuse `T3CODE_*_TEST_BUILD*`.
+  Delivery retries accept only the prefixed legacy `T3_UPDATING:` marker. Fork markers neutralize
+  newlines/backticks and emit links only for thread or http(s) schemes. A throwing background stop
+  is reported as an error frame; peer credential labels are single-line and bounded. The test bed
+  verifies every referenced script path exists.
+- **How.** `scripts/referenced-scripts.test.ts` walks shell/Node scripts, `knip.jsonc` and docs;
+  `MeshAgentKit` owns marker-based exact sync and refuses links; `withoutLegacyInstructions`
+  matches blank-line-bounded paragraphs; `packages/shared` owns the per-instance patch builder;
+  `scripts/lib/release-env.ts` guards the CLI, archive and desktop entry points;
+  `isDeliveryUpdating` checks the `T3_UPDATING:` prefix; `forkMarker` sanitizes and validates;
+  control-socket stop errors become frames; `peerSessionLabel` sanitizes. The dead client
+  `meshConfigEditor` and its test/export are removed, and stage-coded names and owner live data in
+  the cross-device spec are neutral.
+- **Where.** `scripts/mesh-e2e/*`, `scripts/lib/release-env.ts`, `scripts/referenced-scripts.test.ts`,
+  `scripts/release-env.test.ts`, `apps/server/src/mesh/{MeshAgentKit,ThreadForkService}.ts`,
+  `apps/server/src/run/RunWorker.ts`, `apps/server/src/peer/connection/PeerCredentials.ts`,
+  `packages/contracts/src/{delivery,settings}.ts`, `packages/shared/src/serverSettings.ts`,
+  `packages/client-runtime/src/state/meshLayoutClient.ts`, `docs/mesh/*`,
+  `docs/sidebar-cross-device.md`.
+- **Handoff.** Client work switches `AddCodexAccountDialog` and
+  `buildProviderInstanceUpdatePatch` to the shared `buildProviderInstancePatch` and adds settings
+  help text; this stage does not edit `apps/web`.
+
 ### 2026-11-08 — F3b client audit fixes and shared machine decisions
 
 - **What.** Web and Android now make the same choices about a draft's machine, its voice button,
@@ -134,14 +164,12 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `WorkspaceChrome`, `WorkspaceThreadLine`, `MachinesSheet`, `MeshConnectPrompt`,
   `useForkThread`, `DraftMachineStatus`, `lib/touchTargets`, `lib/appLinking`.
 
-### 2026-11-08 — C3 required mesh services and shared server runtime
-
 ### 2026-11-08 — Server hardening and repository cleanliness
 
 - **What.** Agent-kit reconciliation keeps a harness's skill and managed block whenever its home directory or a configured provider `binaryPath` exists, so a short service-manager PATH cannot delete them; removal touches only our block. Settings patches can delete one provider instance with `null`. Delivery retries recognise the legacy `T3_UPDATING` marker from older peers. The voice test flag is ignored in production builds. Fork markers escape peer-supplied titles. One invalid SSH route no longer fails adoption between healthy machines, and the run plan names disabled SSH accurately. Peer credential labels include the peer's machine label. The background worker control socket reports only parse and signal errors as invalid requests.
 - **How.** `MeshAgentKit` reads provider instances; `ServerSettingsPatch.providerInstances` accepts `null` tombstones; provider-core owns one production-gated voice-flag helper; replica routes are built per machine with skipped-route reasons; `isDeliveryUpdating` checks the tag first, then the legacy message. The bundled-worker smoke test runs `t3 run` exec and background start from the built server.
 - **Where.** `apps/server/src/mesh/{MeshAgentKit,ThreadForkService}.ts`, `apps/server/src/replicas/ProjectReplicaService.ts`, `apps/server/src/run/{RunPlan,RunWorker}.ts`, `apps/server/src/peer/connection/PeerCredentials.ts`, `packages/contracts/src/{delivery,settings}.ts`, `packages/provider-core/src/server/testFlags.ts`, `scripts/mesh-e2e/platform-smoke.mjs`.
-- **Cleanliness.** Removed the private development logs (`docs/mesh-conformance.md`, `docs/mesh-agent-eval.*`), renamed stage-coded scripts by function, replaced stage-coded fixture prefixes, made the mobile pairing script read the configured bed, unified shell quoting and sleep helpers, and extended the public-repo leakage test with non-Latin machine names and neutral test names. App ids (`com.gvidon.*`) and the fork repository name stay as the owner decided.
+- **Cleanliness.** Removed the private development logs, renamed stage-coded scripts by function, replaced stage-coded fixture prefixes, made the mobile pairing script read the configured bed, unified shell quoting and sleep helpers, and extended the public-repo leakage test with non-Latin machine names and neutral test names. App ids (`com.gvidon.*`) and the fork repository name stay as the owner decided.
 
 ### 2026-11-08 — Required mesh services and shared server runtime
 
@@ -170,7 +198,7 @@ only compact latest reports plus the last three failed runs with ownership guard
 Paused supervisors close their
 watchers and reject late restarts; fast cleanup removes only marked payloads and
 preserves external symlink targets. The paused-process regression fails before
-the watcher fix and passes afterward. F2 integration uses pinned HTTPS/bootstrap
+the watcher fix and passes afterward. The integration case uses pinned HTTPS/bootstrap
 trust and upgrades an already-paired previous release. Focused regressions cover
 clock correction after quarantine and asynchronous-pong heartbeat scheduling.
 
@@ -1803,20 +1831,23 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `MeshLayoutServiceLive.ts`, `MeshReplicator.ts` and `mesh/migration/`; client-runtime
   `MeshLayoutStore`, web/mobile `useMeshLayout` providers and application roots.
 
-### 2026-11-05 — Mesh state and config editing
+### 2026-11-05 — Mesh state and agent-facing config editing
 
-- **What.** Settings › Mesh presents machine state and opens a YAML config editor on web and
-  mobile. Plan/apply uses optimistic revision checks; history restoration uses the same flow.
-  Forgotten machine facts can be removed separately from active links. Compact machine rows merge
-  repeated connections by environment ID and keep opaque hostnames out of display names. Apply
-  summaries group human action names by revision; lag and SSH route checks accept peer reports.
-  Migration metadata lives outside the editable YAML, including existing history revisions.
-- **How.** Both editors share a client-runtime controller. Replica git ownership is shown as
+- **What.** Settings › Mesh presents machine state and offers "Set up the mesh with an agent"
+  ("Fix with an agent" when status is unhealthy); the agent edits the config through `t3ctl` or
+  the `t3_mesh_config_*` tools. Plan/apply uses optimistic revision checks; history restoration
+  uses the same flow. Forgotten machine facts can be removed separately from active links.
+  Compact machine rows merge repeated connections by environment ID and keep opaque hostnames out
+  of display names. Apply summaries group human action names by revision; lag and SSH route
+  checks accept peer reports. Migration metadata stays outside the editable document, including
+  existing history revisions.
+- **How.** Config editing lives in the server, contracts, CLI and MCP; web and mobile only render
+  state and launch the prepared agent thread. Replica git ownership is shown as
   `git on <machine> · t3 run`; longer project names collapse the machine strip. Fork machine
   selection uses the app combobox and model failures expose provider settings.
-- **Where.** Web `workspaces/MeshSettingsPanel`, `MeshConfigDialog`, `ForkThreadDialog`,
-  `BranchToolbar`; mobile `settings/SettingsMachinesRouteScreen`, `MeshConfigSheet`, thread
-  context pickers; shared `meshConfigEditor`, `meshMachines`, `meshLayout/replicas`.
+- **Where.** Web `workspaces/MeshSettingsPanel`, `ForkThreadDialog`, `BranchToolbar`; mobile
+  `settings/SettingsMachinesRouteScreen`, thread context pickers; shared `meshMachines`,
+  `meshLayout/replicas`.
 
 ### 2026-11-05 — Machine name collision recovery
 
@@ -1971,7 +2002,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   WorkspaceThreadLine,workspaceNavigator}*`, `apps/mobile/src/features/threads/new-task-flow-provider.tsx`,
   `packages/client-runtime/src/state/meshLayout/{draftMachine,draftMachineCards,index}.ts`.
 
-### 2026-11-08 — U2 mesh UI polish
+### 2026-11-08 — Mesh UI polish
 
 - **What:** Settings › Mesh no longer edits YAML: it lists machines with one plain status sentence
   and opens a prepared "Set up the mesh with an agent" thread; machine details show project

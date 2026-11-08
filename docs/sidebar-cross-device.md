@@ -16,8 +16,8 @@ any number of **primaries** (own `.git`, compute) and **replicas** (working copi
 one source representation with Mutagen, both directions). Which machine is primary is
 configuration per project, never code. Creating a thread "in project X on machine M" makes M a
 replica when needed — mounted, synced, registered, placed — then the thread starts. Agents and
-voice can do everything by name: "создай тред в проекте X на Cloudbox", "открой тред про mount"
-— whatever machine it lives on.
+voice can do everything by name: "start a thread in project X on cloudbox", "open the thread
+about the mount" — whatever machine it lives on.
 
 ## 0. Object model (the law; code must match it exactly)
 
@@ -66,9 +66,9 @@ Kill -9 each server mid-sync and mid-mount; kill the Mutagen daemon; cut a link/
   by id and writes `edit(source.config)` per server
   (`apps/mobile/src/features/workspaces/useSidebarWorkspaces.ts`). Copies drift; phone shows
   Cloudbox's layout.
-- Live data: tile "main" is `workspace-4` on studio and `main` on Cloudbox; keys mix
-  `github.com/...`, `<envId>:<path>`, `github-anton/...`; keys of offline environments
-  (`e2e6225c…` Windows) must never be pruned.
+- Live data: a mesh has workspace tiles, logical projects and machine placements; keys can mix
+  repository aliases, `<envId>:<path>` and older client forms. Keys of offline environments must
+  never be pruned.
 - Logical project key = client derivation by grouping mode
   (`packages/client-runtime/src/state/projectGrouping.ts`). Synced folders without `.git` have
   `repositoryIdentity: null` and never group by repository.
@@ -252,7 +252,7 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 - Settings › Machines (web + mobile): every known environment, label, tag, color, reach (ssh) per
   other machine, link status, replica defaults.
 - MCP `t3_thread_search` / `t3_thread_list` accept `environmentId: "all"` (fan out over links, merge
-  results with `environmentId` on each) so "открой тред X" works whatever machine holds it; `ui_open`
+  results with `environmentId` on each) so "open thread X" works whatever machine holds it; `ui_open`
   already takes environment + thread.
 
 ### 8. Skills (`~/.agents/skills/t3`)
@@ -303,21 +303,6 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
   right tool calls, first action within seconds, no wandering. Fix skills/instructions until all
   pass.
 
-## Stages and owners
-
-| Stage           | Scope                                                                                                 | Depends on |
-| --------------- | ----------------------------------------------------------------------------------------------------- | ---------- |
-| A — core        | §1 pure CRDT lib, materialize/diff/importLegacy, §4 pure functions, exhaustive tests                  | —          |
-| B — tags        | §7 tags UI + Settings › Machines (reads materialized config; write path via current settings until C) | —          |
-| C — server mesh | §2 store, RPC, replication over links, legacy compat                                                  | A          |
-| D — clients     | §3 web + mobile read/write via mesh, offline queue, §4 UI                                             | A, C       |
-| E — replicas    | §5, §6 server + clients + MCP                                                                         | A, C       |
-| F — skills      | §8                                                                                                    | C, E       |
-| H — files       | §9                                                                                                    | C          |
-| I — mesh UI     | §10                                                                                                   | C, D       |
-| J — agents      | §11 instructions + behaviour eval                                                                     | F          |
-| G — e2e         | test bed and scenarios below; web (Playwright), Android (adb emulator), desktop build                 | all        |
-
 ## Disposable test bed
 
 The nodeA, nodeB and cloud fixtures use separate units, state directories, sandbox homes and
@@ -325,15 +310,3 @@ loopback ports. Copy `scripts/mesh-e2e/local.env.example` to the gitignored `loc
 configure your own infrastructure there. No production server or account SSH authorization
 file is part of the bed. See [the harness guide](../scripts/mesh-e2e/README.md) for setup,
 commands, the shared lock and cleanup rules.
-
-## Rules for every agent
-
-- Work only in your own worktree/branch given in your task; commit there (conventional messages,
-  e.g. `feat(mesh): …`). Never push, never touch `ws`, never restart/update the live T3 on studio
-  or Cloudbox, never edit their settings.
-- Use the Node version declared by package.json; configure its bin directory in the bed local.env.
-  The pre-commit `knip:check` already fails on `ws` (33 old unused exports): commit with
-  `--no-verify` after running yourself `./node_modules/.bin/vp fmt`, `./node_modules/.bin/vp lint`
-  (no errors), typecheck and the tests of every package you touched; add no new knip findings.
-- Tests for every pure function; FORK.md feature-log entry for your stage.
-- Report at the end: branch, commits, files, commands and results, open issues.

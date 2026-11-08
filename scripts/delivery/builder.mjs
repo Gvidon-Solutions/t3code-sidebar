@@ -202,7 +202,7 @@ export async function deliver(config, request) {
   if (request.hot && !config.cleanAgent?.project)
     throw new Error("Configure cleanAgent.project before a hot deployment");
   if (!request.hot && (!Array.isArray(config.gate) || !config.gate.length))
-    throw new Error("Clean delivery requires the T1 gate command in local config");
+    throw new Error("Clean delivery requires the release gate command in local config");
   const hot = request.hot ? snapshot(resolve(request.worktree || config.repository), id) : null;
   const source = hot?.worktree ?? config.repository;
   const commit =
@@ -333,7 +333,7 @@ export async function deliver(config, request) {
       if (!config.cleanAgent?.project)
         throw new Error("Hot change deployed, but cleanAgent.project is not configured");
       const diff = exec("git", ["-C", source, "diff", `${hot.parent}..${commit}`]);
-      const brief = `Turn this hot change into a clean change: proper code, tests, T1 gate, merge to ws, release; if the change is wrong, do not merge it, explain in the inbox.\nSource: ${source}\nBranch: ${hot.branch}\nCommit: ${commit}\n\n${diff}`;
+      const brief = `Turn this hot change into a clean change: proper code, tests, release gate, merge to ws, release; if the change is wrong, do not merge it, explain in the inbox.\nSource: ${source}\nBranch: ${hot.branch}\nCommit: ${commit}\n\n${diff}`;
       const briefPath = join(logDir, "clean-brief.md");
       writeFileSync(briefPath, brief, { mode: 0o600 });
       const cleanThread = JSON.parse(

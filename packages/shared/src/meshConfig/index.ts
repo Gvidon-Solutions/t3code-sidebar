@@ -6,9 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { decodeLayoutKey } from "../meshLayout/document.ts";
 import * as Schema from "effect/Schema";
-import { parse, stringify } from "yaml";
-
-export const configYaml = (doc: unknown): string => stringify(doc);
+import { parse } from "yaml";
 
 export const defaultAgentAliases = (): NonNullable<
   NonNullable<MeshConfigDocument["agents"]>["aliases"]
