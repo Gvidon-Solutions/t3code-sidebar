@@ -1515,7 +1515,7 @@ it.effect(
           Layer.mock(EffectOutbox.EffectOutboxV2)({
             reconcileAfterProcessLoss: Effect.succeed({ requeued: 0, cancelled: 0 }),
             cancelUnsettled: () => Effect.succeed([]),
-          signalCancellations: () => Effect.void,
+            signalCancellations: () => Effect.void,
           }),
         ),
       ),

@@ -66,7 +66,12 @@ export async function securePipeAddress(address: string, platform: NodeJS.Platfo
 }
 
 export const nodeCommand = (source: string, platform = "linux") =>
-  loginCommand(`eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())`, "", platform, false);
+  loginCommand(
+    `eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())`,
+    "",
+    platform,
+    false,
+  );
 
 export function sshArguments(host: string, sshHome?: string): string[] {
   if (!host || host.startsWith("-") || /[\s\0]/.test(host)) throw new Error("Invalid SSH host");
