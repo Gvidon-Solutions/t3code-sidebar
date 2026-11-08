@@ -726,4 +726,5 @@ Existing-session adoption resolves SSH endpoints from machine bindings and the c
 Automatic conflict resolution records its Mutagen session id in `repstatus.resolvingConflicts`
 before pausing. Keep that intent when publishing errors. After an interruption the driver resets
 and resumes only that marked session, then scans again; an unmarked pause remains intentional.
-Clearing intent before resume completes can strand the copy after a crash.
+Clearing intent before resume completes can strand the copy after a crash. Legacy whole-object
+settings writes leave replica diagnostics to the servers, so older clients cannot erase this intent.
