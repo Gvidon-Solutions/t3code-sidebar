@@ -1,14 +1,17 @@
-// @effect-diagnostics nodeBuiltinImport:off -- A primary runtime loads its own native PTY addon and evaluates the same supervised worker as the SSH Node launcher.
+import { readLine } from "../platform/readLine.ts";
+// @effect-diagnostics nodeBuiltinImport:off -- A primary runtime loads its native PTY addon through its own module resolver.
 import * as NodeModule from "node:module";
-import { nativeInvocation } from "../platform/ServerPlatform.ts";
-import { RUN_WORKER_SOURCE } from "./RunWorker.ts";
+import { nativeInvocation, workerPlatform } from "../platform/ServerPlatform.ts";
+import { workerPolicy } from "./RunWorkerPolicy.ts";
+import { runWorkerMain } from "./RunWorker.ts";
 const requireNative = NodeModule.createRequire(import.meta.url);
 export function runWorker(payload: string) {
-  const execute = new Function(
-    "require",
-    "__T3_RUN_PAYLOAD",
-    "__T3_RUN_RESOLVE",
-    RUN_WORKER_SOURCE,
+  return runWorkerMain(
+    requireNative,
+    payload,
+    nativeInvocation,
+    workerPlatform,
+    workerPolicy,
+    readLine,
   );
-  execute(requireNative, payload, nativeInvocation);
 }

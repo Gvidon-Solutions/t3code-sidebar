@@ -1,3 +1,5 @@
+import { sshOptions, sshConfigPath } from "../platform/ServerPlatform.ts";
+import { resolveMeshHost } from "@t3tools/shared/meshConfig";
 import {
   sshWrapper,
   sshDirectory,
@@ -63,7 +65,7 @@ export const layer = Layer.effect(
     const sshDir = path.join(sshHome, ".ssh");
     const identity = path.join(directory, "id_ed25519");
     const knownHosts = path.join(directory, "known_hosts");
-    const configFile = path.join(sshDir, "config");
+    const configFile = sshConfigPath(sshHome);
     const sshdConfigFile = path.join(
       env.T3_MESH_SSHD_DIR ?? sshDirectory(platform, env),
       "sshd_config",
@@ -247,20 +249,23 @@ export const layer = Layer.effect(
           const check = Effect.gen(function* () {
             if (mode === "managed" && !peer.facts.reported?.sshd)
               return yield* new MeshConfigError({ reason: "storage", message: "no sshd" });
-            const host = mode === "existing" ? peer.settings.ssh?.host : `t3-${machine}`;
             const validatedHost = yield* Effect.try({
-              try: () => resolveSshHost(host),
+              try: () =>
+                resolveSshHost(
+                  resolveMeshHost(
+                    { ssh: { mode }, machines: { [machine]: peer.settings } },
+                    machine,
+                  ),
+                ),
               catch: (cause) =>
                 new MeshConfigError({ reason: "validation", message: String(cause) }),
             });
             const result = yield* runner.run({
               command: "ssh",
               args: [
-                ...(mode === "managed" || env.T3_MESH_SSH_HOME ? ["-F", configFile] : []),
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "ConnectTimeout=10",
+                ...sshOptions({
+                  configPath: mode === "managed" || env.T3_MESH_SSH_HOME ? configFile : undefined,
+                }),
                 "--",
                 validatedHost,
                 "true",

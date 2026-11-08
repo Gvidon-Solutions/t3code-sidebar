@@ -1,3 +1,4 @@
+import { downloadVerified } from "../platform/Download.ts";
 import {
   mutagenChecksums,
   mutagenTarget,
@@ -57,17 +58,22 @@ const make = Effect.gen(function* () {
         message: `Mutagen does not support ${target}.`,
       });
     const archive = mutagenArchiveName(target);
-    const response = yield* http
-      .get(meshAssetUrl(mutagenReleaseUrl(target)))
-      .pipe(Effect.timeout("30 seconds"));
-    if (response.status !== 200)
-      return yield* new ReplicaError({ reason: "mutagen", message: "Mutagen download failed." });
-    const bytes = new Uint8Array(yield* response.arrayBuffer.pipe(Effect.timeout("30 seconds")));
-    if ((yield* digest.digestHex(Digest.sha256, bytes)) !== checksum)
-      return yield* new ReplicaError({
-        reason: "mutagen",
-        message: "Mutagen archive checksum mismatch.",
-      });
+    const bytes = yield* downloadVerified(http, meshAssetUrl(mutagenReleaseUrl(target)), checksum, {
+      bodyTimeout: "30 seconds",
+    }).pipe(
+      Effect.provideService(Digest.Digest, digest),
+      Effect.mapError(
+        (cause) =>
+          new ReplicaError({
+            reason: "mutagen",
+            message:
+              cause.reason === "checksum"
+                ? "Mutagen archive checksum mismatch."
+                : "Mutagen download failed.",
+            cause,
+          }),
+      ),
+    );
     const staging = yield* fs.makeTempDirectoryScoped({ prefix: "t3-mutagen-" });
     const archivePath = join(staging, archive);
     yield* fs.writeFile(archivePath, bytes);

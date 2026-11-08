@@ -1,3 +1,4 @@
+import { downloadVerified } from "../platform/Download.ts";
 import { MeshConfigError } from "@t3tools/contracts";
 import {
   cliArchiveFileName,
@@ -9,8 +10,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Digest from "effect/crypto/Digest";
-import * as Hex from "effect/encoding/Hex";
-import { HttpClient, HttpClientResponse } from "effect/http";
+
+import { HttpClient } from "effect/http";
 export class MeshRuntimeArchive extends Context.Service<
   MeshRuntimeArchive,
   {
@@ -57,20 +58,10 @@ export const layer = Layer.effect(
             reason: "validation",
             message: `Pin t3.runtimeChecksums[${filename}] in mesh config before downloading`,
           });
-        const bytes = new Uint8Array(
-          yield* http.get(`${base}/${filename}`).pipe(
-            Effect.flatMap(HttpClientResponse.filterStatusOk),
-            Effect.flatMap((r) => r.arrayBuffer),
-          ),
-        );
-        yield* report("verify");
-        const actual = Hex.encode(yield* digest.digest(Digest.sha256, bytes));
-        if (actual !== expected.toLowerCase())
-          return yield* new MeshConfigError({
-            reason: "storage",
-            message: "Runtime SHA-256 mismatch",
-          });
-        return bytes;
+        return yield* downloadVerified(http, `${base}/${filename}`, expected, {
+          stallTimeout: "10 minutes",
+          onVerify: report("verify"),
+        }).pipe(Effect.provideService(Digest.Digest, digest));
       },
       Effect.timeout("10 minutes"),
       Effect.mapError((error) =>
