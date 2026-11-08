@@ -1,3 +1,4 @@
+import { RUN_WORKER_POLICY_SOURCE } from "./RunWorkerPolicy.ts";
 import { WORKER_PLATFORM_SOURCE } from "../platform/ServerPlatform.ts";
 export const RUN_WORKER_SOURCE = String.raw`
 const fs = require('node:fs');
@@ -13,6 +14,8 @@ const spawn = (command,args,options) => { const resolved = resolveInvocation(com
 const c = JSON.parse(Buffer.from(typeof __T3_RUN_PAYLOAD === 'string' ? __T3_RUN_PAYLOAD : process.argv[1], 'base64').toString());
 if (c.tty && process.stdin.isTTY) process.stdin.setRawMode(true);
 ${WORKER_PLATFORM_SOURCE}
+${RUN_WORKER_POLICY_SOURCE}
+let stopGraceMs, retentionMs, logBytes;
 const record = id => path.join(root, id + '.json');
 const journal = id => path.join(root, id + '.ndjson');
 const validId = id => typeof id === 'string' && /^[a-f0-9-]{36}$/.test(id);
@@ -30,11 +33,36 @@ async function completion(code, paths, emit = frame) {
   await send({type:'done',code,ignored:[]});
 }
 const atomic = async (file, value) => { const temp = file + '.' + crypto.randomUUID(); await fsp.writeFile(temp, JSON.stringify(value), {mode: 0o600}); await fsp.rename(temp, file); };
-const state = async id => JSON.parse(await fsp.readFile(record(id), 'utf8'));
+const state = async id => { try { return JSON.parse(await fsp.readFile(record(id), 'utf8')); } catch(error) { if (error.code === 'ENOENT') error.runReason = 'job_not_found'; throw error; } };
 async function prepareRoot() {
   await fsp.mkdir(root, {recursive: true, mode: 0o700});
   const s = await fsp.lstat(root);
   if (!privateStat(s)) throw Error('Run state directory is not private');
+  const cutoff = Date.now() - retentionMs;
+  for (const name of await fsp.readdir(root)) {
+    const match = /^([a-f0-9-]{36})[.](json|ndjson)(?:[.]([a-f0-9-]{36}))?$/.exec(name);
+    if (!match) continue;
+    const file = path.join(root, name);
+    let info;
+    try { info = await fsp.stat(file); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    if (!info.isFile() || info.mtimeMs >= cutoff) continue;
+    if (match[3]) {
+      if (info.mtimeMs < Date.now() - Math.max(retentionMs, 86400000)) await fsp.rm(file, {force:true});
+      continue;
+    }
+    if (match[2] === 'ndjson') {
+      try { await fsp.access(record(match[1])); } catch (error) { if (error.code !== 'ENOENT') throw error; await fsp.rm(file, {force:true}); }
+      continue;
+    }
+    let row;
+    try { row = await state(match[1]); }
+    catch (error) { if (error.code === 'ENOENT') continue; frame({type:'err', data:Buffer.from('Cannot inspect background job ' + match[1] + '; its files were retained\n').toString('base64')}); continue; }
+    if (row.status !== 'exited' && row.status !== 'lost') continue;
+    await fsp.rm(record(match[1]), {force:true});
+    await fsp.rm(journal(match[1]), {force:true});
+    if (process.platform !== 'win32') await fsp.rm(address(match[1]), {force:true});
+  }
+
 }
 function ignored(relative) {
   const segments = relative.split('/');
@@ -61,7 +89,11 @@ async function manifest() {
     for (const child of children) {
       const rel = relative ? relative + '/' + child.name : child.name;
       const full = path.join(directory, child.name);
-      if (child.isDirectory()) await walk(full, rel);
+      if (child.isDirectory()) {
+        if (child.name === '.git') continue;
+        if (ignored(rel)) entries.set(rel + '/', 'directory');
+        else await walk(full, rel);
+      }
       else if (ignored(rel)) {
         const stat = await fsp.lstat(full, {bigint: true});
         entries.set(rel, String(stat.mtimeNs) + ':' + String(stat.size));
@@ -73,7 +105,7 @@ async function manifest() {
 }
 async function changed(before) {
   const after = await manifest();
-  return [...after].filter(([file, stamp]) => before.get(file) !== stamp).map(([file]) => file);
+  return [...after].filter(([file, stamp]) => stamp === 'directory' || before.get(file) !== stamp).map(([file]) => file);
 }
 async function control(id, signal) {
   await new Promise((resolve, reject) => {
@@ -88,7 +120,8 @@ async function control(id, signal) {
 async function observe(id, logs, follow) {
   let offset = 0;
   let buffer = '';
-  const decoder = new (require('node:string_decoder').StringDecoder)('utf8');
+  let decoder = new (require('node:string_decoder').StringDecoder)('utf8');
+  let identity;
   let watcher;
   let draining = false;
   let again = false;
@@ -103,7 +136,10 @@ async function observe(id, logs, follow) {
         if (logs) {
           const handle = await fsp.open(journal(id), 'r');
           try {
-            const size = (await handle.stat()).size;
+            const info = await handle.stat();
+            const nextIdentity = String(info.dev) + ':' + String(info.ino);
+            if (identity !== nextIdentity || info.size < offset) { offset = 0; buffer = ''; decoder = new (require('node:string_decoder').StringDecoder)('utf8'); identity = nextIdentity; }
+            const size = info.size;
             while (size > offset) {
               const data = Buffer.alloc(Math.min(65536, size - offset));
               const read = await handle.read(data, 0, data.length, offset);
@@ -119,7 +155,7 @@ async function observe(id, logs, follow) {
           } finally { await handle.close(); }
         }
         const current = await state(id);
-        if (!logs && current.status !== 'running') { await completion(current.code, current.ignored || []); completed = true; }
+        if (!completed && current.status !== 'running') { await completion(current.code, current.ignored || []); completed = true; }
         if (completed || !follow) { close(); if (!completed) frame({type: 'done', code: 0, ignored: []}); }
       } while (again && !completed && follow);
     } finally { draining = false; }
@@ -134,19 +170,40 @@ async function observe(id, logs, follow) {
   if (!logs) frame({type: 'ready', id});
   await drain();
 }
+function appendJournal(id, value) {
+  const file = journal(id);
+  const line = Buffer.from(JSON.stringify(value) + '\n');
+  const notice = Buffer.from(JSON.stringify({type:'err', data:Buffer.from('Earlier background output was truncated by retention.\n').toString('base64')}) + '\n');
+  if (line.length > logBytes - notice.length) {
+    if (value.type !== 'out' && value.type !== 'err') throw Error('Background record exceeds journal limit');
+    const data = Buffer.from(value.data, 'base64');
+    const chunk = Math.floor((logBytes - notice.length - 128) * 3 / 4);
+    for (let offset = 0; offset < data.length; offset += chunk) appendJournal(id, {...value, data:data.subarray(offset, offset + chunk).toString('base64')});
+    return;
+  }
+  if (fs.statSync(file).size + line.length <= logBytes) { fs.appendFileSync(file, line); return; }
+  const combined = Buffer.concat([fs.readFileSync(file), line]);
+  let tail = combined.subarray(Math.max(0, combined.length - (logBytes - notice.length)));
+  if (tail.length < combined.length) tail = tail.subarray(tail.indexOf(10) + 1);
+  const temporary = file + '.' + crypto.randomUUID();
+  fs.writeFileSync(temporary, Buffer.concat([notice, tail]), {mode:0o600});
+  fs.renameSync(temporary, file);
+}
 async function execute(job) {
   const before = await manifest();
   const id = c.id;
   let child;
   let terminalSignal;
   let killTimer;
+  let graceFinished;
+  let finishGrace;
   let commandTimer;
   let watchdog;
   let server;
   let stopping = false;
   let finished = false;
   let lastBeat = Date.now();
-  const emit = job ? value => fs.appendFileSync(journal(id), JSON.stringify(value) + '\n', {mode: 0o600}) : frame;
+  const emit = job ? value => appendJournal(id, value) : frame;
   const metadata = {id, name: c.args[0], cwd: c.cwd, ports: c.ports || [], startedAt: new Date().toISOString(), status: 'running'};
   function signal(sig) {
     if (!child || !Number.isSafeInteger(child.pid) || child.pid <= 0 || finished) return;
@@ -156,7 +213,7 @@ async function execute(job) {
     if (stopping || finished) return;
     stopping = true; terminalSignal = sig;
     signal(sig);
-    killTimer = setTimeout(() => signal('SIGKILL'), 1000);
+    graceFinished = new Promise(resolve => { finishGrace = resolve; killTimer = setTimeout(() => { signal('SIGKILL'); resolve(); }, stopGraceMs); });
   }
   if (job) await fsp.writeFile(journal(id), '', {mode: 0o600});
   if (c.tty) {
@@ -172,7 +229,7 @@ async function execute(job) {
     child.stdout.on('drain', () => pty.resume());
     pty.onExit(event => { const code = event.signal ? 128 + event.signal : event.exitCode; child.emit('exit', code, null); child.stdout.end(); child.stderr.end(); child.emit('close', code, null); });
   } else child = spawn(c.args[0], c.args.slice(1), {cwd: c.cwd, env: process.env, detached: true, stdio: ['pipe', 'pipe', 'pipe']});
-  child.once('exit', () => { if (!stopping) { signal('SIGTERM'); killTimer = setTimeout(() => signal('SIGKILL'), 1000); } });
+  child.once('exit', () => { if (!stopping && groupAlive(child.pid)) stop('SIGTERM'); });
   for (const [stream, type] of [[child.stdout, 'out'], [child.stderr, 'err']]) stream.on('data', data => {
     if (emit({type, data: data.toString('base64')}) === false) { child.stdout.pause(); child.stderr.pause(); }
   });
@@ -184,12 +241,22 @@ async function execute(job) {
   if (job) {
     server = net.createServer(socket => {
       let input = '';
+      let handled = false;
       socket.setTimeout(3000, () => socket.destroy());
       socket.on('error', e => emit({type: 'error', message: e.message}));
       socket.on('data', data => {
+        if (handled) return;
         input += data;
-        if (input.length > 1024) { socket.destroy(); return; }
-        if (input.includes('\n')) { const request = JSON.parse(input.trim()); if (['SIGINT', 'SIGTERM'].includes(request.signal)) stop(request.signal); socket.end('ok\n'); }
+        if (input.length > 1024) { handled = true; socket.destroy(); return; }
+        if (input.includes('\n')) {
+          handled = true;
+          try {
+            const request = JSON.parse(input.trim());
+            if (request && request.signal === 'status') { socket.end('running\n'); return; }
+            if (!request || !['SIGINT', 'SIGTERM'].includes(request.signal)) throw Error('Invalid signal');
+            stop(request.signal); socket.end('ok\n');
+          } catch { socket.end('invalid request\n'); emit({type:'err', data:Buffer.from('Invalid background control request\n').toString('base64')}); }
+        }
       });
     });
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(address(id), resolve); });
@@ -221,8 +288,8 @@ async function execute(job) {
   let code;
   try { code = await complete; }
   catch (e) { emit({type: 'err', data: Buffer.from(e.message + '\n').toString('base64')}); code = e.code === 'ENOENT' ? 127 : 126; }
-  // A successful shell can leave descendants behind; the supervisor owns the group through cleanup.
-  signal('SIGKILL');
+  if (graceFinished && groupAlive(child.pid)) await graceFinished;
+  if (finishGrace) finishGrace();
   finished = true;
   clearTimeout(killTimer); clearTimeout(commandTimer); clearInterval(watchdog);
   const outputs = await changed(before);
@@ -232,6 +299,9 @@ async function execute(job) {
   process.stdin.destroy();
 }
 async function main() {
+  stopGraceMs = killGraceMs(c.killGraceMs ?? process.env.T3CODE_RUN_KILL_GRACE_MS);
+  retentionMs = jobRetentionMs(c.retentionMs ?? process.env.T3CODE_RUN_RETENTION_MS);
+  logBytes = jobLogBytes(c.logBytes ?? process.env.T3CODE_RUN_LOG_BYTES);
   if (!c.namespace || !/^[a-f0-9]{16}$/.test(c.namespace)) throw Error('Invalid run namespace');
   await prepareRoot();
   if (c.action === 'probe') { frame({type: 'done', code: 0, ignored: []}); return; }
@@ -257,6 +327,20 @@ async function main() {
   }
   if (!validId(c.id)) throw Error('Invalid background id');
   const current = await state(c.id);
+  if (current.status === 'lost') { const error = Error(current.lastError || 'The background supervisor no longer exists'); error.runReason = 'job_not_found'; throw error; }
+  if (current.status === 'running' && (c.action === 'wait' || (c.action === 'logs' && c.follow))) {
+    try { await control(c.id, 'status'); }
+    catch(error) {
+      const latest = await state(c.id);
+      if (latest.status === 'running') {
+        if (['ENOENT','ECONNREFUSED'].includes(error.code)) {
+          error.runReason = 'job_not_found';
+          await atomic(record(c.id), {...latest, status:'lost', code:255, lastError:'The background supervisor no longer exists; command outcome is unknown'});
+        }
+        throw error;
+      }
+    }
+  }
   if (c.action === 'stop') {
     if (current.status === 'running') await control(c.id, 'SIGTERM');
     await observe(c.id, false, true); return;
@@ -264,5 +348,5 @@ async function main() {
   if (c.action === 'logs' || c.action === 'wait') { await observe(c.id, c.action === 'logs', c.follow || c.action === 'wait'); return; }
   throw Error('Unknown remote run action');
 }
-main().catch(error => { frame({type:'error',message:error.message}); process.exitCode = 255; });
+main().catch(error => { frame({type:'error',message:error.message,...(error.runReason ? {reason:error.runReason} : {})}); process.exitCode = 255; });
 `;

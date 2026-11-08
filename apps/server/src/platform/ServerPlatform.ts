@@ -248,7 +248,13 @@ const root = path.join(os.tmpdir(), 't3-run-' + (process.getuid ? process.getuid
 const address = id => process.platform === 'win32' ? '\\\\.\\pipe\\t3-run-' + c.namespace + '-' + id : path.join(root, id + '.sock');
 function privateStat(s) { return s.isDirectory() && !(process.platform !== 'win32' && (s.uid !== process.getuid() || (s.mode & 0o077))); }
 async function protectSocket(address) { if (process.platform !== 'win32') await fsp.chmod(address, 0o600); }
+function groupAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try { process.kill(process.platform === 'win32' ? pid : -pid, 0); return true; }
+  catch(error) { if (error.code === 'ESRCH') return false; throw error; }
+}
 function signalGroup(pid, sig, emit) {
+  if (!groupAlive(pid)) return;
   if (process.platform === 'win32') {
     const killer = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {stdio:'ignore'});
     killer.on('error', error => emit({type:'error',message:error.message}));

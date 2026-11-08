@@ -7,8 +7,41 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeReadline from "node:readline";
+import * as NodeNet from "node:net";
+import * as NodeCrypto from "node:crypto";
+import { workerStateRoot } from "../platform/ServerPlatform.ts";
 import { RUN_WORKER_SOURCE } from "./RunWorker.ts";
 import { decodeFrame } from "./RunProtocol.ts";
+
+function workerFixture(root: string) {
+  const namespace = NodeCrypto.createHash("sha256").update(root).digest("hex").slice(0, 16);
+  const invoke = (
+    request: Record<string, unknown>,
+    options: { allowFailure?: boolean; closeInput?: boolean } = {},
+  ) => {
+    const child = NodeChildProcess.spawn(process.execPath, [
+      "-e",
+      RUN_WORKER_SOURCE,
+      "--",
+      Buffer.from(JSON.stringify({ root, cwd: root, namespace, ignores: [], ...request })).toString(
+        "base64",
+      ),
+    ]);
+    if (options.closeInput) child.stdin.end();
+    const frames: ReturnType<typeof decodeFrame>[] = [];
+    const lines = NodeReadline.createInterface({ input: child.stdout });
+    lines.on("line", (line) => frames.push(decodeFrame(line)));
+    return new Promise<typeof frames>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (code) =>
+        code === 0 || options.allowFailure
+          ? resolve(frames)
+          : reject(new Error(`Worker exited ${code}`)),
+      );
+    });
+  };
+  return { invoke, stateRoot: workerStateRoot(namespace) };
+}
 
 it.live("streams both outputs, propagates command failure and detects ignored writes", () =>
   Effect.promise(async () => {
@@ -28,7 +61,16 @@ it.live("streams both outputs, propagates command failure and detects ignored wr
       };
       const child = NodeChildProcess.spawn(process.execPath, [
         "-e",
-        RUN_WORKER_SOURCE,
+        String.raw`
+const promises = require('node:fs/promises');
+const actualRead = promises.readdir;
+promises.readdir = (directory, ...args) => { if (directory.endsWith('dist')) throw Error('Ignored directory scanned'); return actualRead(directory, ...args); };
+const actualKill = process.kill.bind(process);
+process.kill = (pid, signal) => { if (signal !== 0) throw Error('Unexpected signal after command exit'); return actualKill(pid, signal); };
+const processes = require('node:child_process');
+const actualSpawn = processes.spawn;
+processes.spawn = (command, ...args) => { if (command === 'taskkill') throw Error('Unexpected taskkill after command exit'); return actualSpawn(command, ...args); };
+` + RUN_WORKER_SOURCE,
         "--",
         Buffer.from(JSON.stringify(payload)).toString("base64"),
       ]);
@@ -51,7 +93,7 @@ it.live("streams both outputs, propagates command failure and detects ignored wr
           .flatMap((f) => (f.type === "err" ? [Buffer.from(f.data, "base64").toString()] : []))
           .join(""),
       ).toBe("err");
-      expect(frames.at(-1)).toEqual({ type: "done", code: 17, ignored: ["dist/output"] });
+      expect(frames.at(-1)).toEqual({ type: "done", code: 17, ignored: ["dist/"] });
     } finally {
       await NodeFSP.rm(root, { recursive: true, force: true });
     }
@@ -134,13 +176,28 @@ it.live("tracks a detached job through disconnect, live logs, list and process-g
           args: [
             process.execPath,
             "-e",
-            "process.stdout.write('JOB_READY\\n');setInterval(()=>{},1000)",
+            "const parent=process.ppid;process.stdout.write('JOB_READY\\n');setInterval(()=>{try{process.kill(parent,0)}catch(error){if(error.code==='ESRCH')process.exit(1);else throw error}},1000)",
           ],
         }).result;
         const ready = started.find((frame) => frame.type === "ready");
         expect(ready?.type).toBe("ready");
         if (ready?.type !== "ready" || !ready.id) throw Error("No job id");
         id = ready.id;
+        const reply = await new Promise<string>((resolve, reject) => {
+          const address =
+            platform === "win32"
+              ? String.raw`\\.\pipe\t3-run-${namespace}-${id}`
+              : NodePath.join(workerStateRoot(namespace), `${id}.sock`);
+          const socket = NodeNet.connect(address);
+          let response = "";
+          socket.once("error", reject);
+          socket.on("data", (data) => {
+            response += data.toString();
+          });
+          socket.once("end", () => resolve(response));
+          socket.once("connect", () => socket.end("{bad-json\n"));
+        });
+        expect(reply).toContain("invalid");
         const list = await invoke("list").result;
         expect(
           list
@@ -185,7 +242,7 @@ it.live("tracks a detached job through disconnect, live logs, list and process-g
   ),
 );
 
-it.live("keeps a large ignored dependency tree within a bounded completion frame", () =>
+it.live("keeps many ignored root files within bounded completion frames", () =>
   Effect.promise(async () => {
     const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-run-ignored-tree-"));
     try {
@@ -194,11 +251,11 @@ it.live("keeps a large ignored dependency tree within a bounded completion frame
         namespace: "0123456789abcdef",
         root,
         cwd: root,
-        ignores: ["/node_modules"],
+        ignores: ["*.cache"],
         args: [
           process.execPath,
           "-e",
-          "const fs=require('fs');fs.mkdirSync('node_modules');for(let i=0;i<2048;i++)fs.writeFileSync('node_modules/dependency-'+('x'.repeat(40))+'-'+i,'output')",
+          "const fs=require('fs');for(let i=0;i<2048;i++)fs.writeFileSync('dependency-'+('x'.repeat(40))+'-'+i+'.cache','output')",
         ],
       };
       const child = NodeChildProcess.spawn(process.execPath, [
@@ -285,4 +342,140 @@ it.live("runs native command scripts through the runtime worker with exact argv 
       }
     }),
   ),
+);
+
+it.live("collects expired completed jobs while keeping running records and their journals", () =>
+  Effect.promise(async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-run-retention-"));
+    const fixture = workerFixture(root);
+    const completed = NodeCrypto.randomUUID();
+    const running = NodeCrypto.randomUUID();
+    try {
+      await NodeFSP.mkdir(fixture.stateRoot, { recursive: true, mode: 0o700 });
+      for (const [id, status] of [
+        [completed, "exited"],
+        [running, "running"],
+      ]) {
+        const record = NodePath.join(fixture.stateRoot, `${id}.json`);
+        await NodeFSP.writeFile(record, JSON.stringify({ id, status, code: 0 }), { mode: 0o600 });
+        await NodeFSP.utimes(record, 0, 0);
+        await NodeFSP.writeFile(NodePath.join(fixture.stateRoot, `${id}.ndjson`), "old output", {
+          mode: 0o600,
+        });
+      }
+      await fixture.invoke({ action: "probe" });
+      await expect(
+        NodeFSP.stat(NodePath.join(fixture.stateRoot, `${completed}.json`)),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(
+        NodeFSP.stat(NodePath.join(fixture.stateRoot, `${completed}.ndjson`)),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+      expect(
+        (await NodeFSP.stat(NodePath.join(fixture.stateRoot, `${running}.json`))).isFile(),
+      ).toBe(true);
+      expect(
+        (await NodeFSP.stat(NodePath.join(fixture.stateRoot, `${running}.ndjson`))).isFile(),
+      ).toBe(true);
+    } finally {
+      await NodeFSP.rm(fixture.stateRoot, { recursive: true, force: true });
+      await NodeFSP.rm(root, { recursive: true, force: true });
+    }
+  }),
+);
+it.live("bounds a background journal and reports truncation while retaining the final output", () =>
+  Effect.promise(async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-run-journal-"));
+    const fixture = workerFixture(root);
+    let id: string | undefined;
+    try {
+      const frames = await fixture.invoke({
+        action: "start",
+        logBytes: 131072,
+        args: [process.execPath, "-e", "process.stdout.write('x'.repeat(512*1024)+'THE_END\\n')"],
+      });
+      const ready = frames.find((frame) => frame.type === "ready");
+      if (ready?.type !== "ready" || !ready.id) throw new Error("No background job id");
+      id = ready.id;
+      await fixture.invoke({ action: "wait", id });
+      expect(
+        (await NodeFSP.stat(NodePath.join(fixture.stateRoot, `${id}.ndjson`))).size,
+      ).toBeLessThanOrEqual(131072);
+      const logs = await fixture.invoke({ action: "logs", id });
+      const text = logs
+        .flatMap((frame) =>
+          frame.type === "out" ? [Buffer.from(frame.data, "base64").toString()] : [],
+        )
+        .join("");
+      expect(text.endsWith("THE_END\n")).toBe(true);
+      expect(
+        logs.some(
+          (frame) =>
+            frame.type === "err" &&
+            Buffer.from(frame.data, "base64").toString().includes("truncated"),
+        ),
+      ).toBe(true);
+    } finally {
+      if (id) await fixture.invoke({ action: "stop", id });
+      await NodeFSP.rm(fixture.stateRoot, { recursive: true, force: true });
+      await NodeFSP.rm(root, { recursive: true, force: true });
+    }
+  }),
+);
+
+it.live("reports a lost supervisor instead of waiting forever on its running record", () =>
+  Effect.promise(async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-run-lost-"));
+    const fixture = workerFixture(root);
+    const id = NodeCrypto.randomUUID();
+    try {
+      await NodeFSP.mkdir(fixture.stateRoot, { recursive: true, mode: 0o700 });
+      const record = NodePath.join(fixture.stateRoot, `${id}.json`);
+      await NodeFSP.writeFile(record, JSON.stringify({ id, status: "running" }), { mode: 0o600 });
+      const frames = await fixture.invoke(
+        { action: "wait", id },
+        { allowFailure: true, closeInput: true },
+      );
+      expect(frames.find((frame) => frame.type === "error")).toMatchObject({
+        reason: "job_not_found",
+      });
+      expect(JSON.parse(await NodeFSP.readFile(record, "utf8"))).toMatchObject({
+        status: "lost",
+        code: 255,
+      });
+    } finally {
+      await NodeFSP.rm(fixture.stateRoot, { recursive: true, force: true });
+      await NodeFSP.rm(root, { recursive: true, force: true });
+    }
+  }),
+);
+it.live(
+  "recovers completion from the durable record when retained logs lack a completion frame",
+  () =>
+    Effect.promise(async () => {
+      const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-run-completion-"));
+      const fixture = workerFixture(root);
+      const id = NodeCrypto.randomUUID();
+      try {
+        await NodeFSP.mkdir(fixture.stateRoot, { recursive: true, mode: 0o700 });
+        await NodeFSP.writeFile(
+          NodePath.join(fixture.stateRoot, `${id}.json`),
+          JSON.stringify({ id, status: "exited", code: 17, ignored: [] }),
+          { mode: 0o600 },
+        );
+        await NodeFSP.writeFile(
+          NodePath.join(fixture.stateRoot, `${id}.ndjson`),
+          JSON.stringify({ type: "out", data: Buffer.from("final output").toString("base64") }) +
+            "\n",
+          { mode: 0o600 },
+        );
+        const frames = await fixture.invoke(
+          { action: "logs", id, follow: true },
+          { closeInput: true },
+        );
+        expect(frames.at(-1)).toEqual({ type: "done", code: 17, ignored: [] });
+      } finally {
+        await NodeFSP.rm(fixture.stateRoot, { recursive: true, force: true });
+        await NodeFSP.rm(root, { recursive: true, force: true });
+      }
+    }),
 );

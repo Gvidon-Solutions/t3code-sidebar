@@ -130,6 +130,10 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   bootstrap checks readiness before minting a token, and rollout failure injection belongs to
   a test layer. `pair --check` probes a running server without opening its auth database.
 
+- Detached run supervisors validate control messages, retain bounded journals and completed
+  records, recover lost completion frames, and stop reconnecting to vanished jobs. Termination
+  grace is configurable and normal exits no longer send an unconditional process-group kill.
+
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
 - **What.** Local Android builds retain native outputs, reuse identical APKs and publish native

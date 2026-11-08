@@ -1,3 +1,4 @@
+import { RunRemoteError } from "./RunRemoteError.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- SSH processes and their stdio are the CLI transport boundary.
 // @effect-diagnostics globalTimers:off -- SSH heartbeat timers are scoped to the captured child and cleared on close.
 import * as NodeChildProcess from "node:child_process";
@@ -14,11 +15,17 @@ export interface RemoteRequest {
   readonly follow?: boolean;
   readonly ports?: readonly number[];
   readonly timeoutMs?: number;
+  readonly killGraceMs?: number;
+  readonly retentionMs?: number;
+  readonly logBytes?: number;
 }
 const sshArguments = (plan: RemoteRunPlan, request: RemoteRequest, tty: boolean) => {
   const payload = Buffer.from(
     JSON.stringify({
       ...request,
+      killGraceMs: request.killGraceMs ?? process.env.T3CODE_RUN_KILL_GRACE_MS,
+      retentionMs: request.retentionMs ?? process.env.T3CODE_RUN_RETENTION_MS,
+      logBytes: request.logBytes ?? process.env.T3CODE_RUN_LOG_BYTES,
       tty,
       cols: process.stdout.columns,
       rows: process.stdout.rows,
@@ -34,11 +41,11 @@ const sshArguments = (plan: RemoteRunPlan, request: RemoteRequest, tty: boolean)
     "-o",
     "BatchMode=yes",
     "-o",
-    "ConnectTimeout=3",
+    "ConnectTimeout=15",
     "-o",
     "ConnectionAttempts=1",
     "-o",
-    "ServerAliveInterval=1",
+    "ServerAliveInterval=15",
     "-o",
     "ServerAliveCountMax=3",
     "-o",
@@ -77,6 +84,7 @@ export async function remoteRun(
   const ignored: string[] = [];
   let reason = "";
   let fatal = false;
+  let remoteReason: "job_not_found" | undefined;
   let protocolError: Error | undefined;
   let forcedClose = false;
   let closeDeadline: ReturnType<typeof setTimeout> | undefined;
@@ -160,6 +168,14 @@ export async function remoteRun(
     }
     if (frame.type === "error") {
       reason = frame.message;
+      remoteReason =
+        frame.reason ??
+        (request.id &&
+        /ENOENT/.test(frame.message) &&
+        (frame.message.includes(`${request.id}.json`) ||
+          frame.message.includes(`${request.id}.sock`))
+          ? "job_not_found"
+          : undefined);
       fatal = true;
     }
     await options.onFrame(frame);
@@ -212,7 +228,7 @@ export async function remoteRun(
       const detail =
         reason.trim().split(/\r?\n/).at(-1) ||
         `SSH closed without a command result (status ${status ?? "signal"})`;
-      throw new Error(`Cannot run on ${plan.machine}: ${detail}`);
+      throw new RunRemoteError(`Cannot run on ${plan.machine}: ${detail}`, remoteReason);
     }
     return { ...done, ...(id ? { id } : {}) };
   } finally {

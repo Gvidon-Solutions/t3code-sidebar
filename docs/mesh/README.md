@@ -651,6 +651,16 @@ sent to a non-driver. R1 inspects after flush; F1 forwards flush to the replica 
 Mutagen's list argument is a **label selector**, not a session name: list managed
 sessions and then select the name when inspecting/removing a single session.
 
+`run/RunWorker` keeps completed background records for seven days and bounds each
+journal to 10 MiB. `T3CODE_RUN_RETENTION_MS`, `T3CODE_RUN_LOG_BYTES` and
+`T3CODE_RUN_KILL_GRACE_MS` override those limits (termination defaults to ten seconds).
+Journal rotation preserves complete frames; observers recover completion from the durable
+record. A missing supervisor marks the outcome lost instead of reconnecting forever.
+The forwarding guardian stops for missing jobs, backs off transient failures and caps its log.
+Ignored directories are pruned during output inspection and reported as whole directories;
+this warning is conservative because nested writes cannot be detected without scanning them.
+SSH uses a fifteen-second connection deadline and fifteen-second keepalives.
+
 The context note states representation, lite/full mode, primary and sync state;
 lite replicas say `build/test/git: t3 run <cmd>`. `AgentContextBudget.test.ts`
 measures the unchanged 600-byte dynamic ceiling and the static budgets (8334 Claude,
