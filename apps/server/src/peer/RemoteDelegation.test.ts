@@ -472,6 +472,22 @@ const boxToolkitLayer = (thread: BoxThread) => {
     McpHttpServer.layerProjectRegistration,
   ).pipe(
     Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
+    Layer.provide(
+      MeshTest.layerTest(box.environmentId, Schema.decodeSync(SidebarWorkspacesConfig)({}), {
+        "mesh.config": {
+          h: "0000000000000.00000.fixture",
+          v: {
+            revision: "0000000000000.00000.fixture",
+            author: box.environmentId,
+            writtenAt: "",
+            doc: { schema: 1, machines: { laptop: {}, cloudbox: {} } },
+          },
+        },
+        "mesh.machineBinding/laptop": { h: "0000000000000.00000.fixture", v: laptop.environmentId },
+        "mesh.machineBinding/cloudbox": { h: "0000000000000.00000.fixture", v: box.environmentId },
+      }),
+    ),
+
     Layer.provide(NodeCrypto.layer),
     Layer.provide(layerBoxThreads),
     Layer.provide(layerBoxLaunches),
