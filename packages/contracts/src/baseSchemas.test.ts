@@ -3,6 +3,7 @@ import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
 import {
+  PortNumber,
   ForwardCompatibleArray,
   ForwardCompatibleUnion,
   ForwardCompatibleUnionArray,
@@ -97,4 +98,10 @@ describe("ForwardCompatibleUnionArray", () => {
   it("fails when a known member is broken, so real bugs stay visible", () => {
     expect(() => decode([{ kind: "square", side: "wide" }])).toThrow();
   });
+});
+
+it("accepts only TCP port integers in the shared port schema", () => {
+  const decode = Schema.decodeUnknownSync(PortNumber);
+  for (const port of [1, 22, 65535]) expect(decode(port)).toBe(port);
+  for (const port of [0, -1, 65536, 1.5, "22", NaN]) expect(() => decode(port)).toThrow();
 });

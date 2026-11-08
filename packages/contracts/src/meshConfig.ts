@@ -1,3 +1,4 @@
+import { PortNumber } from "./baseSchemas.ts";
 import * as Schema from "effect/Schema";
 
 const open = <const F extends Schema.Struct.Fields>(fields: F) =>
@@ -52,9 +53,7 @@ export const MeshConfigDocument = open({
         open({
           user: Schema.optionalKey(Schema.String),
           host: Schema.optionalKey(Schema.String),
-          port: Schema.optionalKey(
-            Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
-          ),
+          port: Schema.optionalKey(PortNumber),
         }),
       ),
       bootstrap: Schema.optionalKey(
@@ -63,9 +62,7 @@ export const MeshConfigDocument = open({
             Schema.isPattern(/^[a-zA-Z0-9_.-]+@(?:\[[a-fA-F0-9:]+\]|[a-zA-Z0-9_.-]+)(?::[0-9]+)?$/),
           ),
           baseDir: Schema.optionalKey(Schema.String),
-          port: Schema.optionalKey(
-            Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
-          ),
+          port: Schema.optionalKey(PortNumber),
           os: Schema.optionalKey(Schema.String),
           hostKey: Schema.optionalKey(
             Schema.String.check(
