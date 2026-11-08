@@ -31,6 +31,9 @@ import {
 import { ThreadDetailsItemsMenuItems } from "./ThreadDetailsItemsMenu";
 import { resolveThreadDetailsVisibility, THREAD_DETAILS_ITEMS } from "./threadDetailsItems";
 import { useClientSettings } from "../../hooks/useSettings";
+import { useMeshLayout } from "../../hooks/useMeshLayout";
+import { replicaExecutionLabel } from "@t3tools/client-runtime/state/mesh-layout";
+import { threadDetailsGitVisibility } from "./threadDetailsGit";
 import { cn } from "../../lib/utils";
 import { SlidersHorizontalIcon } from "lucide-react";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
@@ -88,6 +91,14 @@ interface ThreadDetailsPanelProps extends Pick<
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   const visible = useClientSettings(resolveThreadDetailsVisibility);
+  const mesh = useMeshLayout();
+  const isReplica =
+    replicaExecutionLabel(
+      mesh.config,
+      props.environmentId,
+      props.projectId,
+      props.environmentId,
+    ) !== null;
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const fileScripts = useT3ProjectFileScripts(
     props.environmentId,
@@ -149,15 +160,19 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
     >
       {(density) => {
         // Section flags follow the rows that will render, so no empty section steals the divider rule.
+        const git = threadDetailsGitVisibility({
+          isReplica,
+          gitCwd: props.gitCwd,
+          isGitRepo: props.isGitRepo,
+          activeProjectName: props.activeProjectName,
+          visible,
+        });
         const show = {
           environment: density === "full" && visible.environment,
           openIn: density !== "essential" && visible.openIn && props.showOpenInPicker,
           scripts: visible.scripts && props.activeProjectScripts !== undefined,
-          branch: props.gitCwd !== null && props.isGitRepo && visible.branch,
-          git:
-            props.gitCwd !== null &&
-            props.activeProjectName !== undefined &&
-            (visible.gitActions || (visible.changes && props.isGitRepo)),
+          branch: git.branch,
+          git: git.git,
         };
         return (
           <>

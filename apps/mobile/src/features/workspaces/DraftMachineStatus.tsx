@@ -53,11 +53,13 @@ export function ReplicaWorkspaceControls(props: {
   projectEnvironmentId?: string;
   children: ReactNode;
 }) {
-  const label = replicaExecutionLabel(
-    props.config,
-    props.environmentId,
-    props.projectId,
-    props.projectEnvironmentId,
-  );
-  return label ? <AppText textRole="footnote">{label}</AppText> : props.children;
+  const isReplica =
+    replicaExecutionLabel(
+      props.config,
+      props.environmentId,
+      props.projectId,
+      props.projectEnvironmentId,
+    ) !== null;
+  // A lite replica has no local git checkout; its controls stay hidden and no jargon is shown.
+  return isReplica ? null : props.children;
 }

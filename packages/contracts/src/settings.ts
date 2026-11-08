@@ -1760,7 +1760,7 @@ export const ServerSettingsPatch = Schema.Struct({
   ),
   /** Merges per host, replacing patched fields whole; redaction markers retain secrets, empty secrets remove them. A non-empty token map keeps the saved tokens of hosts it omits; an empty map clears them all. */
   sourceControlHosts: Schema.optionalKey(Schema.Record(Schema.String, SourceControlHostSettings)),
-  // Replace whole maps to avoid half-merged driver configs.
+  // Merges per instance: a patched instance replaces that entry whole, other instances remain.
   providerInstances: Schema.optionalKey(Schema.Record(ProviderInstanceId, ProviderInstanceConfig)),
   // Merge per source to avoid racing other edits; null removes an entry.
   usageLimitSources: Schema.optionalKey(

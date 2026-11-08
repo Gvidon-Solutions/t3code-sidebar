@@ -357,6 +357,56 @@ describe("T3 Mesh logical projects", () => {
     expect(groups[0]?.memberProjects).toHaveLength(2);
   });
 
+  it("shows one row per logical project when only some machines are connected", () => {
+    const cloudbox = EnvironmentId.make("env-cloudbox");
+    const laptop = EnvironmentId.make("env-laptop");
+    const threeMachineLayout: SidebarWorkspacesConfig = {
+      ...layout,
+      machines: {
+        [remoteEnvironmentId]: { label: "Cloudbox" },
+        [cloudbox]: { label: "Cloudbox" },
+        [laptop]: { label: "Laptop" },
+      },
+      projectMounts: {
+        ...layout.projectMounts,
+        "logical-elsewhere": [
+          {
+            environmentId: cloudbox,
+            path: "/repos/elsewhere",
+            transport: "mutagen",
+            role: "replica",
+            source: remoteEnvironmentId,
+            createdAt: "",
+          },
+          {
+            environmentId: laptop,
+            path: "/repos/elsewhere",
+            transport: "mutagen",
+            role: "replica",
+            source: remoteEnvironmentId,
+            createdAt: "",
+          },
+        ],
+      },
+    };
+    const groups = buildSidebarProjectSnapshots({
+      // The client sees only its own representation of the shared project.
+      projects: [local],
+      settings: defaultGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) => String(environmentId),
+      layout: threeMachineLayout,
+      connectedEnvironmentIds: new Set([primaryEnvironmentId]),
+    });
+    const shared = groups.filter(
+      (group) => group.projectKey === "logical-shared" || group.meshOffline?.tag === "OP",
+    );
+    expect(shared).toHaveLength(1);
+    expect(shared[0]?.meshOffline).toBeUndefined();
+    // A logical project with two unreachable copies still gets exactly one row.
+    expect(groups.filter((group) => group.projectKey === "logical-elsewhere")).toHaveLength(1);
+  });
+
   it("keeps a project visible when only an unconnected machine has it", () => {
     const groups = buildSidebarProjectSnapshots({
       projects: [],

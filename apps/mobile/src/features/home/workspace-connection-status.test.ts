@@ -78,4 +78,60 @@ describe("workspace connection status", () => {
       showsProgress: true,
     });
   });
+
+  it("shortens a multi-machine reconnect and keeps the count for the tooltip", () => {
+    const state = workspaceState({
+      hasReadyEnvironment: false,
+      hasConnectingEnvironment: true,
+      connectingEnvironments: [
+        {
+          environmentId: "environment-2" as never,
+          environmentLabel: "Sleeping laptop",
+          displayUrl: "",
+          isRelayManaged: false,
+          isEnabled: true,
+          connectionState: "reconnecting",
+          connectionError: null,
+          connectionErrorTraceId: null,
+        },
+        {
+          environmentId: "environment-3" as never,
+          environmentLabel: "Studio desktop",
+          displayUrl: "",
+          isRelayManaged: false,
+          isEnabled: true,
+          connectionState: "reconnecting",
+          connectionError: null,
+          connectionErrorTraceId: null,
+        },
+      ],
+    });
+    expect(workspaceConnectionStatusPresentation(state)).toMatchObject({
+      label: "Reconnecting…",
+      detail: "Reconnecting 2 environments",
+    });
+  });
+
+  it("keeps a single machine's name in the tooltip rather than the pill", () => {
+    const state = workspaceState({
+      hasReadyEnvironment: false,
+      hasConnectingEnvironment: true,
+      connectingEnvironments: [
+        {
+          environmentId: "environment-2" as never,
+          environmentLabel: "Sleeping laptop",
+          displayUrl: "",
+          isRelayManaged: false,
+          isEnabled: true,
+          connectionState: "reconnecting",
+          connectionError: null,
+          connectionErrorTraceId: null,
+        },
+      ],
+    });
+    expect(workspaceConnectionStatusPresentation(state)).toMatchObject({
+      label: "Reconnecting…",
+      detail: "Reconnecting to Sleeping laptop",
+    });
+  });
 });

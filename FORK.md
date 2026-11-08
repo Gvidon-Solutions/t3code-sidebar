@@ -1904,3 +1904,35 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   `apps/{web,mobile}/src/**/PendingMeshDraftCoordinator.tsx`, `useForkThread.ts`,
   `replicas.logic.ts`, Machines views, `scripts/lib/{shell,managed-sshd}.mjs`,
   `scripts/delivery/{bed-target,e2e}.mjs` and `scripts/mesh-e2e/`.
+
+### 2026-11-08 — Stage U3 new-thread machine cards and panel git honesty
+
+- **What.** A new thread shows one calm card per machine that can run the project, with the
+  main copy as the default. Cards name the copy state ("Synced", "Copying files…", "Out of
+  sync"), offer "Will set up a copy here", and dim a machine with no usable models. Reachability
+  comes from the mesh, so a machine reached through a peer is never mislabeled "not connected".
+  Composer and its bottom row lose the machine chip; a started thread shows its machine tag in
+  the header. First run with an incomplete mesh offers one dismissible "Connect to all machines
+  in your mesh" action. The right-hand project panel hides Version Control on a lite replica, so
+  it can no longer offer Initialize Git where git does not exist. The shared model chip reserves
+  room for a provider-instance badge. Android rows are compact again and pinned rows show their
+  machine tag. A linked thread's header names only its machine; no raw environment id or
+  "From T3 Code peer" text remains. Each machine appears exactly once per project row, with copies
+  on unconnected machines dimmed. Disabled machine cards say "Not connected to this device" in
+  visible text while their sync state stays in the tooltip. Android shows the connect-all prompt
+  too.
+- **How.** `meshLayout/draftMachineCards.ts` derives cards and their plain sentences from the
+  layout, replica status and destination catalogs; web and mobile render the same rows. The
+  default draft machine prefers the project's main copy. `chat/threadDetailsGit.ts` owns the
+  panel's git visibility, and `sidebar/meshConnectPrompt.logic.ts` decides what a client can
+  reconnect. About and machine versions keep using the build/server values, and project rows no
+  longer append a machine suffix. The composer voice toggle is shared by server threads and drafts;
+  it follows the thread's provider on its own machine and the draft target machine's provider
+  catalog. The deterministic fixture provider reports voice only under
+  `T3_MESH_TEST_VOICE_PROVIDER=1`, so screenshots use the real badge without changing production.
+- **Where.** `apps/web/src/components/chat/{DraftMachineCards,ChatHeader,ThreadDetailsPanel,
+  threadDetailsGit}.tsx|ts`, `apps/web/src/components/sidebar/MeshConnectPrompt*`,
+  `apps/web/src/hooks/useLogicalProjectEnvironments.ts`,
+  `apps/mobile/src/features/workspaces/{DraftMachineCards,WorkspaceChrome,
+  WorkspaceThreadLine,workspaceNavigator}*`, `apps/mobile/src/features/threads/new-task-flow-provider.tsx`,
+  `packages/client-runtime/src/state/meshLayout/{draftMachine,draftMachineCards,index}.ts`.

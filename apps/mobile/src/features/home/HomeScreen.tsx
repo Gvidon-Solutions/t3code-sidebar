@@ -755,13 +755,7 @@ export function HomeScreen(props: HomeScreenProps) {
       return <WorkspaceAgentsRow item={item} onToggle={workspaceHome.toggle} />;
     }
     if (item.type === "ws-more") {
-      return (
-        <WorkspaceMoreRow
-          item={item}
-          onToggle={workspaceHome.toggle}
-          onNewThread={startFolderThread}
-        />
-      );
+      return <WorkspaceMoreRow item={item} onToggle={workspaceHome.toggle} />;
     }
     if (item.type === "v2-pending") {
       const pendingScopeKey = scopedProjectKey(

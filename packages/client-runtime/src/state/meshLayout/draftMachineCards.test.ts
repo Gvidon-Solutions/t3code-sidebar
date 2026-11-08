@@ -1,0 +1,189 @@
+import { describe, expect, it } from "vite-plus/test";
+import {
+  draftMachineCardState,
+  draftMachineCards,
+  draftMachineCardSync,
+} from "./draftMachineCards.ts";
+
+describe("draftMachineCardState", () => {
+  it("names a synced copy, a copy being made and an out-of-sync copy", () => {
+    expect(
+      draftMachineCardState({
+        label: "cloudbox",
+        connected: true,
+        reachable: true,
+        hasProject: true,
+        hasUsableModels: true,
+        sync: "synced",
+      }),
+    ).toEqual({ status: "synced", text: "Synced", selectable: true });
+    expect(
+      draftMachineCardState({
+        label: "cloudbox",
+        connected: true,
+        reachable: true,
+        hasProject: true,
+        hasUsableModels: true,
+        sync: "copying",
+      }).text,
+    ).toBe("Copying files…");
+    expect(
+      draftMachineCardState({
+        label: "cloudbox",
+        connected: true,
+        reachable: true,
+        hasProject: true,
+        hasUsableModels: true,
+        sync: "out-of-sync",
+      }).text,
+    ).toBe("Out of sync");
+  });
+
+  it("offers to set up a copy on a connected machine without one", () => {
+    expect(
+      draftMachineCardState({
+        label: "cloudbox",
+        connected: true,
+        reachable: true,
+        hasProject: false,
+        hasUsableModels: true,
+      }),
+    ).toEqual({ status: "will-copy", text: "Will set up a copy here", selectable: true });
+  });
+
+  it("dims a machine with no usable models and names it", () => {
+    expect(
+      draftMachineCardState({
+        label: "cloudbox",
+        connected: true,
+        reachable: true,
+        hasProject: true,
+        hasUsableModels: false,
+      }),
+    ).toEqual({
+      status: "no-models",
+      text: "No models set up on cloudbox",
+      selectable: false,
+    });
+  });
+
+  it("names a mesh-reached machine's copy without calling it not connected", () => {
+    expect(
+      draftMachineCardState({
+        label: "laptop",
+        connected: false,
+        reachable: true,
+        viaLabel: "studio",
+        hasProject: true,
+        hasUsableModels: true,
+        sync: "synced",
+      }),
+    ).toEqual({ status: "synced", text: "Synced", selectable: false });
+    expect(
+      draftMachineCardState({
+        label: "laptop",
+        connected: false,
+        reachable: true,
+        viaLabel: "studio",
+        hasProject: false,
+        hasUsableModels: true,
+      }),
+    ).toEqual({ status: "will-copy", text: "Will set up a copy here", selectable: false });
+    expect(
+      draftMachineCardState({
+        label: "laptop",
+        connected: false,
+        reachable: false,
+        hasProject: false,
+        hasUsableModels: null,
+      }),
+    ).toEqual({ status: "unreachable", text: "Can't reach laptop", selectable: false });
+  });
+});
+
+describe("draftMachineCards", () => {
+  const config = {
+    machines: {
+      studio: { title: "studio", tag: "ST" },
+      cloudbox: { title: "cloudbox", tag: "CB" },
+      laptop: { title: "laptop", tag: "LT" },
+    },
+  } as const;
+
+  it("shows no cards for a single machine", () => {
+    expect(
+      draftMachineCards({
+        config,
+        choices: [
+          {
+            environmentId: "studio",
+            label: "studio",
+            projectId: "p1",
+            primary: true,
+            connected: true,
+            hasUsableModels: true,
+          },
+        ],
+        reachability: {},
+        selectedEnvironmentId: "studio",
+      }),
+    ).toEqual([]);
+  });
+
+  it("orders the main copy first, then copies that can run, then the rest", () => {
+    const rows = draftMachineCards({
+      config,
+      choices: [
+        {
+          environmentId: "laptop",
+          label: "laptop",
+          projectId: null,
+          primary: false,
+          connected: false,
+          hasUsableModels: null,
+        },
+        {
+          environmentId: "cloudbox",
+          label: "cloudbox",
+          projectId: null,
+          primary: false,
+          connected: true,
+          hasUsableModels: true,
+          sync: "copying",
+        },
+        {
+          environmentId: "studio",
+          label: "studio",
+          projectId: "p1",
+          primary: true,
+          connected: true,
+          hasUsableModels: true,
+          sync: "synced",
+        },
+      ],
+      reachability: { laptop: { reachable: true, viaLabel: "studio" } },
+      selectedEnvironmentId: "studio",
+    });
+    expect(rows.map((row) => [row.environmentId, row.status, row.selected])).toEqual([
+      ["studio", "synced", true],
+      ["cloudbox", "copying", false],
+      ["laptop", "will-copy", false],
+    ]);
+    expect(rows[0]?.machine.tag).toBe("ST");
+    expect(rows[0]?.note).toBeNull();
+    expect(rows[1]?.note).toBeNull();
+    expect(rows[2]?.note).toBe("Not connected to this device");
+    expect(rows[2]?.hint).toContain("Will set up a copy here");
+  });
+});
+
+describe("draftMachineCardSync", () => {
+  it("maps live replica states to the three card words", () => {
+    expect(draftMachineCardSync("watching")).toBe("synced");
+    expect(draftMachineCardSync("mounting")).toBe("copying");
+    expect(draftMachineCardSync("pending")).toBe("copying");
+    expect(draftMachineCardSync("error")).toBe("out-of-sync");
+    expect(draftMachineCardSync("conflict")).toBe("out-of-sync");
+    expect(draftMachineCardSync(undefined)).toBeNull();
+  });
+});

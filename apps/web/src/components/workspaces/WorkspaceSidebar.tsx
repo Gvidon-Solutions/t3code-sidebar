@@ -161,6 +161,7 @@ import { WorkspaceAgentGroup } from "./WorkspaceAgentGroup";
 import { WorkspaceUpdateStrip } from "./WorkspaceUpdateStrip";
 import { MachinesDialog } from "./MachinesDialog";
 import { MeshFooterStatus } from "./MeshFooterStatus";
+import { MeshConnectPrompt } from "../sidebar/MeshConnectPrompt";
 import { PendingReplicaRow } from "./PendingReplicaRow";
 import {
   folderMachineChoices,
@@ -1665,7 +1666,6 @@ export default function WorkspaceSidebar() {
               ) : (
                 folder.label
               )}
-              {offline ? ` · on ${offline.tag}, not connected here` : ""}
             </span>
             {!open && (attention > 0 || working > 0) ? (
               <span className="flex shrink-0 items-center gap-1.5 text-2xs font-semibold tabular-nums group-hover/ws-folder:hidden">
@@ -1746,11 +1746,6 @@ export default function WorkspaceSidebar() {
             {folder.active.length > FOLDER_PREVIEW_COUNT ? (
               <MoreButton onClick={() => view.toggleFolderExpanded(folderKey)}>
                 {expanded ? "Show less" : `Show ${folder.active.length - visible.length} more`}
-              </MoreButton>
-            ) : null}
-            {folder.active.length === 0 && folder.settled.length === 0 ? (
-              <MoreButton onClick={() => startThreadInFolder(folder)}>
-                <SquarePenIcon className="size-3" /> New thread
               </MoreButton>
             ) : null}
             {folder.settled.length > 0 ? (
@@ -2053,6 +2048,7 @@ export default function WorkspaceSidebar() {
         onDropProject={dropProjectOnTile}
         onReorder={reorderWorkspace}
       />
+      <MeshConnectPrompt config={config} />
       <MeshFooterStatus config={config} />
       <SidebarChromeFooter />
       {iconPickerFolder ? (

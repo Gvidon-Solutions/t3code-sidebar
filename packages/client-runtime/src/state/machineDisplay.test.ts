@@ -58,7 +58,8 @@ describe("machineDisplayOf", () => {
 
   it("keeps unnamed machine ids out of display labels", () => {
     expect(machineDisplayOf(config, "e2e6225c", "  ").label).toBe("Unnamed machine");
-    expect(machineDisplayOf(config, "e2e6225c", "").tag).toBe("?");
+    expect(machineDisplayOf(config, "e2e6225c", "").tag).toBe("");
+    expect(machineDisplayOf(config, "e2e6225c", "   ").tag).toBe("");
   });
 
   it("derives the colour from the environment id like workspaces do", () => {

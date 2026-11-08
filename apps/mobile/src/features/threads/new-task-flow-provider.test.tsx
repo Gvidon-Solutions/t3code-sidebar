@@ -80,6 +80,9 @@ vi.mock("../../state/project-grouping", () => ({
 vi.mock("../workspaces/useMeshLayout", () => ({
   useMeshLayout: () => ({ config: null, connectedEnvironmentIds: [] }),
 }));
+vi.mock("../workspaces/useMeshOverview", () => ({
+  useMeshOverview: () => ({ machines: [] }),
+}));
 vi.mock("./use-legacy-plan-mode-enabled", () => ({
   useLegacyPlanModeState: () => ({ enabled: false, loaded: true }),
 }));

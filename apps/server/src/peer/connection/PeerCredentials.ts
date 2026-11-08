@@ -79,7 +79,7 @@ export const layer = Layer.effect(
           return { token: new TextDecoder().decode(stored.value), expiresAt: previous.expires_at };
       }
       const issued = yield* auth.issueMcpClientSession({
-        label: `T3 Code peer · ${environmentId}`,
+        label: "Linked machine",
         access,
         peerLink: true,
         peerEnvironmentId: environmentId,

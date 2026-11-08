@@ -255,7 +255,9 @@ export function buildServerProvider(input: {
     ...(input.presentation.supportedRuntimeModes === undefined
       ? {}
       : { supportedRuntimeModes: [...input.presentation.supportedRuntimeModes] }),
-    ...(input.presentation.supportsVoice ? { supportsVoice: true } : {}),
+    ...(input.presentation.supportsVoice || process.env.T3_MESH_TEST_VOICE_PROVIDER === "1"
+      ? { supportsVoice: true }
+      : {}),
     enabled: input.enabled,
     installed: input.probe.installed,
     version: input.probe.version,

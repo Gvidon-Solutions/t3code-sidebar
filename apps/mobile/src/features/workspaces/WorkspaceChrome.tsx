@@ -48,6 +48,7 @@ import type {
   WorkspaceSectionListItem,
 } from "./workspaceNavigator";
 import { MeshFooterStatus } from "./MeshFooterStatus";
+import { MeshConnectPrompt } from "./MeshConnectPrompt";
 import { setWorkspaceDockHeight } from "./workspaceDockInset";
 import { FolderDragHandle, useFolderDragAvailable } from "./WorkspaceFolderDrag";
 import { WorkspaceAgentGuide } from "./WorkspaceThreadLine";
@@ -187,6 +188,7 @@ export function WorkspaceDock(props: {
       style={{ paddingBottom: props.bottomInset }}
       testID="workspace-dock"
     >
+      <MeshConnectPrompt />
       <MeshFooterStatus />
       <GestureDetector gesture={swipe}>
         <ScrollView
@@ -304,9 +306,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   const { item } = props;
   const navigation = useNavigation<NativeStackNavigationProp<ReactNavigation.RootParamList>>();
   const offline = item.meshOffline;
-  const folderTitle = offline
-    ? `${item.title} · on ${offline.tag}, not connected here`
-    : item.title;
+  const folderTitle = item.title;
   const actions = useMemo((): MenuAction[] => {
     if (offline) return [{ id: "connect", title: "Connect this machine", image: "link" }];
     const shownIn = item.workspaceIds;
@@ -429,10 +429,10 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   const draggable = useFolderDragAvailable() && Platform.OS === "android" && !item.isScratch;
   const row = (
     <Pressable
-      accessibilityLabel={folderTitle}
+      accessibilityLabel={offline ? `${item.title}, not connected to this device` : folderTitle}
       accessibilityRole="button"
       accessibilityState={{ expanded: item.open }}
-      className={cn("mt-1 flex-row items-center gap-2 py-1 pl-3 pr-2", offline && "opacity-70")}
+      className={cn("mt-0.5 flex-row items-center gap-2 py-0.5 pl-3 pr-2", offline && "opacity-70")}
       onPress={() =>
         offline
           ? openSettings(navigation as Parameters<typeof openSettings>[0], "SettingsEnvironments")
@@ -455,6 +455,14 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
         projectTitle={item.project.title}
         workspaceRoot={item.project.workspaceRoot}
       />
+      {offline && offline.tag ? (
+        <Text
+          className="rounded px-1 text-[10px] font-t3-bold uppercase opacity-60 text-foreground"
+          accessibilityLabel={`On ${offline.tag}, not connected to this device`}
+        >
+          {offline.tag}
+        </Text>
+      ) : null}
       <Text className="min-w-0 flex-1 text-[15px] font-t3-medium text-foreground" numberOfLines={1}>
         {folderTitle}
       </Text>
@@ -481,7 +489,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
           accessibilityRole="button"
           hitSlop={8}
           onPress={() => props.onNewThread(item.project)}
-          className="h-[45px] w-[45px] items-center justify-center rounded-full"
+          className="h-7 w-7 items-center justify-center rounded-full"
           style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
           testID={`workspace-folder-new-${item.projectKey}`}
         >
@@ -501,7 +509,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
         {item.pending.map((pending) => (
           <View
             key={pending.key}
-            className="flex-row items-center gap-2 py-1 pl-9 pr-2"
+            className="flex-row items-center gap-2 py-0.5 pl-9 pr-2"
             testID={`workspace-pending-${pending.environmentId}`}
           >
             <View
@@ -523,7 +531,8 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Retry mounting on ${pending.label}`}
-                className="min-h-[45px] min-w-[45px] items-center justify-center"
+                hitSlop={10}
+                className="min-h-7 min-w-7 items-center justify-center"
                 onPress={() => props.onRetryReplica(pending)}
               >
                 <Text className="text-[13px] font-t3-medium text-foreground">Retry</Text>
@@ -575,7 +584,7 @@ export const WorkspaceSectionRow = memo(function WorkspaceSectionRow(props: {
     <Pressable
       accessibilityRole={toggleKey ? "button" : "header"}
       accessibilityState={toggleKey ? { expanded: item.open } : undefined}
-      className="mt-3 flex-row items-center gap-2 py-1.5 pl-3 pr-5"
+      className="mt-2 flex-row items-center gap-2 py-1 pl-3 pr-5"
       disabled={toggleKey === null}
       onPress={() => (toggleKey ? props.onToggle(toggleKey) : undefined)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
@@ -628,7 +637,7 @@ export const WorkspaceAgentsRow = memo(function WorkspaceAgentsRow(props: {
       accessibilityRole="button"
       accessibilityLabel={item.label}
       accessibilityState={{ expanded: item.open }}
-      className="min-h-[45px] flex-row items-center gap-2 py-1.5 pl-[48px] pr-5"
+      className="min-h-7 flex-row items-center gap-2 py-0 pl-[48px] pr-5"
       onPress={() => props.onToggle(item.toggleKey)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
@@ -655,27 +664,15 @@ export const WorkspaceAgentsRow = memo(function WorkspaceAgentsRow(props: {
 export const WorkspaceMoreRow = memo(function WorkspaceMoreRow(props: {
   readonly item: WorkspaceMoreListItem;
   readonly onToggle: (key: string) => void;
-  readonly onNewThread: (project: EnvironmentProject) => void;
 }) {
   const { item } = props;
-  const newThreadIn = item.newThreadIn;
   return (
     <Pressable
       accessibilityRole="button"
-      className="min-h-[45px] flex-row items-center gap-2 py-2 pl-[52px] pr-5"
-      onPress={() =>
-        newThreadIn ? props.onNewThread(newThreadIn) : props.onToggle(item.toggleKey)
-      }
+      className="min-h-7 flex-row items-center gap-2 py-0.5 pl-[52px] pr-5"
+      onPress={() => props.onToggle(item.toggleKey)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
-      {newThreadIn ? (
-        <SymbolView
-          name="square.and.pencil"
-          size={12}
-          tintColorClassName="accent-foreground-muted"
-          type="monochrome"
-        />
-      ) : null}
       <Text className="text-[13px] text-foreground-tertiary">{item.label}</Text>
     </Pressable>
   );

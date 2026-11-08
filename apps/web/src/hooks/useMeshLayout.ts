@@ -143,13 +143,19 @@ function useMeshLayoutOwner() {
   } as const;
 }
 
-const MeshLayoutContext = createContext<ReturnType<typeof useMeshLayoutOwner> | null>(null);
+type MeshLayout = ReturnType<typeof useMeshLayoutOwner>;
+const emptyLayout: MeshLayout = {
+  source: null,
+  state: emptyState,
+  config: null,
+  edit: () => {},
+};
+const MeshLayoutContext = createContext<MeshLayout | null>(null);
 export function MeshLayoutProvider({ children }: { readonly children: ReactNode }) {
   const value = useMeshLayoutOwner();
   return createElement(MeshLayoutContext.Provider, { value }, children);
 }
-export function useMeshLayout() {
-  const value = use(MeshLayoutContext);
-  if (value === null) throw new Error("MeshLayoutProvider is missing");
-  return value;
+/** Mesh-aware components render without mesh data instead of crashing outside the provider. */
+export function useMeshLayout(): MeshLayout {
+  return use(MeshLayoutContext) ?? emptyLayout;
 }

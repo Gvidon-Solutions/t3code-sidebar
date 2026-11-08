@@ -20,7 +20,6 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { isTrailingDoubleClick } from "../Sidebar.logic";
-import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
@@ -41,13 +40,16 @@ import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
 import { useClientSettings } from "../../hooks/useSettings";
+import { useMeshLayout } from "../../hooks/useMeshLayout";
+import { useEnvironments } from "../../state/environments";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { MachineTag } from "../workspaces/MachineTag";
 import { GuestShareIndicator } from "./GuestShareControls";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
-  activeThreadLinkOrigin?: string | null | undefined;
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
   parentThreadLink: { threadId: ThreadId; title: string } | null;
@@ -74,7 +76,6 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
-  activeThreadLinkOrigin,
   isServerThread,
   activeProject,
   parentThreadLink,
@@ -84,6 +85,17 @@ export const ChatHeader = memo(function ChatHeader({
   onOpenProjectSettings,
   onFindInThread,
 }: ChatHeaderProps) {
+  const mesh = useMeshLayout();
+  const { environments } = useEnvironments();
+  const machine = machineDisplayOf(
+    mesh.config ?? { machines: {} },
+    activeThreadEnvironmentId,
+    environments.find((environment) => environment.environmentId === activeThreadEnvironmentId)
+      ?.label ?? "Machine",
+  );
+  const showMachineTag =
+    isServerThread &&
+    (Object.keys(mesh.config?.machines ?? {}).length > 1 || environments.length > 1);
   const activeProjectName = activeProject?.isScratch ? "No project" : activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);
@@ -418,16 +430,7 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
-          {renamingTitle === null && activeThreadLinkOrigin ? (
-            <Tooltip>
-              <TooltipTrigger render={<Badge variant="info" size="sm" />}>
-                From {activeThreadLinkOrigin}
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                Started by an agent on {activeThreadLinkOrigin} through a linked environment.
-              </TooltipPopup>
-            </Tooltip>
-          ) : null}
+          {showMachineTag && renamingTitle === null ? <MachineTag machine={machine} /> : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
       {isServerThread ? <GuestShareIndicator threadRef={activeThreadRef} /> : null}

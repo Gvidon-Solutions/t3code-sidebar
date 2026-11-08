@@ -9162,7 +9162,8 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           received.messages.some((message) => message.text === "Optional first message"),
         );
         assert.include(received.messages.map((message) => message.text).join("\n"), "cedar");
-        assert.include(received.messages[0]!.text, "Forked from Studio notes on Studio");
+        assert.include(received.messages[0]!.text, "Forked from [Studio notes](");
+        assert.include(received.messages[0]!.text, "· Studio");
         assert.equal(received.thread.meshFork?.threadId, sourceId);
         const sourceThread = yield* orchestrator.getThreadProjection(sourceId);
         assert.isNull(sourceThread.thread.archivedAt);

@@ -1,15 +1,10 @@
 import { DraftMachineStatus, ReplicaWorkspaceControls } from "../workspaces/DraftMachineStatus";
+import { DraftMachineCards } from "../workspaces/DraftMachineCards";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useSyncExternalStore } from "react";
-import { CommandId, MessageId } from "@t3tools/contracts";
+import { CommandId, EnvironmentId, MessageId } from "@t3tools/contracts";
 import { pendingMeshDrafts, serializePendingAttachments } from "../../state/pendingMeshDrafts";
-import { useServerConfigs } from "../../state/entities";
-import {
-  defaultUsableDraftModel,
-  draftModelUnavailableReason,
-  machineForDraftModel,
-} from "@t3tools/client-runtime/state/mesh-layout";
-import { DraftEnvironmentControl } from "./DraftEnvironmentControl";
+import { draftModelUnavailableReason } from "@t3tools/client-runtime/state/mesh-layout";
 import { NativeScrollEdgeEffectsContext } from "../../native/NativeScrollViewMarker";
 import { DraftThreadHeader } from "./DraftThreadHeader";
 import { threadHeaderAppearance } from "./thread-header-appearance";
@@ -50,7 +45,6 @@ import { KeyboardController } from "react-native-keyboard-controller";
 import {
   AuthOrchestrationOperateScope,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
-  resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
@@ -179,7 +173,6 @@ export function NewTaskDraftScreen(props: {
     pendingSend?.environmentId ?? flow.switchingToEnvironmentId ?? flow.selectedEnvironmentId;
 
   const mesh = useMeshLayout();
-  const machineConfigs = useServerConfigs();
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const goBack = useWorkspaceBackNavigation("threads");
@@ -855,46 +848,12 @@ export function NewTaskDraftScreen(props: {
     navigation.navigate(routeName);
   };
 
-  const modelMachine =
-    modelUnavailable && flow.selectedModel
-      ? machineForDraftModel(
-          flow.environments.map((machine) => ({
-            ...machine,
-            connected: !machine.disabled,
-            config: machineConfigs.get(machine.environmentId),
-            projectId: null,
-          })),
-          flow.selectedModel,
-        )
-      : null;
-  const defaultHere = defaultUsableDraftModel(
-    selectedEnvironmentServerConfig,
-    selectedProject?.id ?? null,
-  );
-  const modelHere = modelUnavailable
-    ? flow.modelOptions.find(
-        (option) =>
-          option.selection.instanceId === defaultHere?.instanceId &&
-          option.selection.model === defaultHere?.model,
-      )
-    : null;
   const environmentControl = (
     <View>
       <DraftMachineStatus
         error={pendingSend?.error}
         preparing={flow.mountingStatus}
         queued={Boolean(pendingSend && pendingSend.state !== "sent")}
-        reason={modelUnavailable}
-        alternative={modelMachine?.environmentLabel}
-        localModel={modelHere?.label}
-        onSwitch={
-          modelMachine
-            ? () => {
-                void flow.switchEnvironment(modelMachine.environmentId);
-              }
-            : undefined
-        }
-        onModel={modelHere ? () => flow.setSelectedModelKey(modelHere.key) : undefined}
         onRetry={
           pendingSend?.error
             ? () => {
@@ -905,17 +864,12 @@ export function NewTaskDraftScreen(props: {
             : (flow.retryMount ?? undefined)
         }
       />
-      <DraftEnvironmentControl
-        display={
-          flow.environments.find((machine) => machine.environmentId === chosenEnvironmentId)
-            ?.display
-        }
-        environmentId={chosenEnvironmentId ?? selectedProject.environmentId}
-        connectionState={connectionState}
-        label={selectedEnvironmentLabel}
-        machineKind={resolveEnvironmentMachineKind(selectedEnvironmentServerConfig)}
-        disabled={isComposerInteractionLocked}
-        onChooseEnvironment={() => openContextPicker("NewTaskEnvironment")}
+      <DraftMachineCards
+        rows={flow.machineCards}
+        onSelect={(environmentId) => {
+          if (isComposerInteractionLocked) return;
+          void flow.switchEnvironment(EnvironmentId.make(environmentId));
+        }}
       />
     </View>
   );

@@ -69,3 +69,21 @@ export function resolveVoiceThreadModelSelection(
   const voiceProvider = findVoiceProvider(providers);
   return voiceProvider ? { instanceId: voiceProvider.instanceId, model: VOICE_THREAD_MODEL } : null;
 }
+
+/**
+ * The voice entry point for a composer route. A server thread follows the
+ * provider that owns that thread (on whichever machine it runs). A draft
+ * follows the providers of the machine the draft targets; the caller passes
+ * that machine's catalog, not this device's.
+ */
+export function resolveComposerVoiceAvailability(input: {
+  readonly isServerThread: boolean;
+  readonly threadProviderInstanceId: ProviderInstanceId | null;
+  readonly providers: ReadonlyArray<ServerProvider>;
+}): VoiceAvailability {
+  return input.isServerThread
+    ? resolveVoiceAvailability(
+        input.providers.find((provider) => provider.instanceId === input.threadProviderInstanceId),
+      )
+    : resolveVoiceAvailability(findVoiceProvider(input.providers));
+}

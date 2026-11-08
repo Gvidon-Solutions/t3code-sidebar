@@ -229,6 +229,20 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   The sidebar fork sequence (`nextForkTitle`, `planForkPlacement`, `runThreadFork`) is shared in
   `client-runtime/state/threadForks.ts`; app hooks inject the fork command, shell wait, reorder
   and navigation.
+  New-thread machine choice is one card per machine, derived by
+  `meshLayout/draftMachineCards.ts` (primary first; single machine hides the cards). Its
+  reachability comes from mesh peer state, not this client's connections, so a machine the
+  mesh reaches says "Available through <machine>" instead of "not connected". The composer no
+  longer carries a machine chip; a started thread names the machine in its header. A lite
+  replica never offers Initialize Git in the right panel: `chat/threadDetailsGit.ts` hides
+  Version Control there, because git lives on the main copy. First run with an incomplete mesh
+  shows one dismissible "Connect to all machines in your mesh" prompt; it switches saved
+  connections back on and sends never-added machines to Connections. Project rows draw one tag
+  per machine; copies on machines this client is not connected to are dimmed in the same strip.
+  A linked thread's header shows its machine tag only, never a peer label or environment id.
+  The composer voice toggle follows the thread's provider on its own machine and, for a draft,
+  the target machine's provider catalog; the fixture agent reports voice only when
+  `T3_MESH_TEST_VOICE_PROVIDER=1` is set.
 
 ## Interfaces
 

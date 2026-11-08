@@ -46,7 +46,7 @@ export function ProjectMachineStrip({
                 ⇄
               </span>
             ) : null}
-            <MachineTag machine={chip.machine}>
+            <MachineTag machine={chip.machine} muted={chip.muted}>
               {chip.role === "replica" && chip.state !== "watching" ? (
                 <span
                   aria-hidden="true"

@@ -169,3 +169,49 @@ it("keeps a docked picker open after a pick and hands focus to that model's effo
   await userEvent.keyboard("{Escape}");
   await expect.element(search).not.toBeInTheDocument();
 });
+
+it("leaves room for the provider-instance badge beside the model name", async () => {
+  const instanceId = ProviderInstanceId.make("codex-work");
+  const entries = deriveProviderInstanceEntries([
+    {
+      instanceId,
+      driver: ProviderDriverKind.make("codex"),
+      displayName: "Codex Work",
+      accentColor: "#2f6fed",
+      enabled: true,
+      installed: true,
+      version: null,
+      status: "ready",
+      auth: { status: "authenticated" },
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      models: [{ slug: "swe-2", name: "SWE-2", isCustom: false, capabilities: {} }],
+      slashCommands: [],
+      skills: [],
+    },
+  ]);
+  const options = new Map([[instanceId, entries[0]!.models]]);
+  await using screen = await render(
+    <ProviderModelPicker
+      environmentId={null}
+      activeInstanceId={instanceId}
+      model="swe-2"
+      lockedProvider={null}
+      instanceEntries={entries}
+      modelOptionsByInstance={options}
+      triggerAriaLabel="Model chip"
+      onInstanceModelChange={() => {}}
+    />,
+  );
+  const trigger = screen.getByRole("button", { name: "Model chip" }).element();
+  const icon = trigger.querySelector<HTMLElement>("[data-chat-provider-model-picker-icon]");
+  const label = trigger.querySelector<HTMLElement>("[data-chat-provider-model-picker-label]");
+  expect(icon).not.toBeNull();
+  expect(label).not.toBeNull();
+  const badge =
+    icon!.querySelectorAll<HTMLElement>("span")[
+      icon!.querySelectorAll<HTMLElement>("span").length - 1
+    ]!;
+  const badgeRight = badge.getBoundingClientRect().right;
+  const labelLeft = label!.getBoundingClientRect().left;
+  expect(badgeRight).toBeLessThanOrEqual(labelLeft);
+});

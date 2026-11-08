@@ -341,7 +341,7 @@ const serviceLayer = Layer.effect(
           interactionMode: bundle.interactionMode,
         },
         origin,
-        marker: `Forked from ${bundle.sourceTitle} on ${bundle.sourceMachine} ← [Original conversation](${bundle.sourceLink})`,
+        marker: `Forked from [${bundle.sourceTitle}](${bundle.sourceLink}) · ${bundle.sourceMachine}`,
         entries,
         ...(bundle.message === undefined ? {} : { message: bundle.message }),
       });

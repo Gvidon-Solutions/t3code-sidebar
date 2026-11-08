@@ -353,7 +353,7 @@ describe("logical project helpers", () => {
   it("derives machine tags from the layout or the label", () => {
     expect(machineTag(config, "env-b")).toBe("BO");
     expect(machineTag(config, "env-z", "Boreal")).toBe("BO");
-    expect(machineTag(config, "env-z")).toBe("?");
+    expect(machineTag(config, "env-z")).toBe("");
     expect(machineTag(config, "env-z", "lab")).toBe("LAB");
     expect(
       machineTag({ ...config, machines: { "env-z": { label: "vps" } } }, "env-z", "server name"),

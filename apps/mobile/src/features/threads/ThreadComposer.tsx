@@ -628,9 +628,8 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     voiceInput.elapsedSeconds,
   );
   const isVoiceInputPresented = voicePresentation.statusKind === "active";
-  // An open draft stays visible; only a collapsed composer becomes a voice strip.
-  const isExpanded =
-    isFocused || settingsSheetPresentation.keepsComposerExpanded || fullScreenEditor.fullScreen;
+  // The composer always shows the full input and toolbar; there is no collapsed variant.
+  const isExpanded = true;
   const { height: windowHeight } = useWindowDimensions();
   const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
   const safeAreaInsets = useSafeAreaInsets();

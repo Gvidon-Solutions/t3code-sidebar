@@ -26,6 +26,7 @@ import {
   type ProjectFoldMode,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import {
+  knownMachineIds,
   spansMultipleEnvironments,
   type MachineDisplay,
 } from "@t3tools/client-runtime/state/machine-display";
@@ -124,8 +125,6 @@ export interface WorkspaceMoreListItem {
   readonly key: string;
   readonly toggleKey: string;
   readonly label: string;
-  /** Empty folder: the row starts a thread instead of toggling. */
-  readonly newThreadIn?: EnvironmentProject;
 }
 
 /** A thread row drawn as one line; `projectLabel` prefixes pinned/snoozed rows. */
@@ -308,7 +307,12 @@ export function buildWorkspaceHomeItems(input: {
   readonly toRow: (item: ThreadListV2Item) => ThreadListV2ThreadListItem;
 }): WorkspaceHomeListItem[] {
   const nowIso = new Date(input.now).toISOString();
-  const sectionMachineTags = spansMultipleEnvironments(input.connectedEnvironmentIds);
+  const sectionMachineTags = spansMultipleEnvironments(
+    knownMachineIds(
+      input.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      input.connectedEnvironmentIds,
+    ),
+  );
   const voiceThread =
     input.voiceThreadKey == null
       ? undefined
@@ -552,15 +556,6 @@ export function buildWorkspaceHomeItems(input: {
         key: `ws-more:${moreKey}`,
         toggleKey: moreKey,
         label: expanded ? "Show less" : `Show ${model.active.length - visible.length} more`,
-      });
-    }
-    if (model.active.length === 0 && model.settled.length === 0) {
-      rows.push({
-        type: "ws-more",
-        key: `ws-more:new:${folderKey}`,
-        toggleKey: `new:${folderKey}`,
-        label: "New thread",
-        newThreadIn: model.input.project,
       });
     }
     if (model.settled.length > 0) {

@@ -1,4 +1,3 @@
-import { DraftMachineHint } from "./workspaces/DraftMachineHint";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -260,6 +259,7 @@ import {
 import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
+import { DraftMachineCards } from "./chat/DraftMachineCards";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
   BranchRestoreConfirmHost,
@@ -3345,7 +3345,6 @@ export default function ChatView(props: ChatViewProps) {
               activeThreadId={activeThread.id}
               isServerThread={isServerThread}
               activeThreadTitle={activeThread.title}
-              activeThreadLinkOrigin={activeThreadShell?.linkOrigin?.label ?? null}
               activeProject={activeProject ?? null}
               parentThreadLink={headerParentThreadLink}
               onOpenThread={onOpenRelatedThreadStable}
@@ -3546,6 +3545,19 @@ export default function ChatView(props: ChatViewProps) {
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
                         />
+                        {canChangeEnvironment ? (
+                          <DraftMachineCards
+                            choices={logicalProjectEnvironments}
+                            activeProject={activeProject}
+                            selectedEnvironmentId={
+                              pendingDraftMachineId ??
+                              activeThread?.environmentId ??
+                              activeProject?.environmentId ??
+                              null
+                            }
+                            onSelect={onEnvironmentChangeStable}
+                          />
+                        ) : null}
                       </div>
                     </div>
                   ) : null}
@@ -3779,17 +3791,6 @@ export default function ChatView(props: ChatViewProps) {
                         >
                           {showComposerContextStrip && (
                             <div className="pointer-events-auto">
-                              {draftId && activeThread && !mountingStatus && (
-                                <DraftMachineHint
-                                  selection={
-                                    composerSelectedModelSelection ?? activeThread.modelSelection
-                                  }
-                                  environmentId={pendingDraftMachineId ?? environmentId}
-                                  machines={logicalProjectEnvironments}
-                                  onMachine={onEnvironmentChangeStable}
-                                  onModel={onProviderModelSelectStable}
-                                />
-                              )}
                               {mountingStatus && (
                                 <div role="status" className="text-xs text-muted-foreground">
                                   {mountingStatus}
@@ -3802,6 +3803,7 @@ export default function ChatView(props: ChatViewProps) {
                               )}
                               <BranchToolbar
                                 draftMachineId={pendingDraftMachineId ?? environmentId}
+                                showMachine={false}
                                 forceNewWorktree={multipleModelSelections !== null}
                                 ref={branchToolbarRef}
                                 environmentId={activeThread.environmentId}

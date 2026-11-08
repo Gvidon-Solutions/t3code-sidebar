@@ -1,6 +1,6 @@
-import { agentSkillDirectories } from "../platform/ServerPlatform.ts";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -10,7 +10,15 @@ import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 
 const begin = "<!-- t3-mesh begin -->";
 const end = "<!-- t3-mesh end -->";
-const files = [".claude/CLAUDE.md", ".codex/AGENTS.md", ".config/opencode/AGENTS.md"];
+
+/** Harnesses whose skill and instruction files the agent kit owns. */
+const harnesses = [
+  { binary: "claude", home: ".claude", instruction: ".claude/CLAUDE.md" },
+  { binary: "codex", home: ".codex", instruction: ".codex/AGENTS.md" },
+  { binary: "opencode", home: ".config/opencode", instruction: ".config/opencode/AGENTS.md" },
+] as const;
+
+const sharedSkill = ".agents/skills/t3";
 
 export function instructionBlock(original: string, body: string) {
   if (body.includes(begin) || body.includes(end))
@@ -29,6 +37,18 @@ export function instructionBlock(original: string, body: string) {
   return start < 0
     ? `${original}${original && !original.endsWith("\n") ? "\n" : ""}${block}\n`
     : original.slice(0, start) + block + original.slice(stop + end.length);
+}
+
+/** Removes only our managed block, leaving every other line of an instruction file intact. */
+export function withoutManagedBlock(original: string): string {
+  const start = original.indexOf(begin);
+  const stop = original.indexOf(end);
+  if (start < 0 || stop < start) return original;
+  const before = original.slice(0, start);
+  let after = original.slice(stop + end.length).replace(/^\r?\n/, "");
+  if (/\r?\n$/.test(before)) after = after.replace(/^(?:\r?\n)+/, "");
+  const joined = before.replace(/[ \t]+$/, "") + after;
+  return joined.trim() === "" ? "" : joined;
 }
 
 /**
@@ -96,6 +116,9 @@ export const layer = Layer.effect(
     const home = env.T3_MESH_AGENT_HOME ?? (yield* HostProcess.HomeDirectory);
     const executable = yield* HostProcess.ExecutablePath;
     const platform = yield* HostProcess.Platform;
+    const resolveExecutable = yield* SpawnExecutableResolution;
+    const harnessInstalled = (harness: (typeof harnesses)[number]) =>
+      resolveExecutable(harness.binary, platform, env) !== undefined;
     const packaged = path.join(path.dirname(executable), "agent-kit/skills/t3");
     const source =
       env.T3_MESH_AGENT_SOURCE ??
@@ -129,17 +152,36 @@ export const layer = Layer.effect(
             reason: "storage",
             message: "Bundled t3 skill is missing",
           });
-        for (const destination of agentSkillDirectories(home, platform)) {
-          yield* fs.makeDirectory(destination, { recursive: true });
-          yield* copySkill(source, destination);
+        const shared = path.join(home, sharedSkill);
+        yield* fs.makeDirectory(shared, { recursive: true });
+        yield* copySkill(source, shared);
+
+        const installed = new Map<(typeof harnesses)[number], boolean>();
+        for (const harness of harnesses) {
+          installed.set(harness, harnessInstalled(harness));
+        }
+
+        // Skill directories follow installed harnesses; a removed harness loses only our copy.
+        for (const harness of harnesses) {
+          const destination = path.join(home, harness.home, "skills/t3");
+          if (installed.get(harness)) {
+            yield* fs.makeDirectory(destination, { recursive: true });
+            yield* copySkill(source, destination);
+          } else if (yield* fs.exists(destination)) {
+            yield* fs.remove(destination, { recursive: true });
+          }
         }
         if (doc.agents?.manageInstructions === false) return;
         const body = meshInstructions(doc, local);
         // Validate all files before changing any instruction file.
-        const writes = yield* Effect.forEach(files, (file) =>
+        const writes = yield* Effect.forEach(harnesses, (harness) =>
           Effect.gen(function* () {
-            const filePath = path.join(home, file);
+            const filePath = path.join(home, harness.instruction);
             const original = (yield* fs.exists(filePath)) ? yield* fs.readFileString(filePath) : "";
+            if (!installed.get(harness)) {
+              const contents = withoutManagedBlock(original);
+              return { filePath, original, contents };
+            }
             const contents = yield* Effect.try({
               try: () =>
                 instructionBlock(
@@ -149,7 +191,7 @@ export const layer = Layer.effect(
               catch: () =>
                 new MeshConfigError({
                   reason: "validation",
-                  message: `Invalid managed instruction markers in ${file}`,
+                  message: `Invalid managed instruction markers in ${harness.instruction}`,
                 }),
             });
             return { filePath, original, contents };
@@ -157,6 +199,10 @@ export const layer = Layer.effect(
         );
         for (const { filePath, original, contents } of writes) {
           if (original === contents) continue;
+          if (contents === "") {
+            yield* fs.remove(filePath);
+            continue;
+          }
           yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
           yield* writeFileStringAtomically({ filePath, contents }).pipe(
             Effect.provideService(FileSystem.FileSystem, fs),

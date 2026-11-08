@@ -174,7 +174,7 @@ function RootRouteBranch() {
 
   if (pathname === "/welcome") {
     return (
-      <>
+      <MeshLayoutProvider>
         <CustomSnoozeDialogHost />
         <GuestShareDialogHost />
         <CommandPalette>
@@ -182,7 +182,7 @@ function RootRouteBranch() {
             <Outlet />
           </AppSidebarLayout>
         </CommandPalette>
-      </>
+      </MeshLayoutProvider>
     );
   }
 

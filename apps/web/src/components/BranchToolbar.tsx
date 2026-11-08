@@ -104,6 +104,8 @@ interface BranchToolbarProps {
   trailing?: ReactNode;
   availableEnvironments?: readonly EnvironmentOption[];
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
+  /** The new-thread cards own the machine choice; started threads name it in the header. */
+  showMachine?: boolean;
 }
 
 function showWorkspaceContextMenu(event: ReactMouseEvent, workspacePath: string) {
@@ -144,6 +146,7 @@ function showWorkspaceContextMenu(event: ReactMouseEvent, workspacePath: string)
 
 interface RunContextSelectorProps {
   displayMode?: "toolbar" | "panel";
+  showMachine?: boolean;
   workspaceRoot?: string;
   forceNewWorktree: boolean;
   autoEnvironmentLabel?: string | undefined;
@@ -167,6 +170,7 @@ interface RunContextSelectorProps {
 
 const RunContextSelector = memo(function RunContextSelector({
   displayMode = "toolbar",
+  showMachine = true,
   workspaceRoot,
   forceNewWorktree,
   autoEnvironmentLabel,
@@ -249,16 +253,17 @@ const RunContextSelector = memo(function RunContextSelector({
       <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
     </Tooltip>
   );
-  const icon = showEnvironmentIndicator ? environmentIcon : workspaceIcon;
+  const includeEnvironment = showMachine && showEnvironmentIndicator;
+  const icon = includeEnvironment ? environmentIcon : workspaceIcon;
   const triggerContent = (
     <>
       {icon}
       <ComposerContextLabel displayMode={displayMode}>
         {autoEnvironmentLabel ??
-          (showEnvironmentIndicator ? (activeEnvironment?.label ?? "Run on") : workspaceLabel)}
+          (includeEnvironment ? (activeEnvironment?.label ?? "Run on") : workspaceLabel)}
       </ComposerContextLabel>
       {/* Trailing in the panel, so every row label starts on the same edge. */}
-      {isPanel && showEnvironmentIndicator ? workspaceIcon : null}
+      {isPanel && includeEnvironment ? workspaceIcon : null}
     </>
   );
 
@@ -273,7 +278,7 @@ const RunContextSelector = memo(function RunContextSelector({
         onContextMenu={handleContextMenu}
         aria-label={
           isPanel
-            ? `Run context: ${[autoEnvironmentLabel ?? activeEnvironment?.label, workspaceLabel].filter(Boolean).join(", ")}`
+            ? `Run context: ${[includeEnvironment ? (autoEnvironmentLabel ?? activeEnvironment?.label) : null, workspaceLabel].filter(Boolean).join(", ")}`
             : undefined
         }
         data-composer-context-control
@@ -298,7 +303,7 @@ const RunContextSelector = memo(function RunContextSelector({
         }
         aria-label={
           isPanel
-            ? `Run context: ${[autoEnvironmentLabel ?? activeEnvironment?.label, workspaceLabel].filter(Boolean).join(", ")}`
+            ? `Run context: ${[includeEnvironment ? (autoEnvironmentLabel ?? activeEnvironment?.label) : null, workspaceLabel].filter(Boolean).join(", ")}`
             : undefined
         }
         data-composer-context-control
@@ -321,7 +326,8 @@ const RunContextSelector = memo(function RunContextSelector({
         }
         {...(!isPanel ? composerFloatingLayerProps : {})}
       >
-        {availableEnvironments &&
+        {showMachine &&
+        availableEnvironments &&
         ((showEnvironmentPicker && onEnvironmentChange) || addTargets.length > 0) ? (
           <>
             <MenuGroup>
@@ -621,16 +627,19 @@ export const BranchToolbar = memo(function BranchToolbar({
   onComposerFocusRequest,
   availableEnvironments,
   onEnvironmentChange,
+  showMachine: requestedShowMachine,
   trailing,
 }: BranchToolbarProps) {
   const mesh = useMeshLayout();
-  const executionLabel = replicaExecutionLabel(
-    mesh.config,
-    draftMachineId ?? environmentId,
-    projectId,
-    environmentId,
-  );
-  const showGitControls = requestedGitControls && executionLabel === null;
+  // A lite replica has no local git checkout, so its git controls stay hidden.
+  const isReplica =
+    replicaExecutionLabel(
+      mesh.config,
+      draftMachineId ?? environmentId,
+      projectId,
+      environmentId,
+    ) !== null;
+  const showGitControls = requestedGitControls && !isReplica;
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = scopeThreadRef(environmentId, threadId);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
@@ -699,6 +708,7 @@ export const BranchToolbar = memo(function BranchToolbar({
       activeEnvironment: activeEnvironmentOption,
       canPickEnvironment: hasMultipleEnvironments,
     });
+  const showMachine = requestedShowMachine ?? true;
   const [attachStrip, labelsOverflow] = useLabelsOverflow();
 
   if (!activeProject) return null;
@@ -706,12 +716,10 @@ export const BranchToolbar = memo(function BranchToolbar({
   if (layout === "panel") {
     return (
       <div className="flex w-full flex-col" data-thread-panel-run-context>
-        {executionLabel ? (
-          <span className="text-xs text-muted-foreground">{executionLabel}</span>
-        ) : null}
-        {panelSection !== "branch" && !executionLabel ? (
+        {panelSection !== "branch" && !isReplica ? (
           <RunContextSelector
             displayMode="panel"
+            showMachine={showMachine}
             workspaceRoot={activeProject.workspaceRoot}
             forceNewWorktree={forceNewWorktree}
             autoEnvironmentLabel={autoEnvironmentLabel}
@@ -763,6 +771,7 @@ export const BranchToolbar = memo(function BranchToolbar({
       {showGitControls ? (
         <div className="contents @xl/composer-surface:hidden">
           <RunContextSelector
+            showMachine={showMachine}
             forceNewWorktree={forceNewWorktree}
             autoEnvironmentLabel={autoEnvironmentLabel}
             onAutoEnvironment={onAutoEnvironment}
@@ -792,7 +801,7 @@ export const BranchToolbar = memo(function BranchToolbar({
             "flex-1",
           )}
         >
-          {showEnvironmentIndicator && availableEnvironments && (
+          {showMachine && showEnvironmentIndicator && availableEnvironments && (
             <>
               <BranchToolbarEnvironmentSelector
                 autoEnvironmentLabel={autoEnvironmentLabel}
@@ -845,7 +854,6 @@ export const BranchToolbar = memo(function BranchToolbar({
           {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
         />
       ) : null}
-      {executionLabel ? <span>{executionLabel}</span> : null}
       {trailing}
     </ComposerSurface.ContextStrip>
   );

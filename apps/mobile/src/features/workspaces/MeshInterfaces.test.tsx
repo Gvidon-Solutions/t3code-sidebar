@@ -335,7 +335,7 @@ it("hides local git controls for a replica and retains controls for a primary", 
       <button>Branch · Current checkout</button>
     </ReplicaWorkspaceControls>,
   );
-  expect(screen.container.textContent).toBe("git on Studio · t3 run");
+  expect(screen.container.textContent).toBe("");
   expect(screen.container.querySelector("button")).toBeNull();
   screen.render(
     <ReplicaWorkspaceControls
@@ -347,7 +347,7 @@ it("hides local git controls for a replica and retains controls for a primary", 
       <button>Branch · Current checkout</button>
     </ReplicaWorkspaceControls>,
   );
-  expect(screen.container.textContent).toBe("git on Studio · t3 run");
+  expect(screen.container.textContent).toBe("");
   expect(screen.container.querySelector("button")).toBeNull();
   screen.render(
     <ReplicaWorkspaceControls config={config} environmentId="studio" projectId="primary">

@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Kit from "./MeshAgentKit.ts";
@@ -27,6 +28,11 @@ it.effect(
           T3_MESH_AGENT_HOME: home,
           T3_MESH_AGENT_SOURCE: source,
         }),
+        Effect.provideService(SpawnExecutableResolution, (command) =>
+          ["claude", "codex", "opencode"].includes(command)
+            ? `/usr/local/bin/${command}`
+            : undefined,
+        ),
       );
       const doc = {
         schema: 1,
@@ -61,11 +67,56 @@ it.effect(
       expect(yield* fs.readFileString(`${home}/.agents/skills/t3/SKILL.md`)).toBe("skill v2");
       yield* kit.reconcile({ ...doc, agents: { manageInstructions: false } });
       expect(yield* fs.readFileString(`${home}/.codex/AGENTS.md`)).toBe(updated);
+      yield* fs.makeDirectory(`${home}/.claude`, { recursive: true });
       yield* fs.writeFileString(`${home}/.claude/CLAUDE.md`, "<!-- t3-mesh begin -->broken");
       const failure = yield* kit.reconcile(doc).pipe(Effect.flip);
       expect(failure.reason).toBe("validation");
       expect(failure.message).toContain(".claude/CLAUDE.md");
       expect(yield* fs.readFileString(`${home}/.codex/AGENTS.md`)).toBe(updated);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect(
+  "keeps skills and instructions only for installed harnesses and removes our copy elsewhere",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "b1-agent-harness-" });
+      const source = `${home}/bundled`;
+      yield* fs.makeDirectory(`${source}/scripts`, { recursive: true });
+      yield* fs.writeFileString(`${source}/SKILL.md`, "skill v1");
+      yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
+      // A stale copy and block from an earlier install of Claude, which is no longer installed.
+      yield* fs.makeDirectory(`${home}/.claude/skills/t3`, { recursive: true });
+      yield* fs.writeFileString(`${home}/.claude/skills/t3/SKILL.md`, "old skill");
+      yield* fs.writeFileString(
+        `${home}/.claude/CLAUDE.md`,
+        "Owner note\n\n<!-- t3-mesh begin -->\nold block\n<!-- t3-mesh end -->\n\nTail\n",
+      );
+      yield* fs.makeDirectory(`${home}/.codex`, { recursive: true });
+      const kit = yield* Kit.MeshAgentKit.pipe(
+        Effect.provide(Kit.layer),
+        Effect.provideService(HostProcess.Environment, {
+          T3_MESH_AGENT_HOME: home,
+          T3_MESH_AGENT_SOURCE: source,
+        }),
+        Effect.provideService(SpawnExecutableResolution, (command) =>
+          command === "codex" || command === "opencode"
+            ? `/usr/local/bin/${command}`
+            : undefined,
+        ),
+      );
+      yield* kit.reconcile({ schema: 1, machines: { studio: { label: "ST" } } });
+      // Codex has a config directory, OpenCode has an executable; both get our files.
+      expect(yield* fs.readFileString(`${home}/.codex/skills/t3/SKILL.md`)).toBe("skill v1");
+      expect(yield* fs.readFileString(`${home}/.config/opencode/skills/t3/SKILL.md`)).toBe(
+        "skill v1",
+      );
+      // Claude is not installed: our skill copy and managed block are gone, owner text stays.
+      expect(yield* fs.exists(`${home}/.claude/skills/t3`)).toBe(false);
+      expect(yield* fs.readFileString(`${home}/.claude/CLAUDE.md`)).toBe(
+        "Owner note\n\nTail\n",
+      );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 

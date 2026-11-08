@@ -208,6 +208,8 @@ function baseSnapshot(
     ...(iconUrl ? { iconUrl } : {}),
     continuation: { groupKey: input.continuationKey },
     supportsTextGeneration: false,
+    // The deterministic fixture agent reports voice under the mesh test flag only.
+    ...(process.env.T3_MESH_TEST_VOICE_PROVIDER === "1" ? { supportsVoice: true } : {}),
     enabled: input.settings.enabled,
     installed: input.installed,
     version: input.version,
