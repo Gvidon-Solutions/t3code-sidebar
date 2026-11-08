@@ -63,12 +63,16 @@ export const metadataScenarios = {
           (row) => row.revision === applied.revision,
         ),
       );
-      for (const node of mesh.nodes)
+      for (const node of mesh.nodes) {
+        const slug = Object.keys(before.bindings).find((key) => before.bindings[key] === node.id);
+        const machine = desired.machines[slug];
+        const header = `This machine: ${machine.title ?? slug} (${machine.label ?? slug}).`;
         await until(
           "managed instruction install",
           () => NodeFSP.readFile(NodePath.join(node.home, ".codex/AGENTS.md"), "utf8"),
-          (text) => text.includes("fast-managed-instruction"),
+          (text) => text.includes("fast-managed-instruction") && text.includes(header),
         );
+      }
       await NodeAssert.rejects(
         rpc(studio, "meshConfig.apply", {
           baseRevision: applied.revision,
@@ -101,72 +105,85 @@ export const metadataScenarios = {
       );
     }),
   "layout-alias-transports": (directory) =>
-    fixture(directory, async (mesh) => {
-      const [studio, hub, laptop] = mesh.nodes,
-        title = "Legacy title",
-        legacy = "title:legacy title",
-        root = NodePath.join(hub.home, "legacy");
-      await NodeFSP.mkdir(root);
-      await run("git", ["init", "-q", root]);
-      await NodeFSP.writeFile(NodePath.join(root, "local.cache"), "ignored");
-      const local = await mcp(hub, "t3_project_create", { title, workspaceRoot: root });
-      await entry(studio, `proj/${encodeURIComponent(legacy)}.title`, title);
-      const state = await until(
-        "legacy alias migrates",
-        () => rpc(hub, "meshLayout.get"),
-        (value) => value.config.projectAliases[legacy]?.startsWith("lp-"),
-      );
-      const key = state.config.projectAliases[legacy];
-      NodeAssert.equal(
-        (
-          await mcp(hub, "t3_project_place", {
-            project: local.id,
-            machine: hub.id,
-            role: "primary",
-            path: root,
-          })
-        ).logicalKey,
-        key,
-      );
-      const p = { ...local, key, title, root };
-      await config(mesh, (doc) => ({
-        ...doc,
-        projects: { ...doc.projects, overrides: [{ project: title, ignore: ["*.cache"] }] },
-      }));
-      const rep = await place(laptop, p, { path: NodePath.join(laptop.home, "explicit") });
-      await NodeAssert.rejects(NodeFSP.stat(NodePath.join(rep.path, "local.cache")), {
-        code: "ENOENT",
-      });
-      const manual = NodePath.join(studio.home, "external");
-      await NodeFSP.mkdir(manual);
-      for (const transport of ["manual", "sshfs"]) {
-        await mcp(studio, "t3_project_place", {
-          project: key,
-          machine: studio.id,
-          path: manual,
-          transport,
-        });
-        await until(
-          "external transport metadata",
-          () => mcp(studio, "t3_project_machines", { project: key }),
-          (value) =>
-            value.representations.some(
-              (row) =>
-                row.environmentId === studio.id && row.transport === transport && row.projectId,
-            ),
+    fixture(
+      directory,
+      async (mesh) => {
+        const [studio, hub, laptop] = mesh.nodes,
+          title = "Legacy title",
+          legacy = "title:legacy title",
+          root = NodePath.join(hub.home, "legacy");
+        await NodeFSP.mkdir(root);
+        await run("git", ["init", "-q", root]);
+        await NodeFSP.writeFile(NodePath.join(root, "local.cache"), "ignored");
+        await NodeFSP.writeFile(NodePath.join(root, "private.legacyignored"), "legacy exclusion");
+        await NodeFSP.writeFile(NodePath.join(root, "bundle.zip"), "legacy lists stay explicit");
+        NodeAssert.deepEqual((await rpc(hub, "meshConfig.get")).current.doc.replicas.ignore, [
+          "*.legacyignored",
+        ]);
+        const local = await mcp(hub, "t3_project_create", { title, workspaceRoot: root });
+        await entry(studio, `proj/${encodeURIComponent(legacy)}.title`, title);
+        const state = await until(
+          "legacy alias migrates",
+          () => rpc(hub, "meshLayout.get"),
+          (value) => value.config.projectAliases[legacy]?.startsWith("lp-"),
         );
-      }
-      await entry(laptop, `proj/${key}.title`, "Renamed title");
-      await until(
-        "display title shared",
-        () => mcp(hub, "t3_project_machines", { project: local.id }),
-        (value) => value.title === "Renamed title",
-      );
-      NodeAssert.equal(
-        (await mcp(hub, "t3_project_read", { projectId: local.id })).title,
-        "Renamed title",
-      );
-    }),
+        const key = state.config.projectAliases[legacy];
+        NodeAssert.equal(
+          (
+            await mcp(hub, "t3_project_place", {
+              project: local.id,
+              machine: hub.id,
+              role: "primary",
+              path: root,
+            })
+          ).logicalKey,
+          key,
+        );
+        const p = { ...local, key, title, root };
+        await config(mesh, (doc) => ({
+          ...doc,
+          projects: { ...doc.projects, overrides: [{ project: title, ignore: ["*.cache"] }] },
+        }));
+        const rep = await place(laptop, p, { path: NodePath.join(laptop.home, "explicit") });
+        await NodeAssert.rejects(NodeFSP.stat(NodePath.join(rep.path, "local.cache")), {
+          code: "ENOENT",
+        });
+        await NodeAssert.rejects(NodeFSP.stat(NodePath.join(rep.path, "private.legacyignored")), {
+          code: "ENOENT",
+        });
+        await content(NodePath.join(rep.path, "bundle.zip"), "legacy lists stay explicit");
+        const manual = NodePath.join(studio.home, "external");
+        await NodeFSP.mkdir(manual);
+        for (const transport of ["manual", "sshfs"]) {
+          await mcp(studio, "t3_project_place", {
+            project: key,
+            machine: studio.id,
+            path: manual,
+            transport,
+          });
+          await until(
+            "external transport metadata",
+            () => mcp(studio, "t3_project_machines", { project: key }),
+            (value) =>
+              value.representations.some(
+                (row) =>
+                  row.environmentId === studio.id && row.transport === transport && row.projectId,
+              ),
+          );
+        }
+        await entry(laptop, `proj/${key}.title`, "Renamed title");
+        await until(
+          "display title shared",
+          () => mcp(hub, "t3_project_machines", { project: local.id }),
+          (value) => value.title === "Renamed title",
+        );
+        NodeAssert.equal(
+          (await mcp(hub, "t3_project_read", { projectId: local.id })).title,
+          "Renamed title",
+        );
+      },
+      { legacyIgnores: ["*.legacyignored"] },
+    ),
   "replica-foreign-adoption": (directory) =>
     fixture(directory, async (mesh) => {
       const [, hub, laptop] = mesh.nodes,

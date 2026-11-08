@@ -95,6 +95,18 @@ export const replicaScenarios = {
       await write(p.root, "src/build/source.ts", "nested source");
       await write(p.root, "build/out", "ignored");
       await write(p.root, "node_modules/deep/secret", "ignored");
+      const codeOnly = [
+        "nested/.venv/secret",
+        "nested/dist/output.js",
+        "nested/cache.pyc",
+        "trace.log",
+        "state.sqlite",
+        "bundle.zip",
+        "video.mp4",
+        "guide.pdf",
+        "model.gguf",
+      ];
+      for (const file of codeOnly) await write(p.root, file, "ignored code-only payload");
       const a = await place(laptop, p),
         b = await place(hub, p);
       for (const node of mesh.nodes)
@@ -102,7 +114,7 @@ export const replicaScenarios = {
           NodeAssert.equal(await ssh(node, target, "printf managed"), "managed");
       for (const rep of [a, b]) {
         await content(NodePath.join(rep.path, "src/build/source.ts"), "nested source");
-        for (const excluded of ["build", "node_modules", ".git"])
+        for (const excluded of ["build", "node_modules", ".git", ...codeOnly])
           await NodeAssert.rejects(NodeFSP.stat(NodePath.join(rep.path, excluded)), {
             code: "ENOENT",
           });
@@ -177,6 +189,11 @@ export const replicaScenarios = {
         await mutagen(laptop, "sync", "resume", rep.session);
         await content(NodePath.join(rep.path, "README.md"), "primary winner");
         await archive(rep.path, "replica loser");
+        await until(
+          "primary-wins resolution intent cleared",
+          () => rpc(laptop, "meshLayout.get"),
+          (value) => !value.config.projectMountStatus[p.key]?.[laptop.id]?.resolvingConflicts,
+        );
         await config(mesh, (doc) => ({
           ...doc,
           projects: {
@@ -192,6 +209,11 @@ export const replicaScenarios = {
         await mutagen(laptop, "sync", "resume", rep.session);
         await content(NodePath.join(p.root, "README.md"), "newest winner");
         await archive(p.root, "primary loser");
+        await until(
+          "newest-wins resolution intent cleared",
+          () => rpc(laptop, "meshLayout.get"),
+          (value) => !value.config.projectMountStatus[p.key]?.[laptop.id]?.resolvingConflicts,
+        );
         await mutagen(laptop, "sync", "pause", rep.session);
         await write(rep.path, "unsynced.txt", "retained");
         await NodeAssert.rejects(

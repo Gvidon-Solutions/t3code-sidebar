@@ -300,6 +300,7 @@ export class MiniMesh {
       await NodeFSP.mkdir(NodePath.join(base, "userdata"), { recursive: true });
       await publish(NodePath.join(base, "userdata/settings.json"), {
         providerInstances: inactiveProviders,
+        ...(this.legacyIgnores ? { replicaIgnores: this.legacyIgnores } : {}),
       });
     }
     if (this.legacySeed) {
@@ -308,6 +309,7 @@ export class MiniMesh {
         NodePath.join(base, "userdata/settings.json"),
         JSON.stringify({
           providerInstances: inactiveProviders,
+          ...(this.legacyIgnores ? { replicaIgnores: this.legacyIgnores } : {}),
           sidebarWorkspaces: {
             workspaces: [
               { id: "main-" + name, name: "main" },
