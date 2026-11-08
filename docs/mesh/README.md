@@ -1103,6 +1103,9 @@ Round two reads `MESH_E2E_LOCAL_PRIMARY_ROOT`, `MESH_E2E_REVERSE_ROOT`,
 
 Production layers require delivery admission, mesh config/layout and peer transport. A missing
 layer is a construction error; tests install explicit layers from `testFixtures/meshServices.ts`.
+Inject node identity and failure layers before constructing a service: its methods keep those
+dependencies. Multi-node fixtures use fresh config layers and keep unused toolkit dependencies
+inside registration, so one node cannot replace another node’s handlers or request scope.
 `DeliveryUpdatingError` is a wire tag carried through RPC and MCP causes. Retry code checks that
 tag, so arbitrary tool text cannot delay a request. The admission SQL and interrupt planning
 share `ADMISSION_GATED_EFFECT_TYPES`.
