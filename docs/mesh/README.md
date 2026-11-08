@@ -118,6 +118,11 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   excluding the incoming tail. HLC generation refuses clock skew or exhausted counters rather
   than emitting a repeated or decreasing clock. Known keys require canonical URI segments, and
   representation values must match their key environment.
+- **Peer receipts.** `peer/connection/PeerReceipts.ts` reserves an in-flight key before SQL
+  and atomically inserts its durable intent. Receipt migration 82 adds indexed creation times;
+  startup and hourly-on-use sweeps retain thirty days, including interrupted requests. Stored
+  responses are capped at 64 KiB of encoded bytes; an oversized response still reaches its
+  original caller, while retries receive an explicit 413 receipt rather than repeating work.
 - **Routing.** A call for another machine goes direct when linked, else through one relay hop:
   `apps/server/src/mesh/MeshRouting.ts` (`callRouted`) used by `PeerForwarding`, files and forks.
 - **Replicas.** `apps/server/src/replicas/`: `MutagenInstaller` (pinned 0.18.1, sha256),

@@ -171,7 +171,7 @@ describe("runMigrations", () => {
       yield* runMigrations({ toMigrationInclusive: 79 });
       assert.deepStrictEqual(
         (yield* runMigrations()).map(([id]) => id),
-        [80, 81],
+        [80, 81, 82],
       );
       assert.deepStrictEqual(yield* history, migrationManifest);
       assert.deepStrictEqual(yield* runMigrations(), []);
@@ -197,7 +197,7 @@ describe("runMigrations", () => {
 
         assert.deepStrictEqual(
           (yield* runMigrations()).map(([id]) => id),
-          [77, 78, 79, 80, 81],
+          [77, 78, 79, 80, 81, 82],
         );
         assert.deepStrictEqual(yield* history, migrationManifest);
         assert.deepStrictEqual(yield* sql`SELECT value FROM mesh_layout_entries`, [

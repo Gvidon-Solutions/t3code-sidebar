@@ -121,6 +121,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - Delivery admission now waits for in-flight starts without serializing independent providers,
   checks effect-only starts, expires abandoned fences on startup, and preserves typed recovery
   failures while reading deferred ids once per recovery pass.
+- Peer receipts reserve keys atomically, retain thirty days and cap stored response bytes at
+  64 KiB; migration 82 preserves existing receipts while adding indexed creation timestamps.
 
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
