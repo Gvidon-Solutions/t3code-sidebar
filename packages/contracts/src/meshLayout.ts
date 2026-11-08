@@ -24,9 +24,11 @@ import {
  * T3 Mesh (fork): the shared layout document every server replicates and every client reads.
  * Entries follow `@t3tools/shared/meshLayout` (LWW per key; `v: null` is a tombstone).
  */
+export const Hlc = Schema.String.check(Schema.isPattern(/^\d{13}\.\d{5}\..+$/));
+
 export const MeshLayoutEntry = Schema.Struct({
   v: Schema.Unknown,
-  h: Schema.String,
+  h: Hlc,
 });
 export type MeshLayoutEntry = typeof MeshLayoutEntry.Type;
 

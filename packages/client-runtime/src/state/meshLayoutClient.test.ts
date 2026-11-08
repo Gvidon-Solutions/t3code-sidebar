@@ -219,6 +219,7 @@ describe("mesh layout cache and optimistic edits", () => {
     await mesh.edit((config) => addWorkspace(config).config);
     expect(mesh.current.outbox).toEqual({});
     expect(failures).toHaveLength(1);
+    expect(mesh.current.snapshot?.config.workspaces).toEqual([]);
     expect(isPermanentMeshLayoutFailure(rpc.applyError)).toBe(true);
     expect(isPermanentMeshLayoutFailure(new Error("offline"))).toBe(false);
   });
@@ -476,4 +477,62 @@ it("merges the upgrade snapshot with a legacy offline cache without stealing the
       ["cloudbox", "replica"],
     ]);
   }
+});
+
+it("restores the document and offline outbox independently of obsolete derived config", () => {
+  const state = editMeshLayout(
+    mergeMeshLayoutSnapshot(emptyMeshLayoutState(), snapshotOf("studio", {})),
+    (config) => ({ ...config, quietAfterDays: 23 }),
+    { deviceId: "phone", now: 1000 },
+  ).state;
+  const cache = JSON.stringify({
+    ...state,
+    snapshot: { ...state.snapshot, config: { obsolete: true } },
+  });
+  const restored = parseMeshLayoutCache(cache);
+  expect(restored?.outbox).toEqual(state.outbox);
+  expect(restored?.snapshot?.config.quietAfterDays).toBe(23);
+  expect(JSON.parse(serializeMeshLayoutCache(state)).snapshot.config).toBeUndefined();
+});
+it("retains unauthorized edits until authorization returns", async () => {
+  const rpc = new FakeRpc({ primary: {} });
+  const { mesh } = client(rpc, [source("primary")]);
+  await mesh.start();
+  rpc.applyError = { _tag: "EnvironmentAuthorizationError" };
+  await mesh.edit((config) => addWorkspace(config).config);
+  expect(Object.keys(mesh.current.outbox).length).toBeGreaterThan(0);
+  rpc.applyError = null;
+  await mesh.refreshEnvironments();
+  expect(mesh.current.outbox).toEqual({});
+  expect(materialize(rpc.documents.get("primary")!).workspaces).toHaveLength(1);
+  mesh.dispose();
+});
+it("restores the server value when a queued overwrite is permanently rejected", async () => {
+  const rpc = new FakeRpc({
+    primary: { "ws.quietAfterDays": { v: 7, h: "0000000000001.00000.studio" } },
+  });
+  const { mesh, persistence } = client(rpc, [source("primary")]);
+  await mesh.start();
+  rpc.applyError = new Error("offline");
+  await mesh.edit((config) => ({ ...config, quietAfterDays: 23 }));
+  expect(mesh.current.snapshot?.config.quietAfterDays).toBe(23);
+  rpc.applyError = { _tag: "MeshLayoutError", reason: "invalid_entries" };
+  await mesh.replayOutbox();
+  expect(mesh.current.snapshot?.config.quietAfterDays).toBe(7);
+  expect(persistence.saved()?.snapshot?.config.quietAfterDays).toBe(7);
+  expect(mesh.current.outbox).toEqual({});
+  mesh.dispose();
+});
+it("reports clock skew without changing the cached document or outbox", async () => {
+  const rpc = new FakeRpc({
+    primary: { "ws/main": { v: { name: "Main", sort: "a" }, h: "0000001000000.00000.studio" } },
+  });
+  const { mesh, failures } = client(rpc, [source("primary")]);
+  await mesh.start();
+  const before = mesh.current;
+  await expect(mesh.edit((config) => ({ ...config, quietAfterDays: 23 }))).rejects.toThrow("clock");
+  expect(mesh.current).toBe(before);
+  expect(failures).toHaveLength(1);
+  expect(rpc.applies).toEqual([]);
+  mesh.dispose();
 });

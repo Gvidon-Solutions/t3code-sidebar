@@ -1,20 +1,13 @@
 import type { SidebarWorkspacesConfig, SidebarProjectMount } from "@t3tools/contracts";
 import {
   logicalProjectKeyForRecord,
+  resolveAlias,
   normalizeRepresentationPath,
 } from "@t3tools/shared/meshLayout";
 import { machineDisplayOf } from "../machineDisplay.ts";
 type Project = { readonly environmentId: string; readonly workspaceRoot: string };
 function follow(key: string, config: SidebarWorkspacesConfig): string {
-  const seen: string[] = [];
-  for (let i = 0; i < 8; i++) {
-    if (seen.includes(key)) return [...seen, key].sort()[0]!;
-    seen.push(key);
-    const next = config.projectAliases[key];
-    if (!next) return key;
-    key = next;
-  }
-  return key;
+  return resolveAlias(config.projectAliases, key);
 }
 export function resolveLogicalProjectKey<T extends Project>(
   project: T,
