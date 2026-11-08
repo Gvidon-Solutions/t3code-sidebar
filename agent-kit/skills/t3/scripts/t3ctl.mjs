@@ -743,7 +743,7 @@ export async function retryUpdatingCall(call, wait = (ms) => new Promise((resolv
     const updating = (value) => value !== null && typeof value === "object" &&
       (value._tag === "DeliveryUpdatingError" || Object.values(value).some(updating));
     const tagged = updating(result.structuredContent) || (result.content || []).some((item) => {
-      if (item.type !== "text" || !/^[\s]*[\[{]/.test(item.text)) return false;
+      if (item.type !== "text" || !["{", "["].includes(item.text.trimStart()[0])) return false;
       try { return updating(JSON.parse(item.text)); }
       catch (error) { console.warn(`Cannot decode MCP retry metadata: ${error.message}`); return false; }
     });

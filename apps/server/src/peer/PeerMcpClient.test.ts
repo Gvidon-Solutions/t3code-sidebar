@@ -1,3 +1,4 @@
+import { DeliveryUpdatingError, isDeliveryUpdating } from "@t3tools/contracts";
 import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
@@ -123,7 +124,14 @@ it.effect.each([false, true])(
     ),
 );
 
-it.effect("keeps a link healthy when the peer refuses a call", () =>
+it.effect.each([
+  refusal,
+  new OrchestratorMcpFailure({
+    code: "orchestration_error",
+    message: "Updating",
+    cause: new DeliveryUpdatingError(),
+  }),
+])("keeps a link healthy when the peer refuses a call: $message", (refusal) =>
   Effect.scoped(
     Effect.gen(function* () {
       const handlers = McpToolAccess.toLayer(toolkit, {
@@ -151,6 +159,7 @@ it.effect("keeps a link healthy when the peer refuses a call", () =>
         .pipe(Effect.flip);
       // The agent hears the peer's own refusal; the link answered, so it is not failing.
       expect(refused).toMatchObject({ code: refusal.code, message: refusal.message });
+      expect(isDeliveryUpdating(refused)).toBe(isDeliveryUpdating(refusal));
       const link = yield* links.get(box.environmentId);
       expect(link._tag === "Some" ? link.value.lastError : "missing").toBeNull();
     }),

@@ -1,3 +1,4 @@
+import { withoutMeshThreadHeader } from "../../testFixtures/meshPrompt.ts";
 import * as MeshTestServices from "../../testFixtures/meshServices.ts";
 
 import { SidebarWorkspacesConfig } from "@t3tools/contracts";
@@ -274,6 +275,7 @@ it.each([
 });
 
 function makeLocalCommandHarness(input: {
+  mesh?: { environmentId: string; config: SidebarWorkspacesConfig };
   readonly text: string;
   readonly worktreePath?: string;
   readonly worktreesDir?: string;
@@ -918,7 +920,14 @@ function makeLocalCommandHarness(input: {
     }),
   );
   const layer = ProviderTurnStart.layer.pipe(
-    Layer.provide(MeshTestServices.services),
+    Layer.provide(
+      Layer.mergeAll(
+        MeshTestServices.layerMemory,
+        input.mesh
+          ? ReplicaMeshTest.layerTest(input.mesh.environmentId, input.mesh.config)
+          : MeshTestServices.platform,
+      ),
+    ),
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(ContextHandoffService.ContextHandoffServiceV2)({
@@ -1300,9 +1309,9 @@ effectIt.effect.each([
       expect(harness.open).toHaveBeenCalledWith(
         expect.objectContaining({ runtimePolicy: expect.objectContaining({ runtimeMode }) }),
       );
-      expect(harness.startTurn.mock.calls.map(([turn]) => turn.message.text)).toEqual([
-        withInlineContext(context, "What is the main thread doing?"),
-      ]);
+      expect(
+        harness.startTurn.mock.calls.map(([turn]) => withoutMeshThreadHeader(turn.message.text)),
+      ).toEqual([withInlineContext(context, "What is the main thread doing?")]);
       expect(harness.projection().contextHandoffs).toMatchObject([
         {
           id: "side-chat-context",
@@ -1883,10 +1892,6 @@ const decodeReplicaLayout = Schema.decodeSync(SidebarWorkspacesConfig);
 
 effectIt.effect("injects representation, mode, sync state and t3 run into a replica prompt", () =>
   Effect.gen(function* () {
-    const harness = makeLocalCommandHarness({
-      text: "Build this project",
-      sideChat: { contextRun: "delivered" },
-    });
     const config = decodeReplicaLayout({
       projectMounts: {
         repo: [
@@ -1910,7 +1915,12 @@ effectIt.effect("injects representation, mode, sync state and t3 run into a repl
       },
       machines: { replica: {}, primary: { label: "primary-host" } },
     });
-    yield* harness.start.pipe(Effect.provide(ReplicaMeshTest.layerTest("replica", config)));
+    const harness = makeLocalCommandHarness({
+      text: "Build this project",
+      sideChat: { contextRun: "delivered" },
+      mesh: { environmentId: "replica", config },
+    });
+    yield* harness.start;
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("Use t3 run -- <command>");
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("primary-host");
     expect(harness.startTurn.mock.calls[0]?.[0].message.text).toContain("/srv/project with spaces");

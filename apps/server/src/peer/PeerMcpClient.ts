@@ -85,7 +85,11 @@ const ToolCallResponse = Schema.Struct({
 const decodeToolCallResponse = Schema.decodeUnknownEffect(Schema.fromJsonString(ToolCallResponse));
 const decodeFailure = Schema.decodeUnknownOption(
   Schema.fromJsonString(
-    Schema.Struct({ code: OrchestratorMcpFailure.fields.code, message: Schema.String }),
+    Schema.Struct({
+      code: OrchestratorMcpFailure.fields.code,
+      message: Schema.String,
+      cause: OrchestratorMcpFailure.fields.cause,
+    }),
   ),
 );
 
@@ -347,10 +351,7 @@ const make = Effect.gen(function* () {
       ? Effect.gen(function* () {
           const refused = decodeFailure(answer.text);
           return yield* refused._tag === "Some"
-            ? new OrchestratorMcpFailure({
-                code: refused.value.code,
-                message: refused.value.message,
-              })
+            ? new OrchestratorMcpFailure(refused.value)
             : new OrchestratorMcpFailure({
                 code: "orchestration_error",
                 message: answer.text || "The linked environment refused the call.",

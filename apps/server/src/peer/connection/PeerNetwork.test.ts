@@ -1,3 +1,4 @@
+import { PEER_HOPS_ERROR } from "./peerIdentity.ts";
 import * as MeshTestServices from "../../../testFixtures/meshServices.ts";
 import migratePeerIdentities from "../../persistence/Migrations/082_PeerIdentityBindings.ts";
 import { McpDomainAnnotation } from "../../mcp/McpToolDomain.ts";
@@ -144,7 +145,12 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
       Layer.fresh,
     ),
   );
-  const peerLinks = Links.layer.pipe(Layer.provide(Transport.layer));
+  const transportContext = yield* Layer.build(Layer.fresh(Transport.layer));
+  const transport = Layer.succeed(
+    Transport.PeerTransport,
+    Context.get(transportContext, Transport.PeerTransport),
+  );
+  const peerLinks = Links.layer.pipe(Layer.provide(transport));
   const dispatcher = Layer.effect(
     Sessions.PeerCallDispatcher,
     Effect.map(Sessions.PeerCallDispatcher, (raw) =>
@@ -183,7 +189,7 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
     ),
     Layer.provideMerge(dispatcher),
     Layer.provideMerge(peerLinks),
-    Layer.provideMerge(Transport.layer),
+    Layer.provideMerge(transport),
   );
   const routes = Layer.mergeAll(
     HttpApiBuilder.layer(Api).pipe(
@@ -268,7 +274,7 @@ const serve = Effect.fn("test.servePeerNetwork")(function* (
     Layer.provideMerge(Client.layer),
     Layer.provideMerge(Receipts.layer),
     Layer.provideMerge(peerLinks),
-    Layer.provideMerge(Transport.layer),
+    Layer.provideMerge(transport),
     Layer.provide(environment),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(Layer.succeedContext(common)),
@@ -395,6 +401,7 @@ it.live(
           source: string;
         }>`SELECT environment_id, source FROM peer_session_identities WHERE source = 'legacy-local-link'`,
       ).toEqual([{ environment_id: "studio", source: "legacy-local-link" }]);
+      expect(studio.transport.get()).toBe(studio.sessions);
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(yield* studio.client.call(request)).toEqual({ count: 1 });
       expect(cloudbox.count()).toBe(1);
@@ -425,7 +432,7 @@ it.live(
         headers: { authorization: `Bearer ${legacy.token}`, "t3-peer-environment-id": "laptop" },
       });
       expect(rebound.status).toBe(403);
-      expect(yield* rebound.text).toContain("authenticated link identity");
+      expect(yield* rebound.text).toContain(PEER_HOPS_ERROR);
       expect(
         yield* cloudbox.client.call({
           ...request,
@@ -613,9 +620,19 @@ it.live("converges simultaneous real WebSocket dials to the same authenticated c
     yield* Effect.all([studio.sessions.start, cloudbox.sessions.start], {
       concurrency: "unbounded",
     });
+    expect(studio.transport.get()).toBe(studio.sessions);
+    expect(cloudbox.transport.get()).toBe(cloudbox.sessions);
+    expect(studio.transport).not.toBe(cloudbox.transport);
+
     yield* Fiber.join(studioReady);
+
     yield* Fiber.join(cloudboxReady);
+
     yield* Fiber.join(connectionChange);
+
+    expect(yield* studio.client.connectionAvailable!(cloudbox.id)).toBe(true);
+    expect(yield* cloudbox.client.connectionAvailable!(studio.id)).toBe(true);
+
     expect(yield* studio.sessions.status).toMatchObject([
       { environmentId: cloudbox.id, state: "direct", direction: "inbound" },
     ]);
@@ -635,6 +652,7 @@ it.live("converges simultaneous real WebSocket dials to the same authenticated c
           success: Answer,
         }),
       ).toEqual({ count: 1 });
+
     expect(studio.externalMcp() + cloudbox.externalMcp()).toBe(0);
     const waiting = yield* studio.client
       .call({
@@ -646,8 +664,11 @@ it.live("converges simultaneous real WebSocket dials to the same authenticated c
       })
       .pipe(Effect.forkScoped);
     yield* Deferred.await(cloudbox.waitingStarted);
+
     yield* Fiber.interrupt(waiting);
+
     yield* Deferred.await(cloudbox.waitingCancelled);
+
     expect(
       yield* studio.client.call({
         environmentId: cloudbox.id,

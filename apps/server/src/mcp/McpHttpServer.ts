@@ -234,7 +234,7 @@ const linkedEnvironmentsOff = HttpServerResponse.jsonUnsafe(
 );
 
 const makeMcpAuthMiddleware = Effect.gen(function* () {
-  const permissionContext = yield* Effect.context<MeshLayoutService>();
+  const permissionContext = Context.make(MeshLayoutService, yield* MeshLayoutService);
   const receipts = yield* PeerReceipts.PeerReceipts;
   const forks = yield* ThreadForkService;
   const meshReplicator = yield* MeshReplicator;
