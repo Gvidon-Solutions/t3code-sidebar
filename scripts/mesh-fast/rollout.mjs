@@ -70,14 +70,31 @@ export const rolloutScenarios = {
       extraRoutes: [releasePort, sshPort, apiPort],
     });
     let fresh;
+    const freshRoot = NodePath.join(directory, "fresh");
     mesh.beforeClose.push(async () => {
       if (fresh) {
         const owned = fresh;
         fresh = undefined;
+        await run("docker", ["stop", "--time", "1", owned]);
         await NodeFSP.writeFile(
           NodePath.join(directory, "fresh.log"),
           await run("docker", ["logs", owned]),
         );
+        await run("docker", [
+          "run",
+          "--rm",
+          "--network",
+          "none",
+          "--user",
+          "0",
+          "-v",
+          freshRoot + ":/fixture",
+          "mesh-fast-node:26",
+          "chown",
+          "-R",
+          process.getuid() + ":" + process.getgid(),
+          "/fixture",
+        ]);
         await run("docker", ["rm", "-f", owned]);
       }
       if (server.listening)
@@ -89,7 +106,6 @@ export const rolloutScenarios = {
       await mesh.start(["studio", "laptop"]);
       const [studio, laptop] = mesh.nodes;
       fresh = "mesh-fast-bootstrap-" + process.pid + "-" + NodePath.basename(directory);
-      const freshRoot = NodePath.join(directory, "fresh");
       await NodeFSP.mkdir(freshRoot);
       await NodeFSP.writeFile(NodePath.join(freshRoot, ".mesh-fast-node"), "bootstrap fixture\n");
       await run("docker", [
