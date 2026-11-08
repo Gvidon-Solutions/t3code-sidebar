@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off -- Exercises Git’s tracked-file boundary, including compressed fixtures.
 import * as NodeZlib from "node:zlib";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
