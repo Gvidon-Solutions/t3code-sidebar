@@ -52,8 +52,37 @@ describe("draft machine defaults", () => {
       ),
     ).toBeNull();
   });
-  it("treats an unknown catalog as unknown rather than as no usable models", () => {
-    expect(hasUsableDraftModels(null, null)).toBeNull();
+  it("has one answer for usable models with project enablement", () => {
+    const instanceId = ProviderInstanceId.make("codex");
+    const config = {
+      settings: {
+        ...DEFAULT_SERVER_SETTINGS,
+        providerInstances: { [instanceId]: { driver: "codex", enabled: true, config: {} } },
+      },
+      providers: [
+        {
+          instanceId,
+          installed: true,
+          status: "ready",
+          availability: "available",
+          auth: { status: "authenticated" },
+          models: [{ slug: "fast" }],
+        },
+      ],
+    } as unknown as Parameters<typeof hasUsableDraftModels>[0];
+    expect(hasUsableDraftModels(config, null)).toBe(true);
+    expect(
+      hasUsableDraftModels(
+        {
+          ...config,
+          settings: {
+            ...config!.settings!,
+            providerInstances: { [instanceId]: { driver: "codex", enabled: false, config: {} } },
+          },
+        },
+        null,
+      ),
+    ).toBe(false);
   });
   it("prefers the project's main copy when it can run, then any authenticated machine", () => {
     expect(
