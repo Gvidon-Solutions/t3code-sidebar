@@ -1,0 +1,4 @@
+export const LAYOUT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+export const PEER_RECEIPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+export const INCOMPLETE_BACKUP_RETENTION_MS = 24 * 60 * 60 * 1000;
+export const COMPLETED_BACKUP_LIMIT = 10;

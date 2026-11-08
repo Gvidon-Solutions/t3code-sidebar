@@ -232,6 +232,7 @@ it.effect(
       const seq = (yield* sql<{
         seq: number;
       }>`SELECT seq FROM mesh_layout_entries WHERE key = 'machine/laptop'`)[0]!.seq;
+      yield* TestClock.adjust("1 day");
       yield* mesh.collectTombstones!(seq);
       expect((yield* mesh.read).document["machine/laptop"]).toBeDefined();
       yield* mesh.apply({

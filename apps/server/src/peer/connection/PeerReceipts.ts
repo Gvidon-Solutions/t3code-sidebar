@@ -1,3 +1,4 @@
+import { PEER_RECEIPT_RETENTION_MS } from "../../mesh/retention.ts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -52,7 +53,7 @@ export const layer = Layer.effect(
       const now = yield* Clock.currentTimeMillis;
       if (now < nextSweep) return;
       nextSweep = now + 60 * 60 * 1000;
-      yield* sql`DELETE FROM peer_call_receipts WHERE created_at < ${now - 30 * 24 * 60 * 60 * 1000}`;
+      yield* sql`DELETE FROM peer_call_receipts WHERE created_at < ${now - PEER_RECEIPT_RETENTION_MS}`;
     }).pipe(
       Effect.tapError(() =>
         Effect.sync(() => {

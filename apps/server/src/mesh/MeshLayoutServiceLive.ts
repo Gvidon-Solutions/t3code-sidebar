@@ -1,10 +1,12 @@
-import { meshMillis } from "./MeshTiming.ts";
+import { LAYOUT_RETENTION_MS } from "./retention.ts";
 import { MeshLayoutError } from "@t3tools/contracts";
 import { validateEntries } from "./validateEntries.ts";
 import * as Schema from "effect/Schema";
 import { migrateLayout, legacySettingsDiff } from "./migration/layoutMigration.ts";
 import {
   diff,
+  compare,
+  MAX_CLOCK_AHEAD_MS,
   importLegacy,
   materialize,
   merge,
@@ -78,7 +80,7 @@ export const layer = Layer.effect(
     }>`SELECT hlc FROM mesh_layout_meta WHERE id = 1`)[0]!.hlc;
     if (isFutureHlc(savedClock, now)) {
       const recovered = rows.reduce(
-        (clock, row) => (row.hlc > clock ? row.hlc : clock),
+        (clock, row) => (compare(row.hlc, clock) > 0 ? row.hlc : clock),
         tick(now, null, environmentId),
       );
       yield* sql`UPDATE mesh_layout_meta SET hlc = ${recovered} WHERE id = 1`;
@@ -174,7 +176,7 @@ export const layer = Layer.effect(
               yield* Effect.logWarning("Mesh clock guard rejected future entries", peerId, example);
             return yield* new MeshLayoutError({
               reason: "invalid_entries",
-              message: "clock more than five minutes ahead",
+              message: `clock more than ${MAX_CLOCK_AHEAD_MS / 60_000} minutes ahead`,
             });
           }
           return yield* lock.withPermit(persist(entries));
@@ -201,8 +203,7 @@ export const layer = Layer.effect(
           lock
             .withPermit(
               Effect.gen(function* () {
-                const cutoff =
-                  (yield* Clock.currentTimeMillis) - meshMillis(30 * 24 * 60 * 60 * 1000);
+                const cutoff = (yield* Clock.currentTimeMillis) - LAYOUT_RETENTION_MS;
                 const expired = (yield* readRows).filter(
                   (row) =>
                     hlcPhysical(row.hlc) < cutoff &&
@@ -244,7 +245,12 @@ function storedRowReason(row: Row, now: number): string | null {
           : (decodeJson(row.value) as import("@t3tools/shared/meshLayout").Json),
       h: row.hlc,
     });
-    return reason ?? (isFutureHlc(row.hlc, now) ? "clock more than five minutes ahead" : null);
+    return (
+      reason ??
+      (isFutureHlc(row.hlc, now)
+        ? `clock more than ${MAX_CLOCK_AHEAD_MS / 60_000} minutes ahead`
+        : null)
+    );
   } catch (cause) {
     return String(cause);
   }
