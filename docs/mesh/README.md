@@ -23,7 +23,9 @@ serial rollout and stopped-DB/unit rollback. The t3ctl `delivery-client.mjs` for
 to a private socket; customer paths never enter public workflow configuration. Targets read
 B1 health (version, revision, peer watermarks, replicas) and reject conflicting managed versions.
 `mesh/DeliveryAdmission.ts` fences run creation inside EventSink write transactions and
-serializes provider starts with closing admission. Its operational journal survives restart;
+allows concurrent provider starts while drain exclusively waits for all admitted starts.
+Abandoned persisted fences expire at startup one minute after their deadline. Admission
+failures stay typed during outbox/runtime recovery; deferred ids are read once per recovery pass. Its operational journal survives restart;
 already accepted dormant starts remain in the outbox without occupying worker slots or spending
 retry attempts. Cancellation wakes the worker and queue promotions. Checking provider-session
 inactivity alone misses accepted start effects and internal queue promotions.

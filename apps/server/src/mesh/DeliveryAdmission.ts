@@ -51,9 +51,15 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     yield* sql`CREATE TABLE IF NOT EXISTS delivery_admission (id INTEGER PRIMARY KEY CHECK(id = 1), request_id TEXT NOT NULL, deadline_at INTEGER NOT NULL, deferred_json TEXT NOT NULL)`;
+    const now = DateTime.toEpochMillis(yield* DateTime.now);
+    const expired =
+      yield* sql`DELETE FROM delivery_admission WHERE id = 1 AND deadline_at < ${now - 60_000} RETURNING id`;
+    if (expired.length) yield* Effect.logWarning("Expired abandoned delivery admission on startup");
     const resumeQueued = yield* Ref.make<ReadonlyArray<Effect.Effect<void>>>([]);
     const changed = yield* Ref.make(yield* Deferred.make<void>());
     const startLock = yield* Semaphore.make(1);
+    let activeStarts = 0;
+    let startsIdle = Deferred.makeUnsafe<void>();
     const mapError = (cause: unknown) =>
       isDrainError(cause) ? cause : new DeliveryDrainError({ message: String(cause) });
     const notify = Effect.gen(function* () {
@@ -110,14 +116,31 @@ export const layer = Layer.effect(
     const withStart = <A, E, R>(
       effect: Effect.Effect<A, E, R>,
     ): Effect.Effect<A, E | DeliveryDrainError, R> =>
-      startLock.withPermits(1)(
-        Effect.gen(function* () {
-          if ((yield* status).phase !== "open")
-            return yield* new DeliveryDrainError({
-              message: `${DELIVERY_UPDATING}: server is draining; retry this command`,
-            });
-          return yield* effect;
-        }),
+      Effect.uninterruptibleMask((restore) =>
+        restore(startLock.take(1)).pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              if ((yield* status).phase !== "open")
+                return yield* new DeliveryDrainError({
+                  message: `${DELIVERY_UPDATING}: server is draining; retry this command`,
+                });
+              if (activeStarts === 0) startsIdle = Deferred.makeUnsafe<void>();
+              activeStarts++;
+            }).pipe(Effect.ensuring(startLock.release(1))),
+          ),
+          Effect.flatMap(() =>
+            restore(effect).pipe(
+              Effect.ensuring(
+                Effect.suspend(() => {
+                  activeStarts--;
+                  return activeStarts === 0
+                    ? Deferred.succeed(startsIdle, undefined).pipe(Effect.asVoid)
+                    : Effect.void;
+                }),
+              ),
+            ),
+          ),
+        ),
       );
     const drain = Effect.fn("DeliveryAdmission.drain")(function* (
       input: typeof DeliveryDrainInput.Type,
@@ -126,25 +149,28 @@ export const layer = Layer.effect(
       const wait = Effect.gen(function* () {
         yield* startLock
           .withPermits(1)(
-            sql.withTransaction(
-              Effect.gen(function* () {
-                const existing = (yield* read)[0];
-                if (existing) {
-                  if (existing.request_id !== input.requestId)
-                    return yield* new DeliveryDrainError({
-                      message: "Another delivery owns admission",
-                    });
-                  return;
-                }
-                const effects = yield* sql<{
-                  payload_json: string;
-                }>`SELECT effect.payload_json FROM orchestration_v2_effect_outbox effect JOIN orchestration_v2_projection_runs run ON run.run_id = json_extract(effect.payload_json, '$.runId') WHERE effect.status IN ('pending','running') AND effect.effect_type IN ('provider-turn.start','provider-turn.restart') AND run.status IN ('preparing','starting')`;
-                const runs = yield* Effect.forEach(effects, (row) =>
-                  decodeStart(row.payload_json).pipe(Effect.map((value) => value.runId)),
-                );
-                yield* sql`INSERT INTO delivery_admission (id, request_id, deadline_at, deferred_json) VALUES (1, ${input.requestId}, ${deadlineAt}, ${yield* encodeRunIds(runs)})`;
-              }),
-            ),
+            Effect.gen(function* () {
+              if (activeStarts > 0) yield* Deferred.await(startsIdle);
+              return yield* sql.withTransaction(
+                Effect.gen(function* () {
+                  const existing = (yield* read)[0];
+                  if (existing) {
+                    if (existing.request_id !== input.requestId)
+                      return yield* new DeliveryDrainError({
+                        message: "Another delivery owns admission",
+                      });
+                    return;
+                  }
+                  const effects = yield* sql<{
+                    payload_json: string;
+                  }>`SELECT effect.payload_json FROM orchestration_v2_effect_outbox effect JOIN orchestration_v2_projection_runs run ON run.run_id = json_extract(effect.payload_json, '$.runId') WHERE effect.status IN ('pending','running') AND effect.effect_type IN ('provider-turn.start','provider-turn.restart') AND run.status IN ('preparing','starting')`;
+                  const runs = yield* Effect.forEach(effects, (row) =>
+                    decodeStart(row.payload_json).pipe(Effect.map((value) => value.runId)),
+                  );
+                  yield* sql`INSERT INTO delivery_admission (id, request_id, deadline_at, deferred_json) VALUES (1, ${input.requestId}, ${deadlineAt}, ${yield* encodeRunIds(runs)})`;
+                }),
+              );
+            }),
           )
           .pipe(Effect.mapError(mapError));
         yield* notify;
@@ -178,32 +204,40 @@ export const layer = Layer.effect(
                 ? cancel(input.requestId).pipe(Effect.asVoid)
                 : Effect.void,
             ),
-            Effect.orDie,
+            Effect.catchCause((cause) =>
+              Effect.logError("Failed to reopen delivery admission after drain failure", cause),
+            ),
           ),
         ),
       );
     });
     const guard = Effect.fn("DeliveryAdmission.guard")(function* (
       events: ReadonlyArray<OrchestrationV2DomainEvent>,
+      starts: ReadonlyArray<string> = [],
     ) {
       if (!(yield* read)[0]) return;
+      const runIds = new Set(starts);
       for (const event of events) {
         if (
-          (event.type !== "run.created" && event.type !== "run.updated") ||
-          !["preparing", "starting", "running"].includes(event.payload.status)
+          (event.type === "run.created" || event.type === "run.updated") &&
+          ["preparing", "starting", "running"].includes(event.payload.status)
         )
-          continue;
-        const previous = yield* sql<{
-          status: string;
-        }>`SELECT status FROM orchestration_v2_projection_runs WHERE run_id = ${event.payload.id}`;
-        if (
-          !previous[0] ||
-          !["preparing", "starting", "running", "waiting"].includes(previous[0].status)
-        )
-          return yield* new DeliveryDrainError({
-            message: `${DELIVERY_UPDATING}: server is draining; retry this command`,
-          });
+          runIds.add(event.payload.id);
       }
+      if (!runIds.size) return;
+      const rows = yield* sql<{
+        run_id: string;
+        status: string;
+      }>`SELECT run_id, status FROM orchestration_v2_projection_runs WHERE run_id IN ${sql.in([...runIds])}`;
+      const admitted = new Set(
+        rows
+          .filter((row) => ["preparing", "starting", "running", "waiting"].includes(row.status))
+          .map((row) => row.run_id),
+      );
+      if ([...runIds].some((id) => !admitted.has(id)))
+        return yield* new DeliveryDrainError({
+          message: `${DELIVERY_UPDATING}: server is draining; retry this command`,
+        });
     }, Effect.mapError(mapError));
     const awaitClosed: Effect.Effect<void, DeliveryDrainError> = Effect.suspend(() =>
       Effect.gen(function* () {

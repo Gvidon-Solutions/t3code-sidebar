@@ -118,6 +118,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `t3 run` refuses an unavailable server when the manifest cannot prove local execution is safe.
 - **Where.** Shared `meshLayout`, client-runtime `meshLayoutClient`, server
   `MeshLayoutServiceLive`, `MeshReplicator` and `run/RunClient`; regression tests beside them.
+- Delivery admission now waits for in-flight starts without serializing independent providers,
+  checks effect-only starts, expires abandoned fences on startup, and preserves typed recovery
+  failures while reading deferred ids once per recovery pass.
 
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 

@@ -492,7 +492,7 @@ export const layer: Layer.Layer<EffectOutboxV2, never, SqlClient.SqlClient> = La
       reconcileAfterProcessLoss: Effect.gen(function* () {
         const now = DateTime.formatIso(yield* DateTime.now);
         const deferred = Option.isSome(admission)
-          ? [...(yield* admission.value.deferredRunIds.pipe(Effect.orDie))]
+          ? [...(yield* admission.value.deferredRunIds)]
           : [];
         const cancelledRows = yield* sql<{ readonly effect_id: string }>`
           UPDATE orchestration_v2_effect_outbox
