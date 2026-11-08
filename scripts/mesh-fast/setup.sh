@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 source scripts/mesh-fast/admission.sh
 command -v cc >/dev/null
-cache=${MESH_FAST_MUTAGEN_CACHE:-/tmp/mesh-fast-tools-0.18.1}
+cache=$MESH_FAST_MUTAGEN_CACHE
 mkdir -p "$cache"
 scripts/mesh-fast/build-monitor.sh "$cache"
 pnpm --dir apps/web -s build

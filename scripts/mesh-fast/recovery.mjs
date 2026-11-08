@@ -93,6 +93,9 @@ export async function recoveryScenario(directory) {
     const nextArtifacts = nextCommand.match(/^Artifacts: (.+)$/m)?.[1];
     NodeAssert.ok(nextArtifacts, "next real command produced its artifact directory");
     NodeAssert.equal(NodePath.dirname(nextArtifacts), nextArtifactBase);
+    const nextRun = nextCommand.match(/^Run directory: (.+)$/m)?.[1];
+    NodeAssert.ok(nextRun, "next real command reports its fixture directory");
+    await NodeAssert.rejects(NodeFSP.lstat(nextRun), { code: "ENOENT" });
     const recovered = JSON.parse(
       await NodeFSP.readFile(NodePath.join(nextArtifacts, "recovery.json"), "utf8"),
     );

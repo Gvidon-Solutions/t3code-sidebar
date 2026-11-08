@@ -5,6 +5,7 @@ OpenSSH server, a C compiler, `flock`, `patchelf`, and Rust's `rustup`. Then pro
 fixture images, browser, web client and real resource monitor once:
 
 ```sh
+sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /data/mf
 pnpm install --frozen-lockfile
 scripts/mesh-fast/setup.sh
 scripts/mesh-fast/run.sh
@@ -13,8 +14,9 @@ pnpm mesh:fast
 ```
 
 The command builds source-fingerprinted native test runtimes automatically.
-Set `MESH_FAST_ARTIFACTS_DIR` to a short directory on the fixture disk, for example
-`/data/T1`, and `MESH_FAST_MUTAGEN_CACHE` to a cache on the same filesystem.
+Run directories default to `/data/mf`; the immutable tool cache defaults to
+`/data/mf/tools`. Set `MESH_FAST_ARTIFACTS_DIR` to another short directory on the
+fixture disk and `MESH_FAST_MUTAGEN_CACHE` to a cache on the same filesystem.
 Keep the artifact path short enough for Unix sockets. This selects fixture and
 diagnostic storage without changing the system temporary directory used by
 installed services and their CLI clients.
@@ -29,8 +31,8 @@ runtime preparation is included in the command's reported wall time. A warm run
 reuses only immutable tools/runtimes, never server state, credentials or sessions.
 Immutable Mutagen executables and agent archives are hardlinked when the cache
 and fixture share a filesystem. Passed cases discard private payloads after all
-processes stop, retaining logs, assertion evidence and browser recordings. Failed
-cases retain their state. Repeated runs therefore do not copy gigabytes of tools
+processes stop, retaining diagnostics until the complete run is finalized. Failed
+runs retain their state within the three-run limit. Repeated runs do not copy gigabytes of tools
 or accumulate successful private homes.
 
 Ordinary fast servers run the exact Node bundle embedded in the native archive,
@@ -121,9 +123,19 @@ perform startup recovery; the scenario then verifies removal, port rebinding
 and preservation. `lifecycle.test.ts` kills a real lock owner and proves admission
 is released, concurrent refusal and the eight-mesh default.
 
-The printed private artifact directory contains `junit.xml`, `summary.json`, `preparation.json`,
-server/proxy/sshd logs, failure stacks and convergence barriers. The F1 case adds
-screenshots and a WebM recording. Process supervisors record the exact child PID
+The runner prints its temporary `Run directory:` at startup. A successful command
+deletes that entire directory, including unmarked files, logs and recordings.
+Its final `Artifacts:` points to one fixed `latest/` directory containing only
+summary, JUnit, runner/preparation/recovery metadata and the retention audit. These
+compact files replace the preceding success report; no per-success directory is
+kept. A failed command instead reports its retained run directory, with complete
+server/proxy/sshd logs, failure stacks, convergence barriers and F1 recordings.
+Only the latest three failed runs are retained for this host/user in the configured
+artifact root. Startup also reclaims legacy successful and abandoned run directories.
+Active owners and directories still used by a live process are protected, as are
+unmarked, foreign-host/user and symlinked paths. Retention runs inside the runner
+on success, failure and handled termination; no external cleanup wrapper is needed.
+Process supervisors record the exact child PID
 and generation: crash cases kill that child and observe automatic recovery.
 Cleanup only stops tracked children, named containers/networks and each fixture's
 private Mutagen daemon. SIGINT/SIGTERM also trigger cleanup.
@@ -287,7 +299,7 @@ the saved clock from retained valid rows, so clock correction permits startup.
 
 Successful public/SSH runtime installation fixtures carry the same ownership
 marker as server fixtures, so their installed executables are reclaimed after
-assertions. Failed installation state and all diagnostic logs are retained.
+assertions. Failed installation state and diagnostic logs follow the failed-run retention limit.
 
 Public/SSH runtime helpers execute in a separate process. Their synchronous tar
 and SSH work must not block the runner’s TLS peer pipes or daemon shutdown probes

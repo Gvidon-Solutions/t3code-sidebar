@@ -841,8 +841,11 @@ bed scenarios and CONCEPT §12 to isolated mini-meshes. `pnpm mesh:fast` owns al
 server state, SSH identities, daemons, private bridges and fault proxies; it never
 uses the shared bed. `MeshTiming.ts` scales test timers while normal production
 bundles ignore the knob. Native fixture builds are explicitly marked test builds.
-The runner reports wall time and JUnit, retains failure artifacts, and bounds
-concurrent startup separately from scenario concurrency.
+The runner reports wall time and JUnit and bounds startup separately from scenario
+concurrency. It deletes complete successful run directories, replacing only compact
+`latest/` reports; three failed runs retain their full diagnostics. Ownership and
+live-process checks protect unrelated paths during retention. Storage defaults to
+the short `/data/mf` path, including its tool cache.
 Use `MESH_FAST_ARTIFACTS_DIR` with a short path to move fixtures to a separate disk.
 Changing global `TMPDIR` can split IPC discovery between installed services and
 their clients; artifact storage must not change that rendezvous directory.

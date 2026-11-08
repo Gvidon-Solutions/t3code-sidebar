@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      MESH_FAST_MUTAGEN_CACHE: /tmp/mesh-fast-tools-0.18.1
+      MESH_FAST_ARTIFACTS_DIR: /data/mf
+      MESH_FAST_MUTAGEN_CACHE: /data/mf/tools
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,16 +21,17 @@ jobs:
           cache: pnpm
       - run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
       - run: sudo apt-get update && sudo apt-get install -y openssh-server patchelf && sudo mkdir -p /run/sshd
+      - run: sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /data/mf
       - run: pnpm install --frozen-lockfile
       - uses: actions/cache@v4
         with:
           path: |
-            /tmp/mesh-fast-tools-0.18.1/mutagen*
-            /tmp/mesh-fast-tools-0.18.1/browsers
-            /tmp/mesh-fast-tools-0.18.1/previous-*
-            /tmp/mesh-fast-tools-0.18.1/toolchain
+            /data/mf/tools/mutagen*
+            /data/mf/tools/browsers
+            /data/mf/tools/previous-*
+            /data/mf/tools/toolchain
             native/resource-monitor/target
-          key: mesh-fast-tools-v2-${{ runner.os }}-${{ hashFiles('native/resource-monitor/Cargo.lock', 'scripts/mesh-fast/previous.mjs') }}
+          key: mesh-fast-tools-v3-${{ runner.os }}-${{ hashFiles('native/resource-monitor/Cargo.lock', 'scripts/mesh-fast/previous.mjs') }}
       - run: scripts/mesh-fast/setup.sh
       - id: mesh
         run: pnpm mesh:fast --jobs 2 --budget-seconds 2700

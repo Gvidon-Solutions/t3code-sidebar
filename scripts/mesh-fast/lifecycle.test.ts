@@ -46,6 +46,27 @@ it("admits one host gate, releases a terminated owner, and caps the local defaul
     expect(host.jobs).toBeLessThanOrEqual(8);
     expect(host.containerBoots).toBe(2);
     expect([1, 4, 16, 32, 128].map(defaultJobs)).toEqual([1, 1, 4, 8, 8]);
+    const defaultEnv: NodeJS.ProcessEnv = { ...env };
+    delete defaultEnv.MESH_FAST_ARTIFACTS_DIR;
+    delete defaultEnv.MESH_FAST_MUTAGEN_CACHE;
+    const defaults = JSON.parse(
+      (await exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], { env: defaultEnv })).stdout,
+    ) as {
+      artifactsDirectory: string;
+      cacheDirectory: string;
+    };
+    expect(defaults.artifactsDirectory).toBe("/data/mf");
+    expect(defaults.cacheDirectory).toBe("/data/mf/tools");
+    const artifactsDirectory = NodePath.join(state, "artifacts");
+    const configured = JSON.parse(
+      (
+        await exec("bash", ["scripts/mesh-fast/run.sh", "--host-info"], {
+          env: { ...defaultEnv, MESH_FAST_ARTIFACTS_DIR: artifactsDirectory },
+        })
+      ).stdout,
+    ) as { artifactsDirectory: string; cacheDirectory: string };
+    expect(configured.artifactsDirectory).toBe(artifactsDirectory);
+    expect(configured.cacheDirectory).toBe(NodePath.join(artifactsDirectory, "tools"));
     const directEnv: NodeJS.ProcessEnv = { ...env };
     delete directEnv.MESH_FAST_HOST_LEASE_FD;
     await expect(

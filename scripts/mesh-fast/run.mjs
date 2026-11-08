@@ -2,7 +2,7 @@ import { MiniMesh } from "./mesh.mjs";
 import { previous } from "./previous.mjs";
 import { runtimes } from "./runtimes.mjs";
 import { prepare } from "./prepare.mjs";
-import { prunePassed } from "./artifacts.mjs";
+import { prunePassed, pruneRuns, finishRun } from "./artifacts.mjs";
 import { defaultJobs, ownership, assertHostLease, recoverStale } from "./lifecycle.mjs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
@@ -100,41 +100,60 @@ const host = {
   jobs,
   containerBoots: 2,
   serverBoots: Math.max(2, Math.min(8, Math.floor(owner.cores / 2))),
+  artifactsDirectory: NodePath.resolve(process.env.MESH_FAST_ARTIFACTS_DIR),
+  cacheDirectory: NodePath.resolve(process.env.MESH_FAST_MUTAGEN_CACHE),
 };
 if (filter === "@host-info") {
   console.log(JSON.stringify(host, null, 2));
   process.exit(0);
 }
 if (!selected.length) throw Error(`No scenarios match ${filter}`);
-const artifactsDirectory = process.env.MESH_FAST_ARTIFACTS_DIR ?? NodeOS.tmpdir();
+const artifactsDirectory = host.artifactsDirectory;
 await NodeFSP.mkdir(artifactsDirectory, { recursive: true });
 const root = await NodeFSP.mkdtemp(NodePath.join(artifactsDirectory, "mesh-fast-"));
 await NodeFSP.writeFile(NodePath.join(root, "runner.json"), JSON.stringify(host));
 console.log(`Host: ${owner.hostname}; cores ${owner.cores}; meshes ${jobs}; container boots 2`);
-console.log(`Artifacts: ${root}`);
+console.log(`Run directory: ${root}`);
 if (process.env.GITHUB_OUTPUT)
   await NodeFSP.appendFile(process.env.GITHUB_OUTPUT, `artifacts=${root}\n`);
 const started = performance.now(),
   results = [];
 let recovery;
+let pruning;
 const elapsed = () => (performance.now() - started) / 1000;
 const escape = (text) =>
   String(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
-async function report() {
+async function report(directory) {
   const seconds = elapsed();
   await NodeFSP.writeFile(
-    NodePath.join(root, "summary.json"),
+    NodePath.join(directory, "summary.json"),
     JSON.stringify({ seconds, budgetSeconds, host, recovery, results }, null, 2),
   );
   await NodeFSP.writeFile(
-    NodePath.join(root, "junit.xml"),
+    NodePath.join(directory, "junit.xml"),
     `<testsuite name="mesh-fast" tests="${results.length}" failures="${results.filter((r) => r.error).length}" time="${seconds}">${results.map((r) => `<testcase name="${escape(r.name)}" time="${r.seconds}">${r.error ? `<failure message="scenario failed">${escape(r.error)}</failure>` : ""}</testcase>`).join("")}</testsuite>\n`,
   );
-  console.log(
-    `${results.filter((r) => !r.error).length}/${results.length} passed; wall ${seconds.toFixed(2)}s`,
-  );
+}
+let completion;
+function finish(failed) {
+  completion ??= (async () => {
+    await pruning;
+    await report(root);
+    const artifacts = await finishRun(root, owner, failed);
+    await report(artifacts);
+    console.log(`Artifacts: ${artifacts}`);
+    if (process.env.GITHUB_OUTPUT)
+      await NodeFSP.appendFile(process.env.GITHUB_OUTPUT, `artifacts=${artifacts}\n`);
+    console.log(
+      `${results.filter((r) => !r.error).length}/${results.length} passed; wall ${elapsed().toFixed(2)}s`,
+    );
+  })();
+  return completion;
 }
 let terminating = false;
+function assertRunning() {
+  if (terminating) throw Error("Mesh runner is shutting down");
+}
 async function terminate(reason, code) {
   if (terminating) return;
   terminating = true;
@@ -142,7 +161,7 @@ async function terminate(reason, code) {
   console.error(reason);
   const closed = await Promise.allSettled([...MiniMesh.active].map((mesh) => mesh.close()));
   for (const result of closed) if (result.status === "rejected") console.error(result.reason);
-  await report();
+  await finish(true);
   process.exit(code);
 }
 for (const signal of ["SIGINT", "SIGTERM"])
@@ -153,23 +172,30 @@ const watchdog = setTimeout(
 );
 try {
   recovery = await recoverStale(owner);
+  assertRunning();
+  pruning = pruneRuns(artifactsDirectory, owner);
+  await pruning;
+  assertRunning();
   await NodeFSP.writeFile(NodePath.join(root, "recovery.json"), JSON.stringify(recovery, null, 2));
   if (recovery.interruptedRuns.length)
     console.log(
       `RECOVERED ${recovery.containers.length} containers, ${recovery.networks.length} networks from interrupted runs`,
     );
   process.env.MESH_FAST_MUTAGEN_CACHE = await prepare();
+  assertRunning();
   process.env.PLAYWRIGHT_BROWSERS_PATH ??= NodePath.join(
     process.env.MESH_FAST_MUTAGEN_CACHE,
     "browsers",
   );
   process.env.MESH_FAST_RUNTIMES = await runtimes(process.env.MESH_FAST_MUTAGEN_CACHE);
+  assertRunning();
   await NodeFSP.copyFile(
     NodePath.join(process.env.MESH_FAST_RUNTIMES, "preparation.json"),
     NodePath.join(root, "preparation.json"),
   );
   if (selected.some(([name]) => name === "mixed-version"))
     process.env.MESH_FAST_PREVIOUS_ENTRY = await previous(process.env.MESH_FAST_MUTAGEN_CACHE);
+  assertRunning();
   const queue = selected.flatMap(([name, run]) =>
     Array.from({ length: repeat }, (_, index) => ({ name: `${name}-${index + 1}`, run })),
   );
@@ -203,11 +229,14 @@ try {
   );
 } catch (cause) {
   const error = cause.stack ?? String(cause);
-  results.push({ name: "infrastructure", seconds: elapsed(), error });
-  await NodeFSP.writeFile(NodePath.join(root, "failure.txt"), error);
+  if (!terminating) {
+    results.push({ name: "infrastructure", seconds: elapsed(), error });
+    await NodeFSP.writeFile(NodePath.join(root, "failure.txt"), error);
+  }
   console.error(error);
 } finally {
   clearTimeout(watchdog);
 }
-await report();
-process.exitCode = results.some((r) => r.error) || elapsed() > budgetSeconds ? 1 : 0;
+const failed = results.some((r) => r.error) || elapsed() > budgetSeconds;
+await finish(failed);
+process.exitCode = failed || elapsed() > budgetSeconds ? 1 : 0;

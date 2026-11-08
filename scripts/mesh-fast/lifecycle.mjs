@@ -58,6 +58,12 @@ export function ownershipLabels(owner) {
 export const labelArgs = (owner) =>
   Object.entries(ownershipLabels(owner)).flatMap(([key, value]) => ["--label", key + "=" + value]);
 
+export async function ownerIsActive(owner, current) {
+  if (owner.boot !== current.boot) return false;
+  const process = await processIdentity(owner.pid);
+  return process?.uid === owner.uid && process.start === owner.start;
+}
+
 async function stale(labels, current) {
   if (
     labels?.[prefix] !== "1" ||
@@ -71,13 +77,15 @@ async function stale(labels, current) {
   for (const key of ["pid", "start"])
     if (!/^[0-9]+$/.test(labels[`${prefix}.${key}`] ?? ""))
       throw Error("Malformed mesh-fast ownership label: " + key);
-  if (labels[`${prefix}.boot`] !== current.boot) return true;
-  const processInfo = await processIdentity(Number(labels[`${prefix}.pid`]));
-  return (
-    !processInfo ||
-    processInfo.uid !== current.uid ||
-    processInfo.start !== labels[`${prefix}.start`]
-  );
+  return !(await ownerIsActive(
+    {
+      boot: labels[`${prefix}.boot`],
+      uid: current.uid,
+      pid: Number(labels[`${prefix}.pid`]),
+      start: labels[`${prefix}.start`],
+    },
+    current,
+  ));
 }
 
 export async function recoverStale(current) {

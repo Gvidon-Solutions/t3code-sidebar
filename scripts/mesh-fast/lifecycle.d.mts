@@ -10,6 +10,10 @@ export interface Ownership {
 }
 export function defaultJobs(cores: number): number;
 export function ownership(): Promise<Ownership>;
+export function ownerIsActive(
+  owner: Pick<Ownership, "boot" | "uid" | "pid" | "start">,
+  current: Pick<Ownership, "boot">,
+): Promise<boolean>;
 export function ownershipLabels(owner: Ownership): Record<string, string>;
 export function labelArgs(owner: Ownership): string[];
 export function recoverStale(current?: Ownership): Promise<{

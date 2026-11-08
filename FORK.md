@@ -124,7 +124,10 @@ test environment. Measured long scenarios start earlier to avoid a slow final wa
 The agreed fast gate ceiling is six minutes. Native preparation overlaps web and
 server builds and records cache-build phases. Fixture storage can use a separate
 disk via `MESH_FAST_ARTIFACTS_DIR` without changing service/CLI IPC paths; nested
-recovery verifies the selected directory. Paused supervisors close their
+recovery verifies the selected directory and deletion after success. The runner
+defaults to `/data/mf`, removes successful run directories itself, and retains
+only compact latest reports plus the last three failed runs with ownership guards.
+Paused supervisors close their
 watchers and reject late restarts; fast cleanup removes only marked payloads and
 preserves external symlink targets. The paused-process regression fails before
 the watcher fix and passes afterward. F2 integration uses pinned HTTPS/bootstrap
