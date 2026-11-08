@@ -67,8 +67,21 @@ export class MiniMesh {
     let allocated = false;
     for (let attempt = 0; attempt < 64; attempt++) {
       const subnet = `10.240.${NodeCrypto.randomInt(256)}.${NodeCrypto.randomInt(16) * 16}/28`;
+      const address = subnet.split("/")[0].split(".");
+      address[3] = String(Number(address[3]) + 1);
+      const gateway = address.join(".");
       try {
-        await run("docker", ["network", "create", "--subnet", subnet, this.network]);
+        await run("docker", [
+          "network",
+          "create",
+          "--subnet",
+          subnet,
+          "--gateway",
+          gateway,
+          this.network,
+        ]);
+        this.gateway = gateway;
+        this.networkCreated = true;
         allocated = true;
         break;
       } catch (error) {
@@ -77,9 +90,6 @@ export class MiniMesh {
     }
     if (!allocated) throw Error("Could not allocate a private fixture subnet");
 
-    this.gateway = JSON.parse(
-      await run("docker", ["network", "inspect", this.network]),
-    )[0].IPAM.Config[0].Gateway;
     for (const value of this.extraRoutes ?? [])
       this.launch(
         process.execPath,
@@ -546,11 +556,16 @@ const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(a
     const descriptor = await until(
       `${name} ready`,
       async () => {
-        if (child.exitCode !== null) throw Error(`${name} exited ${child.exitCode}`);
+        if (child.exitCode !== null || child.signalCode !== null)
+          return { startupExit: child.exitCode ?? child.signalCode };
         return (await fetch(`${origin}/.well-known/t3/environment`)).json();
       },
-      (value) => !!value.environmentId,
+      (value) => value.startupExit !== undefined || !!value.environmentId,
     );
+    if (descriptor.startupExit !== undefined)
+      throw Error(
+        `${name} exited ${descriptor.startupExit}: ${await NodeFSP.readFile(NodePath.join(root, "server.log"), "utf8")}`,
+      );
     const token = (
       await run(
         useSource ? process.execPath : native,
@@ -686,7 +701,7 @@ const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(a
     } finally {
       clearTimeout(timer);
     }
-    if (this.network) {
+    if (this.networkCreated) {
       await until(
         "private container network released",
         async () => JSON.parse(await run("docker", ["network", "inspect", this.network]))[0],
