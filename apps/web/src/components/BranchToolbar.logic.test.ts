@@ -10,6 +10,7 @@ import {
   resolveLocalCheckoutBranchMismatch,
   sanitizeNewRefName,
   shouldIncludeBranchPickerItem,
+  shouldShowDraftMachineControl,
 } from "./BranchToolbar.logic";
 
 describe("resolveDraftEnvModeAfterBranchChange", () => {
@@ -275,5 +276,42 @@ describe("sanitizeNewRefName", () => {
   it("does not collapse dashes the user typed", () => {
     expect(sanitizeNewRefName("new - branch")).toBe("new---branch");
     expect(sanitizeNewRefName("foo--bar")).toBe("foo--bar");
+  });
+});
+
+describe("shouldShowDraftMachineControl", () => {
+  it("keeps a machine control on a draft whose hero cards are hidden", () => {
+    expect(
+      shouldShowDraftMachineControl({
+        isDraft: true,
+        isDraftHeroState: false,
+        canChangeEnvironment: true,
+        hasActiveProject: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowDraftMachineControl({
+        isDraft: true,
+        isDraftHeroState: true,
+        canChangeEnvironment: true,
+        hasActiveProject: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowDraftMachineControl({
+        isDraft: false,
+        isDraftHeroState: false,
+        canChangeEnvironment: true,
+        hasActiveProject: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowDraftMachineControl({
+        isDraft: true,
+        isDraftHeroState: false,
+        canChangeEnvironment: false,
+        hasActiveProject: true,
+      }),
+    ).toBe(false);
   });
 });

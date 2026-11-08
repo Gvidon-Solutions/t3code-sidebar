@@ -18,12 +18,12 @@ const group = { projectKey: "demo", environmentIds: ["lab"], knownEnvironmentIds
 describe("projectMachineStrip", () => {
   it.each([
     ["watching", "green", false, "synced"],
-    ["pending", "neutral", true, "pending"],
-    ["mounting", "neutral", true, "mounting"],
+    ["pending", "neutral", true, "copying files"],
+    ["mounting", "neutral", true, "copying files"],
     ["conflict", "amber", false, "2 conflicts"],
-    ["error", "red", false, "error"],
-    ["paused", "grey", false, "paused"],
-    ["removed", "grey", false, "removed"],
+    ["error", "red", false, "needs attention"],
+    ["paused", "grey", false, "sync paused"],
+    ["removed", "grey", false, "not on this machine"],
   ] as const)("shows %s from live status over stored status", (state, tone, pending, copy) => {
     const config = {
       ...empty,
@@ -106,7 +106,7 @@ describe("projectMachineStrip", () => {
     expect(model.chips.map((chip) => chip.environmentId)).toEqual(["lab", "at", "vps"]);
     expect(model.overflow).toBe(1);
     expect(model.description).toBe(
-      "Primary on LAB · Primary on AT · Replica on VPS (pending) · Replica on OTHER (pending)",
+      "Primary on LAB · Primary on AT · Replica on VPS (copying files) · Replica on OTHER (copying files)",
     );
   });
   it("hides single-machine strips and uses legacy members on a multi-machine client", () => {

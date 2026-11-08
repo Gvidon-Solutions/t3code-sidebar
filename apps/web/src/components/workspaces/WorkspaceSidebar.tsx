@@ -175,6 +175,8 @@ import {
   effectiveDefaultWorkspaceId,
   EMPTY_WORKSPACE_ACTIVITY,
   addWorkspace,
+  folderRowActivation,
+  folderRowAriaLabel,
   deleteWorkspace,
   dropProjectOnWorkspace,
   isProjectQuiet,
@@ -1530,6 +1532,7 @@ export default function WorkspaceSidebar() {
                 tabIndex={0}
                 draggable={offline === undefined}
                 aria-expanded={open}
+                aria-label={folderRowAriaLabel(folder.label, offline !== undefined)}
                 className={cn(
                   "group/ws-folder relative flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-md pr-1 pl-1 text-sm font-medium outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                   threadDrop === folderKey && "bg-accent ring-2 ring-inset ring-primary",
@@ -1538,7 +1541,7 @@ export default function WorkspaceSidebar() {
                     : "text-sidebar-muted-foreground opacity-70",
                 )}
                 onClick={() => {
-                  if (offline) {
+                  if (folderRowActivation(offline !== undefined) === "connections") {
                     void router.navigate({ to: "/settings/connections" });
                     return;
                   }
@@ -1547,6 +1550,10 @@ export default function WorkspaceSidebar() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
+                    if (folderRowActivation(offline !== undefined) === "connections") {
+                      void router.navigate({ to: "/settings/connections" });
+                      return;
+                    }
                     view.setFolderOpen(folderKey, !open);
                   }
                 }}
@@ -1959,6 +1966,7 @@ export default function WorkspaceSidebar() {
           <>
             <SidebarHeaderIconButton
               label="Add project"
+              className="size-6"
               onClick={() => openCommandPalette({ open: "add-project" })}
             >
               <FolderPlusIcon />
@@ -1966,6 +1974,7 @@ export default function WorkspaceSidebar() {
             {talk ? (
               <SidebarHeaderIconButton
                 label="Talk in a new thread"
+                className="size-6"
                 onClick={() => {
                   if (isMobile) setOpenMobile(false);
                   talk();
@@ -1976,6 +1985,7 @@ export default function WorkspaceSidebar() {
             ) : null}
             <SidebarHeaderIconButton
               label="New thread"
+              className="size-6"
               onClick={() => {
                 if (isMobile) setOpenMobile(false);
                 openCommandPalette({ open: "new-thread-in" });

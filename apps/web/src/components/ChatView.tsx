@@ -59,7 +59,7 @@ import {
   type ChatFileAttachment,
   isProviderNativeSubagentThread,
   orchestrationV2WorktreePending,
-  type EnvironmentId,
+  EnvironmentId,
   type MessageId,
   type ModelSelection,
   type PreviewAnnotationPayload,
@@ -295,6 +295,7 @@ import {
   resolveEffectiveEnvMode,
   resolveLocalCheckoutBranchMismatch,
   shouldShowComposerContextStrip,
+  shouldShowDraftMachineControl,
   shouldShowEnvironmentIndicator,
 } from "./BranchToolbar.logic";
 import {
@@ -357,6 +358,11 @@ import { observeResize } from "~/lib/observeResize";
 import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
 import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
+import {
+  draftModelUnavailableReason,
+  hasUsableDraftModels,
+  nextSelectableDraftMachine,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
 import { branchMismatchBannerItem } from "./chat/ThreadActivityBanners";
 import { ThreadNow } from "./chat/ThreadNow";
@@ -1737,15 +1743,22 @@ export default function ChatView(props: ChatViewProps) {
           providerSubagentModels,
           reportedModelSelection,
         );
+  const showDraftMachineControl = shouldShowDraftMachineControl({
+    isDraft: routeKind === "draft",
+    isDraftHeroState,
+    canChangeEnvironment,
+    hasActiveProject: activeProject !== null && !showProviderSubagentBar,
+  });
   const showComposerContextStrip =
     !embedded &&
-    shouldShowComposerContextStrip({
+    (shouldShowComposerContextStrip({
       isDraftHeroState,
       persistInActiveThreads: settings.persistComposerContextStrip,
       hasActiveProject: activeProject !== null && !showProviderSubagentBar,
       isGitRepo,
       showEnvironmentIndicator: showComposerEnvironmentIndicator,
-    });
+    }) ||
+      showDraftMachineControl);
   const terminalShortcutLabelOptions = {
     context: {
       terminalFocus: true,
@@ -1803,6 +1816,28 @@ export default function ChatView(props: ChatViewProps) {
     projectGroupingSettings,
     sendInFlightRef,
   });
+
+  // Voice must target the same machine the draft will run on, including while a
+  // switch is pending; its catalog then decides whether the mic may appear.
+  const voiceTargetEnvironmentId =
+    pendingDraftMachineId ??
+    activeThread?.environmentId ??
+    activeProject?.environmentId ??
+    environmentId;
+  const voiceTargetServerConfig =
+    environmentById.get(voiceTargetEnvironmentId)?.serverConfig ?? null;
+  const voiceTarget = {
+    environmentId: voiceTargetEnvironmentId,
+    projectId: pendingDraftMachineId
+      ? null
+      : (activeProject?.id ?? activeThread?.projectId ?? null),
+    config: voiceTargetServerConfig
+      ? (() => {
+          const providers = providersByEnvironment.get(voiceTargetEnvironmentId);
+          return providers ? { providers, settings: voiceTargetServerConfig.settings } : null;
+        })()
+      : null,
+  };
 
   const focusComposer = () => {
     composerRef.current?.focusAtEnd();
@@ -2716,12 +2751,28 @@ export default function ChatView(props: ChatViewProps) {
       "composer.cycleHost": ({ event }) => {
         if (!canChangeEnvironment) return false;
         if (event.repeat) return;
-        const currentId = readPendingEnvironmentChange()?.environmentId ?? environmentId;
-        const index = logicalProjectEnvironments.findIndex(
-          (env) => env.environmentId === currentId,
+        const next = nextSelectableDraftMachine(
+          logicalProjectEnvironments.map((environment) => {
+            const serverConfig = environmentById.get(environment.environmentId)?.serverConfig;
+            const providers = providersByEnvironment.get(environment.environmentId);
+            const catalog =
+              serverConfig && providers ? { providers, settings: serverConfig.settings } : null;
+            const selection =
+              composerSelectedModelSelection ?? activeThread?.modelSelection ?? null;
+            return {
+              environmentId: environment.environmentId,
+              connected: environment.connected !== false,
+              usable:
+                hasUsableDraftModels(catalog, environment.projectId) === true &&
+                selection !== null &&
+                draftModelUnavailableReason(catalog, selection, environment.projectId) === null &&
+                (environment.projectId !== null || environment.supportsMesh === true),
+              primary: environment.isPrimary,
+            };
+          }),
+          readPendingEnvironmentChange()?.environmentId ?? environmentId,
         );
-        const next = logicalProjectEnvironments[(index + 1) % logicalProjectEnvironments.length];
-        if (next) onEnvironmentChangeStable(next.environmentId);
+        if (next) onEnvironmentChangeStable(EnvironmentId.make(next));
       },
       "thread.steerQueuedMessage": ({ event }) =>
         routeKind !== "draft" && queuedRunsControlRef.current?.steerNext(event.repeat) === true,
@@ -3549,6 +3600,9 @@ export default function ChatView(props: ChatViewProps) {
                           <DraftMachineCards
                             choices={logicalProjectEnvironments}
                             activeProject={activeProject}
+                            selection={
+                              composerSelectedModelSelection ?? activeThread?.modelSelection ?? null
+                            }
                             selectedEnvironmentId={
                               pendingDraftMachineId ??
                               activeThread?.environmentId ??
@@ -3615,6 +3669,7 @@ export default function ChatView(props: ChatViewProps) {
                               composerRef={composerRef}
                               composerDraftTarget={composerDraftTarget}
                               environmentId={environmentId}
+                              voiceTarget={voiceTarget}
                               attachmentUploadsCapabilityKnown={attachmentUploadsCapabilityKnown}
                               supportsAttachmentUploads={supportsAttachmentUploads}
                               supportsQuestionAttachments={supportsQuestionAttachments}
@@ -3803,7 +3858,7 @@ export default function ChatView(props: ChatViewProps) {
                               )}
                               <BranchToolbar
                                 draftMachineId={pendingDraftMachineId ?? environmentId}
-                                showMachine={false}
+                                showMachine={showDraftMachineControl}
                                 forceNewWorktree={multipleModelSelections !== null}
                                 ref={branchToolbarRef}
                                 environmentId={activeThread.environmentId}

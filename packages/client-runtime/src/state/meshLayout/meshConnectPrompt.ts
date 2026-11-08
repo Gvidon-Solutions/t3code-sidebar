@@ -28,9 +28,45 @@ export function planMeshConnect(input: {
   const offline = input.machines.filter(
     (machine) => !input.connectedEnvironmentIds.has(machine.environmentId),
   );
+  // A saved connection that is already enabled needs no action from this prompt:
+  // switching it on again would be a no-op while the machine is simply down.
+  const reconnectable = offline.filter(
+    (machine) => input.entries.get(machine.environmentId)?.enabled === false,
+  );
+  const missing = offline.filter((machine) => !input.entries.has(machine.environmentId));
   return {
-    reconnect: offline.filter((machine) => input.entries.has(machine.environmentId)),
-    missing: offline.filter((machine) => !input.entries.has(machine.environmentId)),
-    needed: offline.length > 0,
+    reconnect: reconnectable,
+    missing,
+    needed: reconnectable.length > 0 || missing.length > 0,
   };
+}
+
+/** The machines this prompt would act on, stable for dismissing exactly that set. */
+function meshConnectActionableIds(plan: MeshConnectPlan): string[] {
+  return [...plan.reconnect, ...plan.missing]
+    .map((machine) => machine.environmentId)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Whether the prompt should appear. Dismissal covers the machines it acted on
+ * at the time, so a machine that joins the mesh later brings it back.
+ */
+export function shouldShowMeshConnectPrompt(
+  plan: MeshConnectPlan,
+  dismissedEnvironmentIds: ReadonlyArray<string>,
+): boolean {
+  if (!plan.needed) return false;
+  const dismissed = new Set(dismissedEnvironmentIds);
+  return meshConnectActionableIds(plan).some((environmentId) => !dismissed.has(environmentId));
+}
+
+/** The persisted dismissal after acting or choosing "Not now". */
+export function dismissMeshConnectPrompt(
+  dismissedEnvironmentIds: ReadonlyArray<string>,
+  plan: MeshConnectPlan,
+): string[] {
+  return [...new Set([...dismissedEnvironmentIds, ...meshConnectActionableIds(plan)])].sort(
+    (left, right) => left.localeCompare(right),
+  );
 }

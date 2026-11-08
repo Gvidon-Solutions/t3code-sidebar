@@ -113,6 +113,8 @@ import {
   threadRouteOpensDraft,
 } from "./thread-route-hydration";
 import { ThreadHeader } from "./ThreadHeader";
+import { threadHeaderSubtitle } from "./threadHeaderSubtitle";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
 import { ThreadPager } from "../panels/ThreadPager";
 import { terminalTabKey } from "../panels/terminalTabs";
@@ -555,16 +557,18 @@ function ThreadRouteContent(
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useThreadShell(delegatedFromRef);
-  const headerSubtitle = [
-    selectedThreadProject?.title ?? null,
-    selectedEnvironmentConnection?.environmentLabel ?? null,
-    // A linked environment's delegated task names its parent; other linked work its origin.
-    delegatedFrom !== null
-      ? `Subagent of ${delegatedFromThread?.title ?? delegatedFrom.title}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const mesh = useMeshLayout();
+  // A linked environment's delegated task names its parent; other linked work its origin.
+  const headerSubtitle = threadHeaderSubtitle({
+    config: mesh.config,
+    environmentId: selectedThread === null ? null : String(selectedThread.environmentId),
+    environmentLabel: selectedEnvironmentConnection?.environmentLabel ?? null,
+    projectTitle: selectedThreadProject?.title ?? null,
+    delegatedParent:
+      delegatedFrom !== null
+        ? `Subagent of ${delegatedFromThread?.title ?? delegatedFrom.title}`
+        : null,
+  });
   const gitStatus = useEnvironmentQuery(
     selectedThread !== null && selectedThreadCwd !== null
       ? vcsEnvironment.status({

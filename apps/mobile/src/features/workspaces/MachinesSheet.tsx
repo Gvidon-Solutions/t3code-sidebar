@@ -4,7 +4,6 @@ import {
   removeRepresentationCopy,
   representationCandidates,
   representationRow,
-  replicaLagText,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import {
@@ -149,17 +148,6 @@ export function MachinesSheet(props: {
               >
                 {row.text}
               </Text>
-              {rep.role === "replica" ? (
-                <Text className="text-xs text-foreground-muted">
-                  {replicaLagText(
-                    props.liveStatuses.find(
-                      (item) =>
-                        item.environmentId === rep.environmentId &&
-                        item.logicalKey === props.projectKey,
-                    )?.lag,
-                  )}
-                </Text>
-              ) : null}
               {row.status.skippedPaths?.length ? (
                 <View accessibilityLabel="Skipped files" className="gap-1">
                   {row.status.skippedPaths.map((problem) => (
@@ -189,15 +177,41 @@ export function MachinesSheet(props: {
                 <Button
                   label="Remove"
                   tone="secondary"
-                  onPress={() =>
+                  onPress={() => {
+                    const removeCopy = removeRepresentationCopy({
+                      role: rep.role,
+                      otherCopies: reps
+                        .filter(
+                          (other) =>
+                            other.environmentId !== rep.environmentId && other.role === "replica",
+                        )
+                        .map((other) => ({
+                          environmentId: other.environmentId,
+                          label: machineDisplayOf(
+                            props.config,
+                            other.environmentId,
+                            other.environmentId,
+                          ).label,
+                        })),
+                    });
+                    if (!removeCopy.canRemove) {
+                      Dialog.alert(removeCopy.title, removeCopy.message, [
+                        ...removeCopy.makePrimary.map((choice) => ({
+                          text: choice.actionLabel,
+                          onPress: () => props.onMakePrimary(choice.environmentId),
+                        })),
+                        { text: "Cancel", style: "cancel" as const },
+                      ]);
+                      return;
+                    }
                     Dialog.confirm({
-                      title: removeRepresentationCopy(rep.role).title,
-                      message: removeRepresentationCopy(rep.role).message,
+                      title: removeCopy.title,
+                      message: removeCopy.message,
                       confirmText: "Remove",
                       destructive: true,
                       onConfirm: () => props.onRemove(rep.environmentId),
-                    })
-                  }
+                    });
+                  }}
                 />
               </View>
             </View>

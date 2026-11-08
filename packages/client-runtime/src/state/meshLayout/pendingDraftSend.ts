@@ -12,6 +12,7 @@ import {
   type ServerConfig,
 } from "@t3tools/contracts";
 import { draftModelUnavailableReason } from "./draftMachine.ts";
+import { plainErrorMessage } from "../../errors/plainMessage.ts";
 import { replicaProjectId } from "./replicas.ts";
 import type { ReplicaLiveStatus } from "@t3tools/contracts";
 import type { StartThreadTurnInput } from "../../operations/commands.ts";
@@ -38,6 +39,9 @@ export const PendingDraftSend = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   context: Schema.optional(OrchestrationMessageContext),
+  /** The branch/worktree the draft chose before its machine was ready. */
+  branch: Schema.optional(Schema.NullOr(Schema.String)),
+  worktreePath: Schema.optional(Schema.NullOr(Schema.String)),
   attachments: Schema.Array(PendingDraftAttachment),
   createdAt: Schema.String,
   state: Schema.Literals(["queued", "sending", "sent"]),
@@ -155,7 +159,7 @@ export class PendingDraftOutbox {
           try {
             scratch = await openScratch(stored.environmentId);
           } catch (error) {
-            const reason = error instanceof Error ? error.message : String(error);
+            const reason = plainErrorMessage(error);
             await this.write(
               this.sends.map((send) =>
                 send.draftId === stored.draftId ? { ...send, error: reason } : send,
@@ -200,7 +204,7 @@ export class PendingDraftOutbox {
             );
             continue;
           } catch (error) {
-            failure = error instanceof Error ? error.message : String(error);
+            failure = plainErrorMessage(error);
           }
         }
         await this.write(
@@ -259,8 +263,8 @@ function pendingDraftStartInput(
         modelSelection: send.modelSelection,
         runtimeMode: send.runtimeMode,
         interactionMode: send.interactionMode,
-        branch: null,
-        worktreePath: null,
+        branch: send.branch ?? null,
+        worktreePath: send.worktreePath ?? null,
         createdAt: send.createdAt,
       },
     },

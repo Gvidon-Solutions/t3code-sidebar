@@ -9,6 +9,7 @@ import { FlatList, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cn } from "../../lib/cn";
+import { verticalHitSlop } from "../../lib/touchTargets";
 import { useNavigationThreadShells, useProjects, useServerConfigs } from "../../state/entities";
 import { useHomeListOptions } from "../home/home-list-options";
 import { buildHomeProjectScopes } from "../home/homeThreadList";
@@ -289,6 +290,7 @@ export function WorkspaceDrawer(props: {
             accessibilityRole="button"
             accessibilityState={{ selected }}
             className={cn(selected && "bg-subtle")}
+            hitSlop={verticalHitSlop(32)}
             onPress={() => {
               onClose();
               if (selected) return;

@@ -39,6 +39,7 @@ import { AndroidAnchoredMenu } from "../../components/ui/AndroidAnchoredMenu";
 import { Menu } from "../../components/ui/Menu";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
+import { boxHitSlop, verticalHitSlop } from "../../lib/touchTargets";
 import { openSettings } from "../settings/settings-navigation";
 import type { MachineSubaction, MobilePendingReplicaItem } from "./replicas.logic";
 import type {
@@ -433,6 +434,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       accessibilityRole="button"
       accessibilityState={{ expanded: item.open }}
       className={cn("mt-0.5 flex-row items-center gap-2 py-0.5 pl-3 pr-2", offline && "opacity-70")}
+      hitSlop={verticalHitSlop(20)}
       onPress={() =>
         offline
           ? openSettings(navigation as Parameters<typeof openSettings>[0], "SettingsEnvironments")
@@ -487,7 +489,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
         <Pressable
           accessibilityLabel={`New thread in ${item.title}`}
           accessibilityRole="button"
-          hitSlop={8}
+          hitSlop={boxHitSlop(28)}
           onPress={() => props.onNewThread(item.project)}
           className="h-7 w-7 items-center justify-center rounded-full"
           style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
@@ -531,7 +533,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Retry mounting on ${pending.label}`}
-                hitSlop={10}
+                hitSlop={boxHitSlop(28)}
                 className="min-h-7 min-w-7 items-center justify-center"
                 onPress={() => props.onRetryReplica(pending)}
               >
@@ -585,6 +587,7 @@ export const WorkspaceSectionRow = memo(function WorkspaceSectionRow(props: {
       accessibilityRole={toggleKey ? "button" : "header"}
       accessibilityState={toggleKey ? { expanded: item.open } : undefined}
       className="mt-2 flex-row items-center gap-2 py-1 pl-3 pr-5"
+      hitSlop={verticalHitSlop(24)}
       disabled={toggleKey === null}
       onPress={() => (toggleKey ? props.onToggle(toggleKey) : undefined)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
@@ -638,6 +641,7 @@ export const WorkspaceAgentsRow = memo(function WorkspaceAgentsRow(props: {
       accessibilityLabel={item.label}
       accessibilityState={{ expanded: item.open }}
       className="min-h-7 flex-row items-center gap-2 py-0 pl-[48px] pr-5"
+      hitSlop={verticalHitSlop(28)}
       onPress={() => props.onToggle(item.toggleKey)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
@@ -670,6 +674,7 @@ export const WorkspaceMoreRow = memo(function WorkspaceMoreRow(props: {
     <Pressable
       accessibilityRole="button"
       className="min-h-7 flex-row items-center gap-2 py-0.5 pl-[52px] pr-5"
+      hitSlop={verticalHitSlop(28)}
       onPress={() => props.onToggle(item.toggleKey)}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >

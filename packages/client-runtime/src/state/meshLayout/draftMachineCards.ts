@@ -1,4 +1,5 @@
-import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
+import type { ModelSelection, ProjectId, SidebarWorkspacesConfig } from "@t3tools/contracts";
+import { hasSelectedDraftModel, type ProviderCatalog } from "./draftMachine.ts";
 
 import { machineDisplayOf, type MachineDisplay } from "../machineDisplay.ts";
 
@@ -9,6 +10,7 @@ export type DraftMachineCardStatus =
   | "out-of-sync"
   | "will-copy"
   | "no-models"
+  | "cannot-host"
   | "unreachable";
 
 export interface DraftMachineCardStateInput {
@@ -21,6 +23,10 @@ export interface DraftMachineCardStateInput {
   readonly hasProject: boolean;
   /** Null when the machine's provider catalog is unknown to this client. */
   readonly hasUsableModels: boolean | null;
+  /** False when the draft's selected model is missing there; null when no model is chosen. */
+  readonly hasSelectedModel?: boolean | null;
+  /** False when this server cannot host a copy of the project (older server, no replicas). */
+  readonly canHostCopy?: boolean;
   readonly sync?: "synced" | "copying" | "out-of-sync" | null | undefined;
 }
 
@@ -28,6 +34,8 @@ export interface DraftMachineCardState {
   readonly status: DraftMachineCardStatus;
   readonly text: string;
   readonly selectable: boolean;
+  /** Plain guidance when the draft's selected model cannot run on this machine. */
+  readonly guidance: string | null;
 }
 
 /**
@@ -35,29 +43,46 @@ export interface DraftMachineCardState {
  * connect to is not called "not connected": it is named by the way it is reachable.
  */
 export function draftMachineCardState(input: DraftMachineCardStateInput): DraftMachineCardState {
+  const guidance =
+    input.hasSelectedModel === false ? `The selected model isn't set up on ${input.label}` : null;
+  const withGuidance = (state: Omit<DraftMachineCardState, "guidance">): DraftMachineCardState => ({
+    ...state,
+    guidance,
+  });
   if (!input.connected && !input.reachable) {
-    return { status: "unreachable", text: `Can't reach ${input.label}`, selectable: false };
+    return withGuidance({
+      status: "unreachable",
+      text: `Can't reach ${input.label}`,
+      selectable: false,
+    });
   }
   // A machine reached through the mesh still describes its copy; this device just
   // cannot start a thread there until it connects to that machine directly.
   const selectable = input.connected;
+  if (!input.hasProject && input.canHostCopy === false) {
+    return withGuidance({
+      status: "cannot-host",
+      text: `Can't set up a copy on ${input.label}`,
+      selectable: false,
+    });
+  }
   if (input.hasUsableModels === false) {
-    return {
+    return withGuidance({
       status: "no-models",
       text: `No models set up on ${input.label}`,
       selectable: false,
-    };
+    });
   }
   if (input.sync === "copying") {
-    return { status: "copying", text: "Copying files…", selectable };
+    return withGuidance({ status: "copying", text: "Copying files…", selectable });
   }
   if (input.sync === "out-of-sync") {
-    return { status: "out-of-sync", text: "Out of sync", selectable };
+    return withGuidance({ status: "out-of-sync", text: "Out of sync", selectable });
   }
   if (!input.hasProject) {
-    return { status: "will-copy", text: "Will set up a copy here", selectable };
+    return withGuidance({ status: "will-copy", text: "Will set up a copy here", selectable });
   }
-  return { status: "synced", text: "Synced", selectable };
+  return withGuidance({ status: "synced", text: "Synced", selectable });
 }
 
 export interface DraftMachineCardChoice {
@@ -67,6 +92,10 @@ export interface DraftMachineCardChoice {
   readonly primary: boolean;
   readonly connected: boolean;
   readonly hasUsableModels: boolean | null;
+  readonly hasSelectedModel?: boolean | null;
+  /** The machine's provider catalog, when this client knows it. */
+  readonly config?: ProviderCatalog | null;
+  readonly canHostCopy?: boolean;
   readonly sync?: "synced" | "copying" | "out-of-sync" | null | undefined;
 }
 
@@ -96,6 +125,7 @@ export function draftMachineCards(input: {
   readonly choices: readonly DraftMachineCardChoice[];
   readonly reachability: Readonly<Record<string, DraftMachineCardReachability | undefined>>;
   readonly selectedEnvironmentId: string | null;
+  readonly selection?: ModelSelection | null;
 }): DraftMachineCardRow[] {
   if (input.choices.length <= 1) return [];
   return input.choices
@@ -108,13 +138,35 @@ export function draftMachineCards(input: {
         viaLabel: reach?.viaLabel ?? null,
         hasProject: choice.projectId !== null,
         hasUsableModels: choice.hasUsableModels,
+        hasSelectedModel:
+          choice.hasSelectedModel ??
+          hasSelectedDraftModel(
+            choice.config ?? null,
+            input.selection ?? null,
+            choice.projectId as ProjectId | null,
+          ),
+        canHostCopy: choice.canHostCopy ?? true,
         sync: choice.sync ?? null,
       });
       const via = reach?.viaLabel?.trim();
       const note =
-        state.selectable || state.status === "no-models" || state.status === "unreachable"
+        state.status === "cannot-host"
           ? null
-          : "Not connected to this device";
+          : state.selectable
+            ? (state.guidance ?? null)
+            : state.status === "no-models" || state.status === "unreachable"
+              ? null
+              : "Not connected to this device";
+      const hint =
+        state.status === "cannot-host"
+          ? `This server can't host a copy of the project. Update it to a version that supports the mesh.`
+          : note === null
+            ? state.status === "unreachable"
+              ? `Can't reach ${choice.label}.`
+              : null
+            : state.guidance !== null
+              ? `${state.guidance}. Pick another machine or choose a model that exists on ${choice.label}.`
+              : `${note}. ${state.text}${via ? ` through ${via}` : ""}. Connect this device to ${choice.label} to start a thread here.`;
       return {
         ...state,
         environmentId: choice.environmentId,
@@ -123,12 +175,7 @@ export function draftMachineCards(input: {
         primary: choice.primary,
         selected: input.selectedEnvironmentId === choice.environmentId,
         note,
-        hint:
-          note === null
-            ? state.status === "unreachable"
-              ? `Can't reach ${choice.label}.`
-              : null
-            : `${note}. ${state.text}${via ? ` through ${via}` : ""}. Connect this device to ${choice.label} to start a thread here.`,
+        hint,
       };
     })
     .sort((left, right) => {

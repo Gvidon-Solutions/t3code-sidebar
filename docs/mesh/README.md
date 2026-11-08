@@ -246,6 +246,39 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   the target machine's provider catalog; the fixture agent reports voice only when
   `T3_MESH_TEST_VOICE_PROVIDER=1` is set.
 
+### Client draft, voice and prompt rules (F3b)
+
+Shared client-runtime decisions keep web and Android answering these questions the same way:
+
+- `meshLayout/draftMachine.ts` provides the one "has usable models for this project" predicate
+  (`hasUsableDraftModels`, built on `defaultUsableDraftModel`), the default-machine choice
+  (`defaultDraftMachine`: a remembered machine only wins while connected and usable; otherwise
+  the main copy, then any usable machine, else the main copy so its card explains why),
+  `draftMachineCatalogsKnown` so web does not pin the default before provider catalogs load, and
+  `nextSelectableDraftMachine` for `composer.cycleHost` (connected and usable only, wraps).
+- `meshLayout/draftMachineCards.ts` disables a machine that cannot host a copy (server without
+  the `replicas` capability and no existing copy), carries the selected model's availability as
+  guidance, and web refreshes an unconnected machine's catalog when it connects and every minute.
+- `voiceAvailability.ts` (client-runtime) is the one composer decision for web and mobile:
+  `resolveComposerVoiceAvailability` applies install/auth/availability/project enablement and a
+  usable voice model, so the mic is hidden exactly when a voice thread could not start. The draft
+  voice thread is created on the same target machine the button was judged against (hidden while
+  a machine switch has no project on the target yet).
+- `meshLayout/meshConnectPrompt.ts` excludes saved connections that are already enabled (switching
+  them on again is a no-op), and dismissal records the machine ids it acted for, so adding a new
+  machine shows the prompt again. Web and mobile persist that set the same way.
+- `meshLayout/gitVisibility.ts` treats an unloaded layout as "hide git controls" rather than
+  "not a replica"; web `useMeshLayout` throws without its provider instead of silently degrading
+  to a single-machine view. Mobile's thread header names the machine tag, web keeps the workspace
+  name readable by sizing the titlebar icons down.
+- `meshLayout/replicas.ts` `removeRepresentationCopy` is the one remove-copy dialog model (role,
+  other copies, `Make <machine> the main copy` choices); `replicaLagText` is gone. Machine detail
+  project sentences read the same live/stored state as Diagnostics, so a manual copy says
+  "copy not synced automatically". `meshMachines.meshProjectRows` takes live statuses.
+- Pending draft sends keep the chosen branch and worktree path; their error line uses
+  `errors/plainMessage` instead of `String(error)`. Mobile touch rows keep their compact visual
+  density and reach 44–48 dp through `lib/touchTargets` hit slop.
+
 ## Interfaces
 
 `t3 run [--bg] [--ports P[,P]] [--timeout D] -- <command…>` runs locally outside a lite

@@ -32,6 +32,7 @@ import type {
   RuntimeMode,
   RuntimeRequestId,
   ScopedThreadRef,
+  ServerConfig,
   ServerProvider,
   ThreadId,
 } from "@t3tools/contracts";
@@ -361,6 +362,12 @@ export interface ChatComposerHandle {
 export interface ChatComposerProps {
   composerDraftTarget: ScopedThreadRef | DraftId;
   environmentId: EnvironmentId;
+  /** Where a draft's voice thread would be created: the target machine, not this route's. */
+  voiceTarget: {
+    readonly environmentId: EnvironmentId;
+    readonly projectId: ProjectId | null;
+    readonly config: Pick<ServerConfig, "providers" | "settings"> | null;
+  };
   canOperateThread: boolean;
   attachmentUploadsCapabilityKnown: boolean;
   supportsAttachmentUploads: boolean;
@@ -563,6 +570,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     lockedProvider,
     providerStatuses,
     providerCatalogKnown,
+    voiceTarget,
     activeProjectDefaultModelSelection,
     activeThreadModelSelection,
     reportedModelSelection,
@@ -1152,7 +1160,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const voiceAvailability = resolveComposerVoiceAvailability({
     isServerThread,
     threadProviderInstanceId: voiceProviderInstanceId,
-    providers: providerStatuses,
+    config: voiceTarget.config,
+    projectId: voiceTarget.projectId,
   });
   const voicePhase = useVoicePhaseFor(routeThreadRef);
   const voiceEngaged = voicePhase !== "idle";
@@ -1161,10 +1170,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const voiceSupported = voiceAvailability.kind !== "unsupported" || voiceEngaged;
   const startVoiceThread = useStartVoiceThread();
   const draftVoiceThread =
-    !isServerThread && activeThread
+    !isServerThread && activeThread && voiceTarget.projectId !== null
       ? {
-          environmentId,
-          projectId: activeThread.projectId,
+          environmentId: voiceTarget.environmentId,
+          projectId: voiceTarget.projectId,
           branch: activeThread.branch,
           worktreePath: activeThread.worktreePath,
         }

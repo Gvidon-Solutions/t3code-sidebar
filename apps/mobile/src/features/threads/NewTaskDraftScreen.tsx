@@ -16,7 +16,10 @@ import { ThreadScreenBinding, ThreadScreenFallback } from "./ThreadScreenHost";
 import { draftThreadShell } from "./draft-thread-shell";
 import { useCreateVoiceThread } from "../voice-mode/useCreateVoiceThread";
 import { voiceMode, voiceModeSupported } from "../voice-mode/voiceMode";
-import { resolveVoiceModelSelection } from "../voice-mode/voiceThreads";
+import {
+  resolveComposerVoiceAvailability,
+  resolveVoiceThreadModelSelection,
+} from "@t3tools/client-runtime/voice-availability";
 import { useRememberThreadProject } from "./useRememberThreadProject";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { connectionTone } from "../connection/connectionTone";
@@ -692,6 +695,12 @@ export function NewTaskDraftScreen(props: {
           modelSelection,
           runtimeMode: flow.runtimeMode,
           interactionMode: flow.interactionMode,
+          branch: resolveProjectThreadCreationBranch({
+            workspaceMode: workspaceSelection.mode,
+            selectedBranch: workspaceSelection.branch,
+            currentCheckoutBranch: flow.currentCheckoutBranchName,
+          }),
+          worktreePath: workspaceSelection.worktreePath,
           ...(draft.context ? { context: draft.context } : {}),
           attachments,
           createdAt: creationMetadata.createdAt,
@@ -749,29 +758,36 @@ export function NewTaskDraftScreen(props: {
     return message.messageId;
   }
 
-  // Sidebar fork: talking from a draft first creates its thread on the
-  // server, with the draft's settings; a model that cannot talk becomes Codex's.
-  const offersVoiceConversation =
-    voiceModeSupported &&
-    resolveVoiceModelSelection(
-      selectedEnvironmentServerConfig,
-      flow.selectedModel,
-      flow.selectedProject?.id ?? null,
-    ) !== null;
+  // Voice targets the draft's machine. While a switch is pending there is no
+  // project there yet, so the mic stays hidden; button and launch share this
+  // one decision.
+  const voiceProject =
+    !pendingSend &&
+    flow.switchingToEnvironmentId === null &&
+    selectedProject?.environmentId === chosenEnvironmentId
+      ? selectedProject
+      : null;
+  const voiceAvailability = resolveComposerVoiceAvailability({
+    isServerThread: false,
+    threadProviderInstanceId: null,
+    config: selectedEnvironmentServerConfig,
+    projectId: voiceProject?.id ?? null,
+  });
+  const offersVoiceConversation = voiceModeSupported && voiceAvailability.kind !== "unsupported";
   const canStartVoice =
-    environmentConnected && canOperate && !cloneBlocksStart && !isComposerInteractionLocked;
+    environmentConnected &&
+    canOperate &&
+    !cloneBlocksStart &&
+    !isComposerInteractionLocked &&
+    offersVoiceConversation;
   async function handleStartVoice(): Promise<void> {
-    const project = flow.selectedProject;
+    const project = voiceProject;
     const draftKey = flow.draftKey;
     if (!project || !draftKey || !canStartVoice) return;
     const draft = getComposerDraftSnapshot(draftKey);
-    const modelSelection = resolveVoiceModelSelection(
+    const modelSelection = resolveVoiceThreadModelSelection(
       selectedEnvironmentServerConfig,
-      resolveSelectableModelSelection(
-        selectedEnvironmentServerConfig,
-        draft.modelSelection ?? null,
-        project.id,
-      ) ?? flow.selectedModel,
+      draft.modelSelection ?? flow.selectedModel ?? null,
       project.id,
     );
     if (!modelSelection) return;
@@ -839,7 +855,7 @@ export function NewTaskDraftScreen(props: {
     void KeyboardController.dismiss({ animated: true });
     navigation.navigate("NewTaskProject", { incomingShareId: props.incomingShareId });
   };
-  const openContextPicker = (routeName: "NewTaskBranch" | "NewTaskEnvironment") => {
+  const openContextPicker = (routeName: "NewTaskBranch") => {
     if (isComposerInteractionLocked) {
       return;
     }

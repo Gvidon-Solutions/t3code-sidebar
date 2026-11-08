@@ -22,7 +22,6 @@ import {
   representationCandidates,
   representationRow,
   replicaExecutionLabel,
-  replicaLagText,
   unmanagedSessionLabel,
   replicaStatusDetail,
 } from "./replicas.ts";
@@ -489,14 +488,6 @@ describe("shared machine choices", () => {
     expect(pendingRowsForProject(config, [status("beta", "mounting")], "other")).toEqual([]);
   });
 
-  it("renders lag with or without a byte count", () => {
-    expect(replicaLagText(null)).toBe("Lag not reported");
-    expect(replicaLagText({ filesBehind: 1 })).toBe("1 file behind");
-    expect(replicaLagText({ filesBehind: 3, bytesBehind: 1200 })).toBe(
-      "3 files behind · 1200 bytes behind",
-    );
-  });
-
   it("lists only enabled machines that are not already represented", () => {
     const candidates = representationCandidates(
       [
@@ -510,8 +501,22 @@ describe("shared machine choices", () => {
   });
 
   it("shares the remove and adopt copy", () => {
-    expect(removeRepresentationCopy("replica").title).toBe("Remove this replica?");
-    expect(removeRepresentationCopy("primary").message).toContain("leaves replicas without");
+    expect(removeRepresentationCopy({ role: "replica", otherCopies: [] })).toMatchObject({
+      title: "Remove this copy?",
+      canRemove: true,
+    });
+    expect(removeRepresentationCopy({ role: "primary", otherCopies: [] }).message).toContain(
+      "ordinary folder",
+    );
+    const blocked = removeRepresentationCopy({
+      role: "primary",
+      otherCopies: [{ environmentId: "beta", label: "Cloudbox" }],
+    });
+    expect(blocked.canRemove).toBe(false);
+    expect(blocked.message).toContain("Make another copy the main copy first");
+    expect(blocked.makePrimary).toEqual([
+      { environmentId: "beta", label: "Cloudbox", actionLabel: "Make Cloudbox the main copy" },
+    ]);
     expect(
       unmanagedSessionLabel({
         name: null,

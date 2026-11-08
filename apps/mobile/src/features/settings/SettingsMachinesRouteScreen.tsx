@@ -122,7 +122,7 @@ export function SettingsMachinesRouteScreen() {
                   : (offlineMachineText(selected.lastSeenAt) ?? "Offline")}
               </AppText>
               <View className="gap-2">
-                {meshProjectRows(base, selected.environmentId).map((row) => (
+                {meshProjectRows(base, selected.environmentId, live).map((row) => (
                   <AppText key={row.key}>{row.sentence}</AppText>
                 ))}
               </View>

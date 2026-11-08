@@ -68,6 +68,21 @@ export function shouldShowEnvironmentIndicator(input: {
   return input.activeEnvironment !== null && !input.activeEnvironment.isPrimary;
 }
 
+/**
+ * A draft whose hero cards are hidden (worktree setup, docked hero) still needs
+ * a way to see and change its target machine: the composer strip carries one.
+ */
+export function shouldShowDraftMachineControl(input: {
+  isDraft: boolean;
+  isDraftHeroState: boolean;
+  canChangeEnvironment: boolean;
+  hasActiveProject: boolean;
+}): boolean {
+  return (
+    input.isDraft && !input.isDraftHeroState && input.canChangeEnvironment && input.hasActiveProject
+  );
+}
+
 export function shouldShowComposerContextStrip(input: {
   isDraftHeroState: boolean;
   persistInActiveThreads: boolean;

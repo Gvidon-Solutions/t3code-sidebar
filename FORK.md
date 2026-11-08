@@ -109,6 +109,31 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-08 — F3b client audit fixes and shared machine decisions
+
+- **What.** Web and Android now make the same choices about a draft's machine, its voice button,
+  the connect prompt, remove-copy copy and mobile touch areas. A draft never defaults to an
+  offline or model-less remembered machine, cards respect the server's replica capability and
+  the selected model, and the machine control stays reachable when the hero cards are hidden.
+- **How.** `meshLayout/draftMachine.ts` owns the usable-model predicate, default choice, catalog
+  readiness and host cycling; cards carry the replica-capability reason and model guidance and
+  refresh an unconnected catalog on connect and every minute. The shared
+  `voiceAvailability.ts` applies install/auth/project/model checks and targets the draft's real
+  machine. `meshConnectPrompt.ts` ignores already-enabled connections and persists dismissal by
+  machine id. `gitVisibility.ts` hides git until the layout loads, and web `useMeshLayout`
+  throws without its provider. One `removeRepresentationCopy` model serves both Machines views
+  and their footer stacks; machine summaries read the Diagnostics state, so manual copies are
+  not called synced. Pending sends keep branch/worktree and use plain error text; Android rows
+  gain hit slop through `lib/touchTargets`.
+- **Where.** client-runtime `state/meshLayout/{draftMachine,draftMachineCards,meshConnectPrompt,
+  projectMachineStrip,replicas,gitVisibility,pendingDraftSend}.ts`, `state/meshMachines.ts`,
+  `errors/plainMessage.ts`, `voiceAvailability.ts`; web `ChatView`, `ChatComposer`,
+  `DraftMachineCards`, `useDraftEnvironmentRouting`, `WorkspaceSidebar`, `WorkspaceChrome`,
+  `useMeshLayout`, `MachinesDialog`, `MeshConnectPrompt`, `PendingDraftDelivery`; mobile
+  `new-task-flow-provider`, `NewTaskDraftScreen`, `ThreadComposer`, `ThreadRouteScreen`,
+  `WorkspaceChrome`, `WorkspaceThreadLine`, `MachinesSheet`, `MeshConnectPrompt`,
+  `useForkThread`, `DraftMachineStatus`, `lib/touchTargets`, `lib/appLinking`.
+
 ### 2026-11-08 — C3 required mesh services and shared server runtime
 
 - Mesh services now have explicit production dependencies and test layers. Updating refusals preserve a `DeliveryUpdatingError` tag through RPC/MCP; clients and the CLI retry that tag.

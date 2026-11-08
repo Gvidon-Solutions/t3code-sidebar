@@ -11,6 +11,8 @@ import {
 import type { SidebarThreadSummary } from "../../types";
 import {
   effectiveDefaultWorkspaceId,
+  folderRowActivation,
+  folderRowAriaLabel,
   globToRegExp,
   isProjectQuiet,
   isThreadUnread,
@@ -229,5 +231,14 @@ describe("isThreadUnread", () => {
       false,
     );
     expect(isThreadUnread(done, "2026-10-10T10:30:00.000Z", null)).toBe(true);
+  });
+});
+
+describe("folderRowActivation", () => {
+  it("sends an offline folder row to Connections from click and keyboard alike", () => {
+    expect(folderRowActivation(true)).toBe("connections");
+    expect(folderRowActivation(false)).toBe("toggle");
+    expect(folderRowAriaLabel("studio", true)).toBe("studio: Not connected to this device");
+    expect(folderRowAriaLabel("studio", false)).toBeUndefined();
   });
 });

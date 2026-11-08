@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import { planMeshConnect } from "./meshConnectPrompt.ts";
+import {
+  dismissMeshConnectPrompt,
+  planMeshConnect,
+  shouldShowMeshConnectPrompt,
+} from "./meshConnectPrompt.ts";
 
 const machines = [
   { environmentId: "studio", label: "studio" },
@@ -16,6 +20,36 @@ describe("planMeshConnect", () => {
         entries: new Map(),
       }).needed,
     ).toBe(false);
+  });
+
+  it("ignores a saved connection that is already enabled", () => {
+    expect(
+      planMeshConnect({
+        machines,
+        connectedEnvironmentIds: new Set(["studio", "laptop"]),
+        entries: new Map([["cloudbox", { enabled: true }]]),
+      }),
+    ).toEqual({ reconnect: [], missing: [], needed: false });
+  });
+
+  it("keeps a new machine's prompt after an earlier dismissal", () => {
+    const first = planMeshConnect({
+      machines,
+      connectedEnvironmentIds: new Set(["studio", "cloudbox"]),
+      entries: new Map([["laptop", { enabled: false }]]),
+    });
+    const dismissed = dismissMeshConnectPrompt([], first);
+    expect(shouldShowMeshConnectPrompt(first, dismissed)).toBe(false);
+    const joined = planMeshConnect({
+      machines: [...machines, { environmentId: "atlas", label: "atlas" }],
+      connectedEnvironmentIds: new Set(["studio", "cloudbox"]),
+      entries: new Map([["laptop", { enabled: false }]]),
+    });
+    expect(shouldShowMeshConnectPrompt(joined, dismissed)).toBe(true);
+    expect(dismissMeshConnectPrompt(dismissed, joined)).toEqual(["atlas", "laptop"]);
+    expect(shouldShowMeshConnectPrompt({ reconnect: [], missing: [], needed: false }, [])).toBe(
+      false,
+    );
   });
 
   it("reconnects saved environments and names machines that were never added", () => {

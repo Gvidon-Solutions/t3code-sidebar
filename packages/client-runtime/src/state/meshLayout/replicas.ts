@@ -491,16 +491,6 @@ export function pendingRowsForProject(
   return pendingRows(config, liveStatuses).filter((row) => row.logicalKey === logicalKey);
 }
 
-/** One line for a replica's remaining sync distance, or its absent report. */
-export function replicaLagText(
-  lag: { readonly bytesBehind?: number; readonly filesBehind: number } | null | undefined,
-): string {
-  if (!lag) return "Lag not reported";
-  return `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${
-    lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`
-  }`;
-}
-
 /** Machines that may receive a new replica: enabled and not already represented. */
 export function representationCandidates<
   M extends { readonly environmentId: string; readonly disabled: boolean },
@@ -510,18 +500,58 @@ export function representationCandidates<
   );
 }
 
-/** Confirm-dialog copy for removing one representation. */
-export function removeRepresentationCopy(role: "primary" | "replica"): {
+export interface RemoveRepresentationChoice {
+  readonly environmentId: string;
+  readonly label: string;
+  readonly actionLabel: string;
+}
+
+export interface RemoveRepresentationCopyDialog {
   readonly title: string;
   readonly message: string;
-} {
+  /** False while another copy must be made the main copy first. */
+  readonly canRemove: boolean;
+  /** Copies that can take over, with their "Make X the main copy" action labels. */
+  readonly makePrimary: ReadonlyArray<RemoveRepresentationChoice>;
+}
+
+/**
+ * Confirm-dialog copy for removing one representation, shared by web and
+ * mobile. A main copy cannot be removed while other copies depend on it: the
+ * dialog offers making one of them the main copy instead. Files always stay.
+ */
+export function removeRepresentationCopy(input: {
+  readonly role: "primary" | "replica";
+  readonly otherCopies: ReadonlyArray<{ readonly environmentId: string; readonly label: string }>;
+}): RemoveRepresentationCopyDialog {
+  if (input.role === "replica") {
+    return {
+      title: "Remove this copy?",
+      message:
+        "Synchronization stops and this copy is removed from the project. Files already on the machine stay where they are.",
+      canRemove: true,
+      makePrimary: [],
+    };
+  }
+  if (input.otherCopies.length === 0) {
+    return {
+      title: "Remove the main copy?",
+      message:
+        "Removing the main copy leaves the project on this machine only as an ordinary folder.",
+      canRemove: true,
+      makePrimary: [],
+    };
+  }
   return {
-    title: `Remove this ${role}?`,
-    message: `${
-      role === "replica"
-        ? "Synchronization stops and the replica is removed from this mesh folder."
-        : "Removing the primary leaves replicas without their git and build machine. Choose another primary before continuing."
-    } Files already on the machine stay where they are.`,
+    title: "Remove the main copy?",
+    message:
+      "The main copy runs git and builds. Make another copy the main copy first, then remove this one.",
+    canRemove: false,
+    makePrimary: input.otherCopies.map((copy) => ({
+      environmentId: copy.environmentId,
+      label: copy.label,
+      actionLabel: `Make ${copy.label} the main copy`,
+    })),
   };
 }
 

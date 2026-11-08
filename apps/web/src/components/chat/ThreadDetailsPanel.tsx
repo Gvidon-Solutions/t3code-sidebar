@@ -32,7 +32,7 @@ import { ThreadDetailsItemsMenuItems } from "./ThreadDetailsItemsMenu";
 import { resolveThreadDetailsVisibility, THREAD_DETAILS_ITEMS } from "./threadDetailsItems";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
-import { replicaExecutionLabel } from "@t3tools/client-runtime/state/mesh-layout";
+import { hidesGitControls } from "@t3tools/client-runtime/state/mesh-layout";
 import { threadDetailsGitVisibility } from "./threadDetailsGit";
 import { cn } from "../../lib/utils";
 import { SlidersHorizontalIcon } from "lucide-react";
@@ -92,13 +92,12 @@ interface ThreadDetailsPanelProps extends Pick<
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   const visible = useClientSettings(resolveThreadDetailsVisibility);
   const mesh = useMeshLayout();
-  const isReplica =
-    replicaExecutionLabel(
-      mesh.config,
-      props.environmentId,
-      props.projectId,
-      props.environmentId,
-    ) !== null;
+  const isReplica = hidesGitControls(
+    mesh.config,
+    props.environmentId,
+    props.projectId,
+    props.environmentId,
+  );
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const fileScripts = useT3ProjectFileScripts(
     props.environmentId,

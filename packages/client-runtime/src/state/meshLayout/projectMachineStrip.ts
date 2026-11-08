@@ -58,7 +58,15 @@ export function projectMachineStrip(
                 ? "synced"
                 : state === "conflict" && status.conflicts
                   ? `${status.conflicts} conflict${status.conflicts === 1 ? "" : "s"}`
-                  : state;
+                  : state === "pending" || state === "mounting"
+                    ? "copying files"
+                    : state === "removed"
+                      ? "not on this machine"
+                      : state === "paused"
+                        ? "sync paused"
+                        : state === "error"
+                          ? "needs attention"
+                          : "not synced";
           return {
             environmentId: rep.environmentId,
             machine,

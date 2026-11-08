@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
-import { replicaExecutionLabel } from "@t3tools/client-runtime/state/mesh-layout";
+import { hidesGitControls } from "@t3tools/client-runtime/state/mesh-layout";
 import { Pressable, View } from "react-native";
 import { AppText } from "../../components/ui/AppText";
 
@@ -53,13 +53,12 @@ export function ReplicaWorkspaceControls(props: {
   projectEnvironmentId?: string;
   children: ReactNode;
 }) {
-  const isReplica =
-    replicaExecutionLabel(
-      props.config,
-      props.environmentId,
-      props.projectId,
-      props.projectEnvironmentId,
-    ) !== null;
+  const isReplica = hidesGitControls(
+    props.config,
+    props.environmentId,
+    props.projectId,
+    props.projectEnvironmentId,
+  );
   // A lite replica has no local git checkout; its controls stay hidden and no jargon is shown.
   return isReplica ? null : props.children;
 }

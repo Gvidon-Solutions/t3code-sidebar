@@ -2,7 +2,6 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { runThreadFork } from "@t3tools/client-runtime/state/thread-forks";
 import { type EnvironmentId, type RunId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import * as Haptics from "expo-haptics";
 import { useCallback } from "react";
 import { Alert } from "react-native";
 
@@ -12,6 +11,7 @@ import { environmentThreadShells, threadEnvironment } from "../../state/threads"
 import { useAtomCommand } from "../../state/use-atom-command";
 import { waitForThreadShellReady } from "../threads/threadForkNavigation";
 import { useSelectWorkspaceDetail } from "../workspace/useSelectWorkspaceDetail";
+import { forkOutcomeAlert } from "./forkOutcomeAlert";
 
 /**
  * Forks a thread (sidebar fork): "Title (n)", placed right under the source
@@ -37,7 +37,6 @@ export function useForkThread() {
                 (thread) =>
                   thread.environmentId === target.environmentId && thread.id === target.threadId,
               ) ?? null;
-          if (found) void Haptics.selectionAsync();
           return found;
         },
         threadsInEnvironment: (environmentId) =>
@@ -89,16 +88,12 @@ export function useForkThread() {
           return true;
         case "source-missing":
         case "interrupted":
-          return false;
         case "failed":
-          Alert.alert("Could not fork thread", outcome.message);
+        case "created-unavailable": {
+          const alert = forkOutcomeAlert(outcome);
+          if (alert !== null) Alert.alert(alert.title, alert.message);
           return false;
-        case "created-unavailable":
-          Alert.alert(
-            "Fork created",
-            "Its thread data did not reach this client. Reconnect and try opening it from the thread list.",
-          );
-          return false;
+        }
       }
     },
     [forkFromRun, selectDetail, reorderActive],

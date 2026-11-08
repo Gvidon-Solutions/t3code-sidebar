@@ -2,7 +2,9 @@ import { useSyncExternalStore } from "react";
 import { pendingMeshDrafts } from "../../state/pendingMeshDrafts";
 import {
   defaultDraftMachine,
+  draftMachineCatalogsKnown,
   draftModelUnavailableReason,
+  hasUsableDraftModels,
   planThreadOnMachine,
   resolveLogicalProjectKey,
   representationRow,
@@ -24,6 +26,7 @@ import {
   type ThreadContextRecord,
 } from "@t3tools/contracts";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { plainErrorMessage } from "@t3tools/client-runtime/errors";
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { toastManager } from "../ui/toast";
 import {
@@ -392,6 +395,16 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       draftThread?.environmentSelection === "manual"
     )
       return;
+    // A default chosen before the provider catalogs arrive would mark every
+    // machine unusable and permanently pin the draft to its main copy.
+    const catalogsKnown = draftMachineCatalogsKnown(
+      logicalProjectEnvironments.map((machine) => ({
+        environmentId: machine.environmentId,
+        connected: machine.connected !== false,
+      })),
+      new Set(providersByEnvironment.keys()),
+    );
+    if (!catalogsKnown) return;
     defaultApplied.current = draftId;
     let remembered: string | null = null;
     try {
@@ -408,6 +421,15 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
             (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
           ) ?? machine.isPrimary,
         usable:
+          hasUsableDraftModels(
+            environmentById.get(machine.environmentId)?.serverConfig
+              ? {
+                  settings: environmentById.get(machine.environmentId)!.serverConfig!.settings,
+                  providers: providersByEnvironment.get(machine.environmentId) ?? [],
+                }
+              : null,
+            machine.projectId,
+          ) === true &&
           input.selection !== null &&
           draftModelUnavailableReason(
             environmentById.get(machine.environmentId)?.serverConfig
@@ -418,7 +440,10 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
               : null,
             input.selection,
             machine.projectId,
-          ) === null,
+          ) === null &&
+          (machine.projectId !== null ||
+            environmentById.get(machine.environmentId)?.serverConfig?.environment.capabilities
+              .replicas === true),
       })),
       remembered,
     );
@@ -427,6 +452,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies the device's remembered machine after the mesh snapshot loads for a new persistent draft
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- applying the remembered machine updates the draft store, which is this pass's purpose
     applyDefault();
   });
 
@@ -444,7 +470,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
             toastManager.add({
               type: "error",
               title: "Cannot retry send",
-              description: String(error),
+              description: plainErrorMessage(error),
             });
           });
         }
