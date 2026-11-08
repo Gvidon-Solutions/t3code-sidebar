@@ -39,6 +39,8 @@ MOUNT_WATCH_PID=
 PLACEMENT_PID=
 FROZEN_CONTAINER_ID=
 FROZEN_DRIVER_RECORD=
+DAEMON_SETTINGS_MACHINE=
+DAEMON_SETTINGS_ENABLED=
 declare -A CRASH_PEERS=()
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
 git -C "$REPO_ROOT" merge-base --is-ancestor "$source_commit" "$COMMIT" || die "Build lacks N: use MESH_E2E_BUILD_CURRENT=1 build.sh xdev-n, then deploy.sh while the bed is free"
@@ -150,6 +152,13 @@ project_options() {
   config=$(ws_rpc gv meshConfig.get '{}')
   ws_rpc gv meshConfig.apply "$(jq -nc --argjson config "$config" --arg project "$project" --argjson options "$options" '{baseRevision:$config.current.revision,doc:($config.current.doc | .projects.overrides = ((.projects.overrides // []) + [($options + {project:$project})]))}')"
 }
+restore_daemon_settings() {
+  [ -n "$DAEMON_SETTINGS_MACHINE" ] || return 0
+  ws_rpc "$DAEMON_SETTINGS_MACHINE" server.updateSettings "$(jq -nc --argjson enabled "$DAEMON_SETTINGS_ENABLED" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-daemon-settings-restored-$DAEMON_SETTINGS_MACHINE.json" || return 1
+  jq -e --argjson enabled "$DAEMON_SETTINGS_ENABLED" '.replicasEnabled==$enabled' "$WORK/N-daemon-settings-restored-$DAEMON_SETTINGS_MACHINE.json" >/dev/null || return 1
+  DAEMON_SETTINGS_MACHINE=
+  DAEMON_SETTINGS_ENABLED=
+}
 restore_partition() {
   cp "$WORK/N-partition-proxy-before-gv.json" /tmp/N1-partition-state.json || return 1
   mv /tmp/N1-partition-state.json /tmp/N1-network-state.json || return 1
@@ -191,6 +200,9 @@ restore() {
     fi
     gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
     wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
+    if [ -n "$DAEMON_SETTINGS_MACHINE" ]; then
+      wait_health "$(origin_of "$DAEMON_SETTINGS_MACHINE")" "$TIMEOUT" && restore_daemon_settings || rc=1
+    fi
   else
     printf 'Bed lock lost; leaving shared services and settings untouched.\n' >&2
     rc=1
@@ -357,16 +369,22 @@ for m in gv vps; do
   daemon_dir="$base/N-faults/$N_KEY"
   rexec "$m" mkdir -p "$daemon_dir"
   daemon_binary=$(mut_bin "$m")
+  ws_rpc "$m" server.getConfig '{}' > "$WORK/N-daemon-settings-before-$m.json"
+  DAEMON_SETTINGS_ENABLED=$(jq -r '.settings.replicasEnabled' "$WORK/N-daemon-settings-before-$m.json")
+  case "$DAEMON_SETTINGS_ENABLED" in true|false) ;; *) die 'Invalid replica enable setting';; esac
+  DAEMON_SETTINGS_MACHINE=$m
+  ws_rpc "$m" server.updateSettings '{"patch":{"replicasEnabled":false}}' > "$WORK/N-daemon-settings-disabled-$m.json"
+  jq -e '.replicasEnabled==false' "$WORK/N-daemon-settings-disabled-$m.json" >/dev/null
+  if ! daemon_lock "$m" 0; then
+    mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-daemon-before-stop-$m.json"
+    mut "$m" daemon stop
+  fi
   if [ "$m" = vps ]; then
     FROZEN_CONTAINER_ID=$(vps_ssh 'docker inspect -f "{{.Id}}" t3-mesh-e2e')
     FROZEN_DRIVER_RECORD="$daemon_dir/server-paused.json"
     rexec vps node "$driver_signal" pause "$base" "$FROZEN_DRIVER_RECORD"
   else
     unit "$m" stop
-  fi
-  if ! daemon_lock "$m" 0; then
-    wait_daemon "$m"
-    mut "$m" daemon stop
   fi
   end=$((SECONDS+TIMEOUT))
   until daemon_lock "$m" 0; do
@@ -379,6 +397,7 @@ for m in gv vps; do
   daemon_lock "$m" "$captured_pid"
   if [ "$m" = vps ]; then resume_container_driver; else unit "$m" start; fi
   wait_health "$(origin_of "$m")" "$TIMEOUT"
+  restore_daemon_settings
   before=$(restart_count "$m")
   daemon_lock "$m" "$captured_pid"
   printf 'PASS N captured daemon owns private lock %s\n' "$m"
