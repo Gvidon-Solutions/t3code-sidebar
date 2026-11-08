@@ -410,7 +410,7 @@ export class MeshLayoutStore {
         this.unsubscribe?.();
         this.unsubscribe = null;
         this.source = null;
-        this.options.onPermanentFailure?.(error);
+        if (isPermanentMeshLayoutFailure(error)) this.options.onPermanentFailure?.(error);
         void this.refreshEnvironments().catch((error) => this.options.onPermanentFailure?.(error));
       },
     );

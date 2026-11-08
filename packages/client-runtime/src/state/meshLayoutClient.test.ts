@@ -269,10 +269,11 @@ describe("MeshLayoutClient sources", () => {
       secondary: { "ws/b": { v: { name: "Secondary", sort: "a" }, h: "0000000000001.00000.seed" } },
     });
     const environments = [source("primary"), source("secondary")];
-    const { mesh } = client(rpc, environments);
+    const { mesh, failures } = client(rpc, environments);
     await mesh.start();
     expect(rpc.subscriptions).toEqual(["primary"]);
     rpc.fail(env("primary"), new Error("disconnected"));
+    expect(failures).toEqual([]);
     await Promise.resolve();
     await Promise.resolve();
     expect(rpc.subscriptions).toEqual(["primary", "secondary"]);
