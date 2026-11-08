@@ -170,6 +170,10 @@ describe("draftMachineCards", () => {
       ["laptop", "will-copy", false],
     ]);
     expect(rows[0]?.machine.tag).toBe("ST");
+    expect(rows[0]?.note).toBeNull();
+    expect(rows[1]?.note).toBeNull();
+    expect(rows[2]?.note).toBe("Not connected to this device");
+    expect(rows[2]?.hint).toContain("Will set up a copy here");
   });
 });
 

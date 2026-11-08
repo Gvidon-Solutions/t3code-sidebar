@@ -146,7 +146,7 @@ export function DraftMachineCards(props: {
       role="radiogroup"
       aria-label="Machine for this thread"
       data-draft-machine-cards
-      className="mx-auto flex w-full max-w-3xl flex-wrap items-stretch justify-center gap-2 px-4 pb-3"
+      className="mt-5 mb-1 flex w-full max-w-3xl flex-wrap items-stretch justify-center gap-2 px-4 pb-4"
     >
       {rows.map((row) => (
         <MachineCard
@@ -192,7 +192,7 @@ function MachineCard(props: { readonly row: DraftMachineCardRow; readonly onSele
           <CheckIcon className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
         ) : null}
       </span>
-      <span className="truncate text-muted-foreground text-xs">{row.text}</span>
+      <span className="truncate text-muted-foreground text-xs">{row.note ?? row.text}</span>
     </button>
   );
   return (

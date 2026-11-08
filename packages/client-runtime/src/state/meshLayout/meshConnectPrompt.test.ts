@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { planMeshConnect } from "./meshConnectPrompt.logic";
+import { planMeshConnect } from "./meshConnectPrompt.ts";
 
 const machines = [
   { environmentId: "studio", label: "studio" },

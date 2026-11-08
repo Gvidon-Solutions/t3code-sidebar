@@ -68,7 +68,7 @@ export function DraftMachineCards(props: {
             ) : null}
           </View>
           <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-            {row.text}
+            {row.note ?? row.text}
           </Text>
         </Pressable>
       ))}

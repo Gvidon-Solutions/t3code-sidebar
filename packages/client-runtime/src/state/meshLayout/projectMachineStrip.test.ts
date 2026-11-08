@@ -67,6 +67,24 @@ describe("projectMachineStrip", () => {
     expect(model.chips[0]).toMatchObject({ state: "watching", tone: "green", pending: false });
     expect(model.description).toContain("2 files skipped (unreadable files)");
   });
+  it("marks a copy on a machine this client is not connected to once", () => {
+    const config = {
+      ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
+      projectMounts: { demo: [rep("lab", "primary"), rep("at", "replica")] },
+    };
+    const model = projectMachineStrip(
+      config,
+      { ...group, environmentIds: ["lab"], knownEnvironmentIds: ["lab"] },
+      [],
+    );
+    expect(model.chips.map((chip) => [chip.environmentId, chip.muted])).toEqual([
+      ["lab", false],
+      ["at", true],
+    ]);
+    expect(new Set(model.chips.map((chip) => chip.environmentId)).size).toBe(model.chips.length);
+  });
+
   it("orders primaries in layout order, then replicas, and counts all hidden chips", () => {
     const config = {
       ...empty,

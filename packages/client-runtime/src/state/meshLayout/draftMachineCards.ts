@@ -81,7 +81,9 @@ export interface DraftMachineCardRow extends DraftMachineCardState {
   readonly machine: MachineDisplay;
   readonly primary: boolean;
   readonly selected: boolean;
-  /** Why a card is dimmed, for its tooltip; null when it can be picked. */
+  /** Why a card is dimmed, in visible words; null when it can be picked. */
+  readonly note: string | null;
+  /** The full explanation, including the copy state, for the tooltip. */
   readonly hint: string | null;
 }
 
@@ -109,6 +111,10 @@ export function draftMachineCards(input: {
         sync: choice.sync ?? null,
       });
       const via = reach?.viaLabel?.trim();
+      const note =
+        state.selectable || state.status === "no-models" || state.status === "unreachable"
+          ? null
+          : "Not connected to this device";
       return {
         ...state,
         environmentId: choice.environmentId,
@@ -116,13 +122,13 @@ export function draftMachineCards(input: {
         machine: machineDisplayOf(input.config, choice.environmentId, choice.label),
         primary: choice.primary,
         selected: input.selectedEnvironmentId === choice.environmentId,
-        hint: state.selectable
-          ? null
-          : state.status === "unreachable"
-            ? `Can't reach ${choice.label}.`
-            : via
-              ? `Reachable through ${via}. Connect this device to ${choice.label} to start a thread here.`
-              : `Connect this device to ${choice.label} to start a thread here.`,
+        note,
+        hint:
+          note === null
+            ? state.status === "unreachable"
+              ? `Can't reach ${choice.label}.`
+              : null
+            : `${note}. ${state.text}${via ? ` through ${via}` : ""}. Connect this device to ${choice.label} to start a thread here.`,
       };
     })
     .sort((left, right) => {

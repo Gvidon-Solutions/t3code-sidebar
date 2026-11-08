@@ -10,7 +10,7 @@ import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironments } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
-import { planMeshConnect } from "./meshConnectPrompt.logic";
+import { planMeshConnect } from "@t3tools/client-runtime/state/mesh-layout";
 
 export const MESH_CONNECT_PROMPT_DISMISSED_KEY = "t3code.meshConnectPrompt.dismissed";
 

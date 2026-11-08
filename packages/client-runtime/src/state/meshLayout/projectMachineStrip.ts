@@ -9,6 +9,8 @@ export interface ProjectMachineChip {
   readonly state: string;
   readonly tone: "green" | "neutral" | "amber" | "red" | "grey";
   readonly pending: boolean;
+  /** The representation's machine is not connected to this client. */
+  readonly muted: boolean;
   readonly description: string;
 }
 
@@ -30,6 +32,7 @@ export function projectMachineStrip(
   displayOf: (environmentId: string) => MachineDisplay = (id) => machineDisplayOf(config, id, id),
 ): ProjectMachineStripModel {
   const reps = group.isScratch ? [] : (config.projectMounts[group.projectKey] ?? []);
+  const connectedHere = new Set(group.knownEnvironmentIds);
   const known = new Set([
     ...group.knownEnvironmentIds,
     ...Object.keys(config.machines),
@@ -72,6 +75,7 @@ export function projectMachineStrip(
                       ? "grey"
                       : "neutral",
             pending: state === "pending" || state === "mounting",
+            muted: !connectedHere.has(rep.environmentId),
             description:
               rep.role === "primary"
                 ? `Primary on ${machine.label}`
@@ -87,6 +91,7 @@ export function projectMachineStrip(
             state: "watching",
             tone: "green",
             pending: false,
+            muted: !connectedHere.has(environmentId),
             description: group.isScratch
               ? `Scratch on ${machine.label}`
               : `Primary on ${machine.label}`,
