@@ -14,6 +14,7 @@ import { findEsmImportsOfExternalPackages } from "../../../scripts/lib/cli-execu
 import { injectLinuxArm64Sea } from "../../../scripts/lib/linux-arm64-sea.ts";
 import rootPackageJson from "../../../package.json" with { type: "json" };
 import * as HostProcess from "@t3tools/shared/HostProcess";
+import { assertReleaseBuildEnv } from "../../../scripts/lib/release-env.ts";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import {
   ServerCliBuildAssetMissingError,
@@ -73,6 +74,7 @@ const buildCmd = Command.make(
   },
   (config) =>
     Effect.gen(function* () {
+      assertReleaseBuildEnv();
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
       const repoRoot = yield* RepoRoot;
@@ -119,6 +121,7 @@ const buildExeCmd = Command.make(
   },
   (config) =>
     Effect.gen(function* () {
+      assertReleaseBuildEnv();
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
       const repoRoot = yield* RepoRoot;

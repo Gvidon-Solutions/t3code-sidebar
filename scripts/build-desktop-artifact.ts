@@ -41,6 +41,7 @@ import {
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
+import { assertReleaseBuildEnv } from "./lib/release-env.ts";
 import { selectDesktopRuntimeExternalDependencies } from "./lib/desktop-external-packages.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
@@ -4174,6 +4175,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
 const cliRuntimeLayer = Layer.mergeAll(Logger.layer([Logger.consolePretty()]), NodeServices.layer);
 
 if (import.meta.main) {
+  assertReleaseBuildEnv();
   Command.run(buildDesktopArtifactCli, { version: "0.0.0" }).pipe(
     Effect.scoped,
     Effect.provide(cliRuntimeLayer),
