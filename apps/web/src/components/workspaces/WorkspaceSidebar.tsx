@@ -162,6 +162,7 @@ import { WorkspaceAgentGroup } from "./WorkspaceAgentGroup";
 import { WorkspaceUpdateStrip } from "./WorkspaceUpdateStrip";
 import { MachinesDialog } from "./MachinesDialog";
 import { MeshFooterStatus } from "./MeshFooterStatus";
+import { MeshConnectPrompt } from "../sidebar/MeshConnectPrompt";
 import { PendingReplicaRow } from "./PendingReplicaRow";
 import {
   folderMachineChoices,
@@ -2063,6 +2064,7 @@ export default function WorkspaceSidebar() {
         onDropProject={dropProjectOnTile}
         onReorder={reorderWorkspace}
       />
+      <MeshConnectPrompt config={config} />
       <MeshFooterStatus config={config} />
       <SidebarChromeFooter />
       {iconPickerFolder ? (

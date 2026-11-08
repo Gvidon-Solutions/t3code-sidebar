@@ -259,6 +259,7 @@ import {
 import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
+import { DraftMachineCards } from "./chat/DraftMachineCards";
 import { ExpandedImageDialogHost, openExpandedImagePreview } from "./chat/ExpandedImageDialog";
 import {
   BranchRestoreConfirmHost,
@@ -3545,6 +3546,19 @@ export default function ChatView(props: ChatViewProps) {
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
                         />
+                        {canChangeEnvironment ? (
+                          <DraftMachineCards
+                            choices={logicalProjectEnvironments}
+                            activeProject={activeProject}
+                            selectedEnvironmentId={
+                              pendingDraftMachineId ??
+                              activeThread?.environmentId ??
+                              activeProject?.environmentId ??
+                              null
+                            }
+                            onSelect={onEnvironmentChangeStable}
+                          />
+                        ) : null}
                       </div>
                     </div>
                   ) : null}
@@ -3790,6 +3804,7 @@ export default function ChatView(props: ChatViewProps) {
                               )}
                               <BranchToolbar
                                 draftMachineId={pendingDraftMachineId ?? environmentId}
+                                showMachine={false}
                                 forceNewWorktree={multipleModelSelections !== null}
                                 ref={branchToolbarRef}
                                 environmentId={activeThread.environmentId}

@@ -20,6 +20,9 @@ export interface EnvironmentOption {
   display?: import("@t3tools/client-runtime/state/machine-display").MachineDisplay | undefined;
   status?: string;
   connected?: boolean;
+  /** The mesh can reach this machine even when this client is not connected to it. */
+  reachable?: boolean;
+  via?: string | null;
   supportsMesh?: boolean;
 }
 

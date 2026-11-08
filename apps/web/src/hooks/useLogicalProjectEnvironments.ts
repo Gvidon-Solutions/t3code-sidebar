@@ -16,6 +16,7 @@ import {
 } from "@t3tools/client-runtime/state/project-grouping";
 import { resolveLogicalProjectKey } from "@t3tools/client-runtime/state/mesh-layout";
 import { useMeshLayout } from "./useMeshLayout";
+import { useMeshOverview } from "./useMeshOverview";
 import { useProjects } from "../state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useClientSettings } from "./useSettings";
@@ -26,6 +27,7 @@ export function useLogicalProjectEnvironments(
 ): readonly EnvironmentOption[] {
   const { environments } = useEnvironments();
   const mesh = useMeshLayout();
+  const { machines: meshMachines } = useMeshOverview({ config: mesh.config });
   const allProjects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
@@ -52,17 +54,35 @@ export function useLogicalProjectEnvironments(
   const envs: EnvironmentOption[] = [];
   const pushEnvironment = (environmentId: EnvironmentId, projectId: ProjectId | null) => {
     const environment = environmentById.get(environmentId) ?? null;
+    const connected = environment?.connection.phase === "connected";
+    const meshMachine = meshMachines.find((machine) => machine.environmentId === environmentId);
+    const reachable =
+      connected === true ||
+      meshMachine?.network?.state === "direct" ||
+      meshMachine?.network?.state === "relayed";
+    const via =
+      meshMachine?.network?.state === "relayed"
+        ? (meshMachines.find((machine) => machine.environmentId === meshMachine.network?.via)
+            ?.label ?? null)
+        : null;
     envs.push({
       environmentId,
       projectId,
       label: displays.rows.find((row) => row.environmentId === environmentId)?.label ?? "Machine",
       display: displays.rows.find((row) => row.environmentId === environmentId),
-      status: draftMachineStatus({
-        connected: environment?.connection.phase === "connected",
-        hasProject: projectId !== null,
-        error: environment?.connection.error,
-      }),
-      connected: environment?.connection.phase === "connected",
+      status:
+        !connected && reachable
+          ? via
+            ? `Available through ${via}`
+            : "Available through the mesh"
+          : draftMachineStatus({
+              connected,
+              hasProject: projectId !== null,
+              error: environment?.connection.error,
+            }),
+      connected,
+      reachable,
+      via,
       supportsMesh: environment?.serverConfig?.environment.capabilities.replicas === true,
       isPrimary: environmentId === primaryEnvironmentId,
       machine: resolveEnvironmentMachineKind(environment?.serverConfig ?? null),
