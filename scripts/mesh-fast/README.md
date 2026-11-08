@@ -82,6 +82,8 @@ Cleanup only stops tracked children, named containers/networks and each fixture'
 private Mutagen daemon. SIGINT/SIGTERM also trigger cleanup.
 Shutdown waits for each private daemon's OS lock after requesting its stop:
 the listener can already be gone while final cache writes are still running.
+SSH commands hold a shared private session lock; shutdown waits for exclusive
+ownership too, because remote Mutagen agents can flush caches after the daemon exits.
 
 ## Timing and providers
 

@@ -793,6 +793,8 @@ removing other Docker bridges otherwise causes Chromium ERR_NETWORK_CHANGED.
 Run the host-based web unit suite while local mesh networking is idle. Before
 pruning passed payloads, wait for the private Mutagen lock: its listener closes
 before final cache writes finish, so `daemon stop` alone is not an exit barrier.
+Private SSH commands also hold a shared session lock, covering remote Mutagen
+agents that finish cache writes after the originating daemon has stopped.
 Fast R1 commands use real OpenSSH control connections to separate native process
 startup from SSH's three-second connection budget; the control connections and
 all remote process-tree fault assertions remain real. The realistic R1 variant

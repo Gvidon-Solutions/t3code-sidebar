@@ -5,15 +5,19 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeReadline from "node:readline";
 import { expect, it } from "vite-plus/test";
-import { waitForDaemonShutdown } from "./daemons.mjs";
+import { waitForDaemonShutdown, waitForSshShutdown } from "./daemons.mjs";
 
-it("waits for the private lock after the daemon listener is already gone", async () => {
+it.each([
+  { label: "daemon", lock: "daemon/daemon.lock", shared: false, wait: waitForDaemonShutdown },
+  { label: "SSH session", lock: "sshd/sessions.lock", shared: true, wait: waitForSshShutdown },
+])("waits for the private $label lock after its listener is already gone", async (fixture) => {
   const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-daemon-lock-"));
-  await NodeFSP.mkdir(NodePath.join(root, "daemon"));
+  await NodeFSP.mkdir(NodePath.dirname(NodePath.join(root, fixture.lock)));
   const child = NodeChildProcess.spawn(
     "flock",
     [
-      NodePath.join(root, "daemon/daemon.lock"),
+      ...(fixture.shared ? ["--shared"] : []),
+      NodePath.join(root, fixture.lock),
       process.execPath,
       "-e",
       `const lines=require('node:readline').createInterface({input:process.stdin});
@@ -31,7 +35,7 @@ it("waits for the private lock after the daemon listener is already gone", async
   let waiting: Promise<void> | undefined;
   try {
     expect((await lines.next()).value).toBe("locked");
-    waiting = waitForDaemonShutdown(root).then(() => {
+    waiting = fixture.wait(root).then(() => {
       expect(writing).toBe(false);
     });
     // Attach the failure observer before the subprocess boundary can complete.
