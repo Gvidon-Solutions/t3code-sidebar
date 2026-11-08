@@ -1,10 +1,8 @@
 import {
   bindingsFromLayout,
-  migratedPeerLabelsFromLayout,
   configFromLayout,
   effectiveLinkPermissions,
   machineByEnvironment,
-  machineByPeerLabel,
 } from "@t3tools/shared/meshConfig";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -35,30 +33,10 @@ export const linkPermissions = Effect.fn("MeshLinkPermissions.read")(function* (
       ? machineByEnvironment(config, bindings, client.peerEnvironmentId)
       : undefined
     : undefined;
-  const legacyPeers =
-    config && !client.peerEnvironmentId
-      ? Object.entries(bindings).flatMap(([name, environmentId]) =>
-          environmentId !== scope.environmentId &&
-          machineByPeerLabel(
-            config,
-            { [name]: environmentId },
-            client.label,
-            migratedPeerLabelsFromLayout(document),
-          )
-            ? [name]
-            : [],
-        )
-      : [];
-  const peers = peer ? [peer.name] : legacyPeers.length ? legacyPeers : [""];
-  const permissions = (
-    config
-      ? peers.map((name) => effectiveLinkPermissions(config, self?.name ?? "", name))
-      : [defaults]
-  ).reduce((a, b) => ({
-    files: fileRank[a.files] < fileRank[b.files] ? a.files : b.files,
-    replicas: a.replicas && b.replicas,
-    threads: a.threads && b.threads,
-  }));
+  const permissions =
+    config && self && peer && self.name !== peer.name
+      ? effectiveLinkPermissions(config, self.name, peer.name)
+      : { files: "none" as const, replicas: false, threads: false };
   const requested = client.filesLimit ?? "all";
   const ceiling = client.access === "read-only" && requested === "all" ? "projects" : requested;
   return {

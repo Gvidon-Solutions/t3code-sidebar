@@ -106,6 +106,20 @@ it.effect(
           }),
         )).replicas,
       ).toBe(false);
+      for (const peerEnvironmentId of ["unknown-env", "studio-env"]) {
+        expect(
+          yield* linkPermissions().pipe(
+            Effect.provideService(McpInvocationContext, {
+              ...invocation,
+              client: {
+                ...invocation.client!,
+                label: "Laptop",
+                peerEnvironmentId: EnvironmentId.make(peerEnvironmentId),
+              },
+            }),
+          ),
+        ).toEqual({ files: "none", replicas: false, threads: false, linked: true });
+      }
       const legacy = {
         ...(yield* McpInvocationContext),
         client: {
@@ -129,7 +143,7 @@ it.effect(
       });
       expect(
         (yield* linkPermissions().pipe(Effect.provideService(McpInvocationContext, legacy))).files,
-      ).toBe("all");
+      ).toBe("none");
       const ambiguousClock = yield* mesh.nextHlc;
       yield* mesh.apply({
         "mesh.machineBinding/cloudbox": { v: "cloudbox-env", h: ambiguousClock },
@@ -168,7 +182,7 @@ it.effect(
             client: { ...legacy.client, label: "New peer" },
           }),
         )).files,
-      ).toBe("projects");
+      ).toBe("none");
     }).pipe(
       Effect.provide(
         Layer.merge(scope, layerTest("studio-env", DEFAULT_SIDEBAR_WORKSPACES_CONFIG)),
