@@ -1,3 +1,4 @@
+import { PEER_HOPS_HEADER, formatHops } from "./peerIdentity.ts";
 // @effect-diagnostics runEffectInsideEffect:off -- The HTTP transport boundary exposes callbacks to the frame decoder.
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -133,7 +134,7 @@ export const layer = Layer.effect(
                 ...(body.limits.replicas === undefined
                   ? {}
                   : { [REPLICAS_LIMIT_HEADER]: String(body.limits.replicas) }),
-                ...(body.hops === undefined ? {} : { "t3-mesh-hops": body.hops.join(",") }),
+                ...(body.hops === undefined ? {} : { [PEER_HOPS_HEADER]: formatHops(body.hops) }),
               },
               signal,
             );

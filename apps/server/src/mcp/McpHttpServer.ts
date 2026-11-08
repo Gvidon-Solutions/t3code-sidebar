@@ -1,3 +1,4 @@
+import { PEER_HOPS_HEADER, parseHops } from "../peer/connection/peerIdentity.ts";
 import * as PeerReceipts from "../peer/connection/PeerReceipts.ts";
 import { PeerConnectionError } from "../peer/connection/PeerSessions.ts";
 import { interceptForkRequest } from "../mesh/ForkMcp.ts";
@@ -288,7 +289,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const key = request.headers["t3-idempotency-key"];
     const peer = invocation.client?.linked === true;
     const from = invocation.client?.peerEnvironmentId ?? invocation.client?.sessionId;
-    const hops = request.headers["t3-mesh-hops"]?.split(",");
+    const hops = parseHops(request.headers[PEER_HOPS_HEADER]);
     const relayCaller = hops?.length === 2 && hops[1] === from ? hops[0] : undefined;
     // Relay callers partition keys only within the authenticated relay's namespace.
     const scopedKey = relayCaller === undefined ? key : encodeJsonText([relayCaller, key]);

@@ -1,3 +1,4 @@
+import { relayHopsAllowed, PEER_HOPS_ERROR } from "../peer/connection/peerIdentity.ts";
 import { forwardedCallLimits } from "./MeshLinkPermissions.ts";
 import {
   EnvironmentId,
@@ -20,7 +21,6 @@ export const RelayInput = Schema.Struct({
   arguments: Schema.Record(Schema.String, Schema.Unknown),
 });
 export const Routes = Schema.Array(Schema.String);
-export const HOP_HEADER = "t3-mesh-hops";
 export class MeshRelay extends Context.Service<
   MeshRelay,
   {
@@ -35,7 +35,7 @@ export class MeshRelay extends Context.Service<
 >()("t3/mesh/MeshRelay") {}
 const refused = new OrchestratorMcpFailure({
   code: "capability_denied",
-  message: "Mesh relay requires a direct full-access link, at most two hops and no loops",
+  message: PEER_HOPS_ERROR,
 });
 export const layer = Layer.effect(
   MeshRelay,
@@ -64,10 +64,7 @@ export const layer = Layer.effect(
       limits: PeerCallLimits,
     ) {
       if (
-        hops.length !== 1 ||
-        hops.includes(self) ||
-        hops.includes(input.environmentId) ||
-        input.environmentId === self ||
+        !relayHopsAllowed(hops, self, input.environmentId) ||
         (input.tool.startsWith("t3_mesh_") &&
           !["t3_mesh_update_vote", "t3_mesh_update_health"].includes(input.tool))
       )

@@ -1,3 +1,4 @@
+import { PEER_HOPS_HEADER, formatHops } from "./connection/peerIdentity.ts";
 import {
   type EnvironmentId,
   OrchestratorMcpFailure,
@@ -227,7 +228,7 @@ const make = Effect.gen(function* () {
         ...(input.callerEnvironmentId === undefined
           ? {}
           : { "t3-peer-environment-id": input.callerEnvironmentId }),
-        ...(input.hops === undefined ? {} : { "t3-mesh-hops": input.hops.join(",") }),
+        ...(input.hops === undefined ? {} : { [PEER_HOPS_HEADER]: formatHops(input.hops) }),
         ...(input.limits.files
           ? { [McpInvocationContext.FILES_LIMIT_HEADER]: input.limits.files }
           : {}),

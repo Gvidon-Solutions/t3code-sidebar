@@ -1,3 +1,4 @@
+import { PEER_HOPS_HEADER, parseHops } from "../peer/connection/peerIdentity.ts";
 import { declareMcpProtocol } from "../mcp/McpToolDomain.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -5,7 +6,7 @@ import * as Schema from "effect/Schema";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
 import { MeshReplicator, ExchangeInput } from "./MeshReplicator.ts";
-import { MeshRelay, RelayInput, HOP_HEADER } from "./MeshRelay.ts";
+import { MeshRelay, RelayInput } from "./MeshRelay.ts";
 
 const protocols = {
   exchange: declareMcpProtocol("t3_mesh_exchange", "mesh"),
@@ -52,7 +53,7 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
             : decodeRelay(call.value.params.arguments).pipe(
                 Effect.flatMap((input) =>
                   relay.value
-                    .relay(input, request.headers[HOP_HEADER]?.split(",") ?? [], {
+                    .relay(input, parseHops(request.headers[PEER_HOPS_HEADER]) ?? [], {
                       ...McpInvocationContext.clientModeCeiling(limited.client),
                       ...(limited.client?.filesLimit ? { files: limited.client.filesLimit } : {}),
                       ...(limited.client?.replicasLimit === false ? { replicas: false } : {}),

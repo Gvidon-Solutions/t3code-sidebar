@@ -1,3 +1,4 @@
+import { PEER_HOPS_HEADER, parseHops } from "../peer/connection/peerIdentity.ts";
 import { authenticatedPeerHops } from "../peer/connection/peerIdentity.ts";
 import {
   AuthAccessTokenType,
@@ -1355,7 +1356,7 @@ export const make = Effect.gen(function* () {
         diagnostic: "This peer credential has no bound identity. Pair the machines again.",
       });
     const claimed = request.headers["t3-peer-environment-id"];
-    const hops = request.headers["t3-mesh-hops"]?.split(",");
+    const hops = parseHops(request.headers[PEER_HOPS_HEADER]);
     if (
       session.peerLink === true &&
       ((claimed !== undefined && claimed !== peers[0]?.environment_id) ||
