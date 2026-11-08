@@ -1,25 +1,14 @@
 import {
-  MeshConfigRevision,
+  type MeshConfigRevision,
   type MeshConfigStatus,
   type SidebarWorkspacesConfig,
   type ReplicaLiveStatus,
 } from "@t3tools/contracts";
-import * as Schema from "effect/Schema";
 import { machineDisplayOf } from "./machineDisplay.ts";
 import type { MeshMachine } from "./meshMachines.ts";
 
-const isRevision = Schema.is(MeshConfigRevision);
 function readableReason(message: string) {
   return message.replaceAll("Unknown machine (UN)", "Unnamed machine");
-}
-export function meshConfigHistory(
-  document: Readonly<Record<string, { readonly v: unknown }>>,
-): MeshConfigRevision[] {
-  const revisions = new Map<string, MeshConfigRevision>();
-  for (const [key, entry] of Object.entries(document))
-    if ((key === "mesh.config" || key.startsWith("mesh.configHistory/")) && isRevision(entry.v))
-      revisions.set(entry.v.revision, entry.v);
-  return [...revisions.values()].sort((a, b) => a.writtenAt.localeCompare(b.writtenAt));
 }
 function relativeTime(at: string, now: number) {
   const minutes = Math.max(0, Math.floor((now - Date.parse(at)) / 60_000));

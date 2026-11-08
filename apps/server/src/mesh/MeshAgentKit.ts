@@ -40,7 +40,7 @@ export function instructionBlock(original: string, body: string) {
 }
 
 /** Removes only our managed block, leaving every other line of an instruction file intact. */
-export function withoutManagedBlock(original: string): string {
+function withoutManagedBlock(original: string): string {
   const start = original.indexOf(begin);
   const stop = original.indexOf(end);
   if (start < 0 || stop < start) return original;
