@@ -319,6 +319,8 @@ export class PeerChannel {
     return Math.max(
       1,
       Math.min(
+        // A pong can shorten the deadline after this delay has already been scheduled.
+        meshMillis(15_000),
         this.lastReceived + meshMillis(45_000) - now,
         this.lastPing + meshMillis(this.ping === undefined ? 15_000 : 45_000) - now,
       ),

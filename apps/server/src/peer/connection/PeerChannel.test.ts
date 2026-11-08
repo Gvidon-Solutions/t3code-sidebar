@@ -112,7 +112,7 @@ it("detects a peer that stops reading even while it keeps sending unrelated traf
   expect(p.left.nextTickDelay()).toBe(15_000);
   p.advance(15_000);
   p.left.tick();
-  expect(p.left.nextTickDelay()).toBe(30_000);
+  expect(p.left.nextTickDelay()).toBe(15_000);
   expect(JSON.parse(p.leftWire[0]!)).toMatchObject({ type: "ping" });
   p.advance(30_000);
   p.left.receive(JSON.stringify({ type: "event", name: "noise", body: null }));
@@ -128,6 +128,7 @@ it("keeps healthy idle connections alive and rejects malformed or oversized fram
     p.advance(15_000);
     p.left.tick();
     p.right.tick();
+    expect(p.left.nextTickDelay()).toBeLessThanOrEqual(15_000);
     p.pump();
   }
   expect(p.closed).toEqual([]);
