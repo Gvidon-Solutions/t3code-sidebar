@@ -122,6 +122,20 @@ async function buildRuntimes(cache) {
         NodePath.join(source, parent, "node_modules"),
       );
     }
+    const rolloutSource = NodePath.join(source, "apps/server/src/mesh/MeshRollout.ts");
+    const rolloutText = await NodeFSP.readFile(rolloutSource, "utf8");
+    const productionLayer = "export const layer = Layer.effect(MeshRollout, make(Effect.void));";
+    if (!rolloutText.includes(productionLayer)) throw Error("MeshRollout test-layer seam changed");
+    await NodeFSP.writeFile(
+      rolloutSource,
+      rolloutText.replace(
+        productionLayer,
+        `export const layer = Layer.effect(MeshRollout, make(Effect.gen(function* () {
+      const environment = yield* HostProcess.Environment;
+      if (environment.T3_MESH_TEST_FAIL_HEALTH_VERSION === packageJson.version) return yield* new MeshConfigError({ reason: "storage", message: "Injected mesh rollout health failure" });
+    })));`,
+      ),
+    );
     const monitor = NodePath.join(root, "monitor");
     await NodeFSP.mkdir(monitor);
     await NodeFSP.copyFile(

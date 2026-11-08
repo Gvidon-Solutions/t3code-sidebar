@@ -2,7 +2,9 @@ name: Isolated mesh scenarios
 on:
   workflow_dispatch:
   push:
+    branches: [ws]
   pull_request:
+    branches: [ws]
 jobs:
   mesh-fast:
     runs-on: ubuntu-latest

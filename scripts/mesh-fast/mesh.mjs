@@ -250,7 +250,7 @@ export class MiniMesh {
       this.containerMode && (this.containerNames ?? [this.firstName]).includes(name);
     const bundled = process.env.MESH_FAST_REALISTIC !== "1" && !this.launcher;
     const nodeBinary =
-      this.previousEntry && name === "laptop"
+      this.previousEntry && (this.previousAll || name === "laptop")
         ? this.previousEntry
         : this.skewable && name === this.firstName
           ? binary
@@ -464,7 +464,7 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
     const useSource =
       bundled ||
       (this.skewable && name === this.firstName) ||
-      (this.previousEntry && name === "laptop");
+      (this.previousEntry && (this.previousAll || name === "laptop"));
     const native = NodePath.join(root, "runtime/t3");
     if (!this.previousEntry || name !== "laptop")
       await run("cp", [

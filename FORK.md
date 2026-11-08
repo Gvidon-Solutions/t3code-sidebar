@@ -125,7 +125,9 @@ The agreed fast gate ceiling is six minutes. Native preparation overlaps web and
 server builds and records cache-build phases. Paused supervisors close their
 watchers and reject late restarts; fast cleanup removes only marked payloads and
 preserves external symlink targets. The paused-process regression fails before
-the watcher fix and passes afterward.
+the watcher fix and passes afterward. F2 integration uses pinned HTTPS/bootstrap
+trust and upgrades an already-paired previous release. Focused regressions cover
+clock correction after quarantine and asynchronous-pong heartbeat scheduling.
 
 ### 2026-11-08 — F2b layout and replica-run data-loss fixes
 

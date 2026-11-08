@@ -1054,3 +1054,11 @@ The OTA publisher writes the signed native-upgrade payload to `catalog.nativeUpd
 certificate and update origin; `verified-apk.ts` hashes the cached file and grants the Android
 installer read-only access. Legacy unsigned URLs produce no download action. Desktop Settings ›
 About can return from the reduced server UI to trusted local settings without exposing credentials.
+
+T1 integration with the identity migration pairs the actual previous release
+before upgrading one peer; new unbound old clients remain refused. Bootstrap
+fixtures now use private HTTPS trust and pin both host keys and runtime hashes.
+Future-row quarantine must also recover the saved HLC from retained valid rows:
+otherwise the bounded clock refuses every startup write after clock correction.
+Heartbeat scheduling caps a pending-pong wait at the next ping interval, since
+an asynchronous pong can shorten a deadline after its sleep was scheduled.

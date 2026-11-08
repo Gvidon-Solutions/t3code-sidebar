@@ -1,7 +1,10 @@
+import * as NodeFS from "node:fs";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeHttp from "node:http";
+import * as NodeHttps from "node:https";
+import * as NodeCrypto from "node:crypto";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeURL from "node:url";
 import * as NodeEvents from "node:events";
@@ -25,7 +28,27 @@ export const rolloutScenarios = {
     let mutagenDownloads = 0;
     const releases = process.env.MESH_FAST_RUNTIMES;
     NodeAssert.ok(releases, "Native fixture releases must be prepared");
-    const server = NodeHttp.createServer(async (request, response) => {
+    const certificate = NodePath.join(directory, "studio/home/bootstrap-ca.pem");
+    const privateKey = NodePath.join(directory, "bootstrap-ca.key");
+    await NodeFSP.mkdir(NodePath.dirname(certificate), { recursive: true });
+    await run("openssl", [
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-days",
+      "1",
+      "-subj",
+      "/CN=mesh-fast",
+      "-addext",
+      "subjectAltName=IP:127.0.0.1",
+      "-keyout",
+      privateKey,
+      "-out",
+      certificate,
+    ]);
+    const handler = async (request, response) => {
       if (request.headers.authorization) {
         response.writeHead(403).end();
         return;
@@ -73,18 +96,76 @@ export const rolloutScenarios = {
         if (error.code !== "ENOENT") console.error(error);
         response.writeHead(404).end();
       }
-    });
-    const releasePort = await port();
+    };
+    const server = NodeHttp.createServer(handler);
+    const secure = NodeHttps.createServer(
+      { key: await NodeFSP.readFile(privateKey), cert: await NodeFSP.readFile(certificate) },
+      handler,
+    );
+    const releasePort = await port(),
+      secureReleasePort = await port(),
+      secureApiPort = await port();
     await new Promise((resolve, reject) => {
       server.once("error", reject);
       server.listen(releasePort, "127.0.0.1", resolve);
     });
+    await new Promise((resolve, reject) => {
+      secure.once("error", reject);
+      secure.listen(secureReleasePort, "127.0.0.1", resolve);
+    });
     const sshPort = await port(),
       apiPort = await port();
+    const api = NodeHttps.createServer(
+      { key: await NodeFSP.readFile(privateKey), cert: await NodeFSP.readFile(certificate) },
+      (request, response) => {
+        response.once("finish", () =>
+          NodeFS.appendFileSync(
+            NodePath.join(directory, "bootstrap-http.jsonl"),
+            JSON.stringify({
+              method: request.method,
+              path: new URL(request.url, "https://fixture").pathname,
+              status: response.statusCode,
+            }) + "\n",
+          ),
+        );
+        const upstream = NodeHttp.request(
+          {
+            hostname: "127.0.0.1",
+            port: apiPort,
+            method: request.method,
+            path: request.url,
+            headers: {
+              ...request.headers,
+              "x-forwarded-proto": "https",
+              "x-forwarded-host": request.headers.host,
+            },
+          },
+          (incoming) => {
+            response.writeHead(incoming.statusCode, incoming.headers);
+            incoming.pipe(response);
+          },
+        );
+        upstream.once("error", (error) => response.writeHead(502).end(error.message));
+        request.pipe(upstream);
+      },
+    );
+    api.on("tlsClientError", (error) =>
+      NodeFS.appendFileSync(
+        NodePath.join(directory, "bootstrap-http.jsonl"),
+        JSON.stringify({ tlsError: error.message }) + "\n",
+      ),
+    );
+    await new Promise((resolve, reject) => {
+      api.once("error", reject);
+      api.listen(secureApiPort, "127.0.0.1", resolve);
+    });
     const mesh = Object.assign(new MiniMesh(directory), {
       launcher: true,
-      environment: { T3CODE_RELEASE_BASE_URL: `http://127.0.0.1:${releasePort}` },
-      extraRoutes: [releasePort, sshPort, apiPort],
+      environment: {
+        T3CODE_RELEASE_BASE_URL: `https://127.0.0.1:${secureReleasePort}`,
+        NODE_EXTRA_CA_CERTS: certificate,
+      },
+      extraRoutes: [releasePort, secureReleasePort, sshPort, apiPort, secureApiPort],
     });
     let fresh;
     const freshRoot = NodePath.join(directory, "fresh");
@@ -92,6 +173,10 @@ export const rolloutScenarios = {
       if (fresh) {
         const owned = fresh;
         fresh = undefined;
+        await NodeFSP.writeFile(
+          NodePath.join(directory, "fresh-server.log"),
+          await run("docker", ["exec", owned, "journalctl", "--no-pager", "-u", "t3-mesh.service"]),
+        );
         await run("docker", ["stop", "--time", "1", owned]);
         await NodeFSP.writeFile(
           NodePath.join(directory, "fresh.log"),
@@ -114,6 +199,11 @@ export const rolloutScenarios = {
         ]);
         await run("docker", ["rm", "-f", owned]);
       }
+      for (const endpoint of [secure, api])
+        if (endpoint.listening)
+          await new Promise((resolve, reject) =>
+            endpoint.close((error) => (error ? reject(error) : resolve())),
+          );
       if (server.listening)
         await new Promise((resolve, reject) =>
           server.close((error) => (error ? reject(error) : resolve())),
@@ -168,7 +258,10 @@ export const rolloutScenarios = {
           (value) => value.trim() === "active",
         );
       });
+      const freshCertificate = NodePath.join(freshRoot, "bootstrap-ca.pem");
+      await NodeFSP.copyFile(certificate, freshCertificate);
       const fixtureEnvironment = [
+        "NODE_EXTRA_CA_CERTS=" + freshCertificate,
         "GOMAXPROCS=2",
         ...(!realistic
           ? [
@@ -187,7 +280,13 @@ export const rolloutScenarios = {
         "sh",
         "[Service]\n" + fixtureEnvironment.map((value) => "Environment=" + value).join("\n") + "\n",
       ]);
-      for (const target of [studio.front, laptop.front, releasePort])
+      for (const target of [
+        studio.front,
+        laptop.front,
+        releasePort,
+        secureReleasePort,
+        secureApiPort,
+      ])
         await run("docker", [
           "exec",
           "-d",
@@ -208,6 +307,17 @@ export const rolloutScenarios = {
         "sh",
         publicKey,
       ]);
+      const hostKey = (
+        await run("docker", ["exec", fresh, "cat", "/etc/ssh/ssh_host_ed25519_key.pub"])
+      )
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .join(" ");
+      await NodeFSP.writeFile(
+        NodePath.join(studio.home, "bootstrap-probe-hosts"),
+        `[127.0.0.1]:${sshPort} ${hostKey}\n`,
+      );
       await run("docker", [
         "exec",
         "-u",
@@ -219,7 +329,7 @@ export const rolloutScenarios = {
         "-o",
         "IdentitiesOnly=yes",
         "-o",
-        "StrictHostKeyChecking=accept-new",
+        "StrictHostKeyChecking=yes",
         "-o",
         "UserKnownHostsFile=" + NodePath.join(studio.home, "bootstrap-probe-hosts"),
         "-p",
@@ -247,14 +357,36 @@ export const rolloutScenarios = {
         baseRevision: before.current.revision,
         doc: {
           ...before.current.doc,
-          t3: { version: "0.1.5" },
+          t3: {
+            version: "0.1.5",
+            runtimeChecksums: Object.fromEntries(
+              await Promise.all(
+                ["0.1.5", "0.1.6"].map(async (version) => [
+                  `t3-${version}-linux-x64.tar.gz`,
+                  NodeCrypto.createHash("sha256")
+                    .update(
+                      await NodeFSP.readFile(
+                        NodePath.join(releases, "v" + version, `t3-${version}-linux-x64.tar.gz`),
+                      ),
+                    )
+                    .digest("hex"),
+                ]),
+              ),
+            ),
+          },
           machines: {
             ...before.current.doc.machines,
             cloudbox: {
               title: "cloudbox",
               label: "CB",
-              bootstrap: { ssh: `root@127.0.0.1:${sshPort}`, port: apiPort, baseDir: base },
-              reach: { address: `http://127.0.0.1:${apiPort}` },
+              bootstrap: {
+                ssh: `root@127.0.0.1:${sshPort}`,
+                port: apiPort,
+                baseDir: base,
+                hostKey,
+                listenHost: "0.0.0.0",
+              },
+              reach: { address: `https://127.0.0.1:${secureApiPort}` },
               ssh: { user: "root", port: 22 },
             },
           },

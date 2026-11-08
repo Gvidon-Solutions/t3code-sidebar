@@ -94,7 +94,9 @@ export const layoutScenarios = {
     fixture(
       directory,
       async (mesh) => {
-        const [studio, , laptop] = mesh.nodes;
+        const [studio, laptop] = mesh.nodes;
+        studio.serverArgs[0] = NodePath.join(process.env.MESH_FAST_RUNTIMES, "0.1.6/bin.mjs");
+        await mesh.restart(studio);
         await edit(studio, { "future/mixed": { unknown: { preserved: true } } });
         await until(
           "real N-1 forwarding",
@@ -108,7 +110,12 @@ export const layoutScenarios = {
           (value) => value.document["future/mixed"]?.v?.unknown?.preserved,
         );
       },
-      { previousEntry: process.env.MESH_FAST_PREVIOUS_ENTRY },
+      {
+        previousEntry: process.env.MESH_FAST_PREVIOUS_ENTRY,
+        previousAll: true,
+        names: ["studio", "laptop"],
+        containerNames: [],
+      },
     ),
   "layout-files": (directory) =>
     fixture(directory, async (mesh) => {
