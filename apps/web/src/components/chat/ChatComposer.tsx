@@ -536,7 +536,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeThreadId,
     activeThread,
     promptHistoryEntries,
-    forceExpandedOnMobile,
     projectSelectionRequired,
     draftSendQueued = false,
     phase,
@@ -1047,22 +1046,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isComposerModelPickerOpen, setIsComposerModelPickerOpen] = useState(false);
   const isMobileViewport = useMediaQuery("max-sm");
   const isSoftwareKeyboardOpen = useSoftwareKeyboardOpen();
-  const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [, setIsComposerFocused] = useState(false);
   const [composerSubmissionError, setComposerSubmissionError] = useState<string | null>(null);
   const [providerInputSubmissionError, setProviderInputSubmissionError] = useState<string | null>(
     null,
   );
   const [composerMenuAnchor, setComposerMenuAnchor] = useState<HTMLDivElement | null>(null);
-  const [hasWrappedPrompt, observeWrappedPrompt] = useComposerMultilinePrompt();
-  const hasMultilinePrompt = prompt.includes("\n") || hasWrappedPrompt;
-  // A pending question stays expanded: its card moves into the banner dock,
-  // so collapsing would leave the surface empty and squashed beneath it.
-  const isComposerCollapsedMobile =
-    isMobileViewport &&
-    !forceExpandedOnMobile &&
-    !isComposerFocused &&
-    !hasMultilinePrompt &&
-    pendingUserInputs.length === 0;
+  const [, observeWrappedPrompt] = useComposerMultilinePrompt();
+  // The composer always shows the full input and toolbar; there is no collapsed variant.
+  const isComposerCollapsedMobile = false;
 
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
   const pasteAsTextShortcutUntilRef = useRef(0);

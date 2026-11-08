@@ -624,13 +624,15 @@ export const BranchToolbar = memo(function BranchToolbar({
   trailing,
 }: BranchToolbarProps) {
   const mesh = useMeshLayout();
-  const executionLabel = replicaExecutionLabel(
-    mesh.config,
-    draftMachineId ?? environmentId,
-    projectId,
-    environmentId,
-  );
-  const showGitControls = requestedGitControls && executionLabel === null;
+  // A lite replica has no local git checkout, so its git controls stay hidden.
+  const isReplica =
+    replicaExecutionLabel(
+      mesh.config,
+      draftMachineId ?? environmentId,
+      projectId,
+      environmentId,
+    ) !== null;
+  const showGitControls = requestedGitControls && !isReplica;
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = scopeThreadRef(environmentId, threadId);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
@@ -706,10 +708,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   if (layout === "panel") {
     return (
       <div className="flex w-full flex-col" data-thread-panel-run-context>
-        {executionLabel ? (
-          <span className="text-xs text-muted-foreground">{executionLabel}</span>
-        ) : null}
-        {panelSection !== "branch" && !executionLabel ? (
+        {panelSection !== "branch" && !isReplica ? (
           <RunContextSelector
             displayMode="panel"
             workspaceRoot={activeProject.workspaceRoot}
@@ -845,7 +844,6 @@ export const BranchToolbar = memo(function BranchToolbar({
           {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
         />
       ) : null}
-      {executionLabel ? <span>{executionLabel}</span> : null}
       {trailing}
     </ComposerSurface.ContextStrip>
   );

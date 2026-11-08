@@ -1,4 +1,3 @@
-import { DraftMachineHint } from "./workspaces/DraftMachineHint";
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
@@ -3779,17 +3778,6 @@ export default function ChatView(props: ChatViewProps) {
                         >
                           {showComposerContextStrip && (
                             <div className="pointer-events-auto">
-                              {draftId && activeThread && !mountingStatus && (
-                                <DraftMachineHint
-                                  selection={
-                                    composerSelectedModelSelection ?? activeThread.modelSelection
-                                  }
-                                  environmentId={pendingDraftMachineId ?? environmentId}
-                                  machines={logicalProjectEnvironments}
-                                  onMachine={onEnvironmentChangeStable}
-                                  onModel={onProviderModelSelectStable}
-                                />
-                              )}
                               {mountingStatus && (
                                 <div role="status" className="text-xs text-muted-foreground">
                                   {mountingStatus}
