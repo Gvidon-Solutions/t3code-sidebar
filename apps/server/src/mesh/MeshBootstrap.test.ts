@@ -34,7 +34,7 @@ it.effect(
       let downloads = 0;
       const doc = {
         schema: 1,
-        t3: { version: "0.1.5" },
+        t3: { version: "0.1.5", runtimeChecksums: { "t3-0.1.5-linux-x64.tar.gz": "f".repeat(64) } },
         machines: {
           cloudbox: {
             reach: { address: "https://cloudbox.example" },
@@ -129,8 +129,14 @@ it.effect(
                     }),
                 }),
                 Layer.succeed(MeshRuntimeArchive, {
-                  download: () =>
+                  download: (version, platform, arch, checksum) =>
                     Effect.sync(() => {
+                      expect([version, platform, arch, checksum]).toEqual([
+                        "0.1.5",
+                        "linux",
+                        "x64",
+                        "f".repeat(64),
+                      ]);
                       downloads++;
                       return Buffer.from("verified archive");
                     }),
