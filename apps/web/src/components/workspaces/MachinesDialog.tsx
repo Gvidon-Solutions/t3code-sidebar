@@ -12,6 +12,7 @@ import type {
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
 import { useState } from "react";
+import { CopyIcon } from "lucide-react";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -135,14 +136,21 @@ export function MachinesDialog(props: {
                         </TooltipTrigger>
                         <TooltipPopup>{rep.path}</TooltipPopup>
                       </Tooltip>
-                      <button
-                        type="button"
-                        aria-label="Copy folder path"
-                        className="shrink-0 rounded px-1 text-2xs text-muted-foreground hover:text-foreground"
-                        onClick={() => void navigator.clipboard.writeText(rep.path)}
-                      >
-                        Copy
-                      </button>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label="Copy path"
+                              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                              onClick={() => void navigator.clipboard.writeText(rep.path)}
+                            />
+                          }
+                        >
+                          <CopyIcon className="size-3" aria-hidden />
+                        </TooltipTrigger>
+                        <TooltipPopup>Copy path</TooltipPopup>
+                      </Tooltip>
                     </div>
                     {status.status.skippedPaths?.length ? (
                       <ul

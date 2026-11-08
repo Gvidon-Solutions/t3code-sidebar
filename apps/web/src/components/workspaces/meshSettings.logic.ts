@@ -97,8 +97,13 @@ export function meshUpdatePrompt(problem: MeshUpdateProblem, machineLabel: strin
 }
 
 export function offlineMachinePrompt(machineLabel: string, status: string): string {
+  const duration = status.replace(/^offline\s*/iu, "").trim();
+  const sentence =
+    duration === "" || duration === "now"
+      ? `${machineLabel} has just gone offline.`
+      : `${machineLabel} has been offline for ${duration}.`;
   return [
-    `${machineLabel} is offline (${status}).`,
+    sentence,
     "Check why this machine cannot reach the mesh, restore its connection, and confirm its projects and copies reconcile again. Report what you changed.",
   ].join("\n");
 }

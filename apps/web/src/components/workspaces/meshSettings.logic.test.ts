@@ -7,6 +7,7 @@ import {
   linkTargetOptions,
   meshUpdateProblems,
   meshUpdatePrompt,
+  offlineMachinePrompt,
   plainFailureText,
   showsLinkSourcePicker,
   shouldOfferConnect,
@@ -161,6 +162,18 @@ describe("meshProjectRows", () => {
 });
 
 describe("mesh problem helpers", () => {
+  it("writes one plain offline sentence without repeating 'offline'", () => {
+    expect(offlineMachinePrompt("Laptop", "offline 5 min").split("\n")[0]).toBe(
+      "Laptop has been offline for 5 min.",
+    );
+    expect(offlineMachinePrompt("Laptop", "offline now").split("\n")[0]).toBe(
+      "Laptop has just gone offline.",
+    );
+    expect(offlineMachinePrompt("Laptop", "Offline").split("\n")[0]).toBe(
+      "Laptop has just gone offline.",
+    );
+  });
+
   it("strips error class names from failure text", () => {
     expect(
       plainFailureText({ message: "PeerLinkError: That pairing code is wrong or expired." }),
