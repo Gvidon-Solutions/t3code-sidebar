@@ -3,6 +3,7 @@ import * as Channels from "./channels.ts";
 
 const serverChannels = new Set([
   Channels.UI_INFO_CHANNEL,
+  Channels.UI_SELECT_CHANNEL,
   Channels.UI_SERVER_ORIGIN_CHANNEL,
   Channels.GET_APP_BRANDING_CHANNEL,
   Channels.GET_SYSTEM_LOCALE_CHANNEL,

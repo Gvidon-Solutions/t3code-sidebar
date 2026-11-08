@@ -32,6 +32,9 @@ it("denies every privileged IPC channel to server UI, foreign origins and subfra
   }
   expect(() => authorizeDesktopIpc(event(server), Channels.UI_INFO_CHANNEL, server)).not.toThrow();
   expect(() =>
+    authorizeDesktopIpc(event(server), Channels.UI_SELECT_CHANNEL, server),
+  ).not.toThrow();
+  expect(() =>
     authorizeDesktopIpc(
       event(`t3code://server-9-${"a".repeat(24)}/`),
       Channels.UI_INFO_CHANNEL,

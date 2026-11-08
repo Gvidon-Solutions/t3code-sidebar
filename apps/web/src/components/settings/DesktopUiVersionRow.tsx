@@ -1,3 +1,4 @@
+import { Button } from "../ui/button";
 import type { DesktopUiInfo } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
 import { APP_VERSION } from "../../branding";
@@ -30,6 +31,13 @@ export function DesktopUiVersionRow() {
   return (
     <SettingsRow
       title={`UI ${APP_VERSION} · shell ${source.shellVersion}`}
+      control={
+        window.desktopShell?.returnToBundled ? (
+          <Button variant="outline" size="sm" onClick={window.desktopShell.returnToBundled}>
+            Open desktop settings
+          </Button>
+        ) : undefined
+      }
       description={`${origin}${source.source === "server" ? ` · server ${source.version}` : ""}${source.reason ? ` · ${source.reason}` : ""}`}
     />
   );

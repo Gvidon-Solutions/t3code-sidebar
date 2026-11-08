@@ -207,11 +207,15 @@ describe("ElectronProtocol", () => {
         handler = nextHandler;
       });
       let desiredOrigin = new URL("https://studio.example/prefix/");
+      let latestSource: URL | null | undefined;
       const protocol = yield* ElectronProtocol.ElectronProtocol;
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
         serverOrigin: async () => desiredOrigin,
+        onSource: async (origin) => {
+          latestSource = origin;
+        },
         clerkFrontendApiHostname: undefined,
       });
       let pageUrl = "";
@@ -258,6 +262,12 @@ describe("ElectronProtocol", () => {
       );
       assert.isNull(first.headers.get("content-encoding"));
       assert.isNull(first.headers.get("content-length"));
+      yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1&bundled=1")),
+      );
+      assert.isNull(latestSource);
+      assert.isNull(yield* protocol.serverOriginFor(1));
+      yield* page();
       const studioPage = pageUrl;
       desiredOrigin = new URL("https://cloudbox.example/");
       yield* Effect.promise(() => handler!(new Request(new URL("assets/old.js", studioPage))));

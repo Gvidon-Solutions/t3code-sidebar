@@ -121,6 +121,26 @@ async function main() {
             NodeAssert.equal(policy, "Hostile server UI");
             await evaluate('localStorage.setItem("hostile-marker","present")');
             const firstServerPage = window.webContents.getURL();
+            const firstOrigin = origin;
+            origin = new URL("other/", origin);
+            await window.loadURL(firstServerPage);
+            NodeAssert.notEqual(
+              new URL(window.webContents.getURL()).host,
+              new URL(firstServerPage).host,
+            );
+            NodeAssert.equal(await evaluate('localStorage.getItem("hostile-marker")'), null);
+            origin = firstOrigin;
+            await window.loadURL(window.webContents.getURL());
+            NodeAssert.equal(await evaluate('localStorage.getItem("hostile-marker")'), "present");
+            const returned = new Promise((resolve) =>
+              window.webContents.once("did-finish-load", resolve),
+            );
+            await evaluate("window.desktopShell.returnToBundled()");
+            await returned;
+            NodeAssert.match(window.webContents.getURL(), /app\/.*bundled=1/);
+            NodeAssert.equal(await evaluate('localStorage.getItem("hostile-marker")'), null);
+            await window.loadURL(`t3code://app/?desktopWindowId=${window.webContents.id}`);
+            NodeAssert.equal(await evaluate('localStorage.getItem("hostile-marker")'), "present");
             compatible = false;
             await window.loadURL(firstServerPage);
             NodeAssert.match(window.webContents.getURL(), /app\/.*bundled=1/);

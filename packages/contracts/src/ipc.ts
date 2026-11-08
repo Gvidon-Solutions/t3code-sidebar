@@ -1024,6 +1024,15 @@ export type DesktopMediaRead = typeof DesktopMediaReadSchema.Type;
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export type DesktopShellBridge = Pick<
+  DesktopBridge,
+  "getAppBranding" | "getClientPlatform" | "getSystemLocale" | "revealWindow"
+> & {
+  readonly origin: string | null;
+  readonly returnToBundled: () => void;
+  readonly ui: Pick<NonNullable<DesktopBridge["ui"]>, "getInfo" | "select">;
+};
+
 export interface DesktopBridge {
   ui?: {
     select: (selection: DesktopUiSelection) => Promise<boolean>;

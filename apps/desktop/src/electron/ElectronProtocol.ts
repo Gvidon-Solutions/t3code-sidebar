@@ -426,6 +426,13 @@ export const make = Effect.gen(function* () {
                     ),
                   );
                 }
+                if (
+                  isDocument &&
+                  requestUrl.searchParams.has("bundled") &&
+                  currentOrigins.delete(rendererId)
+                ) {
+                  await input.onSource?.(null, "Local desktop settings");
+                }
                 return withContentSecurityPolicy(
                   await runPromise(serveDesktopAsset(request, input.assetDirectory, isDocument)),
                   contentSecurityPolicy,

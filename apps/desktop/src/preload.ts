@@ -1,5 +1,7 @@
+import { isBundledUiUrl, serverUiRendererId } from "./ipc/rendererTrust.ts";
 import type {
   DesktopBridge,
+  DesktopShellBridge,
   DesktopPreviewOpenLinkEvent,
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingInputEvent,
@@ -29,7 +31,8 @@ function isSnapShotEvent(value: unknown): value is DesktopSnapShotEvent {
   );
 }
 
-const trustedUi = location.host === "app" && ["t3code:", "t3code-dev:"].includes(location.protocol);
+const trustedUi = isBundledUiUrl(location.href);
+const serverRendererId = serverUiRendererId(location.host);
 if (trustedUi) exposeClerkBridge({ passkeys: true });
 
 // Runs before any app script reads localStorage. See DesktopLegacyLocalStorage.
@@ -446,12 +449,16 @@ const desktopBridge = {
   },
 } satisfies DesktopBridge;
 if (trustedUi) contextBridge.exposeInMainWorld("desktopBridge", desktopBridge);
-else
+else if (serverRendererId !== undefined) {
+  const origin: unknown = ipcRenderer.sendSync(IpcChannels.UI_SERVER_ORIGIN_CHANNEL);
   contextBridge.exposeInMainWorld("desktopShell", {
-    origin: ipcRenderer.sendSync(IpcChannels.UI_SERVER_ORIGIN_CHANNEL),
-    ui: { getInfo: desktopBridge.ui.getInfo },
+    returnToBundled: () =>
+      location.replace(`${location.protocol}//app/?desktopWindowId=${serverRendererId}&bundled=1`),
+    origin: typeof origin === "string" ? origin : null,
+    ui: { getInfo: desktopBridge.ui.getInfo, select: desktopBridge.ui.select },
     getAppBranding: desktopBridge.getAppBranding,
     getClientPlatform: desktopBridge.getClientPlatform,
     getSystemLocale: desktopBridge.getSystemLocale,
     revealWindow: desktopBridge.revealWindow,
-  });
+  } satisfies DesktopShellBridge);
+}
