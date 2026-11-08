@@ -494,3 +494,76 @@ it.live(
       }
     }),
 );
+
+it.live("reports a throwing stop instead of an unhandled rejection", () =>
+  Effect.flatMap(HostProcess.Platform, (platform) =>
+    Effect.promise(async () => {
+      const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-run-stop-throws-"));
+      const namespace = NodeCrypto.createHash("sha256").update(root).digest("hex").slice(0, 16);
+      const payload = {
+        action: "start",
+        namespace,
+        root,
+        cwd: root,
+        ignores: [],
+        args: [
+          process.execPath,
+          "-e",
+          "process.stdout.write('JOB_READY\\n'); setTimeout(() => process.exit(0), 3000)",
+        ],
+      };
+      const child = NodeChildProcess.spawn(process.execPath, [
+        "-e",
+        `
+const nativeKill = process.kill.bind(process);
+process.kill = (pid, signal) => {
+  if (pid < 0) throw Error('group signal failed');
+  return nativeKill(pid, signal);
+};
+` + RUN_WORKER_SOURCE,
+        "--",
+        Buffer.from(JSON.stringify(payload)).toString("base64"),
+      ]);
+      const frames: ReturnType<typeof decodeFrame>[] = [];
+      let reportReady: (frame: { type: string; id?: string }) => void = () => {};
+      const readyFrame = new Promise<{ type: string; id?: string }>((resolve) => {
+        reportReady = resolve;
+      });
+      const lines = NodeReadline.createInterface({ input: child.stdout });
+      lines.on("line", (line) => {
+        const frame = decodeFrame(line);
+        frames.push(frame);
+        if (frame.type === "ready") reportReady(frame);
+      });
+      const closed = new Promise<number | null>((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", resolve);
+      });
+      try {
+        const ready = await readyFrame;
+        if (ready.id === undefined) throw Error("No job id");
+        await new Promise<void>((resolve, reject) => {
+          const address =
+            platform === "win32"
+              ? String.raw`\\.\pipe\t3-run-${namespace}-${ready.id}`
+              : NodePath.join(workerStateRoot(namespace), `${ready.id}.sock`);
+          const socket = NodeNet.connect(address);
+          socket.once("error", reject);
+          socket.once("close", () => resolve());
+          socket.once("connect", () => socket.end('{"signal":"SIGTERM"}\n'));
+        });
+        // The control frame is journaled synchronously before the socket closes.
+        const journal = await NodeFSP.readFile(
+          NodePath.join(workerStateRoot(namespace), `${ready.id}.ndjson`),
+          "utf8",
+        );
+        const last = decodeFrame(journal.trim().split("\n").at(-1)!);
+        expect(last).toEqual({ type: "error", message: "group signal failed" });
+      } finally {
+        child.kill("SIGKILL");
+        await closed;
+        await NodeFSP.rm(root, { recursive: true, force: true });
+      }
+    }),
+  ),
+);

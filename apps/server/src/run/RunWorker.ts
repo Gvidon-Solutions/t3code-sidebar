@@ -525,7 +525,16 @@ export function runWorkerMain(
               });
               return;
             }
-            stop(signal);
+            try {
+              stop(signal);
+            } catch (error) {
+              emit({
+                type: "error",
+                message: error instanceof Error ? error.message : String(error),
+              });
+              socket.destroy();
+              return;
+            }
             socket.end("ok\n");
           },
           (error) => {
