@@ -1,3 +1,4 @@
+import * as SqlClient from "effect/sql/SqlClient";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
@@ -21,7 +22,6 @@ import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as AuthHttp from "../auth/http.ts";
 import * as McpOAuth from "../auth/McpOAuth.ts";
 import * as McpOAuthHttp from "../auth/mcpOAuthHttp.ts";
-import type * as SqlClient from "effect/sql/SqlClient";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
@@ -77,9 +77,18 @@ export const servePeer = <E, R, S = never>(
     const authContext = yield* EnvironmentAuth.layer.pipe(
       Layer.provide(ManagedPolicy.layerTest()),
       Layer.provideMerge(ServerSettings.layerTest({ linkedEnvironmentsEnabled: true })),
-      Layer.provide(Sqlite.layerMemory),
+      Layer.provideMerge(Sqlite.layerMemory),
       Layer.provideMerge(ServerSecretStore.layer),
-      Layer.provideMerge(ServerEnvironment.layerIdentity),
+      Layer.provideMerge(
+        Layer.mergeAll(
+          layerEnvironment,
+          Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {
+            getEnvironmentId: Ref.get(descriptor).pipe(
+              Effect.map((current) => current.environmentId),
+            ),
+          }),
+        ),
+      ),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-peer-link-peer-" })),
       Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
       Layer.fresh,
@@ -157,6 +166,7 @@ export type ServedPeer = Effect.Success<ReturnType<typeof servePeer>>;
  * The environment that links: its own database and secret store, reaching
  * peers over plain HTTP. Provide it to anything built on its links.
  */
+
 export const layerLinkingEnvironment = <E = never>(
   descriptor: ExecutionEnvironmentDescriptor,
   secrets: typeof ServerSecretStore.layer = ServerSecretStore.layer,

@@ -224,6 +224,11 @@ export const layer = Layer.effect(
         last_error: string | null;
       }>`SELECT environment_id, sent_seq, received_seq, last_exchange_at, last_error FROM mesh_peer_state ORDER BY environment_id`;
       return {
+        legacyIdentityUpgrades: yield* sql<{
+          sessionId: string;
+          environmentId: string;
+          boundAt: string;
+        }>`SELECT session_id AS sessionId, environment_id AS environmentId, bound_at AS boundAt FROM peer_session_identities WHERE source = 'legacy-local-link' ORDER BY session_id`,
         quarantine: yield* sql<{
           key: string;
           reason: string;

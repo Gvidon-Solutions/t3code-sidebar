@@ -6,7 +6,9 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
-import { AppState, Linking, Platform } from "react-native";
+import { verifiedNativeUpdate } from "./native-update-verification";
+import { installVerifiedApk } from "./verified-apk";
+import { AppState, Platform } from "react-native";
 import * as Dialog from "../../components/ui/Dialog";
 
 const ROLLBACK_KEY = "t3.mobileUpdateRollbackFrom";
@@ -80,22 +82,21 @@ export function installSelfHostedUpdateStatus() {
         status.requiresNativeUpdate === true
       ) {
         notified = true;
-        const apkUrl =
-          "apkUrl" in status &&
-          typeof status.apkUrl === "string" &&
-          /^https:\/\//.test(status.apkUrl)
-            ? status.apkUrl
+        const certificate: unknown = Constants.expoConfig?.extra?.mobileUpdateCertificate;
+        const apk =
+          Platform.OS === "android" && typeof certificate === "string"
+            ? verifiedNativeUpdate(status, url, certificate, Updates.runtimeVersion ?? "")
             : undefined;
         Dialog.alert(
           "Update the app",
           "This update needs a newer app installation.",
-          apkUrl
+          apk
             ? [
                 { text: "Later", style: "cancel" },
                 {
                   text: "Download app",
                   onPress: () => {
-                    void Linking.openURL(apkUrl).catch((error) =>
+                    void installVerifiedApk(apk).catch((error) =>
                       Dialog.alert("Could not open download", String(error)),
                     );
                   },

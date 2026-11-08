@@ -1,5 +1,6 @@
 import { meshRetryDelay } from "../../mesh/retryBackoff.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalErrorInEffectCatch:off globalErrorInEffectFailure:off effectFnOpportunity:off runEffectInsideEffect:off -- The peer manager owns Node Duplex pipes, synchronous wire callbacks and its own retry clock; transport failures are intentionally plain Errors.
+import { authenticatedPeerHops } from "./peerIdentity.ts";
 import * as NodeNet from "node:net";
 import * as NodeStream from "node:stream";
 
@@ -598,6 +599,11 @@ export const make = Effect.gen(function* () {
         signal,
       });
     }
+    if (!authenticatedPeerHops(body.hops, environmentId, selfId))
+      return yield* new PeerConnectionError({
+        reason: "relay",
+        message: "Relay hops do not match the authenticated peer",
+      });
     const entry = live.get(environmentId);
     if (entry === undefined) {
       return yield* new PeerConnectionError({

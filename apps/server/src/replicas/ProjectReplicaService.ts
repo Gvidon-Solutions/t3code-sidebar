@@ -1,3 +1,4 @@
+import { resolveSshHost } from "@t3tools/shared/meshConfig";
 import { ReplicaEnvironment } from "./ReplicaEnvironment.ts";
 import { EnvironmentId, ProjectPlaceResult } from "@t3tools/contracts";
 import { callRouted } from "../mesh/MeshRouting.ts";
@@ -169,7 +170,11 @@ const make = Effect.gen(function* () {
         reason: "unreachable",
         message: "Existing SSH host is not configured.",
       });
-    return { ssh: host, platform: config.machines[environmentId]?.reported?.platform.os };
+    const ssh = yield* Effect.try({
+      try: () => resolveSshHost(host),
+      catch: (cause) => new ReplicaError({ reason: "unreachable", message: String(cause) }),
+    });
+    return { ssh, platform: config.machines[environmentId]?.reported?.platform.os };
   });
   const known = new Map<string, string>();
   const refKey = (logicalKey: string, environmentId: string) => `${logicalKey}\0${environmentId}`;

@@ -96,7 +96,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   native inputs, so JavaScript-only pushes reuse them; the job builds `arm64-v8a` only by default
   (manual dispatch can add `x86_64`) and skips R8, PNG crunching and lintVital for this sideload
   APK. Local equivalent: `pnpm mobile:apk` (first build compiles native modules, later builds are
-  usually a minute or two; it auto-loads `~/.local/share/t3-ws/android-signing.env` when present,
+  usually a minute or two; set `T3_ANDROID_SIGNING_ENV` to an explicitly selected signing file
   so the APK updates an installed fork build). E2E helpers for the emulator are in
   `scripts/sidebar-mobile-e2e/`.
 - **iOS.** `.github/workflows/sidebar-ios.yml` builds the sidebar variant for the iOS Simulator
@@ -122,7 +122,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   checks effect-only starts, expires abandoned fences on startup, and preserves typed recovery
   failures while reading deferred ids once per recovery pass.
 - Peer receipts reserve keys atomically, retain thirty days and cap stored response bytes at
-  64 KiB; migration 82 preserves existing receipts while adding indexed creation timestamps.
+  64 KiB; migration 83 preserves existing receipts while adding indexed creation timestamps.
 - Peer route history and revoked HTTP sessions are collected; session cache identities hash the
   bearer. Heartbeats use their actual deadlines. State backups retain ten completed snapshots
   and collect stale temporary files without replacing a resumed token’s original snapshot.
@@ -141,6 +141,25 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   injected environments, ancestry flushes, login shells, SSH config reloads and every conflict-copy
   location have focused regressions. OTA serving and publishing verify content hashes and cache
   catalog indexes; provider recovery logs include causes and mobile layout failures show a dialog.
+
+### 2026-11-08 — F2a security and repository privacy
+
+- **What.** Public sources contain neutral infrastructure examples. Linked callers, server-delivered
+  desktop UI, bootstrap downloads and native mobile upgrades have explicit trust boundaries.
+- **How.** Bed infrastructure comes from one ignored local.env and uses isolated units/homes/keys.
+  CI signing is restricted to ws and a protected environment; upstream-only secret workflows are
+  removed. Peer permissions come from authenticated link records and declared tool domains,
+  unknown peers/tools are denied, and imported links never gain unrestricted file access.
+  One-time pairing atomically binds client identity; later calls only verify it. Legacy credentials
+  upgrade once only against an existing local link/binding, with an audit trail in mesh status.
+  SSH destinations are validated and options terminated. Server UI has a separate origin,
+  reduced bridge, guarded IPC and compatibility fallback. APK metadata is signed and bytes
+  verified; bootstrap pins host keys/runtime hashes and pairs through HTTPS. Agent defaults
+  come from customer config.
+- **Where.** scripts/mesh-e2e, delivery scripts/workflow, desktop protocol/preload/IPC, mobile
+  updates, server auth/MCP/mesh, shared meshConfig/cliRelease. Focused regression tests and
+  the real Electron hostile-server proof cover these boundaries. See docs/mesh/README.md and
+  docs/delivery.md for setup, including the owner's one-time GitHub environment configuration.
 
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
@@ -306,9 +325,9 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 
 ### 2026-11-03 — T3 Mesh — Stage J global agent instructions
 
-- **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to gor.
+- **What:** one canonical global instruction body with machine headers, drift status, dry-run diffs and backed-up verified sync for installed harnesses. Local `--home` supports isolated eval homes; production-home sync was applied only to nodeB.
 - **How:** staged `t3ctl agents sync/status` uses local file operations or pinned SSH routes, with offline render/diff/backup/isolation tests and real Codex/OpenCode eval evidence. Mesh routing resolves configured names and project paths, searches across machines, and runs git on a replica’s primary. General dispatch rules cover API prerequisites and execution location; compact skill tables are excluded from the formatter.
-- **Where:** `agent-kit/skills/t3/`, `agent-kit/skills/t3/global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live gvidon/Operalia configuration changed.
+- **Where:** `agent-kit/skills/t3/`, `agent-kit/skills/t3/global/GLOBAL.md`, `docs/mesh-agent-eval.md`. No product contracts or live studio/Cloudbox configuration changed.
 
 ### 2026-11-03 — T3 Mesh — Stage M session identity and thread access
 
@@ -318,7 +337,7 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 
 ### 2026-11-02 — T3 Mesh — round 2 replica acceptance
 
-- **What:** real Mutagen replica acceptance across gor, isolated gvidon and the VPS container, including staged `t3ctl-next`.
+- **What:** real Mutagen replica acceptance across nodeB, isolated studio and the VPS container, including staged `t3ctl-next`.
 - **How:** Settings-model SSH routes, authenticated MCP launches, live status, file and session assertions, conflict/retry, restart, removal and orphan checks. Build-current mode avoids the shared build checkout; deploy copies only the staged skill.
 - **Where:** `scripts/mesh-e2e/round2.sh`, `round2-routes.sh` and the accompanying run report/log. Product code is unchanged.
 
@@ -388,7 +407,7 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 - **What.** A folder's "New thread" stays as before; a small chevron beside it opens "New thread
   on…" with every connected machine and its tag. Choosing a machine that has no copy of the
   project records a Mutagen replica and shows a pending row at the top of the folder (tag,
-  "Mounting on Operalia… 42%", "2 conflicts", or the error with Retry). The new-thread draft
+  "Mounting on Cloudbox… 42%", "2 conflicts", or the error with Retry). The new-thread draft
   opens there as soon as that machine registers the project. A folder's menu has "Machines…"
   with every representation: machine, Primary/Replica, path, state, conflicts, Make primary,
   Add replica on…, Retry, and Remove (files stay). The phone gets the same "New thread on…"
@@ -567,8 +586,8 @@ Config-driven SSH bootstrap installs a verified runtime and native service, esta
 
 - **What.** A new project-grouping mode, "Group by name": projects with the same name appear as
   one sidebar row on any machine, whatever their folders or git identities. It fixes the phone
-  showing, for example, two "CALF Wrapper" folders because one copy lives on gvidon and the
-  other on Operalia over SSHFS with no detected repository.
+  showing, for example, two "CALF Wrapper" folders because one copy lives on studio and the
+  other on Cloudbox over SSHFS with no detected repository.
 - **How.** `deriveTitleScopedKey` normalizes the title (trim, collapse whitespace, lower case) and
   becomes the logical key for the `title` mode; grouping is client-side, so older servers need no
   change. Available in Settings › Organization on the phone.

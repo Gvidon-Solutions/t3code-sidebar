@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   BackgroundActivityProfile,
   BackgroundActivityProfileSelection,
@@ -51,6 +52,7 @@ const EnvironmentReadTool = Tool.make("t3_environment_read", {
     preferences: Schema.Struct(PreferenceFields),
   }),
 })
+  .annotate(McpDomainAnnotation, "mesh")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
 const EnvironmentPreferencesTool = Tool.make("t3_environment_preferences_update", {
@@ -66,5 +68,7 @@ const EnvironmentPreferencesTool = Tool.make("t3_environment_preferences_update"
     sourceControlWritingStyle: ServerSettingsPatch.fields.sourceControlWritingStyle,
   }),
   success: Schema.Struct(PreferenceFields),
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "owner")
+  .annotate(Tool.Destructive, true);
 export const EnvironmentToolkit = Toolkit.make(EnvironmentReadTool, EnvironmentPreferencesTool);

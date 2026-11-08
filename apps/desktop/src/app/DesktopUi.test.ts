@@ -55,6 +55,10 @@ describe("Desktop connected UI source", () => {
         const program = Effect.gen(function* () {
           const ui = yield* make;
           expect(yield* ui.select(studio)).toBe(true);
+          expect(yield* ui.connectionOrigins).toEqual([
+            "https://studio.example",
+            "https://cloudbox.example",
+          ]);
           yield* ui.recordSource(new URL(studio.httpBaseUrl));
           expect((yield* ui.getInfo).version).toBe("2");
           expect(yield* ui.select(cloudbox)).toBe(true);
@@ -69,6 +73,7 @@ describe("Desktop connected UI source", () => {
           expect(yield* ui.select(cloudbox)).toBe(false);
           for (const httpBaseUrl of [
             "https://intruder.example",
+            "http://studio.example",
             "file:///tmp/app",
             "https://user:secret@studio.example",
           ]) {

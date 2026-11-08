@@ -44,10 +44,17 @@ const layerEnvironmentAuth = EnvironmentAuth.layer.pipe(
   Layer.provideMerge(ServerEnvironment.layerIdentity),
   Layer.provide(layerConfig),
 );
-const makeLayerRoutes = (capture: (auth: EnvironmentAuth.EnvironmentAuth["Service"]) => void) =>
+const makeLayerRoutes = (
+  capture: (auth: EnvironmentAuth.EnvironmentAuth["Service"], environmentId: string) => void,
+) =>
   Layer.mergeAll(
     Layer.effectDiscard(
-      EnvironmentAuth.EnvironmentAuth.pipe(Effect.tap((auth) => Effect.sync(() => capture(auth)))),
+      Effect.gen(function* () {
+        const auth = yield* EnvironmentAuth.EnvironmentAuth;
+        const environmentId = yield* (yield* ServerEnvironment.ServerEnvironmentIdentity)
+          .getEnvironmentId;
+        capture(auth, environmentId);
+      }),
     ),
     HttpApiBuilder.layer(AuthTestApi).pipe(
       Layer.provide(AuthHttp.layer),
@@ -91,14 +98,20 @@ const form = (body: Record<string, string>) => ({
 type Handler = (request: Request) => Effect.Effect<Response>;
 
 const withRoutes = <A, E>(
-  use: (handler: Handler, auth: EnvironmentAuth.EnvironmentAuth["Service"]) => Effect.Effect<A, E>,
+  use: (
+    handler: Handler,
+    auth: EnvironmentAuth.EnvironmentAuth["Service"],
+    environmentId: string,
+  ) => Effect.Effect<A, E>,
 ) =>
   Effect.gen(function* () {
     const random = yield* SecureRandom.SecureRandom;
     const context = Context.make(SecureRandom.SecureRandom, random);
+    let issuerEnvironmentId = "";
     let routerAuth: EnvironmentAuth.EnvironmentAuth["Service"] | undefined;
-    const layerRoutes = makeLayerRoutes((auth) => {
+    const layerRoutes = makeLayerRoutes((auth, environmentId) => {
       routerAuth = auth;
+      issuerEnvironmentId = environmentId;
     });
     return yield* Effect.acquireUseRelease(
       Effect.sync(() => HttpRouter.toWebHandler(layerRoutes, { disableLogger: true })),
@@ -106,7 +119,7 @@ const withRoutes = <A, E>(
         Effect.gen(function* () {
           const handler: Handler = (request) => Effect.promise(() => web.handler(request, context));
           yield* handler(at("/.well-known/oauth-authorization-server"));
-          return yield* use(handler, routerAuth!);
+          return yield* use(handler, routerAuth!, issuerEnvironmentId);
         }),
       (web) => Effect.promise(() => web.dispose()),
     );
@@ -322,7 +335,7 @@ it.live("signs in with a pairing code and issues a token only /mcp accepts", () 
 );
 
 it.live("signs in a hosted agent with an https callback that asked for a client secret", () =>
-  withRoutes((handler, auth) =>
+  withRoutes((handler, auth, issuerEnvironmentId) =>
     Effect.gen(function* () {
       const callbackUrl = "https://bot.example/oauth/callback";
       const registered = yield* handler(
@@ -356,6 +369,8 @@ it.live("signs in a hosted agent with an https callback that asked for a client 
         _tag: "pairing-code",
         access: "approval-required",
         code: pairing.credential,
+        peerEnvironmentId: "laptop-environment",
+        issuerEnvironmentId,
       });
       const callback = new URL(approved.redirectTo!);
       expect(`${callback.origin}${callback.pathname}`).toBe(callbackUrl);
@@ -384,8 +399,17 @@ it.live("signs in a hosted agent with an https callback that asked for a client 
         label: "Hosted bot",
         access: "approval-required",
         peerLink: true,
-        peerEnvironmentId: "cloudbox-environment",
       });
+      expect(signedIn).toHaveProperty("peerEnvironmentId", "laptop-environment");
+      expect(
+        (yield* decide(handler, params, {
+          _tag: "pairing-code",
+          access: "approval-required",
+          code: pairing.credential,
+          peerEnvironmentId: "spoofed-peer",
+          issuerEnvironmentId,
+        })).status,
+      ).toBe(400);
     }),
   ),
 );

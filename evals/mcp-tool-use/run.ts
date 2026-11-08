@@ -558,11 +558,11 @@ export const buildBase = (
   const append = options.nativeSubagent ? "" : t3SystemAppend(model, options.deviceAccess);
   const modelLine = `You are powered by the model named ${MODELS[model]}. The exact model ID is ${model}.`;
   const joined = systemTexts.join("\n");
-  // The capture's home directory names its user. Cases use `/home/user` paths instead.
-  const cwd = /Primary working directory: (\S+)/.exec(joined)?.[1] ?? "/home/user/app";
+  // The capture's home directory names its user. Cases use `/home/dev` paths instead.
+  const cwd = /Primary working directory: (\S+)/.exec(joined)?.[1] ?? "/home/dev/app";
   const home = /^\/(?:home|Users)\/[^/]+/.exec(cwd)?.[0];
   const anonymize = (value: string) =>
-    home === undefined ? value : value.replaceAll(home, home.replace(/[^/]+$/, "user"));
+    home === undefined ? value : value.replaceAll(home, home.replace(/[^/]+$/, "dev"));
   const system = systemTexts.map((value) => {
     // T3's append is the tail of its block: runtime info, PR linking, then orchestration.
     const at = value.indexOf(RUNTIME_MARKER);
@@ -629,9 +629,9 @@ const buildCodexBase = (
   const joined = template.input.map(contentText).join("\n");
   if (!joined.includes("<t3_code_runtime>"))
     throw new Error("Codex template needs full T3 context.");
-  const cwd = /<cwd>(.*?)<\/cwd>/.exec(joined)?.[1] ?? "/home/user/app";
+  const cwd = /<cwd>(.*?)<\/cwd>/.exec(joined)?.[1] ?? "/home/dev/app";
   const home = /^\/(?:home|Users)\/[^/]+/.exec(cwd)?.[0];
-  const clean = (s: string) => (home ? s.replaceAll(home, home.replace(/[^/]+$/, "user")) : s);
+  const clean = (s: string) => (home ? s.replaceAll(home, home.replace(/[^/]+$/, "dev")) : s);
   const effort = options.effort ?? template.reasoning.effort;
   const message = (value: string, role = "developer") => ({
     type: "message",
@@ -1116,8 +1116,7 @@ export const t3Default = (
     case "request_secret": {
       // T3 names both a ref and a file with 32 hex characters, and keeps files in its secrets dir.
       const id = "5f0c9e2a7b4d4183a6e1c8d2b9f07a64";
-      const home =
-        /^\/(?:home|Users)\/[^/]+/.exec(sample.base.environment.cwd)?.[0] ?? "/home/user";
+      const home = /^\/(?:home|Users)\/[^/]+/.exec(sample.base.environment.cwd)?.[0] ?? "/home/dev";
       return input.delivery === "file"
         ? { status: "saved", file: `${home}/.t3/userdata/secrets/files/${id}` }
         : { status: "saved", secretRef: `secret-ref:${id}` };

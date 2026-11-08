@@ -10,17 +10,9 @@ import { parse, stringify } from "yaml";
 
 export const configYaml = (doc: unknown): string => stringify(doc);
 
-export const defaultAgentAliases = () => ({
-  opus: { harness: "claudeAgent", model: "claude-opus-5-5" },
-  sonnet: { harness: "claudeAgent", model: "claude-sonnet-5-5" },
-  fable: { harness: "claudeAgent", model: "claude-fable-5-1" },
-  haiku: { harness: "claudeAgent", model: "claude-haiku-5-5" },
-  luna: { harness: "codex", model: "gpt-6-luna" },
-  astra: { harness: "codex", model: "gpt-6-astra" },
-  sol: { harness: "codex", model: "gpt-6.1-sol" },
-  deepseek: { harness: "opencode", model: "deepseek/deepseek-flash" },
-  "1017": { harness: "opencode", model: "deepseek/deepseek-flash" },
-});
+export const defaultAgentAliases = (): NonNullable<
+  NonNullable<MeshConfigDocument["agents"]>["aliases"]
+> => ({});
 export const defaults = (): MeshConfigDocument => ({
   schema: 1,
   machines: {},
@@ -104,50 +96,6 @@ export const modelAlias = (config: MeshConfigDocument, name: string) =>
   config.agents?.aliases && Object.hasOwn(config.agents.aliases, name)
     ? config.agents.aliases[name]
     : undefined;
-
-const peerLabels = (config: MeshConfigDocument, name: string) => {
-  const machine = machineByName(config, name);
-  if (!machine) return [];
-  const extra = Array.isArray(machine.legacyPeerLabels)
-    ? machine.legacyPeerLabels.filter((label): label is string => typeof label === "string")
-    : [];
-  return [
-    name,
-    machine.title,
-    machine.label,
-    ...(Array.isArray(machine.aliases)
-      ? machine.aliases.filter((alias): alias is string => typeof alias === "string")
-      : []),
-    ...extra,
-  ].filter((label): label is string => typeof label === "string" && label.length > 0);
-};
-
-/**
- * The configured machine an incoming peer link belongs to. Peer links carry
- * the label the linking environment signed in with; bindings carry the id.
- * An unknown label falls back to the defaults, never to broader permissions.
- */
-export const machineByPeerLabel = (
-  config: MeshConfigDocument,
-  bindings: Readonly<Record<string, string>>,
-  peerLabel: string | undefined,
-  migratedLabels: Readonly<Record<string, readonly string[]>> = {},
-) => {
-  if (peerLabel === undefined) return undefined;
-  const compact = peerLabel.replace(/^T3 Code\s*·\s*/u, "").trim();
-  const matches = Object.entries(bindings).filter(
-    ([name]) =>
-      [...peerLabels(config, name), ...(migratedLabels[name] ?? [])].includes(peerLabel) ||
-      [...peerLabels(config, name), ...(migratedLabels[name] ?? [])].includes(compact),
-  );
-  return matches.length === 1
-    ? {
-        name: matches[0]![0],
-        environmentId: matches[0]![1],
-        machine: machineByName(config, matches[0]![0]),
-      }
-    : undefined;
-};
 
 /** Compare two config documents by path, for a stale apply's rebase hint. */
 export const configDiff = (
@@ -268,27 +216,6 @@ export const conflictWinner = (
   replicaMtime: number,
 ): "alpha" | "beta" => (policy === "newest-wins" && replicaMtime > primaryMtime ? "beta" : "alpha");
 
-export const migratedPeerLabelsFromLayout = (
-  document: Readonly<Record<string, { readonly v: unknown }>>,
-) =>
-  Object.fromEntries(
-    Object.entries(document).flatMap(([key, entry]) => {
-      if (
-        !key.startsWith("mesh.machineMigration/") ||
-        decodeLayoutKey(key)?.length !== 2 ||
-        !entry.v ||
-        typeof entry.v !== "object" ||
-        !("peerLabels" in entry.v) ||
-        !Array.isArray(entry.v.peerLabels)
-      )
-        return [];
-      return [
-        [
-          decodeURIComponent(key.slice("mesh.machineMigration/".length)),
-          entry.v.peerLabels.filter((value): value is string => typeof value === "string"),
-        ],
-      ];
-    }),
-  );
-
 export { repairMachineIdentity, renameMachineBindings, localMachineClaim } from "./identity.ts";
+
+export { resolveSshHost } from "./sshHost.ts";

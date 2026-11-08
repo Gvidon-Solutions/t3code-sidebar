@@ -61,7 +61,8 @@ describe("V2 preview upgrade", () => {
         [79, "DelegatedRecoveryIndexes"],
         [80, "MeshLayout"],
         [81, "PeerConnections"],
-        [82, "PeerReceiptRetention"],
+        [82, "PeerIdentityBindings"],
+        [83, "PeerReceiptRetention"],
       ]);
       assert.deepStrictEqual(yield* runMigrations(), []);
       assert.deepStrictEqual(yield* sql`SELECT * FROM orchestration_v2_legacy_imports`, imports);
@@ -166,7 +167,8 @@ describe("V2 preview upgrade", () => {
         [79, "DelegatedRecoveryIndexes"],
         [80, "MeshLayout"],
         [81, "PeerConnections"],
-        [82, "PeerReceiptRetention"],
+        [82, "PeerIdentityBindings"],
+        [83, "PeerReceiptRetention"],
       ]);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
   );

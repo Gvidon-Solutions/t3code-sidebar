@@ -7,7 +7,6 @@ import type { Json } from "../meshLayout/document.ts";
 import {
   defaults,
   bindingsFromLayout,
-  migratedPeerLabelsFromLayout,
   machineByName,
   machineByEnvironment,
   modelAlias,
@@ -20,6 +19,9 @@ import {
 
 const encodeConfig = Schema.encodeSync(MeshConfigDocument);
 describe("mesh config", () => {
+  it("leaves model aliases to user configuration", () => {
+    expect(defaults().agents?.aliases).toEqual({});
+  });
   it("round trips unknown fields at every object level through JSON and YAML", () => {
     const input = {
       schema: 1,
@@ -289,9 +291,6 @@ it("seeds code-only ignores for new configs without expanding existing configs",
   ).not.toContain("*.pdf");
 });
 
-it("ignores malformed encoded binding and migration keys", () => {
+it("ignores malformed encoded binding keys", () => {
   expect(bindingsFromLayout({ "mesh.machineBinding/bad%": { v: "studio" } })).toEqual({});
-  expect(
-    migratedPeerLabelsFromLayout({ "mesh.machineMigration/bad%": { v: { peerLabels: ["old"] } } }),
-  ).toEqual({});
 });

@@ -39,6 +39,9 @@ it.effect(
                     label: "test",
                     access: token === "readonly" ? "read-only" : "full-access",
                     linked: token !== "agent",
+                    ...(token === "link" || token === "readonly"
+                      ? { peerEnvironmentId: EnvironmentId.make("A") }
+                      : {}),
                   },
                 };
                 return Effect.succeed(scope);
@@ -90,6 +93,7 @@ it.effect(
         },
       };
       expect((yield* post("agent", body)).status).toBe(403);
+      expect((yield* post("unbound", body)).status).toBe(403);
       expect((yield* post("readonly", body)).status).toBe(403);
       const accepted = yield* post("link", body);
       expect(accepted.status).toBe(200);

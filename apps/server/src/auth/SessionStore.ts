@@ -62,7 +62,7 @@ export interface VerifiedSession {
   readonly runtimeModeCeiling?: RuntimeMode;
   /** An MCP client that is another T3 Code environment's peer link. */
   readonly peerLink?: true;
-  /** The environment that registered the peer link, when it named itself. */
+  /** Legacy signed claim; peer authorization uses the durable pairing binding. */
   readonly peerEnvironmentId?: string;
 }
 

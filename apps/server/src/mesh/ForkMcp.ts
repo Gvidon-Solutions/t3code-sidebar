@@ -1,3 +1,4 @@
+import { declareMcpProtocol, linkAllowsDomain } from "../mcp/McpToolDomain.ts";
 import { linkPermissions } from "./MeshLinkPermissions.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -9,12 +10,13 @@ import { clientModeCeiling, McpInvocationContext } from "../mcp/McpInvocationCon
 import { ThreadForkService } from "./ThreadForkService.ts";
 import { ForkTransportInput } from "./forkTransport.ts";
 
+const receiver = declareMcpProtocol("t3_thread_receive_fork", "threads");
 const decodeCall = Schema.decodeUnknownOption(
   Schema.Struct({
     id: Schema.Unknown,
     method: Schema.Literal("tools/call"),
     params: Schema.Struct({
-      name: Schema.Literal("t3_thread_receive_fork"),
+      name: Schema.Literal(receiver.name),
       arguments: Schema.Unknown,
     }),
   }),
@@ -39,7 +41,7 @@ export const interceptForkRequest = Effect.fn("ForkMcp.interceptRequest")(functi
   const permissions = yield* linkPermissions().pipe(
     Effect.provideService(McpInvocationContext, scope),
   );
-  if (!permissions.threads)
+  if (!linkAllowsDomain(receiver.domain, permissions, scope.client.peerEnvironmentId !== undefined))
     return HttpServerResponse.jsonUnsafe({ error: "link_threads_denied" }, { status: 403 });
   if (Option.isNone(service))
     return HttpServerResponse.jsonUnsafe({ error: "fork_unavailable" }, { status: 503 });

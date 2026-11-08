@@ -33,7 +33,7 @@ it.effect(
         });
         const result = yield* Archive.MeshRuntimeArchive.pipe(
           Effect.flatMap((service) =>
-            service.download("1.2.3", "linux", "x64", (stage) =>
+            service.download("1.2.3", "linux", "x64", checksum || undefined, (stage) =>
               Effect.sync(() => {
                 phases.push(stage);
               }),
@@ -46,14 +46,15 @@ it.effect(
           }),
           Effect.result,
         );
-        expect(requests[0]).toBe("https://releases.example/download/v1.2.3/SHA256SUMS");
+        expect(requests).not.toContain("https://releases.example/download/v1.2.3/SHA256SUMS");
+        expect(requests.length).toBe(checksum ? 1 : 0);
         if (checksum === digest) {
           expect(result._tag).toBe("Success");
           expect(phases).toEqual(["download", "verify"]);
         } else {
           expect(result._tag).toBe("Failure");
           if (result._tag === "Failure")
-            expect(result.failure.message).toMatch(/SHA-256|SHA256SUMS/);
+            expect(result.failure.message).toMatch(/SHA-256|runtimeChecksums/);
         }
       }
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),

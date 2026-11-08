@@ -165,7 +165,6 @@ describe("self-hosted mobile updates", () => {
         if (status.body._tag === "Uint8Array")
           expect(JSON.parse(new TextDecoder().decode(status.body.body))).toEqual({
             requiresNativeUpdate: true,
-            apkUrl: "https://studio.example/app.apk",
           });
         yield* fs.writeFileString(
           join(root, "catalog.json"),

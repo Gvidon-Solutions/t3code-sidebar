@@ -5,54 +5,71 @@ set -euo pipefail
 MESH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$MESH_DIR/../.." && pwd)"
 
-STATE_DIR="${MESH_E2E_STATE_DIR:-$HOME/.local/share/t3-mesh-e2e}"
-ARTIFACTS_DIR="${MESH_E2E_ARTIFACTS:-$HOME/.cache/t3-mesh-e2e/artifacts}"
-BUILD_DIR="${MESH_E2E_BUILD_DIR:-$HOME/.cache/t3-mesh-e2e/build}"
+if [ -f "$MESH_DIR/local.env" ]; then
+  . "$MESH_DIR/local.env"
+fi
+: "${NODE_B_SSH_CONFIG:?Set NODE_B_SSH_CONFIG in scripts/mesh-e2e/local.env}"
+: "${NODE_B_SSH_KEY:?Set NODE_B_SSH_KEY in scripts/mesh-e2e/local.env}"
+: "${NODE_B_HOST:?Set NODE_B_HOST in scripts/mesh-e2e/local.env}"
+: "${CLOUD_SSH_CONFIG:?Set CLOUD_SSH_CONFIG in scripts/mesh-e2e/local.env}"
+: "${CLOUD_HOST:?Set CLOUD_HOST in scripts/mesh-e2e/local.env}"
+: "${CLOUD_KNOWN_HOSTS:?Set CLOUD_KNOWN_HOSTS in scripts/mesh-e2e/local.env}"
+: "${NODE_A_PUBLIC_IP:?Set NODE_A_PUBLIC_IP in scripts/mesh-e2e/local.env}"
+: "${NODE_B_PUBLIC_IP:?Set NODE_B_PUBLIC_IP in scripts/mesh-e2e/local.env}"
+: "${NODE_A_NODE_BIN_DIR:?Set NODE_A_NODE_BIN_DIR in scripts/mesh-e2e/local.env}"
+: "${NODE_B_NODE_BIN_DIR:?Set NODE_B_NODE_BIN_DIR in scripts/mesh-e2e/local.env}"
+: "${NODE_B_STATE_DIR:?Set NODE_B_STATE_DIR in scripts/mesh-e2e/local.env}"
+: "${NODE_B_DEMO_DIR:?Set NODE_B_DEMO_DIR in scripts/mesh-e2e/local.env}"
+: "${CLOUD_DIR:?Set CLOUD_DIR in scripts/mesh-e2e/local.env}"
+: "${CLOUD_SSH_USER:?Set CLOUD_SSH_USER in scripts/mesh-e2e/local.env}"
+
+export PATH="$NODE_A_NODE_BIN_DIR:$PATH"
+STATE_DIR="${MESH_E2E_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/t3-mesh-e2e}"
+ARTIFACTS_DIR="${MESH_E2E_ARTIFACTS:-$STATE_DIR/artifacts}"
+BUILD_DIR="${MESH_E2E_BUILD_DIR:-$STATE_DIR/build}"
 BUILD_ENV="$ARTIFACTS_DIR/build.env"
-
-GOR_SSH_CONFIG="${GOR_SSH_CONFIG:-$HOME/.local/share/gor-transfer/ssh_config}"
-GOR_SSH_KEY="${GOR_SSH_KEY:-$HOME/.ssh/id_malaniya_25519}"
-VPS_SSH_CONFIG="${VPS_SSH_CONFIG:-$HOME/.local/share/vpn-ops/ssh_config}"
-VPS_HOST="${VPS_HOST:-152.89.244.57}"
-GOR_HOST="${GOR_HOST:-gor}"
-# Egress IPs as seen by the VPS. gor exits through its own route, which is not
-# the home IP gvidon uses.
-GVIDON_PUBLIC_IP="${MESH_E2E_GVIDON_IP:-78.17.147.89}"
-GOR_PUBLIC_IP="${MESH_E2E_GOR_IP:-91.77.163.152}"
-
-GV_PORT=3795
-GOR_PORT=3774
-VPS_PORT=3791
-GV_LOCAL=13795
-GOR_LOCAL=13797
-VPS_LOCAL=13791
-VPS_BIND=172.17.0.1
-VPS_SSH_GOR=22022
-VPS_SSH_GV=22023
-
-GV_BASE_DIR="${MESH_E2E_GV_BASE_DIR:-/tmp/t3-mesh-e2e-gv}"
-GV_RUNTIME_ROOT="$HOME/.t3-mesh-e2e-gv-runtime"
-GOR_BASE_DIR="${MESH_E2E_GOR_BASE_DIR:-$HOME/.t3-sidebar-server}"
-GOR_RUNTIME_ROOT="$HOME/.t3-sidebar-server/runtime/versions"
-GOR_LEGACY_BASE_DIR="$HOME/.t3-mesh-e2e"
-VPS_DIR="${MESH_E2E_VPS_DIR:-/opt/t3-mesh-e2e}"
-VPS_DATA="$VPS_DIR/home"
-
-GV_UNIT=t3-mesh-e2e-gv.service
-GOR_UNIT=t3code-sidebar.service
-GOR_LEGACY_UNIT=t3-mesh-e2e.service
-GV_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
-GOR_TUNNEL_UNIT="${MESH_E2E_GOR_TUNNEL_UNIT:-t3-mesh-e2e-tunnels.service}"
+NODE_A_PORT="${NODE_A_PORT:-3795}"
+NODE_B_PORT="${NODE_B_PORT:-3797}"
+CLOUD_PORT="${CLOUD_PORT:-3791}"
+NODE_A_LOCAL="$NODE_A_PORT"
+NODE_B_LOCAL="${NODE_B_LOCAL:-13797}"
+CLOUD_LOCAL="${CLOUD_LOCAL:-13791}"
+CLOUD_BIND="${CLOUD_BIND:-172.17.0.1}"
+CLOUD_SSH_NODE_B="${CLOUD_SSH_NODE_B:-22022}"
+CLOUD_SSH_NODE_A="${CLOUD_SSH_NODE_A:-22023}"
+NODE_A_SSHD_PORT="${NODE_A_SSHD_PORT:-22295}"
+NODE_B_SSHD_PORT="${NODE_B_SSHD_PORT:-22297}"
+NODE_A_BASE_DIR="${NODE_A_BASE_DIR:-$STATE_DIR/nodeA/server}"
+NODE_A_RUNTIME_ROOT="$STATE_DIR/nodeA/runtime"
+NODE_B_BASE_DIR="${NODE_B_BASE_DIR:-$NODE_B_STATE_DIR/server}"
+NODE_B_RUNTIME_ROOT="$NODE_B_STATE_DIR/runtime"
+CLOUD_DATA="$CLOUD_DIR/home"
+NODE_A_UNIT="${NODE_A_UNIT:-t3-mesh-e2e-nodeA.service}"
+NODE_B_UNIT="${NODE_B_UNIT:-t3-mesh-e2e-nodeB.service}"
+NODE_A_TUNNEL_UNIT=t3-mesh-e2e-nodeA-tunnels.service
+NODE_B_TUNNEL_UNIT=t3-mesh-e2e-nodeB-tunnels.service
 IMAGE="${MESH_E2E_IMAGE:-t3-mesh-e2e:dev}"
 MUTAGEN_VERSION=0.18.1
 MUTAGEN_SHA256=7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f
-
 KEY_TAG=t3-mesh-e2e
-CONTAINER_KEY_GOR="$VPS_DATA/.ssh/id_mesh_gor"
-CONTAINER_KEY_GV="$VPS_DATA/.ssh/id_mesh_gvidon"
-REVERSE_KEY_GV="$HOME/.ssh/id_t3_mesh_e2e_vps"
-REVERSE_KEY_GOR='$HOME/.ssh/id_t3_mesh_e2e_vps'
-SELF_KEY="$HOME/.ssh/id_t3_mesh_e2e_self"
+REVERSE_KEY_NODE_A="$STATE_DIR/ssh/cloud"
+REVERSE_KEY_NODE_B="$NODE_B_STATE_DIR/ssh/cloud"
+SELF_KEY="$STATE_DIR/ssh/self"
+
+if [ "${MESH_E2E_ALLOW_LIVE:-0}" != 1 ]; then
+  for unit in "$NODE_A_UNIT" "$NODE_B_UNIT"; do
+    case "$unit" in t3-mesh-e2e-*.service) ;; *) echo 'Live service action requires MESH_E2E_ALLOW_LIVE=1' >&2; exit 1 ;; esac
+  done
+  for port in "$NODE_A_PORT" "$NODE_B_PORT" "$CLOUD_PORT"; do
+    [ "$port" != 3774 ] || { echo 'Live port requires MESH_E2E_ALLOW_LIVE=1' >&2; exit 1; }
+  done
+  for directory in "$STATE_DIR" "$NODE_A_BASE_DIR" "$NODE_B_STATE_DIR" "$NODE_B_BASE_DIR" "$CLOUD_DIR"; do
+    case "$directory" in */.t3|*/.t3/*|*/.t3-sidebar|*/.t3-sidebar/*|*/.t3-sidebar-server|*/.t3-sidebar-server/*|*/t3-ws|/|"$HOME")
+      echo 'Live data requires MESH_E2E_ALLOW_LIVE=1' >&2; exit 1 ;;
+    esac
+  done
+fi
+case "$NODE_B_DEMO_DIR" in "$NODE_B_STATE_DIR"/*) ;; *) echo 'Demo must be inside NODE_B_STATE_DIR' >&2; exit 1 ;; esac
 
 log() { printf '[mesh-e2e] %s\n' "$*"; }
 warn() { printf '[mesh-e2e] WARN: %s\n' "$*" >&2; }
@@ -61,42 +78,42 @@ die() {
   exit 1
 }
 
-gor_ssh() {
+nodeB_ssh() {
   local control=()
   if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
-    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/gor")
+    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/nodeB")
   fi
-  ssh -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no \
-    -o ConnectTimeout=10 "${control[@]}" "$GOR_HOST" "$@"
+  ssh -F "$NODE_B_SSH_CONFIG" -i "$NODE_B_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no \
+    -o ConnectTimeout=10 "${control[@]}" "$NODE_B_HOST" "$@"
 }
 
-gor_scp() {
+nodeB_scp() {
   local control=()
   if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
-    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/gor")
+    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/nodeB")
   fi
-  scp -F "$GOR_SSH_CONFIG" -i "$GOR_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no \
+  scp -F "$NODE_B_SSH_CONFIG" -i "$NODE_B_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no \
     -o ConnectTimeout=10 "${control[@]}" "$@"
 }
 
-vps_ssh() {
+cloud_ssh() {
   local control=()
   if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
-    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/vps")
+    control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/cloud")
   fi
   local remote_command
-  if [ "${MESH_E2E_VPS_SUDO:-0}" = 1 ]; then
+  if [ "${MESH_E2E_CLOUD_SUDO:-0}" = 1 ]; then
     printf -v remote_command '%q' "$*"
-    ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$VPS_HOST" "sudo -n bash -c $remote_command"
+    ssh -F "$CLOUD_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$CLOUD_HOST" "sudo -n bash -c $remote_command"
   else
-    ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$VPS_HOST" "$@"
+    ssh -F "$CLOUD_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$CLOUD_HOST" "$@"
   fi
 }
 
-vps_put() {
+cloud_put() {
   local destination
   printf -v destination '%q' "$2"
-  vps_ssh "cat > $destination" < "$1"
+  cloud_ssh "cat > $destination" < "$1"
 }
 
 require_bins() {
@@ -133,6 +150,7 @@ key_body() { printf '%s\n' "$1" | awk 'NF >= 2 { print $1 " " $2; exit }'; }
 
 ensure_local_key() {
   local key=$1 comment=$2
+  case "$key" in "$STATE_DIR/ssh/"*) ;; *) die "Bed keys must be inside STATE_DIR/ssh" ;; esac
   if [ ! -f "$key" ]; then
     mkdir -p "$(dirname "$key")"
     chmod 700 "$(dirname "$key")"
@@ -142,33 +160,3 @@ ensure_local_key() {
   chmod 644 "$key.pub"
 }
 
-# Remove lines carrying our tag, then append one line with options. Keeps a
-# timestamped backup the first time a file is touched in this run.
-authorize_line() {
-  local file=$1 options=$2 pubkey=$3 comment=$4
-  local backup="$file.bak-t3-mesh-e2e-$(date -u +%Y%m%dT%H%M%SZ)"
-  mkdir -p "$(dirname "$file")"
-  touch "$file"
-  chmod 600 "$file"
-  cp -p "$file" "$backup" 2>/dev/null || true
-  local tmp
-  tmp=$(mktemp)
-  grep -vF " $comment" "$file" >"$tmp" || true
-  printf '%s %s %s\n' "$options" "$pubkey" "$comment" >>"$tmp"
-  cat "$tmp" >"$file"
-  rm -f "$tmp"
-  chmod 600 "$file"
-}
-
-remove_authorized_lines() {
-  local file=$1 comment=$2
-  [ -f "$file" ] || return 0
-  local backup="$file.bak-t3-mesh-e2e-remove-$(date -u +%Y%m%dT%H%M%SZ)"
-  cp -p "$file" "$backup" 2>/dev/null || true
-  local tmp
-  tmp=$(mktemp)
-  grep -vF " $comment" "$file" >"$tmp" || true
-  cat "$tmp" >"$file"
-  rm -f "$tmp"
-  chmod 600 "$file"
-}

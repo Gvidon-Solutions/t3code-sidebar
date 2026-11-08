@@ -17,6 +17,7 @@ import * as Schema from "effect/Schema";
 import * as Hex from "effect/encoding/Hex";
 import * as HttpBody from "effect/http/HttpBody";
 import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
@@ -126,6 +127,25 @@ export const peerHttpSessionKey = Effect.fn("PeerMcpClient.sessionKey")(function
   );
 });
 
+const decodeRefusal = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({ error: Schema.String, message: Schema.optionalKey(Schema.String) }),
+  ),
+);
+const peerRefusal = Effect.fn("PeerMcpClient.peerRefusal")(function* (
+  response: HttpClientResponse.HttpClientResponse,
+) {
+  const refusal = decodeRefusal(yield* response.text);
+  if (Option.isSome(refusal) && refusal.value.error === "linked_environments_off")
+    return linkedEnvironmentsOffThere;
+  return new OrchestratorMcpFailure({
+    code: "capability_denied",
+    message: Option.isSome(refusal)
+      ? (refusal.value.message ?? "The peer refused this credential or relay identity.")
+      : "The peer refused this credential or relay identity.",
+  });
+});
+
 const make = Effect.gen(function* () {
   const links = yield* PeerLinks.PeerLinks;
   const digest = yield* Digest.Digest;
@@ -170,7 +190,7 @@ const make = Effect.gen(function* () {
       limitHeader,
     );
     const sessionId = initialized.headers["mcp-session-id"];
-    if (initialized.status === 403) return yield* linkedEnvironmentsOffThere;
+    if (initialized.status === 403) return yield* yield* peerRefusal(initialized);
     if (initialized.status !== 200 || sessionId === undefined) {
       return yield* new OrchestratorMcpFailure({
         code: initialized.status === 401 ? "capability_denied" : "orchestration_error",
@@ -268,7 +288,7 @@ const make = Effect.gen(function* () {
             "The linked environment no longer accepts this link. It may have been revoked there; link it again.",
         });
       }
-      if (response.status === 403) return yield* linkedEnvironmentsOffThere;
+      if (response.status === 403) return yield* yield* peerRefusal(response);
       if (response.status !== 200) {
         return yield* new OrchestratorMcpFailure({
           code: "orchestration_error",

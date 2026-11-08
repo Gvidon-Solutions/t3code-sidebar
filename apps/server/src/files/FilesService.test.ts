@@ -1,3 +1,4 @@
+import { linkedTestDocument } from "../replicas/MeshLayoutTestLayer.ts";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   EnvironmentId,
@@ -190,7 +191,7 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
         yield* writeTextFile(outside, "secret.txt", "secret");
         yield* fs.symlink(outside, path.join(project, "escape")).pipe(Effect.orDie);
         const snapshot = {
-          document: {},
+          document: linkedTestDocument({ studio: "studio", laptop: "laptop" }),
           config: {
             ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
             projectMounts: {
@@ -223,7 +224,13 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
               issuedAt: 0,
               requestNamespace: "test",
               thread: undefined,
-              client: { sessionId: "link", label: "laptop", linked: true, access: "read-only" },
+              client: {
+                sessionId: "link",
+                label: "laptop",
+                linked: true,
+                access: "read-only",
+                peerEnvironmentId: EnvironmentId.make("laptop"),
+              },
             }),
             Effect.provideService(
               MeshLayoutService,
@@ -322,6 +329,7 @@ it.layer(layerTest, { excludeTestServices: true })("FilesService receiving link"
               client: {
                 sessionId: "link",
                 label: "T3 Code · Laptop",
+                peerEnvironmentId: EnvironmentId.make("laptop"),
                 linked: true,
                 access,
                 ...(filesLimit ? { filesLimit } : {}),

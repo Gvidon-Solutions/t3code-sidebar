@@ -166,7 +166,7 @@ const native: Native = JSON.parse(NodeFS.readFileSync(capturePath, "utf8")).requ
 const raw = JSON.stringify({
   request: { provider_native: harness === "claude" ? trimClaude(native) : trimCodex(native) },
 });
-// Home paths name the user. Cases use /home/user too.
+// Home paths name the user. Cases use /home/dev too.
 const user = /\/(?:home|Users)\/([^/\s"\\]+)/.exec(raw)?.[1];
 const body = user ? raw.replace(new RegExp(`/(home|Users)/${user}\\b`, "g"), "/$1/user") : raw;
 const leak = new RegExp(

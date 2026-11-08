@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   BrowserNavigationTarget,
   OrchestratorMcpFailure,
@@ -58,6 +59,7 @@ const PreviewStatusTool = Tool.make("preview_status", {
   failure: PreviewToolFailure,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Get preview status")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -78,6 +80,7 @@ const PreviewOpenTool = browserTool(
     failure: PreviewToolFailure,
     dependencies,
   })
+    .annotate(McpDomainAnnotation, "owner")
     .annotate(Tool.Title, "Open browser preview")
     .annotate(Tool.Destructive, false),
 );
@@ -90,7 +93,9 @@ const PreviewDialogTool = browserTool(
     success: PreviewAutomationStatus,
     failure: PreviewToolFailure,
     dependencies,
-  }).annotate(Tool.Title, "Resolve browser dialog"),
+  })
+    .annotate(McpDomainAnnotation, "owner")
+    .annotate(Tool.Title, "Resolve browser dialog"),
 );
 
 const PreviewNavigateTool = safeBrowserTool(
@@ -101,7 +106,9 @@ const PreviewNavigateTool = safeBrowserTool(
     success: PreviewAutomationStatus,
     failure: PreviewToolFailure,
     dependencies,
-  }).annotate(Tool.Title, "Navigate browser preview"),
+  })
+    .annotate(McpDomainAnnotation, "owner")
+    .annotate(Tool.Title, "Navigate browser preview"),
 );
 
 const PreviewResizeTool = safeBrowserTool(
@@ -113,6 +120,7 @@ const PreviewResizeTool = safeBrowserTool(
     failure: PreviewToolFailure,
     dependencies,
   })
+    .annotate(McpDomainAnnotation, "owner")
     .annotate(Tool.Title, "Resize browser viewport")
     .annotate(Tool.Idempotent, true),
 );
@@ -129,6 +137,7 @@ const PreviewSetAppearanceTool = safeBrowserTool(
     failure: PreviewToolFailure,
     dependencies,
   })
+    .annotate(McpDomainAnnotation, "owner")
     .annotate(Tool.Title, "Set preview appearance")
     .annotate(Tool.Idempotent, true),
 );
@@ -154,7 +163,9 @@ export const PreviewSnapshotTool = safeBrowserTool(
     success: PreviewAutomationSnapshot,
     failure: PreviewToolFailure,
     dependencies,
-  }).annotate(Tool.Title, "Inspect browser page"),
+  })
+    .annotate(McpDomainAnnotation, "owner")
+    .annotate(Tool.Title, "Inspect browser page"),
 );
 
 const PreviewActTool = browserTool(
@@ -168,7 +179,9 @@ const PreviewActTool = browserTool(
     ]),
     failure: PreviewToolFailure,
     dependencies,
-  }).annotate(Tool.Title, "Act in preview page"),
+  })
+    .annotate(McpDomainAnnotation, "owner")
+    .annotate(Tool.Title, "Act in preview page"),
 );
 
 /** Wrap non-objects: MCP requires object structuredContent, and Claude Code rejects invalid results entirely. */
@@ -187,7 +200,9 @@ const PreviewEvaluateTool = browserTool(
     success: PreviewEvaluateResult,
     failure: PreviewToolFailure,
     dependencies,
-  }).annotate(Tool.Title, "Evaluate JavaScript in preview"),
+  })
+    .annotate(McpDomainAnnotation, "owner")
+    .annotate(Tool.Title, "Evaluate JavaScript in preview"),
 );
 
 const PreviewWaitForTool = readonlyBrowserTool(
@@ -198,7 +213,9 @@ const PreviewWaitForTool = readonlyBrowserTool(
     success: PreviewActionResult,
     failure: PreviewToolFailure,
     dependencies,
-  }).annotate(Tool.Title, "Wait for preview page condition"),
+  })
+    .annotate(McpDomainAnnotation, "owner")
+    .annotate(Tool.Title, "Wait for preview page condition"),
 );
 
 const PreviewRecordingStartTool = safeBrowserTool(
@@ -208,7 +225,9 @@ const PreviewRecordingStartTool = safeBrowserTool(
     success: Schema.Struct({ ...PreviewAutomationRecordingStatus.fields, ...presentationFields }),
     failure: PreviewToolFailure,
     dependencies,
-  }).annotate(Tool.Title, "Start browser recording"),
+  })
+    .annotate(McpDomainAnnotation, "owner")
+    .annotate(Tool.Title, "Start browser recording"),
 );
 
 const PreviewRecordingStopTool = safeBrowserTool(
@@ -216,10 +235,15 @@ const PreviewRecordingStopTool = safeBrowserTool(
     description:
       "Stop recording the chosen tab. Returns a local path to the recording file (max 50 MiB).",
     parameters: PreviewAutomationTabTargetInput,
-    success: Schema.Struct({ ...PreviewAutomationRecordingArtifact.fields, ...presentationFields }),
+    success: Schema.Struct({
+      ...PreviewAutomationRecordingArtifact.fields,
+      ...presentationFields,
+    }),
     failure: PreviewToolFailure,
     dependencies: [...dependencies, FileSystem.FileSystem, ServerConfig.ServerConfig],
-  }).annotate(Tool.Title, "Stop browser recording"),
+  })
+    .annotate(McpDomainAnnotation, "owner")
+    .annotate(Tool.Title, "Stop browser recording"),
 );
 
 export const PreviewToolkit = Toolkit.make(

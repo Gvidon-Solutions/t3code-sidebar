@@ -109,6 +109,15 @@ export const MeshPeerState = Schema.Struct({
 export type MeshPeerState = typeof MeshPeerState.Type;
 
 export const MeshLayoutStatus = Schema.Struct({
+  legacyIdentityUpgrades: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        sessionId: Schema.String,
+        environmentId: Schema.String,
+        boundAt: Schema.String,
+      }),
+    ),
+  ),
   quarantine: Schema.optionalKey(
     Schema.Array(Schema.Struct({ key: Schema.String, reason: Schema.String })),
   ),

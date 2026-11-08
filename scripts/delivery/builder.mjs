@@ -27,6 +27,7 @@ const { randomUUID } = NodeCrypto;
 import * as NodeNet from "node:net";
 import * as Effect from "effect/Effect";
 import * as HostProcess from "../../packages/shared/src/HostProcess.ts";
+import { cleanAgentOptions } from "./agent-options.mjs";
 import { rollout, waitForHealthy } from "./rollout.mjs";
 import { buildAssets, publishMobileUpdate } from "./assets.mjs";
 
@@ -339,10 +340,7 @@ export async function deliver(config, request) {
             "new",
             "--project",
             config.cleanAgent.project,
-            "--agent",
-            config.cleanAgent.agent || "codex",
-            "--model",
-            config.cleanAgent.model || "gpt-6.1-sol",
+            ...cleanAgentOptions(config.cleanAgent),
             "--file",
             briefPath,
             "--json",

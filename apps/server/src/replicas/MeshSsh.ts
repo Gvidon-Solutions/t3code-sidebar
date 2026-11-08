@@ -9,7 +9,11 @@ import {
   type MeshConfigDocument,
   type SidebarMachineReported,
 } from "@t3tools/contracts";
-import { bindingsFromLayout, effectiveLinkPermissions } from "@t3tools/shared/meshConfig";
+import {
+  bindingsFromLayout,
+  effectiveLinkPermissions,
+  resolveSshHost,
+} from "@t3tools/shared/meshConfig";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as Context from "effect/Context";
@@ -244,11 +248,11 @@ export const layer = Layer.effect(
             if (mode === "managed" && !peer.facts.reported?.sshd)
               return yield* new MeshConfigError({ reason: "storage", message: "no sshd" });
             const host = mode === "existing" ? peer.settings.ssh?.host : `t3-${machine}`;
-            if (!host || host.startsWith("-") || /[\s\0]/.test(host))
-              return yield* new MeshConfigError({
-                reason: "validation",
-                message: "Existing SSH host is missing or invalid",
-              });
+            const validatedHost = yield* Effect.try({
+              try: () => resolveSshHost(host),
+              catch: (cause) =>
+                new MeshConfigError({ reason: "validation", message: String(cause) }),
+            });
             const result = yield* runner.run({
               command: "ssh",
               args: [
@@ -257,7 +261,8 @@ export const layer = Layer.effect(
                 "BatchMode=yes",
                 "-o",
                 "ConnectTimeout=10",
-                host,
+                "--",
+                validatedHost,
                 "true",
               ],
               timeout: "15 seconds",

@@ -6,9 +6,9 @@
 
 ## Setup and fixture validity
 
-Re-synced the isolated HOME and gor before starting. Runtime and topology are unchanged: isolated HOME /tmp/t3-eval-home, base /tmp/t3-eval, :3807, linked full-access to bed GV :13795, GR :13797 and VP :13791. Eval controller is EV. Codex CLI is 0.166.0; DeepSeek is OpenCode + deepseek/deepseek-flash (1017). The CLI was frozen in the isolated HOME so concurrent staged CLI edits could not affect these turns.
+Re-synced the isolated HOME and nodeB before starting. Runtime and topology are unchanged: isolated HOME /tmp/t3-eval-home, base /tmp/t3-eval, :3807, linked full-access to bed GV :13795, GR :13797 and VP :13791. Eval controller is EV. Codex CLI is 0.166.0; DeepSeek is OpenCode + deepseek/deepseek-flash (1017). The CLI was frozen in the isolated HOME so concurrent staged CLI edits could not affect these turns.
 
-An initial backup was accidentally inside skill discovery. One Sol run read the old skill and OpenCode cached its now-moved path. That batch is not a valid full baseline. The first reset then aborted because its UI observer had already exited; the old T3 process was explicitly stopped by its captured PID before a verified fresh process was started. All 30 affected attempts are marked fixtureInvalid, never counted as behaviour passes. The clean generic batch below contains all 24 requests; it was followed by targeted retries. Old skill backups were moved outside discovery and retained, including gor's original backup under ~/.local/state/t3-skill-backups/.
+An initial backup was accidentally inside skill discovery. One Sol run read the old skill and OpenCode cached its now-moved path. That batch is not a valid full baseline. The first reset then aborted because its UI observer had already exited; the old T3 process was explicitly stopped by its captured PID before a verified fresh process was started. All 30 affected attempts are marked fixtureInvalid, never counted as behaviour passes. The clean generic batch below contains all 24 requests; it was followed by targeted retries. Old skill backups were moved outside discovery and retained, including nodeB's original backup under ~/.local/state/t3-skill-backups/.
 
 ## General changes
 
@@ -70,7 +70,7 @@ Luna initially opened a source-primary file, then in the clean batch chose the c
 
 ## Artifacts, sync and concurrent work
 
-The committed evaluated skill is 24745 bytes, SHA-256 6c9f7d9bf6ddd552eae723a723c1b2f47691ac7124983ae45e85bd875006fc7f. GLOBAL.md and its skill copy match. The isolated HOME and gor were updated; gor reports Claude/Codex in sync, OpenCode harness absent. Backups are retained; the final gor instruction backup is recorded in /tmp/stage-j-general-evidence/gor-sync-final.txt.
+The committed evaluated skill is 24745 bytes, SHA-256 6c9f7d9bf6ddd552eae723a723c1b2f47691ac7124983ae45e85bd875006fc7f. GLOBAL.md and its skill copy match. The isolated HOME and nodeB were updated; nodeB reports Claude/Codex in sync, OpenCode harness absent. Backups are retained; the final nodeB instruction backup is recorded in /tmp/stage-j-general-evidence/nodeB-sync-final.txt.
 
 The shared staged file changed concurrently later: another stage appended Session identity and thread ids across the mesh and padded its tables back to 43,839 bytes. Only table padding was removed, preserving that appendix and all semantic content; shared staged size is **25399 bytes**. It is not the evaluated snapshot. Gor and this branch retain the evaluated 24745-byte version; the isolated HOME was frozen. No later-stage source content was reverted.
 
@@ -80,7 +80,7 @@ The formatter now explicitly ignores docs/skill-t3-next/SKILL.md. Before/after S
 
 | Item                                                          | Status / location                      | Proof                                                                                                          |
 | ------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Updated instructions on isolated HOME and gor, backups kept   | done — private HOME and gor only       | sync readback, gor Claude/Codex status both in sync; gor backup 2026-11-03T10-31-56-995Z-2058766               |
+| Updated instructions on isolated HOME and nodeB, backups kept | done — private HOME and nodeB only     | sync readback, nodeB Claude/Codex status both in sync; nodeB backup 2026-11-03T10-31-56-995Z-2058766           |
 | Eight fresh requests per model                                | done — 24 selected threads in new JSON | 81-attempt ledger; each model has all eight distinct completed selected rows                                   |
 | Latency, total, ordered calls, first route, tokens, confusion | done — matrix and JSON                 | native provider session mapping plus t3ctl show --activity; selected timestamps and counters asserted          |
 | Actual requested effects                                      | done — bed GV/GR/VP                    | child completion/project checks, UI packets, README equality, replica state and primary commits detailed above |
@@ -90,7 +90,7 @@ The formatter now explicitly ignores docs/skill-t3-next/SKILL.md. Before/after S
 
 ## Checks
 
-Every shell exports PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH. Product contracts/interfaces were not changed.
+Every shell uses its configured Node bin directory. Product contracts/interfaces were not changed.
 
 - ./node_modules/.bin/vp fmt: exit 0; Finished in 6979ms on 6764 files using 128 threads. SKILL.md excluded; hash unchanged.
 - ./node_modules/.bin/vp lint: exit 0, 0 errors, existing warnings only.
@@ -110,7 +110,7 @@ Exact typecheck commands and results:
 (cd apps/web && pnpm exec vp run typecheck)        # exit 0, tsc --noEmit (cache replay)
 ```
 
-The exact web pnpm command also fails on baseline /home/user/Repos/t3/t3code-xdev/apps/web:
+The exact web pnpm command also fails on baseline /home/dev/Repos/t3/t3code-xdev/apps/web:
 
 ```text
 Error: ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
@@ -119,4 +119,4 @@ Error: ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
 
 ./node_modules/.bin/vp run knip:check fails on xdev-j and baseline xdev: Unused exports (48); vp run: 1/2 successful. The complete findings sections compare identically (diff exit 0), zero new findings. All exact logs are in /tmp/stage-j-general-evidence/. The runtime effects/selection assertions used to build this report verify 24 completed rows, five UI deliveries, full README readback, three completed child edits, replica role/state and remote-only git commands.
 
-All requested work is confined to xdev-j, staged skill files and the authorized test machines/HOME. No push, live gvidon :3774/global file/installed skill change, Operalia access or owner inbox write. Isolated processes are stopped after evidence collection; test data and backups remain.
+All requested work is confined to xdev-j, staged skill files and the authorized test machines/HOME. No push, live studio :3774/global file/installed skill change, Cloudbox access or owner inbox write. Isolated processes are stopped after evidence collection; test data and backups remain.

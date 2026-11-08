@@ -35,8 +35,8 @@ describe("meshLinkSourceOptions", () => {
     expect(
       meshLinkSourceOptions([
         {
-          environmentId: "gvidon",
-          label: "Gvidon",
+          environmentId: "studio",
+          label: "Studio",
           connection: { phase: "connected" },
           serverConfig: {
             settings: { linkedEnvironmentsEnabled: true },
@@ -44,8 +44,8 @@ describe("meshLinkSourceOptions", () => {
           },
         },
         {
-          environmentId: "gor",
-          label: "gor",
+          environmentId: "nodeB",
+          label: "nodeB",
           connection: { phase: "offline" },
           serverConfig: {
             settings: { linkedEnvironmentsEnabled: true },
@@ -53,7 +53,7 @@ describe("meshLinkSourceOptions", () => {
           },
         },
       ]),
-    ).toEqual([{ environmentId: "gvidon", label: "Gvidon" }]);
+    ).toEqual([{ environmentId: "studio", label: "Studio" }]);
   });
 });
 
@@ -62,9 +62,9 @@ describe("meshLinkTargets", () => {
     const machines = buildMeshMachines({
       config: {
         ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-        machines: { gvidon: {}, gor: {} },
+        machines: { studio: {}, nodeB: {} },
       },
     });
-    expect(meshLinkTargets(machines, "gvidon").map((m) => m.environmentId)).toEqual(["gor"]);
+    expect(meshLinkTargets(machines, "studio").map((m) => m.environmentId)).toEqual(["nodeB"]);
   });
 });

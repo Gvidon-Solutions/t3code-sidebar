@@ -143,8 +143,7 @@ const ClientIdPayload = Schema.Struct({
   r: Schema.Array(Schema.String),
   /** Registered as another T3 Code environment's peer link. */
   p: Schema.optionalKey(Schema.Literal(1)),
-  /** The registering environment's id, so the connection knows who it is. */
-  e: Schema.optionalKey(Schema.String),
+  i: Schema.optionalKey(Schema.String),
 });
 const decodeClientIdPayload = Schema.decodeUnknownOption(Schema.fromJsonString(ClientIdPayload));
 
@@ -153,7 +152,6 @@ export interface McpOAuthClient {
   readonly name: string;
   readonly redirectUris: ReadonlyArray<string>;
   readonly peerLink: boolean;
-  readonly peerEnvironmentId?: string;
 }
 
 export class McpOAuthPageError extends Schema.TaggedError<McpOAuthPageError>()(
@@ -188,7 +186,6 @@ interface PendingCode {
   readonly clientId: string;
   readonly clientName: string;
   readonly peerLink: boolean;
-  readonly peerEnvironmentId?: string;
   readonly redirectUri: string;
   readonly codeChallenge: string;
   readonly resource: string;
@@ -276,7 +273,7 @@ const make = Effect.gen(function* () {
     name: string,
     redirectUris: ReadonlyArray<string>,
     peerLink: boolean,
-    peerEnvironmentId: string | undefined,
+    registrationId: string,
   ) => {
     const body = base64UrlEncode(
       JSON.stringify({
@@ -284,7 +281,7 @@ const make = Effect.gen(function* () {
         n: name,
         r: redirectUris,
         ...(peerLink ? { p: 1 } : {}),
-        ...(peerEnvironmentId ? { e: peerEnvironmentId } : {}),
+        i: registrationId,
       }),
     );
     return `${body}.${sign("mcp-client-id", body)}`;
@@ -307,7 +304,6 @@ const make = Effect.gen(function* () {
           name: payload.n,
           redirectUris: payload.r,
           peerLink: payload.p === 1,
-          ...(payload.e ? { peerEnvironmentId: payload.e } : {}),
         })),
       ),
     );
@@ -355,7 +351,6 @@ const make = Effect.gen(function* () {
       }
       // RFC 7591 allows ignoring unsupported registration options; all clients use public PKCE.
       const peerLink = metadata.software_id === MCP_PEER_LINK_SOFTWARE_ID;
-      const peerEnvironmentId = peerLink ? metadata.environment_id?.trim() : undefined;
       if (peerLink && !(yield* linksEnabled)) {
         return yield* new AuthMcpRegistrationError({
           error: "invalid_client_metadata",
@@ -364,11 +359,15 @@ const make = Effect.gen(function* () {
         });
       }
       return {
-        clientId: signClientId(name, redirectUris, peerLink, peerEnvironmentId || undefined),
+        clientId: signClientId(
+          name,
+          redirectUris,
+          peerLink,
+          base64UrlEncode(yield* random.randomBytes(24)),
+        ),
         name,
         redirectUris,
         peerLink,
-        ...(peerEnvironmentId ? { peerEnvironmentId } : {}),
       };
     },
   );
@@ -450,9 +449,6 @@ const make = Effect.gen(function* () {
         clientId: authorization.client.clientId,
         clientName: authorization.client.name,
         peerLink: authorization.client.peerLink,
-        ...(authorization.client.peerEnvironmentId
-          ? { peerEnvironmentId: authorization.client.peerEnvironmentId }
-          : {}),
         redirectUri: authorization.redirectUri,
         codeChallenge: authorization.codeChallenge,
         resource: authorization.resource,
@@ -467,20 +463,42 @@ const make = Effect.gen(function* () {
   const approve: McpOAuth["Service"]["approve"] = Effect.fn("McpOAuth.approve")(function* (input) {
     const { decision } = input;
     if (decision._tag === "pairing-code") {
-      yield* environmentAuth.consumeMcpApprovalCode(decision.code, decision.access).pipe(
-        Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (cause) =>
-          Effect.logError("MCP approval code check failed.", { cause }).pipe(
-            Effect.andThen(
-              Effect.fail(
-                new McpOAuthPageError({
-                  description: "The code could not be checked. Try again.",
-                }),
+      const peer = input.authorization.client.peerLink;
+      if (peer && (!decision.peerEnvironmentId || !decision.issuerEnvironmentId))
+        return yield* new McpOAuthPageError({
+          description:
+            "Peer pairing requires both environment identities. Update both machines and pair again.",
+        });
+      yield* environmentAuth
+        .consumeMcpApprovalCode(
+          decision.code,
+          decision.access,
+          peer
+            ? {
+                clientId: input.authorization.client.clientId,
+                environmentId: decision.peerEnvironmentId!,
+                issuerEnvironmentId: decision.issuerEnvironmentId!,
+              }
+            : undefined,
+        )
+        .pipe(
+          Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (cause) =>
+            Effect.logError("MCP approval code check failed.", { cause }).pipe(
+              Effect.andThen(
+                Effect.fail(
+                  new McpOAuthPageError({
+                    description: "The code could not be checked. Try again.",
+                  }),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
     } else {
+      if (input.authorization.client.peerLink)
+        return yield* new McpOAuthPageError({
+          description: "Peer links must redeem a one-time pairing code.",
+        });
       const session = yield* approvingBrowserSession(input.request, input.authorization);
       if (
         session === undefined ||
@@ -556,7 +574,7 @@ const make = Effect.gen(function* () {
           label: pending.clientName,
           access: pending.access,
           peerLink: pending.peerLink,
-          ...(pending.peerEnvironmentId ? { peerEnvironmentId: pending.peerEnvironmentId } : {}),
+          ...(pending.peerLink ? { peerClientId: pending.clientId } : {}),
           client: deriveAuthClientMetadata({ request }),
         })
         .pipe(
@@ -638,10 +656,17 @@ export const layerMcpClientAuthenticator = Layer.effect(
               ),
             ),
             Effect.catch((error) =>
-              (EnvironmentAuth.isServerAuthCredentialError(error)
-                ? Effect.void
-                : Effect.logWarning("MCP client authentication failed.", { cause: error })
-              ).pipe(Effect.as(undefined)),
+              error._tag === "ServerAuthInvalidCredentialError" && error.diagnostic
+                ? Effect.fail(
+                    new McpHttpServer.McpClientAuthenticationError({
+                      status: error.peerIdentityMismatch ? 403 : 401,
+                      message: error.diagnostic,
+                    }),
+                  )
+                : (EnvironmentAuth.isServerAuthCredentialError(error)
+                    ? Effect.void
+                    : Effect.logWarning("MCP client authentication failed.", { cause: error })
+                  ).pipe(Effect.as(undefined)),
             ),
           );
         },

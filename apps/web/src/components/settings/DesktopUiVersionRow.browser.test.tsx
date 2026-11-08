@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { DesktopUiInfo } from "@t3tools/contracts";
 import { EnvironmentId } from "@t3tools/contracts";
 import { expect, it, vi } from "vite-plus/test";
@@ -6,10 +7,19 @@ import { DesktopUiVersionRow } from "./DesktopUiVersionRow";
 import { APP_VERSION } from "../../branding";
 
 vi.mock("./settingsLayout", () => ({
-  SettingsRow: ({ title, description }: { title: string; description: string }) => (
+  SettingsRow: ({
+    title,
+    description,
+    control,
+  }: {
+    title: string;
+    description: string;
+    control?: ReactNode;
+  }) => (
     <section>
       <h2>{title}</h2>
       <p>{description}</p>
+      {control}
     </section>
   ),
 }));
@@ -27,7 +37,11 @@ it("reads actual UI, shell and server source versions from the asynchronous desk
     shellVersion: "shell-1",
     reason: null,
   };
-  using _bridge = stubGlobal("desktopBridge", { ui: { getInfo: () => pending } });
+  using _bridge = stubGlobal("desktopShell", {
+    origin: cloudbox.origin,
+    ui: { getInfo: () => pending },
+    returnToBundled: vi.fn(),
+  });
   await using screen = await render(<DesktopUiVersionRow />);
   expect(screen.container.textContent).toBe("");
   await act(() => resolveSource(cloudbox));
