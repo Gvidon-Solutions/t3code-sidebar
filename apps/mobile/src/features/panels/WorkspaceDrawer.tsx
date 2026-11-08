@@ -275,13 +275,7 @@ export function WorkspaceDrawer(props: {
           />
         ) : null;
       case "ws-more":
-        return (
-          <WorkspaceMoreRow
-            item={item}
-            onToggle={workspaceHome.toggle}
-            onNewThread={startFolderThread}
-          />
-        );
+        return <WorkspaceMoreRow item={item} onToggle={workspaceHome.toggle} />;
       case "ws-agents":
         return <WorkspaceAgentsRow item={item} onToggle={workspaceHome.toggle} />;
       case "ws-thread": {

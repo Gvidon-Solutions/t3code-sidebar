@@ -7,6 +7,9 @@ import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/
 import { AsyncResult } from "effect/reactivity";
 import {
   defaultDraftMachine,
+  defaultUsableDraftModel,
+  draftMachineCardSync,
+  draftMachineCards,
   draftModelUnavailableReason,
   planThreadOnMachine,
   resolveLogicalProjectKey,
@@ -41,6 +44,7 @@ import { pipe } from "effect/Function";
 
 import { useProjects, useServerConfigs, useThreadShells } from "../../state/entities";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { useMeshOverview } from "../workspaces/useMeshOverview";
 import type { TurnCommandMetadata } from "../../lib/commandMetadata";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
@@ -181,7 +185,13 @@ type NewTaskFlowContextValue = {
     readonly display?: import("@t3tools/client-runtime/state/machine-display").MachineDisplay;
     readonly status?: string;
     readonly disabled?: boolean;
+    readonly projectId: string | null;
+    readonly primary: boolean;
+    readonly connected: boolean;
+    readonly hasUsableModels: boolean | null;
+    readonly sync: "synced" | "copying" | "out-of-sync" | null;
   }>;
+  readonly machineCards: import("@t3tools/client-runtime/state/mesh-layout").DraftMachineCardRow[];
   readonly selectedProject: EnvironmentProject | null;
   /** The machines the selected project's environment links to, whose threads it can read. */
   readonly linkedEnvironments: ReadonlyMap<EnvironmentId, string>;
@@ -253,6 +263,7 @@ export function NewTaskFlowProvider(
 ) {
   const meshLayout = useMeshLayout();
   const statuses = useReplicaStatuses();
+  const meshOverview = useMeshOverview({ config: meshLayout.config });
   const retryReplica = useAtomCommand(replicaStatusEnvironment.retry);
   const [pendingMount, setPendingMount] = useState<{
     environmentId: EnvironmentId;
@@ -945,20 +956,100 @@ export function NewTaskFlowProvider(
           meshLayout.config?.projectMounts[preferenceKey ?? ""]?.some(
             (rep) => rep.environmentId === environmentId && rep.projectId,
           );
+      const meshMachine = meshOverview.machines.find(
+        (machine) => machine.environmentId === environmentId,
+      );
+      const reachable =
+        connected ||
+        meshMachine?.network?.state === "direct" ||
+        meshMachine?.network?.state === "relayed";
+      const via =
+        meshMachine?.network?.state === "relayed"
+          ? (meshOverview.machines.find(
+              (machine) => machine.environmentId === meshMachine.network?.via,
+            )?.label ?? null)
+          : null;
       return {
         environmentId,
         environmentLabel: display.label,
         display,
-        status: draftMachineStatus({
-          connected,
-          hasProject: !!hasProject,
-          error: connection?.connectionError,
-        }),
+        status:
+          !connected && reachable
+            ? via
+              ? `Available through ${via}`
+              : "Available through the mesh"
+            : draftMachineStatus({
+                connected,
+                hasProject: !!hasProject,
+                error: connection?.connectionError,
+              }),
         disabled:
           !connected ||
           (!isScratchDraft && !serverConfigs.get(environmentId)?.environment.capabilities.replicas),
+        projectId:
+          preferenceScope?.projects.find((project) => project.environmentId === environmentId)
+            ?.id ??
+          meshLayout.config?.projectMounts[preferenceKey ?? ""]?.find(
+            (rep) => rep.environmentId === environmentId,
+          )?.projectId ??
+          null,
+        primary:
+          meshLayout.config?.projectMounts[preferenceKey ?? ""]?.some(
+            (rep) => rep.environmentId === environmentId && rep.role === "primary",
+          ) ?? false,
+        connected,
+        hasUsableModels: connected
+          ? defaultUsableDraftModel(
+              serverConfigs.get(environmentId) ?? null,
+              (preferenceScope?.projects.find((project) => project.environmentId === environmentId)
+                ?.id ?? null) as import("@t3tools/contracts").ProjectId | null,
+            ) !== null
+          : null,
+        sync:
+          draftMachineCardSync(
+            statuses.find(
+              (status) =>
+                status.logicalKey === (preferenceKey ?? "") &&
+                status.environmentId === environmentId,
+            )?.state,
+          ) ??
+          draftMachineCardSync(
+            meshLayout.config?.projectMountStatus[preferenceKey ?? ""]?.[environmentId]?.state,
+          ) ??
+          (preferenceScope?.projects.some((project) => project.environmentId === environmentId)
+            ? "synced"
+            : null),
       };
     });
+  const machineCards = draftMachineCards({
+    config: meshLayout.config ?? { machines: {} },
+    choices: environments.map((environment) => ({
+      environmentId: environment.environmentId,
+      label: environment.environmentLabel,
+      projectId: environment.projectId,
+      primary: environment.primary,
+      connected: environment.connected,
+      hasUsableModels: environment.hasUsableModels,
+      sync: environment.sync,
+    })),
+    reachability: Object.fromEntries(
+      meshOverview.machines.map((machine) => [
+        machine.environmentId,
+        {
+          reachable:
+            machine.connectedHere ||
+            machine.network?.state === "direct" ||
+            machine.network?.state === "relayed",
+          viaLabel:
+            machine.network?.state === "relayed"
+              ? (meshOverview.machines.find((other) => other.environmentId === machine.network?.via)
+                  ?.label ?? null)
+              : null,
+        },
+      ]),
+    ),
+    selectedEnvironmentId: selectedEnvironmentId ?? null,
+  });
   const mountRep =
     pendingMount &&
     meshLayout.config?.projectMounts[pendingMount.logicalKey]?.find(
@@ -1062,6 +1153,7 @@ export function NewTaskFlowProvider(
     planModeEnabled,
     expandedProvider,
     environments,
+    machineCards,
     selectedProject,
     linkedEnvironments,
     isScratchDraft,

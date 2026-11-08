@@ -1,5 +1,10 @@
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProjectId,
+  ThreadId,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { makeThreadShellFixture } from "../../test-fixtures";
@@ -47,6 +52,7 @@ function build(
     projectOrder?: ReadonlyArray<string>;
     voiceThreadKey?: string;
     connectedEnvironmentIds?: ReadonlyArray<string>;
+    config?: SidebarWorkspacesConfig;
   } = {},
 ): WorkspaceHomeListItem[] {
   return buildWorkspaceHomeItems({
@@ -64,6 +70,7 @@ function build(
     selectedThreadKey: null,
     ...(options.voiceThreadKey ? { voiceThreadKey: options.voiceThreadKey } : {}),
     connectedEnvironmentIds: options.connectedEnvironmentIds ?? [environmentId],
+    ...(options.config ? { config: options.config } : {}),
     resolveMachineDisplay: (id) => ({ label: id, tag: "EN", color: "#000000" }),
     now: NOW,
     toRow: (item: ThreadListV2Item) => ({
@@ -111,6 +118,36 @@ describe("buildWorkspaceHomeItems", () => {
       "thread active",
       "folder Beta",
     ]);
+  });
+
+  it("does not add a separate New thread row under an empty project", () => {
+    const items = build([], [], { folders: [folder("a", "Alpha")] });
+    expect(items.some((item) => item.type === "ws-more" && /new thread/i.test(item.label))).toBe(
+      false,
+    );
+  });
+
+  it("shows each pinned thread's machine tag when the layout has several machines", () => {
+    const config = {
+      machines: {
+        [environmentId]: { title: "studio", tag: "ST" },
+        cloudbox: { title: "cloudbox", tag: "CB" },
+      },
+      projectMounts: {},
+      projectMountStatus: {},
+    } as unknown as SidebarWorkspacesConfig;
+    const pinned = build([thread("pinned", "a", { pinnedAt: hoursAgo(1) })], [], { config }).find(
+      (item) => item.type === "ws-thread",
+    );
+    expect(pinned?.type === "ws-thread" ? pinned.machineTag?.tag : null).toBe("EN");
+    const single = build([thread("pinned", "a", { pinnedAt: hoursAgo(1) })], [], {
+      config: {
+        machines: { [environmentId]: { title: "studio", tag: "ST" } },
+        projectMounts: {},
+        projectMountStatus: {},
+      } as unknown as SidebarWorkspacesConfig,
+    }).find((item) => item.type === "ws-thread");
+    expect(single?.type === "ws-thread" ? single.machineTag : "missing").toBeNull();
   });
 
   it("shows threads pinned in other workspaces, and nothing else of theirs", () => {

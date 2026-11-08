@@ -1,10 +1,10 @@
 import { DraftMachineStatus, ReplicaWorkspaceControls } from "../workspaces/DraftMachineStatus";
+import { DraftMachineCards } from "../workspaces/DraftMachineCards";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useSyncExternalStore } from "react";
-import { CommandId, MessageId } from "@t3tools/contracts";
+import { CommandId, EnvironmentId, MessageId } from "@t3tools/contracts";
 import { pendingMeshDrafts, serializePendingAttachments } from "../../state/pendingMeshDrafts";
 import { draftModelUnavailableReason } from "@t3tools/client-runtime/state/mesh-layout";
-import { DraftEnvironmentControl } from "./DraftEnvironmentControl";
 import { NativeScrollEdgeEffectsContext } from "../../native/NativeScrollViewMarker";
 import { DraftThreadHeader } from "./DraftThreadHeader";
 import { threadHeaderAppearance } from "./thread-header-appearance";
@@ -45,7 +45,6 @@ import { KeyboardController } from "react-native-keyboard-controller";
 import {
   AuthOrchestrationOperateScope,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
-  resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 
 import { ComposerEditor, type ComposerEditorHandle } from "../../components/ComposerEditor";
@@ -865,17 +864,12 @@ export function NewTaskDraftScreen(props: {
             : (flow.retryMount ?? undefined)
         }
       />
-      <DraftEnvironmentControl
-        display={
-          flow.environments.find((machine) => machine.environmentId === chosenEnvironmentId)
-            ?.display
-        }
-        environmentId={chosenEnvironmentId ?? selectedProject.environmentId}
-        connectionState={connectionState}
-        label={selectedEnvironmentLabel}
-        machineKind={resolveEnvironmentMachineKind(selectedEnvironmentServerConfig)}
-        disabled={isComposerInteractionLocked}
-        onChooseEnvironment={() => openContextPicker("NewTaskEnvironment")}
+      <DraftMachineCards
+        rows={flow.machineCards}
+        onSelect={(environmentId) => {
+          if (isComposerInteractionLocked) return;
+          void flow.switchEnvironment(EnvironmentId.make(environmentId));
+        }}
       />
     </View>
   );
