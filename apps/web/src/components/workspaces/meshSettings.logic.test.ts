@@ -2,7 +2,12 @@ import { buildMeshMachines } from "@t3tools/client-runtime/state/mesh-machines";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { linkSourceOptions, linkTargetOptions, shouldOfferConnect } from "./meshSettings.logic";
+import {
+  linkSourceOptions,
+  linkTargetOptions,
+  meshSetupPrompt,
+  shouldOfferConnect,
+} from "./meshSettings.logic";
 
 const environment = (
   environmentId: string,
@@ -77,5 +82,21 @@ describe("shouldOfferConnect", () => {
     expect(shouldOfferConnect(machines.find((m) => m.environmentId === "lab")!)).toBe(true);
     expect(shouldOfferConnect(machines.find((m) => m.environmentId === "vps")!)).toBe(false);
     expect(shouldOfferConnect(machines.find((m) => m.environmentId === "atlas")!)).toBe(false);
+  });
+});
+
+describe("meshSetupPrompt", () => {
+  it("lists machines in plain words and leaves the goal to the user", () => {
+    const prompt = meshSetupPrompt(
+      [
+        { label: "Studio", online: true },
+        { label: "Cloudbox", online: false, detail: "Offline · 3 min" },
+      ],
+      ["Cloudbox is offline"],
+    );
+    expect(prompt).toContain("Machines: Studio (online), Cloudbox (Offline · 3 min).");
+    expect(prompt).toContain("- Cloudbox is offline");
+    expect(prompt).toContain("t3ctl mesh config plan");
+    expect(prompt).not.toContain("environmentId");
   });
 });

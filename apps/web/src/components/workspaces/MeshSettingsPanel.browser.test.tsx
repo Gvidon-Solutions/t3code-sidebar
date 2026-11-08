@@ -87,23 +87,25 @@ vi.mock(import("../../state/use-atom-command"), () => ({
   useAtomCommand: (() => vi.fn()) as never,
 }));
 
-it("shows the known server version and omits a version row for a link without one", async () => {
+it("shows each machine as a name with one plain status sentence", async () => {
   mocks.review = false;
   mocks.collision = false;
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
   await expect.element(screen.getByText("Remote", { exact: true }).first()).toBeVisible();
+  await expect.element(screen.getByText("Online", { exact: true }).first()).toBeVisible();
   await expect.element(screen.getByText("Unknown", { exact: true })).not.toBeInTheDocument();
-  await expect.element(screen.getByText("Version", { exact: true })).not.toBeInTheDocument();
-  await expect.element(screen.getByText("0.1.5", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("0.1.5", { exact: true })).not.toBeInTheDocument();
 });
 
-it("keeps configuration fields in the config editor and shows machine state", async () => {
+it("offers an agent setup button instead of a config editor", async () => {
   mocks.review = false;
   mocks.collision = false;
   mocks.edit.mockReset();
   await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
-  await expect.element(screen.getByRole("button", { name: "Edit config" })).toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: "Set up the mesh with an agent" }))
+    .toBeVisible();
   await expect.element(screen.getByRole("button", { name: "Link a machine" })).toBeVisible();
   await expect.element(screen.getByRole("textbox")).not.toBeInTheDocument();
   await expect.element(screen.getByText("2 machines · 1 online", { exact: true })).toBeVisible();
@@ -164,11 +166,10 @@ it("deduplicates phone-shaped connections, names unknown hosts and excludes forg
   await expect
     .element(screen.getByRole("button", { name: "Open Unnamed machine details" }))
     .toBeVisible();
-  await expect.element(screen.getByRole("button", { name: "Name it in config" })).toBeVisible();
   await expect.element(screen.getByText("07e7a1a797ee", { exact: true })).not.toBeInTheDocument();
-  await expect.element(screen.getByText("Old laptop", { exact: true })).not.toBeVisible();
+  await expect.element(screen.getByText("Old laptop", { exact: true })).not.toBeInTheDocument();
   await screen.getByText("Forgotten machines (1)").click();
-  await expect.element(screen.getByText("Old laptop", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText("Old laptop · forgotten", { exact: true })).toBeVisible();
   await screen.getByRole("button", { name: "Forget", exact: true }).click();
   expect(mocks.edit).toHaveBeenCalledOnce();
 });

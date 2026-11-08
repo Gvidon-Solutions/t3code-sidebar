@@ -1,8 +1,6 @@
 import { Button } from "../../components/ui/Button";
 import { Sheet } from "../../components/ui/Sheet";
 import { useReplicaStatuses } from "../../state/meshReplicas";
-import { useEnvironmentQuery } from "../../state/query";
-import { meshLayoutAtoms } from "../../state/mesh-layout";
 import { useNowMinuteMs } from "../../lib/clock";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { useState } from "react";
@@ -11,19 +9,54 @@ import {
   meshConnectionText,
   offlineMachineText,
   meshMachineDetailRows,
-  meshConfigApplyGroups,
-  meshConfigHistory,
   partitionMeshMachines,
   forgetMachineFacts,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import { useMeshOverview } from "../workspaces/useMeshOverview";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { MeshLinkForm } from "./MeshLinkForm";
-import { MeshConfigSheet } from "./MeshConfigSheet";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { AppText } from "../../components/ui/AppText";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
+import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+
+function MachineProjects(props: {
+  readonly machine: { readonly environmentId: string };
+  readonly base: SidebarWorkspacesConfig;
+}) {
+  const rows = Object.entries(props.base.projectMounts).flatMap(([key, reps]) =>
+    reps
+      .filter((rep) => rep.environmentId === props.machine.environmentId)
+      .map((rep) => {
+        const title = props.base.projectTitles[key] ?? "Project";
+        if (rep.role === "primary") return { key, sentence: `${title} · main copy` };
+        const state = props.base.projectMountStatus[key]?.[props.machine.environmentId]?.state;
+        const source = rep.source
+          ? machineDisplayOf(props.base, rep.source, rep.source).label
+          : "its main copy";
+        const sentence =
+          state === "watching"
+            ? `${title} · copy synced`
+            : state === "mounting" || state === "pending"
+              ? `${title} · copying files…`
+              : state === "conflict"
+                ? `${title} · copies kept after a conflict`
+                : state === "error"
+                  ? `${title} · can't reach ${source}`
+                  : `${title} · out of sync`;
+        return { key, sentence };
+      }),
+  );
+  return (
+    <View className="gap-2">
+      {rows.map((row) => (
+        <AppText key={row.key}>{row.sentence}</AppText>
+      ))}
+    </View>
+  );
+}
 
 export function SettingsMachinesRouteScreen() {
   const mesh = useMeshLayout();
@@ -36,20 +69,12 @@ export function SettingsMachinesRouteScreen() {
     now,
   );
   const [forgottenOpen, setForgottenOpen] = useState(false);
-  const applyStatus = useEnvironmentQuery(
-    mesh.source ? meshLayoutAtoms.configStatus({ environmentId: mesh.source, input: {} }) : null,
-  );
   const [linkOpen, setLinkOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const live = useReplicaStatuses();
   const base = config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
   const selected = machines.find((machine) => machine.environmentId === detail);
-  const groups = meshConfigApplyGroups(
-    applyStatus.data,
-    meshConfigHistory(mesh.state?.snapshot?.document ?? {}),
-    now,
-  );
   const online = (machine: (typeof machines)[number]) =>
     machine.connectedHere ||
     machine.network?.state === "direct" ||
@@ -61,17 +86,7 @@ export function SettingsMachinesRouteScreen() {
           title={`${machines.length} ${machines.length === 1 ? "machine" : "machines"} · ${machines.filter(online).length} online`}
         >
           <View className="flex-row flex-wrap gap-2 p-4">
-            <Button
-              label="Edit config"
-              tone="primary"
-              disabled={mesh.source === null}
-              onPress={() => setEditing(true)}
-            />
-            <Button
-              label="Link a machine"
-              tone="secondary"
-              onPress={() => setLinkOpen(!linkOpen)}
-            />
+            <Button label="Link a machine" tone="primary" onPress={() => setLinkOpen(!linkOpen)} />
           </View>
           {linkOpen ? (
             <MeshLinkForm links={links} machines={machines} onDone={() => setLinkOpen(false)} />
@@ -111,11 +126,6 @@ export function SettingsMachinesRouteScreen() {
                 </AppText>
                 <AppText>›</AppText>
               </Pressable>
-              {machine.unnamed ? (
-                <View className="px-4 pb-2">
-                  <Button label="Name it in config" tone="text" onPress={() => setEditing(true)} />
-                </View>
-              ) : null}
             </View>
           ))}
         </SettingsSection>
@@ -130,21 +140,28 @@ export function SettingsMachinesRouteScreen() {
               {selected.lastError ? (
                 <AppText accessibilityRole="alert">{selected.lastError}</AppText>
               ) : null}
-              {meshMachineDetailRows(selected, base, live).map((row) => (
-                <View key={row.label}>
-                  <AppText className="text-xs text-foreground-muted">{row.label}</AppText>
-                  <AppText>{row.value}</AppText>
-                </View>
-              ))}
-              {selected.unnamed ? (
-                <Button
-                  label="Name it in config"
-                  onPress={() => {
-                    setDetail(null);
-                    setEditing(true);
-                  }}
-                />
-              ) : null}
+              <AppText className="text-xs text-foreground-muted">Machine</AppText>
+              <AppText>
+                {online(selected)
+                  ? selected.network?.state === "relayed"
+                    ? "Online through another machine"
+                    : "Online"
+                  : (offlineMachineText(selected.lastSeenAt) ?? "Offline")}
+              </AppText>
+              <MachineProjects machine={selected} base={base} />
+              <Button
+                label={diagnosticsOpen ? "Hide diagnostics" : "Diagnostics"}
+                tone="text"
+                onPress={() => setDiagnosticsOpen(!diagnosticsOpen)}
+              />
+              {diagnosticsOpen
+                ? meshMachineDetailRows(selected, base, live).map((row) => (
+                    <View key={row.label}>
+                      <AppText className="text-xs text-foreground-muted">{row.label}</AppText>
+                      <AppText>{row.value}</AppText>
+                    </View>
+                  ))
+                : null}
             </ScreenScrollView>
           </Sheet>
         ) : null}
@@ -176,37 +193,6 @@ export function SettingsMachinesRouteScreen() {
                 ))
               : null}
           </SettingsSection>
-        ) : null}
-        {applyStatus.error ? (
-          <AppText accessibilityRole="alert">{applyStatus.error}</AppText>
-        ) : null}
-        {groups.map((group) => (
-          <SettingsSection key={group.revision} title={group.title}>
-            <View className="gap-3 p-4">
-              {group.actions.map((action) => (
-                <View key={`${action.server}:${action.id}`}>
-                  <AppText>
-                    {action.description} ·{" "}
-                    {action.state === "in_progress"
-                      ? "In progress"
-                      : action.state === "done"
-                        ? "Done"
-                        : "Failed"}
-                  </AppText>
-                  {action.reason ? (
-                    <AppText className="text-xs text-foreground-muted">{action.reason}</AppText>
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          </SettingsSection>
-        ))}
-        {editing && mesh.source ? (
-          <MeshConfigSheet
-            key={mesh.source}
-            environmentId={mesh.source}
-            onClose={() => setEditing(false)}
-          />
         ) : null}
       </ScreenScrollView>
     </SettingsScreen>

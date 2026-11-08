@@ -57,7 +57,6 @@ vi.mock("./components/SettingsSection", () => ({
   ),
 }));
 vi.mock("./MeshLinkForm", () => ({ MeshLinkForm: () => <div>Pairing code</div> }));
-vi.mock("./MeshConfigSheet", () => ({ MeshConfigSheet: () => <div>Mesh YAML editor</div> }));
 vi.mock("../../state/mesh-layout", () => ({ meshLayoutAtoms: { configStatus: () => null } }));
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: null, error: null }) }));
 vi.mock("../workspaces/useMeshLayout", () => ({
@@ -93,23 +92,16 @@ vi.mock("../workspaces/useMeshOverview", () => ({
 }));
 import { SettingsMachinesRouteScreen } from "./SettingsMachinesRouteScreen";
 
-it("shows state and opens editing and pairing without machine settings fields", () => {
+it("shows machine state and pairing without machine settings fields", () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const container = document.createElement("div");
   const root = createRoot(container);
   try {
     act(() => root.render(<SettingsMachinesRouteScreen />));
     expect(container.textContent).toContain("2 machines · 2 online");
-    expect(container.textContent).toContain("1.0");
     expect(container.textContent).toContain("Studio (linux · desk:3795)");
     expect(container.textContent).toContain("Studio (darwin · laptop:3795)");
     expect(container.querySelector("input")).toBeNull();
-    act(() =>
-      [...container.querySelectorAll("button")]
-        .find((button) => button.textContent === "Edit config")!
-        .click(),
-    );
-    expect(container.textContent).toContain("Mesh YAML editor");
     act(() =>
       [...container.querySelectorAll("button")]
         .find((button) => button.textContent === "Link a machine")!
