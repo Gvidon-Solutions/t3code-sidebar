@@ -55,7 +55,7 @@ function sourceRepresentation(
  *
  * `createdAt` is passed by the caller so this stays pure; `""` is the schema default.
  */
-export function replicaPlan(
+function replicaPlan(
   config: SidebarWorkspacesConfig,
   logicalKey: string,
   targetEnvironmentId: string,
@@ -325,7 +325,7 @@ export interface ReplicaMachineChoice {
   readonly reason: string | null;
 }
 
-export const MACHINE_NEEDS_MESH = "update this server to use the mesh";
+const MACHINE_NEEDS_MESH = "update this server to use the mesh";
 
 /** The connected machines a folder can start a thread on, in the order given. */
 export function replicaMachineChoices(
@@ -446,4 +446,82 @@ export function replicaExecutionLabel(
     return `git on ${primary} · t3 run`;
   }
   return null;
+}
+
+/** The connected machines a folder can start a thread on, in the order given. */
+export function machineChoices(
+  config: SidebarWorkspacesConfig,
+  machines: ReadonlyArray<MeshMachineInfo>,
+): ReplicaMachineChoice[] {
+  return replicaMachineChoices(config, machines, (environmentId, fallbackLabel) =>
+    machineDisplayOf(config, environmentId, fallbackLabel),
+  );
+}
+
+/** Stable menu/item id for a machine choice. */
+export function machineChoiceId(choice: ReplicaMachineChoice): string {
+  return `machine:${choice.environmentId}`;
+}
+
+/** The item text: "TAG  Label", with the reason when the server cannot join the mesh. */
+export function machineChoiceText(choice: ReplicaMachineChoice): string {
+  return choice.disabled
+    ? `${choice.tag}  ${choice.label} (${choice.reason})`
+    : `${choice.tag}  ${choice.label}`;
+}
+
+/** Pending copy rows for one logical project, shared by both Machines views. */
+export function pendingRowsForProject(
+  config: SidebarWorkspacesConfig,
+  liveStatuses: ReadonlyArray<ReplicaLiveStatus>,
+  logicalKey: string,
+): PendingReplicaRow[] {
+  return pendingRows(config, liveStatuses).filter((row) => row.logicalKey === logicalKey);
+}
+
+/** One line for a replica's remaining sync distance, or its absent report. */
+export function replicaLagText(
+  lag: { readonly bytesBehind?: number; readonly filesBehind: number } | null | undefined,
+): string {
+  if (!lag) return "Lag not reported";
+  return `${lag.filesBehind} ${lag.filesBehind === 1 ? "file" : "files"} behind${
+    lag.bytesBehind === undefined ? "" : ` · ${lag.bytesBehind} bytes behind`
+  }`;
+}
+
+/** Machines that may receive a new replica: enabled and not already represented. */
+export function representationCandidates<
+  M extends { readonly environmentId: string; readonly disabled: boolean },
+>(machines: ReadonlyArray<M>, presentEnvironmentIds: ReadonlySet<string>): M[] {
+  return machines.filter(
+    (machine) => !machine.disabled && !presentEnvironmentIds.has(machine.environmentId),
+  );
+}
+
+/** Confirm-dialog copy for removing one representation. */
+export function removeRepresentationCopy(role: "primary" | "replica"): {
+  readonly title: string;
+  readonly message: string;
+} {
+  return {
+    title: `Remove this ${role}?`,
+    message: `${
+      role === "replica"
+        ? "Synchronization stops and the replica is removed from this mesh folder."
+        : "Removing the primary leaves replicas without their git and build machine. Choose another primary before continuing."
+    } Files already on the machine stay where they are.`,
+  };
+}
+
+export const NO_UNMANAGED_SESSIONS = "No existing sync sessions on this machine.";
+export const ADOPTED_SESSION_MESSAGE =
+  "Taking over sync. The original session stays paused until the new copy is ready.";
+
+/** The label for one adoptable legacy session. */
+export function unmanagedSessionLabel(session: {
+  readonly name?: string | null;
+  readonly alpha: { readonly path: string };
+  readonly beta: { readonly path: string };
+}): string {
+  return `Adopt ${session.name ?? "existing sync"} · ${session.alpha.path} ↔ ${session.beta.path}`;
 }

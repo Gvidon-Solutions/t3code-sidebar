@@ -3,6 +3,11 @@ import { useState } from "react";
 import { View } from "react-native";
 import { EnvironmentId, type UnmanagedSyncSession } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import {
+  ADOPTED_SESSION_MESSAGE,
+  NO_UNMANAGED_SESSIONS,
+  unmanagedSessionLabel,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { replicaStatusEnvironment } from "../../state/meshReplicas";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../../components/ui/Button";
@@ -32,7 +37,7 @@ export function AdoptReplicaAction(props: {
           if (result._tag === "Failure") setMessage(String(squashAtomCommandFailure(result)));
           else {
             setSessions(result.value);
-            setMessage(result.value.length ? null : "No existing sync sessions on this machine.");
+            setMessage(result.value.length ? null : NO_UNMANAGED_SESSIONS);
           }
         }}
       />
@@ -41,7 +46,7 @@ export function AdoptReplicaAction(props: {
           key={session.identifier}
           tone="secondary"
           disabled={busy || !canAdopt}
-          label={`Adopt ${session.name ?? "existing sync"} · ${session.alpha.path} ↔ ${session.beta.path}`}
+          label={unmanagedSessionLabel(session)}
           onPress={async () => {
             setBusy(true);
             const result = await adopt({
@@ -52,9 +57,7 @@ export function AdoptReplicaAction(props: {
             if (result._tag === "Failure") setMessage(String(squashAtomCommandFailure(result)));
             else {
               setSessions(null);
-              setMessage(
-                "Taking over sync. The original session stays paused until the new copy is ready.",
-              );
+              setMessage(ADOPTED_SESSION_MESSAGE);
             }
           }}
         />

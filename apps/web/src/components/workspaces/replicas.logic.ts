@@ -1,11 +1,12 @@
 import {
-  pendingRows,
-  replicaMachineChoices,
+  machineChoiceId,
+  machineChoiceText,
+  machineChoices,
+  pendingRowsForProject,
   type MeshMachineInfo,
   type PendingReplicaRow,
   type ReplicaMachineChoice,
 } from "@t3tools/client-runtime/state/mesh-layout";
-import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import type {
   ContextMenuItem,
   ReplicaLiveStatus,
@@ -14,35 +15,20 @@ import type {
 
 // Fork: the sidebar's "new thread on a machine" choices and pending replica rows.
 
-export interface WebMachineInput {
-  readonly environmentId: string;
-  readonly label: string;
-  readonly connected: boolean;
-  readonly supportsMesh: boolean;
-}
+export type WebMachineInput = MeshMachineInfo;
 
 export function folderMachineChoices(
   config: SidebarWorkspacesConfig,
   machines: ReadonlyArray<WebMachineInput>,
 ): ReplicaMachineChoice[] {
-  const infos: MeshMachineInfo[] = machines.map((machine) => ({
-    environmentId: machine.environmentId,
-    label: machine.label,
-    connected: machine.connected,
-    supportsMesh: machine.supportsMesh,
-  }));
-  return replicaMachineChoices(config, infos, (environmentId, fallbackLabel) =>
-    machineDisplayOf(config, environmentId, fallbackLabel),
-  );
+  return machineChoices(config, machines);
 }
 
 /** A context-menu item per machine; an unsupported server carries the reason in its label. */
 export function machineMenuItems(choices: ReadonlyArray<ReplicaMachineChoice>): ContextMenuItem[] {
   return choices.map((choice) => ({
-    id: `machine:${choice.environmentId}`,
-    label: choice.disabled
-      ? `${choice.tag}  ${choice.label} (${choice.reason})`
-      : `${choice.tag}  ${choice.label}`,
+    id: machineChoiceId(choice),
+    label: machineChoiceText(choice),
     disabled: choice.disabled,
   }));
 }
@@ -52,7 +38,7 @@ export function folderPendingRows(
   liveStatuses: ReadonlyArray<ReplicaLiveStatus>,
   logicalKey: string,
 ): PendingReplicaRow[] {
-  return pendingRows(config, liveStatuses).filter((row) => row.logicalKey === logicalKey);
+  return pendingRowsForProject(config, liveStatuses, logicalKey);
 }
 
 /** The representation a new logical project starts from: this folder's own project. */

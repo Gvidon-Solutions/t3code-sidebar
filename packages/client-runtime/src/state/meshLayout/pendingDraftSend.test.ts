@@ -137,3 +137,131 @@ it("restores a no-project send and opens scratch on its selected machine", async
   expect(opened).toEqual(["bo"]);
   expect(launched).toEqual(["bo:bo-scratch:Keep this message"]);
 });
+
+it("builds the draft machine map from each client's connection facts", async () => {
+  const { pendingDraftMachines } = await import("./pendingDraftSend.ts");
+  const { DEFAULT_SERVER_SETTINGS } = await import("@t3tools/contracts");
+  const machines = pendingDraftMachines([
+    {
+      environmentId: EnvironmentId.make("studio"),
+      connected: true,
+      config: { settings: DEFAULT_SERVER_SETTINGS, providers: [] },
+    },
+    { environmentId: EnvironmentId.make("laptop"), connected: false, config: null },
+  ]);
+  expect([...machines.keys()]).toEqual(["studio", "laptop"]);
+  expect(machines.get(EnvironmentId.make("studio"))).toMatchObject({ connected: true });
+  expect(machines.get(EnvironmentId.make("laptop"))).toEqual({ connected: false, config: null });
+});
+
+it("uploads draft attachments before launching the shared start command", async () => {
+  const { launchPendingDraft } = await import("./pendingDraftSend.ts");
+  const { CommandId, MessageId, ProviderInstanceId, ThreadId, EnvironmentId } =
+    await import("@t3tools/contracts");
+  const environmentId = EnvironmentId.make("studio");
+  const send = {
+    draftId: "draft",
+    logicalKey: "demo",
+    environmentId,
+    commandId: CommandId.make("command"),
+    threadId: ThreadId.make("thread"),
+    messageId: MessageId.make("message"),
+    text: "Launch me",
+    attachments: [
+      {
+        id: "attachment",
+        type: "image" as const,
+        name: "shot.png",
+        mimeType: "image/png",
+        sizeBytes: 3,
+        dataUrl: "data:image/png;base64,AAAA",
+      },
+    ],
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "model" },
+    runtimeMode: "full-access" as const,
+    interactionMode: "default" as const,
+    createdAt: "2026-11-03T00:00:00.000Z",
+    state: "queued" as const,
+    error: null,
+  };
+  const order: string[] = [];
+  const upload = async (attachment: { readonly id: string }) => {
+    order.push(`upload:${attachment.id}`);
+    return "uploaded-attachment";
+  };
+  const commands: unknown[] = [];
+  await launchPendingDraft({
+    send,
+    projectId: "project",
+    upload,
+    startTurn: async (command) => {
+      order.push("start");
+      commands.push(command);
+    },
+  });
+  expect(order).toEqual(["upload:attachment", "start"]);
+  expect(commands).toHaveLength(1);
+  const command = commands[0] as {
+    readonly commandId: string;
+    readonly threadId: string;
+    readonly message: { readonly messageId: string; readonly attachments: readonly unknown[] };
+    readonly bootstrap: { readonly createThread: { readonly projectId: string } };
+  };
+  expect(command.commandId).toBe("command");
+  expect(command.threadId).toBe("thread");
+  expect(command.message.messageId).toBe("message");
+  expect(command.message.attachments).toEqual([
+    {
+      id: "uploaded-attachment",
+      type: "image",
+      name: "shot.png",
+      mimeType: "image/png",
+      sizeBytes: 3,
+    },
+  ]);
+  expect(command.bootstrap.createThread.projectId).toBe("project");
+});
+
+it("does not start a turn when an attachment upload fails", async () => {
+  const { launchPendingDraft } = await import("./pendingDraftSend.ts");
+  const { CommandId, MessageId, ProviderInstanceId, ThreadId, EnvironmentId } =
+    await import("@t3tools/contracts");
+  const started = { value: false };
+  await expect(
+    launchPendingDraft({
+      send: {
+        draftId: "draft",
+        logicalKey: "demo",
+        environmentId: EnvironmentId.make("studio"),
+        commandId: CommandId.make("command"),
+        threadId: ThreadId.make("thread"),
+        messageId: MessageId.make("message"),
+        text: "Launch me",
+        attachments: [
+          {
+            id: "attachment",
+            type: "file",
+            name: "notes.txt",
+            mimeType: "text/plain",
+            sizeBytes: 1,
+            dataUrl: "data:text/plain;base64,AA==",
+          },
+        ],
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "model" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt: "2026-11-03T00:00:00.000Z",
+        state: "queued",
+        error: null,
+      },
+      projectId: "project",
+      upload: async () => {
+        throw new Error("upload refused");
+      },
+      startTurn: async () => {
+        started.value = true;
+      },
+    }),
+  ).rejects.toThrow("upload refused");
+  expect(started.value).toBe(false);
+});

@@ -7,17 +7,23 @@ import {
 } from "@t3tools/contracts";
 
 import {
-  MACHINE_NEEDS_MESH,
+  machineChoiceId,
+  machineChoiceText,
+  machineChoices,
   mergeReplicaStatusLists,
   pendingRows,
+  pendingRowsForProject,
   planThreadOnMachine,
+  removeRepresentationCopy,
   replicaDriverEnvironment,
   replicaMachineChoices,
-  replicaPlan,
   replicaProjectId,
   replicaStatusCopy,
+  representationCandidates,
   representationRow,
   replicaExecutionLabel,
+  replicaLagText,
+  unmanagedSessionLabel,
 } from "./replicas.ts";
 
 const primary = (environmentId: string, path = "/work/demo"): SidebarProjectMount => ({
@@ -65,10 +71,10 @@ const displayOf = (environmentId: string, label: string) => ({
   color: "#123456",
 });
 
-describe("replicaPlan", () => {
+describe("thread placement", () => {
   it("is ready when the target already has a registered project", () => {
     const config = withReps([primary("alpha"), { ...replica("beta", "alpha"), projectId: "p2" }]);
-    const plan = replicaPlan(config, "demo", "beta");
+    const plan = planThreadOnMachine({ config, logicalKey: "demo", targetEnvironmentId: "beta" });
     expect(plan).toMatchObject({ kind: "ready", projectId: "p2" });
   });
 
@@ -78,7 +84,7 @@ describe("replicaPlan", () => {
         demo: { beta: { state: "mounting", conflicts: 2, updatedAt: "2026-01-04T00:00:00.000Z" } },
       },
     });
-    const plan = replicaPlan(config, "demo", "beta");
+    const plan = planThreadOnMachine({ config, logicalKey: "demo", targetEnvironmentId: "beta" });
     expect(plan).toMatchObject({
       kind: "pending",
       status: { state: "mounting", conflicts: 2 },
@@ -87,8 +93,13 @@ describe("replicaPlan", () => {
 
   it("creates a Mutagen replica of the first primary with the caller's timestamp", () => {
     const config = withReps([primary("alpha"), primary("gamma")]);
-    const plan = replicaPlan(config, "demo", "beta", "2026-02-02T00:00:00.000Z");
-    expect(plan).toEqual({
+    const plan = planThreadOnMachine({
+      config,
+      logicalKey: "demo",
+      targetEnvironmentId: "beta",
+      createdAt: "2026-02-02T00:00:00.000Z",
+    });
+    expect(plan).toMatchObject({
       kind: "create",
       rep: {
         environmentId: "beta",
@@ -103,7 +114,11 @@ describe("replicaPlan", () => {
 
   it("prefers a primary over another replica as the source", () => {
     const config = withReps([replica("beta", "alpha"), primary("alpha")]);
-    const plan = replicaPlan(config, "demo", "gamma");
+    const plan = planThreadOnMachine({
+      config,
+      logicalKey: "demo",
+      targetEnvironmentId: "gamma",
+    });
     expect(plan.kind === "create" && plan.rep.source).toBe("alpha");
   });
 });
@@ -292,7 +307,10 @@ describe("replicaMachineChoices", () => {
       displayOf,
     );
     expect(choices.map((choice) => choice.environmentId)).toEqual(["alpha", "beta"]);
-    expect(choices[1]).toMatchObject({ disabled: true, reason: MACHINE_NEEDS_MESH });
+    expect(choices[1]).toMatchObject({
+      disabled: true,
+      reason: "update this server to use the mesh",
+    });
   });
 });
 
@@ -426,4 +444,67 @@ it("identifies replica git ownership without offering local git controls", () =>
     ),
   ).toBe("git on Studio · t3 run");
   expect(replicaExecutionLabel(config, "studio", "source")).toBeNull();
+});
+
+describe("shared machine choices", () => {
+  const choicesConfig = {
+    ...empty,
+    machines: {
+      alpha: { label: "atlas", tag: "AT" },
+      beta: { label: "Boreal", tag: "BO" },
+    },
+  };
+
+  it("resolves display facts and keeps only connected machines", () => {
+    const choices = machineChoices(choicesConfig, [
+      { environmentId: "alpha", label: "atlas", connected: true, supportsMesh: true },
+      { environmentId: "beta", label: "Boreal", connected: true, supportsMesh: false },
+      { environmentId: "gamma", label: "lab", connected: false, supportsMesh: true },
+    ]);
+    expect(choices.map((choice) => [choice.environmentId, choice.tag, choice.label])).toEqual([
+      ["alpha", "AT", "atlas"],
+      ["beta", "BO", "Boreal"],
+    ]);
+    expect(machineChoiceId(choices[0]!)).toBe("machine:alpha");
+    expect(machineChoiceText(choices[1]!)).toBe("BO  Boreal (update this server to use the mesh)");
+  });
+
+  it("filters pending rows by logical project", () => {
+    const config = withReps([primary("alpha"), replica("beta", "alpha")]);
+    const rows = pendingRowsForProject(config, [status("beta", "mounting")], "demo");
+    expect(rows.map((row) => row.rep.environmentId)).toEqual(["beta"]);
+    expect(pendingRowsForProject(config, [status("beta", "mounting")], "other")).toEqual([]);
+  });
+
+  it("renders lag with or without a byte count", () => {
+    expect(replicaLagText(null)).toBe("Lag not reported");
+    expect(replicaLagText({ filesBehind: 1 })).toBe("1 file behind");
+    expect(replicaLagText({ filesBehind: 3, bytesBehind: 1200 })).toBe(
+      "3 files behind · 1200 bytes behind",
+    );
+  });
+
+  it("lists only enabled machines that are not already represented", () => {
+    const candidates = representationCandidates(
+      [
+        { environmentId: "alpha", disabled: false },
+        { environmentId: "beta", disabled: true },
+        { environmentId: "gamma", disabled: false },
+      ],
+      new Set(["alpha"]),
+    );
+    expect(candidates.map((machine) => machine.environmentId)).toEqual(["gamma"]);
+  });
+
+  it("shares the remove and adopt copy", () => {
+    expect(removeRepresentationCopy("replica").title).toBe("Remove this replica?");
+    expect(removeRepresentationCopy("primary").message).toContain("leaves replicas without");
+    expect(
+      unmanagedSessionLabel({
+        name: null,
+        alpha: { path: "/a" },
+        beta: { path: "/b" },
+      }),
+    ).toBe("Adopt existing sync · /a ↔ /b");
+  });
 });

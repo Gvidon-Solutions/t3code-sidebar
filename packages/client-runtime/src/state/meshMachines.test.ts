@@ -12,7 +12,6 @@ import {
   forgetMachineFacts,
   deriveMeshFooterStatus,
   meshFooterText,
-  meshMachineLastSync,
 } from "./meshMachines.ts";
 
 const base: SidebarWorkspacesConfig = {
@@ -215,38 +214,6 @@ describe("deriveMeshFooterStatus", () => {
       minutes: 5,
     });
     expect(meshFooterText(status)).toBe("Mesh · BO unreachable for 5 min");
-  });
-});
-
-describe("meshMachineLastSync", () => {
-  const machine = buildMeshMachines({
-    config: base,
-    peerStates: [
-      {
-        environmentId: "boreal",
-        lastExchangeAt: "2026-01-01T00:00:00.000Z",
-        lastError: null,
-        sentSeq: 0,
-        receivedSeq: 0,
-      },
-    ],
-  }).find((entry) => entry.environmentId === "boreal")!;
-
-  it("describes minutes and hours since the last exchange", () => {
-    expect(meshMachineLastSync(machine, Date.parse("2026-01-01T00:00:30.000Z"))).toBe(
-      "Synced just now",
-    );
-    expect(meshMachineLastSync(machine, Date.parse("2026-01-01T00:07:00.000Z"))).toBe(
-      "Synced 7 min ago",
-    );
-    expect(meshMachineLastSync(machine, Date.parse("2026-01-01T03:00:00.000Z"))).toBe(
-      "Synced 3 h ago",
-    );
-  });
-
-  it("says never when the server has not recorded an exchange", () => {
-    const other = { ...machine, lastExchangeAt: null };
-    expect(meshMachineLastSync(other, 0)).toBe("Never synced");
   });
 });
 

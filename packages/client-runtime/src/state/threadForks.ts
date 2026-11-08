@@ -81,3 +81,90 @@ export function planForkPlacement(input: {
     movedId: input.forkId,
   });
 }
+
+/** A thread reference without pulling the app-specific scoped-ref helper into this module. */
+export interface ThreadForkTarget {
+  readonly environmentId: import("@t3tools/contracts").EnvironmentId;
+  readonly threadId: import("@t3tools/contracts").ThreadId;
+}
+
+/** An app adapter's normalized fork-command result, including interruption. */
+export type ThreadForkCommandResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly interrupted: boolean; readonly message: string };
+
+export type ThreadForkOutcome =
+  | { readonly kind: "forked"; readonly target: ThreadForkTarget }
+  | { readonly kind: "source-missing" }
+  | { readonly kind: "interrupted" }
+  | { readonly kind: "failed"; readonly message: string }
+  | { readonly kind: "created-unavailable"; readonly target: ThreadForkTarget };
+
+export interface ThreadForkDeps {
+  readonly readThread: (target: ThreadForkTarget) => EnvironmentThreadShell | null;
+  readonly threadsInEnvironment: (
+    environmentId: import("@t3tools/contracts").EnvironmentId,
+  ) => readonly EnvironmentThreadShell[];
+  readonly createThreadId: () => import("@t3tools/contracts").ThreadId;
+  readonly fork: (input: {
+    readonly sourceThreadId: import("@t3tools/contracts").ThreadId;
+    readonly targetThreadId: import("@t3tools/contracts").ThreadId;
+    readonly runId?: import("@t3tools/contracts").RunId;
+    readonly title: string;
+  }) => Promise<ThreadForkCommandResult>;
+  readonly waitForThread: (target: ThreadForkTarget) => Promise<boolean>;
+  readonly reorder: (target: ThreadForkTarget, orderKey: string) => Promise<unknown>;
+  readonly now: () => string;
+}
+
+/**
+ * The shared sidebar fork sequence: name the fork "Title (n)", create it from the requested
+ * run, wait for its shell, place it under the source, and report which UI step the app owes.
+ */
+export async function runThreadFork(
+  source: ThreadForkTarget,
+  runId: import("@t3tools/contracts").RunId | undefined,
+  deps: ThreadForkDeps,
+): Promise<ThreadForkOutcome> {
+  const sourceThread = deps.readThread(source);
+  if (!sourceThread) return { kind: "source-missing" };
+  const environmentThreads = () => deps.threadsInEnvironment(source.environmentId);
+  const target: ThreadForkTarget = {
+    environmentId: source.environmentId,
+    threadId: deps.createThreadId(),
+  };
+  const result = await deps.fork({
+    sourceThreadId: source.threadId,
+    targetThreadId: target.threadId,
+    ...(runId === undefined ? {} : { runId }),
+    title: nextForkTitle(
+      sourceThread.title,
+      environmentThreads().map((thread) => thread.title),
+    ),
+  });
+  if (!result.ok) {
+    return result.interrupted
+      ? { kind: "interrupted" }
+      : { kind: "failed", message: result.message };
+  }
+  if (!(await deps.waitForThread(target))) return { kind: "created-unavailable", target };
+  const placement = planForkPlacement({
+    threads: environmentThreads().filter((thread) => thread.projectId === sourceThread.projectId),
+    sourceId: source.threadId,
+    forkId: target.threadId,
+    now: deps.now(),
+  });
+  // Placement is cosmetic: a failed write leaves the fork on top.
+  await Promise.all(
+    placement.map((write) =>
+      deps.reorder(
+        {
+          environmentId: source.environmentId,
+          threadId: write.id as import("@t3tools/contracts").ThreadId,
+        },
+        write.orderKey,
+      ),
+    ),
+  );
+  return { kind: "forked", target };
+}
