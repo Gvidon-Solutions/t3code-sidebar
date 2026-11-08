@@ -63,7 +63,6 @@
     "@legendapp/list": "catalog:",
     "@material/material-color-utilities": "0.3.0",
     "@noble/curves": "catalog:",
-    "@noble/hashes": "1.8.0",
     "@pierre/diffs": "catalog:",
     "@pierre/highlights": "catalog:",
     "@react-native-ai/apple": "0.12.0",

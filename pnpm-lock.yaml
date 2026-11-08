@@ -563,9 +563,6 @@ importers:
       '@noble/curves':
         specifier: 'catalog:'
         version: 1.9.1
-      '@noble/hashes':
-        specifier: 1.8.0
-        version: 1.8.0
       '@pierre/diffs':
         specifier: 1.6.1
         version: 1.6.1(patch_hash=322ac5f5db8b5715189c010802047f8235c3a45d8ed5ca0ba60fac266e2eba34)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
