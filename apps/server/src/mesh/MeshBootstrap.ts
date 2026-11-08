@@ -1,3 +1,4 @@
+import { keys } from "@t3tools/shared/meshLayout";
 import * as DateTime from "effect/DateTime";
 import * as Stream from "effect/Stream";
 import * as Schema from "effect/Schema";
@@ -363,8 +364,8 @@ export const layer = Layer.effect(
               yield* report(name, phase, "in_progress");
               const h = yield* mesh.nextHlc;
               yield* mesh.apply({
-                [`mesh.machineBinding/${name}`]: { h, v: linked.environmentId },
-                [`mesh.machineClaim/${encodeURIComponent(linked.environmentId)}`]: {
+                [keys.machineBinding(name)]: { h, v: linked.environmentId },
+                [keys.machineClaim(linked.environmentId)]: {
                   h,
                   v: { name, machine } as Json,
                 },

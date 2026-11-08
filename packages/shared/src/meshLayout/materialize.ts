@@ -2,7 +2,7 @@ import { compare } from "./hlc.ts";
 import { validateLayoutEntry } from "./registry.ts";
 import { normalizeRepresentationPath } from "./representationPath.ts";
 import { configFromLayout, bindingsFromLayout } from "../meshConfig/index.ts";
-import { keys } from "./document.ts";
+import { canonical, keys } from "./document.ts";
 import { SidebarMachine } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import type {
@@ -25,6 +25,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const workspaceFold: Record<string, Record<string, "quiet" | "active">> = dictionary();
   const machines: Record<string, SidebarMachine> = dictionary();
   const projectTitles: Record<string, string> = dictionary();
+  const titles = new Map<string, { v: string | null; h: string }>();
   const projectAliases: Record<string, string> = dictionary();
   const projectMounts: Record<string, SidebarProjectMount[]> = dictionary();
   const projectMountStatus: Record<
@@ -42,13 +43,29 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   }[] = [];
   const legacy: Record<string, Json> = dictionary();
   for (const [key, { v }] of Object.entries(doc).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    if (v === null || validateLayoutEntry(key, doc[key]!) !== null) continue;
-    if (key.startsWith("proj/") && key.endsWith(".title") && typeof v === "string") {
-      const id = decodeURIComponent(key.slice(5, -6));
-      if ((doc[keys.project(id)]?.h ?? "") <= doc[key]!.h) projectTitles[id] = v;
+    const entry = doc[key]!;
+    if (validateLayoutEntry(key, entry) !== null) continue;
+    const [family, a = "", b = ""] = key.split("/").map(decodeURIComponent);
+    if (family === "projTitle" || family === "proj") {
+      const oldTitle =
+        family === "proj" && key.endsWith(".title") && (typeof v === "string" || v === null);
+      const id = oldTitle ? a.slice(0, -6) : a;
+      const title =
+        typeof v === "string"
+          ? v
+          : v && typeof v === "object" && "title" in v && typeof v.title === "string"
+            ? v.title
+            : null;
+      const previous = titles.get(id);
+      if (
+        !previous ||
+        compare(entry.h, previous.h) > 0 ||
+        (entry.h === previous.h && canonical(title) > canonical(previous.v))
+      )
+        titles.set(id, { v: title, h: entry.h });
       continue;
     }
-    const [family, a = "", b = ""] = key.split("/").map(decodeURIComponent);
+    if (v === null) continue;
     switch (family) {
       case "ws":
         workspaces.push({ ...(v as Omit<SidebarWorkspace, "id"> & { sort: string }), id: a });
@@ -75,15 +92,6 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
       case "machine":
         machines[a] = decodeMachine(v);
         break;
-      case "proj":
-        if (
-          typeof v === "object" &&
-          "title" in v &&
-          typeof v.title === "string" &&
-          (doc[keys.projectTitle(a)]?.h ?? "") < doc[key]!.h
-        )
-          projectTitles[a] = v.title;
-        break;
       case "alias":
         projectAliases[a] = v as string;
         break;
@@ -103,6 +111,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         break;
     }
   }
+  for (const [id, entry] of titles) if (entry.v !== null) projectTitles[id] = entry.v;
   const ordered = <T extends { sort: string }>(items: T[]) =>
     items.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0));
   ordered(workspaces);

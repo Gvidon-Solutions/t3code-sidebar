@@ -1,3 +1,4 @@
+import { keys } from "@t3tools/shared/meshLayout";
 import { MeshBootstrap } from "./MeshBootstrap.ts";
 import { MeshRollout } from "./MeshRollout.ts";
 import { MeshAgentKit } from "./MeshAgentKit.ts";
@@ -69,7 +70,7 @@ export const layer = Layer.effect(
           reason: "validation",
           message: `Machine ${name} is already bound under another name`,
         });
-      yield* write(`mesh.machineBinding/${name}`, environmentId);
+      yield* write(keys.machineBinding(name), environmentId);
       return environmentId;
     });
     const machines: ConfigPlanner = {

@@ -6,6 +6,7 @@ import {
   machineByPeerLabel,
   parseConfig,
   referenceErrors,
+  projectPolicy,
 } from "./index.ts";
 it("migrates a three-machine layout and existing routes, aliases, ignores and permissions once", () => {
   const layout = {
@@ -273,4 +274,32 @@ it("carries all nine replica ignore lists even when only two layout titles were 
       projects,
     ),
   ).toBeUndefined();
+});
+
+it("migrates wildcard characters in titles as literal project matches", () => {
+  const { doc } = migrateConfig(
+    {},
+    {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      machines: { studio: {} },
+      projectTitles: { application: "App*?\\name" },
+      projectMounts: {
+        application: [
+          {
+            environmentId: "studio",
+            path: "/application",
+            role: "primary",
+            transport: "git",
+            createdAt: "",
+            ignores: ["private"],
+          },
+        ],
+      },
+    },
+    { environmentId: "studio", label: "Studio" },
+    [],
+    [],
+  )!;
+  expect(projectPolicy(doc, "App*?\\name").ignore).toContain("private");
+  expect(projectPolicy(doc, "ApplicationX\\name").ignore).not.toContain("private");
 });

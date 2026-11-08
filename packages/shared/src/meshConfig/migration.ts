@@ -1,4 +1,4 @@
-import { defaultAgentAliases } from "./index.ts";
+import { escapeProjectGlob, defaultAgentAliases } from "./index.ts";
 import * as Schema from "effect/Schema";
 import type { Json } from "../meshLayout/document.ts";
 import {
@@ -150,7 +150,7 @@ export function migrateConfig(
     projects: {
       defaults: { conflicts: "primary-wins", replica: "lite", ignore: [] },
       overrides: [...projectIgnores].map(([project, patterns]) => ({
-        project,
+        project: escapeProjectGlob(project),
         ignore: [...patterns],
       })),
     },

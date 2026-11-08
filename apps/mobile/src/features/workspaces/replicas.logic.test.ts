@@ -1,5 +1,5 @@
 import upgradeFixture from "../../../../../packages/client-runtime/src/state/meshLayout/fixtures/upgrade.json";
-import { materialize } from "@t3tools/shared/meshLayout";
+import { materialize, merge, migrateLogicalProjectIds } from "@t3tools/shared/meshLayout";
 import {
   emptyMeshLayoutState,
   mergeMeshLayoutSnapshot,
@@ -126,13 +126,14 @@ it("keeps the unreachable primary beside its replica after a phone cache upgrade
       h: "0000000000002.00000.phone",
     },
   };
+  const migrated = migrateLogicalProjectIds(merge(cachedDocument, upgradeFixture.document));
   const state = mergeMeshLayoutSnapshot(
     {
       ...emptyMeshLayoutState(),
       snapshot: {
         environmentId: "studio",
-        document: cachedDocument,
-        config: materialize(cachedDocument),
+        document: migrated,
+        config: materialize(migrated),
       },
     },
     { ...upgradeFixture, config: materialize(upgradeFixture.document) },

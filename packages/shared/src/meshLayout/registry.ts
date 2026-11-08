@@ -49,6 +49,7 @@ export const layoutKeyFamilies = {
   order: family(sorted, 2),
   fold: family(Schema.Literals(["quiet", "active"]), 3),
   machine: family(SidebarMachine, 2),
+  projTitle: family(Schema.String, 2),
   proj: family(Schema.Struct({ title: Schema.String }), 2),
   alias: family(Schema.String, 2),
   rep: family(SidebarProjectMount, 3),
@@ -105,7 +106,7 @@ export function validateLayoutEntry(key: string, entry: MeshLayoutEntry): string
   if (name === "mesh.machineBinding" && !isMachineName(parts[1]!))
     return "machine name must be a slug";
   if (entry.v === null) return null;
-  if (name === "proj" && key.endsWith(".title"))
+  if (name === "proj" && key.endsWith(".title") && typeof entry.v === "string")
     return typeof entry.v === "string" ? null : "project title must be a string";
   const error = spec.validate(entry.v);
   if (error !== null) return error;

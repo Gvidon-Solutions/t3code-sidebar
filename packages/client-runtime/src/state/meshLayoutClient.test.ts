@@ -7,7 +7,13 @@ import type {
   SidebarWorkspace,
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
-import { materialize, merge, type MeshLayoutDocument } from "@t3tools/shared/meshLayout";
+import {
+  keys,
+  migrateLogicalProjectIds,
+  materialize,
+  merge,
+  type MeshLayoutDocument,
+} from "@t3tools/shared/meshLayout";
 import { describe, expect, it } from "vite-plus/test";
 
 import { machineTag, mergeSuggestionsFor, offlineLogicalProjects } from "./meshLayout/index.ts";
@@ -452,10 +458,20 @@ it("merges the upgrade snapshot with a legacy offline cache without stealing the
     ...emptyMeshLayoutState(),
     snapshot: { environmentId: "studio", document, config: materialize(document) },
   };
-  const state = mergeMeshLayoutSnapshot(cached, {
-    ...upgradeFixture,
-    config: materialize(upgradeFixture.document),
-  });
+  const restored = parseMeshLayoutCache(serializeMeshLayoutCache(cached))!;
+  const migrated = migrateLogicalProjectIds(
+    merge(restored.snapshot!.document, upgradeFixture.document),
+  );
+  const state = mergeMeshLayoutSnapshot(
+    {
+      ...restored,
+      snapshot: { ...restored.snapshot!, document: migrated, config: materialize(migrated) },
+    },
+    {
+      ...upgradeFixture,
+      config: materialize(upgradeFixture.document),
+    },
+  );
   const config = state.snapshot!.config;
   const machines = buildMeshMachines({
     config,
@@ -535,4 +551,51 @@ it("reports clock skew without changing the cached document or outbox", async ()
   expect(failures).toHaveLength(1);
   expect(rpc.applies).toEqual([]);
   mesh.dispose();
+});
+
+it("keeps opaque dotted project ids unchanged while merging live snapshots", () => {
+  const document = {
+    [keys.projectTitle("a.b/c")]: { v: "Opaque", h: "0000000000002.00000.studio" },
+  };
+  const state = mergeMeshLayoutSnapshot(emptyMeshLayoutState(), {
+    environmentId: "studio",
+    document,
+    config: materialize(document),
+  });
+  expect(state.snapshot?.config.projectTitles["a.b/c"]).toBe("Opaque");
+  expect(state.snapshot?.document).toEqual(document);
+});
+
+it("migrates a hydrated cache once using the first server aliases", async () => {
+  const h = "0000000000001.00000.studio";
+  const legacy = "studio:/application";
+  const document = { [keys.projectTitle(legacy)]: { v: "Offline", h } };
+  const persistence = memoryPersistence({
+    ...emptyMeshLayoutState(),
+    snapshot: snapshotOf("studio", document),
+    outbox: document,
+  });
+  const rpc = new FakeRpc({
+    studio: { [keys.alias(legacy)]: { v: "application", h: "0000000000002.00000.studio" } },
+  });
+  const mesh = new MeshLayoutStore({
+    rpc,
+    persistence,
+    environments: () => [source("studio")],
+    primaryEnvironmentId: () => null,
+    deviceId: "laptop",
+    now: () => 1000,
+  });
+  try {
+    await mesh.start();
+    expect(mesh.current.snapshot?.config.projectTitles.application).toBe("Offline");
+    expect(rpc.applies[0]?.entries[keys.projectTitle("application")]?.v).toBe("Offline");
+    const opaque = {
+      [keys.projectTitle("a.b/c")]: { v: "Unchanged", h: "0000000000003.00000.studio" },
+    };
+    rpc.push(env("studio"), merge(rpc.documents.get("studio")!, opaque));
+    expect(mesh.current.snapshot?.config.projectTitles["a.b/c"]).toBe("Unchanged");
+  } finally {
+    mesh.dispose();
+  }
 });

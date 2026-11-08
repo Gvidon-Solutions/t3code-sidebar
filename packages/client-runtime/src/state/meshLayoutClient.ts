@@ -93,12 +93,13 @@ export function parseMeshLayoutCache(json: string | null): MeshLayoutClientState
   if (json === null || json.trim() === "") return null;
   try {
     const parsed = decodeCache(json);
+    const document = (parsed.snapshot?.document ?? {}) as MeshLayoutDocument;
     return {
       snapshot: parsed.snapshot
         ? {
             environmentId: parsed.snapshot.environmentId ?? "",
-            document: parsed.snapshot.document as MeshLayoutDocument,
-            config: materialize(parsed.snapshot.document as MeshLayoutDocument),
+            document,
+            config: materialize(document),
           }
         : null,
       outbox: parsed.outbox as MeshLayoutDocument,
@@ -168,7 +169,7 @@ export function mergeMeshLayoutSnapshot(
   state: MeshLayoutClientState,
   remote: MeshLayoutSnapshot,
 ): MeshLayoutClientState {
-  const document = migrateLogicalProjectIds(merge(state.snapshot?.document ?? {}, remote.document));
+  const document = merge(state.snapshot?.document ?? {}, remote.document);
   const outbox = Object.fromEntries(
     Object.entries(state.outbox).filter(([key, entry]) => {
       const seen = remote.document[key];
@@ -263,7 +264,24 @@ export class MeshLayoutStore {
   private state: MeshLayoutClientState = emptyMeshLayoutState();
   private confirmedDocument: MeshLayoutDocument = {};
 
+  private migrateHydratedCache = false;
   private acceptSnapshot(snapshot: RpcMeshLayoutSnapshot) {
+    if (this.migrateHydratedCache) {
+      this.migrateHydratedCache = false;
+      const aliases = merge(
+        this.state.snapshot?.document ?? {},
+        snapshot.document as MeshLayoutDocument,
+      );
+      const outbox = migrateLogicalProjectIds(this.state.outbox, aliases);
+      const document = migrateLogicalProjectIds(aliases);
+      this.confirmedDocument = migrateLogicalProjectIds(this.confirmedDocument, aliases);
+      if (this.state.snapshot)
+        this.state = {
+          ...this.state,
+          outbox,
+          snapshot: { ...this.state.snapshot, document, config: materialize(document) },
+        };
+    }
     this.confirmedDocument = merge(this.confirmedDocument, snapshot.document as MeshLayoutDocument);
     this.state = mergeMeshLayoutSnapshot(this.state, rpcSnapshot(snapshot));
   }
@@ -291,6 +309,7 @@ export class MeshLayoutStore {
   hydrate(state: MeshLayoutClientState) {
     if (this.cacheHydrated) return;
     this.cacheHydrated = true;
+    this.migrateHydratedCache = true;
     const restored =
       this.state.snapshot === null ? state : mergeMeshLayoutSnapshot(state, this.state.snapshot);
     this.confirmedDocument = merge(

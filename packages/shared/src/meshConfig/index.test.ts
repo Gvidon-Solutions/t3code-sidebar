@@ -6,6 +6,8 @@ import { materialize } from "../meshLayout/materialize.ts";
 import type { Json } from "../meshLayout/document.ts";
 import {
   defaults,
+  bindingsFromLayout,
+  migratedPeerLabelsFromLayout,
   machineByName,
   machineByEnvironment,
   modelAlias,
@@ -164,16 +166,18 @@ describe("mesh config", () => {
     expect(modelAlias(config, "missing")).toBeUndefined();
   });
   it("reports unsupported schemas, unknown references, cycles and duplicate pairs", () => {
-    const errors = referenceErrors(
-      parseConfig({
-        schema: 2,
+    const errors = referenceErrors({
+      ...parseConfig({
+        schema: 1,
         machines: { studio: { reach: { via: "laptop" } }, laptop: { reach: { via: "studio" } } },
         links: {
           overrides: [{ between: ["studio", "absent"] }, { between: ["absent", "studio"] }],
         },
         replicas: { rules: [{ project: "*", on: "missing", when: "manual" }] },
       }),
-    );
+      schema: 2,
+    });
+    expect(() => parseConfig({ schema: 2, machines: {} })).toThrow();
     expect(errors.map((e) => e.path)).toEqual([
       "schema",
       "machines.studio.reach.via",
@@ -283,4 +287,11 @@ it("seeds code-only ignores for new configs without expanding existing configs",
     projectPolicy({ schema: 1, machines: {}, replicas: { ignore: ["/private"] } }, "Application")
       .ignore,
   ).not.toContain("*.pdf");
+});
+
+it("ignores malformed encoded binding and migration keys", () => {
+  expect(bindingsFromLayout({ "mesh.machineBinding/bad%": { v: "studio" } })).toEqual({});
+  expect(
+    migratedPeerLabelsFromLayout({ "mesh.machineMigration/bad%": { v: { peerLabels: ["old"] } } }),
+  ).toEqual({});
 });

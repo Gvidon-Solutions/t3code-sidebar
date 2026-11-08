@@ -587,3 +587,9 @@ it("does not label a directly connected machine unreachable because a server's p
     }),
   ).toMatchObject({ kind: "unreachable" });
 });
+
+it("ignores malformed percent encoding in replicated machine facts", () => {
+  expect(
+    meshMachineFactTimes({ "machine/bad%": { h: "0000000000001.00000.studio", v: {} } }),
+  ).toEqual({});
+});
