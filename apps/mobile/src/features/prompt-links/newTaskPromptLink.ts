@@ -18,7 +18,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import {
   parseNewThreadLink,
   type LinkedPrompt,
@@ -63,6 +63,8 @@ type LinkedDraftRequest = {
   readonly provider: string | null;
   readonly model: string | null;
   readonly pullRequest: PromptLinkPullRequest | null;
+  /** The machine named by an agent action, when the link carries one. */
+  readonly environmentId: string | null;
 };
 
 // A cold launch from a link has no projects or threads yet. Matching then would offer to clone a
@@ -280,19 +282,28 @@ async function openProjectDraft(project: EnvironmentProject, request: LinkedDraf
 
 async function openScratchDraft(request: LinkedDraftRequest) {
   const serverConfigs = appAtomRegistry.get(environmentServerConfigsAtom);
-  const environmentId = promptLinkScratchEnvironmentId(
-    latestThreadEnvironmentIds(appAtomRegistry.get(environmentThreadShells.threadShellsAtom)),
-    appAtomRegistry
-      .get(workspaceConnections.environmentsAtom)
-      .filter(
-        (environment) =>
-          availableScratchWorkspaceRoot(
-            environment.connectionState,
-            serverConfigs.get(environment.environmentId),
-          ) !== null,
-      )
-      .map((environment) => environment.environmentId),
-  );
+  const environments = appAtomRegistry.get(workspaceConnections.environmentsAtom);
+  const offersScratch = (environmentId: EnvironmentId) => {
+    const environment = environments.find((candidate) => candidate.environmentId === environmentId);
+    return (
+      environment !== undefined &&
+      availableScratchWorkspaceRoot(
+        environment.connectionState,
+        serverConfigs.get(environmentId),
+      ) !== null
+    );
+  };
+  const requested =
+    request.environmentId === null ? null : EnvironmentId.make(request.environmentId);
+  const environmentId =
+    requested !== null && offersScratch(requested)
+      ? requested
+      : promptLinkScratchEnvironmentId(
+          latestThreadEnvironmentIds(appAtomRegistry.get(environmentThreadShells.threadShellsAtom)),
+          environments
+            .filter((environment) => offersScratch(environment.environmentId))
+            .map((environment) => environment.environmentId),
+        );
   if (environmentId === null) {
     Dialog.alert(
       "Could not start without a project",
@@ -370,8 +381,20 @@ function resolveLink(linkSearch: string) {
   const link = parsed.value;
   const request: LinkedDraftRequest =
     link.kind === "new"
-      ? { prompt: link.prompt, provider: link.provider, model: link.model, pullRequest: null }
-      : { prompt: link.prompt, provider: null, model: null, pullRequest: link.pullRequest };
+      ? {
+          prompt: link.prompt,
+          provider: link.provider,
+          model: link.model,
+          pullRequest: null,
+          environmentId: link.environmentId,
+        }
+      : {
+          prompt: link.prompt,
+          provider: null,
+          model: null,
+          pullRequest: link.pullRequest,
+          environmentId: null,
+        };
 
   if (link.kind === "pull-request") {
     const thread = findPromptLinkPullRequestThread(threads, link.pullRequest);

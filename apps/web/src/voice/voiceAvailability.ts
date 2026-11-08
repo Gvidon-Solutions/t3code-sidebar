@@ -6,7 +6,6 @@
 export {
   VOICE_THREAD_MODEL,
   VOICE_THREAD_TITLE,
-  findVoiceProvider,
   resolveComposerVoiceAvailability,
   resolveThreadVoiceAvailability,
   resolveVoiceThreadModelSelection,

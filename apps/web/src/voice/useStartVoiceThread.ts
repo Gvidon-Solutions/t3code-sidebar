@@ -55,7 +55,17 @@ export function useStartVoiceThread() {
       input.modelSelection,
       input.projectId,
     );
-    if (modelSelection === null) return;
+    if (modelSelection === null) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "warning",
+          title: "Voice isn't available here",
+          description:
+            "Connect a voice provider for this project, or choose a project that has one.",
+        }),
+      );
+      return;
+    }
     launching = true;
     // No try/finally: the React Compiler can't compile it. settlePromise catches
     // any throw so `launching` resets before the error goes on to the caller.

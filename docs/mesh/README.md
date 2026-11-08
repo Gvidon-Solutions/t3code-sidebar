@@ -251,26 +251,34 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 Shared client-runtime decisions keep web and Android answering these questions the same way:
 
 - `meshLayout/draftMachine.ts` provides the one "has usable models for this project" predicate
-  (`hasUsableDraftModels`, built on `defaultUsableDraftModel`), the default-machine choice
+  (`hasUsableDraftModels`, built on `defaultUsableDraftModel`), the host rule
+  (`draftMachineCanHostCopy`: an existing copy, a replica-capable server, or a scratch draft),
+  the machine-usable rule (`draftMachineUsable`), the default-machine choice
   (`defaultDraftMachine`: a remembered machine only wins while connected and usable; otherwise
   the main copy, then any usable machine, else the main copy so its card explains why),
-  `draftMachineCatalogsKnown` so web does not pin the default before provider catalogs load, and
+  `draftMachineCatalogsKnown` so neither client pins the default before provider catalogs load,
+  `savedDraftMachineChoice` so only an explicit choice is remembered, and
   `nextSelectableDraftMachine` for `composer.cycleHost` (connected and usable only, wraps).
+  Web and mobile build the same candidate rows from these helpers.
 - `meshLayout/draftMachineCards.ts` disables a machine that cannot host a copy (server without
   the `replicas` capability and no existing copy), carries the selected model's availability as
   guidance, and web refreshes an unconnected machine's catalog when it connects and every minute.
-- `voiceAvailability.ts` (client-runtime) is the one composer decision for web and mobile:
-  `resolveComposerVoiceAvailability` applies install/auth/availability/project enablement and a
-  usable voice model, so the mic is hidden exactly when a voice thread could not start. The draft
-  voice thread is created on the same target machine the button was judged against (hidden while
-  a machine switch has no project on the target yet).
+- `voiceAvailability.ts` (client-runtime) is the one decision for every entry point on web and
+  mobile (`resolveComposerVoiceAvailability`): composer, command palette and "Talk" apply
+  install/auth/availability/project enablement and a usable voice model against the thread's own
+  machine or the draft's target machine. The mic and the agent thread are hidden exactly when a
+  voice thread could not start; a direct launch that still finds no model says so instead of
+  doing nothing. The draft voice thread is created on the same target machine the button was
+  judged against (hidden while a machine switch has no project on the target yet).
 - `meshLayout/meshConnectPrompt.ts` excludes saved connections that are already enabled (switching
-  them on again is a no-op), and dismissal records the machine ids it acted for, so adding a new
-  machine shows the prompt again. Web and mobile persist that set the same way.
-- `meshLayout/gitVisibility.ts` treats an unloaded layout as "hide git controls" rather than
-  "not a replica"; web `useMeshLayout` throws without its provider instead of silently degrading
-  to a single-machine view. Mobile's thread header names the machine tag, web keeps the workspace
-  name readable by sizing the titlebar icons down.
+  them on again is a no-op), records dismissal per machine, prunes machines that left the mesh,
+  and only records ids whose switch succeeded. Web and mobile persist that set the same way;
+  Settings › Mesh repeats the action as "Connect to all machines".
+- `meshLayout/gitVisibility.ts` hides git only while a mesh source is genuinely loading or the
+  folder is a lite replica. Without a mesh every folder is an ordinary project, so single-machine
+  clients keep git; web `useMeshLayout` still throws without its provider rather than silently
+  degrading to a single-machine view. Mobile's thread header names the machine tag, web keeps the
+  workspace name readable by sizing the titlebar icons down.
 - `meshLayout/replicas.ts` `removeRepresentationCopy` is the one remove-copy dialog model (role,
   other copies, `Make <machine> the main copy` choices); `replicaLagText` is gone. Machine detail
   project sentences read the same live/stored state as Diagnostics, so a manual copy says
@@ -278,6 +286,19 @@ Shared client-runtime decisions keep web and Android answering these questions t
 - Pending draft sends keep the chosen branch and worktree path; their error line uses
   `errors/plainMessage` instead of `String(error)`. Mobile touch rows keep their compact visual
   density and reach 44–48 dp through `lib/touchTargets` hit slop.
+- Agent prompts are built in `state/meshMachines.ts` for web and mobile. Peer-provided labels,
+  project titles and failure reasons are single-line, length-capped and quoted as data; a typed
+  address loses credentials, query and fragment; the whole prompt is capped below the `/new`
+  link limit with a visible truncation note. `AgentFixActions` (web) and `MeshAgentFixActions`
+  (mobile) carry the source machine in the link's `env`, and their accessible names name the
+  machine or problem. New-thread links accept `env` so the prepared thread opens on the machine
+  that must run the fix, not the most recently updated thread's machine.
+- Settings › Mesh on both clients launches the same setup, offline, replica and failed-update
+  agent actions; mobile shows `mesh.updateFailure/*` problems and disables setup without a mesh
+  source. Diagnostics show local, human times instead of raw ISO strings, and machine copy rows
+  use Main/Copy wording everywhere. Machine cards keep disabled reasons in visible text and under
+  `aria-disabled` while staying focusable. Unconnected catalogs refresh only while a machine is
+  unconnected, with one bounded request key per project and destination.
 
 ## Interfaces
 

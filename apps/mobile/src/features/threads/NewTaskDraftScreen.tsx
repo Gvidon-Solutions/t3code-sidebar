@@ -4,7 +4,10 @@ import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useSyncExternalStore } from "react";
 import { CommandId, EnvironmentId, MessageId } from "@t3tools/contracts";
 import { pendingMeshDrafts, serializePendingAttachments } from "../../state/pendingMeshDrafts";
-import { draftModelUnavailableReason } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  draftModelUnavailableReason,
+  nextSelectableDraftMachine,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { NativeScrollEdgeEffectsContext } from "../../native/NativeScrollViewMarker";
 import { DraftThreadHeader } from "./DraftThreadHeader";
 import { threadHeaderAppearance } from "./thread-header-appearance";
@@ -91,10 +94,7 @@ import {
   useRemoteEnvironmentRuntime,
 } from "../../state/use-remote-environment-registry";
 import { useNewTaskFlow } from "./new-task-flow-provider";
-import {
-  nextEnvironmentId,
-  useHardwareKeyboardCommand,
-} from "../keyboard/hardwareKeyboardCommands";
+import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
 import { resolveProjectThreadCreationBranch } from "./projectThreadCreationValidation";
 import { resolveDraftProjectSelection } from "./new-task-project-selection";
 import {
@@ -376,8 +376,16 @@ export function NewTaskDraftScreen(props: {
   const { environments, selectedEnvironmentId, switchEnvironment, switchingToEnvironmentId } = flow;
   const cycleEnvironment = () => {
     if (isComposerInteractionLocked) return true;
-    const next = nextEnvironmentId(environments, switchingToEnvironmentId ?? selectedEnvironmentId);
-    if (next !== null) void switchEnvironment(next);
+    const next = nextSelectableDraftMachine(
+      environments.map((environment) => ({
+        environmentId: environment.environmentId,
+        connected: environment.connected,
+        usable: environment.usable,
+        primary: environment.primary,
+      })),
+      switchingToEnvironmentId ?? selectedEnvironmentId,
+    );
+    if (next !== null) void switchEnvironment(EnvironmentId.make(next));
     return true;
   };
   const cycleEnvironmentCommands = environments.length > 1 ? (["cycleHost"] as const) : [];
@@ -985,6 +993,7 @@ export function NewTaskDraftScreen(props: {
       environmentId={chosenEnvironmentId ?? selectedProject.environmentId}
       projectId={selectedProject.id}
       projectEnvironmentId={selectedProject.environmentId}
+      layoutLoading={mesh.config === null && mesh.source !== null}
     >
       <View className="flex-row items-center gap-1 px-2">
         <ComposerInlineControl

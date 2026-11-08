@@ -89,12 +89,3 @@ export function parseActiveThreadPath(pathname: string): {
     return null;
   }
 }
-
-export function nextEnvironmentId<T extends { readonly environmentId: string }>(
-  environments: ReadonlyArray<T>,
-  currentId: string | null,
-): T["environmentId"] | null {
-  if (environments.length < 2) return null;
-  const index = environments.findIndex((environment) => environment.environmentId === currentId);
-  return environments[(index + 1) % environments.length]?.environmentId ?? null;
-}

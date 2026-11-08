@@ -6,9 +6,15 @@ import { toastManager } from "../ui/toast";
 export function AgentFixActions({
   prompt,
   label = "Fix with an agent",
+  accessibleLabel,
+  environmentId,
 }: {
   readonly prompt: string;
   readonly label?: string;
+  /** Names the machine or problem so repeated rows are distinct to a screen reader. */
+  readonly accessibleLabel?: string;
+  /** The machine that must open the prepared thread, when the view knows it. */
+  readonly environmentId?: string | null;
 }) {
   const navigate = useNavigate();
   const copy = async () => {
@@ -24,7 +30,13 @@ export function AgentFixActions({
       <Button
         size="xs"
         variant="outline"
-        onClick={() => void navigate({ to: "/new", search: { prompt } as never })}
+        aria-label={accessibleLabel ?? label}
+        onClick={() =>
+          void navigate({
+            to: "/new",
+            search: (environmentId ? { prompt, env: environmentId } : { prompt }) as never,
+          })
+        }
       >
         {label}
       </Button>

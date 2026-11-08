@@ -171,5 +171,7 @@ export function folderRowActivation(offline: boolean): "connections" | "toggle" 
 
 /** The row's accessible name, including why an offline folder cannot expand. */
 export function folderRowAriaLabel(label: string, offline: boolean): string | undefined {
-  return offline ? `${label}: Not connected to this device` : undefined;
+  return offline
+    ? `${label}: Not connected to this device. Opens Connections to fix it.`
+    : undefined;
 }

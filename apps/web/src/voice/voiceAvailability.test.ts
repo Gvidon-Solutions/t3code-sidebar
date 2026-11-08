@@ -132,6 +132,38 @@ describe("resolveVoiceThreadModelSelection", () => {
 });
 
 describe("resolveComposerVoiceAvailability", () => {
+  it("hides voice on a server thread when the project disables its provider", () => {
+    const projectId = ProjectId.make("project");
+    const base = config();
+    expect(
+      resolveComposerVoiceAvailability({
+        isServerThread: true,
+        threadProviderInstanceId: codex,
+        config: {
+          ...base,
+          settings: {
+            ...base.settings,
+            projectSettingsOverrides: {
+              [projectId]: { providerInstances: { [codex]: { enabled: false } } },
+            },
+          },
+        },
+        projectId,
+      }),
+    ).toEqual({ kind: "unsupported" });
+  });
+
+  it("hides voice when the provider has no usable model", () => {
+    expect(
+      resolveComposerVoiceAvailability({
+        isServerThread: true,
+        threadProviderInstanceId: codex,
+        config: withProvider(codex, { models: [] }),
+        projectId: null,
+      }),
+    ).toEqual({ kind: "unsupported" });
+  });
+
   it("follows the provider that owns a thread on another machine", () => {
     expect(
       resolveComposerVoiceAvailability({

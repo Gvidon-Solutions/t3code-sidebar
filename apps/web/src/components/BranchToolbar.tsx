@@ -632,12 +632,13 @@ export const BranchToolbar = memo(function BranchToolbar({
 }: BranchToolbarProps) {
   const mesh = useMeshLayout();
   // A lite replica has no local git checkout, so its git controls stay hidden.
-  const isReplica = hidesGitControls(
-    mesh.config,
-    draftMachineId ?? environmentId,
+  const isReplica = hidesGitControls({
+    config: mesh.config,
+    environmentId: draftMachineId ?? environmentId,
     projectId,
-    environmentId,
-  );
+    projectEnvironmentId: environmentId,
+    layoutLoading: mesh.config === null && mesh.source !== null,
+  });
   const showGitControls = requestedGitControls && !isReplica;
   const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = scopeThreadRef(environmentId, threadId);

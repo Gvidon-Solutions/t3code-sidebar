@@ -344,6 +344,7 @@ import {
   startNewThreadForProject,
   codexArtifactTemplatePromptToAppend,
   shouldRefocusComposerOnWindowFocus,
+  realDraftModelSelection,
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useComposerHandleContext } from "../composerHandleContext";
@@ -361,6 +362,8 @@ import { ChatRightPanel } from "./chat/ChatRightPanel";
 import {
   draftModelUnavailableReason,
   hasUsableDraftModels,
+  draftMachineCanHostCopy,
+  draftMachineUsable,
   nextSelectableDraftMachine,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
@@ -600,6 +603,7 @@ export default function ChatView(props: ChatViewProps) {
       ? (draft.modelSelectionByProvider[draft.activeProvider] ?? null)
       : null;
   });
+  const composerRealModelSelection = realDraftModelSelection(composerSelectedModelSelection);
   const composerModelSelectionExplicit = useComposerDraftStore(
     (store) => store.getComposerDraft(composerDraftTarget)?.modelSelectionExplicit === true,
   );
@@ -803,6 +807,10 @@ export default function ChatView(props: ChatViewProps) {
     : undefined;
   const isServerThread = serverThread !== null;
   const activeThread = isServerThread ? serverThread : localDraftThread;
+  // The local draft carries the placeholder until a model is chosen; it is not
+  // a model that any machine is missing.
+  const draftModelSelection =
+    composerRealModelSelection ?? realDraftModelSelection(activeThread?.modelSelection);
   const serverLatestRun =
     serverProjection === null ? null : deriveLatestThreadRun(serverProjection);
   const serverActivityRun =
@@ -1798,7 +1806,7 @@ export default function ChatView(props: ChatViewProps) {
     readPendingEnvironmentChange,
     onEnvironmentChangeStable,
   } = useDraftEnvironmentRouting({
-    selection: composerSelectedModelSelection ?? activeThread?.modelSelection ?? null,
+    selection: draftModelSelection ?? null,
     draftId,
     draftThread,
     envLocked,
@@ -2479,7 +2487,7 @@ export default function ChatView(props: ChatViewProps) {
       item.type === "user_message" &&
       (item.text.trim().toLowerCase() !== "/compact" || item.attachments.length > 0),
   );
-  const pendingHandoffSelection = composerSelectedModelSelection ?? activeThread?.modelSelection;
+  const pendingHandoffSelection = draftModelSelection;
   const pendingHandoffSelectionUsable = providerInstanceEntries.some(
     (entry) =>
       entry.instanceId === pendingHandoffSelection?.instanceId &&
@@ -2606,9 +2614,9 @@ export default function ChatView(props: ChatViewProps) {
       multipleModelSelections === null &&
       !composerModelSelectionExplicit &&
       draftFallback?.fallback &&
-      (!composerSelectedModelSelection ||
-        (composerSelectedModelSelection.instanceId === fallbackSelection?.instanceId &&
-          composerSelectedModelSelection.model === fallbackSelection?.model))
+      (!composerRealModelSelection ||
+        (composerRealModelSelection.instanceId === fallbackSelection?.instanceId &&
+          composerRealModelSelection.model === fallbackSelection?.model))
         ? draftFallback.fallback
         : null;
     const fallbackWindow = fallback
@@ -2757,16 +2765,22 @@ export default function ChatView(props: ChatViewProps) {
             const providers = providersByEnvironment.get(environment.environmentId);
             const catalog =
               serverConfig && providers ? { providers, settings: serverConfig.settings } : null;
-            const selection =
-              composerSelectedModelSelection ?? activeThread?.modelSelection ?? null;
+            const selection = draftModelSelection ?? null;
             return {
               environmentId: environment.environmentId,
               connected: environment.connected !== false,
-              usable:
-                hasUsableDraftModels(catalog, environment.projectId) === true &&
-                selection !== null &&
-                draftModelUnavailableReason(catalog, selection, environment.projectId) === null &&
-                (environment.projectId !== null || environment.supportsMesh === true),
+              usable: draftMachineUsable({
+                connected: environment.connected !== false,
+                hasUsableModels: hasUsableDraftModels(catalog, environment.projectId),
+                selectedModelUsable:
+                  selection !== null &&
+                  draftModelUnavailableReason(catalog, selection, environment.projectId) === null,
+                canHostCopy: draftMachineCanHostCopy({
+                  hasProject: environment.projectId !== null,
+                  supportsReplicas: environment.supportsMesh === true,
+                  isScratchDraft: activeProjectIsScratch,
+                }),
+              }),
               primary: environment.isPrimary,
             };
           }),
@@ -3600,9 +3614,7 @@ export default function ChatView(props: ChatViewProps) {
                           <DraftMachineCards
                             choices={logicalProjectEnvironments}
                             activeProject={activeProject}
-                            selection={
-                              composerSelectedModelSelection ?? activeThread?.modelSelection ?? null
-                            }
+                            selection={draftModelSelection ?? null}
                             selectedEnvironmentId={
                               pendingDraftMachineId ??
                               activeThread?.environmentId ??

@@ -61,12 +61,37 @@ export function shouldShowMeshConnectPrompt(
   return meshConnectActionableIds(plan).some((environmentId) => !dismissed.has(environmentId));
 }
 
+/** A stable, deduplicated dismissal list. */
+function mergeDismissed(
+  dismissedEnvironmentIds: ReadonlyArray<string>,
+  environmentIds: ReadonlyArray<string>,
+): string[] {
+  return [...new Set([...dismissedEnvironmentIds, ...environmentIds])].sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
+/** Remember the machines one action settled, so a failed one asks again. */
+export function dismissMeshConnectIds(
+  dismissedEnvironmentIds: ReadonlyArray<string>,
+  environmentIds: ReadonlyArray<string>,
+): string[] {
+  return mergeDismissed(dismissedEnvironmentIds, environmentIds);
+}
+
 /** The persisted dismissal after acting or choosing "Not now". */
 export function dismissMeshConnectPrompt(
   dismissedEnvironmentIds: ReadonlyArray<string>,
   plan: MeshConnectPlan,
 ): string[] {
-  return [...new Set([...dismissedEnvironmentIds, ...meshConnectActionableIds(plan)])].sort(
-    (left, right) => left.localeCompare(right),
-  );
+  return mergeDismissed(dismissedEnvironmentIds, meshConnectActionableIds(plan));
+}
+
+/** Drop machines that left the mesh; a current machine is never forgotten here. */
+export function pruneMeshConnectDismissed(
+  dismissedEnvironmentIds: ReadonlyArray<string>,
+  currentEnvironmentIds: ReadonlyArray<string>,
+): string[] {
+  const current = new Set(currentEnvironmentIds);
+  return dismissedEnvironmentIds.filter((environmentId) => current.has(environmentId));
 }

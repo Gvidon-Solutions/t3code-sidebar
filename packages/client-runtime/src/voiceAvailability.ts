@@ -42,13 +42,6 @@ function providerSupportsVoice(provider: VoiceProviderFacts | null | undefined):
   );
 }
 
-/** The environment's provider instance that can hold voice conversations, if it has one. */
-export function findVoiceProvider(
-  providers: ReadonlyArray<ServerProvider>,
-): ServerProvider | undefined {
-  return providers.find(providerSupportsVoice);
-}
-
 /** A voice provider can run in this project when its catalog and settings allow it. */
 function providerCanVoiceForProject(
   config: ProviderCatalog | null | undefined,

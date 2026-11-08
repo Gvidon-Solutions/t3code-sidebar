@@ -7,6 +7,7 @@ import {
   type PendingDraftSend,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { plainErrorMessage } from "@t3tools/client-runtime/errors";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useEnvironments, useEnvironmentProviders } from "../../state/environments";
 import { useReplicaStatuses } from "../../state/meshReplicas";
@@ -30,7 +31,7 @@ export function PendingMeshDraftCoordinator() {
     toastManager.add({
       type: "error",
       title: "Queued draft could not be sent",
-      description: error instanceof Error ? error.message : String(error),
+      description: plainErrorMessage(error),
     });
   };
   const launch = async (send: PendingDraftSend, projectId: string) => {

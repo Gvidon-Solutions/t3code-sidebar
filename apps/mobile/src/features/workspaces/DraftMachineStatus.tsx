@@ -51,14 +51,16 @@ export function ReplicaWorkspaceControls(props: {
   environmentId: string;
   projectId: string;
   projectEnvironmentId?: string;
+  readonly layoutLoading: boolean;
   children: ReactNode;
 }) {
-  const isReplica = hidesGitControls(
-    props.config,
-    props.environmentId,
-    props.projectId,
-    props.projectEnvironmentId,
-  );
+  const isReplica = hidesGitControls({
+    config: props.config,
+    environmentId: props.environmentId,
+    projectId: props.projectId,
+    projectEnvironmentId: props.projectEnvironmentId,
+    layoutLoading: props.layoutLoading,
+  });
   // A lite replica has no local git checkout; its controls stay hidden and no jargon is shown.
   return isReplica ? null : props.children;
 }

@@ -51,6 +51,7 @@ describe("parseNewThreadLink", () => {
         repository: { owner: "pingdotgg", name: "t3code" },
         provider: "codex",
         model: "gpt-5",
+        environmentId: null,
       },
     });
   });
@@ -99,6 +100,7 @@ describe("link round trips", () => {
       repository: { owner: "pingdotgg", name: "t3code" },
       provider: "claudeAgent",
       model: "opus",
+      environmentId: "studio",
     });
     const path = promptLinkAppPath(link);
     expect(path).toBe(new URL(link).pathname + new URL(link).search);
@@ -106,6 +108,7 @@ describe("link round trips", () => {
     expect(parsed.ok && parsed.value.kind === "new" && parsed.value.prompt.text).toBe(
       "Swear count & rating?",
     );
+    expect(parsed.ok && parsed.value.kind === "new" && parsed.value.environmentId).toBe("studio");
   });
 
   it("opens a copied thread link in the app at that thread", () => {

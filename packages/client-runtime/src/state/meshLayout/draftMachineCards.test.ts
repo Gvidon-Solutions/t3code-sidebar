@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  draftMachineCatalogRequests,
   draftMachineCardState,
   draftMachineCards,
   draftMachineCardSync,
+  retainedCatalogRequests,
+  shouldRefreshDraftMachineCatalogs,
 } from "./draftMachineCards.ts";
 
 describe("draftMachineCardState", () => {
@@ -118,7 +121,7 @@ describe("draftMachineCardState", () => {
       hasSelectedModel: false,
     });
     expect(state.selectable).toBe(true);
-    expect(state.guidance).toBe("The selected model isn't set up on cloudbox");
+    expect(state.guidance).toBe("Model not set up here");
     const rows = draftMachineCards({
       config,
       choices: [
@@ -145,7 +148,7 @@ describe("draftMachineCardState", () => {
       selectedEnvironmentId: "studio",
     });
     expect(rows.find((row) => row.environmentId === "cloudbox")?.note).toBe(
-      "The selected model isn't set up on cloudbox",
+      "Model not set up here",
     );
   });
 
@@ -278,4 +281,28 @@ describe("draftMachineCardSync", () => {
     expect(draftMachineCardSync("conflict")).toBe("out-of-sync");
     expect(draftMachineCardSync(undefined)).toBeNull();
   });
+});
+
+it("polls catalogs only for unconnected machines and keeps a bounded key set", () => {
+  expect(
+    draftMachineCatalogRequests({ activeProjectEnvironmentId: "studio", environmentIds: [] }),
+  ).toEqual([]);
+  expect(
+    draftMachineCatalogRequests({
+      activeProjectEnvironmentId: "studio",
+      environmentIds: ["cloudbox", "cloudbox", "laptop"],
+    }),
+  ).toEqual(["studio:cloudbox", "studio:laptop"]);
+  expect(
+    shouldRefreshDraftMachineCatalogs({ activeProjectEnvironmentId: "studio", environmentIds: [] }),
+  ).toBe(false);
+  expect(
+    shouldRefreshDraftMachineCatalogs({
+      activeProjectEnvironmentId: "studio",
+      environmentIds: ["cloudbox"],
+    }),
+  ).toBe(true);
+  expect(
+    retainedCatalogRequests(["studio:cloudbox", "studio:old"], new Set(["studio:cloudbox"])),
+  ).toEqual(["studio:cloudbox"]);
 });

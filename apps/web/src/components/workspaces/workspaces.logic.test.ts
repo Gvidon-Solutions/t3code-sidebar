@@ -238,7 +238,9 @@ describe("folderRowActivation", () => {
   it("sends an offline folder row to Connections from click and keyboard alike", () => {
     expect(folderRowActivation(true)).toBe("connections");
     expect(folderRowActivation(false)).toBe("toggle");
-    expect(folderRowAriaLabel("studio", true)).toBe("studio: Not connected to this device");
+    expect(folderRowAriaLabel("studio", true)).toBe(
+      "studio: Not connected to this device. Opens Connections to fix it.",
+    );
     expect(folderRowAriaLabel("studio", false)).toBeUndefined();
   });
 });

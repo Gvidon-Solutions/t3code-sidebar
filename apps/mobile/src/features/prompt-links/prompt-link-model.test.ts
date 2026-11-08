@@ -24,6 +24,7 @@ describe("promptLinkSearchFromParams", () => {
         repository: { owner: "pingdotgg", name: "t3code" },
         provider: "codex",
         model: null,
+        environmentId: null,
       },
     });
   });

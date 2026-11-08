@@ -42,7 +42,7 @@ it("names connected machines in a truncated error and lets the keyboard retry th
     </div>,
   );
   const short = "Can't reach Primary machine";
-  const detail = "Can't reach Primary machine from QA machine. Check the SSH route in Mesh config";
+  const detail = "Can't reach Primary machine from QA machine. Ask an agent to fix the connection";
   await userEvent.hover(screen.getByText(short));
   await expect.element(page.getByText(detail, { exact: true }).first()).toBeVisible();
   await userEvent.tab();

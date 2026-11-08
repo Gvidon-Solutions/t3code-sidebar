@@ -7,7 +7,11 @@ import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/
 import { AsyncResult } from "effect/reactivity";
 import {
   defaultDraftMachine,
+  draftMachineCanHostCopy,
   draftMachineCardSync,
+  draftMachineCatalogsKnown,
+  draftMachineUsable,
+  savedDraftMachineChoice,
   hasUsableDraftModels,
   draftMachineCards,
   draftModelUnavailableReason,
@@ -189,6 +193,8 @@ type NewTaskFlowContextValue = {
     readonly primary: boolean;
     readonly connected: boolean;
     readonly hasUsableModels: boolean | null;
+    readonly canHostCopy: boolean;
+    readonly usable: boolean;
     readonly sync: "synced" | "copying" | "out-of-sync" | null;
   }>;
   readonly machineCards: import("@t3tools/client-runtime/state/mesh-layout").DraftMachineCardRow[];
@@ -211,7 +217,10 @@ type NewTaskFlowContextValue = {
    */
   readonly missingRouteDraftId: string | null;
   readonly selectEnvironment: (environmentId: EnvironmentId) => void;
-  readonly switchEnvironment: (environmentId: EnvironmentId) => Promise<boolean>;
+  readonly switchEnvironment: (
+    environmentId: EnvironmentId,
+    options?: { readonly remember?: boolean },
+  ) => Promise<boolean>;
   readonly switchingToEnvironmentId: EnvironmentId | null;
   readonly mountingStatus: string | null;
   readonly mountTarget: {
@@ -670,17 +679,31 @@ export function NewTaskFlowProvider(
     ),
   );
   const preferenceKey = isScratchDraft ? "scratch" : preferenceScope?.key;
-  const switchEnvironment = async (environmentId: EnvironmentId): Promise<boolean> => {
-    if (preferenceKey)
-      savePreferences({
-        transform: (current) => ({
-          draftMachines: { ...current.draftMachines, [preferenceKey]: environmentId },
-        }),
-      });
+  const rememberDraftMachine = (environmentId: EnvironmentId) => {
+    const saved = savedDraftMachineChoice({
+      remember: true,
+      preferenceKey: preferenceKey ?? null,
+      environmentId,
+    });
+    if (!saved) return;
+    savePreferences({
+      transform: (current) => ({
+        draftMachines: { ...current.draftMachines, [saved.preferenceKey]: saved.environmentId },
+      }),
+    });
+  };
+  const switchEnvironment = async (
+    environmentId: EnvironmentId,
+    options: { readonly remember?: boolean } = {},
+  ): Promise<boolean> => {
+    // Remember only after the switch is accepted: a machine this server cannot
+    // mount must never replace the person's saved choice.
+    const remember = options.remember !== false;
     setPendingMount(null);
     if (environmentId === selectedEnvironmentId) {
       latestSwitchRef.current = null;
       setSwitchingToEnvironmentId(null);
+      if (remember) rememberDraftMachine(environmentId);
       return true;
     }
     if (!isScratchDraft) {
@@ -713,6 +736,7 @@ export function NewTaskFlowProvider(
       );
       if (target) {
         setProject(target);
+        if (remember) rememberDraftMachine(environmentId);
         return true;
       }
       // An older server cannot host a copy; offering to mount there would leave
@@ -735,6 +759,7 @@ export function NewTaskFlowProvider(
       );
       setPendingMount({ environmentId, logicalKey });
       setSwitchingToEnvironmentId(environmentId);
+      if (remember) rememberDraftMachine(environmentId);
       return true;
     }
     const request = {};
@@ -746,6 +771,7 @@ export function NewTaskFlowProvider(
     setSwitchingToEnvironmentId(null);
     if (result._tag === "Success") {
       setProject(result.value);
+      if (remember) rememberDraftMachine(environmentId);
       return true;
     }
     if (!isAtomCommandInterrupted(result)) {
@@ -975,6 +1001,21 @@ export function NewTaskFlowProvider(
               (machine) => machine.environmentId === meshMachine.network?.via,
             )?.label ?? null)
           : null;
+      const projectId = (preferenceScope?.projects.find(
+        (project) => project.environmentId === environmentId,
+      )?.id ??
+        meshLayout.config?.projectMounts[preferenceKey ?? ""]?.find(
+          (rep) => rep.environmentId === environmentId,
+        )?.projectId ??
+        null) as import("@t3tools/contracts").ProjectId | null;
+      const serverConfig = serverConfigs.get(environmentId) ?? null;
+      const supportsReplicas = serverConfig?.environment.capabilities.replicas === true;
+      const canHostCopy = draftMachineCanHostCopy({
+        hasProject: projectId !== null,
+        supportsReplicas,
+        isScratchDraft,
+      });
+      const hasUsableModels = connected ? hasUsableDraftModels(serverConfig, projectId) : null;
       return {
         environmentId,
         environmentLabel: display.label,
@@ -989,31 +1030,24 @@ export function NewTaskFlowProvider(
                 hasProject: !!hasProject,
                 error: connection?.connectionError,
               }),
-        disabled:
-          !connected ||
-          (!isScratchDraft && !serverConfigs.get(environmentId)?.environment.capabilities.replicas),
-        projectId:
-          preferenceScope?.projects.find((project) => project.environmentId === environmentId)
-            ?.id ??
-          meshLayout.config?.projectMounts[preferenceKey ?? ""]?.find(
-            (rep) => rep.environmentId === environmentId,
-          )?.projectId ??
-          null,
-        canHostCopy:
-          isScratchDraft ||
-          serverConfigs.get(environmentId)?.environment.capabilities.replicas === true,
+        // An older server that already holds the project is still selectable.
+        disabled: !connected || !canHostCopy,
+        projectId,
+        canHostCopy,
+        usable: draftMachineUsable({
+          connected,
+          hasUsableModels,
+          selectedModelUsable:
+            selectedModel !== null &&
+            draftModelUnavailableReason(serverConfig, selectedModel, projectId) === null,
+          canHostCopy,
+        }),
         primary:
           meshLayout.config?.projectMounts[preferenceKey ?? ""]?.some(
             (rep) => rep.environmentId === environmentId && rep.role === "primary",
-          ) ?? false,
+          ) ?? environmentId === meshLayout.source,
         connected,
-        hasUsableModels: connected
-          ? hasUsableDraftModels(
-              serverConfigs.get(environmentId) ?? null,
-              (preferenceScope?.projects.find((project) => project.environmentId === environmentId)
-                ?.id ?? null) as import("@t3tools/contracts").ProjectId | null,
-            )
-          : null,
+        hasUsableModels,
         sync:
           draftMachineCardSync(
             statuses.find(
@@ -1108,36 +1142,32 @@ export function NewTaskFlowProvider(
       defaultApplied.current === activeDraftKey
     )
       return;
+    // A default chosen before the provider catalogs arrive would mark every
+    // machine unusable and pin the draft to its main copy for good.
+    const catalogsKnown = draftMachineCatalogsKnown(
+      environments.map((machine) => ({
+        environmentId: machine.environmentId,
+        connected: machine.connected,
+      })),
+      new Set(
+        [...serverConfigs.entries()]
+          .filter(([, serverConfig]) => serverConfig.providers !== undefined)
+          .map(([environmentId]) => environmentId),
+      ),
+    );
+    if (!catalogsKnown) return;
     defaultApplied.current = activeDraftKey;
     const target = defaultDraftMachine(
       environments.map((machine) => ({
         environmentId: machine.environmentId,
-        connected: connectedEnvironments.some(
-          (environment) =>
-            environment.environmentId === machine.environmentId &&
-            environment.connectionState === "connected",
-        ),
-        usable:
-          hasUsableDraftModels(
-            serverConfigs.get(machine.environmentId) ?? null,
-            machine.projectId as import("@t3tools/contracts").ProjectId | null,
-          ) === true &&
-          selectedModel !== null &&
-          draftModelUnavailableReason(
-            serverConfigs.get(machine.environmentId),
-            selectedModel,
-            machine.projectId as import("@t3tools/contracts").ProjectId | null,
-          ) === null &&
-          (machine.projectId !== null || machine.canHostCopy),
-        primary:
-          meshLayout.config!.projectMounts[preferenceKey]?.some(
-            (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
-          ) ?? machine.environmentId === selectedEnvironmentId,
+        connected: machine.connected,
+        usable: machine.usable,
+        primary: machine.primary,
       })),
       preferences.draftMachines?.[preferenceKey] ?? null,
     );
     if (target && target !== selectedEnvironmentId)
-      void switchEnvironment(EnvironmentId.make(target));
+      void switchEnvironment(EnvironmentId.make(target), { remember: false });
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies a hydrated per-device machine preference to a new persistent draft
   useEffect(() => {
@@ -1198,7 +1228,10 @@ export function NewTaskFlowProvider(
         ? () => {
             const driver = replicaDriverEnvironment(meshLayout.config!, mountRow.rep);
             if (!driver) {
-              Dialog.alert("Cannot retry replica", "Add an SSH route in Settings › Mesh.");
+              Dialog.alert(
+                "Cannot retry replica",
+                "Ask an agent to fix the connection between these machines.",
+              );
               return;
             }
             if (driver)

@@ -352,7 +352,7 @@ describe("replicaStatusCopy", () => {
         state: "error",
         message: "Boreal cannot reach atlas and back. Add an ssh route.",
       }),
-    ).toBe("Can't reach atlas from Boreal. Check the SSH route in Mesh config");
+    ).toBe("Can't reach atlas from Boreal. Ask an agent to fix the connection");
     expect(replicaStatusCopy({ ...base, state: "error", message: "Disk is full" })).toBe(
       "Disk is full",
     );

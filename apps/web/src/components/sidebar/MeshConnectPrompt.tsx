@@ -10,9 +10,12 @@ import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironments } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
+import { toastManager } from "../ui/toast";
 import {
+  dismissMeshConnectIds,
   dismissMeshConnectPrompt,
   planMeshConnect,
+  pruneMeshConnectDismissed,
   shouldShowMeshConnectPrompt,
 } from "@t3tools/client-runtime/state/mesh-layout";
 
@@ -50,6 +53,10 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
       .filter((environment) => environment.connection.phase === "connected")
       .map((environment) => String(environment.environmentId)),
   );
+  const currentDismissed = pruneMeshConnectDismissed(
+    dismissed,
+    machines.map((machine) => machine.environmentId),
+  );
   const plan = planMeshConnect({
     machines: machines.map((machine) => ({
       environmentId: machine.environmentId,
@@ -63,9 +70,9 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
       ]),
     ),
   });
-  if (!shouldShowMeshConnectPrompt(plan, dismissed)) return null;
-  const dismiss = () => {
-    const next = dismissMeshConnectPrompt(dismissed, plan);
+  if (!shouldShowMeshConnectPrompt(plan, currentDismissed)) return null;
+  const rememberDismissed = (environmentIds: ReadonlyArray<string>) => {
+    const next = dismissMeshConnectIds(currentDismissed, environmentIds);
     setDismissed(next);
     try {
       window.localStorage.setItem(MESH_CONNECT_PROMPT_DISMISSED_KEY, JSON.stringify(next));
@@ -73,11 +80,34 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
       console.warn("Could not remember the dismissed mesh prompt", error);
     }
   };
-  const connectAll = () => {
-    for (const machine of plan.reconnect) {
-      void setEnabled({ environmentId: machine.environmentId as EnvironmentId, enabled: true });
+  const dismiss = () => {
+    const next = dismissMeshConnectPrompt(currentDismissed, plan);
+    setDismissed(next);
+    try {
+      window.localStorage.setItem(MESH_CONNECT_PROMPT_DISMISSED_KEY, JSON.stringify(next));
+    } catch (error) {
+      console.warn("Could not remember the dismissed mesh prompt", error);
     }
-    dismiss();
+  };
+  const connectAll = async () => {
+    const settled = plan.missing.map((machine) => machine.environmentId);
+    const failed: string[] = [];
+    for (const machine of plan.reconnect) {
+      const result = await setEnabled({
+        environmentId: machine.environmentId as EnvironmentId,
+        enabled: true,
+      });
+      if (result._tag === "Success") settled.push(machine.environmentId);
+      else failed.push(machine.label);
+    }
+    if (settled.length > 0) rememberDismissed(settled);
+    if (failed.length > 0) {
+      toastManager.add({
+        type: "error",
+        title: "Couldn't connect every machine",
+        description: `Ask an agent to fix the connection to ${failed.join(", ")}.`,
+      });
+    }
     if (plan.missing.length > 0) {
       void navigate({ to: "/settings/connections" });
     }
@@ -99,7 +129,7 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
               : "Bring this device's other machines online."}
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <Button size="xs" onClick={connectAll}>
+            <Button size="xs" onClick={() => void connectAll()}>
               Connect all
             </Button>
             <Button size="xs" variant="ghost" onClick={dismiss}>

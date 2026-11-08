@@ -102,14 +102,12 @@ it("shows replica lag and SSH route reasons while keeping absent reports unknown
     },
   ];
   const now = Date.parse("2026-11-05T00:05:00Z");
-  expect(meshMachineDetailRows(machine, config, live, now)).toEqual([
-    {
-      label: "SSH to Studio",
-      value: "Failed · Host key changed · checked 4 min ago",
-      exact: "2026-11-05T00:01:00Z",
-    },
-    { label: "Field notes", value: "Sync running", exact: "" },
-  ]);
+  const rows = meshMachineDetailRows(machine, config, live, now);
+  expect(rows[0]?.label).toBe("SSH to Studio");
+  expect(rows[0]?.value).toBe("Failed · Host key changed · checked 4 min ago");
+  expect(rows[0]?.exact).toBeTruthy();
+  expect(rows[0]?.exact).not.toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  expect(rows[1]).toEqual({ label: "Field notes", value: "Sync running", exact: "" });
   expect(
     meshMachineDetailRows(
       machine,

@@ -113,6 +113,15 @@ export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
 
 export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
 
+/** The local draft's "no provider yet" placeholder is not a model any machine can miss. */
+export function realDraftModelSelection(
+  selection: import("@t3tools/contracts").ModelSelection | null | undefined,
+): import("@t3tools/contracts").ModelSelection | null {
+  return selection && selection.instanceId !== NO_PROVIDER_MODEL_SELECTION.instanceId
+    ? selection
+    : null;
+}
+
 export function agentControlledBrowserCloseConfirmation(
   surfaces: readonly RightPanelSurface[],
   desktopByTabId: Readonly<Record<string, Pick<DesktopPreviewOverlay, "controller"> | undefined>>,

@@ -92,12 +92,13 @@ interface ThreadDetailsPanelProps extends Pick<
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   const visible = useClientSettings(resolveThreadDetailsVisibility);
   const mesh = useMeshLayout();
-  const isReplica = hidesGitControls(
-    mesh.config,
-    props.environmentId,
-    props.projectId,
-    props.environmentId,
-  );
+  const isReplica = hidesGitControls({
+    config: mesh.config,
+    environmentId: props.environmentId,
+    projectId: props.projectId,
+    projectEnvironmentId: props.environmentId,
+    layoutLoading: mesh.config === null && mesh.source !== null,
+  });
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const fileScripts = useT3ProjectFileScripts(
     props.environmentId,

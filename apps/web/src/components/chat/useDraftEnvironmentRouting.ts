@@ -2,9 +2,12 @@ import { useSyncExternalStore } from "react";
 import { pendingMeshDrafts } from "../../state/pendingMeshDrafts";
 import {
   defaultDraftMachine,
+  draftMachineCanHostCopy,
   draftMachineCatalogsKnown,
+  draftMachineUsable,
   draftModelUnavailableReason,
   hasUsableDraftModels,
+  savedDraftMachineChoice,
   planThreadOnMachine,
   resolveLogicalProjectKey,
   representationRow,
@@ -279,7 +282,11 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
           deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings),
         )
       : activeProjectKey;
-  const onEnvironmentChange = (nextEnvironmentId: EnvironmentId, allowOffline = false) => {
+  const onEnvironmentChange = (
+    nextEnvironmentId: EnvironmentId,
+    allowOffline = false,
+    remember = true,
+  ) => {
     if (envLocked || !draftId || sendInFlightRef.current) return;
     const originalDraft = getDraftSession(draftId);
     if (!originalDraft || originalDraft.promotedTo) return;
@@ -289,13 +296,19 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     if (!target || (target.connected === false && !allowOffline)) return;
     setMount(null);
     mountReadyRef.current = null;
-    try {
-      window.localStorage.setItem(
-        `t3.draftMachine.${preferenceKey ?? "scratch"}`,
-        nextEnvironmentId,
-      );
-    } catch (error) {
-      console.warn("Could not remember draft machine", error);
+    // Only an explicit choice is remembered. The automatic default must not
+    // overwrite the machine the person picked yesterday while it was offline.
+    const saved = savedDraftMachineChoice({
+      remember,
+      preferenceKey: preferenceKey ?? "scratch",
+      environmentId: nextEnvironmentId,
+    });
+    if (saved) {
+      try {
+        window.localStorage.setItem(`t3.draftMachine.${saved.preferenceKey}`, saved.environmentId);
+      } catch (error) {
+        console.warn("Could not remember draft machine", error);
+      }
     }
     setDraftThreadContext(draftId, {
       environmentSelection: "manual",
@@ -413,42 +426,39 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       console.warn("Could not read draft machine", error);
     }
     const target = defaultDraftMachine(
-      logicalProjectEnvironments.map((machine) => ({
-        environmentId: machine.environmentId,
-        connected: machine.connected !== false,
-        primary:
-          config.projectMounts[preferenceKey ?? ""]?.some(
-            (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
-          ) ?? machine.isPrimary,
-        usable:
-          hasUsableDraftModels(
-            environmentById.get(machine.environmentId)?.serverConfig
-              ? {
-                  settings: environmentById.get(machine.environmentId)!.serverConfig!.settings,
-                  providers: providersByEnvironment.get(machine.environmentId) ?? [],
-                }
-              : null,
-            machine.projectId,
-          ) === true &&
-          input.selection !== null &&
-          draftModelUnavailableReason(
-            environmentById.get(machine.environmentId)?.serverConfig
-              ? {
-                  settings: environmentById.get(machine.environmentId)!.serverConfig!.settings,
-                  providers: providersByEnvironment.get(machine.environmentId) ?? [],
-                }
-              : null,
-            input.selection,
-            machine.projectId,
-          ) === null &&
-          (machine.projectId !== null ||
-            environmentById.get(machine.environmentId)?.serverConfig?.environment.capabilities
-              .replicas === true),
-      })),
+      logicalProjectEnvironments.map((machine) => {
+        const serverConfig = environmentById.get(machine.environmentId)?.serverConfig;
+        const catalog = serverConfig
+          ? {
+              settings: serverConfig.settings,
+              providers: providersByEnvironment.get(machine.environmentId) ?? [],
+            }
+          : null;
+        return {
+          environmentId: machine.environmentId,
+          connected: machine.connected !== false,
+          primary:
+            config.projectMounts[preferenceKey ?? ""]?.some(
+              (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
+            ) ?? machine.isPrimary,
+          usable: draftMachineUsable({
+            connected: machine.connected !== false,
+            hasUsableModels: hasUsableDraftModels(catalog, machine.projectId),
+            selectedModelUsable:
+              input.selection !== null &&
+              draftModelUnavailableReason(catalog, input.selection, machine.projectId) === null,
+            canHostCopy: draftMachineCanHostCopy({
+              hasProject: machine.projectId !== null,
+              supportsReplicas: serverConfig?.environment.capabilities.replicas === true,
+              isScratchDraft: activeProjectIsScratch,
+            }),
+          }),
+        };
+      }),
       remembered,
     );
     if (target && target !== draftThread?.environmentId)
-      onEnvironmentChange(EnvironmentId.make(target), true);
+      onEnvironmentChange(EnvironmentId.make(target), true, false);
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies the device's remembered machine after the mesh snapshot loads for a new persistent draft
   useEffect(() => {
@@ -481,7 +491,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
               toastManager.add({
                 type: "error",
                 title: "Cannot retry replica",
-                description: "Add an SSH route in Settings › Mesh.",
+                description: "Ask an agent to fix the connection between these machines.",
               });
               return;
             }

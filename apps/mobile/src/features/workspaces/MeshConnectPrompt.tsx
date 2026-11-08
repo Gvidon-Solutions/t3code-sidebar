@@ -1,7 +1,9 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
+  dismissMeshConnectIds,
   dismissMeshConnectPrompt,
   planMeshConnect,
+  pruneMeshConnectDismissed,
   shouldShowMeshConnectPrompt,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -15,6 +17,7 @@ import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironments } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
+import * as Dialog from "../../components/ui/Dialog";
 import { openSettings } from "../settings/settings-navigation";
 import { useMeshLayout } from "./useMeshLayout";
 import { useMeshOverview } from "./useMeshOverview";
@@ -30,14 +33,16 @@ export function MeshConnectPrompt() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : {};
-  const dismissed = preferences.meshConnectPromptDismissed ?? [];
+  const dismissed = pruneMeshConnectDismissed(
+    preferences.meshConnectPromptDismissed ?? [],
+    machines.map((machine) => machine.environmentId),
+  );
   // Mobile gates on the same mesh settings as web before offering to reconnect.
   const enabled = environments.some(
     (environment) =>
       environment.serverConfig?.settings.meshEnabled === true &&
       environment.serverConfig.settings.linkedEnvironmentsEnabled === true,
   );
-  if (!enabled) return null;
   const plan = planMeshConnect({
     machines: machines.map((machine) => ({
       environmentId: machine.environmentId,
@@ -55,22 +60,43 @@ export function MeshConnectPrompt() {
       ]),
     ),
   });
-  if (!shouldShowMeshConnectPrompt(plan, dismissed)) return null;
+  if (!enabled || !shouldShowMeshConnectPrompt(plan, dismissed)) return null;
+  const rememberDismissed = (environmentIds: ReadonlyArray<string>) => {
+    const current = preferences.meshConnectPromptDismissed ?? [];
+    savePreferences({
+      transform: (_value) => ({
+        meshConnectPromptDismissed: dismissMeshConnectIds(current, environmentIds),
+      }),
+    });
+  };
   const dismiss = () => {
     savePreferences({
-      transform: (current) => ({
+      transform: (value) => ({
         meshConnectPromptDismissed: dismissMeshConnectPrompt(
-          current.meshConnectPromptDismissed ?? [],
+          value.meshConnectPromptDismissed ?? [],
           plan,
         ),
       }),
     });
   };
-  const connectAll = () => {
+  const connectAll = async () => {
+    const settled = plan.missing.map((machine) => machine.environmentId);
+    const failed: string[] = [];
     for (const machine of plan.reconnect) {
-      void setEnabled({ environmentId: machine.environmentId as EnvironmentId, enabled: true });
+      const result = await setEnabled({
+        environmentId: machine.environmentId as EnvironmentId,
+        enabled: true,
+      });
+      if (result._tag === "Success") settled.push(machine.environmentId);
+      else failed.push(machine.label);
     }
-    dismiss();
+    if (settled.length > 0) rememberDismissed(settled);
+    if (failed.length > 0) {
+      Dialog.alert(
+        "Couldn't connect every machine",
+        `Ask an agent to fix the connection to ${failed.join(", ")}.`,
+      );
+    }
     if (plan.missing.length > 0) openSettings(navigation, "SettingsEnvironments");
   };
   return (
@@ -86,7 +112,8 @@ export function MeshConnectPrompt() {
         <Pressable
           accessibilityLabel="Dismiss"
           accessibilityRole="button"
-          hitSlop={10}
+          hitSlop={8}
+          className="min-h-11 min-w-11 items-center justify-center"
           onPress={dismiss}
         >
           <SymbolView name="xmark" size={13} tintColorClassName="accent-icon-muted" />
@@ -98,10 +125,14 @@ export function MeshConnectPrompt() {
           : "Bring this device's other machines online."}
       </Text>
       <View className="mt-1 flex-row items-center gap-3">
-        <Pressable accessibilityRole="button" onPress={connectAll}>
+        <Pressable
+          accessibilityRole="button"
+          className="min-h-11 justify-center"
+          onPress={() => void connectAll()}
+        >
           <Text className="text-sm font-t3-medium text-primary-text">Connect all</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={dismiss}>
+        <Pressable accessibilityRole="button" className="min-h-11 justify-center" onPress={dismiss}>
           <Text className="text-sm text-foreground-muted">Not now</Text>
         </Pressable>
       </View>

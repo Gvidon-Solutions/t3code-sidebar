@@ -1,5 +1,6 @@
 import { useMeshLayout } from "./useMeshLayout";
 import * as Cause from "effect/Cause";
+import { plainErrorMessage } from "@t3tools/client-runtime/errors";
 import { useAtomValue } from "@effect/atom-react";
 import { offersLinkedEnvironments } from "@t3tools/client-runtime/link-request";
 import {
@@ -35,7 +36,7 @@ const peerLinksSourcesAtom = Atom.family((key: string) =>
         }),
       );
       if (result._tag === "Failure")
-        return [{ environmentId, links: [], error: String(Cause.squash(result.cause)) }];
+        return [{ environmentId, links: [], error: plainErrorMessage(Cause.squash(result.cause)) }];
       const data = AsyncResult.getOrElse(result, () => null);
       return data === null
         ? []
@@ -71,7 +72,7 @@ const peerStatesAtom = Atom.family((key: string) =>
           {
             environmentId,
             lastExchangeAt: null,
-            lastError: String(Cause.squash(result.cause)),
+            lastError: plainErrorMessage(Cause.squash(result.cause)),
             sentSeq: 0,
             receivedSeq: 0,
           },

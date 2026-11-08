@@ -23,6 +23,8 @@ export type NewThreadLink =
       readonly repository: PromptLinkRepository | null;
       readonly provider: string | null;
       readonly model: string | null;
+      /** The machine that should open the prepared thread. */
+      readonly environmentId: string | null;
     }
   | {
       readonly kind: "pull-request";
@@ -149,6 +151,7 @@ export function parseNewThreadLink(search: string): PromptLinkResult<NewThreadLi
       repository,
       provider: optionalParam(params, "provider")?.toLowerCase() ?? null,
       model: optionalParam(params, "model"),
+      environmentId: optionalParam(params, "env"),
     },
   };
 }
@@ -159,7 +162,7 @@ export function parseThreadLinkPrompt(search: string): PromptLinkResult<LinkedPr
 
 export function withoutPromptLinkParams(search: string): string {
   const params = new URLSearchParams(search);
-  for (const key of ["prompt", "repo", "pr", "provider", "model"]) params.delete(key);
+  for (const key of ["prompt", "repo", "pr", "provider", "model", "env"]) params.delete(key);
   const rest = params.toString();
   return rest ? `?${rest}` : "";
 }
@@ -169,6 +172,7 @@ export function buildNewThreadLink(input: {
   readonly repository?: PromptLinkRepository | null;
   readonly provider?: string | null;
   readonly model?: string | null;
+  readonly environmentId?: string | null;
   readonly origin?: string;
 }): string {
   const url = new URL("/new", input.origin ?? DEFAULT_HOSTED_APP_URL);
@@ -178,6 +182,7 @@ export function buildNewThreadLink(input: {
   }
   if (input.provider) url.searchParams.set("provider", input.provider);
   if (input.provider && input.model) url.searchParams.set("model", input.model);
+  if (input.environmentId) url.searchParams.set("env", input.environmentId);
   return url.toString();
 }
 

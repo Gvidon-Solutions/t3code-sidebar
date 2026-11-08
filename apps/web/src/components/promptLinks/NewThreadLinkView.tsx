@@ -11,7 +11,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { EnvironmentId, type ProjectId } from "@t3tools/contracts";
 import {
   type NewThreadLink,
   type PromptLinkRepository,
@@ -106,7 +106,7 @@ export function NewThreadLinkView({ link }: { readonly link: NewThreadLink }) {
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const handleNewThread = useNewThreadHandler();
-  const { scratchEnvironmentId, openScratchProject } = useScratchProject();
+  const { scratchEnvironmentId, scratchWorkspaceRootFor, openScratchProject } = useScratchProject();
   const startProjectClone = useAtomCommand(sourceControlEnvironment.startProjectClone, {
     reportFailure: false,
   });
@@ -175,7 +175,16 @@ export function NewThreadLinkView({ link }: { readonly link: NewThreadLink }) {
   };
 
   const openScratchDraft = async () => {
-    const environmentId = scratchEnvironmentId(lastActiveEnvironmentId());
+    // An agent action names the machine it must run on; never fall back to the
+    // machine of the most recently updated thread.
+    const requested =
+      link.kind === "new" && link.environmentId !== null
+        ? EnvironmentId.make(link.environmentId)
+        : null;
+    const environmentId =
+      requested !== null && scratchWorkspaceRootFor(requested) !== null
+        ? requested
+        : scratchEnvironmentId(lastActiveEnvironmentId());
     const project = environmentId === null ? null : await openScratchProject(environmentId);
     if (project === null) {
       setState({

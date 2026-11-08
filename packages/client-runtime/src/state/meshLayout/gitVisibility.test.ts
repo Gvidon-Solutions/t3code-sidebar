@@ -28,12 +28,25 @@ const config = {
   },
 };
 
+const base = { environmentId: "studio", projectId: "p1" };
+
 describe("hidesGitControls", () => {
-  it("hides git until the layout loads instead of guessing it is a primary", () => {
-    expect(hidesGitControls(null, "studio", "p1")).toBe(true);
+  it("shows git without a mesh: a folder is an ordinary project", () => {
+    expect(hidesGitControls({ ...base, config: null, layoutLoading: false })).toBe(false);
+  });
+  it("hides git only while a mesh layout is genuinely loading", () => {
+    expect(hidesGitControls({ ...base, config: null, layoutLoading: true })).toBe(true);
+    expect(hidesGitControls({ ...base, config, layoutLoading: true })).toBe(false);
   });
   it("hides git on a replica and keeps it on the primary", () => {
-    expect(hidesGitControls(config, "cloudbox", "p1")).toBe(true);
-    expect(hidesGitControls(config, "studio", "p1")).toBe(false);
+    expect(
+      hidesGitControls({
+        environmentId: "cloudbox",
+        projectId: "p1",
+        config,
+        layoutLoading: false,
+      }),
+    ).toBe(true);
+    expect(hidesGitControls({ ...base, config, layoutLoading: false })).toBe(false);
   });
 });
