@@ -108,11 +108,14 @@ it("cancels remote work, times out calls and releases timers on disconnect", asy
 
 it("detects a peer that stops reading even while it keeps sending unrelated traffic", () => {
   const p = pair();
+  expect(p.left.nextTickDelay()).toBe(15_000);
   p.advance(15_000);
   p.left.tick();
+  expect(p.left.nextTickDelay()).toBe(30_000);
   expect(JSON.parse(p.leftWire[0]!)).toMatchObject({ type: "ping" });
   p.advance(30_000);
   p.left.receive(JSON.stringify({ type: "event", name: "noise", body: null }));
+  expect(p.left.nextTickDelay()).toBe(15_000);
   p.advance(15_000);
   p.left.tick();
   expect(p.closed[0]?.message).toBe("Peer heartbeat timed out");

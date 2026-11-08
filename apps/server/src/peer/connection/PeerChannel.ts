@@ -317,6 +317,17 @@ export class PeerChannel {
       });
   }
 
+  nextTickDelay() {
+    const now = this.options.now();
+    return Math.max(
+      1,
+      Math.min(
+        this.lastReceived + 45_000 - now,
+        this.lastPing + (this.ping === undefined ? 15_000 : 45_000) - now,
+      ),
+    );
+  }
+
   tick() {
     const now = this.options.now();
     if (

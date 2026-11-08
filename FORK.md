@@ -123,6 +123,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   failures while reading deferred ids once per recovery pass.
 - Peer receipts reserve keys atomically, retain thirty days and cap stored response bytes at
   64 KiB; migration 82 preserves existing receipts while adding indexed creation timestamps.
+- Peer route history and revoked HTTP sessions are collected; session cache identities hash the
+  bearer. Heartbeats use their actual deadlines. State backups retain ten completed snapshots
+  and collect stale temporary files without replacing a resumed token’s original snapshot.
 
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 

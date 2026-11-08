@@ -5,6 +5,7 @@ import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as TestClock from "effect/testing/TestClock";
 import * as ServerConfig from "../config.ts";
 import * as Backup from "./MeshStateBackup.ts";
 it.effect(
@@ -36,6 +37,26 @@ it.effect(
           } finally {
             snapshot.close();
           }
+          for (let i = 0; i < 11; i++) {
+            const old = `${root}/runtime/mesh-backup/old-${i}`;
+            yield* fs.makeDirectory(old);
+            yield* fs.writeFileString(`${old}/statev2.sqlite`, "historical");
+            yield* fs.utimes(old, i, i);
+          }
+          const incomplete = `${root}/runtime/mesh-backup/incomplete`;
+          yield* fs.makeDirectory(incomplete);
+          yield* fs.writeFileString(`${incomplete}/statev2.sqlite.tmp`, "interrupted");
+          yield* fs.utimes(incomplete, 0, 0);
+          yield* TestClock.adjust("2 days");
+          yield* backup.create("next-token");
+          expect(yield* fs.exists(incomplete)).toBe(false);
+          expect(yield* fs.readDirectory(`${root}/runtime/mesh-backup`)).toHaveLength(10);
+          expect(yield* fs.exists(`${root}/runtime/mesh-backup/lease-token/statev2.sqlite`)).toBe(
+            true,
+          );
+          expect(yield* fs.exists(`${root}/runtime/mesh-backup/next-token/statev2.sqlite`)).toBe(
+            true,
+          );
         } finally {
           db.close();
         }

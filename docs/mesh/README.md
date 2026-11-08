@@ -123,6 +123,12 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   startup and hourly-on-use sweeps retain thirty days, including interrupted requests. Stored
   responses are capped at 64 KiB of encoded bytes; an oversized response still reaches its
   original caller, while retries receive an explicit 413 receipt rather than repeating work.
+- **Bounded peer state.** `PeerMcpClient` hashes HTTP session identities and removes rejected
+  sessions on 401, including a failed renewal. `PeerSessions` retains route history only for
+  current links/layout machines or live advertisements. `PeerChannel.nextTickDelay` schedules
+  heartbeat/death deadlines directly rather than ticking every second. `MeshStateBackup` keeps
+  ten completed snapshots, protects the current token, and removes incomplete directories older
+  than a day and stale temporary files under its private root.
 - **Routing.** A call for another machine goes direct when linked, else through one relay hop:
   `apps/server/src/mesh/MeshRouting.ts` (`callRouted`) used by `PeerForwarding`, files and forks.
 - **Replicas.** `apps/server/src/replicas/`: `MutagenInstaller` (pinned 0.18.1, sha256),

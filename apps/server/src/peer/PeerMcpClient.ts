@@ -116,6 +116,16 @@ const responseJson = (contentType: string | undefined, text: string) =>
         .join("")
     : text;
 
+export const peerHttpSessionKey = Effect.fn("PeerMcpClient.sessionKey")(function* (
+  url: string,
+  token: string,
+) {
+  const digest = yield* Digest.Digest;
+  return Hex.encode(
+    yield* digest.digest(Digest.sha256, new TextEncoder().encode(encodeSeed([url, token]))),
+  );
+});
+
 const make = Effect.gen(function* () {
   const links = yield* PeerLinks.PeerLinks;
   const digest = yield* Digest.Digest;
@@ -206,7 +216,17 @@ const make = Effect.gen(function* () {
           : {}),
         [McpInvocationContext.MODE_LIMIT_HEADER]: `${input.limits.runtimeMode}/${input.limits.interactionMode}`,
       };
-      const sessionKey = `${input.url}\n${input.token}`;
+      const sessionKey = yield* peerHttpSessionKey(input.url, input.token).pipe(
+        Effect.provideService(Digest.Digest, digest),
+        Effect.tapError((cause) => Effect.logError("Peer session identity hash failed", cause)),
+        Effect.mapError(
+          () =>
+            new OrchestratorMcpFailure({
+              code: "orchestration_error",
+              message: "Peer session identity could not be computed",
+            }),
+        ),
+      );
       const callOnce = (sessionId: string) =>
         post(
           input.url,
@@ -227,11 +247,21 @@ const make = Effect.gen(function* () {
       }
       let response = yield* callOnce(sessionId);
       if (response.status === 404) {
+        yield* Ref.update(sessions, (current) => {
+          const next = new Map(current);
+          next.delete(sessionKey);
+          return next;
+        });
         const renewed = yield* openSession(input.url, input.token, limitHeader);
         yield* Ref.update(sessions, (current) => new Map(current).set(sessionKey, renewed));
         response = yield* callOnce(renewed);
       }
       if (response.status === 401) {
+        yield* Ref.update(sessions, (current) => {
+          const next = new Map(current);
+          next.delete(sessionKey);
+          return next;
+        });
         return yield* new OrchestratorMcpFailure({
           code: "capability_denied",
           message:

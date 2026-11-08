@@ -101,7 +101,7 @@ it.effect("reserves a receipt atomically when two services read an absent key to
       apply(target, receiver, args: unknown[]) {
         const statement = Reflect.apply(target, receiver, args) as Effect.Effect<
           ReadonlyArray<unknown>,
-          unknown
+          SqlError.SqlError
         >;
         if (!Array.isArray(args[0]) || !args[0].join("").includes("SELECT request_body, result"))
           return statement;
