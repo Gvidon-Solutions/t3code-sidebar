@@ -381,9 +381,12 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
       return `Preparing ${input.targetLabel}…`;
     case "mounting":
       return input.progress === null
-        ? `Mounting on ${input.targetLabel}…`
-        : `Mounting on ${input.targetLabel}… ${Math.round(input.progress * 100)}%`;
+        ? `Copying files to ${input.targetLabel}…`
+        : `Copying files to ${input.targetLabel}… ${Math.round(input.progress * 100)}%`;
     case "watching":
+      if (input.message === "Manual copy") return "Not synced automatically";
+      if (input.message?.startsWith("External folder"))
+        return "External folder, not synced automatically";
       return input.message || "Synced";
     case "conflict":
       return input.conflicts === 1 ? "1 conflict" : `${input.conflicts} conflicts`;
