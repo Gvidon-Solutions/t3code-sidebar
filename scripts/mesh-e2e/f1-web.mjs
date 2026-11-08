@@ -154,8 +154,8 @@ try {
   });
   console.log("PASS real thread menu -> Fork to machine dialog");
   if (values["remote-machine"]) {
-    const picker = dialog.getByRole("combobox", { name: "Fork target machine" });
-    await picker.fill(values["remote-machine"]);
+    const picker = dialog.locator('[data-slot="combobox-trigger"]');
+    await picker.click();
     await page.getByRole("option", { name: values["remote-machine"], exact: true }).click();
     await dialog.getByRole("button", { name: "Fork model", exact: true }).waitFor();
     await dialog.getByRole("button", { name: "Fork model", exact: true }).click();
@@ -165,7 +165,7 @@ try {
       path: NodePath.join(values.shots, "remote-models.png"),
       fullPage: true,
     });
-    await picker.fill(values["empty-machine"]);
+    await picker.click();
     await page.getByRole("option", { name: values["empty-machine"], exact: true }).click();
     await dialog
       .getByText("No models are available on " + values["empty-machine"] + ".", { exact: true })

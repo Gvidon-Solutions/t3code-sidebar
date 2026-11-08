@@ -41,6 +41,6 @@ export const skewScenarios = {
           ),
         );
       },
-      { skewable: true },
+      { skewable: true, names: ["studio", "cloudbox"] },
     ),
 };

@@ -158,6 +158,13 @@ async function buildRuntimes(cache) {
       "Test build; never publish\n",
     );
   }
+  await NodeFSP.copyFile(
+    NodePath.join(source, "apps/server/dist-exe/bin.mjs"),
+    NodePath.join(root, "0.1.6/bin.mjs"),
+  );
+  await run(process.execPath, [NodePath.join(root, "0.1.6/bin.mjs"), "--help"], {
+    env: { ...process.env, NODE_COMPILE_CACHE: NodePath.join(root, "compile-cache") },
+  });
   await NodeFSP.writeFile(NodePath.join(root, "ready"), "ready");
   return root;
 }

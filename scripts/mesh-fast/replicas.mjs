@@ -28,7 +28,7 @@ export const replicaScenarios = {
       directory,
       async (mesh) => {
         const p = await project(mesh, "cold-install"),
-          target = mesh.nodes[2],
+          target = mesh.nodes[1],
           rep = await place(target, p);
         NodeAssert.match(
           await run(NodePath.join(target.base, "bin/mutagen"), ["version"]),
@@ -36,7 +36,7 @@ export const replicaScenarios = {
         );
         await content(NodePath.join(rep.path, "README.md"), p.title);
       },
-      { coldInstall: true },
+      { coldInstall: true, names: ["studio", "laptop"] },
     ),
   "replica-policies": (directory) =>
     fixture(directory, async (mesh) => {
@@ -115,132 +115,177 @@ export const replicaScenarios = {
       );
     }),
   "replica-conflicts": (directory) =>
-    fixture(directory, async (mesh) => {
-      const [, , laptop] = mesh.nodes,
-        p = await project(mesh, "conflicts"),
-        rep = await place(laptop, p);
-      await mutagen(laptop, "sync", "pause", rep.session);
-      await write(p.root, "README.md", "primary winner");
-      await write(rep.path, "README.md", "replica loser");
-      await mutagen(laptop, "sync", "resume", rep.session);
-      await content(NodePath.join(rep.path, "README.md"), "primary winner");
-      await archive(rep.path, "replica loser");
-      await config(mesh, (doc) => ({
-        ...doc,
-        projects: {
-          ...doc.projects,
-          defaults: { ...doc.projects?.defaults, conflicts: "newest-wins" },
-        },
-      }));
-      await mutagen(laptop, "sync", "pause", rep.session);
-      await write(p.root, "README.md", "primary loser");
-      await write(rep.path, "README.md", "newest winner");
-      await NodeFSP.utimes(NodePath.join(p.root, "README.md"), 100, 100);
-      await NodeFSP.utimes(NodePath.join(rep.path, "README.md"), 200, 200);
-      await mutagen(laptop, "sync", "resume", rep.session);
-      await content(NodePath.join(p.root, "README.md"), "newest winner");
-      await archive(p.root, "primary loser");
-      await mutagen(laptop, "sync", "pause", rep.session);
-      await write(rep.path, "unsynced.txt", "retained");
-      await NodeAssert.rejects(
-        mcp(laptop, "t3_project_place", { project: p.key, machine: laptop.id, action: "remove" }),
-        /unsynced.txt/,
-      );
-      await mutagen(laptop, "sync", "resume", rep.session);
-      await content(NodePath.join(p.root, "unsynced.txt"), "retained");
-      await mutagen(laptop, "sync", "flush", rep.session);
-      await mcp(laptop, "t3_project_place", {
-        project: p.key,
-        machine: laptop.id,
-        action: "remove",
-      });
-      await content(NodePath.join(rep.path, "unsynced.txt"), "retained");
-      NodeAssert.ok(
-        (await mcp(laptop, "t3_project_list", { limit: 100 })).projects.some(
-          (item) => item.workspaceRoot === rep.path,
-        ),
-      );
-    }),
-  "replica-warnings": (directory) =>
-    fixture(directory, async (mesh) => {
-      const [, , laptop] = mesh.nodes,
-        p = await project(mesh, "warnings");
-      await write(p.root, "private", "unreadable");
-      await NodeFSP.chmod(NodePath.join(p.root, "private"), 0);
-      await NodeFSP.symlink("../outside", NodePath.join(p.root, "outside"));
-      try {
-        const rep = await place(laptop, p);
-        await until(
-          "nonfatal scan problems",
-          () => state(laptop, p),
-          (value) =>
-            value.representations.some(
-              (item) =>
-                item.environmentId === laptop.id && item.projectId && item.status?.skipped >= 2,
-            ),
-        );
-        const previous = JSON.parse(
-          await mutagen(laptop, "sync", "list", "--template", "{{json .}}"),
-        )[0].identifier;
+    fixture(
+      directory,
+      async (mesh) => {
+        const [, laptop] = mesh.nodes,
+          p = await project(mesh, "conflicts"),
+          rep = await place(laptop, p);
+        await mutagen(laptop, "sync", "pause", rep.session);
+        await write(p.root, "README.md", "primary winner");
+        await write(rep.path, "README.md", "replica loser");
+        await mutagen(laptop, "sync", "resume", rep.session);
+        await content(NodePath.join(rep.path, "README.md"), "primary winner");
+        await archive(rep.path, "replica loser");
         await config(mesh, (doc) => ({
           ...doc,
           projects: {
             ...doc.projects,
-            overrides: [{ project: p.title, ignore: ["private", "outside"] }],
+            defaults: { ...doc.projects?.defaults, conflicts: "newest-wins" },
           },
         }));
-        await until(
-          "ignore session replacement",
-          async () => JSON.parse(await mutagen(laptop, "sync", "list", "--template", "{{json .}}")),
-          (rows) =>
-            rows.length === 1 &&
-            rows[0].identifier !== previous &&
-            rows[0].ignore.paths.includes("private"),
+        await mutagen(laptop, "sync", "pause", rep.session);
+        await write(p.root, "README.md", "primary loser");
+        await write(rep.path, "README.md", "newest winner");
+        await NodeFSP.utimes(NodePath.join(p.root, "README.md"), 100, 100);
+        await NodeFSP.utimes(NodePath.join(rep.path, "README.md"), 200, 200);
+        await mutagen(laptop, "sync", "resume", rep.session);
+        await content(NodePath.join(p.root, "README.md"), "newest winner");
+        await archive(p.root, "primary loser");
+        await mutagen(laptop, "sync", "pause", rep.session);
+        await write(rep.path, "unsynced.txt", "retained");
+        await NodeAssert.rejects(
+          mcp(laptop, "t3_project_place", { project: p.key, machine: laptop.id, action: "remove" }),
+          /unsynced.txt/,
+        );
+        await mutagen(laptop, "sync", "resume", rep.session);
+        await content(NodePath.join(p.root, "unsynced.txt"), "retained");
+        await mutagen(laptop, "sync", "flush", rep.session);
+        await mcp(laptop, "t3_project_place", {
+          project: p.key,
+          machine: laptop.id,
+          action: "remove",
+        });
+        await content(NodePath.join(rep.path, "unsynced.txt"), "retained");
+        NodeAssert.ok(
+          (await mcp(laptop, "t3_project_list", { limit: 100 })).projects.some(
+            (item) => item.workspaceRoot === rep.path,
+          ),
+        );
+      },
+      { names: ["studio", "laptop"] },
+    ),
+  "replica-warnings": (directory) =>
+    fixture(
+      directory,
+      async (mesh) => {
+        const [, laptop] = mesh.nodes,
+          p = await project(mesh, "warnings");
+        await write(p.root, "private", "unreadable");
+        await NodeFSP.chmod(NodePath.join(p.root, "private"), 0);
+        await NodeFSP.symlink("../outside", NodePath.join(p.root, "outside"));
+        try {
+          const rep = await place(laptop, p);
+          await until(
+            "nonfatal scan problems",
+            () => state(laptop, p),
+            (value) =>
+              value.representations.some(
+                (item) =>
+                  item.environmentId === laptop.id && item.projectId && item.status?.skipped >= 2,
+              ),
+          );
+          const previous = JSON.parse(
+            await mutagen(laptop, "sync", "list", "--template", "{{json .}}"),
+          )[0].identifier;
+          await config(mesh, (doc) => ({
+            ...doc,
+            projects: {
+              ...doc.projects,
+              overrides: [{ project: p.title, ignore: ["private", "outside"] }],
+            },
+          }));
+          await until(
+            "ignore session replacement",
+            async () =>
+              JSON.parse(await mutagen(laptop, "sync", "list", "--template", "{{json .}}")),
+            (rows) =>
+              rows.length === 1 &&
+              rows[0].identifier !== previous &&
+              rows[0].ignore.paths.includes("private"),
+          );
+          await until(
+            "warnings cleared",
+            () => state(laptop, p),
+            (value) =>
+              value.representations.some(
+                (item) =>
+                  item.environmentId === laptop.id &&
+                  item.status?.state === "watching" &&
+                  (item.status.skipped ?? 0) === 0,
+              ),
+          );
+          await content(NodePath.join(rep.path, "README.md"), p.title);
+        } finally {
+          await NodeFSP.chmod(NodePath.join(p.root, "private"), 0o600);
+        }
+      },
+      { names: ["studio", "laptop"] },
+    ),
+  "replica-full": (directory) =>
+    fixture(
+      directory,
+      async (mesh) => {
+        const [, laptop] = mesh.nodes,
+          p = await project(mesh, "full");
+        await write(
+          p.root,
+          "package.json",
+          JSON.stringify({
+            name: "mesh-fast-full",
+            private: true,
+            dependencies: { "mesh-fast-fixture": "file:./fixture-dependency" },
+          }),
+        );
+        await write(
+          p.root,
+          "fixture-dependency/package.json",
+          JSON.stringify({ name: "mesh-fast-fixture", version: "1.0.0", main: "index.cjs" }),
+        );
+        await write(
+          p.root,
+          "fixture-dependency/index.cjs",
+          "module.exports='installed real dependency';\n",
+        );
+        await run(
+          NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "pnpm-12.14.0/pnpm"),
+          ["install", "--lockfile-only", "--offline"],
+          { cwd: p.root, env: mesh.nodes[0].env },
+        );
+        const firstLock = await NodeFSP.readFile(NodePath.join(p.root, "pnpm-lock.yaml"), "utf8");
+        await config(mesh, (doc) => ({
+          ...doc,
+          projects: { ...doc.projects, overrides: [{ project: p.title, replica: "full" }] },
+        }));
+        const rep = await place(laptop, p);
+        await content(NodePath.join(rep.path, ".t3/installed-lock"), firstLock);
+        NodeAssert.equal(
+          await run(process.execPath, ["-e", "console.log(require('mesh-fast-fixture'))"], {
+            cwd: rep.path,
+            env: laptop.env,
+          }),
+          "installed real dependency",
+        );
+        NodeAssert.equal(
+          await NodeFSP.readFile(NodePath.join(rep.path, ".t3/install-count"), "utf8"),
+          "1",
+        );
+        const secondLock = firstLock + "\n# second frozen installation\n";
+        await write(p.root, "pnpm-lock.yaml", secondLock);
+        await content(NodePath.join(rep.path, ".t3/installed-lock"), secondLock);
+        NodeAssert.equal(
+          await NodeFSP.readFile(NodePath.join(rep.path, ".t3/install-count"), "utf8"),
+          "2",
         );
         await until(
-          "warnings cleared",
+          "full ready status",
           () => state(laptop, p),
           (value) =>
-            value.representations.some(
-              (item) =>
-                item.environmentId === laptop.id &&
-                item.status?.state === "watching" &&
-                (item.status.skipped ?? 0) === 0,
-            ),
+            value.representations.some((item) => item.status?.message === "environment: ready"),
         );
-        await content(NodePath.join(rep.path, "README.md"), p.title);
-      } finally {
-        await NodeFSP.chmod(NodePath.join(p.root, "private"), 0o600);
-      }
-    }),
-  "replica-full": (directory) =>
-    fixture(directory, async (mesh) => {
-      const [, , laptop] = mesh.nodes,
-        p = await project(mesh, "full");
-      await write(p.root, "pnpm-lock.yaml", "lock one");
-      await config(mesh, (doc) => ({
-        ...doc,
-        projects: { ...doc.projects, overrides: [{ project: p.title, replica: "full" }] },
-      }));
-      const rep = await place(laptop, p);
-      await content(NodePath.join(rep.path, ".t3/installed-lock"), "lock one");
-      NodeAssert.equal(
-        await NodeFSP.readFile(NodePath.join(rep.path, ".t3/install-count"), "utf8"),
-        "1",
-      );
-      await write(p.root, "pnpm-lock.yaml", "lock two");
-      await content(NodePath.join(rep.path, ".t3/installed-lock"), "lock two");
-      NodeAssert.equal(
-        await NodeFSP.readFile(NodePath.join(rep.path, ".t3/install-count"), "utf8"),
-        "2",
-      );
-      await until(
-        "full ready status",
-        () => state(laptop, p),
-        (value) =>
-          value.representations.some((item) => item.status?.message === "environment: ready"),
-      );
-    }),
+      },
+      { names: ["studio", "laptop"] },
+    ),
 };
 for (const target of ["studio", "cloudbox", "laptop"])
   for (const phase of ["mount", "sync"])

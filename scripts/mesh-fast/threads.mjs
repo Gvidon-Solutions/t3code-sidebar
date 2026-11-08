@@ -6,31 +6,33 @@ import { fixture, project, rpc, mcp, until, content } from "./helpers.mjs";
 const agent = NodeURL.fileURLToPath(new URL("fake-agent.mjs", import.meta.url));
 const instances = ["fakeCodex", "fakeOpenCode"];
 export async function providers(mesh) {
-  for (const node of mesh.nodes) {
-    await rpc(node, "server.updateSettings", {
-      patch: {
-        providerInstances: {
-          ...node.inactiveProviders,
-          ...Object.fromEntries(
-            instances.map((instanceId) => [
-              instanceId,
-              {
-                driver: "acpRegistry",
-                enabled: true,
-                displayName: instanceId,
-                config: {
-                  source: "local",
-                  commandPath: node.container ? "/usr/local/bin/node" : process.execPath,
-                  commandArgs: [agent],
+  await Promise.all(
+    mesh.nodes.map(async (node) => {
+      await rpc(node, "server.updateSettings", {
+        patch: {
+          providerInstances: {
+            ...node.inactiveProviders,
+            ...Object.fromEntries(
+              instances.map((instanceId) => [
+                instanceId,
+                {
+                  driver: "acpRegistry",
+                  enabled: true,
+                  displayName: instanceId,
+                  config: {
+                    source: "local",
+                    commandPath: node.container ? "/usr/local/bin/node" : process.execPath,
+                    commandArgs: [agent],
+                  },
                 },
-              },
-            ]),
-          ),
+              ]),
+            ),
+          },
         },
-      },
-    });
-    await rpc(node, "server.refreshProviders", { fresh: true, refreshModels: true });
-  }
+      });
+      await rpc(node, "server.refreshProviders", { fresh: true, refreshModels: true });
+    }),
+  );
 }
 export async function completed(node, threadId) {
   await mcp(node, "t3_thread_wait", { threadId, timeoutMs: 60000 });

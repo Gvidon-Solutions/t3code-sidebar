@@ -57,59 +57,63 @@ async function journals(node) {
 }
 export const forkScenarios = {
   "f1-dropped-commit": (directory) =>
-    fixture(directory, async (mesh) => {
-      await providers(mesh);
-      const [studio, target] = mesh.nodes,
-        p = await project(mesh, "F1-retry"),
-        source = await launch(studio, p);
-      await mesh.fault(target, { observeCommit: true, reset: true });
-      await until(
-        "commit proxy installed",
-        async () => (await fetch(target.origin + "/__N1_network")).json(),
-        (v) => v.state.observeCommit && v.sockets === 0,
-      );
-      await mesh.fault(target, { observeCommit: true });
-      await until(
-        "instrumented native peer reconnected",
-        () => rpc(studio, "meshLayout.status"),
-        (value) =>
-          value.connections.some(
-            (row) => row.environmentId === target.id && row.state === "direct",
-          ),
-      );
-      await mesh.fault(target, { observeCommit: true, denyMcp: true, peerOnlyMcp: true });
-      const commandId = NodeCrypto.randomUUID();
-      const result = await rpc(studio, "threads.fork", {
-        commandId,
-        threadId: source.threadId,
-        targetEnvironmentId: target.id,
-        modelSelection: { instanceId: "fakeCodex", model: "fast" },
-      });
-      await until(
-        "dropped response retried",
-        async () => (await fetch(target.origin + "/__N1_network")).json(),
-        (v) => v.droppedCommitResponses === 1 && v.commitCalls >= 2,
-      );
-      const read = await mcp(target, "t3_thread_read", { threadId: result.threadId });
-      NodeAssert.match(JSON.stringify(read), /FAST_DONE/);
-      const receipts = await journals(target);
-      NodeAssert.equal(
-        receipts.filter(
-          (entry) => entry.key === "target:" + commandId && entry.value.phase === "committed",
-        ).length,
-        1,
-      );
-      const list = await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 });
-      await NodeFSP.writeFile(
-        NodePath.join(directory, "retry.json"),
-        JSON.stringify({ result, receipts, list }),
-      );
-      NodeAssert.equal(
-        list.threads.filter((thread) => thread.threadId === result.threadId).length,
-        1,
-      );
-      NodeAssert.equal(list.total, 1);
-    }),
+    fixture(
+      directory,
+      async (mesh) => {
+        await providers(mesh);
+        const [studio, target] = mesh.nodes,
+          p = await project(mesh, "F1-retry"),
+          source = await launch(studio, p);
+        await mesh.fault(target, { observeCommit: true, reset: true });
+        await until(
+          "commit proxy installed",
+          async () => (await fetch(target.origin + "/__N1_network")).json(),
+          (v) => v.state.observeCommit && v.sockets === 0,
+        );
+        await mesh.fault(target, { observeCommit: true });
+        await until(
+          "instrumented native peer reconnected",
+          () => rpc(studio, "meshLayout.status"),
+          (value) =>
+            value.connections.some(
+              (row) => row.environmentId === target.id && row.state === "direct",
+            ),
+        );
+        await mesh.fault(target, { observeCommit: true, denyMcp: true, peerOnlyMcp: true });
+        const commandId = NodeCrypto.randomUUID();
+        const result = await rpc(studio, "threads.fork", {
+          commandId,
+          threadId: source.threadId,
+          targetEnvironmentId: target.id,
+          modelSelection: { instanceId: "fakeCodex", model: "fast" },
+        });
+        await until(
+          "dropped response retried",
+          async () => (await fetch(target.origin + "/__N1_network")).json(),
+          (v) => v.droppedCommitResponses === 1 && v.commitCalls >= 2,
+        );
+        const read = await mcp(target, "t3_thread_read", { threadId: result.threadId });
+        NodeAssert.match(JSON.stringify(read), /FAST_DONE/);
+        const receipts = await journals(target);
+        NodeAssert.equal(
+          receipts.filter(
+            (entry) => entry.key === "target:" + commandId && entry.value.phase === "committed",
+          ).length,
+          1,
+        );
+        const list = await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 });
+        await NodeFSP.writeFile(
+          NodePath.join(directory, "retry.json"),
+          JSON.stringify({ result, receipts, list }),
+        );
+        NodeAssert.equal(
+          list.threads.filter((thread) => thread.threadId === result.threadId).length,
+          1,
+        );
+        NodeAssert.equal(list.total, 1);
+      },
+      { names: ["studio", "cloudbox"] },
+    ),
   "f1-replica-content": (directory) =>
     fixture(directory, async (mesh) => {
       const real = process.env.MESH_FAST_REAL_PROVIDERS === "1";
@@ -175,110 +179,122 @@ export const forkScenarios = {
       );
     }),
   "f1-offline-atomic": (directory) =>
-    fixture(directory, async (mesh) => {
-      await providers(mesh);
-      const [studio, target] = mesh.nodes,
-        p = await project(mesh, "F1-offline"),
-        source = await launch(studio, p);
-      const before = await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 });
-      const history = await mcp(studio, "t3_thread_read", { threadId: source.threadId });
-      await mesh.stop(target);
-      try {
-        await NodeAssert.rejects(
-          mcp(studio, "t3_thread_fork", {
-            threadId: source.threadId,
-            targetEnvironmentId: target.id,
-            modelSelection: { instanceId: "fakeCodex", model: "fast" },
-          }),
-          /offline|unavailable|connect|reach|failed|timed out|did not answer/i,
+    fixture(
+      directory,
+      async (mesh) => {
+        await providers(mesh);
+        const [studio, target] = mesh.nodes,
+          p = await project(mesh, "F1-offline"),
+          source = await launch(studio, p);
+        const before = await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 });
+        const history = await mcp(studio, "t3_thread_read", { threadId: source.threadId });
+        await mesh.stop(target);
+        try {
+          await NodeAssert.rejects(
+            mcp(studio, "t3_thread_fork", {
+              threadId: source.threadId,
+              targetEnvironmentId: target.id,
+              modelSelection: { instanceId: "fakeCodex", model: "fast" },
+            }),
+            /offline|unavailable|connect|reach|failed|timed out|did not answer/i,
+          );
+        } finally {
+          await mesh.resume(target);
+        }
+        NodeAssert.deepEqual(
+          await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 }),
+          before,
         );
-      } finally {
-        await mesh.resume(target);
-      }
-      NodeAssert.deepEqual(
-        await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 }),
-        before,
-      );
-      NodeAssert.deepEqual(
-        items(await mcp(studio, "t3_thread_read", { threadId: source.threadId })),
-        items(history),
-      );
-      NodeAssert.ok(
-        !(await mcp(studio, "t3_project_machines", { project: p.id })).representations.some(
-          (rep) => rep.environmentId === target.id,
-        ),
-      );
-      NodeAssert.ok(!(await journals(target)).some((entry) => entry.value.phase !== "committed"));
-    }),
+        NodeAssert.deepEqual(
+          items(await mcp(studio, "t3_thread_read", { threadId: source.threadId })),
+          items(history),
+        );
+        NodeAssert.ok(
+          !(await mcp(studio, "t3_project_machines", { project: p.id })).representations.some(
+            (rep) => rep.environmentId === target.id,
+          ),
+        );
+        NodeAssert.ok(!(await journals(target)).some((entry) => entry.value.phase !== "committed"));
+      },
+      { names: ["studio", "cloudbox"] },
+    ),
   "f1-pending-expiry": (directory) =>
-    fixture(directory, async (mesh) => {
-      await providers(mesh);
-      const [studio, target] = mesh.nodes,
-        p = await project(mesh, "F1-pending"),
-        source = await launch(studio, p),
-        peer = await receiver(studio, target),
-        id = NodeCrypto.randomUUID();
-      const modelSelection = { instanceId: "fakeCodex", model: "fast" };
-      await mcp(peer, "t3_thread_receive_fork", {
-        action: "prepare",
-        forkId: id,
-        logicalKey: p.key,
-        modelSelection,
-      });
-      const staged = await mcp(peer, "t3_thread_receive_fork", {
-        action: "receive",
-        bundle: {
-          id,
-          sourceEnvironmentId: studio.id,
-          sourceThreadId: source.threadId,
-          sourceTitle: "source",
-          sourceMachine: "studio",
-          sourceLink: source.link,
+    fixture(
+      directory,
+      async (mesh) => {
+        await providers(mesh);
+        const [studio, target] = mesh.nodes,
+          p = await project(mesh, "F1-pending"),
+          source = await launch(studio, p),
+          peer = await receiver(studio, target),
+          id = NodeCrypto.randomUUID();
+        const modelSelection = { instanceId: "fakeCodex", model: "fast" };
+        await mcp(peer, "t3_thread_receive_fork", {
+          action: "prepare",
+          forkId: id,
           logicalKey: p.key,
-          title: "Invisible pending fork",
           modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          entries: [{ role: "user", text: "history", attachments: [] }],
-        },
-      });
-      const threadId = staged.result.threadId;
-      NodeAssert.ok(
-        (await journals(target)).some(
-          (entry) => entry.key === "target:" + id && entry.value.phase === "pending",
-        ),
-      );
-      NodeAssert.ok(
-        !JSON.stringify(
-          await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 }),
-        ).includes(threadId),
-      );
-      await NodeAssert.rejects(
-        mcp(target, "t3_thread_read", { threadId }),
-        /not_found|not found|unknown/i,
-      );
-      await NodeAssert.rejects(
-        mcp(target, "t3_thread_send", { threadId, message: "must not run" }),
-        /not_found|not found|unknown/i,
-      );
-      await until(
-        "pending fork expiry sweep",
-        () => journals(target),
-        (entries) => !entries.some((entry) => entry.key === "target:" + id),
-        process.env.MESH_FAST_REALISTIC === "1" ? 700000 : 90000,
-      );
-      await NodeAssert.rejects(
-        mcp(peer, "t3_thread_receive_fork", { action: "commit", forkId: id, token: staged.token }),
-        /expired|invalid/i,
-      );
-      NodeAssert.ok(
-        !JSON.stringify(
-          await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 }),
-        ).includes(threadId),
-      );
-      await NodeFSP.writeFile(
-        NodePath.join(directory, "expiry.json"),
-        JSON.stringify({ threadId, invisible: true, unrunnable: true, swept: true }),
-      );
-    }),
+        });
+        const staged = await mcp(peer, "t3_thread_receive_fork", {
+          action: "receive",
+          bundle: {
+            id,
+            sourceEnvironmentId: studio.id,
+            sourceThreadId: source.threadId,
+            sourceTitle: "source",
+            sourceMachine: "studio",
+            sourceLink: source.link,
+            logicalKey: p.key,
+            title: "Invisible pending fork",
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            entries: [{ role: "user", text: "history", attachments: [] }],
+          },
+        });
+        const threadId = staged.result.threadId;
+        NodeAssert.ok(
+          (await journals(target)).some(
+            (entry) => entry.key === "target:" + id && entry.value.phase === "pending",
+          ),
+        );
+        NodeAssert.ok(
+          !JSON.stringify(
+            await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 }),
+          ).includes(threadId),
+        );
+        await NodeAssert.rejects(
+          mcp(target, "t3_thread_read", { threadId }),
+          /not_found|not found|unknown/i,
+        );
+        await NodeAssert.rejects(
+          mcp(target, "t3_thread_send", { threadId, message: "must not run" }),
+          /not_found|not found|unknown/i,
+        );
+        await until(
+          "pending fork expiry sweep",
+          () => journals(target),
+          (entries) => !entries.some((entry) => entry.key === "target:" + id),
+          600_000 * Number(target.env.T3_MESH_TIME_SCALE) + 60_000,
+        );
+        await NodeAssert.rejects(
+          mcp(peer, "t3_thread_receive_fork", {
+            action: "commit",
+            forkId: id,
+            token: staged.token,
+          }),
+          /expired|invalid/i,
+        );
+        NodeAssert.ok(
+          !JSON.stringify(
+            await mcp(target, "t3_thread_list", { allProjects: true, limit: 100 }),
+          ).includes(threadId),
+        );
+        await NodeFSP.writeFile(
+          NodePath.join(directory, "expiry.json"),
+          JSON.stringify({ threadId, invisible: true, unrunnable: true, swept: true }),
+        );
+      },
+      { names: ["studio", "cloudbox"] },
+    ),
 };

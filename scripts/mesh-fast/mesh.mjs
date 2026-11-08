@@ -217,7 +217,13 @@ export class MiniMesh {
     if (this.stopping) throw Error("Fixture is closing");
     const inContainer =
       this.containerMode && (this.containerNames ?? [this.firstName]).includes(name);
-    const nodeBinary = this.previousEntry && name === "laptop" ? this.previousEntry : binary;
+    const bundled = process.env.MESH_FAST_REALISTIC !== "1" && !this.launcher;
+    const nodeBinary =
+      this.previousEntry && name === "laptop"
+        ? this.previousEntry
+        : this.skewable && name === this.firstName
+          ? binary
+          : NodePath.join(process.env.MESH_FAST_RUNTIMES, "0.1.6/bin.mjs");
     const root = NodePath.join(this.directory, name);
     const home = NodePath.join(root, "home"),
       base = NodePath.join(root, "state");
@@ -237,13 +243,22 @@ export class MiniMesh {
       T3_MESH_AGENT_HOME: home,
       T3_MESH_SSH_HOME: home,
       T3_MESH_LEGACY_GLOBAL: NodePath.join(home, "absent"),
-      T3_MESH_TIME_SCALE: process.env.MESH_FAST_REALISTIC === "1" ? "1" : "0.075",
+      T3_MESH_TIME_SCALE:
+        process.env.MESH_FAST_REALISTIC === "1"
+          ? "1"
+          : NodeOS.availableParallelism() < 8
+            ? "0.2"
+            : "0.075",
       NODE_ENV: "test",
+      NODE_COMPILE_CACHE: NodePath.join(process.env.MESH_FAST_RUNTIMES, "compile-cache"),
     };
     if (process.env.MESH_FAST_MUTAGEN_CACHE && !this.coldInstall) {
       await NodeFSP.mkdir(NodePath.join(base, "bin"), { recursive: true });
+      const sameDevice =
+        (await NodeFSP.stat(home)).dev ===
+        (await NodeFSP.stat(process.env.MESH_FAST_MUTAGEN_CACHE)).dev;
       for (const file of ["mutagen", "mutagen-agents.tar.gz"])
-        await NodeFSP.copyFile(
+        await (sameDevice ? NodeFSP.link : NodeFSP.copyFile)(
           NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, file),
           NodePath.join(base, "bin", file),
         );
@@ -252,7 +267,10 @@ export class MiniMesh {
     if (this.warmAgents && !this.coldInstall) {
       const agentHome = NodePath.join(home, ".mutagen/agents/0.18.1");
       await NodeFSP.mkdir(agentHome, { recursive: true });
-      await NodeFSP.copyFile(
+      const sameDevice =
+        (await NodeFSP.stat(home)).dev ===
+        (await NodeFSP.stat(process.env.MESH_FAST_MUTAGEN_CACHE)).dev;
+      await (sameDevice ? NodeFSP.link : NodeFSP.copyFile)(
         NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "mutagen-agent-linux-amd64"),
         NodePath.join(agentHome, "mutagen-agent"),
       );
@@ -281,12 +299,12 @@ export class MiniMesh {
         }),
       );
     }
-    const fakeBin = NodePath.join(home, "fake-bin");
+    const fakeBin = NodePath.join(home, "tool-bin");
     await NodeFSP.mkdir(fakeBin);
     await NodeFSP.writeFile(
       NodePath.join(fakeBin, "pnpm"),
       `#!/usr/bin/env node
-const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stringify(['install','--frozen-lockfile']))throw Error('Unexpected install arguments');fs.mkdirSync('.t3',{recursive:true});const n='.t3/install-count';fs.writeFileSync(n,String((fs.existsSync(n)?Number(fs.readFileSync(n)):0)+1));fs.copyFileSync('pnpm-lock.yaml','.t3/installed-lock');
+const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(args)!==JSON.stringify(['install','--frozen-lockfile']))throw Error('Unexpected install arguments');const r=require('node:child_process').spawnSync(${JSON.stringify(NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "pnpm-12.14.0/pnpm"))},args,{stdio:'inherit',env:{...process.env,npm_config_offline:'true',CI:'true'}});if(r.error)throw r.error;if(r.status!==0)process.exit(r.status??1);fs.mkdirSync('.t3',{recursive:true});const n='.t3/install-count';fs.writeFileSync(n,String((fs.existsSync(n)?Number(fs.readFileSync(n)):0)+1));fs.copyFileSync('pnpm-lock.yaml','.t3/installed-lock');
 `,
       { mode: 0o700 },
     );
@@ -318,7 +336,7 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
       );
     await NodeFSP.appendFile(
       sshConfig,
-      `SetEnv ${JSON.stringify("HOME=" + home)} ${JSON.stringify("PATH=" + env.PATH)}\n`,
+      `SetEnv ${JSON.stringify("HOME=" + home)} ${JSON.stringify("PATH=" + env.PATH)} ${JSON.stringify("NODE_COMPILE_CACHE=" + env.NODE_COMPILE_CACHE)}\n`,
     );
     env.T3_MESH_SSHD_DIR = NodePath.dirname(sshConfig);
     if (!inContainer)
@@ -366,9 +384,11 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
         NodePath.join(root, "proxy.log"),
       );
     const useSource =
-      (this.skewable && name === this.firstName) || (this.previousEntry && name === "laptop");
+      bundled ||
+      (this.skewable && name === this.firstName) ||
+      (this.previousEntry && name === "laptop");
     const native = NodePath.join(root, "runtime/t3");
-    if (!useSource)
+    if (!this.previousEntry || name !== "laptop")
       await run("cp", [
         "-al",
         NodePath.join(process.env.MESH_FAST_RUNTIMES, "0.1.6"),
@@ -486,6 +506,13 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
           repo + ":" + repo + ":ro",
           "-v",
           root + ":" + root,
+          "-v",
+          process.env.MESH_FAST_RUNTIMES + ":" + process.env.MESH_FAST_RUNTIMES + ":ro",
+          "-v",
+          NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "pnpm-12.14.0") +
+            ":" +
+            NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "pnpm-12.14.0") +
+            ":ro",
           ...(this.browser
             ? [
                 "-v",
@@ -557,6 +584,7 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
       serverCommand,
       backend,
       front,
+      sshPort,
       spec,
       receipt,
       container,

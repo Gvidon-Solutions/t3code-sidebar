@@ -47,6 +47,14 @@ async function collisions(directory, reverseJoins) {
           ),
           "studio\n" + mesh.nodes.find((node) => node.id === bindings[slug]).home,
         );
+      const boundSlug = Object.keys(bindings).find((key) => bindings[key] === studio.id);
+      const seeded = structuredClone(values[0].current.doc);
+      seeded.machines[boundSlug].ssh = { host: "127.0.0.1", user: "node", port: studio.sshPort };
+      await rpc(hub, "meshConfig.apply", { baseRevision: values[0].current.revision, doc: seeded });
+      values = await identical(
+        mesh,
+        (value) => value.current.doc.machines[boundSlug].ssh?.port === studio.sshPort,
+      );
       const revision = values[0].current.revision;
       const missing = Object.keys(bindings).find((key) => bindings[key] === laptop.id);
       await Promise.all(mesh.nodes.map((node) => mesh.stop(node)));
@@ -71,6 +79,7 @@ async function collisions(directory, reverseJoins) {
       );
       const old = Object.keys(bindings).find((key) => bindings[key] === studio.id);
       const destination = values[0].current.doc.machines[old].ssh;
+      NodeAssert.deepEqual(destination, { host: "127.0.0.1", user: "node", port: studio.sshPort });
       const doc = structuredClone(values[0].current.doc);
       {
         doc.machines.renamed = doc.machines[old];

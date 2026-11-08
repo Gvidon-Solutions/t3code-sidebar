@@ -61,7 +61,7 @@ export const networkScenarios = Object.fromEntries(
                 ),
             );
             await new Promise((resolve) =>
-              setTimeout(resolve, 600_000 * (process.env.MESH_FAST_REALISTIC === "1" ? 1 : 0.075)),
+              setTimeout(resolve, 600_000 * Number(studio.env.T3_MESH_TIME_SCALE)),
             );
           } finally {
             await mesh.signal(studio, "SIGCONT");

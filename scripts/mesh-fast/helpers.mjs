@@ -13,7 +13,7 @@ export async function fixture(directory, work, options = {}) {
     );
   try {
     await mark("booting");
-    await mesh.start();
+    await mesh.start(options.names);
     await mark("ready");
     await work(mesh);
     await mark("asserted");

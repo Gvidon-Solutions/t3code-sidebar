@@ -774,3 +774,10 @@ startup from SSH's three-second connection budget; the control connections and
 all remote process-tree fault assertions remain real. The realistic R1 variant
 uses fresh connections. Provider defaults are disabled in private fixture
 settings, and fake profiles or explicit nightly native profiles are enabled there.
+
+Ordinary fast servers execute the same bundle embedded in the native executable,
+using an immutable Node compilation cache; the native SEA must disable its own
+code cache to support dynamic imports. Bootstrap/rollout and the realistic suite
+retain native execution. Two-machine cases avoid an unused third server, while
+relay and collision cases retain their full topology. Full-mode tests run real,
+checksum-pinned pnpm offline and import the installed local dependency.

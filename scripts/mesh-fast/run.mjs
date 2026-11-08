@@ -2,6 +2,7 @@ import { MiniMesh } from "./mesh.mjs";
 import { previous } from "./previous.mjs";
 import { runtimes } from "./runtimes.mjs";
 import { prepare } from "./prepare.mjs";
+import { prunePassed } from "./artifacts.mjs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -129,6 +130,7 @@ try {
         let error;
         try {
           await task.run(directory);
+          await prunePassed(directory);
         } catch (cause) {
           error = cause.stack ?? String(cause);
           await NodeFSP.writeFile(NodePath.join(directory, "failure.txt"), error);

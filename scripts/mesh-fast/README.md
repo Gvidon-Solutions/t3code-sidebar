@@ -19,6 +19,22 @@ so concurrent commands share completed artifacts. Downloads, image creation and
 browser/toolchain installation belong to host provisioning; source-dependent
 runtime preparation is included in the command's reported wall time. A warm run
 reuses only immutable tools/runtimes, never server state, credentials or sessions.
+Immutable Mutagen executables and agent archives are hardlinked when the cache
+and fixture share a filesystem. Passed cases discard private payloads after all
+processes stop, retaining logs, assertion evidence and browser recordings. Failed
+cases retain their state. Repeated runs therefore do not copy gigabytes of tools
+or accumulate successful private homes.
+
+Ordinary fast servers run the exact Node bundle embedded in the native archive,
+with a shared immutable V8 compilation cache. Native single executables cannot
+use that cache because their dynamic imports require code caching to be disabled.
+Bootstrap, installation, rollout and realistic nightly scenarios still execute
+the native artifacts. Behavior that needs only two machines uses a two-node mesh;
+relay faults, collisions, grouping and cross-machine matrices keep three.
+
+Full replicas execute checksum-pinned pnpm against an offline local dependency.
+The wrapper records successful frozen installs, and the scenario imports the
+installed package as well as checking first-sync and lock-change counts.
 
 Each scenario owns a fresh mini-mesh. Studio runs in a container with its actual
 login home set to the fixture home; cloudbox and laptop are isolated processes.
@@ -59,7 +75,9 @@ private Mutagen daemon. SIGINT/SIGTERM also trigger cleanup.
 ## Timing and providers
 
 `T3_MESH_TIME_SCALE` is the only server timing knob. `(0,1]` is accepted in source
-execution; unset or `1` preserves defaults. The runner uses `0.075`. It scales
+execution; unset or `1` preserves defaults. The runner uses `0.075`, or `0.2`
+on hosts with fewer than eight logical CPUs to keep health windows usable while
+native subprocesses start. It scales
 heartbeat/dead detection, reconnect backoff, exchange/retry/debounce, config,
 bootstrap and replica reconciliation, rollout health windows, pending fork leases
 and commit retry, and tombstone age. The five-minute clock guard remains real;

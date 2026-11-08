@@ -91,6 +91,7 @@ export const rolloutScenarios = {
       fresh = "mesh-fast-bootstrap-" + process.pid + "-" + NodePath.basename(directory);
       const freshRoot = NodePath.join(directory, "fresh");
       await NodeFSP.mkdir(freshRoot);
+      await NodeFSP.writeFile(NodePath.join(freshRoot, ".mesh-fast-node"), "bootstrap fixture\n");
       await run("docker", [
         "run",
         "-d",
