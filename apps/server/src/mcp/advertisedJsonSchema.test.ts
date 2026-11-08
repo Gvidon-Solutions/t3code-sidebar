@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import { expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { Tool } from "effect/ai";
@@ -21,7 +22,7 @@ it("drops JSON noise, merges tagged unions, and keeps null where it is required"
         ),
       ),
     }),
-  });
+  }).annotate(McpDomainAnnotation, "mesh");
 
   expect(advertisedJsonSchema(tool)).toEqual({
     type: "object",

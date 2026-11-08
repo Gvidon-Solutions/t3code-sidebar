@@ -13,11 +13,11 @@ describe("DesktopEarlyElectronStartup", () => {
 
   it("reads the persisted linux password-store preference before Electron is ready", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
-      env: { T3CODE_HOME: "/home/user/.t3-test" },
-      homeDirectory: "/home/user",
+      env: { T3CODE_HOME: "/home/dev/.t3-test" },
+      homeDirectory: "/home/dev",
       joinPath,
       readFileString: (path) => {
-        assert.equal(path, "/home/user/.t3-test/userdata/desktop-settings.json");
+        assert.equal(path, "/home/dev/.t3-test/userdata/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "kwallet6" });
       },
     });
@@ -27,8 +27,8 @@ describe("DesktopEarlyElectronStartup", () => {
 
   it("accepts JSONC in the early desktop settings file", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
-      env: { T3CODE_HOME: "/home/user/.t3-test" },
-      homeDirectory: "/home/user",
+      env: { T3CODE_HOME: "/home/dev/.t3-test" },
+      homeDirectory: "/home/dev",
       joinPath,
       readFileString: () => `{
         // manually edited setting
@@ -42,7 +42,7 @@ describe("DesktopEarlyElectronStartup", () => {
   it("falls back to auto when the early settings document is missing or invalid", () => {
     const preference = resolveEarlyLinuxPasswordStorePreference({
       env: {},
-      homeDirectory: "/home/user",
+      homeDirectory: "/home/dev",
       joinPath,
       readFileString: () => {
         throw new Error("missing");
@@ -134,7 +134,7 @@ describe("DesktopEarlyElectronStartup", () => {
 describe("Linux device scale persistence failures", () => {
   const input = {
     env: { T3CODE_HOME: "/isolated" },
-    homeDirectory: "/home/user",
+    homeDirectory: "/home/dev",
     joinPath: NodePath.posix.join,
   };
 

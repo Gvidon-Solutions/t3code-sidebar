@@ -22,8 +22,8 @@ describe("files contracts", () => {
     expect(decodeRead({ absolutePath: " /srv/app/README.md " })).toEqual({
       absolutePath: "/srv/app/README.md",
     });
-    expect(decodeRead({ environmentId: "gvidon", absolutePath: "~/note.md" })).toEqual({
-      environmentId: "gvidon",
+    expect(decodeRead({ environmentId: "studio", absolutePath: "~/note.md" })).toEqual({
+      environmentId: "studio",
       absolutePath: "~/note.md",
     });
   });

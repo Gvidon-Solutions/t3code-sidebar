@@ -48,6 +48,18 @@ it.effect(
       expect(yield* fs.readFileString(`${home}/state/userdata/settings.json`)).toContain(
         '"custom":"keep"',
       );
+      expect(yield* fs.readFileString(`${home}/state/service.env`)).toContain(
+        "T3CODE_HOST=127.0.0.1",
+      );
+      yield* service.install({
+        version: "0.1.6",
+        port: 3799,
+        baseDir: `${home}/state`,
+        listenHost: "0.0.0.0",
+      });
+      expect(yield* fs.readFileString(`${home}/state/service.env`)).toContain(
+        "T3CODE_HOST=0.0.0.0",
+      );
       expect(calls.some((c) => c.command === "loginctl" && c.args.includes("studio"))).toBe(true);
       expect(
         calls.filter((c) => c.command === "systemctl").every((c) => c.args[0] === "--user"),

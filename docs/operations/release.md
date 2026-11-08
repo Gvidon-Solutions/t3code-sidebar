@@ -1,8 +1,11 @@
-# Release Checklist
+# Historical upstream release checklist
 
 > For maintainers. Using T3 Code? See [docs/user](../user/).
 
-This document covers the unified release workflow for stable and nightly desktop releases.
+The fork ships from `ws` through `sidebar-desktop.yml` and `sidebar-ios.yml`; use
+[the fork delivery guide](../delivery.md). Upstream desktop-preview, relay-preview, EAS and
+stable/nightly publishing workflows have been retired in this fork. The checklist below is
+retained as historical upstream context; it is not an executable fork release procedure.
 
 Beta is the product label, not a release channel or version suffix. Release channels
 remain stable and nightly. To ship 0.1.0 Beta, use `channel=stable` and

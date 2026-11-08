@@ -2431,6 +2431,7 @@ const commands = {
         linksError,
         connections,
         connectionsError: network.error ?? null,
+        legacyIdentityUpgrades: network.legacyIdentityUpgrades ?? [],
         machines,
         replicas: rows.map((row) => ({
           logicalKey: row.logicalKey,
@@ -2472,6 +2473,8 @@ const commands = {
           `  network ${tagOf(connection.environmentId)} ${state}${connection.lastError ? ` · ${clip(connection.lastError, 160)}` : ""}`,
         );
       }
+      for (const upgrade of result.legacyIdentityUpgrades)
+        console.log(`  legacy identity upgrade ${upgrade.sessionId} → ${tagOf(upgrade.environmentId)} ${upgrade.environmentId} at ${upgrade.boundAt}`);
       if (network.error) console.log(`  network status: ${clip(network.error, 160)}`);
       for (const link of links)
         console.log(

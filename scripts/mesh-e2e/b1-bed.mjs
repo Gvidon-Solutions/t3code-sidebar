@@ -10,7 +10,7 @@ const admin = {
   cloudbox: JSON.parse(process.env.B1_CLOUDBOX_SSH ?? "null"),
 };
 if (!admin.laptop || !admin.cloudbox)
-  throw Error("B1_LAPTOP_SSH and B1_CLOUDBOX_SSH must be SSH argument arrays (VPS and gor)");
+  throw Error("B1_LAPTOP_SSH and B1_CLOUDBOX_SSH must be SSH argument arrays (CLOUD and nodeB)");
 for (const name of ["laptop", "cloudbox"]) {
   const args = admin[name];
   admin[name] = [
@@ -99,9 +99,9 @@ try {
   console.log("PASS fresh container: sshd active; no T3 or Node");
   await NodeFSP.mkdir(root, { recursive: true });
   await new Promise((resolve) => releaseServer.listen(14890, "127.0.0.1", resolve));
-  const active = await run("systemctl", ["--user", "is-active", "t3-mesh-e2e-gv.service"]);
+  const active = await run("systemctl", ["--user", "is-active", "t3-mesh-e2e-nodeA.service"]);
   if (active === "active") {
-    await run("systemctl", ["--user", "stop", "t3-mesh-e2e-gv.service"]);
+    await run("systemctl", ["--user", "stop", "t3-mesh-e2e-nodeA.service"]);
     stoppedBed = true;
   }
   for (const node of nodes.slice(0, 2)) {
@@ -436,5 +436,5 @@ try {
       console.error("Cleanup", error.message);
     }
   }
-  if (stoppedBed) await run("systemctl", ["--user", "start", "t3-mesh-e2e-gv.service"]);
+  if (stoppedBed) await run("systemctl", ["--user", "start", "t3-mesh-e2e-nodeA.service"]);
 }

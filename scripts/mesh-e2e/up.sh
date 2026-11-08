@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command: build a ref, deploy it to gor + isolated gvidon + VPS, bring
+# One command: build a ref, deploy it to nodeB + isolated studio + CLOUD, bring
 # tunnels up, print health.
 #
 # Usage: up.sh [--no-build] [ref]     (default ref: xdev)

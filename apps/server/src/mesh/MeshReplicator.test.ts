@@ -328,6 +328,7 @@ it.effect("reports peer watermarks and retains old tombstones while a linked pee
     expect((yield* mesh.read).config.machines.studio?.label).toBe("Studio");
     yield* sql`DELETE FROM mesh_peer_state WHERE environment_id = 'laptop'`;
     expect(yield* replicator.status).toEqual({
+      legacyIdentityUpgrades: [],
       quarantine: [],
       clockRejections: [],
       peers: [

@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -81,7 +82,10 @@ const rootNode = NodeId.make("node:laptop:root");
 
 /** The box needs no tools of its own: linking only signs in to its /mcp. */
 const NoTools = Toolkit.make(
-  Tool.make("noop", { success: Schema.Struct({}), failure: OrchestratorMcpFailure }),
+  Tool.make("noop", { success: Schema.Struct({}), failure: OrchestratorMcpFailure }).annotate(
+    McpDomainAnnotation,
+    "mesh",
+  ),
 );
 const serveBox = servePeer(
   box,

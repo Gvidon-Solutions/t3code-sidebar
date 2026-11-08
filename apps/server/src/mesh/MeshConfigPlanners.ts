@@ -1,3 +1,5 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- SSH fingerprints use the OpenSSH SHA-256 representation.
+import * as NodeCrypto from "node:crypto";
 import { MeshBootstrap } from "./MeshBootstrap.ts";
 import { MeshRollout } from "./MeshRollout.ts";
 import { MeshAgentKit } from "./MeshAgentKit.ts";
@@ -120,7 +122,11 @@ export const layer = Layer.effect(
                 id: `links/${a}/${b}`,
                 machine: b,
                 server,
-                description: `Enforce link permissions between ${a} and ${b}`,
+                description: `Enforce link permissions between ${a} and ${b}: ${Object.entries(
+                  effectiveLinkPermissions(doc, a, b),
+                )
+                  .map(([key, value]) => `${key}=${value}`)
+                  .join(", ")}`,
               })),
           );
       }),
@@ -373,11 +379,19 @@ export const layer = Layer.effect(
         const bound = bindingsFromLayout((yield* snapshot).document);
         return Object.entries(doc.machines)
           .filter(([name, machine]) => machine.bootstrap && !bound[name])
-          .map(([name]) => ({
+          .map(([name, machine]) => ({
             id: `bootstrap/${name}`,
             machine: name,
             server: mesh.environmentId,
-            description: `Bootstrap ${name} over SSH`,
+            description: `Bootstrap ${name} over SSH; host fingerprint ${
+              machine.bootstrap?.hostKey
+                ? "SHA256:" +
+                  NodeCrypto.createHash("sha256")
+                    .update(Buffer.from(machine.bootstrap.hostKey.split(" ")[1]!, "base64"))
+                    .digest("base64")
+                    .replace(/=+$/, "")
+                : "not accepted: pin bootstrap.hostKey"
+            }; HTTPS pairing via ${typeof machine.reach === "object" && typeof machine.reach.address === "string" ? machine.reach.address : "reach.address required"}`,
           }));
       }),
       reconcile: Effect.fn("MeshConfigPlanners.bootstrap.reconcile")((action, doc) =>

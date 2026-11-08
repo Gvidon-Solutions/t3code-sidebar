@@ -118,6 +118,7 @@ export async function buildAssets({
         ? JSON.parse(NodeFS.readFileSync(join(candidate, "catalog.json"), "utf8")).apkAsset?.url
         : undefined;
       const apkUrl = existingApkUrl ?? config.ota.apkUrl;
+      if (apk) stageMobileApk(candidate, apk, config.ota.origin);
       await run(process.execPath, [
         "scripts/delivery/mobile-ota.mjs",
         "publish",
@@ -139,7 +140,6 @@ export async function buildAssets({
         config.ota.certificate,
         ...(apkUrl ? ["--apk-url", apkUrl] : []),
       ]);
-      if (apk) stageMobileApk(candidate, apk, config.ota.origin);
       mobileUpdate = { store: candidate };
     }
   }
@@ -216,7 +216,9 @@ export function stageMobileApk(store, apk, origin) {
   mkdirSync(join(store, "assets"), { recursive: true });
   copyFileSync(apk, join(store, "assets", hash));
   const catalogPath = join(store, "catalog.json");
-  const catalog = JSON.parse(NodeFS.readFileSync(catalogPath, "utf8"));
+  const catalog = existsSync(catalogPath)
+    ? JSON.parse(NodeFS.readFileSync(catalogPath, "utf8"))
+    : { releases: [] };
   catalog.apkUrl = url;
   catalog.apkAsset = {
     key: hash,

@@ -66,7 +66,7 @@ export async function runScenarios(h) {
         MUTAGEN_SSH_PATH: studio.base + "/mesh/ssh/bin",
       },
     });
-  await cloud(`mkdir -p /bed/home/.nvm/versions/node/v26.12.1/bin /bed/home/.local/bin`);
+  await cloud(`mkdir -p /bed/home/.nvm/versions/node/v26.0.0/bin /bed/home/.local/bin`);
   await upload(
     "cloudbox",
     NodePath.join(process.env.NVM_DIR || NodePath.join(NodeOS.homedir(), ".nvm"), "nvm.sh"),
@@ -75,7 +75,7 @@ export async function runScenarios(h) {
   const uv = (await run("sh", ["-c", "command -v uv"])).trim();
   await upload("cloudbox", uv, root + "/uv");
   await cloud(
-    `sh -ec ${quote("cp /bed/nvm.sh /bed/home/.nvm/nvm.sh; cp /bed/uv /bed/home/.local/bin/uv; chmod 755 /bed/home/.local/bin/uv; test -L /bed/home/.nvm/versions/node/v26.12.1/bin/node || ln -s /usr/local/bin/node /bed/home/.nvm/versions/node/v26.12.1/bin/node")}`,
+    `sh -ec ${quote("cp /bed/nvm.sh /bed/home/.nvm/nvm.sh; cp /bed/uv /bed/home/.local/bin/uv; chmod 755 /bed/home/.local/bin/uv; test -L /bed/home/.nvm/versions/node/v26.0.0/bin/node || ln -s /usr/local/bin/node /bed/home/.nvm/versions/node/v26.0.0/bin/node")}`,
   );
   const profile =
     'export HOME=/bed/home\nexport PATH=/usr/bin:/bin\nexport NVM_DIR=/bed/home/.nvm\n. "$NVM_DIR/nvm.sh" --no-use\nnvm use --silent v26.12.1\nexport PATH=/bed/home/.local/bin:$PATH\nexport R1_LOGIN_PROFILE=loaded\n';

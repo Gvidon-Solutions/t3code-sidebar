@@ -1,3 +1,4 @@
+import * as Dialog from "../../components/ui/Dialog";
 import { AppState } from "react-native";
 import {
   flushPendingAppUpdateWrites,
@@ -13,6 +14,7 @@ import {
   installSelfHostedUpdateStatus,
 } from "./self-hosted-updates";
 
+vi.mock("./verified-apk", () => ({ installVerifiedApk: vi.fn() }));
 vi.mock("expo-constants", () => ({
   default: {
     expoConfig: {
@@ -23,6 +25,7 @@ vi.mock("expo-constants", () => ({
 vi.mock("expo-updates", () => ({
   isEnabled: true,
   updateId: "current-bundle",
+  runtimeVersion: "current-native",
   fetchUpdateAsync: vi.fn(),
   reloadAsync: vi.fn(),
   setUpdateRequestHeadersOverride: vi.fn(),
@@ -80,12 +83,20 @@ it("checks a private OTA server on a short foreground transition after restoring
   vi.clearAllMocks();
   vi.mocked(AsyncStorage.getItem).mockResolvedValue(null);
   vi.mocked(installAppUpdateChecks).mockReturnValue(() => undefined);
-  using _fetch = vi
-    .spyOn(globalThis, "fetch")
-    .mockResolvedValue(new Response(JSON.stringify({ requiresNativeUpdate: false })));
+  using _fetch = vi.spyOn(globalThis, "fetch").mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          requiresNativeUpdate: true,
+          apkUrl: "https://attacker.example/app.apk",
+        }),
+      ),
+  );
   const dispose = installSelfHostedUpdateStatus();
   try {
     await vi.waitFor(() => expect(installAppUpdateChecks).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(Dialog.alert).toHaveBeenCalledOnce());
+    expect(vi.mocked(Dialog.alert).mock.calls[0]?.[2]).toBeUndefined();
     const listener = vi.mocked(AppState.addEventListener).mock.calls[0]![1];
     listener("active");
     expect(runAppUpdateCheck).toHaveBeenCalledOnce();

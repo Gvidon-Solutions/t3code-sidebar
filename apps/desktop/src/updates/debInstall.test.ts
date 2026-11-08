@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 
 import { DebInstallError, downloadedDebFile, installDebPackage } from "./debInstall.ts";
 
-const FILE = "/home/user/.cache/t3code-sidebar-updater/pending/T3-Code-Sidebar-0.0.45-amd64.deb";
+const FILE = "/home/dev/.cache/t3code-sidebar-updater/pending/T3-Code-Sidebar-0.0.45-amd64.deb";
 
 describe("downloadedDebFile", () => {
   it("finds the .deb electron-updater downloaded", () => {

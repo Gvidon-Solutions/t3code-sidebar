@@ -1,3 +1,4 @@
+import { declareMcpProtocol } from "../mcp/McpToolDomain.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -5,6 +6,13 @@ import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
 import { MeshReplicator, ExchangeInput } from "./MeshReplicator.ts";
 import { MeshRelay, RelayInput, HOP_HEADER } from "./MeshRelay.ts";
+
+const protocols = {
+  exchange: declareMcpProtocol("t3_mesh_exchange", "mesh"),
+  routes: declareMcpProtocol("t3_mesh_routes", "mesh"),
+  relay: declareMcpProtocol("t3_mesh_relay", "mesh"),
+};
+const protocolNames = new Set<string>(Object.values(protocols).map((tool) => tool.name));
 
 export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(function* (
   request: HttpServerRequest.HttpServerRequest,
@@ -20,13 +28,11 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
       ),
     );
     const call = decodeMeshCall(body);
-    if (
-      Option.isSome(call) &&
-      ["t3_mesh_exchange", "t3_mesh_routes", "t3_mesh_relay"].includes(call.value.params.name)
-    ) {
-      if (call.value.params.name !== "t3_mesh_exchange") {
+    if (Option.isSome(call) && protocolNames.has(call.value.params.name)) {
+      if (call.value.params.name !== protocols.exchange.name) {
         if (
           limited.client?.linked !== true ||
+          limited.client.peerEnvironmentId === undefined ||
           limited.client.access !== "full-access" ||
           !linkedEnvironments
         )
@@ -38,7 +44,7 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
         if (Option.isNone(relay))
           return HttpServerResponse.jsonUnsafe({ error: "mesh_unavailable" }, { status: 503 });
         const result = yield* (
-          call.value.params.name === "t3_mesh_routes"
+          call.value.params.name === protocols.routes.name
             ? decodeRouteOptions(call.value.params.arguments).pipe(Option.getOrUndefined)
                 ?.details === true
               ? Effect.all({ routes: relay.value.routes, connections: relay.value.status })
@@ -84,7 +90,11 @@ export const interceptMeshRequest = Effect.fn("MeshMcp.interceptRequest")(functi
         );
         return HttpServerResponse.jsonUnsafe({ jsonrpc: "2.0", id: call.value.id, result });
       }
-      if (limited.client?.linked !== true || limited.client.access !== "full-access") {
+      if (
+        limited.client?.linked !== true ||
+        limited.client.peerEnvironmentId === undefined ||
+        limited.client.access !== "full-access"
+      ) {
         return HttpServerResponse.jsonUnsafe(
           { error: "mesh_requires_full_access_link" },
           { status: 403 },

@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "@effect/vitest";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
@@ -28,18 +29,18 @@ const toolkit = Toolkit.make(
     description: "Returns this request's mode limits.",
     success: Result,
     dependencies: [McpInvocationContext.McpInvocationContext],
-  }),
+  }).annotate(McpDomainAnnotation, "mesh"),
   Tool.make("hold", {
     description: "Holds a tool request open.",
     success: Result,
     dependencies: [McpInvocationContext.McpInvocationContext],
-  }),
+  }).annotate(McpDomainAnnotation, "mesh"),
   Tool.make("refuse", {
     description: "Refuses the call.",
     success: Result,
     failure: OrchestratorMcpFailure,
     failureMode: "return",
-  }),
+  }).annotate(McpDomainAnnotation, "mesh"),
 );
 
 const refusal = new OrchestratorMcpFailure({

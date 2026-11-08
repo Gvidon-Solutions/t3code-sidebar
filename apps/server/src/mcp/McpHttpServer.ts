@@ -134,12 +134,20 @@ const unauthorized = (input: {
   );
 };
 
+export class McpClientAuthenticationError extends Schema.TaggedError<McpClientAuthenticationError>()(
+  "McpClientAuthenticationError",
+  { status: Schema.Literals([401, 403]), message: Schema.String },
+) {}
+
 export class McpClientAuthenticator extends Context.Service<
   McpClientAuthenticator,
   {
     readonly authenticate: (
       request: HttpServerRequest.HttpServerRequest,
-    ) => Effect.Effect<McpInvocationContext.McpInvocationScope | undefined>;
+    ) => Effect.Effect<
+      McpInvocationContext.McpInvocationScope | undefined,
+      McpClientAuthenticationError
+    >;
   }
 >()("t3/mcp/McpHttpServer/McpClientAuthenticator") {}
 
@@ -241,11 +249,20 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const authorization = request.headers.authorization;
     const token = parseBearerToken(request) ?? "";
-    const invocation =
-      (yield* registry.resolve(token)) ??
-      (Option.isSome(clients) && token.length > 0
-        ? yield* clients.value.authenticate(request)
-        : undefined);
+    const authentication = yield* Effect.gen(function* () {
+      return (
+        (yield* registry.resolve(token)) ??
+        (Option.isSome(clients) && token.length > 0
+          ? yield* clients.value.authenticate(request)
+          : undefined)
+      );
+    }).pipe(Effect.result);
+    if (authentication._tag === "Failure")
+      return HttpServerResponse.jsonUnsafe(
+        { error: "invalid_peer_identity", message: authentication.failure.message },
+        { status: authentication.failure.status, headers: { "cache-control": "no-store" } },
+      );
+    const invocation = authentication.success;
     if (!invocation) {
       yield* Effect.logWarning("rejected MCP request with an unusable credential", {
         reason:
@@ -270,19 +287,19 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     if (limited.client?.linked === true && !linkedEnvironments) return linkedEnvironmentsOff;
     const key = request.headers["t3-idempotency-key"];
     const peer = invocation.client?.linked === true;
-    const from =
-      request.headers["t3-mesh-hops"]?.split(",")[0] ??
-      invocation.client?.peerEnvironmentId ??
-      request.headers["t3-peer-environment-id"] ??
-      invocation.client?.sessionId;
+    const from = invocation.client?.peerEnvironmentId ?? invocation.client?.sessionId;
+    const hops = request.headers["t3-mesh-hops"]?.split(",");
+    const relayCaller = hops?.length === 2 && hops[1] === from ? hops[0] : undefined;
+    // Relay callers partition keys only within the authenticated relay's namespace.
+    const scopedKey = relayCaller === undefined ? key : encodeJsonText([relayCaller, key]);
     let sequence = 0;
     const callInvocation =
       peer && key && from
         ? {
             ...limited,
-            requestNamespace: `peer:${encodeJsonText([from, key])}`,
+            requestNamespace: `peer:${encodeJsonText([from, scopedKey])}`,
             peerCommandIdentity: {
-              namespace: `peer:${encodeJsonText([from, key])}`,
+              namespace: `peer:${encodeJsonText([from, scopedKey])}`,
               next: () => sequence++,
             },
           }
@@ -363,7 +380,7 @@ const makeMcpAuthMiddleware = Effect.gen(function* () {
     return yield* receipts.value
       .run(
         from!,
-        key,
+        scopedKey ?? key,
         encodeJsonText({
           body,
           modes: request.headers[McpInvocationContext.MODE_LIMIT_HEADER],

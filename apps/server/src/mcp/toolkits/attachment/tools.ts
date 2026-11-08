@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import * as Digest from "effect/crypto/Digest";
 import { McpAttachmentInput } from "./input.ts";
 import {
@@ -39,13 +40,17 @@ const AttachmentUploadTool = Tool.make("t3_attachment_prepare_upload", {
     "Get an upload URL. POST the file's exact bytes to `relativeUrl` on this MCP server's HTTP origin, then send via `t3_thread_send_attachments` with the returned `attachmentId`.",
   parameters: Schema.Struct({ upload: AttachmentCreateUploadUrlInput }),
   success: AttachmentCreateUploadUrlResult,
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Destructive, true);
 const AttachmentDiscardTool = Tool.make("t3_attachment_discard", {
   ...shared,
   description: "Discard a pending upload (not a sent attachment).",
   parameters: AttachmentDeleteInput,
   success: Schema.Struct({}),
-}).annotate(Tool.Destructive, true);
+})
+  .annotate(McpDomainAnnotation, "threads")
+  .annotate(Tool.Destructive, true);
 const AttachmentSendTool = Tool.make("t3_thread_send_attachments", {
   ...shared,
   dependencies: [...shared.dependencies, DocumentText.DocumentText],
@@ -66,6 +71,7 @@ const AttachmentSendTool = Tool.make("t3_thread_send_attachments", {
     status: OrchestrationV2RunStatus,
   }),
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Destructive, true)
   .annotate(Tool.OpenWorld, true);
 export const AttachmentToolkit = Toolkit.make(

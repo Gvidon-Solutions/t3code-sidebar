@@ -1,4 +1,7 @@
-import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  type SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
 import {
   diff,
   materialize,
@@ -68,4 +71,40 @@ export const layerTest = (
         changes: Stream.fromEffect(read).pipe(Stream.concat(Stream.fromPubSub(changes))),
       });
     }),
+  );
+
+export const linkedTestDocument = (
+  bindings: Readonly<Record<string, string>>,
+  h = "0000000000000.00000.fixture",
+  files: "all" | "projects" = "projects",
+): MeshLayoutDocument => ({
+  "mesh.config": {
+    h,
+    v: {
+      revision: h,
+      author: "fixture",
+      writtenAt: "",
+      doc: {
+        schema: 1,
+        links: { default: { files } },
+        machines: Object.fromEntries(Object.keys(bindings).map((name) => [name, {}])),
+      },
+    },
+  },
+  ...Object.fromEntries(
+    Object.entries(bindings).map(([name, id]) => [
+      `mesh.machineBinding/${encodeURIComponent(name)}`,
+      { h, v: id },
+    ]),
+  ),
+});
+export const layerLinkedTest = (
+  environmentId: string,
+  bindings: Readonly<Record<string, string>>,
+  files: "all" | "projects" = "projects",
+) =>
+  layerTest(
+    environmentId,
+    DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    linkedTestDocument(bindings, undefined, files),
   );

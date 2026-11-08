@@ -664,6 +664,7 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
     };
     const headers: Record<string, string> = {
       "Cache-Control": cacheControl,
+      ...(isHtml ? { "t3-desktop-ui-protocol": "1", "t3-desktop-bridge": "reduced-1" } : {}),
       ...validators(fileInfo),
     };
     const etag = headers.ETag;
@@ -700,6 +701,7 @@ const handleStaticAndDevRequest = Effect.fn("handleStaticAndDevRequest")(
       return HttpServerResponse.uint8Array(bytes, {
         headers: {
           "Cache-Control": cacheControl,
+          ...(isHtml ? { "t3-desktop-ui-protocol": "1", "t3-desktop-bridge": "reduced-1" } : {}),
           ...validators({ ...info, size: ByteSize.bytes(bytes.byteLength) }),
         },
         contentType,

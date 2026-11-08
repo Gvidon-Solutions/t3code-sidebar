@@ -128,7 +128,7 @@ export const layer = Layer.effect(
         return HttpServerResponse.jsonUnsafe(
           {
             requiresNativeUpdate: latestRuntime !== undefined && latestRuntime !== runtime,
-            apkUrl: catalog.apkUrl,
+            nativeUpdate: platform === "android" ? catalog.nativeUpdate : undefined,
           },
           { headers },
         );

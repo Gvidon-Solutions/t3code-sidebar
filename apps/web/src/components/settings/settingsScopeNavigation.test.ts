@@ -16,7 +16,7 @@ import { validateScheduledTasksSearch } from "./scheduledTasksSettings.logic";
 const checkoutSearch = {
   project: "repository:t3code",
   machine: "remote-server",
-  checkout: "remote-server:/home/user/T3 Code",
+  checkout: "remote-server:/home/dev/T3 Code",
 };
 
 function createSettingsRouter(initialEntry = "/settings/general") {
@@ -138,7 +138,7 @@ describe("settings scope navigation", () => {
       const selectedCheckout = {
         project: "another-project",
         machine: "another-server",
-        checkout: "another-server:/home/user/Another checkout",
+        checkout: "another-server:/home/dev/Another checkout",
       };
       await router.navigate({
         from: "/settings",

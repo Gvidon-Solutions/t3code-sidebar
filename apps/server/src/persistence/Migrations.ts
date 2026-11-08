@@ -83,6 +83,7 @@ import Migration0077 from "./Migrations/077_RepairBooleanSettledOverride.ts";
 import Migration0078 from "./Migrations/078_DropOrchestrationEventCorrelationIndex.ts";
 import Migration0079 from "./Migrations/079_DelegatedRecoveryIndexes.ts";
 import Migration0080 from "./Migrations/080_MeshLayout.ts";
+import Migration0082 from "./Migrations/082_PeerIdentityBindings.ts";
 import Migration0081 from "./Migrations/081_PeerConnections.ts";
 
 const migrationEntries = [
@@ -169,6 +170,7 @@ const migrationEntries = [
   // Sidebar fork: MeshLayout first shipped as id 77, which upstream v0.1.7 claims.
   [80, "MeshLayout", Migration0080],
   [81, "PeerConnections", Migration0081],
+  [82, "PeerIdentityBindings", Migration0082],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

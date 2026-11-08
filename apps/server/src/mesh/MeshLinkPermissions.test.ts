@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../mcp/McpToolDomain.ts";
 import { expect, it } from "@effect/vitest";
 import {
   EnvironmentId,
@@ -16,7 +17,7 @@ import { layerTest } from "../replicas/MeshLayoutTestLayer.ts";
 import { McpInvocationContext } from "../mcp/McpInvocationContext.ts";
 import * as Access from "../mcp/McpToolAccess.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
-import { linkPermissions } from "./MeshLinkPermissions.ts";
+import { linkPermissions, forwardedCallLimits } from "./MeshLinkPermissions.ts";
 
 const shared = {
   parameters: Schema.Struct({ environmentId: OrchestratorMcpEnvironmentTarget }),
@@ -25,12 +26,24 @@ const shared = {
   failureMode: "return" as const,
 };
 const toolkit = Toolkit.make(
-  Tool.make("t3_thread_read", shared),
-  Tool.make("t3_project_place", shared),
+  Tool.make("t3_thread_read", shared).annotate(McpDomainAnnotation, "threads"),
+  Tool.make("t3_project_place", shared).annotate(McpDomainAnnotation, "replicas"),
+  Tool.make("unclassified_fixture", shared),
+  Tool.make("owner_fixture", shared).annotate(McpDomainAnnotation, "owner"),
+  Tool.make("copy_repo", shared).annotate(McpDomainAnnotation, "filesystem"),
+  Tool.make("copy_setup", shared)
+    .annotate(McpDomainAnnotation, "replicas")
+    .annotate(Tool.Readonly, true),
+  Tool.make("read_blob", shared).annotate(McpDomainAnnotation, "files"),
 );
 const handlers = Access.toLayer(toolkit, {
   t3_thread_read: Access.reads(() => Effect.succeed("thread accepted")),
   t3_project_place: Access.reads(() => Effect.succeed("replica accepted")),
+  unclassified_fixture: Access.reads(() => Effect.succeed("unclassified accepted")),
+  owner_fixture: Access.reads(() => Effect.succeed("owner accepted")),
+  copy_repo: Access.reads(() => Effect.succeed("repo accepted")),
+  copy_setup: Access.reads(() => Effect.succeed("copy accepted")),
+  read_blob: Access.reads(() => Effect.succeed("file accepted")),
 });
 const scope = Layer.succeed(McpInvocationContext, {
   environmentId: EnvironmentId.make("studio-env"),
@@ -76,11 +89,41 @@ it.effect(
         linked: true,
       });
       const tools = yield* toolkit.pipe(Effect.provide(Access.HandlersLayer.layer(handlers)));
-      for (const name of ["t3_thread_read", "t3_project_place"] as const) {
+      for (const name of [
+        "t3_thread_read",
+        "t3_project_place",
+        "copy_setup",
+        "read_blob",
+      ] as const) {
         const result = yield* tools.handle(name, {}).pipe(Stream.unwrap, Stream.runCollect);
         expect(result.at(-1)?.isFailure).toBe(true);
         expect(result.at(-1)?.result).toMatchObject({ code: "capability_denied" });
       }
+      const unclassified = yield* tools
+        .handle("unclassified_fixture", {})
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(unclassified.at(-1)?.result).toMatchObject({ code: "capability_denied" });
+      for (const tool of ["copy_setup", "read_blob", "copy_repo", "unclassified_fixture"]) {
+        const denied = yield* forwardedCallLimits(tool, {
+          runtimeMode: "full-access",
+          interactionMode: "default",
+        }).pipe(Effect.flip);
+        expect(denied.code).toBe("capability_denied");
+      }
+      const ownerOnly = yield* tools
+        .handle("owner_fixture", {})
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(ownerOnly.at(-1)?.result).toMatchObject({ code: "capability_denied" });
+      const ownerScope = yield* McpInvocationContext;
+      const localOwner = yield* tools.handle("owner_fixture", {}).pipe(
+        Stream.unwrap,
+        Stream.runCollect,
+        Effect.provideService(McpInvocationContext, {
+          ...ownerScope,
+          client: { ...ownerScope.client!, linked: false },
+        }),
+      );
+      expect(localOwner.at(-1)?.result).toBe("owner accepted");
       const allow = yield* mesh.nextHlc;
       yield* mesh.apply({
         "mesh.config": {
@@ -93,10 +136,26 @@ it.effect(
           h: allow,
         },
       });
+      expect(
+        (yield* forwardedCallLimits("copy_setup", {
+          runtimeMode: "full-access",
+          interactionMode: "default",
+        })).replicas,
+      ).toBe(true);
       const result = yield* tools
         .handle("t3_thread_read", {})
         .pipe(Stream.unwrap, Stream.runCollect);
       expect(result.at(-1)?.result).toBe("thread accepted");
+      const projectOnlyCopy = yield* tools
+        .handle("copy_repo", {})
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(projectOnlyCopy.at(-1)?.result).toMatchObject({ code: "capability_denied" });
+      expect(
+        (yield* forwardedCallLimits("copy_repo", {
+          runtimeMode: "full-access",
+          interactionMode: "default",
+        }).pipe(Effect.flip)).code,
+      ).toBe("capability_denied");
       const invocation = yield* McpInvocationContext;
       expect(
         (yield* linkPermissions().pipe(
@@ -106,6 +165,20 @@ it.effect(
           }),
         )).replicas,
       ).toBe(false);
+      for (const peerEnvironmentId of ["unknown-env", "studio-env"]) {
+        expect(
+          yield* linkPermissions().pipe(
+            Effect.provideService(McpInvocationContext, {
+              ...invocation,
+              client: {
+                ...invocation.client!,
+                label: "Laptop",
+                peerEnvironmentId: EnvironmentId.make(peerEnvironmentId),
+              },
+            }),
+          ),
+        ).toEqual({ files: "none", replicas: false, threads: false, linked: true });
+      }
       const legacy = {
         ...(yield* McpInvocationContext),
         client: {
@@ -129,6 +202,16 @@ it.effect(
       });
       expect(
         (yield* linkPermissions().pipe(Effect.provideService(McpInvocationContext, legacy))).files,
+      ).toBe("none");
+      const unrestrictedCopy = yield* tools
+        .handle("copy_repo", {})
+        .pipe(Stream.unwrap, Stream.runCollect);
+      expect(unrestrictedCopy.at(-1)?.result).toBe("repo accepted");
+      expect(
+        (yield* forwardedCallLimits("copy_repo", {
+          runtimeMode: "full-access",
+          interactionMode: "default",
+        })).files,
       ).toBe("all");
       const ambiguousClock = yield* mesh.nextHlc;
       yield* mesh.apply({
@@ -168,7 +251,7 @@ it.effect(
             client: { ...legacy.client, label: "New peer" },
           }),
         )).files,
-      ).toBe("projects");
+      ).toBe("none");
     }).pipe(
       Effect.provide(
         Layer.merge(scope, layerTest("studio-env", DEFAULT_SIDEBAR_WORKSPACES_CONFIG)),

@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   McpCapabilityUnavailableError,
   OrchestratorMcpEnvironmentTarget,
@@ -309,6 +310,7 @@ const LinkPullRequestTool = Tool.make("link_pull_request", {
   failure: PullRequestToolError,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Link pull request to thread")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
@@ -327,6 +329,7 @@ const LinkPullRequestsTool = Tool.make("link_pull_requests", {
   failure: PullRequestToolError,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Link pull requests to thread")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
@@ -341,6 +344,7 @@ const UnlinkPullRequestTool = Tool.make("unlink_pull_request", {
   failure: PullRequestToolError,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Unlink pull request from thread")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, true)
@@ -359,6 +363,7 @@ const UnlinkPullRequestsTool = Tool.make("unlink_pull_requests", {
   failure: PullRequestToolError,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Unlink pull requests by state")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, true)
@@ -376,6 +381,7 @@ const ListThreadPullRequestsTool = Tool.make("list_thread_pull_requests", {
   failure: PullRequestToolError,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "List thread pull requests")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -390,6 +396,7 @@ const WatchPullRequestTool = Tool.make("watch_pull_request", {
   failure: PullRequestToolError,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Watch pull request")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
@@ -404,6 +411,7 @@ const UnwatchPullRequestTool = Tool.make("unwatch_pull_request", {
   failure: PullRequestToolError,
   dependencies,
 })
+  .annotate(McpDomainAnnotation, "threads")
   .annotate(Tool.Title, "Stop watching pull request")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
@@ -453,6 +461,7 @@ const WritePullRequestGuidesTool = Tool.make("write_pull_request_guides", {
   failure: PullRequestToolError,
   dependencies: guideDependencies,
 })
+  .annotate(McpDomainAnnotation, "filesystem")
   .annotate(Tool.Title, "Write pull request guides")
   .annotate(Tool.Readonly, false)
   .annotate(Tool.Destructive, false)
@@ -470,6 +479,7 @@ const ReadPullRequestGuideTool = Tool.make("read_pull_request_guide", {
   failure: PullRequestToolError,
   dependencies: guideDependencies,
 })
+  .annotate(McpDomainAnnotation, "filesystem")
   .annotate(Tool.Title, "Read pull request guide")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)

@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import {
   FILES_LIST_MAX_LIMIT,
   FilesListResult,
@@ -30,7 +31,7 @@ const FilesReadTool = Tool.make("t3_files_read", {
     absolutePath: TrimmedNonEmptyString,
   }),
   success: FilesReadResult,
-});
+}).annotate(McpDomainAnnotation, "files");
 
 const FilesListTool = Tool.make("t3_files_list", {
   ...shared,
@@ -40,6 +41,6 @@ const FilesListTool = Tool.make("t3_files_list", {
     limit: Schema.optionalKey(PositiveInt.check(Schema.isLessThanOrEqualTo(FILES_LIST_MAX_LIMIT))),
   }),
   success: FilesListResult,
-});
+}).annotate(McpDomainAnnotation, "files");
 
 export const FilesToolkit = Toolkit.make(FilesReadTool, FilesListTool);

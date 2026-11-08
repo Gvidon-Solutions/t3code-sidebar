@@ -3,8 +3,13 @@
 # container. Usage: deploy/t3-ws/deploy.sh [--no-build] [--workspaces file.json]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-CFG="$HOME/.local/share/vpn-ops/ssh_config"
-HOST=152.89.244.57
+LOCAL_ENV="$PWD/scripts/mesh-e2e/local.env"
+[ -f "$LOCAL_ENV" ] || { echo "Create $LOCAL_ENV from local.env.example" >&2; exit 1; }
+. "$LOCAL_ENV"
+: "${CLOUD_SSH_CONFIG:?Set CLOUD_SSH_CONFIG in local.env}"
+: "${CLOUD_HOST:?Set CLOUD_HOST in local.env}"
+CFG="$CLOUD_SSH_CONFIG"
+HOST="$CLOUD_HOST"
 export DOCKER_CONTEXT=default DOCKER_CONFIG="$HOME/.local/share/t3-ws/docker-config"
 
 build=1

@@ -25,6 +25,7 @@ import type { RemoteT3RunnerOptions } from "@t3tools/ssh/tunnel";
 import serverPackageJson from "../../server/package.json" with { type: "json" };
 
 import * as DesktopIpc from "./ipc/DesktopIpc.ts";
+import { authorizeDesktopIpc } from "./ipc/rendererTrust.ts";
 import * as ElectronApp from "./electron/ElectronApp.ts";
 import * as ElectronDialog from "./electron/ElectronDialog.ts";
 import * as ElectronMenu from "./electron/ElectronMenu.ts";
@@ -140,7 +141,12 @@ const layerElectron = Layer.mergeAll(
   ElectronTheme.layer,
   ElectronUpdater.layer,
   ElectronWindow.layer,
-  DesktopIpc.layer(Electron.ipcMain),
+  DesktopIpc.layer(Electron.ipcMain, (event, channel) => {
+    const window = Electron.BrowserWindow.fromWebContents(
+      Electron.webContents.fromId(event.sender.id)!,
+    );
+    authorizeDesktopIpc(event, channel, window?.webContents.getURL());
+  }),
 );
 
 const layerDesktopFoundation = Layer.mergeAll(

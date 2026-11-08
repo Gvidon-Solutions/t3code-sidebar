@@ -1,8 +1,9 @@
+import { cliArchiveFileName, cliArchivePlatformKey } from "@t3tools/shared/cliRelease";
 import * as DateTime from "effect/DateTime";
 import * as Stream from "effect/Stream";
 import * as Schema from "effect/Schema";
 import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
-import { configFromLayout, bindingsFromLayout } from "@t3tools/shared/meshConfig";
+import { configFromLayout, bindingsFromLayout, resolveSshHost } from "@t3tools/shared/meshConfig";
 import type { Json } from "@t3tools/shared/meshLayout";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Context from "effect/Context";
@@ -31,10 +32,16 @@ const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Json));
 
 export function bootstrapTarget(ssh: string) {
   const match = /^([a-zA-Z0-9_.-]+)@(\[[a-fA-F0-9:]+\]|[a-zA-Z0-9_.-]+)(?::([0-9]+))?$/.exec(ssh);
-  if (!match) throw new Error("Bootstrap SSH must be user@host[:port], without a password");
+  if (!match || match[0] !== ssh)
+    throw new Error("Bootstrap SSH must be user@host[:port], without a password");
   const port = Number(match[3] ?? 22);
   if (port < 1 || port > 65535) throw new Error("Invalid bootstrap SSH port");
-  return { user: match[1]!, host: match[2]!, port, destination: `${match[1]}@${match[2]}` };
+  return {
+    user: match[1]!,
+    host: resolveSshHost(match[2]!),
+    port,
+    destination: `${match[1]}@${match[2]}`,
+  };
 }
 export interface BootstrapCredential {
   kind: "agent" | "key" | "password";
@@ -150,6 +157,20 @@ export const layer = Layer.effect(
           catch: () =>
             new MeshConfigError({ reason: "validation", message: "Invalid bootstrap SSH address" }),
         });
+        const reach =
+          typeof machine.reach === "object" && typeof machine.reach.address === "string"
+            ? URL.parse(machine.reach.address)
+            : null;
+        if (!reach || reach.protocol !== "https:" || reach.username || reach.password)
+          return yield* new MeshConfigError({
+            reason: "validation",
+            message: "Bootstrap requires an explicit HTTPS reach.address for secure pairing",
+          });
+        if (!bootstrap.hostKey)
+          return yield* new MeshConfigError({
+            reason: "validation",
+            message: "Accept the SSH host fingerprint by pinning bootstrap.hostKey in mesh config",
+          });
         const provided = credentials.get(name);
         const secret =
           provided && provided.expiresAt > DateTime.toEpochMillis(yield* DateTime.now)
@@ -179,12 +200,21 @@ export const layer = Layer.effect(
               } else yield* fs.writeFileString(askpass, askpassPlan.content);
               if (askpassPlan.mode !== undefined) yield* fs.chmod(askpass, askpassPlan.mode);
             }
-            const knownHosts = path.join(config.baseDir, "mesh/bootstrap-known-hosts");
+            const knownHosts = path.join(directory, "known-hosts");
             yield* fs.makeDirectory(path.dirname(knownHosts), { recursive: true, mode: 0o700 });
+            yield* fs.writeFileString(
+              knownHosts,
+              `[${target.host.replace(/^\[|\]$/g, "")}]:${target.port} ${bootstrap.hostKey}\n`,
+              { mode: 0o600 },
+            );
             const ssh = Effect.fn("MeshBootstrap.ssh")(function* (command: string, stdin?: string) {
               const result = yield* runner.run({
                 command: "ssh",
                 args: [
+                  "-F",
+                  clientPlatform === "win32" ? "NUL" : "/dev/null",
+                  "-o",
+                  `GlobalKnownHostsFile=${clientPlatform === "win32" ? "NUL" : "/dev/null"}`,
                   "-o",
                   `BatchMode=${secret.kind === "password" ? "no" : "yes"}`,
                   "-o",
@@ -204,7 +234,7 @@ export const layer = Layer.effect(
                   "-o",
                   "ServerAliveCountMax=2",
                   "-o",
-                  "StrictHostKeyChecking=accept-new",
+                  "StrictHostKeyChecking=yes",
                   "-o",
                   `UserKnownHostsFile=${knownHosts}`,
                   ...(secret.kind === "key" && secret.value
@@ -234,11 +264,16 @@ export const layer = Layer.effect(
               if (result.code !== 0)
                 return yield* new MeshConfigError({
                   reason: "storage",
-                  message: /Permission denied/i.test(result.stderr)
-                    ? "SSH authentication refused; provide a fresh one-time credential"
-                    : /Host key verification failed|REMOTE HOST IDENTIFICATION/i.test(result.stderr)
-                      ? "Bootstrap SSH host key verification failed"
-                      : `Bootstrap SSH command failed (exit ${result.code})`,
+                  message:
+                    /Permission denied|authentication (?:failed|failures|refused)|no supported authentication methods/i.test(
+                      result.stderr,
+                    )
+                      ? "SSH authentication refused; provide a fresh one-time credential"
+                      : /Host key verification failed|REMOTE HOST IDENTIFICATION/i.test(
+                            result.stderr,
+                          )
+                        ? "Bootstrap SSH host key verification failed"
+                        : `Bootstrap SSH command failed (exit ${result.code})`,
                 });
               return result.stdout;
             });
@@ -248,7 +283,12 @@ export const layer = Layer.effect(
               windowsHint ? bootstrapWindowsProbe : bootstrapUnixProbe,
             ).pipe(Effect.result);
             const output =
-              detected._tag === "Success" ? detected.success : yield* ssh(bootstrapWindowsProbe);
+              detected._tag === "Success"
+                ? detected.success
+                : /authentication refused|host key verification/.test(detected.failure.message) ||
+                    windowsHint
+                  ? yield* detected.failure
+                  : yield* ssh(bootstrapWindowsProbe);
             yield* report(name, phase, "done");
             phase = "detect";
             yield* report(name, phase, "in_progress");
@@ -276,12 +316,19 @@ export const layer = Layer.effect(
             yield* Effect.gen(function* () {
               const installed = yield* ssh(remote.installed);
               if (!installed.includes("installed")) {
-                const bytes = yield* archive.download(version, platform, arch, (stage) =>
-                  Effect.gen(function* () {
-                    if (stage !== phase) yield* report(name, phase, "done");
-                    phase = stage;
-                    yield* report(name, phase, "in_progress");
-                  }),
+                const bytes = yield* archive.download(
+                  version,
+                  platform,
+                  arch,
+                  doc.t3?.runtimeChecksums?.[
+                    cliArchiveFileName(version, cliArchivePlatformKey(platform, arch)!)
+                  ],
+                  (stage) =>
+                    Effect.gen(function* () {
+                      if (stage !== phase) yield* report(name, phase, "done");
+                      phase = stage;
+                      yield* report(name, phase, "in_progress");
+                    }),
                 );
                 yield* ssh(remote.extract, Buffer.from(bytes).toString("base64"));
               }
@@ -309,6 +356,7 @@ export const layer = Layer.effect(
                       baseDir,
                       version,
                       port,
+                      listenHost: bootstrap.listenHost ?? "127.0.0.1",
                       ...(env.T3CODE_RELEASE_BASE_URL
                         ? { releaseBaseUrl: env.T3CODE_RELEASE_BASE_URL }
                         : {}),
@@ -331,10 +379,7 @@ export const layer = Layer.effect(
                   reason: "storage",
                   message: "Bootstrap pairing token was not returned",
                 });
-              const url =
-                typeof machine.reach === "object" && typeof machine.reach.address === "string"
-                  ? machine.reach.address
-                  : `http://${target.host}:${port}`;
+              const url = reach.href;
               const linked = yield* links.link({ url, pairingCode: token, access: "full-access" });
               yield* report(name, phase, "done");
               phase = "bind";

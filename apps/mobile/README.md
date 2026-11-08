@@ -139,9 +139,10 @@ The first run still compiles the native modules and can take a while. Later runs
 build cache and the generated project, so a JavaScript change usually rebuilds in a minute or two.
 It builds the fork's `sidebar` variant (`com.gvidon.t3codesidebar`), runs `expo prebuild` without
 `--clean` only when the native config changed or `android/` is missing, and uses a clean prebuild
-when the app variant changes. When `~/.local/share/t3-ws/android-signing.env` exists, it signs with
-the fork's release keystore so the APK installs over a released build; otherwise it falls back to
-the debug keystore. `T3_ANDROID_ARCH` selects another ABI; `T3_ANDROID_WORKERS` caps Gradle workers.
+when the app variant changes. Set `T3_ANDROID_SIGNING_ENV` to an explicitly selected signing
+file to use the release keystore and install over a released build; see
+[Android signing](../../docs/delivery.md#android-signing-boundary). `T3_ANDROID_ARCH` selects
+another ABI; `T3_ANDROID_WORKERS` caps Gradle workers.
 
 For UI iteration, skip the APK entirely: install the dev client once and run Metro
 (`vp run dev:client`); JavaScript edits then arrive through Fast Refresh. EAS stays the path for

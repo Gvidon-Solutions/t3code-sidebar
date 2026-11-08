@@ -27,6 +27,9 @@ export const OtaRelease = Schema.Struct({
 export const OtaCatalog = Schema.Struct({
   releases: Schema.Array(OtaRelease),
   apkUrl: Schema.optional(Schema.String),
+  nativeUpdate: Schema.optional(
+    Schema.Struct({ payload: Schema.String, signature: Schema.String }),
+  ),
   apkAsset: Schema.optional(OtaAsset),
 });
 const decodeManifest = Schema.decodeSync(Schema.fromJsonString(OtaManifest));

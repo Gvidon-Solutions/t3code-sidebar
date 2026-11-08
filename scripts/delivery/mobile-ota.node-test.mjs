@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeCrypto from "node:crypto";
 import * as NodeURL from "node:url";
+import { stageMobileApk } from "./assets.mjs";
 import { publishMobileUpdate } from "./mobile-ota.mjs";
 const { test } = NodeTest;
 const { mkdtemp, writeFile, mkdir, readFile, rm } = NodeFSP;
@@ -110,12 +111,26 @@ test("publishes real Expo exports, keeps two signed updates and refuses mismatch
       key,
       certificate,
     };
+    await writeFile(join(root, "app.apk"), "signed APK");
+    stageMobileApk(store, join(root, "app.apk"), options.origin);
     const first = await publishMobileUpdate(options);
     await writeFile(join(source, "bundle.js"), "second");
     const second = await publishMobileUpdate(options);
     NodeAssert.notEqual(first.id, second.id);
     const catalog = JSON.parse(await readFile(join(store, "catalog.json"), "utf8"));
     NodeAssert.equal(catalog.releases.length, 2);
+    NodeAssert.ok(
+      verify(
+        "RSA-SHA256",
+        Buffer.from(catalog.nativeUpdate.payload),
+        new X509Certificate(await readFile(certificate)).publicKey,
+        Buffer.from(catalog.nativeUpdate.signature, "base64"),
+      ),
+    );
+    NodeAssert.equal(
+      JSON.parse(catalog.nativeUpdate.payload).sha256,
+      NodeCrypto.createHash("sha256").update("signed APK").digest("hex"),
+    );
     for (const release of catalog.releases) {
       NodeAssert.ok(
         verify(

@@ -363,7 +363,7 @@ describe("T3 Mesh logical projects", () => {
       settings: defaultGroupingSettings,
       primaryEnvironmentId,
       resolveEnvironmentLabel: (environmentId) =>
-        environmentId === remoteEnvironmentId ? "Operalia" : null,
+        environmentId === remoteEnvironmentId ? "Cloudbox" : null,
       layout: {
         ...layout,
         machines: { [remoteEnvironmentId]: { tag: "OP" } },

@@ -19,10 +19,6 @@ export class PeerCredentials extends Context.Service<
       environmentId: string,
       access: AuthMcpClientAccess,
     ) => Effect.Effect<{ token: string; expiresAt: number }, PeerConnectionError>;
-    readonly bind: (
-      environmentId: string,
-      sessionId: string,
-    ) => Effect.Effect<void, PeerConnectionError>;
     readonly revoke: (environmentId: string) => Effect.Effect<void, PeerConnectionError>;
   }
 >()("t3/peer/connection/PeerCredentials") {}
@@ -41,20 +37,6 @@ export const layer = Layer.effect(
             message: "Peer credential storage failed",
             cause,
           });
-    const bind = Effect.fn("PeerCredentials.bind")(function* (
-      environmentId: string,
-      sessionId: string,
-    ) {
-      const previous = yield* sql<{
-        environment_id: string;
-      }>`SELECT environment_id FROM peer_incoming_sessions WHERE session_id = ${sessionId}`;
-      if (previous[0] && previous[0].environment_id !== environmentId)
-        return yield* new PeerConnectionError({
-          reason: "protocol",
-          message: "The peer token is bound to another environment",
-        });
-      yield* sql`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${sessionId}, ${environmentId}) ON CONFLICT(session_id) DO NOTHING`;
-    }, Effect.mapError(failure));
     const revoke = Effect.fn("PeerCredentials.revoke")(function* (environmentId: string) {
       const sessions = yield* sql<{
         session_id: string;
@@ -112,6 +94,6 @@ export const layer = Layer.effect(
       }
       return { token: issued.token, expiresAt: issued.expiresAt.epochMilliseconds };
     }, Effect.mapError(failure));
-    return { bind, revoke, grant };
+    return { revoke, grant };
   }),
 );

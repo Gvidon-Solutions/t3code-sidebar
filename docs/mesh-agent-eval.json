@@ -27,7 +27,7 @@
         "threadId": "mcp:d931f643-e5da-4c1e-84cd-ceb9f17b1f9d",
         "target": {
           "kind": "file",
-          "path": "/home/user/t3-replicas/demo-2/README.md",
+          "path": "/home/dev/t3-replicas/demo-2/README.md",
           "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
         }
       },
@@ -37,7 +37,7 @@
         "threadId": "mcp:9cdc7f8f-0355-4605-a59a-990e3900a31a",
         "target": {
           "kind": "file",
-          "path": "/home/user/t3-replicas/demo-2/README.md",
+          "path": "/home/dev/t3-replicas/demo-2/README.md",
           "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
         }
       },
@@ -77,7 +77,7 @@
         "threadId": "mcp:1e387a2d-ab56-42fb-97e8-19eb91fd52a8",
         "target": {
           "kind": "file",
-          "path": "/home/user/t3-replicas/demo-2/README.md",
+          "path": "/home/dev/t3-replicas/demo-2/README.md",
           "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
         }
       }
@@ -85,23 +85,23 @@
     "readmeSha256": "b3880bf8501fd51b77911e043019efea87817464b47e92c6b8608f34f513cb60",
     "replicas": [
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
         "role": "primary",
-        "path": "/home/user/xdev-e2e/demo",
+        "path": "/home/dev/xdev-e2e/demo",
         "state": "watching",
         "source": null
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
         "role": "replica",
-        "path": "/home/user/t3-replicas/demo-2",
+        "path": "/home/dev/t3-replicas/demo-2",
         "state": "watching",
         "source": "34e33796-4717-4293-a955-88c2f740db4d"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
         "role": "replica",
         "path": "/home/t3/t3-replicas/demo-6",
@@ -109,15 +109,15 @@
         "source": "34e33796-4717-4293-a955-88c2f740db4d"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "98fe006e-1a2f-497b-ae5d-1714bccb2052",
         "role": "replica",
-        "path": "/home/user/t3-replicas/demo",
+        "path": "/home/dev/t3-replicas/demo",
         "state": "error",
         "source": "34e33796-4717-4293-a955-88c2f740db4d"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/user/xdev-e2e/demo",
+        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
         "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
         "role": "replica",
         "path": "/tmp/t3-eval-home/demo",
@@ -175,7 +175,7 @@
             "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
             "projectId": "a6ec9e68-e851-4c5a-b893-3492e94c8dc4",
             "title": "Дополнить README",
-            "message": "Дополни README одной подходящей строкой. Это синхронизированная реплика: рабочие файлы редактируй здесь; git и сборки выполняй только на primary 34e33796-4717-4293-a955-88c2f740db4d через `ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && <command>'`. Сначала проверь README и добавь уместную одну строку, сохрани стиль файла. Mutagen синхронизирует изменения."
+            "message": "Дополни README одной подходящей строкой. Это синхронизированная реплика: рабочие файлы редактируй здесь; git и сборки выполняй только на primary 34e33796-4717-4293-a955-88c2f740db4d через `ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'`. Сначала проверь README и добавь уместную одну строку, сохрани стиль файла. Mutagen синхронизирует изменения."
           }
         },
         {
@@ -184,7 +184,7 @@
             "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
             "projectId": "a6ec9e68-e851-4c5a-b893-3492e94c8dc4",
             "title": "Дополнить README",
-            "message": "Дополни README одной подходящей строкой. Это синхронизированная реплика: рабочие файлы редактируй здесь; git и сборки выполняй только на primary 34e33796-4717-4293-a955-88c2f740db4d через `ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && <command>'`. Сначала проверь README и добавь уместную одну строку, сохрани стиль файла. Mutagen синхронизирует изменения."
+            "message": "Дополни README одной подходящей строкой. Это синхронизированная реплика: рабочие файлы редактируй здесь; git и сборки выполняй только на primary 34e33796-4717-4293-a955-88c2f740db4d через `ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'`. Сначала проверь README и добавь уместную одну строку, сохрани стиль файла. Mutagen синхронизирует изменения."
           }
         },
         {
@@ -203,7 +203,7 @@
               "model": "gpt-6-luna"
             },
             "title": "Дополнить README",
-            "message": "Дополни README одной подходящей строкой. Это синхронизированная реплика: рабочие файлы редактируй здесь; git и сборки выполняй только на primary 34e33796-4717-4293-a955-88c2f740db4d через `ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && <command>'`. Сначала проверь README и добавь уместную одну строку, сохрани стиль файла. Mutagen синхронизирует изменения."
+            "message": "Дополни README одной подходящей строкой. Это синхронизированная реплика: рабочие файлы редактируй здесь; git и сборки выполняй только на primary 34e33796-4717-4293-a955-88c2f740db4d через `ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'`. Сначала проверь README и добавь уместную одну строку, сохрани стиль файла. Mutagen синхронизирует изменения."
           }
         }
       ],
@@ -346,7 +346,7 @@
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/xdev-e2e/demo/README.md",
+              "path": "/home/dev/xdev-e2e/demo/README.md",
               "environmentId": "34e33796-4717-4293-a955-88c2f740db4d"
             }
           }
@@ -384,7 +384,7 @@
           "tool": "t3-code.t3_project_place",
           "input": {
             "action": "add",
-            "machine": "gvidon",
+            "machine": "studio",
             "project": "demo",
             "role": "replica",
             "wait": 600
@@ -586,7 +586,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short --branch && git diff --stat && git diff --cached --stat'"
+            "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short --branch && git diff --stat && git diff --cached --stat'"
           ]
         },
         {
@@ -594,7 +594,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git diff -- stage-j-commit.txt && git diff --cached'"
+            "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git diff -- stage-j-commit.txt && git diff --cached'"
           ]
         },
         {
@@ -602,7 +602,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add -- stage-j-commit.txt && git commit -m \"Update stage J commit marker\" && git status --short --branch && git log -1 --oneline'"
+            "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add -- stage-j-commit.txt && git commit -m \"Update stage J commit marker\" && git status --short --branch && git log -1 --oneline'"
           ]
         }
       ],
@@ -795,7 +795,7 @@
         {
           "tool": "t3-code.t3_project_place",
           "input": {
-            "machine": "gvidon",
+            "machine": "studio",
             "project": "demo",
             "role": "replica",
             "source": "34e33796-4717-4293-a955-88c2f740db4d",
@@ -970,7 +970,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short && git diff --stat && git diff && git log -5 --oneline'"
+            "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short && git diff --stat && git diff && git log -5 --oneline'"
           ]
         },
         {
@@ -978,7 +978,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && cat round2-conflict.txt stage-j-commit.txt && git diff --check && git add README.md round2-conflict.txt stage-j-commit.txt && git commit -m \"Record mesh synchronization demo changes\" && git status --short && git rev-parse --short HEAD'"
+            "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && cat round2-conflict.txt stage-j-commit.txt && git diff --check && git add README.md round2-conflict.txt stage-j-commit.txt && git commit -m \"Record mesh synchronization demo changes\" && git status --short && git rev-parse --short HEAD'"
           ]
         }
       ],
@@ -1195,7 +1195,11 @@
         },
         {
           "tool": "shell",
-          "command": ["/usr/bin/zsh", "-lc", "t3ctl place demo --on 'gv test' --source gor --wait"]
+          "command": [
+            "/usr/bin/zsh",
+            "-lc",
+            "t3ctl place demo --on 'gv test' --source nodeB --wait"
+          ]
         }
       ],
       "transcript": "rollout-2026-11-03T12-11-23-01a1a0ad-70d9-7811-8dfc-70f4fb2e12a7.jsonl"
@@ -1355,7 +1359,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short --branch && git diff --stat && git diff --cached --stat'"
+            "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short --branch && git diff --stat && git diff --cached --stat'"
           ]
         },
         {
@@ -1363,7 +1367,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git diff -- README.md stage-j-commit.txt && git status --porcelain=v1'"
+            "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git diff -- README.md stage-j-commit.txt && git status --porcelain=v1'"
           ]
         },
         {
@@ -1371,7 +1375,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Record synchronized replica changes\" && git status --short --branch && git log -1 --oneline'"
+            "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Record synchronized replica changes\" && git status --short --branch && git log -1 --oneline'"
           ]
         }
       ],
@@ -1410,7 +1414,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "t3ctl new --project demo --on VP \"Допиши в конец README одну строку: «README обновлён агентом на VPS.» Сохрани существующее содержимое. Работай в синхронизированной копии проекта; если нужны git или сборки, запускай их только на primary через ssh gor в /home/user/xdev-e2e/demo. Коммит не требуется. Проверь добавленную строку и коротко сообщи результат.\" "
+            "t3ctl new --project demo --on VP \"Допиши в конец README одну строку: «README обновлён агентом на VPS.» Сохрани существующее содержимое. Работай в синхронизированной копии проекта; если нужны git или сборки, запускай их только на primary через ssh nodeB в /home/dev/xdev-e2e/demo. Коммит не требуется. Проверь добавленную строку и коротко сообщи результат.\" "
           ]
         },
         {
@@ -1536,7 +1540,7 @@
             "target": {
               "kind": "file",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
-              "path": "/home/user/t3-replicas/demo-2/README.md"
+              "path": "/home/dev/t3-replicas/demo-2/README.md"
             }
           }
         }
@@ -1720,7 +1724,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd /home/user/xdev-e2e/demo && git status --short && git diff --stat && git diff && git ls-files --others --exclude-standard'"
+            "ssh nodeB 'cd /home/dev/xdev-e2e/demo && git status --short && git diff --stat && git diff && git ls-files --others --exclude-standard'"
           ]
         },
         {
@@ -1728,7 +1732,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd /home/user/xdev-e2e/demo && git add README.md stage-j-commit.txt && git commit -m \"Update README and stage J progress\" && git status --short && git log -1 --format=\"%h %s\"'"
+            "ssh nodeB 'cd /home/dev/xdev-e2e/demo && git add README.md stage-j-commit.txt && git commit -m \"Update README and stage J progress\" && git status --short && git log -1 --format=\"%h %s\"'"
           ]
         }
       ],
@@ -1806,7 +1810,7 @@
             "target": {
               "kind": "file",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
-              "path": "/home/user/t3-replicas/demo-2/README.md"
+              "path": "/home/dev/t3-replicas/demo-2/README.md"
             }
           }
         }
@@ -1926,7 +1930,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short && git diff'"
+            "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short && git diff'"
           ]
         },
         {
@@ -1934,7 +1938,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh gor 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add stage-j-commit.txt && git commit -m \"Record verified Luna stage\" && git status --short && git log -1 --oneline'"
+            "ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add stage-j-commit.txt && git commit -m \"Record verified Luna stage\" && git status --short && git log -1 --oneline'"
           ]
         }
       ],
@@ -1997,7 +2001,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "~/.local/bin/t3ctl new --project f11e227a-a53d-42d2-8e16-ed72e37f8907 --on vps \"Допиши одну подходящую строку в README. Сначала посмотри текущий текст README и добавь одну короткую строку, согласованную с проектом. Работай в этой реплике; изменения синхронизируются с primary. Git, сборки и тесты запускать только на primary через ssh gor 'cd /home/user/xdev-e2e/demo && <command>'. В конце сообщи, какую строку добавил и в какой файл.\" --json"
+            "~/.local/bin/t3ctl new --project f11e227a-a53d-42d2-8e16-ed72e37f8907 --on vps \"Допиши одну подходящую строку в README. Сначала посмотри текущий текст README и добавь одну короткую строку, согласованную с проектом. Работай в этой реплике; изменения синхронизируются с primary. Git, сборки и тесты запускать только на primary через ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'. В конце сообщи, какую строку добавил и в какой файл.\" --json"
           ]
         }
       ],
@@ -2084,7 +2088,7 @@
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -2154,7 +2158,7 @@
         },
         {
           "tool": "shell",
-          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl place demo --on gvidon --wait"]
+          "command": ["/usr/bin/zsh", "-lc", "~/.local/bin/t3ctl place demo --on studio --wait"]
         },
         {
           "tool": "shell",
@@ -2305,7 +2309,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short --branch && git log -1 --oneline'"
+            "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short --branch && git log -1 --oneline'"
           ]
         },
         {
@@ -2313,7 +2317,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git diff -- README.md stage-j-commit.txt && git diff --cached --stat'"
+            "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git diff -- README.md stage-j-commit.txt && git diff --cached --stat'"
           ]
         },
         {
@@ -2321,7 +2325,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Update replica sync notes\" && git status --short --branch && git log -1 --oneline'"
+            "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Update replica sync notes\" && git status --short --branch && git log -1 --oneline'"
           ]
         }
       ],
@@ -2454,7 +2458,7 @@
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -2670,7 +2674,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status --short && git diff && git diff --cached'"
+            "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status --short && git diff && git diff --cached'"
           ]
         },
         {
@@ -2678,7 +2682,7 @@
           "command": [
             "/usr/bin/zsh",
             "-lc",
-            "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git diff --check && git add -- stage-j-commit.txt && git commit -m \"Add stage J acceptance marker\" && git status --short && git log -1 --format=\"%h %s\"'"
+            "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git diff --check && git add -- stage-j-commit.txt && git commit -m \"Add stage J acceptance marker\" && git status --short && git log -1 --format=\"%h %s\"'"
           ]
         }
       ],
@@ -2958,14 +2962,14 @@
         },
         {
           "tool": "bash",
-          "command": "t3ctl cat /home/user/t3-replicas/demo-2/README.md --on 375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+          "command": "t3ctl cat /home/dev/t3-replicas/demo-2/README.md --on 375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
         },
         {
           "tool": "t3-code_ui_open",
           "input": {
             "target": {
               "kind": "file",
-              "path": "/home/user/t3-replicas/demo-2/README.md",
+              "path": "/home/dev/t3-replicas/demo-2/README.md",
               "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
             }
           }
@@ -3151,11 +3155,11 @@
       "actions": [
         {
           "tool": "bash",
-          "command": "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git status && echo \"---DIFF---\" && git diff && echo \"---STAGED---\" && git diff --cached && echo \"---LOG---\" && git log --oneline -5'"
+          "command": "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git status && echo \"---DIFF---\" && git diff && echo \"---STAGED---\" && git diff --cached && echo \"---LOG---\" && git log --oneline -5'"
         },
         {
           "tool": "bash",
-          "command": "ssh 'gor' 'cd '\\''/home/user/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Record DeepSeek stage and sync notes\" && git log --oneline -2 && git status --short'"
+          "command": "ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && git add README.md stage-j-commit.txt && git commit -m \"Record DeepSeek stage and sync notes\" && git log --oneline -2 && git status --short'"
         }
       ],
       "transcript": "ses_e5f48759bffesLdL0TgNb2IfF8",
@@ -3202,7 +3206,7 @@
       "verification": "all-machine title/content search"
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6-luna",
       "request": 1,
       "threadId": "mcp:a4561dce-ccc3-4a93-b073-91f1cbb47d19",
@@ -3216,7 +3220,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6-luna",
       "request": 2,
       "threadId": "mcp:294a913a-e981-4bee-9526-25d2007d38b0",
@@ -3230,7 +3234,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6-luna",
       "request": 3,
       "threadId": "mcp:13283193-5b15-4081-ba3e-ee1df668710c",
@@ -3244,7 +3248,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6-luna",
       "request": 4,
       "threadId": "mcp:bc4c874d-ecc3-4c02-a8ca-d3d67ac814f7",
@@ -3258,7 +3262,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6-luna",
       "request": 5,
       "threadId": "mcp:d8f7b220-6686-406d-ac92-aa40bc6c7627",
@@ -3272,7 +3276,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6-luna",
       "request": 6,
       "threadId": "mcp:fb278210-38d1-46ac-81c8-96a66010e742",
@@ -3286,7 +3290,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6-luna",
       "request": 7,
       "threadId": "mcp:22f63cc1-7ab4-4488-bc5f-ed38e74be3e9",
@@ -3300,7 +3304,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6-luna",
       "request": 8,
       "threadId": "mcp:c46809ff-b601-45bb-8475-efe16fe81ecb",
@@ -3314,7 +3318,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6.1-sol",
       "request": 1,
       "threadId": "mcp:60c00874-9b27-47b8-b24b-e2697d39bfcb",
@@ -3328,7 +3332,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6.1-sol",
       "request": 2,
       "threadId": "mcp:5294f179-f8a1-4131-b4ad-42cb07bce9b8",
@@ -3342,7 +3346,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6.1-sol",
       "request": 3,
       "threadId": "mcp:da4f179e-c6d2-42dc-bf2a-0065a3a84831",
@@ -3356,7 +3360,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6.1-sol",
       "request": 4,
       "threadId": "mcp:9a776e62-ee45-4219-aad1-507b60189121",
@@ -3370,7 +3374,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6.1-sol",
       "request": 5,
       "threadId": "mcp:82197ab4-ee86-48ac-b4d7-43b257b05cae",
@@ -3384,7 +3388,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6.1-sol",
       "request": 6,
       "threadId": "mcp:f2e43962-c9d6-4797-abca-e0cfa9a8fbcb",
@@ -3398,7 +3402,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6.1-sol",
       "request": 7,
       "threadId": "mcp:7c5c7586-f262-4e71-ae6f-ef8900dd0579",
@@ -3412,7 +3416,7 @@
       "outcomeVerified": false
     },
     {
-      "round": "gor-original",
+      "round": "nodeB-original",
       "model": "gpt-6.1-sol",
       "request": 8,
       "threadId": "mcp:4401b028-0cd9-4585-a55e-3e8383ebfcb2",
@@ -3425,5 +3429,6 @@
       "error": "workspace routing discovery failed",
       "outcomeVerified": false
     }
-  ]
+  ],
+  "redactedInfrastructure": true
 }

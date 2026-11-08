@@ -1,8 +1,27 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cliArchiveTarCommand, newestCliReleaseVersion, parseChecksums } from "./cliRelease.ts";
+import {
+  cliReleaseAssetUrl,
+  cliReleaseDownloadBaseUrl,
+  cliReleaseIndexPageUrl,
+  cliArchiveTarCommand,
+  newestCliReleaseVersion,
+  parseChecksums,
+} from "./cliRelease.ts";
 
 describe("cliRelease", () => {
+  it("uses the fork release repository and refuses insecure download overrides", () => {
+    expect(cliReleaseAssetUrl("1.2.3", "runtime.tar.gz")).toBe(
+      "https://github.com/Gvidon-Solutions/t3code-sidebar/releases/download/v1.2.3/runtime.tar.gz",
+    );
+    expect(cliReleaseIndexPageUrl(1)).toContain("repos/Gvidon-Solutions/t3code-sidebar/releases");
+    for (const base of [
+      "http://releases.example/download",
+      "file:///tmp/runtime",
+      "https://user:secret@releases.example",
+    ])
+      expect(() => cliReleaseDownloadBaseUrl("1.2.3", base)).toThrow("HTTPS");
+  });
   it("parses sha256sum output including binary-mode markers", () => {
     const checksums = parseChecksums(
       [

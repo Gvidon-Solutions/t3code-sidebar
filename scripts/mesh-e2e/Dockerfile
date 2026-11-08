@@ -1,4 +1,4 @@
-# T3 Mesh E2E VPS image: deploy/t3-ws/Dockerfile plus Mutagen and ssh tooling.
+# T3 Mesh E2E CLOUD image: deploy/t3-ws/Dockerfile plus Mutagen and ssh tooling.
 # Build from the repo root:
 #   docker build -f scripts/mesh-e2e/Dockerfile -t t3-mesh-e2e:dev .
 #

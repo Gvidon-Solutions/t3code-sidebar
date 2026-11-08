@@ -1,3 +1,4 @@
+import { mcpDomain, linkAllowsDomain, registerMcpTools } from "./McpToolDomain.ts";
 import { discoverThreadMachines, probeThread } from "../mesh/MeshThreadAccess.ts";
 import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
 import { MeshLayoutService } from "../mesh/MeshLayoutService.ts";
@@ -588,30 +589,19 @@ const routed = Effect.fn("McpToolAccess.routed")(function* <Tools extends Record
     };
   }
   for (const [name, handler] of Object.entries(handlers)) {
-    const domain =
-      name.startsWith("t3_thread_") ||
-      name.startsWith("t3_attachment_") ||
-      [
-        "t3_queue",
-        "t3_pending_request",
-        "create_threads",
-        "delegate_task",
-        "task_status",
-        "task_cancel",
-      ].includes(name)
-        ? "threads"
-        : name === "t3_project_place" || name === "t3_replica_adopt"
-          ? "replicas"
-          : undefined;
-    if (!domain) continue;
+    const tool = toolkit.tools[name];
+    const domain = tool ? mcpDomain(tool) : undefined;
     const invoke = handler as (params: object) => Effect.Effect<unknown, OrchestratorMcpFailure>;
     handlers[name] = (params: object) =>
       Effect.gen(function* () {
         const permissions = yield* linkPermissions();
-        if (permissions.linked && !permissions[domain])
+        const scope = yield* Effect.serviceOption(McpInvocationContext.McpInvocationContext);
+        const identified =
+          Option.isSome(scope) && scope.value.client?.peerEnvironmentId !== undefined;
+        if (permissions.linked && !linkAllowsDomain(domain, permissions, identified))
           return yield* new OrchestratorMcpFailure({
             code: "capability_denied",
-            message: `This link may not access ${domain} on this server.`,
+            message: `This link may not access ${domain ?? "unclassified tools"} on this server.`,
           });
         return yield* invoke(params);
       });
@@ -623,6 +613,7 @@ export const toLayer = <Tools extends Record<string, Tool.Any>, EX = never, RX =
   toolkit: Toolkit.Toolkit<Tools>,
   build: Handlers<Tools> | Effect.Effect<Handlers<Tools>, EX, RX>,
 ): HandlersLayer<Tools, EX, Exclude<RX, Scope.Scope>> => {
+  registerMcpTools(toolkit.tools);
   // Checked as soon as they are given, so a forged declaration fails here.
   const withDeclarations = (declarations: Handlers<Tools>) =>
     routed(toolkit, declarations, checkedHandlers(declarations));

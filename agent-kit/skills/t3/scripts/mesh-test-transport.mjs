@@ -218,7 +218,8 @@ function call(name, args) {
     case "meshLayout.get":
       return snapshot;
     case "meshLayout.status":
-      return { peers: [], connections: [
+      return {
+        legacyIdentityUpgrades: [{ sessionId: "legacy-session", environmentId: peer, boundAt: "2026-11-08T10:00:00.000Z" }], peers: [], connections: [
         { environmentId: peer, state: "direct", via: null, offlineSince: null, lastError: null },
         { environmentId: "cloudbox", state: "relayed", via: peer, offlineSince: null, lastError: null },
         { environmentId: "laptop", state: "offline", via: null, offlineSince: "2026-11-04T00:00:00.000Z", lastError: "Peer heartbeat timed out" },

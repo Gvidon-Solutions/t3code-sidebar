@@ -152,6 +152,7 @@ it.effect(
             DesktopUi.DesktopUi,
             DesktopUi.DesktopUi.of({
               selection: Effect.succeed(null),
+              connectionOrigins: Effect.succeed([]),
               select: () => Effect.succeed(false),
               recordSource: () => Effect.void,
               getInfo: Effect.succeed({
@@ -166,6 +167,8 @@ it.effect(
           ),
           Effect.provideService(ElectronProtocol.ElectronProtocol, {
             registerDesktopProtocol: () => Effect.void,
+            trackWindow: () => Effect.void,
+            serverOriginFor: () => Effect.succeed(null),
           } as unknown as ElectronProtocol.ElectronProtocol["Service"]),
           Effect.provideService(DesktopLegacyLocalStorage.DesktopLegacyLocalStorage, {
             load: () => Effect.void,

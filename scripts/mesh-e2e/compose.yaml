@@ -1,5 +1,5 @@
 # Deployed to /opt/t3-mesh-e2e/compose.yaml. Isolated from t3-ws and every
-# other stack on the VPS: own project name, own network, loopback-only port.
+# other stack on the CLOUD: own project name, own network, loopback-only port.
 name: t3-mesh-e2e
 services:
   t3:

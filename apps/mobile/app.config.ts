@@ -1,3 +1,4 @@
+import * as NodeFS from "node:fs";
 import mobileVersion from "./mobile-version.json" with { type: "json" };
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
@@ -519,6 +520,18 @@ const config: ExpoConfig = {
   extra: {
     appVariant: APP_VARIANT,
     mobileUpdateUrl: APP_VARIANT === "sidebar" ? (repoEnv.T3_MOBILE_UPDATE_URL ?? null) : null,
+    mobileUpdateCertificate:
+      APP_VARIANT === "sidebar" && repoEnv.T3_MOBILE_UPDATE_CERTIFICATE
+        ? NodeFS.readFileSync(
+            isAbsolute(repoEnv.T3_MOBILE_UPDATE_CERTIFICATE)
+              ? repoEnv.T3_MOBILE_UPDATE_CERTIFICATE
+              : NodePath.resolve(
+                  dirname(fileURLToPath(import.meta.url)),
+                  repoEnv.T3_MOBILE_UPDATE_CERTIFICATE,
+                ),
+            "utf8",
+          )
+        : null,
     forkReleaseRepo: APP_VARIANT === "sidebar" ? "Gvidon-Solutions/t3code-sidebar" : null,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {

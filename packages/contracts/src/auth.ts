@@ -524,6 +524,8 @@ export const AuthMcpApprovalDecision = Schema.Union([
   Schema.TaggedStruct("pairing-code", {
     access: AuthMcpClientAccess,
     code: TrimmedNonEmptyString,
+    peerEnvironmentId: Schema.optionalKey(TrimmedNonEmptyString),
+    issuerEnvironmentId: Schema.optionalKey(TrimmedNonEmptyString),
   }),
   Schema.TaggedStruct("browser-session", {
     access: AuthMcpClientAccess,

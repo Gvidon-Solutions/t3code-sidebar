@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "./McpToolDomain.ts";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
@@ -57,7 +58,7 @@ const RenameTool = Tool.make("rename", {
     McpInvocationContext.McpInvocationContext,
     ThreadManagement.ThreadManagementService,
   ],
-});
+}).annotate(McpDomainAnnotation, "mesh");
 const RenameToolkit = Toolkit.make(RenameTool);
 
 const supervisedClient: McpInvocationContext.McpInvocationScope = {

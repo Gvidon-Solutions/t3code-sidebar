@@ -1,3 +1,4 @@
+import { McpDomainAnnotation } from "../../McpToolDomain.ts";
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import {
   HTML_RENDER_COLUMN_WIDTH,
@@ -63,6 +64,7 @@ export const HtmlPreviewTool = Tool.make("html_preview", {
     HtmlRender.HtmlRender,
   ],
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Preview HTML")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)
@@ -99,6 +101,7 @@ const HtmlRenderTool = Tool.make(HTML_RENDER_TOOL_NAME, {
     HtmlRender.HtmlRender,
   ],
 })
+  .annotate(McpDomainAnnotation, "owner")
   .annotate(Tool.Title, "Render HTML")
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false)

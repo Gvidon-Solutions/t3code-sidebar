@@ -17,6 +17,11 @@ vi.mock("electron", () => ({
 }));
 
 import * as ElectronProtocol from "./ElectronProtocol.ts";
+function navigation(url: string, init?: RequestInit) {
+  const request = new Request(url, init);
+  Object.defineProperty(request, "mode", { value: "navigate" });
+  return request;
+}
 
 const layerProtocol = ElectronProtocol.layer.pipe(Layer.provide(NodeServices.layer));
 
@@ -44,7 +49,13 @@ describe("ElectronProtocol", () => {
         clerkFrontendApiHostname: undefined,
       });
       const request = (pathname: string, init?: RequestInit) =>
-        Effect.promise(() => handler!(new Request(`t3code://app${pathname}`, init)));
+        Effect.promise(() =>
+          handler!(
+            init?.headers && new Headers(init.headers).get("accept")?.includes("text/html")
+              ? navigation(`t3code://app${pathname}`, init)
+              : new Request(`t3code://app${pathname}`, init),
+          ),
+        );
 
       const page = yield* request("/settings/connections");
       assert.equal(yield* Effect.promise(() => page.text()), "<html>app</html>");
@@ -196,29 +207,41 @@ describe("ElectronProtocol", () => {
         handler = nextHandler;
       });
       let desiredOrigin = new URL("https://studio.example/prefix/");
+      let latestSource: URL | null | undefined;
       const protocol = yield* ElectronProtocol.ElectronProtocol;
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
         serverOrigin: async () => desiredOrigin,
+        onSource: async (origin) => {
+          latestSource = origin;
+        },
         clerkFrontendApiHostname: undefined,
       });
-      const page = () =>
-        Effect.promise(() =>
-          handler!(
-            new Request("t3code://app/", {
+      let pageUrl = "";
+      const page = (id = 1) =>
+        Effect.promise(async () => {
+          const redirect = await handler!(navigation(`t3code://app/?desktopWindowId=${id}`));
+          pageUrl = redirect.headers.get("location")!;
+          return handler!(
+            navigation(pageUrl, {
               headers: {
                 accept: "text/html",
                 cookie: "local=secret",
                 authorization: "Bearer local-secret",
               },
             }),
-          ),
-        );
+          );
+        });
       netFetchMock.mockImplementation(
         async () =>
           new Response("server-v1", {
-            headers: { "content-type": "text/html", "set-cookie": "remote=secret" },
+            headers: {
+              "content-type": "text/html",
+              "t3-desktop-ui-protocol": "1",
+              "t3-desktop-bridge": "reduced-1",
+              "set-cookie": "remote=secret",
+            },
           }),
       );
       const first = yield* page();
@@ -228,25 +251,71 @@ describe("ElectronProtocol", () => {
       assert.isFalse(forwardedHeaders.has("cookie"));
       assert.isFalse(forwardedHeaders.has("authorization"));
       assert.isNull(first.headers.get("set-cookie"));
+      assert.include(first.headers.get("content-security-policy")!, "object-src 'none'");
+      assert.include(
+        first.headers.get("content-security-policy")!,
+        "connect-src 'self' https://studio.example wss://studio.example",
+      );
+      assert.notInclude(
+        first.headers.get("content-security-policy")!,
+        "connect-src 'self' blob: http:",
+      );
       assert.isNull(first.headers.get("content-encoding"));
       assert.isNull(first.headers.get("content-length"));
+      yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1&bundled=1")),
+      );
+      assert.isNull(latestSource);
+      assert.isNull(yield* protocol.serverOriginFor(1));
+      yield* page();
+      const studioPage = pageUrl;
       desiredOrigin = new URL("https://cloudbox.example/");
-      yield* Effect.promise(() => handler!(new Request("t3code://app/assets/old.js")));
+      yield* Effect.promise(() => handler!(new Request(new URL("assets/old.js", studioPage))));
       assert.equal(
         netFetchMock.mock.calls.at(-1)?.[0],
         "https://studio.example/prefix/assets/old.js",
       );
       netFetchMock.mockImplementation(
-        async () => new Response("server-v2", { headers: { "content-type": "text/html" } }),
+        async () =>
+          new Response("server-v2", {
+            headers: {
+              "content-type": "text/html",
+              "t3-desktop-ui-protocol": "1",
+              "t3-desktop-bridge": "reduced-1",
+            },
+          }),
       );
+      yield* Effect.promise(() =>
+        handler!(
+          new Request(new URL("pretend-document", studioPage), {
+            headers: { accept: "text/html" },
+          }),
+        ),
+      );
+      assert.equal(
+        netFetchMock.mock.calls.at(-1)?.[0],
+        "https://studio.example/prefix/pretend-document",
+      );
+      yield* page(2);
+      assert.equal(yield* protocol.serverOriginFor(1), "https://studio.example/prefix/");
+      assert.equal(yield* protocol.serverOriginFor(2), "https://cloudbox.example/");
       const second = yield* page();
+      assert.notEqual(new URL(pageUrl).host, new URL(studioPage).host);
       assert.equal(yield* Effect.promise(() => second.text()), "server-v2");
       assert.equal(netFetchMock.mock.calls.at(-1)?.[0], "https://cloudbox.example/");
       netFetchMock.mockImplementation(async () => new Response("unavailable", { status: 503 }));
       const offline = yield* page();
-      assert.equal(yield* Effect.promise(() => offline.text()), "bundled");
+      assert.equal(offline.status, 302);
+      assert.include(offline.headers.get("location")!, "bundled=1");
       netFetchMock.mockImplementation(
-        async () => new Response("server-v3", { headers: { "content-type": "text/html" } }),
+        async () =>
+          new Response("server-v3", {
+            headers: {
+              "content-type": "text/html",
+              "t3-desktop-ui-protocol": "1",
+              "t3-desktop-bridge": "reduced-1",
+            },
+          }),
       );
       const recovered = yield* page();
       assert.equal(yield* Effect.promise(() => recovered.text()), "server-v3");

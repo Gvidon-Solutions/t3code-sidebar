@@ -109,6 +109,21 @@ export async function publishMobileUpdate(options) {
   if (!existingCertificate) await writeFile(join(store, "certificate.pem"), cert, { flag: "wx" });
   catalog.releases.push({ manifest, signature, platform });
   if (options["apk-url"]) catalog.apkUrl = new URL(options["apk-url"]).href;
+  if (platform === "android" && catalog.apkAsset) {
+    const apk = catalog.apkAsset;
+    const url = new URL(apk.url);
+    if (url.origin !== base.origin || url.username || url.password)
+      throw new Error("APK must share the OTA origin");
+    const bytes = await readFile(join(store, "assets", apk.hash));
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    if (createHash("sha256").update(bytes).digest("base64url") !== apk.hash)
+      throw new Error("APK digest mismatch");
+    const payload = JSON.stringify({ platform, runtimeVersion: runtime, apkUrl: url.href, sha256 });
+    catalog.nativeUpdate = {
+      payload,
+      signature: sign("RSA-SHA256", Buffer.from(payload), await readFile(key)).toString("base64"),
+    };
+  }
   await writeFile(catalogPath + ".tmp", JSON.stringify(catalog));
   await rename(catalogPath + ".tmp", catalogPath);
   return { id, runtimeVersion: runtime, assets: files.assets.length + 1 };

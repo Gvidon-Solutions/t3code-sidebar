@@ -1,3 +1,6 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- Source-specific renderer origins are computed before document navigation.
+import * as NodeCrypto from "node:crypto";
+import { serverUiRendererId } from "../ipc/rendererTrust.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -13,6 +16,9 @@ import * as Scope from "effect/Scope";
 import * as Electron from "electron";
 
 export const DESKTOP_HOST = "app";
+function sourceHost(id: number, origin: URL): string {
+  return `server-${id}-${NodeCrypto.createHash("sha256").update(origin.href).digest("hex").slice(0, 24)}`;
+}
 const DESKTOP_PRODUCTION_SCHEME = "t3code";
 const DESKTOP_DEVELOPMENT_SCHEME = "t3code-dev";
 
@@ -55,6 +61,7 @@ export class ElectronProtocolUnregistrationError extends Schema.TaggedError<Elec
 export type DesktopProtocolRegistrationInput = {
   readonly scheme: string;
   readonly clerkFrontendApiHostname: string | undefined;
+  readonly connectionOrigins?: () => Promise<ReadonlyArray<string>>;
 } & (
   | { readonly targetOrigin: URL }
   | {
@@ -67,13 +74,18 @@ export type DesktopProtocolRegistrationInput = {
 export class ElectronProtocol extends Context.Service<
   ElectronProtocol,
   {
+    readonly serverOriginFor: (rendererId: number) => Effect.Effect<string | null>;
+    readonly trackWindow: (contents: Electron.WebContents) => Effect.Effect<void>;
     readonly registerDesktopProtocol: (
       input: DesktopProtocolRegistrationInput,
     ) => Effect.Effect<void, ElectronProtocolRegistrationError, Scope.Scope>;
   }
 >()("@t3tools/desktop/electron/ElectronProtocol") {}
 
-function makeDesktopContentSecurityPolicy(input: DesktopProtocolRegistrationInput): string {
+function makeDesktopContentSecurityPolicy(
+  input: DesktopProtocolRegistrationInput,
+  origins?: ReadonlyArray<string>,
+): string {
   const clerkOrigin = input.clerkFrontendApiHostname
     ? `https://${input.clerkFrontendApiHostname}`
     : undefined;
@@ -87,7 +99,16 @@ function makeDesktopContentSecurityPolicy(input: DesktopProtocolRegistrationInpu
 
   // User-configured environment origins are unknown here, so allow supported network schemes.
   // GLTFLoader fetches embedded textures through blob URLs.
-  const connectSources = ["'self'", "blob:", "http:", "https:", "ws:", "wss:"];
+  const connectSources =
+    origins === undefined
+      ? ["'self'", "blob:", "http:", "https:", "ws:", "wss:"]
+      : [
+          "'self'",
+          ...origins.flatMap((value) => {
+            const url = new URL(value);
+            return [url.origin, url.origin.replace(/^http/, "ws")];
+          }),
+        ];
 
   return [
     "default-src 'self'",
@@ -99,7 +120,9 @@ function makeDesktopContentSecurityPolicy(input: DesktopProtocolRegistrationInpu
     `font-src 'self' ${input.scheme}: data:`,
     "worker-src 'self' blob:",
     "frame-src 'self' blob: http: https:",
-    "object-src 'self' blob: http: https:",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
     "form-action 'self'",
   ].join("; ");
 }
@@ -169,9 +192,21 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   targetOrigin: URL,
   contentSecurityPolicy: string,
   publicUi = false,
+  document = false,
 ) {
+  if (
+    publicUi &&
+    (targetOrigin.username ||
+      targetOrigin.password ||
+      (targetOrigin.protocol !== "https:" &&
+        !(
+          targetOrigin.protocol === "http:" &&
+          ["localhost", "127.0.0.1", "[::1]"].includes(targetOrigin.hostname)
+        )))
+  )
+    return new Response(null, { status: 403 });
   const requestUrl = new URL(request.url);
-  if (requestUrl.host !== DESKTOP_HOST) {
+  if (requestUrl.host !== DESKTOP_HOST && serverUiRendererId(requestUrl.host) === undefined) {
     return new Response(null, { status: 404 });
   }
 
@@ -205,8 +240,9 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   const init: RequestInit = {
     method: request.method,
     headers,
+    ...(publicUi ? { credentials: "omit" as const, redirect: "error" as const } : {}),
   };
-  if (request.headers.get("accept")?.includes("text/html")) {
+  if (document || request.mode === "navigate") {
     init.cache = "no-store";
     init.signal = AbortSignal.timeout(5_000);
   }
@@ -238,6 +274,7 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
 const serveDesktopAsset = Effect.fn("desktop.protocol.serveAsset")(function* (
   request: Request,
   assetDirectory: string,
+  document = false,
 ) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -258,7 +295,7 @@ const serveDesktopAsset = Effect.fn("desktop.protocol.serveAsset")(function* (
   const stat = yield* fileSystem.stat(assetPath).pipe(Effect.orElseSucceed(() => null));
   let filePath = assetPath;
   if (stat?.type !== "File") {
-    const wantsHtml = request.headers.get("accept")?.includes("text/html") ?? false;
+    const wantsHtml = document || request.mode === "navigate";
     if (path.extname(assetPath) !== "" && !wantsHtml) {
       return new Response(null, { status: 404 });
     }
@@ -276,6 +313,26 @@ const serveDesktopAsset = Effect.fn("desktop.protocol.serveAsset")(function* (
 /** @public */
 export const make = Effect.gen(function* () {
   const registered = yield* Ref.make(false);
+  const navigations = new Map<number, string>();
+  const pageOrigins = new Map<string, URL>();
+  const currentOrigins = new Map<number, URL>();
+  const trackWindow = Effect.fn("desktop.protocol.trackWindow")((contents: Electron.WebContents) =>
+    Effect.sync(() => {
+      const started = (
+        event: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
+      ) => {
+        if (event.isMainFrame && !event.isSameDocument) navigations.set(contents.id, event.url);
+      };
+      contents.on("did-start-navigation", started);
+      contents.once("destroyed", () => {
+        for (const host of pageOrigins.keys())
+          if (serverUiRendererId(host) === contents.id) pageOrigins.delete(host);
+        currentOrigins.delete(contents.id);
+        navigations.delete(contents.id);
+        contents.removeListener("did-start-navigation", started);
+      });
+    }),
+  );
   const context = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
   const runPromise = Effect.runPromiseWith(context);
 
@@ -284,48 +341,100 @@ export const make = Effect.gen(function* () {
       if (yield* Ref.get(registered)) return;
 
       const contentSecurityPolicy = makeDesktopContentSecurityPolicy(input);
-      let pageOrigin: URL | null = null;
 
       yield* Effect.acquireRelease(
         Effect.try({
           try: () => {
             Electron.protocol.handle(input.scheme, async (request) => {
               if ("assetDirectory" in input) {
-                const isDocument = request.headers.get("accept")?.includes("text/html") ?? false;
-                if (isDocument && input.serverOrigin) {
+                const requestUrl = new URL(request.url);
+                const rendererId =
+                  serverUiRendererId(requestUrl.host) ??
+                  Number(requestUrl.searchParams.get("desktopWindowId"));
+                const isDocument =
+                  request.mode === "navigate" || navigations.get(rendererId) === request.url;
+                if (isDocument) navigations.delete(rendererId);
+                const serverHost = serverUiRendererId(requestUrl.host) !== undefined;
+                const id = requestUrl.searchParams.get("desktopWindowId");
+                if (
+                  isDocument &&
+                  requestUrl.host === DESKTOP_HOST &&
+                  id &&
+                  /^\d+$/.test(id) &&
+                  !requestUrl.searchParams.has("bundled") &&
+                  input.serverOrigin
+                ) {
                   const origin = await input.serverOrigin();
                   if (origin) {
+                    const next = `${input.scheme}://${sourceHost(Number(id), origin)}/`;
+                    navigations.set(Number(id), next);
+                    return Response.redirect(next, 302);
+                  }
+                }
+                if (serverHost && isDocument && input.serverOrigin) {
+                  const origin = await input.serverOrigin();
+                  if (origin) {
+                    if (requestUrl.host !== sourceHost(rendererId, origin)) {
+                      const next = `${input.scheme}://${sourceHost(rendererId, origin)}/`;
+                      navigations.set(rendererId, next);
+                      return Response.redirect(next, 302);
+                    }
+                    const origins = (await input.connectionOrigins?.()) ?? [origin.origin];
+                    const policy = makeDesktopContentSecurityPolicy(input, origins);
                     const response = await runPromise(
-                      proxyRequest(request, origin, contentSecurityPolicy, true).pipe(
+                      proxyRequest(request, origin, policy, true, true).pipe(
                         Effect.catchTags({
                           ElectronProtocolFetchError: (error) =>
-                            Effect.logWarning(
-                              "Server UI unavailable; loading bundled client",
-                              error,
-                            ).pipe(Effect.as(null)),
+                            Effect.logWarning("Server UI unavailable", error).pipe(Effect.as(null)),
                         }),
                       ),
                     );
                     if (
                       response?.ok &&
-                      response.headers.get("content-type")?.includes("text/html")
+                      response.headers.get("content-type")?.includes("text/html") &&
+                      response.headers.get("t3-desktop-ui-protocol") === "1" &&
+                      response.headers.get("t3-desktop-bridge") === "reduced-1"
                     ) {
-                      pageOrigin = origin;
+                      pageOrigins.set(requestUrl.host, origin);
+                      currentOrigins.set(rendererId, origin);
                       await input.onSource?.(origin);
                       return response;
                     }
                   }
-                  pageOrigin = null;
+                  pageOrigins.delete(requestUrl.host);
+                  currentOrigins.delete(rendererId);
                   await input.onSource?.(
                     null,
-                    origin ? "Connected server UI is unavailable; using bundled client" : undefined,
+                    "Server UI unavailable or incompatible; using bundled client",
+                  );
+                  const fallback = `${input.scheme}://app/?desktopWindowId=${rendererId}&bundled=1`;
+                  navigations.set(rendererId, fallback);
+                  return Response.redirect(fallback, 302);
+                }
+                if (serverHost) {
+                  const origin = pageOrigins.get(requestUrl.host);
+                  if (!origin) return new Response(null, { status: 404 });
+                  return runPromise(
+                    proxyRequest(
+                      request,
+                      origin,
+                      makeDesktopContentSecurityPolicy(
+                        input,
+                        (await input.connectionOrigins?.()) ?? [origin.origin],
+                      ),
+                      true,
+                    ),
                   );
                 }
-                if (!isDocument && pageOrigin) {
-                  return runPromise(proxyRequest(request, pageOrigin, contentSecurityPolicy, true));
+                if (
+                  isDocument &&
+                  requestUrl.searchParams.has("bundled") &&
+                  currentOrigins.delete(rendererId)
+                ) {
+                  await input.onSource?.(null, "Local desktop settings");
                 }
                 return withContentSecurityPolicy(
-                  await runPromise(serveDesktopAsset(request, input.assetDirectory)),
+                  await runPromise(serveDesktopAsset(request, input.assetDirectory, isDocument)),
                   contentSecurityPolicy,
                 );
               }
@@ -353,7 +462,13 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  return ElectronProtocol.of({ registerDesktopProtocol });
+  return ElectronProtocol.of({
+    registerDesktopProtocol,
+    trackWindow,
+    serverOriginFor: Effect.fn("desktop.protocol.serverOriginFor")((id: number) =>
+      Effect.sync(() => currentOrigins.get(id)?.href ?? null),
+    ),
+  });
 });
 
 export const layer = Layer.effect(ElectronProtocol, make);

@@ -11,14 +11,14 @@ describe("resolveDesktopAppControlAddress", () => {
     ["darwin", `/tmp/${"x".repeat(56)}`, `/tmp/${"x".repeat(56)}/t3code-1000`, 103],
   ] as const)("keeps %s sockets short under %s", (platform, tempDir, directory, maxBytes) => {
     const first = resolveDesktopAppControlAddress({
-      stateDir: `/home/user/${"long/".repeat(40)}userdata`,
+      stateDir: `/home/dev/${"long/".repeat(40)}userdata`,
       platform,
       tempDir,
       userId: 1000,
       joinPath: (...segments) => segments.join("/"),
     });
     const second = resolveDesktopAppControlAddress({
-      stateDir: "/home/user/.t3/other/userdata",
+      stateDir: "/home/dev/.t3/other/userdata",
       platform,
       tempDir,
       userId: 1000,
