@@ -6,7 +6,7 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeEvents from "node:events";
 import { run, until, rpc, mcp } from "./client.mjs";
-import { waitForDaemonShutdown, waitForSshShutdown } from "./daemons.mjs";
+import { waitForDaemonShutdown } from "./daemons.mjs";
 import { harnessRoot as repo, productRoot } from "./paths.mjs";
 
 const binary = NodePath.join(productRoot, "apps/server/src/bin.ts");
@@ -394,9 +394,9 @@ const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(a
 set -eu
 cd "$HOME"
 if [ "\${SSH_ORIGINAL_COMMAND:-}" = internal-sftp ]; then
-  exec flock --shared "$HOME/sshd/sessions.lock" /usr/lib/openssh/sftp-server
+  exec /usr/lib/openssh/sftp-server
 fi
-exec flock --shared "$HOME/sshd/sessions.lock" /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --noprofile --norc}"
+exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --noprofile --norc}"
 `,
       { mode: 0o700 },
     );
@@ -809,7 +809,6 @@ exec flock --shared "$HOME/sshd/sessions.lock" /bin/bash --noprofile --norc -c "
             env: { ...node.env, MUTAGEN_DATA_DIRECTORY: data },
           });
         await waitForDaemonShutdown(data);
-        await waitForSshShutdown(node.home);
       }),
     );
     if (errors.length)

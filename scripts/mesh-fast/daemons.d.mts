@@ -1,2 +1,2 @@
-export function waitForDaemonShutdown(data: string): Promise<void>;
-export function waitForSshShutdown(home: string): Promise<void>;
+export function posixLockBinary(directory?: string): Promise<string>;
+export function waitForDaemonShutdown(data: string, cache?: string): Promise<void>;

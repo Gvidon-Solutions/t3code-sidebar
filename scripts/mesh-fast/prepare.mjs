@@ -3,10 +3,12 @@ import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeCrypto from "node:crypto";
 import { run } from "./client.mjs";
+import { posixLockBinary } from "./daemons.mjs";
 async function prepareLocked() {
   const root =
     process.env.MESH_FAST_MUTAGEN_CACHE ?? NodePath.join(NodeOS.tmpdir(), "mesh-fast-tools-0.18.1");
   await NodeFSP.mkdir(root, { recursive: true });
+  await posixLockBinary(root);
   const pnpm = NodePath.join(root, "pnpm-12.14.0");
   let pnpmReady = false;
   try {

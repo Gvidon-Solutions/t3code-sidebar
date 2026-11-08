@@ -1,7 +1,7 @@
 # Isolated mesh acceptance
 
 On a Linux x64 Docker host, install Node 26, pnpm's frozen dependencies,
-OpenSSH server, `flock`, `patchelf`, and Rust's `rustup`. Then provision the
+OpenSSH server, a C compiler, `flock`, `patchelf`, and Rust's `rustup`. Then provision the
 fixture images, browser, web client and real resource monitor once:
 
 ```sh
@@ -80,10 +80,10 @@ screenshots and a WebM recording. Process supervisors record the exact child PID
 and generation: crash cases kill that child and observe automatic recovery.
 Cleanup only stops tracked children, named containers/networks and each fixture's
 private Mutagen daemon. SIGINT/SIGTERM also trigger cleanup.
-Shutdown waits for each private daemon's OS lock after requesting its stop:
+Shutdown waits for each private daemon's POSIX lock after requesting its stop:
 the listener can already be gone while final cache writes are still running.
-SSH commands hold a shared private session lock; shutdown waits for exclusive
-ownership too, because remote Mutagen agents can flush caches after the daemon exits.
+The tiny source-fingerprinted C helper uses `F_SETLKW`; Linux `flock` locks do
+not contend with Mutagen's POSIX locks. No cleanup or scenario retries are used.
 
 ## Timing and providers
 

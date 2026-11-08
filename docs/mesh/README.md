@@ -791,10 +791,10 @@ are published by rename so fs.watch never parses a truncated JSON file.
 The browser runs inside its fixture's stable network namespace: creating and
 removing other Docker bridges otherwise causes Chromium ERR_NETWORK_CHANGED.
 Run the host-based web unit suite while local mesh networking is idle. Before
-pruning passed payloads, wait for the private Mutagen lock: its listener closes
+pruning passed payloads, wait for the private Mutagen POSIX lock: its listener closes
 before final cache writes finish, so `daemon stop` alone is not an exit barrier.
-Private SSH commands also hold a shared session lock, covering remote Mutagen
-agents that finish cache writes after the originating daemon has stopped.
+`flock` uses a different lock namespace on Linux; the fixture's C helper uses
+`F_SETLKW` so it actually waits for Mutagen's final cache writes.
 Fast R1 commands use real OpenSSH control connections to separate native process
 startup from SSH's three-second connection budget; the control connections and
 all remote process-tree fault assertions remain real. The realistic R1 variant
