@@ -93,6 +93,25 @@ describe("serverSettings helpers", () => {
     expect([on.idleCompaction, on.compactIdleThreads]).toEqual(["beforeCacheExpires", true]);
   });
 
+  it("merges provider instances per instance instead of replacing the whole map", () => {
+    const codex = ProviderInstanceId.make("codex");
+    const opencode = ProviderInstanceId.make("opencode");
+    const base = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      providerInstances: {
+        [codex]: { driver: ProviderDriverKind.make("codex"), enabled: true, config: {} },
+        [opencode]: { driver: ProviderDriverKind.make("opencode"), enabled: true, config: {} },
+      },
+    });
+    const patched = applyServerSettingsPatch(base, {
+      providerInstances: {
+        [opencode]: { driver: ProviderDriverKind.make("opencode"), enabled: false, config: {} },
+      },
+    });
+    expect(patched.providerInstances[codex]?.enabled).toBe(true);
+    expect(patched.providerInstances[opencode]?.enabled).toBe(false);
+    expect(Object.keys(patched.providerInstances).sort()).toEqual(["codex", "opencode"]);
+  });
+
   it("changes a cleanup rule without replacing the machine's other rules", () => {
     const enabled = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
       storageCleanup: { worktreeAfterDays: 8, worktreeOnMerge: true, logsAfterDays: 30 },

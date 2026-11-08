@@ -537,7 +537,12 @@ export function applyServerSettingsPatch(
       ? { backgroundActivity: backgroundActivityPatch }
       : {}),
     ...(patch.providerInstances !== undefined
-      ? { providerInstances: patch.providerInstances }
+      ? {
+          providerInstances: mergeSettingsEntries(
+            current.providerInstances,
+            patch.providerInstances,
+          ),
+        }
       : {}),
     // Fork: clients always send the whole workspace config; a deep merge would keep
     // project assignments the client removed.
