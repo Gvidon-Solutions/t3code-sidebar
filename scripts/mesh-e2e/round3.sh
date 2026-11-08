@@ -150,6 +150,13 @@ project_options() {
   config=$(ws_rpc gv meshConfig.get '{}')
   ws_rpc gv meshConfig.apply "$(jq -nc --argjson config "$config" --arg project "$project" --argjson options "$options" '{baseRevision:$config.current.revision,doc:($config.current.doc | .projects.overrides = ((.projects.overrides // []) + [($options + {project:$project})]))}')"
 }
+restore_partition() {
+  cp "$WORK/N-partition-proxy-before-gv.json" /tmp/N1-partition-state.json || return 1
+  mv /tmp/N1-partition-state.json /tmp/N1-network-state.json || return 1
+  gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json" || return 1
+  vps_put "$WORK/N-partition-proxy-before-vps.json" "$VPS_DIR/tmp/N1-partition-state.json" || return 1
+  vps_ssh "chmod 644 '$VPS_DIR/tmp/N1-partition-state.json' && mv '$VPS_DIR/tmp/N1-partition-state.json' '$VPS_DIR/tmp/N1-network-state.json'" || return 1
+}
 resume_container_driver() {
   [ -n "$FROZEN_DRIVER_RECORD" ] || return 0
   local args
@@ -180,7 +187,7 @@ restore() {
   if require_bed_lock; then
     for m in gv gor vps; do unit "$m" start || rc=1; done
     if [ "$PARTITION_ACTIVE" = 1 ]; then
-      gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json" || rc=1
+      restore_partition || rc=1
     fi
     gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
     wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
@@ -388,13 +395,20 @@ for m in gv vps; do
   printf 'PASS N daemon recovered without server restart %s\n' "$m"
 done
 # Cut both peer directions before writing divergent versions, without user pauses.
+cp /tmp/N1-network-state.json "$WORK/N-partition-proxy-before-gv.json"
 gor_ssh 'cat /tmp/N1-network-state.json' > "$WORK/N-partition-proxy-before.json"
-jq -e '.cut==false' "$WORK/N-partition-proxy-before.json" >/dev/null
+vps_ssh "cat '$VPS_DIR/tmp/N1-network-state.json'" > "$WORK/N-partition-proxy-before-vps.json"
+for state_file in "$WORK"/N-partition-proxy-before*.json; do jq -e '.cut==false' "$state_file" >/dev/null; done
 for m in gv vps; do
   mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-before-partition-$m.json"
   jq -e --arg p "$N_ROOT" 'any(.[]; .beta.path==$p and .paused==false and .alpha.connected==true)' "$WORK/N-before-partition-$m.json" >/dev/null
 done
 PARTITION_ACTIVE=1
+jq '.cut=true' "$WORK/N-partition-proxy-before-gv.json" > /tmp/N1-partition-state.json
+mv /tmp/N1-partition-state.json /tmp/N1-network-state.json
+jq '.cut=true' "$WORK/N-partition-proxy-before-vps.json" > "$WORK/N-vps-cut.json"
+vps_put "$WORK/N-vps-cut.json" "$VPS_DIR/tmp/N1-partition-state.json"
+vps_ssh "chmod 644 '$VPS_DIR/tmp/N1-partition-state.json' && mv '$VPS_DIR/tmp/N1-partition-state.json' '$VPS_DIR/tmp/N1-network-state.json'"
 jq '.cut=true' "$WORK/N-partition-proxy-before.json" | gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json'
 gor_ssh "systemctl --user stop $GOR_TUNNEL_UNIT"
 for m in gv vps; do
@@ -411,7 +425,7 @@ rexec gv sh -c "printf 'N-gv-loses' > '$N_FILE'"
 rexec vps sh -c "printf 'N-vps-loses' > '$N_FILE'"
 for _ in $(seq 1 180); do sleep 1; done
 require_bed_lock || die 'Bed lock lost during partition'
-gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json"
+restore_partition
 gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT"
 PARTITION_ACTIVE=0
 # The reconciler must resume and resolve automatically; no retry/resume command here.

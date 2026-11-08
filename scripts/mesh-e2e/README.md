@@ -235,6 +235,9 @@ waiting until both placements finish can miss this transient state entirely.
 The container daemon check pauses only the recorded T3 process, keeping `docker exec`
 available. It records and validates the process start time before resuming, including
 error cleanup; native servers use their isolated systemd unit instead.
+Partition injection cuts every node’s peer proxy, since either endpoint can initiate a
+connection; stopping one forwarding unit does not sever every route in alternate topologies.
+Each proxy’s original state is saved and restored independently.
 Round 3 requests four-hour test sessions (`MESH_E2E_SESSION_TTL`) so credentials
 remain valid across those transfers and the six restart orders.
 Use `MESH_E2E_LIVE_REPORTS=1` for round one on a populated bed with ongoing status writers;
