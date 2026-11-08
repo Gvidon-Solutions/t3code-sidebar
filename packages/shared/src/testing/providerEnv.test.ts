@@ -9,13 +9,13 @@ it("strips provider credentials and the T3 run shim directories from PATH", () =
     T3CODE_RUN_SOCKET: "/tmp/agent.sock",
     ANTHROPIC_AUTH_TOKEN: "secret",
     T3CODE_TRANSFER_BUDGET_REPORT_PATH: "/tmp/report",
-    HOME: "/home/user",
+    HOME: "/home/tester",
   };
   stripProvisionedEnvironment(env, ":");
   expect(env).toEqual({
     PATH: "/usr/bin:/bin",
     T3CODE_TRANSFER_BUDGET_REPORT_PATH: "/tmp/report",
-    HOME: "/home/user",
+    HOME: "/home/tester",
   });
 });
 
