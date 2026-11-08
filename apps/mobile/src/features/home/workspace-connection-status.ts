@@ -2,6 +2,8 @@ import type { WorkspaceState } from "../../state/workspaceModel";
 
 export interface WorkspaceConnectionStatusPresentation {
   readonly label: string;
+  /** Full sentence for a tooltip or accessibility hint when the label is shortened. */
+  readonly detail?: string;
   readonly showsProgress: boolean;
 }
 
@@ -21,12 +23,7 @@ function workspaceConnectionStatusLabel(state: WorkspaceState): string {
   if (state.hasReadyEnvironment && state.hasSyncingConnectedEnvironment) {
     return state.hasLoadedShellSnapshot ? "Syncing threads..." : "Loading threads...";
   }
-  if (state.connectingEnvironments.length === 1) {
-    return `Reconnecting to ${state.connectingEnvironments[0]!.environmentLabel}`;
-  }
-  if (state.connectingEnvironments.length > 1) {
-    return `Reconnecting ${state.connectingEnvironments.length} environments`;
-  }
+  if (state.connectingEnvironments.length > 0) return "Reconnecting…";
   if (state.connectionError !== null) return state.connectionError;
   if (state.hasPendingShellSnapshot) {
     return state.hasLoadedShellSnapshot ? "Syncing threads..." : "Loading threads...";
@@ -38,8 +35,17 @@ export function workspaceConnectionStatusPresentation(
   state: WorkspaceState,
 ): WorkspaceConnectionStatusPresentation | null {
   if (!shouldShowWorkspaceConnectionStatus(state)) return null;
+  const label = workspaceConnectionStatusLabel(state);
+  const connecting = state.connectingEnvironments;
+  const detail =
+    label === "Reconnecting…"
+      ? connecting.length === 1
+        ? `Reconnecting to ${connecting[0]!.environmentLabel}`
+        : `Reconnecting ${connecting.length} environments`
+      : undefined;
   return {
-    label: workspaceConnectionStatusLabel(state),
+    label,
+    ...(detail === undefined ? {} : { detail }),
     showsProgress:
       state.networkStatus !== "offline" &&
       (state.hasReadyEnvironment || state.connectionError === null) &&
