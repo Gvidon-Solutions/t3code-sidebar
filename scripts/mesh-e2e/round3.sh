@@ -50,7 +50,7 @@ systemctl --user show -p ExecStart --value "$NODE_A_UNIT" | rg -Fq "/$BUILD_VERS
 nodeB_ssh "systemctl --user show -p ExecStart --value $NODE_B_UNIT" | rg -Fq "/$BUILD_VERSION/t3" || die 'Wrong nodeB runtime path'
 expected_hash=$(sha256sum "$RUNTIME_DIR/t3" | cut -d' ' -f1)
 test "$(sha256sum "$NODE_A_RUNTIME_ROOT/$BUILD_VERSION/t3" | cut -d' ' -f1)" = "$expected_hash" || die 'NODE_A binary differs from build'
-test "$(nodeB_ssh "sha256sum ~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3" | cut -d' ' -f1)" = "$expected_hash" || die 'nodeB binary differs from build'
+test "$(nodeB_ssh "sha256sum $NODE_B_BIN" | cut -d' ' -f1)" = "$expected_hash" || die 'nodeB binary differs from build'
 test "$(cloud_ssh 'docker inspect -f "{{.Image}}" t3-mesh-e2e')" = "$(docker image inspect -f '{{.Id}}' "$IMAGE")" || die 'Wrong CLOUD image'
 nodeB_ssh 'cat /tmp/N1-network-state.json' | jq -e '.cut==false' > "$WORK/N-proxy-ready.json" || die 'Round three requires network-proxies.sh up'
 for m in nodeA nodeB cloud; do
@@ -85,7 +85,7 @@ rexec() {
   esac
 }
 env_of() { case "$1" in nodeA) echo "$NODE_A_ENV";; nodeB) echo "$NODE_B_ENV";; cloud) echo "$CLOUD_ENV";; esac; }
-NODE_B_REMOTE_BASE=${MESH_E2E_NODE_B_BASE_DIR:-$(nodeB_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')}
+NODE_B_REMOTE_BASE=${MESH_E2E_NODE_B_BASE_DIR:-$NODE_B_BASE_DIR}
 base_of() { case "$1" in nodeA) echo "$NODE_A_BASE_DIR";; nodeB) echo "$NODE_B_REMOTE_BASE";; cloud) echo /home/t3/.t3;; esac; }
 mut_bin() {
   local m=$1 configured cache="$WORK/$N_KEY-mutagen-bin-$1"

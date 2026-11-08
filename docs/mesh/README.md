@@ -304,6 +304,9 @@ Never format `agent-kit/skills/t3/**`. Keep the skill general and compact.
   VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
   `round1.sh` (layout, links, files, old clients), `round2.sh` (replicas on real Mutagen, t3ctl),
   `round3.sh` (crashes, partitions, duplicate claims). They must stay green.
+  Runners and fault-proxy units use the configured bed base, runtime root and unit, never an
+  installed server's legacy paths. `MESH_E2E_STAGE_PREFIX` namespaces fixture timestamps;
+  round two uses this checkout's t3ctl. `isolation.node-test.mjs` verifies helper resolution.
   `config.sh` verifies C1 config planning/apply, stale-base refusal, label/title convergence on
   three servers and a real registered replica. It requires the C1 bed lock and an existing
   deployment; `MESH_E2E_ARTIFACTS` selects its build metadata. Fixtures are C1-prefixed.

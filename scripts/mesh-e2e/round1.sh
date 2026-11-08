@@ -20,7 +20,7 @@ set -uo pipefail
 set +e
 load_build_env
 require_bins
-NODE_B_BASE_DIR=${MESH_E2E_NODE_B_BASE_DIR:-$(nodeB_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')}
+NODE_B_BASE_DIR=${MESH_E2E_NODE_B_BASE_DIR:-$NODE_B_BASE_DIR}
 
 TIMEOUT="${MESH_E2E_ROUND1_TIMEOUT:-60}"
 if [ "${1:-}" = "--timeout" ]; then
@@ -33,10 +33,10 @@ CLOUD_ORIGIN="http://127.0.0.1:$CLOUD_LOCAL"
 LEGACY_DIR="$STATE_DIR/legacy"
 WORK="${MESH_E2E_ROUND1_WORK:-/tmp/t3-mesh-e2e-round1}"
 WS="$WORK/ws.mjs"
-NODE_B_BIN="~/.t3-sidebar-server/runtime/versions/$BUILD_VERSION/t3"
+NODE_B_BIN="$NODE_B_RUNTIME_ROOT/$BUILD_VERSION/t3"
 CLOUD_BIN="/opt/t3/dist/bin.mjs"
 
-RUN_TS="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_TS="${MESH_E2E_STAGE_PREFIX:+$MESH_E2E_STAGE_PREFIX-}$(date -u +%Y%m%dT%H%M%SZ)"
 SCRATCH="round1-$RUN_TS"
 SCRATCH_NAME="r1-$RUN_TS"
 SCRATCH_NAME_A="r1-a-$RUN_TS"
@@ -67,7 +67,7 @@ elapsed_ms() { echo $(( $(now_ms) - $1 )); }
 
 cleanup_bed() {
   if [ "$NODE_B_STOPPED" = 1 ]; then
-    nodeB_ssh 'systemctl --user start t3code-sidebar.service' >/dev/null 2>&1 || true
+    nodeB_ssh "systemctl --user start $NODE_B_UNIT" >/dev/null 2>&1 || true
     NODE_B_STOPPED=0
   fi
   if [ "$CLOUD_KILLED" = 1 ]; then
@@ -524,7 +524,7 @@ echo "== step 3: settings and links =="
 check "build $BUILD_VERSION deployed on nodeA" \
   grep -q "$BUILD_VERSION/t3" ~/.config/systemd/user/"$NODE_A_UNIT"
 check "build $BUILD_VERSION deployed on nodeB" \
-  nodeB_ssh "grep -q 'runtime/versions/$BUILD_VERSION/t3' ~/.config/systemd/user/$NODE_B_UNIT"
+  nodeB_ssh "grep -Fq '$NODE_B_BIN' ~/.config/systemd/user/$NODE_B_UNIT"
 check "build $BUILD_VERSION image deployed on cloud" \
   test "$(docker image inspect "$IMAGE" -f '{{.Id}}')" = "$(cloud_ssh "docker image inspect '$IMAGE' -f '{{.Id}}'")"
 
@@ -699,7 +699,7 @@ assert_all "concurrent nodeB reorder kept (independent workspace first)" \
   '.config.workspaces[0].id == "'"$REORDER_ID"'"'
 
 # nodeB offline: edit on nodeA and cloud, then bring nodeB back.
-nodeB_ssh 'systemctl --user stop t3code-sidebar.service'
+nodeB_ssh "systemctl --user stop $NODE_B_UNIT"
 NODE_B_STOPPED=1
 took_start="$(now_ms)"
 jq -nc --arg id "$SCRATCH" --arg name "$SCRATCH_NAME_B" \
@@ -711,7 +711,7 @@ ws_edit nodeA "$(cat "$WORK/op-rename-b.json")" >/dev/null 2>&1 || offline_ok=0
 ws_edit cloud "$(cat "$WORK/op-place-b.json")" >/dev/null 2>&1 || offline_ok=0
 
 check "edits applied while nodeB was down" test "$offline_ok" = 1
-nodeB_ssh 'systemctl --user start t3code-sidebar.service'
+nodeB_ssh "systemctl --user start $NODE_B_UNIT"
 NODE_B_STOPPED=0
 wait_health "$NODE_B_ORIGIN" "$TIMEOUT" || true
 if wait_converged "nodeB rejoins and catches up" ; then
