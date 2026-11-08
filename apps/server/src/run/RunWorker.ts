@@ -174,16 +174,16 @@ function appendJournal(id, value) {
   const file = journal(id);
   const line = Buffer.from(JSON.stringify(value) + '\n');
   const notice = Buffer.from(JSON.stringify({type:'err', data:Buffer.from('Earlier background output was truncated by retention.\n').toString('base64')}) + '\n');
-  if (line.length > logBytes - notice.length) {
+  if (line.length > Math.floor(logBytes / 2) - notice.length) {
     if (value.type !== 'out' && value.type !== 'err') throw Error('Background record exceeds journal limit');
     const data = Buffer.from(value.data, 'base64');
-    const chunk = Math.floor((logBytes - notice.length - 128) * 3 / 4);
+    const chunk = Math.floor((Math.floor(logBytes / 2) - notice.length - 128) * 3 / 4);
     for (let offset = 0; offset < data.length; offset += chunk) appendJournal(id, {...value, data:data.subarray(offset, offset + chunk).toString('base64')});
     return;
   }
   if (fs.statSync(file).size + line.length <= logBytes) { fs.appendFileSync(file, line); return; }
   const combined = Buffer.concat([fs.readFileSync(file), line]);
-  let tail = combined.subarray(Math.max(0, combined.length - (logBytes - notice.length)));
+  let tail = combined.subarray(Math.max(0, combined.length - (Math.floor(logBytes / 2) - notice.length)));
   if (tail.length < combined.length) tail = tail.subarray(tail.indexOf(10) + 1);
   const temporary = file + '.' + crypto.randomUUID();
   fs.writeFileSync(temporary, Buffer.concat([notice, tail]), {mode:0o600});

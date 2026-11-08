@@ -134,6 +134,14 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   records, recover lost completion frames, and stop reconnecting to vanished jobs. Termination
   grace is configurable and normal exits no longer send an unconditional process-group kill.
 
+- Cache migration runs once with server aliases, title registers have a separate family and
+  migrated project globs escape literal wildcards. Config inputs require schema one while future
+  replicated revisions stay forwardable.
+- Full replicas retain failed install fingerprints until retry or lock change. Mutagen lifetimes,
+  injected environments, ancestry flushes, login shells, SSH config reloads and every conflict-copy
+  location have focused regressions. OTA serving and publishing verify content hashes and cache
+  catalog indexes; provider recovery logs include causes and mobile layout failures show a dialog.
+
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
 - **What.** Local Android builds retain native outputs, reuse identical APKs and publish native

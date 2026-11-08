@@ -131,7 +131,12 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   `meshLayout/resolveAlias.ts` resolves complete chains; a cycle uses its smallest member,
   excluding the incoming tail. HLC generation refuses clock skew or exhausted counters rather
   than emitting a repeated or decreasing clock. Known keys require canonical URI segments, and
-  representation values must match their key environment.
+  representation values must match their key environment. Titles use `projTitle/<id>`; old
+  `proj/<id>.title` registers migrate without confusing ids ending in `.title`. Cache migration
+  runs once with the first server aliases; live merges preserve opaque ids. Config inputs require
+  schema one while replicated future revisions remain forwardable and refuse their planners.
+  Migrated titles escape glob wildcards. Key helpers encode machine claims/bindings, and malformed
+  URI segments are ignored by client materialization paths.
 - **Peer receipts.** `peer/connection/PeerReceipts.ts` reserves an in-flight key before SQL
   and atomically inserts its durable intent. Receipt migration 82 adds indexed creation times;
   startup and hourly-on-use sweeps retain thirty days, including interrupted requests. Stored
@@ -623,6 +628,15 @@ name. Defaults anchor generated outputs at the root while excluding nested
 node_modules. `ReplicaEnvironment.ts` installs full-mode environments after sync,
 persists a lock-content fingerprint under ignored `.t3`, and refreshes on changes;
 replica messages report environment installing/ready/failed with the failure reason.
+Choosing `full` in a placement or config rule explicitly authorizes package managers and
+lifecycle scripts from synchronized project files. A failed fingerprint is stored in
+`.t3/environment.failed`; the same lock is not executed until it changes or explicit Retry
+clears the marker. This persistent stop replaces endless thirty-second install retries.
+The runner uses the injected environment and stops its private daemon at scope shutdown.
+Before replacing ignores or endpoint paths it flushes and verifies the old session so pending
+deletions keep their ancestry. Conflict reports carry every losing location for both clients.
+Remote scripts use the target platform's login shell. SSH reconciliation reloads sshd
+configuration and selects source/bundled entrypoints from runtime facts.
 `ReplicaLiveStatus.lag` reports remaining staging files in either direction. `bytesBehind`
 is included only when the remaining total is known (the final file in each active
 queue); Mutagen reports the current file size, not a total queue size. A clean watching
@@ -660,6 +674,11 @@ The forwarding guardian stops for missing jobs, backs off transient failures and
 Ignored directories are pruned during output inspection and reported as whole directories;
 this warning is conservative because nested writes cannot be detected without scanning them.
 SSH uses a fifteen-second connection deadline and fifteen-second keepalives.
+
+`delivery/MobileOta` caches decoded manifests and an asset index until the atomically published
+catalog changes. Serving and publishing verify content hashes; corrupt bytes cannot replace an
+existing catalog. Provider startup fallbacks log their original causes while preserving accepted
+turn ingestion. Mobile layout failures show a dialog, including a clock-skew refusal.
 
 The context note states representation, lite/full mode, primary and sync state;
 lite replicas say `build/test/git: t3 run <cmd>`. `AgentContextBudget.test.ts`
