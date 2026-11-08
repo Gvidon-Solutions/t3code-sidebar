@@ -638,7 +638,7 @@ IPC and conflict-copy tests exercise the shared implementation.
 
 ### Bootstrap and rolling updates (B1)
 
-`MeshBootstrap.ts` reconciles unbound `machines.<name>.bootstrap` entries. The server that can authenticate to the target detects OS/architecture, verifies the mesh-version release against SHA256SUMS, installs a platform service, obtains a pairing credential locally on the target, establishes N1 mutual trust and writes a C2 name binding. Individual step statuses are replicated under `mesh.bootstrapStatus`; a target-side lock and an installation sentinel make retries resumable. SSH keys and host pins live beneath the server base directory, apart from managed SSH blocks.
+`MeshBootstrap.ts` reconciles unbound `machines.<name>.bootstrap` entries. The server that can authenticate to the target detects OS/architecture, verifies the mesh-version release against an independently pinned `t3.runtimeChecksums[archive filename]`, installs a platform service, obtains a pairing credential locally on the target, establishes N1 mutual trust and writes a C2 name binding. Individual step statuses are replicated under `mesh.bootstrapStatus`; a target-side lock and an installation sentinel make retries resumable. SSH keys and host pins live beneath the server base directory, apart from managed SSH blocks.
 
 Use `t3ctl mesh machines add cloudbox --ssh user@host[:port]`. SSH agent authentication is automatic; `--identity-file PATH` supplies a key path once. Passwords use the existing one-time secret API: request a secret, then call `t3_mesh_bootstrap_credential` with `kind: password`, `secretRef` and `projectId` (CLI flags `--secret-ref`/`--project-id`). Passwords are consumed into memory, passed only through SSH_ASKPASS's child environment and discarded after the attempt. Unused credentials expire after five minutes. They are never layout/config fields or status text. Authentication failure requires a fresh secret. Bootstrap requires service-manager permissions; Linux user services also require permission to enable linger.
 
@@ -791,10 +791,16 @@ settings writes leave replica diagnostics to the servers, so older clients canno
 `MeshLinkPermissions.ts` requires distinct local and peer environment IDs bound in the mesh
 config. A missing config, missing binding, unknown peer ID, or legacy label-only session denies
 files, replicas and threads. Labels are migration input, never a runtime permission identity.
-`EnvironmentAuth` resolves identity from the authenticated incoming-link or reverse-grant
-record. OAuth registration metadata, token claims and caller headers never supply permission
-identity. A conflicting peer header is rejected at the persistent transport upgrade. HTTP idempotency namespaces use the
-session peer ID (or session ID), never caller-supplied mesh-hop or peer-ID headers. Legacy
+`EnvironmentAuth` binds a registered client's peer identity in the same database transaction
+that consumes its owner-entered one-time pairing code. The exchange names both environments;
+registration metadata and signed token claims alone confer no identity. Reverse grants use the
+already-bound connection identity. `/peer` never adopts a header identity: unbound tokens return
+401 and conflicting headers or relay hops return 403 on both transports. Migration 82 snapshots
+existing credentials; only those can acquire a binding on first authenticated use with a matching
+local outgoing link or `mesh.machineBinding`. The durable upgrade is logged and listed in
+`meshLayout.status.legacyIdentityUpgrades`; unknown peers and new unbound tokens must pair again.
+HTTP idempotency namespaces use the authenticated peer ID (or session ID); relay caller IDs
+partition keys only inside that bound relay's namespace. Legacy
 label matching lives only in `meshConfig/migration.ts`. Import defaults to project files;
 existing config revisions are untouched. An unrestricted link requires an explicit `files: all`
 config override, whose permissions are listed in the plan before apply.
@@ -823,3 +829,30 @@ ports, and never edit administrator SSH authorization. Live unit/data/port overr
 `MESH_E2E_ALLOW_LIVE=1` in addition to the owner's operational approval. See the harness guide
 for pinned infrastructure SSH keys and isolation tests. Git history is not rewritten by this
 cleanup; removing historical disclosures is a separate repository-owner decision.
+
+Desktop server UI uses a separate `t3code://server-<webContentsId>-<source hash>` origin and a reduced
+`desktopShell` bridge. Storage is also separated when the selected server changes. It cannot read desktop credentials, catalogs, legacy storage, SSH,
+exposure controls or media IPC. Server UI navigation and popup attempts cannot launch native external handlers. Every IPC entry checks the sender's top frame and current
+application origin. Protocol routing tracks main-frame navigation events because Electron's
+Fetch Request does not retain navigation mode; an HTML Accept header never changes the
+source. Documents require protocol `1` and bridge `reduced-1` response headers; incompatible
+or unavailable sources redirect to the bundled origin. Server CSP forbids objects and limits
+connections to saved catalog origins. Media IPC permits only saved origins, omits credentials
+and refuses redirects. The isolated hostile-server proof is documented in delivery.md.
+
+Bootstrap requires an explicit HTTPS `reach.address`, an accepted OpenSSH public key in
+`bootstrap.hostKey`, and a pinned runtime digest in `t3.runtimeChecksums` before download.
+The plan displays the SSH SHA-256 fingerprint; obtain and compare the key through a trusted
+channel before applying it. SSH uses a private per-attempt known_hosts file with strict checking,
+ignores global host keys, and never retries an OS probe after authentication rejection.
+Services bind loopback by default. Set `bootstrap.listenHost` explicitly when the HTTPS reverse
+proxy needs a different listener; opening a public interface is a config decision. Release
+URLs use the fork repository and HTTPS-only overrides. OTA native-upgrade metadata is signed
+by the OTA key, constrained to the configured update origin, and downloaded APK bytes are
+SHA-256 checked before the installer opens.
+
+The OTA publisher writes the signed native-upgrade payload to `catalog.nativeUpdate`;
+`MobileOta.status` transports it unchanged. `native-update-verification.ts` verifies the pinned
+certificate and update origin; `verified-apk.ts` hashes the cached file and grants the Android
+installer read-only access. Legacy unsigned URLs produce no download action. Desktop Settings ›
+About can return from the reduced server UI to trusted local settings without exposing credentials.

@@ -166,18 +166,28 @@ server version change waits for in-flight sends to be accepted or restored, then
 after flushing pending composer writes. Settings › About
 shows the UI version, shell version, serving origin and any offline fallback reason.
 
-The main process validates the paired connection and the main application frame before changing
-sources. The renderer stays on the stable `t3code://app/` origin, preserving storage and preload.
-HTML bypasses the HTTP cache; Vite resources have content hashes and remain pinned to the server
-that supplied that document. A failed document fetch loads the bundled client. Relay-only
-connections without a direct UI route use that same bundled copy. Local cookies and bearer
-headers are never forwarded to a server UI. `T3CODE_DESKTOP_UI_URL` is only an initial source
-override before a connected source has been selected.
+The main process validates paired HTTPS or loopback sources. Bundled UI owns `t3code://app/`;
+server UI uses a separate origin per window and source and the reduced `desktopShell` bridge. Its UI selector can choose only routes authorized by saved connections; it returns no catalog or credentials. This keeps
+local credentials and storage apart. Privileged IPC checks the sender frame and origin even
+when the preload is bypassed. HTML bypasses cache; resources remain pinned to the document's
+server. Server responses must advertise `t3-desktop-ui-protocol: 1` and
+`t3-desktop-bridge: reduced-1`. Missing/incompatible headers or unavailable HTML redirect to the
+bundled client. Relay-only connections also use the bundled client. Server UI pairs as a web
+client and cannot manage the desktop's saved connections. Settings › About offers **Open desktop settings** to return to the trusted local client. `T3CODE_DESKTOP_UI_URL` follows the
+same secure-source and compatibility checks.
 
 Run `xvfb-run -a apps/desktop/node_modules/electron/dist/electron --no-sandbox
-apps/desktop/scripts/delivery-ui-proof.mjs` to exercise two connected servers, a server-only
-version update, secure IPC, stable storage/preload and offline fallback in an isolated profile.
-It prints the temporary capture directory. Xvfb is unnecessary on a graphical desktop.
+apps/desktop/scripts/delivery-ui-proof.mjs` to run a hostile HTTP loopback server against the
+production preload and IPC transport, in a temporary Electron profile. It verifies denied
+credential/catalog/SSH/exposure/media/external IPC, isolated storage and compatibility fallback.
+No installed desktop profile or live T3 server is used. Xvfb is unnecessary on a graphical desktop.
+
+Native APK offers require OTA-key-signed metadata containing the update origin, target runtime
+and SHA-256. The build embeds the same public certificate used by Expo code signing; rotating it
+requires a native rebuild. The publisher signs metadata only for an APK staged in the content
+store. External unsigned apkUrl entries never become mobile download offers. The app verifies
+the signature and origin before offering, downloads to private cache and verifies bytes before
+opening the Android installer. A digest mismatch deletes the download. The installer bridge adds a native module, so this change requires a new APK/native fingerprint; existing clients that only understand unsigned apkUrl notices need that APK through the normal release distribution channel.
 
 `node --test scripts/delivery/rollout.node-test.mjs` proves drain failure recovery, health failure
 rollback, missing layout watermark refusal and a real Git snapshot preserving the user's index.

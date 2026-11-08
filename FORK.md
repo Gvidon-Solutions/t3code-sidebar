@@ -96,7 +96,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   native inputs, so JavaScript-only pushes reuse them; the job builds `arm64-v8a` only by default
   (manual dispatch can add `x86_64`) and skips R8, PNG crunching and lintVital for this sideload
   APK. Local equivalent: `pnpm mobile:apk` (first build compiles native modules, later builds are
-  usually a minute or two; it auto-loads `~/.local/share/t3-ws/android-signing.env` when present,
+  usually a minute or two; set `T3_ANDROID_SIGNING_ENV` to an explicitly selected signing file
   so the APK updates an installed fork build). E2E helpers for the emulator are in
   `scripts/sidebar-mobile-e2e/`.
 - **iOS.** `.github/workflows/sidebar-ios.yml` builds the sidebar variant for the iOS Simulator
@@ -109,19 +109,24 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
-### 2026-11-08 — F2a security boundaries (partial audit remediation)
+### 2026-11-08 — F2a security and repository privacy
 
-Release signing is fenced to `ws` and the protected `android-release` GitHub environment;
-mesh platform actions are pinned, and upstream-only release/EAS secret workflows are removed.
-Mesh link permissions fail closed for unresolved bindings and no longer match peer labels.
-HTTP idempotency namespaces prefer session identity over caller headers. Legacy import no longer
-grants unrestricted file access to every pair; config plans show the effective link permissions.
-A shared SSH host validator covers run/replica transports, with option terminators on SSH calls.
-New mesh configs have no personal model aliases, and delivery agent choices come from config
-or project defaults. Regression coverage lives in workflow, RunPlan, Mutagen endpoint,
-MeshLinkPermissions, meshConfig and delivery agent-options tests. OAuth identity issuance,
-desktop server-UI isolation, OTA verification, bootstrap trust and repository leakage cleanup
-remain outside this partial change; this entry does not certify the full F2a audit as resolved.
+- **What.** Public sources contain neutral infrastructure examples. Linked callers, server-delivered
+  desktop UI, bootstrap downloads and native mobile upgrades have explicit trust boundaries.
+- **How.** Bed infrastructure comes from one ignored local.env and uses isolated units/homes/keys.
+  CI signing is restricted to ws and a protected environment; upstream-only secret workflows are
+  removed. Peer permissions come from authenticated link records and declared tool domains,
+  unknown peers/tools are denied, and imported links never gain unrestricted file access.
+  One-time pairing atomically binds client identity; later calls only verify it. Legacy credentials
+  upgrade once only against an existing local link/binding, with an audit trail in mesh status.
+  SSH destinations are validated and options terminated. Server UI has a separate origin,
+  reduced bridge, guarded IPC and compatibility fallback. APK metadata is signed and bytes
+  verified; bootstrap pins host keys/runtime hashes and pairs through HTTPS. Agent defaults
+  come from customer config.
+- **Where.** scripts/mesh-e2e, delivery scripts/workflow, desktop protocol/preload/IPC, mobile
+  updates, server auth/MCP/mesh, shared meshConfig/cliRelease. Focused regression tests and
+  the real Electron hostile-server proof cover these boundaries. See docs/mesh/README.md and
+  docs/delivery.md for setup, including the owner's one-time GitHub environment configuration.
 
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
