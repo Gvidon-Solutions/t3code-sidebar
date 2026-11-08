@@ -221,6 +221,15 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   ForkThreadDialog, MeshFooterStatus, FileMachineTag); mobile
   `apps/mobile/src/features/workspaces/` (same names). Pure logic lives in
   `packages/client-runtime/src/state/{meshLayout/*,machineDisplay,meshMachines}.ts`.
+  New-thread machine choice is one card per machine, derived by
+  `meshLayout/draftMachineCards.ts` (primary first; single machine hides the cards). Its
+  reachability comes from mesh peer state, not this client's connections, so a machine the
+  mesh reaches says "Available through <machine>" instead of "not connected". The composer no
+  longer carries a machine chip; a started thread names the machine in its header. A lite
+  replica never offers Initialize Git in the right panel: `chat/threadDetailsGit.ts` hides
+  Version Control there, because git lives on the main copy. First run with an incomplete mesh
+  shows one dismissible "Connect to all machines in your mesh" prompt; it switches saved
+  connections back on and sends never-added machines to Connections.
 
 ## Interfaces
 

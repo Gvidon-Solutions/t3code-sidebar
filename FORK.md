@@ -1864,3 +1864,28 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **What:** Existing sync sessions remain adoptable after machine display titles change.
 - **How:** Resolve their endpoints through the stable machine bindings and managed or existing SSH hosts; ambiguous hosts remain rejected.
 - **Where:** `apps/server/src/replicas/adoptionModel.ts`, `ProjectReplicaService.ts` and their tests.
+
+### 2026-11-08 — Stage U3 new-thread machine cards and panel git honesty
+
+- **What.** A new thread shows one calm card per machine that can run the project, with the
+  main copy as the default. Cards name the copy state ("Synced", "Copying files…", "Out of
+  sync"), offer "Will set up a copy here", and dim a machine with no usable models. Reachability
+  comes from the mesh, so a machine reached through a peer is never mislabeled "not connected".
+  Composer and its bottom row lose the machine chip; a started thread shows its machine tag in
+  the header. First run with an incomplete mesh offers one dismissible "Connect to all machines
+  in your mesh" action. The right-hand project panel hides Version Control on a lite replica, so
+  it can no longer offer Initialize Git where git does not exist. The shared model chip reserves
+  room for a provider-instance badge. Android rows are compact again and pinned rows show their
+  machine tag.
+- **How.** `meshLayout/draftMachineCards.ts` derives cards and their plain sentences from the
+  layout, replica status and destination catalogs; web and mobile render the same rows. The
+  default draft machine prefers the project's main copy. `chat/threadDetailsGit.ts` owns the
+  panel's git visibility, and `sidebar/meshConnectPrompt.logic.ts` decides what a client can
+  reconnect. About and machine versions keep using the build/server values, and project rows no
+  longer append a machine suffix.
+- **Where.** `apps/web/src/components/chat/{DraftMachineCards,ChatHeader,ThreadDetailsPanel,
+  threadDetailsGit}.tsx|ts`, `apps/web/src/components/sidebar/MeshConnectPrompt*`,
+  `apps/web/src/hooks/useLogicalProjectEnvironments.ts`,
+  `apps/mobile/src/features/workspaces/{DraftMachineCards,WorkspaceChrome,
+  WorkspaceThreadLine,workspaceNavigator}*`, `apps/mobile/src/features/threads/new-task-flow-provider.tsx`,
+  `packages/client-runtime/src/state/meshLayout/{draftMachine,draftMachineCards,index}.ts`.
