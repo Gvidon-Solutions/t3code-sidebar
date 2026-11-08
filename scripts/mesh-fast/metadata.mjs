@@ -20,6 +20,12 @@ export const metadataScenarios = {
     fixture(directory, async (mesh) => {
       const [studio, , laptop] = mesh.nodes,
         p = await project(mesh, "automatic-rule");
+      // Agent-kit files follow installed harnesses; seed Codex so its managed block is in scope.
+      await Promise.all(
+        mesh.nodes.map((node) =>
+          NodeFSP.mkdir(NodePath.join(node.home, ".codex"), { recursive: true }),
+        ),
+      );
       const before = await rpc(studio, "meshConfig.get"),
         name = Object.keys(before.bindings).find((key) => before.bindings[key] === laptop.id);
       const desired = {

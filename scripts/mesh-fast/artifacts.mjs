@@ -1,7 +1,6 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
-import { run } from "./client.mjs";
 import { ownerIsActive } from "./lifecycle.mjs";
 
 const completeMarker = ".mesh-fast-complete.json";
@@ -176,5 +175,10 @@ export async function prunePassed(directory) {
       for (const payload of ["home", "state", "runtime"])
         payloads.push(NodePath.join(machine, payload));
   }
-  if (payloads.length) await run("rm", ["-rf", "--", ...payloads]);
+  if (payloads.length)
+    await Promise.all(
+      payloads.map((payload) =>
+        NodeFSP.rm(payload, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+      ),
+    );
 }
