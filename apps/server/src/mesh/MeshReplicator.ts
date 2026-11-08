@@ -1,3 +1,4 @@
+import { meshRetryDelay } from "./retryBackoff.ts";
 import * as ApplicationEvents from "../persistence/OrchestrationEventStore.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as SecureRandom from "effect/crypto/SecureRandom";
@@ -379,8 +380,7 @@ export const layer = Layer.effect(
                   Effect.gen(function* () {
                     const failures = (retries.get(peer.environmentId)?.failures ?? 0) + 1;
                     const now = yield* Clock.currentTimeMillis;
-                    const after =
-                      now + Math.min(MAX_RETRY_MS, 1000 * 2 ** Math.min(failures - 1, 4));
+                    const after = now + meshRetryDelay(failures - 1);
                     retries.set(peer.environmentId, { failures, after });
                     yield* sql`INSERT INTO mesh_peer_state(environment_id, last_error) VALUES (${peer.environmentId}, ${String(cause)}) ON CONFLICT(environment_id) DO UPDATE SET last_error = excluded.last_error`;
                     yield* Effect.logWarning("Mesh peer exchange failed", cause);
@@ -524,9 +524,6 @@ export const layer = Layer.effect(
     return MeshReplicator.of({ exchange, sync, status });
   }).pipe(Effect.provide(NodeCrypto.layer)),
 );
-
-/** Longest pause before retrying an unreachable peer; a peer that calls in resets it. */
-export const MAX_RETRY_MS = 15_000;
 
 const decodeJson = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
 const isMeshError = Schema.is(MeshLayoutError);

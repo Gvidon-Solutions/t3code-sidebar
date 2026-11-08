@@ -12,6 +12,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Semaphore from "effect/Semaphore";
 import * as Schedule from "effect/Schedule";
+import { meshRetrySchedule } from "./retryBackoff.ts";
 import { ProcessRunner } from "../processRunner.ts";
 import { ServerConfig } from "../config.ts";
 import { PeerLinks } from "../peer/PeerLinks.ts";
@@ -319,12 +320,33 @@ export const layer = Layer.effect(
               yield* report(name, phase, "done");
               phase = "start";
               yield* report(name, phase, "in_progress");
-              const output = yield* ssh(
-                platformRemoteCommand(platform, [executable, "pair", "--base-dir", baseDir]),
-              ).pipe(Effect.retry({ schedule: Schedule.spaced("1 second"), times: 30 }));
+              yield* ssh(
+                platformRemoteCommand(platform, [
+                  executable,
+                  "pair",
+                  "--base-dir",
+                  baseDir,
+                  "--check",
+                ]),
+              ).pipe(
+                Effect.retry({ schedule: meshRetrySchedule, times: 7 }),
+                Effect.timeoutOrElse({
+                  duration: "2 minutes",
+                  orElse: () =>
+                    Effect.fail(
+                      new MeshConfigError({
+                        reason: "storage",
+                        message: "Bootstrap server did not become ready before the deadline",
+                      }),
+                    ),
+                }),
+              );
               yield* report(name, phase, "done");
               phase = "pair";
               yield* report(name, phase, "in_progress");
+              const output = yield* ssh(
+                platformRemoteCommand(platform, [executable, "pair", "--base-dir", baseDir]),
+              );
               const token = /^Token: (\S+)/m.exec(output)?.[1];
               if (!token)
                 return yield* new MeshConfigError({

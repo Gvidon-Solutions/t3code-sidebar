@@ -1,3 +1,4 @@
+import { meshRetryDelay } from "../../mesh/retryBackoff.ts";
 // @effect-diagnostics nodeBuiltinImport:off globalTimers:off globalErrorInEffectCatch:off globalErrorInEffectFailure:off effectFnOpportunity:off runEffectInsideEffect:off -- The peer manager owns Node Duplex pipes, synchronous wire callbacks and its own retry clock; transport failures are intentionally plain Errors.
 import * as NodeNet from "node:net";
 import * as NodeStream from "node:stream";
@@ -31,7 +32,7 @@ import * as PeerLinks from "../PeerLinks.ts";
 import { isLocalLoopbackHost, isTailnetHost } from "@t3tools/shared/hostClassification";
 import * as PeerFacts from "./PeerFacts.ts";
 import * as PeerTransport from "./PeerTransport.ts";
-import { PeerChannel, preferConnection, reconnectDelay } from "./PeerChannel.ts";
+import { PeerChannel, preferConnection } from "./PeerChannel.ts";
 import { PeerConnectionError } from "./PeerConnectionError.ts";
 import { forwardedCallLimits } from "../../mesh/MeshLinkPermissions.ts";
 import { McpInvocationContext, type McpCapability } from "../../mcp/McpInvocationContext.ts";
@@ -997,7 +998,7 @@ export const make = Effect.gen(function* () {
       const changed = state.lastError !== message || !offlineSince.has(env);
       attempt.set(env, {
         attempt: nextAttempt,
-        nextAt: nowMs() + reconnectDelay(nextAttempt - 1, jitter),
+        nextAt: nowMs() + meshRetryDelay(nextAttempt - 1, jitter),
         lastError: message,
       });
       if (!offlineSince.has(env)) offlineSince.set(env, DateTime.formatIso(DateTime.nowUnsafe()));

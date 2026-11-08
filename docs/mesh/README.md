@@ -16,6 +16,20 @@ mtimes without changing native inputs. Expo 58 defaults to cleaning on prebuild:
 refreshes require `--no-clean`. Preserved Gradle history also requires declaring native fingerprint
 and JS inputs on Expo Updates resource generation. See [delivery.md](../delivery.md#android-builds).
 
+## Retry and bootstrap lifetimes (F2b)
+
+`mesh/retryBackoff.ts` defines the shared 1–15 second schedule for peer reconnects,
+layout exchange, bootstrap readiness and fork recovery. Expiry cleanup makes seven attempts,
+logs exhaustion and retains its durable staging record for recovery after restart; committed
+fork intents retain their resumable retry path. Bootstrap polls `pair --check` for readiness
+before minting one pairing token. The check reads the runtime descriptor without opening the
+auth database.
+
+`T3_MESH_JOINING=1` marks a newly bootstrapped service that is waiting to receive its mesh
+config. `MeshConfigMigration` suppresses standalone config seeding while that config is absent;
+identity migration proceeds normally after it arrives. `MeshInstall` writes the marker into the
+new service environment. Ordinary standalone installations omit it.
+
 ## Private delivery (D1)
 
 `scripts/delivery/` owns the private builder queue, warm build clone, target allowlist,
@@ -669,7 +683,7 @@ Use `t3ctl mesh machines add cloudbox --ssh user@host[:port]`. SSH agent authent
 
 `MeshRuntimeArchive.ts` shares release URL/platform naming and SHA256SUMS parsing with the existing runtime installer. `MeshInstall.ts` executes `platform/ServerPlatform.ts` service plans: Linux systemd user+linger or root system unit, macOS launchd agent, Windows SCM host. The Windows host implements ServiceBase and supervises the launcher process tree.
 
-`t3ctl mesh update VERSION --plan` plans a config edit; without `--plan` it applies it. `--max-wait 5m` sets `t3.drain.maxWaitMs`; `--now` binds `t3.drain.skipForVersion` to that target only. A normal update clears the skip flag even for the same version, preserving other policy fields. WS `meshConfig.updateVersion`, MCP `t3_mesh_update` and config plan/apply share the typed policy. `MeshRollout.ts` orders bound config names lexically. A candidate obtains durable votes from every configured server before publishing the layout lease (owner/token/expiry). Outstanding votes fence a partitioned owner even after expiry; recovery by that owner releases them only when its launcher has no pending update. The existing protocol-3 launcher backs up the stopped state DB, installs/verifies and trials the selected runtime. Activation starts peer replication before the trial checks version, peer layout convergence and resumed replicas. Failure reason is recorded outside the DB so rollback preserves it; the restored server publishes a stop marker for that config revision before releasing its lease. A new config revision is required to retry. `T3_MESH_TEST_MODE=1` plus `T3_MESH_TEST_FAIL_HEALTH_VERSION` enables the test-only health failure.
+`t3ctl mesh update VERSION --plan` plans a config edit; without `--plan` it applies it. `--max-wait 5m` sets `t3.drain.maxWaitMs`; `--now` binds `t3.drain.skipForVersion` to that target only. A normal update clears the skip flag even for the same version, preserving other policy fields. WS `meshConfig.updateVersion`, MCP `t3_mesh_update` and config plan/apply share the typed policy. `MeshRollout.ts` orders bound config names lexically. A candidate obtains durable votes from every configured server before publishing the layout lease (owner/token/expiry). Outstanding votes fence a partitioned owner even after expiry; recovery by that owner releases them only when its launcher has no pending update. The existing protocol-3 launcher backs up the stopped state DB, installs/verifies and trials the selected runtime. Activation starts peer replication before the trial checks version, peer layout convergence and resumed replicas. Failure reason is recorded outside the DB so rollback preserves it; the restored server publishes a stop marker for that config revision before releasing its lease. A new config revision is required to retry. Unit trial failures are injected through `MeshRollout.layerTest`.
 
 CLI operations have MCP equivalents `t3_mesh_machine_add`, `t3_mesh_update`, `t3_mesh_status` and the credential API. Peer-only update voting accepts trusted full-access links. Test servers set `T3_MESH_AGENT_HOME`, `T3_MESH_SSH_HOME`, private sshd and Mutagen data directories. Native Windows/macOS replica smoke coverage lives in `.github/workflows/mesh-platform-smoke.yml`.
 

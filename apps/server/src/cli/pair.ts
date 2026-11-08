@@ -475,6 +475,10 @@ const tailscaleServePortFlag = Flag.Int("tailscale-serve-port").pipe(
 
 export const pairCommand = Command.make("pair", {
   baseDir: baseDirFlag,
+  check: Flag.Boolean("check").pipe(
+    Flag.withDefault(false),
+    Flag.withDescription("Check readiness without issuing a pairing token."),
+  ),
   scopes: authScopesFlag(AuthStandardClientScopes),
   ttl: ttlFlag,
   label: labelFlag,
@@ -499,6 +503,11 @@ export const pairCommand = Command.make("pair", {
           serverVersion: target.descriptor.serverVersion,
           serverProtocolVersion,
         });
+      }
+
+      if (flags.check) {
+        yield* Console.log("Server is ready");
+        return;
       }
 
       const notes: Array<string> = [];

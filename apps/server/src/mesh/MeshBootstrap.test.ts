@@ -65,6 +65,18 @@ it.effect(
           calls.slice(firstCount).every((call) => call.env?.T3_BOOTSTRAP_PASSWORD === undefined),
         ).toBe(true);
         expect(downloads).toBe(1);
+        expect(
+          calls.slice(firstCount).filter((call) => call.args.at(-1)?.includes("'--check'")),
+        ).toHaveLength(1);
+        expect(
+          calls
+            .slice(firstCount)
+            .filter(
+              (call) =>
+                call.args.at(-1)?.includes("'pair'") && !call.args.at(-1)?.includes("'--check'"),
+            ),
+        ).toHaveLength(1);
+
         expect((yield* mesh.read).document["mesh.machineBinding/cloudbox"]?.v).toBe("cloudbox-id");
         const before = calls.length;
         yield* bootstrap.reconcile("cloudbox", doc);

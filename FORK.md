@@ -126,6 +126,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - Peer route history and revoked HTTP sessions are collected; session cache identities hash the
   bearer. Heartbeats use their actual deadlines. State backups retain ten completed snapshots
   and collect stale temporary files without replacing a resumed token’s original snapshot.
+- Shared retry delays stay between one and fifteen seconds. Fork expiry retries are bounded,
+  bootstrap checks readiness before minting a token, and rollout failure injection belongs to
+  a test layer. `pair --check` probes a running server without opening its auth database.
 
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 
