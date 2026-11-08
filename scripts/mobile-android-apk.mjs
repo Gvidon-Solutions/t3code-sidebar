@@ -225,7 +225,7 @@ if (needsAndroidPrebuild(ANDROID_DIR, fingerprint, clean)) {
       "--platform",
       "android",
       "--no-install",
-      ...(clean ? ["--clean"] : []),
+      ...(clean ? ["--clean"] : ["--no-clean"]),
     ],
     APP_DIR,
   );
@@ -241,6 +241,7 @@ if (!existsSync(localProperties)) {
 const gradleArgs = [
   dev ? "app:assembleDebug" : "app:assembleRelease",
   `-PreactNativeArchitectures=${arch}`,
+  `-Pt3AndroidNativeFingerprint=${fingerprint}`,
   "--build-cache",
   "--configuration-cache",
   "--daemon",

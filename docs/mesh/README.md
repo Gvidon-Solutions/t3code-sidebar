@@ -10,7 +10,9 @@ D1 retains native outputs instead of forcing a clean prebuild. `assets.mjs` stag
 with immutable OTA assets; `delivery/MobileOta.ts` serves their catalogued hashes through the
 existing asset route and native-upgrade notice. Promotion still follows successful rollout.
 Generated Android files must not determine prebuild invalidation by mtime: switching refs changes
-mtimes without changing native inputs. See [delivery.md](../delivery.md#android-builds).
+mtimes without changing native inputs. Expo 58 defaults to cleaning on prebuild: incremental
+refreshes require `--no-clean`. Preserved Gradle history also requires declaring native fingerprint
+and JS inputs on Expo Updates resource generation. See [delivery.md](../delivery.md#android-builds).
 
 ## Private delivery (D1)
 

@@ -91,6 +91,11 @@ test("generated Gradle resolves Node inputs through providers and supplies both 
     const text = readFileSync(file, "utf8");
     assert.ok(!text.includes(".execute(null, rootDir)"));
     assert.ok(text.includes("providers.exec { commandLine("));
+    assert.ok(
+      text.includes(
+        'inputs.property("t3NativeFingerprint", providers.gradleProperty("t3AndroidNativeFingerprint"))',
+      ),
+    );
     assert.ok(text.includes("rootProject.ext.REACT_NATIVE_NODE_MODULES_DIR"));
     assert.ok(text.includes("project.ext.REACT_NATIVE_NODE_MODULES_DIR"));
     configureAndroidGradle(file);

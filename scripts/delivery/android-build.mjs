@@ -82,6 +82,10 @@ react {`,
   }
   const bundleInputPattern =
     /\n+def t3BundleInputs = files\([\s\S]*?\ntasks\.withType\(com\.facebook\.react\.tasks\.BundleHermesCTask\)\.configureEach \{\n\s*inputs\.files\(t3BundleInputs\)\.withPathSensitivity\(PathSensitivity\.RELATIVE\)\n\}\n?$/;
+  updated = updated.replace(
+    /\n+tasks\.matching \{ it\.name\.startsWith\("create"\) && it\.name\.endsWith\("UpdatesResources"\) \}\.configureEach \{[\s\S]*?\n\}\n?$/,
+    "",
+  );
   if (updated.includes("def t3BundleInputs") && !bundleInputPattern.test(updated))
     throw new Error("Unrecognized generated Android bundle input block; run --clean");
   updated = updated.replace(bundleInputPattern, "");
@@ -100,6 +104,11 @@ def t3BundleInputs = files(
 )
 tasks.withType(com.facebook.react.tasks.BundleHermesCTask).configureEach {
     inputs.files(t3BundleInputs).withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
+tasks.matching { it.name.startsWith("create") && it.name.endsWith("UpdatesResources") }.configureEach {
+    inputs.files(t3BundleInputs).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.property("t3NativeFingerprint", providers.gradleProperty("t3AndroidNativeFingerprint"))
 }
 `;
   if (updated === source) return;

@@ -2,7 +2,7 @@ name: Sidebar fork desktop build
 
 on:
   push:
-    branches: [ws, delivery-ci/**]
+    branches: [ws, delivery-ci/**, ci/a1-timing]
     paths-ignore: ["deploy/**", "docs/**", "**/*.md", ".github/workflows/sidebar-ios.yml"]
   workflow_dispatch:
     inputs:
@@ -517,6 +517,7 @@ jobs:
           node --input-type=module -e 'import { configureAndroidGradle } from "../../../scripts/delivery/android-build.mjs"; configureAndroidGradle("app/build.gradle")'
           ./gradlew assembleRelease \
             -PreactNativeArchitectures="$ANDROID_ARCH" \
+            -Pt3AndroidNativeFingerprint="${{ steps.native.outputs.fingerprint }}" \
             -Pandroid.enableMinifyInReleaseBuilds=false \
             -Pandroid.enablePngCrunchInReleaseBuilds=false \
             -x lintVitalRelease \

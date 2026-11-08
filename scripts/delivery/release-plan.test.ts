@@ -107,6 +107,7 @@ it("release creation is fenced to the release branch and dry-run is the manual d
   );
   NodeAssert.deepEqual(branches, ["refs/heads/ws", "refs/heads/ws"]);
   NodeAssert.ok(workflow.on.push.branches.includes("delivery-ci/**"));
+  NodeAssert.ok(workflow.on.push.branches.includes("ci/a1-timing"));
 });
 
 it("path planner diffs renamed paths without splitting spaces and refuses invalid refs", () => {

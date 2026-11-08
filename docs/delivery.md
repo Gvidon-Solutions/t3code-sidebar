@@ -116,7 +116,9 @@ Run `node scripts/delivery/builder.mjs apk /private/config.json [--clean]` for t
 It uses `scripts/mobile-android-apk.mjs` in the configured persistent build directory and does not roll
 out servers or publish releases. Full clean/hot delivery invokes the same script.
 It compares Expo's native fingerprint before prebuild; unchanged native inputs retain the generated
-project and C++ outputs. The default ABI remains `arm64-v8a`; set `T3_ANDROID_ARCH` to a comma-separated
+project and C++ outputs. Refreshes explicitly use `--no-clean` because Expo 58 otherwise deletes
+Gradle history. Expo Updates resources track the native fingerprint and bundle inputs, so keeping
+that history does not freeze the embedded runtime or asset manifest. The default ABI remains `arm64-v8a`; set `T3_ANDROID_ARCH` to a comma-separated
 ABI list when another device needs it. Public releases keep their existing default and dispatch choices.
 Install ccache on the builder's PATH before the first native build; React Native's CMake integration
 uses it automatically. RN and Hermes themselves use their published prebuilt artifacts.
