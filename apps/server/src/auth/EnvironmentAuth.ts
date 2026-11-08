@@ -1,3 +1,4 @@
+import { PeerIdentitySource } from "@t3tools/contracts";
 import {
   PEER_HOPS_HEADER,
   PEER_HOPS_ERROR,
@@ -1414,7 +1415,7 @@ export const make = Effect.gen(function* () {
             client: { ...input.client, label: input.label, deviceType: "bot" },
           });
           if (input.peerLink && peerEnvironmentId) {
-            yield* sql`INSERT INTO peer_session_identities(session_id, environment_id, source, bound_at) VALUES (${issued.sessionId}, ${peerEnvironmentId}, ${input.peerClientId ? "pairing-code" : "mutual-grant"}, ${DateTime.formatIso(yield* DateTime.now)})`;
+            yield* sql`INSERT INTO peer_session_identities(session_id, environment_id, source, bound_at) VALUES (${issued.sessionId}, ${peerEnvironmentId}, ${(input.peerClientId ? "pairing-code" : "mutual-grant") satisfies PeerIdentitySource}, ${DateTime.formatIso(yield* DateTime.now)})`;
             yield* sql`INSERT INTO peer_incoming_sessions(session_id, environment_id) VALUES (${issued.sessionId}, ${peerEnvironmentId})`;
           }
           return { sessionId: issued.sessionId, token: issued.token, expiresAt: issued.expiresAt };
