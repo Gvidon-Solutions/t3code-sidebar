@@ -1864,3 +1864,20 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **What:** Existing sync sessions remain adoptable after machine display titles change.
 - **How:** Resolve their endpoints through the stable machine bindings and managed or existing SSH hosts; ambiguous hosts remain rejected.
 - **Where:** `apps/server/src/replicas/adoptionModel.ts`, `ProjectReplicaService.ts` and their tests.
+
+### 2026-11-08 — U2 mesh UI polish
+
+- **What:** Settings › Mesh no longer edits YAML: it lists machines with one plain status sentence
+  and opens a prepared "Set up the mesh with an agent" thread; machine details show project
+  sentences with collapsed diagnostics. The fork dialog speaks one plain no-models sentence and
+  defaults to a machine other than the source. The project machines dialog uses Main/Copy wording,
+  a middle-ellipsized path with a copy button, and refuses to remove the main copy without first
+  promoting another copy. Forked-from banners link the source title instead of repeating it.
+  Agent-kit files are written only for installed harnesses, and settings patches merge provider
+  instances per instance.
+- **How:** Config editing stays in server/contracts/CLI/MCP; the web and mobile settings screens
+  render state and launch an agent thread. Replica rows shorten the error and keep the full text
+  outside the normal UI where still used.
+- **Where:** `apps/web/src/components/workspaces/{MeshSettingsPanel,MachinesDialog,ForkThreadDialog}.tsx`,
+  `apps/mobile/src/features/settings/SettingsMachinesRouteScreen.tsx`,
+  `packages/shared/src/serverSettings.ts`, `apps/server/src/mesh/MeshAgentKit.ts`.
