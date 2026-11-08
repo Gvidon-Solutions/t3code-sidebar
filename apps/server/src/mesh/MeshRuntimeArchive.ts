@@ -69,7 +69,10 @@ export const layer = Layer.effect(
           ? error
           : new MeshConfigError({
               reason: "storage",
-              message: "Runtime download failed or timed out",
+              message:
+                error._tag === "DownloadError" && error.reason === "checksum"
+                  ? `Runtime SHA-256 verification failed: ${error.message}`
+                  : "Runtime download failed or timed out",
             }),
       ),
     );
