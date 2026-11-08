@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Real three-machine replica acceptance. Requires up.sh and round1.sh first.
+# Real three-machine replica acceptance. Requires up.sh and mesh-core-acceptance.sh first.
 # Evidence is retained outside the checkout; no live studio/Cloudbox access.
 set -uo pipefail
 export MESH_E2E_HELPERS_ONLY=1
-export MESH_E2E_ROUND1_WORK="${MESH_E2E_ROUND2_WORK:-/tmp/t3-mesh-e2e-round2}"
-. "$(dirname "$0")/round1.sh"
+export MESH_E2E_CORE_WORK="${MESH_E2E_REPLICA_WORK:-/tmp/t3-mesh-e2e-replica}"
+. "$(dirname "$0")/mesh-core-acceptance.sh"
 unset MESH_E2E_HELPERS_ONLY
-export MESH_E2E_SSH_CONTROL_DIR="${MESH_E2E_SSH_CONTROL_DIR:-$WORK/${MESH_E2E_ROUND2_NAME:-round2}-ssh}"
+export MESH_E2E_SSH_CONTROL_DIR="${MESH_E2E_SSH_CONTROL_DIR:-$WORK/${MESH_E2E_REPLICA_NAME:-replica}-ssh}"
 mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
 chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
 RUN_PREFIX=${MESH_E2E_RUN_PREFIX:-mesh-acceptance}
@@ -14,10 +14,10 @@ LOCAL_PRIMARY_ROOT=${MESH_E2E_LOCAL_PRIMARY_ROOT:-$WORK/second-primary}
 REVERSE_ROOT=${MESH_E2E_REVERSE_ROOT:-/tmp/$RUN_PREFIX/reverse}
 REVERSE_TITLE=${MESH_E2E_REVERSE_TITLE:-$RUN_PREFIX-reverse}
 DEMO_TITLE=${MESH_E2E_DEMO_TITLE:-demo}
-ROUND2_NAME=${MESH_E2E_ROUND2_NAME:-round2}
+REPLICA_NAME=${MESH_E2E_REPLICA_NAME:-replica}
 ORPHAN_LABEL=${MESH_E2E_ORPHAN_LABEL:-orphan}
-TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-900}
-RPC_TIMEOUT=${MESH_E2E_ROUND2_RPC_TIMEOUT:-900}
+TIMEOUT=${MESH_E2E_REPLICA_TIMEOUT:-900}
+RPC_TIMEOUT=${MESH_E2E_REPLICA_RPC_TIMEOUT:-900}
 PASS=0; FAIL=0; FAILED=()
 CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
 for m in nodeA nodeB cloud; do
@@ -73,7 +73,7 @@ T_NODE_A=$(mint_token nodeA); T_NODE_B=$(mint_token nodeB); T_CLOUD=$(mint_token
 NODE_A_ENV=$(descriptor_env "$NODE_A_ORIGIN"); NODE_B_ENV=$(descriptor_env "$NODE_B_ORIGIN"); CLOUD_ENV=$(descriptor_env "$CLOUD_ORIGIN")
 printf 'build=%s environments nodeA=%s nodeB=%s cloud=%s evidence=%s\n' "$BUILD_VERSION" "$NODE_A_ENV" "$NODE_B_ENV" "$CLOUD_ENV" "$WORK"
 probe installer-disable ws_rpc cloud server.updateSettings '{"patch":{"replicasEnabled":false}}'
-probe installer-clean vexec sh -c 'if test -d /home/t3/.t3/bin; then mv /home/t3/.t3/bin "/home/t3/.t3/bin.before-$ROUND2_NAME-$1"; fi; test ! -e /home/t3/.t3/bin/mutagen' sh "$RUN_TS"
+probe installer-clean vexec sh -c 'if test -d /home/t3/.t3/bin; then mv /home/t3/.t3/bin "/home/t3/.t3/bin.before-$REPLICA_NAME-$1"; fi; test ! -e /home/t3/.t3/bin/mutagen' sh "$RUN_TS"
 for m in nodeA nodeB cloud; do probe "enable-$m" ws_rpc "$m" server.updateSettings '{"patch":{"meshEnabled":true,"linkedEnvironmentsEnabled":true,"replicasEnabled":true,"mutagenPath":""}}'; done
 ws_rpc nodeB meshConfig.get '{}' > "$WORK/routes-config.json"
 NODE_A_NAME=$(jq -er --arg id "$NODE_A_ENV" '.bindings|to_entries[]|select(.value==$id)|.key' "$WORK/routes-config.json")
@@ -100,7 +100,7 @@ if [ -z "$DEMO" ]; then
  DEMO=$(jq -r '.id // empty' "$WORK/register-demo.out")
 fi
 KEY=$(node --input-type=module -e 'import {createHash} from "node:crypto"; console.log("lp-"+createHash("sha256").update(process.argv[1]).digest("hex"))' "$NODE_B_ENV:${NODE_B_DEMO_DIR}")
-MARK="$ROUND2_NAME-$RUN_TS"
+MARK="$REPLICA_NAME-$RUN_TS"
 LAUNCH=$(jq -nc --arg p "$DEMO" --arg e "$CLOUD_ENV" --arg key "$MARK-a" --arg msg "In your current working directory on this CLOUD replica, use a local shell command to append the exact line $MARK-a to README.md. Mutagen syncs this local edit back to nodeB. Do not access the primary, request a machine link, run git, or create other files. Finish after making the local edit." '{projectId:$p,environmentId:$e,clientRequestId:$key,title:$key,message:$msg,modelSelection:{instanceId:"codex",model:"gpt-6-luna"},runtimeMode:"full-access"}')
 wait_replica() {
  local m=$1 key=$2 env=$3 state=$4 copies=${5:-} deadline=$((SECONDS+TIMEOUT))
@@ -111,7 +111,7 @@ wait_replica() {
  done
  cat "$WORK/status-$m.json"; return 1
 }
-probe f-transfer-fixture nodeB_ssh "head -c 134217728 /dev/urandom > '$NODE_B_DEMO_DIR/$ROUND2_NAME-transfer.bin'"
+probe f-transfer-fixture nodeB_ssh "head -c 134217728 /dev/urandom > '$NODE_B_DEMO_DIR/$REPLICA_NAME-transfer.bin'"
 launch_start=$(now_ms)
 tool nodeB t3_thread_launch "$LAUNCH" > "$WORK/a-mcp-launch.out" 2>&1 &
 launch_pid=$!
@@ -124,12 +124,12 @@ VPATH=$(jq -r --arg e "$CLOUD_ENV" '.representations[]? | select(.environmentId=
 probe a-watching wait_replica cloud "$KEY" "$CLOUD_ENV" watching
 transfer_checksum() {
  local source_file quoted_source expected actual
- source_file=$(jq -r --arg e "$NODE_B_ENV" '.representations[] | select(.environmentId==$e) | .path' "$WORK/a-machines.out")/$ROUND2_NAME-transfer.bin
+ source_file=$(jq -r --arg e "$NODE_B_ENV" '.representations[] | select(.environmentId==$e) | .path' "$WORK/a-machines.out")/$REPLICA_NAME-transfer.bin
  printf -v quoted_source '%q' "$source_file"
  expected=$(nodeB_ssh "sha256sum $quoted_source" | cut -d' ' -f1) || return
- actual=$(vexec sha256sum "$VPATH/$ROUND2_NAME-transfer.bin" | cut -d' ' -f1) || return
+ actual=$(vexec sha256sum "$VPATH/$REPLICA_NAME-transfer.bin" | cut -d' ' -f1) || return
  printf '128 MiB primary=%s replica=%s\n' "$expected" "$actual"
- [ "$expected" = "$actual" ] && [ "$(vexec stat -c %s "$VPATH/$ROUND2_NAME-transfer.bin")" = 134217728 ]
+ [ "$expected" = "$actual" ] && [ "$(vexec stat -c %s "$VPATH/$REPLICA_NAME-transfer.bin")" = 134217728 ]
 }
 probe a-transfer-checksum transfer_checksum
 probe a-installer vexec sh -c 'test "$(/home/t3/.t3/bin/mutagen version)" = 0.18.1 && sha256sum /home/t3/.t3/bin/mutagen'
@@ -143,7 +143,7 @@ wait_edit() {
  return 1
 }
 probe a-agent-edit wait_edit "$MARK-a"
-probe f-transfer-cleanup nodeB_ssh "rm -f '$NODE_B_DEMO_DIR/$ROUND2_NAME-transfer.bin'"
+probe f-transfer-cleanup nodeB_ssh "rm -f '$NODE_B_DEMO_DIR/$REPLICA_NAME-transfer.bin'"
 probe b-cli-launch ctl nodeB new --project "$DEMO_TITLE" --on "$CLOUD_ENV" --agent codex --model gpt-6-luna --title "$MARK-b" "Use a local shell command in your current CLOUD replica directory to append the exact line $MARK-b to README.md. Mutagen syncs the edit to nodeB. Do not access the primary, request a link, run git, or create other files. Finish after making the local edit."
 probe b-agent-edit wait_edit "$MARK-b"
 # Reverse source endpoint runs through docker exec; no ssh daemon in the container.
@@ -238,14 +238,14 @@ probe e-drain cloud_ssh 'docker restart t3-mesh-e2e'
 probe e-health wait_health "$CLOUD_ORIGIN" 60
 probe e-ssh-ready wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$NODE_B_NAME" true
 probe e-pause mut sync pause "$SESSION"
-probe e-alpha nodeB_ssh "printf 'alpha-$MARK\n' > ${NODE_B_DEMO_DIR}/$ROUND2_NAME-conflict.txt"
-probe e-beta vexec sh -c "printf 'beta-$MARK\n' > '$VPATH/$ROUND2_NAME-conflict.txt'"
+probe e-alpha nodeB_ssh "printf 'alpha-$MARK\n' > ${NODE_B_DEMO_DIR}/$REPLICA_NAME-conflict.txt"
+probe e-beta vexec sh -c "printf 'beta-$MARK\n' > '$VPATH/$REPLICA_NAME-conflict.txt'"
 probe e-resume mut sync resume "$SESSION"
 probe e-enable ws_rpc cloud server.updateSettings '{"patch":{"replicasEnabled":true}}'
 probe e-recovered wait_replica cloud "$KEY" "$CLOUD_ENV" watching copies
 probe e-flush mut sync flush "$SESSION"
-probe e-content vexec grep -F "alpha-$MARK" "$VPATH/$ROUND2_NAME-conflict.txt"
-probe e-preserved-loser vexec sh -c 'find "$1/.t3-conflicts" -type f -name "$3" -exec cat {} \; | grep -F "$2"' sh "$VPATH" "beta-$MARK" "$ROUND2_NAME-conflict.txt"
+probe e-content vexec grep -F "alpha-$MARK" "$VPATH/$REPLICA_NAME-conflict.txt"
+probe e-preserved-loser vexec sh -c 'find "$1/.t3-conflicts" -type f -name "$3" -exec cat {} \; | grep -F "$2"' sh "$VPATH" "beta-$MARK" "$REPLICA_NAME-conflict.txt"
 wait_converged "resolved conflict status converges before placement retries"
 for n in 1 2; do probe "f-place-$n" tool nodeB t3_project_place "$(jq -nc --arg p "$KEY" --arg m "$CLOUD_ENV" '{project:$p,machine:$m,wait:90}')"; probe "f-launch-$n" tool nodeB t3_thread_launch "$LAUNCH"; done
 probe f-one-launch node --input-type=module -e 'import{readFileSync}from"node:fs";import assert from"node:assert/strict";const a=JSON.parse(readFileSync(process.argv[1])),b=JSON.parse(readFileSync(process.argv[2]));assert(a.threadId);assert.equal(a.threadId,b.threadId);console.log(a.threadId)' "$WORK/f-launch-1.out" "$WORK/f-launch-2.out"
@@ -268,7 +268,7 @@ for m in nodeA nodeB cloud; do
  probe "h-open-target-$m" grep -F "$e" "$WORK/h-open-$m.out"
  probe "h-cat-content-$m" grep -F 'mesh e2e demo' "$WORK/h-cat-$m.out"
 done
-probe h-find ctl nodeB find "$ROUND2_NAME" --all
+probe h-find ctl nodeB find "$REPLICA_NAME" --all
 probe h-status ctl nodeB status --all
 probe h-machines ctl nodeB machines
 probe h-mesh ctl nodeB mesh status
@@ -290,19 +290,19 @@ probe g-terminated wait_gone
 probe g-files-kept vexec test -f "$VPATH/README.md"
 probe g-project-list all_projects cloud
 probe g-project-kept jq -e --arg path "$VPATH" '.. | objects | select(.workspaceRoot?==$path)' "$WORK/g-project-list.out"
-probe g-orphan-create vexec sh -c 'mkdir -p "/home/t3/$1-orphan-a" "/home/t3/$1-orphan-b"; export MUTAGEN_DATA_DIRECTORY=/home/t3/.t3/mutagen; if /home/t3/.t3/bin/mutagen sync list --label-selector "t3-env=$2" --template "{{json .}}" | jq -e "length > 0"; then exit 0; fi; /home/t3/.t3/bin/mutagen sync create --name "$1-orphan" -l t3-logical=deadbeef -l "t3-env=$2" "/home/t3/$1-orphan-a" "/home/t3/$1-orphan-b"' sh "$ROUND2_NAME" "$ORPHAN_LABEL"
+probe g-orphan-create vexec sh -c 'mkdir -p "/home/t3/$1-orphan-a" "/home/t3/$1-orphan-b"; export MUTAGEN_DATA_DIRECTORY=/home/t3/.t3/mutagen; if /home/t3/.t3/bin/mutagen sync list --label-selector "t3-env=$2" --template "{{json .}}" | jq -e "length > 0"; then exit 0; fi; /home/t3/.t3/bin/mutagen sync create --name "$1-orphan" -l t3-logical=deadbeef -l "t3-env=$2" "/home/t3/$1-orphan-a" "/home/t3/$1-orphan-b"' sh "$REPLICA_NAME" "$ORPHAN_LABEL"
 wait_orphan() {
  local deadline=$((SECONDS+TIMEOUT))
  while [ "$SECONDS" -lt "$deadline" ]; do
   ws_rpc cloud replicas.status '{}' --first > "$WORK/orphan-status.json" || return
-  if jq -e --arg name "$ROUND2_NAME-orphan" '.. | objects | select(.sessionName?==$name and (.message? | startswith("Orphan session")))' "$WORK/orphan-status.json"; then return; fi
+  if jq -e --arg name "$REPLICA_NAME-orphan" '.. | objects | select(.sessionName?==$name and (.message? | startswith("Orphan session")))' "$WORK/orphan-status.json"; then return; fi
   sleep 2
  done
  return 1
 }
 probe g-orphan-reported wait_orphan
 probe g-orphan-list mut sync list --label-selector t3-env=$ORPHAN_LABEL --template '{{json .}}'
-probe g-orphan-kept jq -e --arg name "$ROUND2_NAME-orphan" 'length==1 and .[0].name==$name' "$WORK/g-orphan-list.out"
+probe g-orphan-kept jq -e --arg name "$REPLICA_NAME-orphan" 'length==1 and .[0].name==$name' "$WORK/g-orphan-list.out"
 printf '\nPASS: %d FAIL: %d\n' "$PASS" "$FAIL"
 for name in "${FAILED[@]}"; do printf 'FAIL %s evidence=%s/%s.out\n' "$name" "$WORK" "$name"; done
 [ "$FAIL" = 0 ]

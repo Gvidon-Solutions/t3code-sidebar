@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 . "$(dirname "$0")/lib.sh"
 if [ "${1:-}" = --plan ]; then
-  printf '%s\n' 'build deploy network-proxies round1 round2 config network-nat network-ssh network-faults round3 stage-m real-provider-guards realistic-matrix'
+  printf '%s\n' 'build deploy network-proxies network-core replica config network-nat network-ssh network-faults resilience machine-identity real-provider-guards realistic-matrix'
   exit 0
 fi
 run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -43,17 +43,17 @@ export MESH_E2E_IMAGE=t3-mesh-e2e:nightly
 export MESH_E2E_REUSE_NETWORK=1
 export MESH_E2E_LIVE_REPORTS=1
 export MESH_E2E_SESSION_TTL=4h
-export MESH_E2E_ROUND1_WORK="$root/round1"
-export MESH_E2E_RUN_PREFIX="T1-nightly-$run_id"
+export MESH_E2E_CORE_WORK="$root/core"
+export MESH_E2E_RUN_PREFIX="mesh-nightly-$run_id"
 export MESH_E2E_LOCAL_PRIMARY_ROOT="$root/second-primary"
-export MESH_E2E_REVERSE_ROOT="/tmp/T1-nightly-$run_id/reverse"
-export MESH_E2E_REVERSE_TITLE="T1-nightly-$run_id-reverse"
-export NODE_B_DEMO_DIR="$NODE_B_STATE_DIR/projects/t1-nightly-$run_id/demo"
-export MESH_E2E_DEMO_TITLE="T1-nightly-$run_id"
-export MESH_E2E_ROUND2_WORK="$root/round2"
-export MESH_E2E_ROUND3_WORK="$root/round3"
+export MESH_E2E_REVERSE_ROOT="/tmp/mesh-nightly-$run_id/reverse"
+export MESH_E2E_REVERSE_TITLE="mesh-nightly-$run_id-reverse"
+export NODE_B_DEMO_DIR="$NODE_B_STATE_DIR/projects/mesh-nightly-$run_id/demo"
+export MESH_E2E_DEMO_TITLE="mesh-nightly-$run_id"
+export MESH_E2E_REPLICA_WORK="$root/replica"
+export MESH_E2E_RESILIENCE_WORK="$root/resilience"
 export MESH_E2E_CONFIG_WORK="$root/config"
-export MESH_E2E_STAGE_M_WORK="$root/agents"
+export MESH_E2E_MACHINE_IDENTITY_WORK="$root/agents"
 export MESH_E2E_BED_OPS="$root/network"
 export RUSTUP_HOME="$BED_NIGHTLY_ROOT/toolchain/rustup"
 export CARGO_HOME="$BED_NIGHTLY_ROOT/toolchain/cargo"
@@ -72,18 +72,18 @@ worker_ssh "systemctl --user start $WORKER_TUNNEL_UNIT"
 "$MESH_DIR/network-proxies.sh" up
 touch "$root/proxies-up"
 "$MESH_DIR/network-proxies.sh" block
-"$MESH_DIR/round1.sh"
+"$MESH_DIR/mesh-core-acceptance.sh"
 "$MESH_DIR/network-bed.sh" nat
-"$MESH_DIR/round2.sh"
+"$MESH_DIR/replica-acceptance.sh"
 "$MESH_DIR/config.sh"
 "$MESH_DIR/network-bed.sh" ssh
 "$MESH_DIR/network-bed.sh" faults
-"$MESH_DIR/round3.sh"
-"$MESH_DIR/stage-m.sh"
+"$MESH_DIR/resilience-acceptance.sh"
+"$MESH_DIR/machine-identity-acceptance.sh"
 export MESH_E2E_CODEX_BINARY="${MESH_E2E_CODEX_BINARY:-$(command -v codex)}"
 export MESH_E2E_OPENCODE_BINARY="${MESH_E2E_OPENCODE_BINARY:-$(command -v opencode)}"
-MESH_E2E_HARNESS_EVIDENCE="$root/real-provider-guards" node "$MESH_DIR/r1-harness.mjs"
-"$MESH_DIR/c2-bed.sh"
-"$MESH_DIR/f1-bed.sh"
+MESH_E2E_HARNESS_EVIDENCE="$root/real-provider-guards" node "$MESH_DIR/replica-command-harness.mjs"
+"$MESH_DIR/machine-name-bed.sh"
+"$MESH_DIR/fork-bed.sh"
 MESH_FAST_REALISTIC=1 "$REPO_ROOT/scripts/mesh-fast/run.sh" --jobs 1
 printf 'PASS nightly realistic mesh suite; evidence %s\n' "$root"

@@ -148,8 +148,8 @@ NodeTest.test("round helpers resolve only the configured disposable runtime and 
   const fixture = setup();
   try {
     NodeFS.copyFileSync(
-      NodePath.join(directory, "round1.sh"),
-      NodePath.join(fixture.bed, "round1.sh"),
+      NodePath.join(directory, "mesh-core-acceptance.sh"),
+      NodePath.join(fixture.bed, "mesh-core-acceptance.sh"),
     );
     const bin = NodePath.join(fixture.root, "bin");
     NodeFS.mkdirSync(bin);
@@ -170,7 +170,7 @@ NodeTest.test("round helpers resolve only the configured disposable runtime and 
         "-c",
         '. "$1"; printf "%s\\n" "$NODE_B_BIN" "$NODE_B_UNIT" "$NODE_B_BASE_DIR"',
         "fixture",
-        NodePath.join(fixture.bed, "round1.sh"),
+        NodePath.join(fixture.bed, "mesh-core-acceptance.sh"),
       ],
       {
         encoding: "utf8",
@@ -178,7 +178,7 @@ NodeTest.test("round helpers resolve only the configured disposable runtime and 
           ...fixture.env,
           PATH: bin + ":/usr/bin:/bin",
           MESH_E2E_HELPERS_ONLY: "1",
-          MESH_E2E_ROUND1_WORK: NodePath.join(fixture.root, "work"),
+          MESH_E2E_CORE_WORK: NodePath.join(fixture.root, "work"),
         },
       },
     );

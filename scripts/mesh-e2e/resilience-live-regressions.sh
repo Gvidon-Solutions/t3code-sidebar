@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by round3-features.sh; only this run's N folders and project are changed.
+# Sourced by resilience-features.sh; only this run's N folders and project are changed.
 set -euo pipefail
 catalog_root="$N_ROOT-catalog"
 catalog_title="N-unplaced catalog $RUN_TS"

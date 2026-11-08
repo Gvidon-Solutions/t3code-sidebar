@@ -17,7 +17,7 @@ const { values } = NodeUtil.parseArgs({
     "target-project-id": { type: "string" },
     "remote-machine": { type: "string" },
     "empty-machine": { type: "string" },
-    shots: { type: "string", default: "/tmp/t3-f1-shots" },
+    shots: { type: "string", default: "/tmp/t3-fork-shots" },
   },
 });
 for (const name of [

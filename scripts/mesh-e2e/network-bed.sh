@@ -2,8 +2,8 @@
 set -euo pipefail
 action=${1:-}
 export MESH_E2E_HELPERS_ONLY=1
-export MESH_E2E_ROUND1_WORK=${MESH_E2E_BED_OPS:-/tmp/mesh-network-ops}
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/round1.sh"
+export MESH_E2E_CORE_WORK=${MESH_E2E_BED_OPS:-/tmp/mesh-network-ops}
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/mesh-core-acceptance.sh"
 unset MESH_E2E_HELPERS_ONLY
 set -euo pipefail
 BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-mesh-network}

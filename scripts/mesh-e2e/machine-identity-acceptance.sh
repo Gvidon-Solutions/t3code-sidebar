@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export MESH_E2E_HELPERS_ONLY=1 MESH_E2E_ROUND1_WORK="${MESH_E2E_STAGE_M_WORK:-/tmp/stage-m-e2e}"
+export MESH_E2E_HELPERS_ONLY=1 MESH_E2E_CORE_WORK="${MESH_E2E_MACHINE_IDENTITY_WORK:-/tmp/t3-mesh-machine-identity}"
 cd "$(dirname "$0")/../.."
-. scripts/mesh-e2e/round1.sh
+. scripts/mesh-e2e/mesh-core-acceptance.sh
 set -e
 unset MESH_E2E_HELPERS_ONLY
 CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
@@ -26,7 +26,7 @@ ctl() {
  XDG_CONFIG_HOME="$WORK/auth-$m" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$m")" T3CTL_T3_BIN="$WORK/t3-$m" timeout 210 node "$CTL" "$@"
 }
 tool() { local m=$1 name=$2; shift 2; ctl "$m" tool "$name" "$@"; }
-MARK=stage-m-$(date +%s)
+MARK=machine-identity-$(date +%s)
 ctl cloud rpc meshLayout.get '{}' > "$WORK/layout.json"
 CLOUD_ENV=$(descriptor_env "$CLOUD_ORIGIN")
 PROJECT=$(jq -r --arg e "$CLOUD_ENV" --arg suffix ":$NODE_B_DEMO_DIR" '.config.projectMounts | to_entries[] | select(.key | endswith($suffix)) | .value[] | select(.environmentId==$e and .role=="replica") | .projectId' "$WORK/layout.json" | head -1)

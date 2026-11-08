@@ -3,7 +3,7 @@ import * as NodePath from "node:path";
 
 const [action, base, recordPath] = process.argv.slice(2);
 if (!["pause", "resume"].includes(action) || !base || !recordPath) {
-  throw new Error("Usage: round3-driver.mjs pause|resume <base> <record>");
+  throw new Error("Usage: resilience-driver.mjs pause|resume <base> <record>");
 }
 const inspect = (pid) => {
   if (!Number.isSafeInteger(pid) || pid <= 1) throw new Error("Invalid captured server PID");

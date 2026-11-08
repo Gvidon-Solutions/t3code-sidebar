@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
-STAGE=${MESH_E2E_STAGE_PREFIX:-network}
+STAGE=${MESH_E2E_FIXTURE_PREFIX:-network}
 BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-$STAGE}
 [ "$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner')" = "$BED_LOCK_OWNER" ] || die "$BED_LOCK_OWNER must hold the bed lock"
 round=${1:-1}
-case "$round" in 1|2) ;; *) die "Usage: network-rounds.sh 1|2";; esac
-export MESH_E2E_BED_WORK=${MESH_E2E_BED_WORK:-/tmp/$STAGE-network-rounds}
+case "$round" in 1|2) ;; *) die "Usage: network-acceptance.sh 1|2";; esac
+export MESH_E2E_BED_WORK=${MESH_E2E_BED_WORK:-/tmp/$STAGE-network-acceptance}
 export MESH_E2E_BED_PROJECT=${MESH_E2E_BED_PROJECT:-$STAGE-network-demo}
-export MESH_E2E_ROUND1_NAME=$STAGE-round1
-export MESH_E2E_ROUND1_SCRATCH=$STAGE-r1
-export MESH_E2E_ROUND2_NAME=$STAGE-round2
+export MESH_E2E_CORE_NAME=$STAGE-core
+export MESH_E2E_CORE_SCRATCH=$STAGE-r1
+export MESH_E2E_REPLICA_NAME=$STAGE-replica
 export MESH_E2E_DEMO_TITLE=$STAGE-network-demo
 export MESH_E2E_ORPHAN_LABEL=$STAGE-orphan
-export MESH_E2E_STAGE_PREFIX=$STAGE
-export MESH_E2E_ROUND1_WORK="$MESH_E2E_BED_WORK/round1"
-export MESH_E2E_ROUND2_WORK="$MESH_E2E_BED_WORK/round2"
+export MESH_E2E_FIXTURE_PREFIX=$STAGE
+export MESH_E2E_CORE_WORK="$MESH_E2E_BED_WORK/core"
+export MESH_E2E_REPLICA_WORK="$MESH_E2E_BED_WORK/replica"
 mkdir -p "$MESH_E2E_BED_WORK"
 nodeB_ssh 'bash -s' <<EOF
 set -euo pipefail
