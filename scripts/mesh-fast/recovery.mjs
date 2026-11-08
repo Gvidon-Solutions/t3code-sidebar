@@ -69,10 +69,23 @@ export async function recoveryScenario(directory) {
       "--network",
       "none",
     ]);
+    const parentOutput = NodePath.join(directory, "parent-github-output");
+    await NodeFSP.writeFile(parentOutput, "artifacts=parent-only\n");
+    const childEnvironment = {
+      ...process.env,
+      MESH_FAST_STATE_DIR: NodePath.join(directory, "admission"),
+      GITHUB_OUTPUT: parentOutput,
+    };
+    delete childEnvironment.GITHUB_OUTPUT;
     const nextCommand = await run(
       "bash",
       [NodePath.join(harnessRoot, "scripts/mesh-fast/run.sh"), "--scenario", "runner-cancel-boot"],
-      { env: { ...process.env, MESH_FAST_STATE_DIR: NodePath.join(directory, "admission") } },
+      { env: childEnvironment },
+    );
+    NodeAssert.equal(
+      await NodeFSP.readFile(parentOutput, "utf8"),
+      "artifacts=parent-only\n",
+      "nested recovery must preserve the parent Actions artifact output",
     );
     await NodeFSP.writeFile(NodePath.join(directory, "next-command.log"), nextCommand);
     const nextArtifacts = nextCommand.match(/^Artifacts: (.+)$/m)?.[1];
