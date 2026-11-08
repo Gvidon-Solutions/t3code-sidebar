@@ -18,6 +18,7 @@ import { createModelSelection } from "./model.ts";
 import { resolveProjectScripts } from "./projectScripts.ts";
 import {
   applyServerSettingsPatch,
+  buildProviderInstancePatch,
   fallbackTextGenerationModelSelection,
   modelPreferencesMigrationPatch,
   resolveModelPreferences,
@@ -1059,5 +1060,56 @@ describe("synchronized model preferences", () => {
         setModelFavorites: [{ provider, model: "sol", favorite: false }],
       }).favorites,
     ).toEqual([{ provider: otherProvider, model: "sol" }]);
+  });
+});
+
+describe("buildProviderInstancePatch", () => {
+  it("sends only the changed instance and leaves every other instance to the server merge", () => {
+    const codexId = ProviderInstanceId.make("codex");
+    const opencodeId = ProviderInstanceId.make("opencode");
+    const current = {
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances: {
+        [codexId]: { driver: ProviderDriverKind.make("codex"), enabled: true, config: {} },
+        [opencodeId]: { driver: ProviderDriverKind.make("opencode"), enabled: true, config: {} },
+      },
+    };
+    const patch = buildProviderInstancePatch(codexId, {
+      driver: ProviderDriverKind.make("codex"),
+      displayName: "Codex Work",
+      enabled: false,
+      config: {},
+    });
+    expect(Object.keys(patch.providerInstances ?? {})).toEqual([codexId]);
+    const next = applyServerSettingsPatch(current, patch);
+    expect(next.providerInstances[codexId]?.displayName).toBe("Codex Work");
+    expect(next.providerInstances[codexId]?.enabled).toBe(false);
+    expect(next.providerInstances[opencodeId]).toBe(current.providerInstances[opencodeId]);
+  });
+
+  it("deletes an instance with null without replacing the rest of the map", () => {
+    const codexId = ProviderInstanceId.make("codex");
+    const opencodeId = ProviderInstanceId.make("opencode");
+    const current = {
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances: {
+        [codexId]: { driver: ProviderDriverKind.make("codex"), enabled: true, config: {} },
+        [opencodeId]: { driver: ProviderDriverKind.make("opencode"), enabled: true, config: {} },
+      },
+    };
+    const next = applyServerSettingsPatch(current, buildProviderInstancePatch(codexId, null));
+    expect(next.providerInstances[codexId]).toBeUndefined();
+    expect(next.providerInstances[opencodeId]).toBe(current.providerInstances[opencodeId]);
+  });
+
+  it("leaves an omitted instance in place", () => {
+    const codexId = ProviderInstanceId.make("codex");
+    const current = {
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances: {
+        [codexId]: { driver: ProviderDriverKind.make("codex"), enabled: true, config: {} },
+      },
+    };
+    expect(applyServerSettingsPatch(current, {}).providerInstances[codexId]).toBeDefined();
   });
 });

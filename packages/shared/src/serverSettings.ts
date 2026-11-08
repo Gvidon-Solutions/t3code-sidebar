@@ -719,3 +719,14 @@ export function modelPreferencesMigrationPatch(
         },
       };
 }
+
+/**
+ * Builds a settings patch for exactly one provider instance. Other instances are omitted, so the
+ * server merges them unchanged; `null` deletes the instance.
+ */
+export function buildProviderInstancePatch(
+  instanceId: ProviderInstanceId,
+  instance: ProviderInstanceConfig | null,
+): Pick<ServerSettingsPatch, "providerInstances"> {
+  return { providerInstances: { [instanceId]: instance } };
+}
