@@ -3,6 +3,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { EnvironmentId, type UnmanagedSyncSession } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { plainErrorMessage } from "@t3tools/client-runtime/errors";
 import {
   ADOPTED_SESSION_MESSAGE,
   NO_UNMANAGED_SESSIONS,
@@ -34,7 +35,8 @@ export function AdoptReplicaAction(props: {
           setBusy(true);
           const result = await list({ environmentId, input: {} });
           setBusy(false);
-          if (result._tag === "Failure") setMessage(String(squashAtomCommandFailure(result)));
+          if (result._tag === "Failure")
+            setMessage(plainErrorMessage(squashAtomCommandFailure(result)));
           else {
             setSessions(result.value);
             setMessage(result.value.length ? null : NO_UNMANAGED_SESSIONS);
@@ -54,7 +56,8 @@ export function AdoptReplicaAction(props: {
               input: { project: props.logicalKey, session: session.identifier },
             });
             setBusy(false);
-            if (result._tag === "Failure") setMessage(String(squashAtomCommandFailure(result)));
+            if (result._tag === "Failure")
+              setMessage(plainErrorMessage(squashAtomCommandFailure(result)));
             else {
               setSessions(null);
               setMessage(ADOPTED_SESSION_MESSAGE);

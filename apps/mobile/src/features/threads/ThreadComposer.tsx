@@ -151,6 +151,7 @@ import {
 } from "../voice-mode/ComposerVoiceMode";
 import { useVoiceModePhase } from "../voice-mode/useVoiceMode";
 import { voiceMode, voiceModeSupported } from "../voice-mode/voiceMode";
+import { resolveComposerVoiceAvailability } from "@t3tools/client-runtime/voice-availability";
 import {
   rememberModelOptions,
   withRememberedModelOptions,
@@ -600,8 +601,15 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     onChangeDraftMessage: (text) => setComposerDraftText(composerDraftKey, text),
     onChangeSelection: composerMenu.onSelectionChange,
   });
+  const threadVoiceAvailability = resolveComposerVoiceAvailability({
+    isServerThread: true,
+    threadProviderInstanceId: props.selectedThread.modelSelection.instanceId,
+    config: props.serverConfig,
+    projectId: props.selectedThread.projectId ?? null,
+  });
+  // A live conversation stays stoppable even if its provider's catalog changed.
   const offersVoiceConversation =
-    voiceModeSupported && selectedProviderStatus?.supportsVoice === true;
+    voiceModeSupported && (threadVoiceAvailability.kind !== "unsupported" || voiceConversationLive);
   const canToggleVoiceConversation =
     voiceConversationLive ||
     (props.connectionState === "connected" && threadOnServer && !voiceInput.isBusy);

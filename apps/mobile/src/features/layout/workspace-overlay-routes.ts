@@ -22,7 +22,6 @@ const LISTED_OVERLAY_ROUTES: ReadonlySet<string> = new Set([
   "AddProjectDestination",
   "AddProjectLocal",
   "AddProjectNew",
-  "NewTaskEnvironment",
   "NewTaskBranch",
   "SettingsLegal",
   "SettingsAuth",

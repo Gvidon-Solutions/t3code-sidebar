@@ -1,8 +1,12 @@
-import { useAtomValue } from "@effect/atom-react";
-import { planMeshConnect } from "@t3tools/client-runtime/state/mesh-layout";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import {
+  dismissMeshConnectPrompt,
+  planMeshConnect,
+  shouldShowMeshConnectPrompt,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
-import { useState } from "react";
+import { AsyncResult } from "effect/reactivity";
 import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -10,6 +14,7 @@ import { SymbolView } from "../../components/ui/AppSymbol";
 import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironments } from "../../state/environments";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/preferences";
 import { openSettings } from "../settings/settings-navigation";
 import { useMeshLayout } from "./useMeshLayout";
 import { useMeshOverview } from "./useMeshOverview";
@@ -22,8 +27,17 @@ export function MeshConnectPrompt() {
   const { environments } = useEnvironments();
   const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
   const setEnabled = useAtomCommand(environmentCatalog.setEnabled, { reportFailure: false });
-  const [dismissed, setDismissed] = useState(false);
-  if (dismissed) return null;
+  const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : {};
+  const dismissed = preferences.meshConnectPromptDismissed ?? [];
+  // Mobile gates on the same mesh settings as web before offering to reconnect.
+  const enabled = environments.some(
+    (environment) =>
+      environment.serverConfig?.settings.meshEnabled === true &&
+      environment.serverConfig.settings.linkedEnvironmentsEnabled === true,
+  );
+  if (!enabled) return null;
   const plan = planMeshConnect({
     machines: machines.map((machine) => ({
       environmentId: machine.environmentId,
@@ -41,12 +55,22 @@ export function MeshConnectPrompt() {
       ]),
     ),
   });
-  if (!plan.needed) return null;
+  if (!shouldShowMeshConnectPrompt(plan, dismissed)) return null;
+  const dismiss = () => {
+    savePreferences({
+      transform: (current) => ({
+        meshConnectPromptDismissed: dismissMeshConnectPrompt(
+          current.meshConnectPromptDismissed ?? [],
+          plan,
+        ),
+      }),
+    });
+  };
   const connectAll = () => {
     for (const machine of plan.reconnect) {
       void setEnabled({ environmentId: machine.environmentId as EnvironmentId, enabled: true });
     }
-    setDismissed(true);
+    dismiss();
     if (plan.missing.length > 0) openSettings(navigation, "SettingsEnvironments");
   };
   return (
@@ -63,7 +87,7 @@ export function MeshConnectPrompt() {
           accessibilityLabel="Dismiss"
           accessibilityRole="button"
           hitSlop={10}
-          onPress={() => setDismissed(true)}
+          onPress={dismiss}
         >
           <SymbolView name="xmark" size={13} tintColorClassName="accent-icon-muted" />
         </Pressable>
@@ -77,7 +101,7 @@ export function MeshConnectPrompt() {
         <Pressable accessibilityRole="button" onPress={connectAll}>
           <Text className="text-sm font-t3-medium text-primary-text">Connect all</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => setDismissed(true)}>
+        <Pressable accessibilityRole="button" onPress={dismiss}>
           <Text className="text-sm text-foreground-muted">Not now</Text>
         </Pressable>
       </View>

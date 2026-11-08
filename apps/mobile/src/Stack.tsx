@@ -84,10 +84,7 @@ import { AddProjectLocalRoute } from "./features/projects/AddProjectLocalRoute";
 import { AddProjectNewRoute } from "./features/projects/AddProjectNewRoute";
 import { AddProjectRepositoryRoute } from "./features/projects/AddProjectRepositoryRoute";
 import { AddProjectSourceRoute } from "./features/projects/AddProjectSourceRoute";
-import {
-  NewTaskBranchPickerRouteScreen,
-  NewTaskEnvironmentPickerRouteScreen,
-} from "./features/threads/NewTaskContextPickerScreens";
+import { NewTaskBranchPickerRouteScreen } from "./features/threads/NewTaskContextPickerScreens";
 import {
   ExistingThreadSettingsRouteScreen,
   NewTaskThreadSettingsRouteScreen,
@@ -762,11 +759,6 @@ const RootStackConfig = createWorkspaceStackNavigator({
       screen: NewTaskRouteScreen,
       linking: { path: "new", alias: ["new/project"] },
       options: { ...GLASS_HEADER_OPTIONS, title: "Choose project" },
-    }),
-    NewTaskEnvironment: createNativeStackScreen({
-      linking: "new/draft/environment",
-      screen: NewTaskEnvironmentPickerRouteScreen,
-      options: { ...GLASS_HEADER_OPTIONS, title: "Machine" },
     }),
     NewTaskBranch: createNativeStackScreen({
       linking: "new/draft/branch",

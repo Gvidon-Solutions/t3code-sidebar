@@ -9,6 +9,7 @@ import {
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   confirm: vi.fn(),
+  alert: vi.fn(),
   overview: false,
   connections: [] as unknown[],
   document: {} as Record<string, { h: string; v: unknown }>,
@@ -81,7 +82,7 @@ vi.mock("../../components/ui/Sheet", () => ({
 }));
 vi.mock("../../components/ui/Dialog", () => ({
   confirm: (options: unknown) => mocks.confirm(options),
-  alert: vi.fn(),
+  alert: (...args: unknown[]) => mocks.alert(...args),
 }));
 vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -178,6 +179,7 @@ import { partitionMeshMachines } from "@t3tools/client-runtime/state/mesh-machin
 function setup() {
   mocks.navigate.mockReset();
   mocks.confirm.mockReset();
+  mocks.alert.mockReset();
   mocks.overview = false;
   mocks.connections = [{ environmentId: "studio", connection: { phase: "connected" } }];
   mocks.document = {};
@@ -380,6 +382,59 @@ it("keeps old phone connections collapsed until Unavailable is expanded", () => 
   screen.click("Unavailable (1)");
   expect(screen.container.textContent).not.toContain("Old laptop");
 });
+
+it("blocks removing a main copy while another copy exists and offers to promote it", () => {
+  using screen = setup();
+  const config: SidebarWorkspacesConfig = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: { studio: { title: "Studio" }, cloudbox: { title: "Cloudbox" } },
+    projectMounts: {
+      notes: [
+        {
+          environmentId: "studio",
+          projectId: "primary",
+          role: "primary",
+          transport: "git",
+          path: "/notes",
+          createdAt: "",
+        },
+        {
+          environmentId: "cloudbox",
+          projectId: "replica",
+          role: "replica",
+          transport: "mutagen",
+          source: "studio",
+          path: "/notes",
+          createdAt: "",
+        },
+      ],
+    },
+  };
+  screen.render(
+    <MachinesSheet
+      config={config}
+      projectKey="notes"
+      title="Field notes"
+      liveStatuses={[]}
+      machines={[]}
+      onClose={vi.fn()}
+      onAddReplica={vi.fn()}
+      onMakePrimary={vi.fn()}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
+    />,
+  );
+  mocks.alert.mockReset();
+  screen.click("Remove");
+  const [, message, buttons] = mocks.alert.mock.calls[0] as [
+    string,
+    string,
+    ReadonlyArray<{ text: string; onPress?: () => void }>,
+  ];
+  expect(message).toContain("Make another copy the main copy first");
+  expect(buttons?.map((button) => button.text)).toContain("Make Cloudbox the main copy");
+});
+
 it("warns before removing a primary, omits Adopt when synced, and opens conflict copies", () => {
   using screen = setup();
   const remove = vi.fn();
@@ -436,7 +491,7 @@ it("warns before removing a primary, omits Adopt when synced, and opens conflict
     message: string;
     onConfirm: () => void;
   };
-  expect(confirmation.message).toContain("leaves replicas without their git and build machine");
+  expect(confirmation.message).toContain("ordinary folder");
   act(confirmation.onConfirm);
   expect(remove).toHaveBeenCalledWith("studio");
   screen.click("Open copies on cloudbox");

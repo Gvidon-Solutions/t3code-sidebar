@@ -134,6 +134,8 @@ export interface Preferences {
   /** T3 Mesh (fork): cached layout snapshot and offline outbox, JSON. */
   readonly meshLayoutCache?: string;
   readonly meshLayoutDeviceId?: string;
+  /** Mesh machines whose "connect all" prompt this device already dismissed. */
+  readonly meshConnectPromptDismissed?: ReadonlyArray<string>;
   readonly workspaceToggles?: readonly string[];
   /** Sidebar fork: open file tabs per thread (`environmentId:threadId`). */
   readonly threadTabs?: ThreadTabsByThread;
@@ -220,6 +222,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     sidebarWorkspaceId?: string;
     meshLayoutCache?: string;
     meshLayoutDeviceId?: string;
+    meshConnectPromptDismissed?: ReadonlyArray<string>;
     workspaceToggles?: readonly string[];
     threadTabs?: ThreadTabsByThread;
     voiceBubblePosition?: { readonly x: number; readonly y: number };
@@ -382,6 +385,11 @@ function sanitizePreferences(parsed: Preferences): Preferences {
       Object.entries(parsed.draftMachines).filter(
         (entry): entry is [string, string] => typeof entry[1] === "string",
       ),
+    );
+  }
+  if (Array.isArray(parsed.meshConnectPromptDismissed)) {
+    preferences.meshConnectPromptDismissed = parsed.meshConnectPromptDismissed.filter(
+      (id): id is string => typeof id === "string",
     );
   }
   if (isThreadProject(parsed.lastThreadProject)) {

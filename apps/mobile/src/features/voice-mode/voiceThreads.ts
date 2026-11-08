@@ -6,16 +6,12 @@ import {
   type ServerConfig as T3ServerConfig,
 } from "@t3tools/contracts";
 
-import { resolveSelectableModelSelection } from "../../lib/modelOptions";
+import { resolveVoiceThreadModelSelection } from "@t3tools/client-runtime/voice-availability";
 
 /** Sidebar fork: the title of a thread started to talk, until its first phrase names it. */
 export const VOICE_THREAD_TITLE = VOICE_THREAD_DEFAULT_TITLE;
 /** Codex's realtime model, used when the draft's model cannot hold a conversation. */
 export const VOICE_DEFAULT_MODEL = "gpt-6-astra";
-
-function providerOf(config: T3ServerConfig, instanceId: ModelSelection["instanceId"]) {
-  return config.providers.find((provider) => provider.instanceId === instanceId);
-}
 
 /**
  * The model a voice thread starts with: the draft's own when its provider can
@@ -28,25 +24,9 @@ export function resolveVoiceModelSelection(
   draftSelection: ModelSelection | null,
   projectId: ProjectId | null,
 ): ModelSelection | null {
-  if (!config) return null;
-  if (
-    draftSelection !== null &&
-    providerOf(config, draftSelection.instanceId)?.supportsVoice === true &&
-    resolveSelectableModelSelection(config, draftSelection, projectId) !== null
-  ) {
-    return draftSelection;
-  }
-  for (const provider of config.providers) {
-    if (provider.supportsVoice !== true) continue;
-    const model = provider.models.some((candidate) => candidate.slug === VOICE_DEFAULT_MODEL)
-      ? VOICE_DEFAULT_MODEL
-      : (provider.models.find((candidate) => candidate.isDefault)?.slug ??
-        provider.models[0]?.slug ??
-        VOICE_DEFAULT_MODEL);
-    const selection = { instanceId: provider.instanceId, model };
-    if (resolveSelectableModelSelection(config, selection, projectId) !== null) return selection;
-  }
-  return null;
+  // The shared rule is the one the composer and web use, so Home's Talk button
+  // cannot offer a conversation the draft composer would hide.
+  return resolveVoiceThreadModelSelection(config, draftSelection, projectId);
 }
 
 /**

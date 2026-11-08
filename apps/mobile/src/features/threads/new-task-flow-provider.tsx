@@ -7,8 +7,8 @@ import { mobilePreferencesAtom, updateMobilePreferencesAtom } from "../../state/
 import { AsyncResult } from "effect/reactivity";
 import {
   defaultDraftMachine,
-  defaultUsableDraftModel,
   draftMachineCardSync,
+  hasUsableDraftModels,
   draftMachineCards,
   draftModelUnavailableReason,
   planThreadOnMachine,
@@ -529,6 +529,7 @@ export function NewTaskFlowProvider(
     projectId: selectedProject?.id ?? null,
     now: modelSelectionNow,
   }).selection;
+  const selectedModelForCards = useMemo(() => selectedModel, [selectedModel]);
   const selectedModelKey = selectedModel
     ? `${selectedModel.instanceId}:${selectedModel.model}`
     : null;
@@ -713,6 +714,11 @@ export function NewTaskFlowProvider(
       if (target) {
         setProject(target);
         return true;
+      }
+      // An older server cannot host a copy; offering to mount there would leave
+      // the draft "preparing" forever, so refuse the switch instead.
+      if (serverConfigs.get(environmentId)?.environment.capabilities.replicas !== true) {
+        return false;
       }
       meshLayout.edit(
         (current) =>
@@ -993,17 +999,20 @@ export function NewTaskFlowProvider(
             (rep) => rep.environmentId === environmentId,
           )?.projectId ??
           null,
+        canHostCopy:
+          isScratchDraft ||
+          serverConfigs.get(environmentId)?.environment.capabilities.replicas === true,
         primary:
           meshLayout.config?.projectMounts[preferenceKey ?? ""]?.some(
             (rep) => rep.environmentId === environmentId && rep.role === "primary",
           ) ?? false,
         connected,
         hasUsableModels: connected
-          ? defaultUsableDraftModel(
+          ? hasUsableDraftModels(
               serverConfigs.get(environmentId) ?? null,
               (preferenceScope?.projects.find((project) => project.environmentId === environmentId)
                 ?.id ?? null) as import("@t3tools/contracts").ProjectId | null,
-            ) !== null
+            )
           : null,
         sync:
           draftMachineCardSync(
@@ -1030,6 +1039,8 @@ export function NewTaskFlowProvider(
       primary: environment.primary,
       connected: environment.connected,
       hasUsableModels: environment.hasUsableModels,
+      canHostCopy: environment.canHostCopy,
+      config: serverConfigs.get(environment.environmentId) ?? null,
       sync: environment.sync,
     })),
     reachability: Object.fromEntries(
@@ -1048,7 +1059,9 @@ export function NewTaskFlowProvider(
         },
       ]),
     ),
-    selectedEnvironmentId: selectedEnvironmentId ?? null,
+    selectedEnvironmentId:
+      switchingToEnvironmentId ?? pendingMount?.environmentId ?? selectedEnvironmentId ?? null,
+    selection: selectedModelForCards,
   });
   const mountRep =
     pendingMount &&
@@ -1105,12 +1118,17 @@ export function NewTaskFlowProvider(
             environment.connectionState === "connected",
         ),
         usable:
+          hasUsableDraftModels(
+            serverConfigs.get(machine.environmentId) ?? null,
+            machine.projectId as import("@t3tools/contracts").ProjectId | null,
+          ) === true &&
           selectedModel !== null &&
           draftModelUnavailableReason(
             serverConfigs.get(machine.environmentId),
             selectedModel,
-            null,
-          ) === null,
+            machine.projectId as import("@t3tools/contracts").ProjectId | null,
+          ) === null &&
+          (machine.projectId !== null || machine.canHostCopy),
         primary:
           meshLayout.config!.projectMounts[preferenceKey]?.some(
             (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
