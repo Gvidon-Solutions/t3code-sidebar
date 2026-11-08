@@ -798,7 +798,8 @@ already-bound connection identity. `/peer` never adopts a header identity: unbou
 401 and conflicting headers or relay hops return 403 on both transports. Migration 82 snapshots
 existing credentials; only those can acquire a binding on first authenticated use with a matching
 local outgoing link or `mesh.machineBinding`. The durable upgrade is logged and listed in
-`meshLayout.status.legacyIdentityUpgrades`; unknown peers and new unbound tokens must pair again.
+`meshLayout.status.legacyIdentityUpgrades` and `t3ctl mesh status` (including `--json`); unknown
+peers and new unbound tokens must pair again.
 HTTP idempotency namespaces use the authenticated peer ID (or session ID); relay caller IDs
 partition keys only inside that bound relay's namespace. Legacy
 label matching lives only in `meshConfig/migration.ts`. Import defaults to project files;

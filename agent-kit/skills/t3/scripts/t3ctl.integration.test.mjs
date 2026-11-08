@@ -94,10 +94,12 @@ test("machine inventory, mesh status, replicas and layout reach transports", () 
   ])
     assert.ok(run(args).calls.some((c) => c.name === "meshLayout.get"));
   const status = JSON.parse(run(["mesh", "status", "--json"]).out);
+  assert.deepEqual(status.legacyIdentityUpgrades, [{ sessionId: "legacy-session", environmentId: peer, boundAt: "2026-11-08T10:00:00.000Z" }]);
   assert.equal(status.connections[0].state, "direct");
   assert.equal(status.connections[1].via, peer);
   assert.equal(status.connections[2].lastError, "Peer heartbeat timed out");
   const text = run(["mesh", "status"]).out;
+  assert.match(text, /legacy identity upgrade.*legacy-session.*LB.*2026-11-08/);
   assert.match(text, /connected directly/);
   assert.match(text, /via lab/);
   assert.match(text, /offline since 2026-11-04.*Peer heartbeat timed out/);
