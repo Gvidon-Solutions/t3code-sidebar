@@ -772,6 +772,10 @@ helpers use neutral roles and resolve physical destinations through that file.
 `install-nightly.sh` installs the worker timer plus a separate controller SSH
 endpoint; `nightly.mjs` stores summaries and posts the stable `mesh-nightly` inbox
 issue only for failures. The installer never restarts an owner's T3 server.
+It rejects a mismatched worker before installing services. The realistic matrix
+and provider guards use the freshly built product checkout through
+`MESH_FAST_PRODUCT_ROOT`; native build failures cannot select an older installed
+resource monitor.
 
 Two fixture constraints matter: settle private machine claims before pairing,
 otherwise automatic collision reconciliation can supersede a test's config

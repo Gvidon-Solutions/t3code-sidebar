@@ -2,6 +2,8 @@
 set -euo pipefail
 export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$PATH
 . "$(dirname "$0")/lib.sh"
+worker_name=$(worker_ssh 'hostname -s')
+[ "$worker_name" = "$BED_NIGHTLY_HOST" ] || die "Nightly timer target is $worker_name, expected $BED_NIGHTLY_HOST"
 private="$BED_NIGHTLY_ROOT/controller"
 mkdir -p "$private" "$HOME/.config/systemd/user"
 chmod 700 "$private"
@@ -55,7 +57,7 @@ EOF_UNIT
 systemctl --user daemon-reload
 systemctl --user enable --now mesh-nightly-controller.service
 systemctl --user restart mesh-nightly-controller.service
-worker_ssh "test \"\$(hostname -s)\" = '$BED_NIGHTLY_HOST'; mkdir -p '$BED_NIGHTLY_ROOT'; chmod 700 '$BED_NIGHTLY_ROOT'"
+worker_ssh "test \"\$(hostname -s)\" = '$BED_NIGHTLY_HOST' && mkdir -p '$BED_NIGHTLY_ROOT' && chmod 700 '$BED_NIGHTLY_ROOT'"
 worker_scp "$private/client" "$private/host.pub" "$MESH_DIR/nightly.mjs" "$WORKER_HOST:$BED_NIGHTLY_ROOT/"
 local_user=$(id -un)
 cat > "$private/ssh-config" <<EOF_CLIENT
@@ -92,7 +94,7 @@ Type=oneshot
 Environment=T3CODE_HOME=$WORKER_BASE_DIR
 Environment=T3CTL_ORIGIN=http://127.0.0.1:$WORKER_PORT
 ExecStart=$node_path $BED_NIGHTLY_ROOT/nightly.mjs $BED_NIGHTLY_ROOT/job.json
-TimeoutStartSec=3h
+TimeoutStartSec=3h10m
 EOF_SERVICE
 cat > "$private/timer" <<EOF_TIMER
 [Unit]

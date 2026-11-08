@@ -4,10 +4,13 @@ import * as NodePath from "node:path";
 import * as NodeNet from "node:net";
 import * as NodeHttp from "node:http";
 import * as NodeChildProcess from "node:child_process";
-import {
-  installPublicRuntime,
-  installSshRuntime,
-} from "../../agent-kit/skills/t3/scripts/server-runtime.mjs";
+import * as NodeURL from "node:url";
+import { productRoot } from "./paths.mjs";
+const { installPublicRuntime, installSshRuntime } = await import(
+  NodeURL.pathToFileURL(
+    NodePath.join(productRoot, "agent-kit/skills/t3/scripts/server-runtime.mjs"),
+  ).href
+);
 import { MiniMesh } from "./mesh.mjs";
 import { project, rpc, mcp, until, run, invariant } from "./helpers.mjs";
 async function port() {

@@ -64,6 +64,7 @@ export PATH=$HOME/.nvm/versions/node/v26.12.1/bin:$CARGO_HOME/bin:$PATH
 rustup toolchain install 1.95.0 --profile minimal
 export RUSTUP_TOOLCHAIN=1.95.0
 "$MESH_DIR/build.sh" "${MESH_E2E_NIGHTLY_REF:-xdev}"
+export MESH_FAST_PRODUCT_ROOT="$MESH_E2E_BUILD_DIR"
 "$MESH_DIR/deploy.sh"
 "$MESH_DIR/tunnels.sh" up
 "$MESH_DIR/network-proxies.sh" up

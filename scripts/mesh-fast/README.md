@@ -13,6 +13,9 @@ pnpm mesh:fast
 ```
 
 The command builds source-fingerprinted native test runtimes automatically.
+`MESH_FAST_PRODUCT_ROOT` can select a separate prepared product checkout; the
+nightly wrapper selects the ref it has just built. Server bundles, CLI routing,
+runtime installers and real provider guards use that checkout.
 The first invocation also downloads a checksum-pinned Mutagen and the actual
 preceding release's source and dependencies. Native builds use a kernel `flock`
 so concurrent commands share completed artifacts. Downloads, image creation and

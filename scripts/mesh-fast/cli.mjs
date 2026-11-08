@@ -3,7 +3,8 @@ import * as NodeAssert from "node:assert/strict";
 import * as NodeFSP from "node:fs/promises";
 import { fixture, project, place, run, mcp } from "./helpers.mjs";
 import { providers, completed } from "./threads.mjs";
-const cli = new URL("../../agent-kit/skills/t3/scripts/t3ctl.mjs", import.meta.url).pathname;
+import { productRoot } from "./paths.mjs";
+const cli = NodePath.join(productRoot, "agent-kit/skills/t3/scripts/t3ctl.mjs");
 export const cliScenarios = {
   "cli-routing": (directory) =>
     fixture(directory, async (mesh) => {

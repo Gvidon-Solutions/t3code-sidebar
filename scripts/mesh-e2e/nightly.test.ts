@@ -39,6 +39,18 @@ it("writes both outcomes and posts only a failed run with the stable inbox key",
     expect(
       JSON.parse(await NodeFSP.readFile(NodePath.join(root, "fail/summary.json"), "utf8")).state,
     ).toBe("FAIL");
+    const expired = await nightly({
+      directory: NodePath.join(root, "deadline"),
+      command: [process.execPath, "-e", "setInterval(() => {}, 1000)"],
+      inboxCommand,
+      timeoutMs: 1,
+    });
+    expect(expired.state).toBe("FAIL");
+    expect(expired.error).toContain("execution deadline");
+    expect(JSON.parse(await NodeFSP.readFile(calls, "utf8")).slice(-2)).toEqual([
+      "--key",
+      "mesh-nightly",
+    ]);
   } finally {
     await NodeFSP.rm(root, { recursive: true, force: true });
   }

@@ -5,11 +5,10 @@ import * as NodeOS from "node:os";
 import * as NodeCrypto from "node:crypto";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeEvents from "node:events";
-import * as NodeURL from "node:url";
 import { run, until, rpc, mcp } from "./client.mjs";
+import { harnessRoot as repo, productRoot } from "./paths.mjs";
 
-const repo = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
-const binary = NodePath.join(repo, "apps/server/src/bin.ts");
+const binary = NodePath.join(productRoot, "apps/server/src/bin.ts");
 let bootSlots = Math.max(2, Math.min(12, Math.floor(NodeOS.availableParallelism() / 2)));
 const bootQueue = [];
 async function boot(work) {
@@ -504,6 +503,7 @@ const fs=require('node:fs');const args=process.argv.slice(2);if(JSON.stringify(a
           `127.0.0.1:${front}:${front}`,
           "-v",
           repo + ":" + repo + ":ro",
+          ...(productRoot === repo ? [] : ["-v", productRoot + ":" + productRoot + ":ro"]),
           "-v",
           root + ":" + root,
           "-v",

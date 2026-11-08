@@ -55,7 +55,7 @@ REVERSE_KEY_GOR='$HOME/.ssh/id_t3_mesh_e2e_vps'
 SELF_KEY="$HOME/.ssh/id_t3_mesh_e2e_self"
 
 BED_MACHINES=(studio worker cloudbox)
-BED_NIGHTLY_HOST=gor
+BED_NIGHTLY_HOST="${MESH_E2E_NIGHTLY_HOST:-gor}"
 BED_CONTROLLER=gvidon
 LEGACY_STUDIO_FILE=gvidon.json
 LEGACY_REMOTE_FILE=operalia.json

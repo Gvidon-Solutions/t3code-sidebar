@@ -470,7 +470,10 @@ five minutes of jitter, persistent across reboots.
 The worker runs `nightly.mjs`, which SSHes to the controller to run
 `acceptance.sh`. The wrapper leases the existing bed, builds xdev, runs the real
 rounds/provider guards and then the full isolated matrix with realistic timers and
-payloads. It waits five minutes when another stage holds the bed. It copies the
+payloads. `MESH_FAST_PRODUCT_ROOT` points that matrix, CLI and native provider
+guards at the freshly built ref, so they test the same product as the shared bed.
+The installer checks the worker's hostname before writing either service.
+It waits five minutes when another stage holds the bed. It copies the
 existing legacy seed into its own state directory and uses its own nightly demo.
 It neither takes over an active lease nor sends success notifications.
 

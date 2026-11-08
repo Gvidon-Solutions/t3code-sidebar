@@ -1,9 +1,8 @@
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import * as NodeURL from "node:url";
 import * as NodeCrypto from "node:crypto";
 import { run } from "./client.mjs";
-const repo = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
+import { productRoot as repo } from "./paths.mjs";
 async function fingerprint(directory, hash) {
   for (const entry of (await NodeFSP.readdir(directory, { withFileTypes: true })).sort((a, b) =>
     a.name.localeCompare(b.name),
