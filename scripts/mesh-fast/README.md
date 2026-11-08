@@ -40,6 +40,11 @@ a private loopback mirror, then performs real verification, extraction and sync.
 `T3_MESH_TEST_ASSET_ORIGIN` is accepted only by test runtimes; production bundles
 and non-test source execution retain the original release URL. Nightly leaves
 the mirror unset and downloads from the real release service.
+Fresh bootstrap containers receive the same timing scale and pinned archive
+mirror through a private systemd drop-in before the real installer creates its
+unit. The scenario asserts the running unit's environment, an actual archive
+download, replica contents and subsequent rollout/rollback. Nightly omits these
+test overrides. This keeps bootstrap independent of public download availability.
 
 Full replicas execute checksum-pinned pnpm against an offline local dependency.
 The wrapper records successful frozen installs, and the scenario imports the
@@ -244,7 +249,8 @@ process-tree checks. The cut case kills the captured managed ProxyCommand, and
 the offline case uses a fresh connection. The realistic variant retains fresh
 connections throughout; the product's three-second SSH timeout is unchanged.
 
-Long scenarios run first, with independent startup and shutdown work bounded
+Long scenarios run first, including agent/config/SSH cases that would otherwise
+leave an expensive final wave, with independent startup and shutdown work bounded
 separately. Each fixture records phase transitions and captured child PIDs.
 Tool preparation and native builds use kernel locks, so parallel invocations do
 not overwrite a Mutagen archive while another invocation is extracting it.

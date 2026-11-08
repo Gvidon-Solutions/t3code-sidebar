@@ -16,11 +16,28 @@ import { containerBoot } from "./boot.mjs";
 import { project, rpc, mcp, until, run, invariant } from "./helpers.mjs";
 export const rolloutScenarios = {
   "bootstrap-rollout": async (directory) => {
+    const realistic = process.env.MESH_FAST_REALISTIC === "1";
+    const mutagenArchive = realistic
+      ? undefined
+      : await NodeFSP.readFile(
+          NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "mutagen.tar.gz"),
+        );
+    let mutagenDownloads = 0;
     const releases = process.env.MESH_FAST_RUNTIMES;
     NodeAssert.ok(releases, "Native fixture releases must be prepared");
     const server = NodeHttp.createServer(async (request, response) => {
       if (request.headers.authorization) {
         response.writeHead(403).end();
+        return;
+      }
+      if (
+        mutagenArchive &&
+        request.method === "GET" &&
+        request.url ===
+          "/mutagen-io/mutagen/releases/download/v0.18.1/mutagen_linux_amd64_v0.18.1.tar.gz"
+      ) {
+        mutagenDownloads++;
+        response.writeHead(200, { "content-length": mutagenArchive.length }).end(mutagenArchive);
         return;
       }
       if (request.url === "/repos/fixture/releases/latest") {
@@ -151,6 +168,25 @@ export const rolloutScenarios = {
           (value) => value.trim() === "active",
         );
       });
+      const fixtureEnvironment = [
+        "GOMAXPROCS=2",
+        ...(!realistic
+          ? [
+              "NODE_ENV=test",
+              "T3_MESH_TIME_SCALE=" + studio.env.T3_MESH_TIME_SCALE,
+              `T3_MESH_TEST_ASSET_ORIGIN=http://127.0.0.1:${releasePort}`,
+            ]
+          : []),
+      ];
+      await run("docker", [
+        "exec",
+        fresh,
+        "sh",
+        "-ec",
+        'mkdir -p /etc/systemd/system/t3-mesh.service.d; printf "%s" "$1" > /etc/systemd/system/t3-mesh.service.d/fixture.conf',
+        "sh",
+        "[Service]\n" + fixtureEnvironment.map((value) => "Environment=" + value).join("\n") + "\n",
+      ]);
       for (const target of [studio.front, laptop.front, releasePort])
         await run("docker", [
           "exec",
@@ -270,6 +306,29 @@ export const rolloutScenarios = {
         await run("docker", ["exec", fresh, "cat", NodePath.join(placed.path, "README.md")]),
         p.title,
       );
+      if (!realistic) {
+        NodeAssert.ok(
+          mutagenDownloads > 0,
+          "Bootstrapped server must download the real pinned Mutagen archive from its private mirror",
+        );
+        const pid = await run("docker", [
+          "exec",
+          fresh,
+          "systemctl",
+          "show",
+          "--property=MainPID",
+          "--value",
+          "t3-mesh.service",
+        ]);
+        const environment = (
+          await run("docker", ["exec", fresh, "cat", `/proc/${pid}/environ`])
+        ).split("\0");
+        for (const value of fixtureEnvironment) NodeAssert.ok(environment.includes(value), value);
+        await NodeFSP.writeFile(
+          NodePath.join(directory, "bootstrap-fixture.json"),
+          JSON.stringify({ mutagenDownloads, environment: fixtureEnvironment }),
+        );
+      }
       await mcp(studio, "t3_mesh_update", { version: "0.1.6" });
       await until(
         "second machine rolled back",

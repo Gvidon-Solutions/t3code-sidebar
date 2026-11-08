@@ -119,6 +119,8 @@ bridges and published ports. Active and foreign resources remain intact. Host
 identity and recovery evidence accompany timings. Implementation and real
 subprocess/Docker proofs live in `scripts/mesh-fast/{lifecycle,recovery}.mjs`,
 `lifecycle.test.ts` and the `runner-reboot-recovery` scenario.
+Fresh bootstrap units use the private pinned Mutagen mirror and assert their
+test environment. Measured long scenarios start earlier to avoid a slow final wave.
 
 ### 2026-11-08 — A1 Android build caching and private APK delivery
 

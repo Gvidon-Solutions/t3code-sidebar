@@ -773,6 +773,10 @@ same local command gates either configured builder host, capped at eight meshes,
 eight server starts and two container starts; host identity is recorded in results.
 `runner-reboot-recovery` proves real Docker cleanup, port reuse and preservation of
 active/foreign resources. An unowned bridge attachment aborts reclamation.
+Allocate all peer routes before taking server startup permits: a three-node mesh
+must not wait for a peer queued behind its own permit budget. Fresh bootstrap's
+private systemd unit also needs test timings and the archive mirror; inheriting
+only the initiating server's environment leaves it dependent on public downloads.
 
 The realistic inventory lives in `scripts/mesh-e2e/bed-config.sh`; shell bed
 helpers use neutral roles and resolve physical destinations through that file.
