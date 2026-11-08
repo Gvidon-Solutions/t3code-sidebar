@@ -553,8 +553,8 @@ It starts the retained forwarding units instead of rewriting their configuration
 or provisioning SSH files. The old temporary X1 presets are unnecessary at runtime.
 It neither takes over an active lease nor sends success notifications.
 
-Results are in `~/.local/share/t3-mesh-nightly/results/<UTC>-<pid>/` on the
-worker: `summary.json`, `summary.md`, `suite.log`. Only failure invokes
+Results are in `~/.local/share/t3-mesh-nightly/results/` on the
+worker: `summary.json`, `summary.md`, `latest.log`. Only failure invokes
 `t3ctl inbox post attention ... --key mesh-nightly`.
 The worker sends the failure body over its private SSH connection to the controller,
 which posts to `MESH_E2E_INBOX_HOME` (the owner's T3 home by default), so the issue
