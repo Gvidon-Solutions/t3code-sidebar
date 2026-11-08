@@ -105,61 +105,81 @@ async function buildRuntimes(cache) {
   );
   const manifest = NodePath.join(source, "apps/server/package.json"),
     original = JSON.parse(await NodeFSP.readFile(manifest, "utf8"));
-  for (const version of ["0.1.5", "0.1.6"]) {
-    await NodeFSP.writeFile(manifest, JSON.stringify({ ...original, version }, null, 2));
-    await run(NodePath.join(repo, "node_modules/.bin/vp"), ["pack"], {
-      cwd: NodePath.join(source, "apps/server"),
-      env: { ...process.env, T3CODE_PACK_EXE: "1", T3CODE_MESH_TEST_BUILD: "1" },
-    });
-    const releases = NodePath.join(root, "v" + version);
-    await NodeFSP.mkdir(releases);
-    await run(
-      process.execPath,
-      [
-        NodePath.join(source, "scripts/build-cli-archive.ts"),
-        "--platform",
-        "linux",
-        "--arch",
-        "x64",
-        "--version",
-        version,
-        "--output-dir",
-        releases,
-        "--resource-monitor-dir",
-        monitor,
-      ],
-      {
-        cwd: source,
-        env: {
-          ...process.env,
-          GZIP: "-1",
-          PATH: NodePath.join(repo, "node_modules/.bin") + NodePath.delimiter + process.env.PATH,
+  const versions = ["0.1.5", "0.1.6"];
+  const builds = await Promise.allSettled(
+    versions.map(async (version) => {
+      const versionSource = NodePath.join(root, "source-" + version);
+      await NodeFSP.cp(source, versionSource, { recursive: true });
+      await NodeFSP.writeFile(
+        NodePath.join(versionSource, "apps/server/package.json"),
+        JSON.stringify({ ...original, version }, null, 2),
+      );
+      await run(NodePath.join(repo, "node_modules/.bin/vp"), ["pack"], {
+        cwd: NodePath.join(versionSource, "apps/server"),
+        env: { ...process.env, T3CODE_PACK_EXE: "1", T3CODE_MESH_TEST_BUILD: "1" },
+      });
+      const releases = NodePath.join(root, "v" + version);
+      await NodeFSP.mkdir(releases);
+      await run(
+        process.execPath,
+        [
+          NodePath.join(versionSource, "scripts/build-cli-archive.ts"),
+          "--platform",
+          "linux",
+          "--arch",
+          "x64",
+          "--version",
+          version,
+          "--output-dir",
+          releases,
+          "--resource-monitor-dir",
+          monitor,
+        ],
+        {
+          cwd: versionSource,
+          env: {
+            ...process.env,
+            GZIP: "-1",
+            PATH: NodePath.join(repo, "node_modules/.bin") + NodePath.delimiter + process.env.PATH,
+          },
         },
-      },
+      );
+      const filename = `t3-${version}-linux-x64.tar.gz`,
+        bytes = await NodeFSP.readFile(NodePath.join(releases, filename));
+      await NodeFSP.writeFile(
+        NodePath.join(releases, "SHA256SUMS"),
+        NodeCrypto.createHash("sha256").update(bytes).digest("hex") + "  " + filename + "\n",
+      );
+      const extracted = NodePath.join(root, version);
+      await NodeFSP.mkdir(extracted);
+      await run("tar", [
+        "-xzf",
+        NodePath.join(releases, filename),
+        "--strip-components=1",
+        "-C",
+        extracted,
+      ]);
+      await NodeFSP.writeFile(
+        NodePath.join(extracted, ".mesh-fast-fixture"),
+        "Test build; never publish\n",
+      );
+      if (version === "0.1.6")
+        await NodeFSP.copyFile(
+          NodePath.join(versionSource, "apps/server/dist-exe/bin.mjs"),
+          NodePath.join(root, "0.1.6/bin.mjs"),
+        );
+    }),
+  );
+  const failed = builds.filter((build) => build.status === "rejected");
+  if (failed.length)
+    throw new AggregateError(
+      failed.map((build) => build.reason),
+      "Native fixture builds failed",
     );
-    const filename = `t3-${version}-linux-x64.tar.gz`,
-      bytes = await NodeFSP.readFile(NodePath.join(releases, filename));
-    await NodeFSP.writeFile(
-      NodePath.join(releases, "SHA256SUMS"),
-      NodeCrypto.createHash("sha256").update(bytes).digest("hex") + "  " + filename + "\n",
-    );
-    const extracted = NodePath.join(root, version);
-    await NodeFSP.mkdir(extracted);
-    await run("tar", [
-      "-xzf",
-      NodePath.join(releases, filename),
-      "--strip-components=1",
-      "-C",
-      extracted,
-    ]);
-    await NodeFSP.writeFile(
-      NodePath.join(extracted, ".mesh-fast-fixture"),
-      "Test build; never publish\n",
-    );
-  }
-  await NodeFSP.copyFile(
-    NodePath.join(source, "apps/server/dist-exe/bin.mjs"),
-    NodePath.join(root, "0.1.6/bin.mjs"),
+  await Promise.all(
+    [source, ...versions.map((version) => NodePath.join(root, "source-" + version))].map(
+      (directory) => NodeFSP.rm(directory, { recursive: true }),
+    ),
   );
   await run(process.execPath, [NodePath.join(root, "0.1.6/bin.mjs"), "--help"], {
     env: { ...process.env, NODE_COMPILE_CACHE: NodePath.join(root, "compile-cache") },

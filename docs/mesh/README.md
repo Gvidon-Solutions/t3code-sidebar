@@ -837,3 +837,7 @@ release URL. This keeps parallel cold installs independent of GitHub throughput.
 Daemon crash evidence reads the captured process's own `fdinfo` lock record for
 its exact private lock path, then kills that PID during real staging. A global
 `/proc/locks` scan can race unrelated lock churn and is unnecessary for ownership.
+
+Native rollout fixtures build their two versions concurrently in independent
+source snapshots, then discard those snapshots after extracting self-contained
+archives. Source-dependent preparation stays inside the five-minute wall budget.
