@@ -33,6 +33,9 @@ StrictModes yes
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 UsePAM no
+UseDNS no
+PermitUserRC no
+PermitUserEnvironment no
 AllowTcpForwarding no
 PermitTTY no
 X11Forwarding no
@@ -51,6 +54,7 @@ WantedBy=default.target
 EOF_UNIT
 systemctl --user daemon-reload
 systemctl --user enable --now mesh-nightly-controller.service
+systemctl --user restart mesh-nightly-controller.service
 worker_ssh "test \"\$(hostname -s)\" = '$BED_NIGHTLY_HOST'; mkdir -p '$BED_NIGHTLY_ROOT'; chmod 700 '$BED_NIGHTLY_ROOT'"
 worker_scp "$private/client" "$private/host.pub" "$MESH_DIR/nightly.mjs" "$WORKER_HOST:$BED_NIGHTLY_ROOT/"
 local_user=$(id -un)

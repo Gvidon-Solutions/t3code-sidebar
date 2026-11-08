@@ -133,6 +133,7 @@ async function buildRuntimes(cache) {
         cwd: source,
         env: {
           ...process.env,
+          GZIP: "-1",
           PATH: NodePath.join(repo, "node_modules/.bin") + NodePath.delimiter + process.env.PATH,
         },
       },

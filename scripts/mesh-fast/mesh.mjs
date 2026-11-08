@@ -646,7 +646,7 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
     await settle(
       this.nodes
         .filter((node) => node.container)
-        .map((node) => run("docker", ["stop", "--time", "3", node.container])),
+        .map((node) => run("docker", ["stop", "--time", "1", node.container])),
     );
     for (const { child } of this.children) if (child.exitCode === null) child.kill("SIGTERM");
     const timer = setTimeout(() => {

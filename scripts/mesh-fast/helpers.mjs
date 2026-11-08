@@ -161,18 +161,21 @@ export async function invariant(mesh) {
         ),
       ).size === 1,
   );
-  for (const node of mesh.nodes) {
-    const state = await rpc(node, "meshLayout.get");
-    for (const reps of Object.values(state.config.projectMounts))
-      NodeAssert.equal(new Set(reps.map((rep) => rep.environmentId)).size, reps.length);
-    if (node.containerOwnedRoot) continue;
-    try {
-      await NodeFSP.stat(NodePath.join(node.base, "bin/mutagen"));
-    } catch (error) {
-      if (error.code === "ENOENT") continue;
-      throw error;
-    }
-    const sessions = JSON.parse(await mutagen(node, "sync", "list", "--template", "{{json .}}"));
-    NodeAssert.equal(new Set(sessions.map((session) => session.name)).size, sessions.length);
-  }
+  await Promise.all(
+    mesh.nodes.map(async (node) => {
+      const state = await rpc(node, "meshLayout.get");
+      for (const reps of Object.values(state.config.projectMounts))
+        NodeAssert.equal(new Set(reps.map((rep) => rep.environmentId)).size, reps.length);
+      if (node.containerOwnedRoot) return;
+      try {
+        const sessions = await NodeFSP.readdir(NodePath.join(node.base, "mutagen/sessions"));
+        if (!sessions.length) return;
+      } catch (error) {
+        if (error.code === "ENOENT") return;
+        throw error;
+      }
+      const sessions = JSON.parse(await mutagen(node, "sync", "list", "--template", "{{json .}}"));
+      NodeAssert.equal(new Set(sessions.map((session) => session.name)).size, sessions.length);
+    }),
+  );
 }

@@ -1,5 +1,6 @@
 import * as NodePath from "node:path";
 import * as NodeAssert from "node:assert/strict";
+import * as NodeFSP from "node:fs/promises";
 import { fixture, project, place, run, mcp } from "./helpers.mjs";
 import { providers, completed } from "./threads.mjs";
 const cli = new URL("../../agent-kit/skills/t3/scripts/t3ctl.mjs", import.meta.url).pathname;
@@ -18,8 +19,12 @@ export const cliScenarios = {
         runtimeMode: "full-access",
       });
       await completed(studio, thread.threadId);
-      const ctl = (...args) =>
-        run(process.execPath, [cli, ...args], {
+      const ctl = async (...args) => {
+        await NodeFSP.appendFile(
+          NodePath.join(directory, "cli-commands.log"),
+          JSON.stringify(args) + "\n",
+        );
+        const result = await run(process.execPath, [cli, ...args], {
           env: {
             ...laptop.env,
             T3CODE_HOME: laptop.base,
@@ -28,6 +33,9 @@ export const cliScenarios = {
             T3CTL_ISOLATED_TEST: "1",
           },
         });
+        await NodeFSP.appendFile(NodePath.join(directory, "cli-commands.log"), "PASS\n");
+        return result;
+      };
       NodeAssert.match(
         await ctl("cat", NodePath.join(p.root, "README.md"), "--on", studio.id),
         /cli-project/,

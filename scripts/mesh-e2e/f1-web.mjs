@@ -169,6 +169,7 @@ try {
     await page.getByRole("option", { name: values["empty-machine"], exact: true }).click();
     await dialog
       .getByText("No models are available on " + values["empty-machine"] + ".", { exact: true })
+      .first()
       .waitFor();
     NodeAssert.equal(
       await dialog

@@ -21,7 +21,7 @@ for (const key of Object.keys(process.env))
     delete process.env[key];
 const args = process.argv.slice(2);
 let repeat = 1,
-  jobs = Math.min(16, Math.max(1, Math.floor(NodeOS.availableParallelism() / 2))),
+  jobs = Math.min(16, Math.max(1, Math.floor(NodeOS.availableParallelism() / 4))),
   filter,
   budgetSeconds = process.env.MESH_FAST_REALISTIC === "1" ? 10800 : 300;
 while (args.length) {

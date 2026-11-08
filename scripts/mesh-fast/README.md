@@ -45,7 +45,7 @@ iteration; failures are never retried. Every case reports PASS/FAIL and duration
 The final line reports total wall time, with a default 300-second ceiling. A
 watchdog shuts down owned fixtures and fails the command when the ceiling is
 exceeded. `--budget-seconds` explicitly changes that ceiling for smaller hosts:
-the independent hosted CI job uses two meshes and 1800 seconds; performance
+the independent hosted CI job uses two meshes and 2700 seconds; performance
 acceptance on the 32-core host keeps the default 300 seconds. Existing build jobs
 have no dependency on this job.
 
