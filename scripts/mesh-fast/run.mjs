@@ -69,6 +69,8 @@ if (!selected.length) throw Error(`No scenarios match ${filter}`);
 const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-fast-"));
 await NodeFSP.writeFile(NodePath.join(root, "runner.json"), JSON.stringify({ pid: process.pid }));
 console.log(`Artifacts: ${root}`);
+if (process.env.GITHUB_OUTPUT)
+  await NodeFSP.appendFile(process.env.GITHUB_OUTPUT, `artifacts=${root}\n`);
 const started = performance.now(),
   results = [];
 const elapsed = () => (performance.now() - started) / 1000;

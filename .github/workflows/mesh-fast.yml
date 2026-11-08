@@ -29,14 +29,19 @@ jobs:
             native/resource-monitor/target
           key: mesh-fast-tools-v2-${{ runner.os }}-${{ hashFiles('native/resource-monitor/Cargo.lock', 'scripts/mesh-fast/previous.mjs') }}
       - run: scripts/mesh-fast/setup.sh
-      - run: pnpm mesh:fast --jobs 2 --budget-seconds 2700
+      - id: mesh
+        run: pnpm mesh:fast --jobs 2 --budget-seconds 2700
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && steps.mesh.outputs.artifacts != '' }}
         with:
           name: mesh-fast-results
           path: |
-            /tmp/mesh-fast-*/summary.json
-            /tmp/mesh-fast-*/junit.xml
-            /tmp/mesh-fast-*/**/*.log
-            /tmp/mesh-fast-*/**/failure.txt
-            /tmp/mesh-fast-*/**/shots/*
+            ${{ steps.mesh.outputs.artifacts }}/summary.json
+            ${{ steps.mesh.outputs.artifacts }}/junit.xml
+            ${{ steps.mesh.outputs.artifacts }}/failure.txt
+            ${{ steps.mesh.outputs.artifacts }}/*/failure.txt
+            ${{ steps.mesh.outputs.artifacts }}/*/*.log
+            ${{ steps.mesh.outputs.artifacts }}/*/*/*.log
+            ${{ steps.mesh.outputs.artifacts }}/*/phases.jsonl
+            ${{ steps.mesh.outputs.artifacts }}/*/children.jsonl
+            ${{ steps.mesh.outputs.artifacts }}/*/artifacts/shots/*
