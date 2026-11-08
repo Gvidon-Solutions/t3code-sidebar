@@ -73,3 +73,9 @@ Failures post one deduplicated attention issue using
 `t3ctl inbox post attention … --key mesh-nightly`; notification errors fail the job.
 
 Physical configuration and per-host operational evidence stay private.
+
+For an existing bed, local.env also owns NODE_A_LOCAL, both runtime roots and
+NODE_A_TUNNEL_UNIT/NODE_B_TUNNEL_UNIT. These overrides preserve already-provisioned
+forwarding instead of selecting nonexistent default units. Keep the private
+inventory in persistent storage; local.env may link to it. After merging, run the
+installer from the permanent checkout before removing the stage worktree.

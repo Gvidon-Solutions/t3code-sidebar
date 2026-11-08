@@ -18,7 +18,7 @@ it("routes bed roles through the configured inventory and pins both SSH destinat
       "bash",
       [
         "-c",
-        'source "$1"; printf "%s\\n" "${BED_MACHINES[@]}"; worker_ssh probe; cloudbox_ssh probe',
+        'source "$1"; printf "%s\\n" "${BED_MACHINES[@]}"; worker_ssh probe; cloudbox_ssh probe; printf "%s\\n" "$NODE_A_LOCAL" "$NODE_A_RUNTIME_ROOT" "$NODE_B_RUNTIME_ROOT" "$NODE_A_TUNNEL_UNIT" "$NODE_B_TUNNEL_UNIT"',
         "bed-config",
         NodePath.join(root, "lib.sh"),
       ],
@@ -27,6 +27,11 @@ it("routes bed roles through the configured inventory and pins both SSH destinat
           ...process.env,
           PATH: root + NodePath.delimiter + process.env.PATH,
           NODE_B_HOST: "studio.test",
+          NODE_A_LOCAL: "13995",
+          NODE_A_RUNTIME_ROOT: "/private/controller-runtime",
+          NODE_B_RUNTIME_ROOT: "/private/worker-runtime",
+          NODE_A_TUNNEL_UNIT: "t3-mesh-e2e-studio-forward.service",
+          NODE_B_TUNNEL_UNIT: "t3-mesh-e2e-worker-forward.service",
           CLOUD_KNOWN_HOSTS: "/private/known-hosts",
           CLOUD_SSH_USER: "bed",
           NODE_A_PUBLIC_IP: "192.0.2.1",
@@ -45,6 +50,11 @@ it("routes bed roles through the configured inventory and pins both SSH destinat
     );
     expect(stdout.split("\n").slice(0, 3)).toEqual(["studio", "worker", "cloudbox"]);
     for (const value of [
+      "13995",
+      "/private/controller-runtime",
+      "/private/worker-runtime",
+      "t3-mesh-e2e-studio-forward.service",
+      "t3-mesh-e2e-worker-forward.service",
       "studio.test",
       "cloudbox.test",
       "/private/worker-config",
