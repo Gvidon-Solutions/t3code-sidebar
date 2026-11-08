@@ -3,7 +3,7 @@ import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import * as NodeCrypto from "node:crypto";
 import { run } from "./client.mjs";
-export async function prepare() {
+async function prepareLocked() {
   const root =
     process.env.MESH_FAST_MUTAGEN_CACHE ?? NodePath.join(NodeOS.tmpdir(), "mesh-fast-tools-0.18.1");
   await NodeFSP.mkdir(root, { recursive: true });
@@ -26,20 +26,28 @@ export async function prepare() {
     "7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f"
   )
     throw Error("Mutagen fixture checksum mismatch");
-  await NodeFSP.writeFile(archive, bytes);
-  await run("tar", ["-xzf", archive, "-C", root]);
   try {
-    await run("docker", ["image", "inspect", "mesh-fast-node:26"]);
-  } catch {
-    await run("docker", [
-      "build",
-      "-t",
-      "mesh-fast-node:26",
-      "-f",
-      new URL("Dockerfile", import.meta.url).pathname,
-      new URL(".", import.meta.url).pathname,
-    ]);
+    await NodeFSP.stat(archive);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    await NodeFSP.writeFile(archive, bytes);
   }
+  const ready = NodePath.join(root, "tools-ready");
+  try {
+    await NodeFSP.stat(ready);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    await run("tar", ["-xzf", archive, "-C", root]);
+    await NodeFSP.writeFile(ready, "0.18.1\n");
+  }
+  await run("docker", [
+    "build",
+    "-t",
+    "mesh-fast-node:26",
+    "-f",
+    new URL("Dockerfile", import.meta.url).pathname,
+    new URL(".", import.meta.url).pathname,
+  ]);
   const agent = NodePath.join(root, "mutagen-agent-linux-amd64");
   try {
     await NodeFSP.stat(agent);
@@ -57,3 +65,20 @@ export async function prepare() {
   }
   return root;
 }
+
+export async function prepare() {
+  const root =
+    process.env.MESH_FAST_MUTAGEN_CACHE ?? NodePath.join(NodeOS.tmpdir(), "mesh-fast-tools-0.18.1");
+  await NodeFSP.mkdir(root, { recursive: true });
+  return run(
+    "flock",
+    [
+      NodePath.join(root, "prepare.lock"),
+      process.execPath,
+      new URL(import.meta.url).pathname,
+      "--prepare",
+    ],
+    { env: { ...process.env, MESH_FAST_MUTAGEN_CACHE: root } },
+  );
+}
+if (import.meta.main && process.argv[2] === "--prepare") console.log(await prepareLocked());

@@ -61,7 +61,7 @@ export const networkScenarios = Object.fromEntries(
                 ),
             );
             await new Promise((resolve) =>
-              setTimeout(resolve, 600_000 * (process.env.MESH_FAST_REALISTIC === "1" ? 1 : 0.1)),
+              setTimeout(resolve, 600_000 * (process.env.MESH_FAST_REALISTIC === "1" ? 1 : 0.075)),
             );
           } finally {
             await mesh.signal(studio, "SIGCONT");
@@ -129,8 +129,8 @@ export const networkScenarios = Object.fromEntries(
             () => metrics(hub),
             (value) =>
               mode === "drop-idle"
-                ? value.idleDrops > before.idleDrops
-                : value.resets > before.resets,
+                ? value.peerIdleDrops > before.peerIdleDrops
+                : value.peerResets > before.peerResets,
           );
           await mesh.fault(hub, { denyMcp: true, peerOnlyMcp: true });
         }

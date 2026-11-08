@@ -6,7 +6,7 @@ on:
 jobs:
   mesh-fast:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     env:
       MESH_FAST_MUTAGEN_CACHE: /tmp/mesh-fast-tools-0.18.1
     steps:
@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: "26.12.1"
           cache: pnpm
+      - run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
       - run: sudo apt-get update && sudo apt-get install -y openssh-server patchelf && sudo mkdir -p /run/sshd
       - run: pnpm install --frozen-lockfile
       - uses: actions/cache@v4
@@ -27,9 +28,8 @@ jobs:
             /tmp/mesh-fast-tools-0.18.1/toolchain
             native/resource-monitor/target
           key: mesh-fast-tools-v2-${{ runner.os }}-${{ hashFiles('native/resource-monitor/Cargo.lock', 'scripts/mesh-fast/previous.mjs') }}
-      - run: pnpm --dir scripts exec playwright-core install-deps chromium
       - run: scripts/mesh-fast/setup.sh
-      - run: pnpm mesh:fast --jobs 2 --budget-seconds 1800
+      - run: pnpm mesh:fast --jobs 2 --budget-seconds 2700
       - uses: actions/upload-artifact@v4
         if: always()
         with:

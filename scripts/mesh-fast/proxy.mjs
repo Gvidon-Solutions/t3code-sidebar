@@ -8,6 +8,7 @@ const [listen, backend, stateFile, host = "127.0.0.1", backendHost = "127.0.0.1"
 if (!listen || !backend || !stateFile)
   throw new Error("Usage: network-proxy.mjs LISTEN_PORT BACKEND_PORT STATE_FILE");
 const sockets = new Set();
+const peerSockets = new Set();
 const held = new Set();
 const messageServer = new WebSocketServer({ noServer: true });
 let commitDropped = false;
@@ -18,6 +19,8 @@ const counts = {
   bytes: 0,
   pipeBytes: 0,
   idleDrops: 0,
+  peerIdleDrops: 0,
+  peerResets: 0,
   mcp: 0,
   refusedMcp: 0,
   peerMcp: 0,
@@ -35,6 +38,7 @@ function refresh() {
   if (state.cut || state.reset)
     for (const socket of sockets) {
       counts.resets++;
+      if (peerSockets.has(socket)) counts.peerResets++;
       socket.resetAndDestroy();
     }
   if (!state.pauseAfterBytes && !state.pausePipeAfterBytes)
@@ -45,6 +49,7 @@ function refresh() {
   for (const socket of sockets)
     socket.setTimeout(state.idleMs ?? 0, () => {
       counts.idleDrops++;
+      if (peerSockets.has(socket)) counts.peerIdleDrops++;
       socket.destroy();
     });
 }
@@ -124,6 +129,7 @@ server.on("upgrade", (request, socket, head) => {
       const commits = new Set();
       counts.upgrades++;
       sockets.add(socket);
+      peerSockets.add(socket);
       const send = (to, bytes, binary, frame) => {
         const deliver = () => {
           if (to.readyState === WebSocket.OPEN) to.send(bytes, { binary });
@@ -167,6 +173,7 @@ server.on("upgrade", (request, socket, head) => {
       });
       incoming.on("close", () => {
         sockets.delete(socket);
+        peerSockets.delete(socket);
         remote.terminate();
       });
       remote.on("close", () => incoming.terminate());
@@ -191,6 +198,10 @@ server.on("upgrade", (request, socket, head) => {
     counts.upgrades++;
     sockets.add(socket);
     sockets.add(remote);
+    if (request.url?.split("?")[0] === "/peer") {
+      peerSockets.add(socket);
+      peerSockets.add(remote);
+    }
     const headers = [];
     for (let i = 0; i < response.rawHeaders.length; i += 2)
       headers.push(`${response.rawHeaders[i]}: ${response.rawHeaders[i + 1]}`);
@@ -201,10 +212,12 @@ server.on("upgrade", (request, socket, head) => {
     if (remoteHead.length) socket.write(remoteHead);
     socket.on("close", () => {
       sockets.delete(socket);
+      peerSockets.delete(socket);
       remote.destroy();
     });
     remote.on("close", () => {
       sockets.delete(remote);
+      peerSockets.delete(remote);
       socket.destroy();
     });
     socket.on("error", (error) => remote.destroy(error));

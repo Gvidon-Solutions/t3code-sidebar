@@ -6,12 +6,22 @@ import { run } from "./client.mjs";
 export { rpc, mcp, until, run };
 export async function fixture(directory, work, options = {}) {
   const mesh = Object.assign(new MiniMesh(directory), options);
+  const mark = (phase) =>
+    NodeFSP.appendFile(
+      NodePath.join(directory, "phases.jsonl"),
+      JSON.stringify({ phase, at: new Date().toISOString() }) + "\n",
+    );
   try {
+    await mark("booting");
     await mesh.start();
+    await mark("ready");
     await work(mesh);
+    await mark("asserted");
     await invariant(mesh);
+    await mark("converged");
   } finally {
     await mesh.close();
+    await mark("closed");
   }
 }
 export async function config(mesh, update) {

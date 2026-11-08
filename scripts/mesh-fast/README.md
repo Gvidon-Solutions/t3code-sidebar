@@ -59,7 +59,7 @@ private Mutagen daemon. SIGINT/SIGTERM also trigger cleanup.
 ## Timing and providers
 
 `T3_MESH_TIME_SCALE` is the only server timing knob. `(0,1]` is accepted in source
-execution; unset or `1` preserves defaults. The runner uses `0.1`. It scales
+execution; unset or `1` preserves defaults. The runner uses `0.075`. It scales
 heartbeat/dead detection, reconnect backoff, exchange/retry/debounce, config,
 bootstrap and replica reconciliation, rollout health windows, pending fork leases
 and commit retry, and tombstone age. The five-minute clock guard remains real;
@@ -159,3 +159,24 @@ first installation. During crash cases the proxy forwards peer control traffic
 and holds only pipe data after 512 KiB, so the real Mutagen staging state remains
 observable until the captured server or daemon is killed. Releasing the latch
 allows recovery; no transfer or state transition is mocked.
+
+The runner keeps typed RPC connections per origin and credential, cancels snapshot
+streams after their first value, and reconnects after a fixture restart. It never
+replays a failed mutation. Native Codex and Claude defaults are disabled in fresh
+fixture settings so ambient CLI discovery is outside the fast suite.
+
+Chromium runs in the studio container, with browser artifacts bind-mounted into
+its own fixture directory. This prevents other fixtures' bridge changes from
+resetting browser requests. Private sshd explicitly disables account rc files,
+account environment files and reverse DNS; `replica-ssh` checks sshd's effective
+configuration as well as real managed SSH transfers.
+
+Fast R1 reuses scoped, real OpenSSH control connections for its command and
+process-tree checks. The cut case kills the captured managed ProxyCommand, and
+the offline case uses a fresh connection. The realistic variant retains fresh
+connections throughout; the product's three-second SSH timeout is unchanged.
+
+Long scenarios run first, with independent startup and shutdown work bounded
+separately. Each fixture records phase transitions and captured child PIDs.
+Tool preparation and native builds use kernel locks, so parallel invocations do
+not overwrite a Mutagen archive while another invocation is extracting it.

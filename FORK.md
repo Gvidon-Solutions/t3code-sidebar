@@ -1729,22 +1729,16 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **Where.** PeerLinks/PeerMcpClient and connection transport, persistence migrations/tests,
   mesh services, replica installer, MCP tool dependencies, mobile model catalog and client tests.
 
-### 2026-11-07 — T1 isolated acceptance foundation
+### 2026-11-08 — T1 fast mesh acceptance and realistic nightly suite
 
-- **What.** Adds independently runnable layout partition, config/clock and real
-  managed-SSH/Mutagen replica scenarios with JUnit, logs and repeat controls.
-  This is a subset of the full T1 acceptance matrix; its README states the boundary.
-- **How.** Fresh source processes, private homes/sshd/state, incoming-only peer
-  proxy, and a source-only timer multiplier compiled out of production bundles.
-  Product tests use neutral machine fixtures; branding assertions use identity constants.
-- **Where.** `scripts/mesh-fast/`, `mesh/MeshTiming.ts`, mesh timer consumers,
-  server pack config and the independent `mesh-fast.yml` CI workflow.
-
-- **T1 — isolated fast mesh acceptance and realistic nightly scheduling.** Added
-  source-only timer scaling with a production build guard, private mini-meshes,
-  real SSH/Mutagen/network/crash/run/bootstrap/rollout/browser cases, deterministic
-  provider turns, JUnit and failure artifacts. Added the independent mesh CI job,
-  one realistic-bed inventory, and a failure-only nightly summary/inbox runner
-  with a systemd user timer installer. Implementation and old→new coverage map:
-  `scripts/mesh-fast/README.md`; timing: `apps/server/src/mesh/MeshTiming.ts`;
-  scheduling: `scripts/mesh-e2e/{acceptance,install-nightly}.sh`.
+- **What.** Ports the bed rounds and CONCEPT §12 into isolated fault, replica,
+  crash, run, fork, configuration, bootstrap, rollout and browser scenarios.
+  One command reports each result, wall time and JUnit, retaining failure evidence.
+- **How.** Private homes, sshd, Mutagen daemons, bridges and fault proxies; a
+  production-guarded timer multiplier; deterministic ACP profiles for fast turns.
+  Real provider turns remain nightly. A single bed inventory feeds the realistic
+  wrapper, with a worker user timer and failure-only summary/inbox reporting.
+  Product tests use neutral machine fixtures and shared branding constants.
+- **Where.** Coverage and operation: `scripts/mesh-fast/README.md`; timers:
+  `apps/server/src/mesh/MeshTiming.ts`; nightly:
+  `scripts/mesh-e2e/{acceptance,install-nightly}.sh`; CI: `mesh-fast.yml`.

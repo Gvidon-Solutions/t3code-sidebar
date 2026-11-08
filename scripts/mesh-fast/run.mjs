@@ -21,7 +21,7 @@ for (const key of Object.keys(process.env))
     delete process.env[key];
 const args = process.argv.slice(2);
 let repeat = 1,
-  jobs = Math.min(16, Math.max(1, Math.floor(NodeOS.availableParallelism() / 3))),
+  jobs = Math.min(16, Math.max(1, Math.floor(NodeOS.availableParallelism() / 2))),
   filter,
   budgetSeconds = process.env.MESH_FAST_REALISTIC === "1" ? 10800 : 300;
 while (args.length) {
@@ -35,14 +35,28 @@ while (args.length) {
 if (![repeat, jobs, budgetSeconds].every((n) => Number.isInteger(n) && n > 0))
   throw Error("repeat/jobs/budget-seconds must be positive integers");
 const priority = [
-  "bootstrap-rollout",
-  "f1-pending-expiry",
-  "network-sleep",
   "run-concept",
+  "bootstrap-rollout",
+  "cli-routing",
+  "replica-policies",
+  "replica-conflicts",
+  "replica-foreign-adoption",
+  "f1-web-journey",
   "crash-restart-orders",
-  "fork-matrix",
   "network-mid-pipe",
+  "network-sleep",
+  "f1-pending-expiry",
+  "fork-matrix",
   "crash-mutagen",
+  "f1-replica-content",
+  "c2-concurrent-forward",
+  "c2-concurrent-reverse",
+  "crash-studio-mount",
+  "crash-cloudbox-mount",
+  "crash-laptop-mount",
+  "crash-studio-sync",
+  "crash-cloudbox-sync",
+  "crash-laptop-sync",
 ];
 const selected = Object.entries(scenarios)
   .sort(([a], [b]) => {

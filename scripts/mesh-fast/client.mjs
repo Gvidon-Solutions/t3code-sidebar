@@ -44,43 +44,100 @@ const until = async (description, read, accepts, timeout = 120000) => {
   throw Error(`${description}: ${JSON.stringify(value).slice(-3000)}`);
 };
 
-const rpc = async (node, tag, payload = {}) => {
-  const response = await fetch(`${node.origin}/api/auth/websocket-ticket`, {
+async function connectRpc(node, key) {
+  const response = await fetch(node.origin + "/api/auth/websocket-ticket", {
     method: "POST",
     signal: AbortSignal.timeout(120000),
-    headers: { authorization: `Bearer ${node.token}` },
+    headers: { authorization: "Bearer " + node.token },
   });
-  if (!response.ok) throw Error(`Ticket ${node.name}: ${response.status}`);
+  if (!response.ok) throw Error("Ticket " + node.name + ": " + response.status);
   const { ticket } = await response.json();
   const ws = new WebSocket(
-    `${node.origin.replace("http:", "ws:")}/ws?wsTicket=${encodeURIComponent(ticket)}&orchestrationProtocol=2&clientSurface=cli`,
+    node.origin.replace("http:", "ws:") +
+      "/ws?wsTicket=" +
+      encodeURIComponent(ticket) +
+      "&orchestrationProtocol=2&clientSurface=cli",
   );
   await NodeEvents.once(ws, "open");
-  try {
-    return await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(Error(`RPC ${tag} deadline`)), 30000);
-      ws.onmessage = (event) => {
-        for (const line of String(event.data).split("\n")) {
-          if (!line) continue;
-          const message = JSON.parse(line);
-          if (message._tag === "Ping") ws.send(JSON.stringify({ _tag: "Pong" }));
-          if (message._tag === "Chunk" && message.requestId === "B1" && message.values.length) {
-            clearTimeout(timer);
-            ws.send(JSON.stringify({ _tag: "Interrupt", requestId: "B1" }));
-            resolve(message.values[0]);
-          }
-          if (message._tag === "Exit" && message.requestId === "B1") {
-            clearTimeout(timer);
-            if (message.exit._tag === "Success") resolve(message.exit.value);
-            else reject(Error(JSON.stringify(message.exit.cause)));
-          }
-        }
-      };
-      ws.send(JSON.stringify({ _tag: "Request", id: "B1", tag, payload, headers: [] }));
-    });
-  } finally {
-    ws.close();
+  const pending = new Map();
+  let sequence = 0;
+  const connection = { key, ws, call };
+  function fail(error) {
+    for (const request of pending.values()) {
+      clearTimeout(request.timer);
+      request.reject(error);
+    }
+    pending.clear();
+    if (node.rpcConnection === connection) delete node.rpcConnection;
   }
+  ws.onclose = (event) => fail(Error("RPC connection closed: " + event.code));
+  ws.onerror = () => fail(Error("RPC connection failed"));
+  ws.onmessage = (event) => {
+    try {
+      for (const line of String(event.data).split("\n")) {
+        if (!line) continue;
+        const message = JSON.parse(line);
+        if (message._tag === "Ping") ws.send(JSON.stringify({ _tag: "Pong" }));
+        const request = pending.get(message.requestId);
+        if (!request) continue;
+        if (message._tag === "Chunk" && message.values.length) {
+          pending.delete(message.requestId);
+          clearTimeout(request.timer);
+          ws.send(JSON.stringify({ _tag: "Interrupt", requestId: message.requestId }));
+          request.resolve(message.values[0]);
+        } else if (message._tag === "Exit") {
+          pending.delete(message.requestId);
+          clearTimeout(request.timer);
+          if (message.exit._tag === "Success") request.resolve(message.exit.value);
+          else request.reject(Error(JSON.stringify(message.exit.cause)));
+        }
+      }
+    } catch (error) {
+      fail(error);
+      ws.close();
+    }
+  };
+  function call(tag, payload) {
+    return new Promise((resolve, reject) => {
+      const id = "fast-" + ++sequence;
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(Error("RPC " + tag + " deadline"));
+      }, 30000);
+      pending.set(id, { resolve, reject, timer });
+      try {
+        ws.send(JSON.stringify({ _tag: "Request", id, tag, payload, headers: [] }));
+      } catch (error) {
+        clearTimeout(timer);
+        pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+  node.rpcConnection = connection;
+  return connection;
+}
+const rpc = async (node, tag, payload = {}) => {
+  const key = node.origin + "\0" + node.token;
+  let connection = node.rpcConnection;
+  if (connection?.key !== key || connection.ws.readyState !== WebSocket.OPEN) {
+    if (node.rpcConnecting?.key !== key) {
+      const connecting = { key, promise: connectRpc(node, key) };
+      node.rpcConnecting = connecting;
+      connecting.promise = connecting.promise.then(
+        (value) => {
+          if (node.rpcConnecting === connecting) delete node.rpcConnecting;
+          return value;
+        },
+        (error) => {
+          if (node.rpcConnecting === connecting) delete node.rpcConnecting;
+          throw error;
+        },
+      );
+    }
+    connection = await node.rpcConnecting.promise;
+  }
+  return connection.call(tag, payload);
 };
 const mcp = async (node, name, args = {}) => {
   if (!node.mcpToken) {

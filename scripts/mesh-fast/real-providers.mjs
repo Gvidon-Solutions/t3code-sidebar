@@ -27,7 +27,7 @@ export async function realProviders(mesh) {
     );
     for (const relative of [".codex/auth.json", ".local/share/opencode/auth.json"])
       await NodeFSP.chmod(NodePath.join(node.home, relative), 0o600);
-    const profiles = {};
+    const profiles = { ...node.inactiveProviders };
     for (const driver of ["codex", "opencode"]) {
       const source = process.env["R1_" + driver.toUpperCase() + "_BINARY"];
       NodeAssert.ok(source, "R1_" + driver.toUpperCase() + "_BINARY is required");

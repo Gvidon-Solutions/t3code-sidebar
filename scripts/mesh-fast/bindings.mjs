@@ -2,20 +2,22 @@ import * as NodeAssert from "node:assert/strict";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
-import { fixture, rpc, until, run, config } from "./helpers.mjs";
+import { fixture, rpc, until, run } from "./helpers.mjs";
 const canonical = (value) =>
   JSON.stringify(value, (_key, v) =>
     v && typeof v === "object" && !Array.isArray(v)
       ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
       : v,
   );
-async function identical(mesh) {
+async function identical(mesh, accepts = () => true) {
   return until(
     "sameBindings and sameConfig",
     () => Promise.all(mesh.nodes.map((node) => rpc(node, "meshConfig.get"))),
     (values) =>
       new Set(values.map((v) => canonical({ bindings: v.bindings, current: v.current }))).size ===
-        1 && Object.keys(values[0].bindings).length === 3,
+        1 &&
+      Object.keys(values[0].bindings).length === 3 &&
+      accepts(values[0]),
   );
 }
 async function collisions(directory, reverseJoins) {
@@ -33,12 +35,17 @@ async function collisions(directory, reverseJoins) {
         NodeAssert.equal(
           await run(
             "ssh",
-            ["-F", NodePath.join(hub.home, ".ssh/config"), "t3-" + slug, "hostname"],
+            [
+              "-F",
+              NodePath.join(hub.home, ".ssh/config"),
+              "t3-" + slug,
+              `printf '%s\n%s' "$(hostname)" "$HOME"`,
+            ],
             {
               env: hub.env,
             },
           ),
-          "studio",
+          "studio\n" + mesh.nodes.find((node) => node.id === bindings[slug]).home,
         );
       const revision = values[0].current.revision;
       const missing = Object.keys(bindings).find((key) => bindings[key] === laptop.id);
@@ -64,12 +71,13 @@ async function collisions(directory, reverseJoins) {
       );
       const old = Object.keys(bindings).find((key) => bindings[key] === studio.id);
       const destination = values[0].current.doc.machines[old].ssh;
-      await config(mesh, (doc) => {
+      const doc = structuredClone(values[0].current.doc);
+      {
         doc.machines.renamed = doc.machines[old];
         delete doc.machines[old];
-        return doc;
-      });
-      values = await identical(mesh);
+      }
+      await rpc(hub, "meshConfig.apply", { baseRevision: values[0].current.revision, doc });
+      values = await identical(mesh, (value) => value.bindings.renamed === studio.id);
       NodeAssert.equal(values[0].bindings.renamed, studio.id);
       NodeAssert.notEqual(values[0].bindings[old], studio.id);
       NodeAssert.deepEqual(values[0].current.doc.machines.renamed.ssh, destination);
@@ -81,10 +89,17 @@ async function collisions(directory, reverseJoins) {
           text.split("Host t3-renamed\n")[1].split("\nHost ")[0].includes(studio.id),
       );
       NodeAssert.equal(
-        await run("ssh", ["-F", NodePath.join(hub.home, ".ssh/config"), "t3-renamed", "hostname"], {
-          env: hub.env,
-        }),
-        "studio",
+        await run(
+          "ssh",
+          [
+            "-F",
+            NodePath.join(hub.home, ".ssh/config"),
+            "t3-renamed",
+            `printf '%s\n%s' "$(hostname)" "$HOME"`,
+          ],
+          { env: hub.env },
+        ),
+        "studio\n" + studio.home,
       );
       await NodeFSP.writeFile(
         NodePath.join(directory, "bindings.json"),

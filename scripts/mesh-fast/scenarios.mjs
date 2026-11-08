@@ -61,6 +61,15 @@ export const scenarios = {
   "replica-ssh": (directory) =>
     withMesh(directory, async (mesh) => {
       const [studio, , laptop] = mesh.nodes;
+      for (const node of mesh.nodes) {
+        const effective = await run("/usr/sbin/sshd", [
+          "-T",
+          "-f",
+          NodePath.join(node.home, "sshd/sshd_config"),
+        ]);
+        for (const rule of ["permituserrc no", "permituserenvironment no", "usedns no"])
+          NodeAssert.ok(effective.split("\n").includes(rule));
+      }
       const source = NodePath.join(studio.home, "primary");
       await NodeFSP.mkdir(NodePath.join(source, "node_modules"), { recursive: true });
       const payload = Buffer.alloc(1024 * 1024, 42);

@@ -9,21 +9,24 @@ export async function providers(mesh) {
   for (const node of mesh.nodes) {
     await rpc(node, "server.updateSettings", {
       patch: {
-        providerInstances: Object.fromEntries(
-          instances.map((instanceId) => [
-            instanceId,
-            {
-              driver: "acpRegistry",
-              enabled: true,
-              displayName: instanceId,
-              config: {
-                source: "local",
-                commandPath: node.container ? "/usr/local/bin/node" : process.execPath,
-                commandArgs: [agent],
+        providerInstances: {
+          ...node.inactiveProviders,
+          ...Object.fromEntries(
+            instances.map((instanceId) => [
+              instanceId,
+              {
+                driver: "acpRegistry",
+                enabled: true,
+                displayName: instanceId,
+                config: {
+                  source: "local",
+                  commandPath: node.container ? "/usr/local/bin/node" : process.execPath,
+                  commandArgs: [agent],
+                },
               },
-            },
-          ]),
-        ),
+            ]),
+          ),
+        },
       },
     });
     await rpc(node, "server.refreshProviders", { fresh: true, refreshModels: true });

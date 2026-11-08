@@ -761,3 +761,16 @@ Two fixture constraints matter: settle private machine claims before pairing,
 otherwise automatic collision reconciliation can supersede a test's config
 revision; reserve ports for the whole command, since releasing a port-zero socket
 can otherwise hand the same port to another concurrently starting fixture.
+
+C2 binding repair and rename can publish a newer config revision after an apply;
+its scenarios wait for the requested binding and equal documents, rather than
+requiring every observer to catch the intermediate revision. Supervisor specs
+are published by rename so fs.watch never parses a truncated JSON file.
+
+The browser runs inside its fixture's stable network namespace: creating and
+removing other Docker bridges otherwise causes Chromium ERR_NETWORK_CHANGED.
+Fast R1 commands use real OpenSSH control connections to separate native process
+startup from SSH's three-second connection budget; the control connections and
+all remote process-tree fault assertions remain real. The realistic R1 variant
+uses fresh connections. Provider defaults are disabled in private fixture
+settings, and fake profiles or explicit nightly native profiles are enabled there.

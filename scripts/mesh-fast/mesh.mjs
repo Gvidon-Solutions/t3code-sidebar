@@ -10,7 +10,7 @@ import { run, until, rpc, mcp } from "./client.mjs";
 
 const repo = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
 const binary = NodePath.join(repo, "apps/server/src/bin.ts");
-let bootSlots = Math.max(2, Math.min(6, Math.floor(NodeOS.availableParallelism() / 4)));
+let bootSlots = Math.max(2, Math.min(12, Math.floor(NodeOS.availableParallelism() / 2)));
 const bootQueue = [];
 async function boot(work) {
   if (bootSlots === 0) await new Promise((resolve) => bootQueue.push(resolve));
@@ -23,6 +23,9 @@ async function boot(work) {
     else bootSlots++;
   }
 }
+const inactiveProviders = Object.fromEntries(
+  ["codex", "claudeAgent"].map((driver) => [driver, { driver, enabled: false }]),
+);
 const allocatedPorts = new Set();
 async function publish(file, value) {
   const temporary = file + "." + NodeCrypto.randomUUID() + ".tmp";
@@ -54,6 +57,8 @@ export class MiniMesh {
 
   async start(names = ["studio", "cloudbox", "laptop"]) {
     this.routes = new Map();
+    if (this.browser)
+      await NodeFSP.mkdir(NodePath.join(this.directory, "artifacts"), { recursive: true });
     for (const value of this.extraRoutes ?? []) allocatedPorts.add(value);
     this.network =
       "mesh-fast-" +
@@ -204,7 +209,7 @@ export class MiniMesh {
     const closed = NodeEvents.once(child, "close").then(async () => {
       await Promise.all(writes);
     });
-    this.children.push({ child, closed });
+    this.children.push({ child, closed, program });
     return child;
   }
 
@@ -232,7 +237,7 @@ export class MiniMesh {
       T3_MESH_AGENT_HOME: home,
       T3_MESH_SSH_HOME: home,
       T3_MESH_LEGACY_GLOBAL: NodePath.join(home, "absent"),
-      T3_MESH_TIME_SCALE: process.env.MESH_FAST_REALISTIC === "1" ? "1" : "0.1",
+      T3_MESH_TIME_SCALE: process.env.MESH_FAST_REALISTIC === "1" ? "1" : "0.075",
       NODE_ENV: "test",
     };
     if (process.env.MESH_FAST_MUTAGEN_CACHE && !this.coldInstall) {
@@ -253,11 +258,18 @@ export class MiniMesh {
       );
       await NodeFSP.chmod(NodePath.join(agentHome, "mutagen-agent"), 0o700);
     }
+    if (!this.legacySeed) {
+      await NodeFSP.mkdir(NodePath.join(base, "userdata"), { recursive: true });
+      await publish(NodePath.join(base, "userdata/settings.json"), {
+        providerInstances: inactiveProviders,
+      });
+    }
     if (this.legacySeed) {
       await NodeFSP.mkdir(NodePath.join(base, "userdata"), { recursive: true });
       await NodeFSP.writeFile(
         NodePath.join(base, "userdata/settings.json"),
         JSON.stringify({
+          providerInstances: inactiveProviders,
           sidebarWorkspaces: {
             workspaces: [
               { id: "main-" + name, name: "main" },
@@ -474,6 +486,19 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
           repo + ":" + repo + ":ro",
           "-v",
           root + ":" + root,
+          ...(this.browser
+            ? [
+                "-v",
+                NodePath.join(this.directory, "artifacts") +
+                  ":" +
+                  NodePath.join(this.directory, "artifacts"),
+                "-v",
+                process.env.PLAYWRIGHT_BROWSERS_PATH +
+                  ":" +
+                  process.env.PLAYWRIGHT_BROWSERS_PATH +
+                  ":ro",
+              ]
+            : []),
           ...Object.entries(env).flatMap(([key, value]) => ["-e", key + "=" + value]),
           "mesh-fast-node:26",
           "sh",
@@ -535,6 +560,7 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
       spec,
       receipt,
       container,
+      inactiveProviders,
       cli: (args) =>
         run(
           useSource ? process.execPath : native,
@@ -609,9 +635,19 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
     return this.closing;
   }
   async shutdown() {
-    for (const cleanup of this.beforeClose) await cleanup();
-    for (const node of this.nodes)
-      if (node.container) await run("docker", ["stop", "--time", "3", node.container]);
+    const errors = [];
+    const settle = async (tasks) => {
+      for (const result of await Promise.allSettled(tasks))
+        if (result.status === "rejected") errors.push(result.reason);
+    };
+    await settle(this.beforeClose.map((cleanup) => cleanup()));
+    for (const { child, program } of this.children)
+      if (program !== "docker" && child.exitCode === null) child.kill("SIGTERM");
+    await settle(
+      this.nodes
+        .filter((node) => node.container)
+        .map((node) => run("docker", ["stop", "--time", "3", node.container])),
+    );
     for (const { child } of this.children) if (child.exitCode === null) child.kill("SIGTERM");
     const timer = setTimeout(() => {
       for (const { child } of this.children)
@@ -630,29 +666,32 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
       );
       await run("docker", ["network", "rm", this.network]);
     }
-    for (const node of this.nodes) {
-      const executable = NodePath.join(node.base, "bin", "mutagen");
-      const data = NodePath.join(node.base, "mutagen");
-      const active = await new Promise((resolve, reject) => {
-        const socket = NodeNet.connect(NodePath.join(data, "daemon/daemon.sock"));
-        socket.once("connect", () => {
-          socket.end();
-          resolve(true);
+    await settle(
+      this.nodes.map(async (node) => {
+        const executable = NodePath.join(node.base, "bin", "mutagen");
+        const data = NodePath.join(node.base, "mutagen");
+        const active = await new Promise((resolve, reject) => {
+          const socket = NodeNet.connect(NodePath.join(data, "daemon/daemon.sock"));
+          socket.once("connect", () => {
+            socket.end();
+            resolve(true);
+          });
+          socket.once("error", (error) => {
+            if (["ENOENT", "ECONNREFUSED"].includes(error.code)) resolve(false);
+            else reject(error);
+          });
+          socket.setTimeout(1000, () => {
+            socket.destroy();
+            reject(Error("Private daemon shutdown probe timed out"));
+          });
         });
-        socket.once("error", (error) => {
-          if (["ENOENT", "ECONNREFUSED"].includes(error.code)) resolve(false);
-          else reject(error);
+        if (!active) return;
+        await run(executable, ["daemon", "stop"], {
+          env: { ...node.env, MUTAGEN_DATA_DIRECTORY: data },
         });
-        socket.setTimeout(1000, () => {
-          socket.destroy();
-          reject(Error("Private daemon shutdown probe timed out"));
-        });
-      });
-      if (!active) continue;
-      await run(executable, ["daemon", "stop"], {
-        env: { ...node.env, MUTAGEN_DATA_DIRECTORY: data },
-      });
-    }
+      }),
+    );
+    if (errors.length) throw new AggregateError(errors, "Private fixture cleanup failed");
   }
 }
 export { rpc, until, mcp };

@@ -71,6 +71,49 @@ export const runScenarios = {
         p = await project(mesh, "run"),
         rep = await place(laptop, p);
       const execute = (args) => launch(laptop, rep.path, args).result;
+      const sourceName = Object.entries((await rpc(laptop, "meshConfig.get")).bindings).find(
+        ([, id]) => id === studio.id,
+      )[0];
+      const fast = process.env.MESH_FAST_REALISTIC !== "1";
+      const writeConfig = async (file, text) => {
+        await NodeFSP.writeFile(file + ".next", text, { mode: 0o600 });
+        await NodeFSP.rename(file + ".next", file);
+      };
+      const prime = async (file, control) => {
+        if (!fast) return undefined;
+        const prefix =
+          "Host *\n  ControlMaster auto\n  ControlPath " +
+          JSON.stringify(control) +
+          "\n  ControlPersist no\n";
+        await writeConfig(file, prefix + (await NodeFSP.readFile(file, "utf8")));
+        const child = mesh.launch(
+          "ssh",
+          ["-F", file, "-o", "ConnectTimeout=30", "-M", "-N", "t3-" + sourceName],
+          laptop.env,
+          NodePath.join(laptop.root, "ssh-masters.log"),
+        );
+        const closed = mesh.children.find((entry) => entry.child === child).closed;
+        await until(
+          "real managed SSH control connection",
+          () => NodeFSP.stat(control),
+          (value) => value.isSocket(),
+        );
+        return { child, closed, file, prefix };
+      };
+      const release = async (master) => {
+        if (!master) return;
+        if (master.child.exitCode === null && master.child.signalCode === null)
+          master.child.kill("SIGTERM");
+        await master.closed;
+        await writeConfig(
+          master.file,
+          (await NodeFSP.readFile(master.file, "utf8")).replace(master.prefix, ""),
+        );
+      };
+      const master = await prime(
+        NodePath.join(laptop.home, ".ssh/config"),
+        NodePath.join(laptop.home, "run-control"),
+      );
       await NodeFSP.mkdir(NodePath.join(studio.home, ".nvm/versions/node/v26.12.1/bin"), {
         recursive: true,
       });
@@ -193,10 +236,8 @@ export const runScenarios = {
       interrupted.child.kill("SIGINT");
       NodeAssert.equal((await interrupted.result).code, 130);
       await gone();
-      const managed = await NodeFSP.readFile(NodePath.join(laptop.home, ".ssh/config"), "utf8"),
-        sourceName = Object.entries((await rpc(laptop, "meshConfig.get")).bindings).find(
-          ([, id]) => id === studio.id,
-        )[0];
+      await release(master);
+      const managed = await NodeFSP.readFile(NodePath.join(laptop.home, ".ssh/config"), "utf8");
       const block = managed
           .split(/(?=^Host )/m)
           .find((value) => value.startsWith("Host t3-" + sourceName + "\n")),
@@ -213,6 +254,7 @@ export const runScenarios = {
         alternative,
         managed.replace(block, block.replace(line, "  ProxyCommand " + script)),
       );
+      const cutMaster = await prime(alternative, NodePath.join(laptop.home, "cut-control"));
       const cut = launch(laptop, rep.path, ["--", "node", "-e", parentCode], {
         T3CODE_RUN_SSH_CONFIG: alternative,
       });
@@ -222,6 +264,7 @@ export const runScenarios = {
       process.kill(pid, "SIGTERM");
       const result = await cut.result;
       NodeAssert.equal(result.code, 255, result.stderr);
+      await release(cutMaster);
       await gone();
       await mesh.signal(studio, "SIGSTOP");
       try {
