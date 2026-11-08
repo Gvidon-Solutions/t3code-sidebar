@@ -8,17 +8,9 @@ import { parse, stringify } from "yaml";
 
 export const configYaml = (doc: unknown): string => stringify(doc);
 
-export const defaultAgentAliases = () => ({
-  opus: { harness: "claudeAgent", model: "claude-opus-5-5" },
-  sonnet: { harness: "claudeAgent", model: "claude-sonnet-5-5" },
-  fable: { harness: "claudeAgent", model: "claude-fable-5-1" },
-  haiku: { harness: "claudeAgent", model: "claude-haiku-5-5" },
-  luna: { harness: "codex", model: "gpt-6-luna" },
-  astra: { harness: "codex", model: "gpt-6-astra" },
-  sol: { harness: "codex", model: "gpt-6.1-sol" },
-  deepseek: { harness: "opencode", model: "deepseek/deepseek-flash" },
-  "1017": { harness: "opencode", model: "deepseek/deepseek-flash" },
-});
+export const defaultAgentAliases = (): NonNullable<
+  NonNullable<MeshConfigDocument["agents"]>["aliases"]
+> => ({});
 export const defaults = (): MeshConfigDocument => ({
   schema: 1,
   machines: {},

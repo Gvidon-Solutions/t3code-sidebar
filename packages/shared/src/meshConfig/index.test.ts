@@ -18,6 +18,9 @@ import {
 
 const encodeConfig = Schema.encodeSync(MeshConfigDocument);
 describe("mesh config", () => {
+  it("leaves model aliases to user configuration", () => {
+    expect(defaults().agents?.aliases).toEqual({});
+  });
   it("round trips unknown fields at every object level through JSON and YAML", () => {
     const input = {
       schema: 1,
