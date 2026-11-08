@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   defaultDraftMachine,
+  draftMachineCanHostCopy,
   draftMachineCatalogsKnown,
+  draftMachineUsable,
+  hasSelectedDraftModel,
   hasUsableDraftModels,
   machineForDraftModel,
+  savedDraftMachineChoice,
   nextSelectableDraftMachine,
+  type ProviderCatalog,
 } from "./draftMachine.ts";
 
 describe("draft machine defaults", () => {
@@ -54,10 +59,13 @@ describe("draft machine defaults", () => {
   });
   it("has one answer for usable models with project enablement", () => {
     const instanceId = ProviderInstanceId.make("codex");
+    const providerInstances = (enabled: boolean) => ({
+      [instanceId]: { driver: ProviderDriverKind.make("codex"), enabled, config: {} },
+    });
     const config = {
       settings: {
         ...DEFAULT_SERVER_SETTINGS,
-        providerInstances: { [instanceId]: { driver: "codex", enabled: true, config: {} } },
+        providerInstances: providerInstances(true),
       },
       providers: [
         {
@@ -69,7 +77,7 @@ describe("draft machine defaults", () => {
           models: [{ slug: "fast" }],
         },
       ],
-    } as unknown as Parameters<typeof hasUsableDraftModels>[0];
+    } as unknown as ProviderCatalog;
     expect(hasUsableDraftModels(config, null)).toBe(true);
     expect(
       hasUsableDraftModels(
@@ -77,7 +85,7 @@ describe("draft machine defaults", () => {
           ...config,
           settings: {
             ...config!.settings!,
-            providerInstances: { [instanceId]: { driver: "codex", enabled: false, config: {} } },
+            providerInstances: providerInstances(false),
           },
         },
         null,
@@ -106,7 +114,12 @@ describe("draft machine defaults", () => {
   });
 });
 
-import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId, type ServerConfig } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerConfig,
+} from "@t3tools/contracts";
 import { draftModelUnavailableReason } from "./draftMachine.ts";
 
 it("maps authentication, installation, availability and missing models", () => {
@@ -212,4 +225,66 @@ it("waits for every connected machine's catalog before pinning a draft default",
   expect(draftMachineCatalogsKnown(machines, new Set(["a"]))).toBe(false);
   expect(draftMachineCatalogsKnown(machines, new Set(["a", "b"]))).toBe(true);
   expect(draftMachineCatalogsKnown([], new Set())).toBe(true);
+});
+
+it("has one host rule for scratch drafts, existing copies and replica-capable servers", () => {
+  expect(
+    draftMachineCanHostCopy({ hasProject: false, supportsReplicas: false, isScratchDraft: false }),
+  ).toBe(false);
+  expect(
+    draftMachineCanHostCopy({ hasProject: false, supportsReplicas: true, isScratchDraft: false }),
+  ).toBe(true);
+  expect(
+    draftMachineCanHostCopy({ hasProject: true, supportsReplicas: false, isScratchDraft: false }),
+  ).toBe(true);
+  expect(
+    draftMachineCanHostCopy({ hasProject: false, supportsReplicas: false, isScratchDraft: true }),
+  ).toBe(true);
+});
+
+it("treats an unarrived provider catalog as unknown for the selected model", () => {
+  const instanceId = ProviderInstanceId.make("codex");
+  expect(hasSelectedDraftModel({ providers: [] }, { instanceId, model: "fast" }, null)).toBeNull();
+  expect(hasSelectedDraftModel(null, { instanceId, model: "fast" }, null)).toBeNull();
+  const catalog = {
+    providers: [
+      {
+        instanceId,
+        enabled: true,
+        installed: true,
+        status: "ready",
+        availability: "available",
+        auth: { status: "authenticated" },
+        models: [{ slug: "fast" }],
+      },
+    ],
+  } as unknown as ProviderCatalog;
+  expect(hasSelectedDraftModel(catalog, { instanceId, model: "" }, null)).toBeNull();
+});
+
+it("only calls a machine usable when it is connected, model-ready and can host the copy", () => {
+  const ready = {
+    connected: true,
+    hasUsableModels: true,
+    selectedModelUsable: true,
+    canHostCopy: true,
+  };
+  expect(draftMachineUsable(ready)).toBe(true);
+  expect(draftMachineUsable({ ...ready, connected: false })).toBe(false);
+  expect(draftMachineUsable({ ...ready, hasUsableModels: null })).toBe(false);
+  expect(draftMachineUsable({ ...ready, hasUsableModels: false })).toBe(false);
+  expect(draftMachineUsable({ ...ready, selectedModelUsable: false })).toBe(false);
+  expect(draftMachineUsable({ ...ready, canHostCopy: false })).toBe(false);
+});
+
+it("saves an explicit machine choice and never the automatic default", () => {
+  expect(
+    savedDraftMachineChoice({ remember: false, preferenceKey: "atlas", environmentId: "a" }),
+  ).toBeNull();
+  expect(
+    savedDraftMachineChoice({ remember: true, preferenceKey: null, environmentId: "a" }),
+  ).toBeNull();
+  expect(
+    savedDraftMachineChoice({ remember: true, preferenceKey: "atlas", environmentId: "a" }),
+  ).toEqual({ preferenceKey: "atlas", environmentId: "a" });
 });

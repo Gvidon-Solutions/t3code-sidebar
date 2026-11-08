@@ -2,17 +2,25 @@ import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { replicaExecutionLabel } from "./replicas.ts";
 
 /**
- * Whether git controls must stay hidden for this thread's folder. Before the
- * layout loads we cannot prove the folder is a primary, so hide them: a lite
- * replica has no `.git`, and offering Initialize Git there would create one by
- * mistake. Once the layout says primary, the normal git rows return.
+ * Hide git while a mesh layout loads or on a lite replica: a replica has no
+ * `.git`, so offering Initialize Git there would create one by mistake. Without
+ * a mesh every folder is an ordinary project and git shows.
  */
-export function hidesGitControls(
-  config: SidebarWorkspacesConfig | null,
-  environmentId: string,
-  projectId: string,
-  projectEnvironmentId?: string,
-): boolean {
-  if (config === null) return true;
-  return replicaExecutionLabel(config, environmentId, projectId, projectEnvironmentId) !== null;
+export function hidesGitControls(input: {
+  readonly config: SidebarWorkspacesConfig | null;
+  readonly environmentId: string;
+  readonly projectId: string;
+  readonly projectEnvironmentId?: string | undefined;
+  /** A mesh-capable source exists, but its first layout snapshot has not arrived. */
+  readonly layoutLoading: boolean;
+}): boolean {
+  if (input.config === null) return input.layoutLoading;
+  return (
+    replicaExecutionLabel(
+      input.config,
+      input.environmentId,
+      input.projectId,
+      input.projectEnvironmentId,
+    ) !== null
+  );
 }

@@ -11,6 +11,19 @@ import type { MeshMachine } from "./meshMachines.ts";
 function readableReason(message: string) {
   return message.replaceAll("Unknown machine (UN)", "Unnamed machine");
 }
+function exactLocalTime(at: string | null | undefined): string {
+  if (!at) return "";
+  const date = DateTime.make(at);
+  return date._tag === "None"
+    ? ""
+    : DateTime.formatLocal(date.value, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+}
 function relativeTime(at: string, now: number) {
   const minutes = Math.max(0, Math.floor((now - Date.parse(at)) / 60_000));
   if (!Number.isFinite(minutes)) return "";
@@ -68,7 +81,7 @@ export function meshConfigApplyGroups(
 export interface MeshMachineDetailRow {
   readonly label: string;
   readonly value: string;
-  /** Exact ISO time behind a relative "checked ..." phrase. */
+  /** Human local time behind a relative "checked ..." phrase, never a raw ISO string. */
   readonly exact?: string;
 }
 
@@ -107,7 +120,7 @@ function plainReplicaState(
               : state === "removed"
                 ? "Removed"
                 : "Sync state unknown";
-  return { value, exact: current?.updatedAt ?? stored?.updatedAt ?? "" };
+  return { value, exact: exactLocalTime(current?.updatedAt ?? stored?.updatedAt) };
 }
 
 export function meshMachineDetailRows(
@@ -123,7 +136,7 @@ export function meshMachineDetailRows(
     rows.push({
       label: `SSH to ${machineDisplayOf(config, target, "").label}`,
       value: `${route.status === "ok" ? "OK" : route.status === "failed" ? "Failed" : "Unknown"}${route.reason ? ` · ${route.reason}` : ""} · checked ${relativeTime(route.checkedAt, now)}`,
-      exact: route.checkedAt,
+      exact: exactLocalTime(route.checkedAt),
     });
   if (!rows.length) rows.push({ label: "SSH routes", value: "Not reported" });
   for (const [key, reps] of Object.entries(config.projectMounts))

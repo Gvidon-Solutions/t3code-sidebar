@@ -43,8 +43,7 @@ export interface DraftMachineCardState {
  * connect to is not called "not connected": it is named by the way it is reachable.
  */
 export function draftMachineCardState(input: DraftMachineCardStateInput): DraftMachineCardState {
-  const guidance =
-    input.hasSelectedModel === false ? `The selected model isn't set up on ${input.label}` : null;
+  const guidance = input.hasSelectedModel === false ? "Model not set up here" : null;
   const withGuidance = (state: Omit<DraftMachineCardState, "guidance">): DraftMachineCardState => ({
     ...state,
     guidance,
@@ -202,4 +201,31 @@ export function draftMachineCardSync(
     default:
       return null;
   }
+}
+
+/** One catalog request key per (project, destination); bounded by live machines. */
+export function draftMachineCatalogRequests(input: {
+  readonly activeProjectEnvironmentId: string | null;
+  readonly environmentIds: ReadonlyArray<string>;
+}): string[] {
+  if (input.activeProjectEnvironmentId === null) return [];
+  return [...new Set(input.environmentIds)].map(
+    (environmentId) => `${input.activeProjectEnvironmentId}:${environmentId}`,
+  );
+}
+
+/** Keys to keep: a connected destination or a changed project drops its old request. */
+export function retainedCatalogRequests(
+  current: Iterable<string>,
+  wanted: ReadonlySet<string>,
+): string[] {
+  return [...current].filter((key) => wanted.has(key));
+}
+
+/** Nothing is unconnected: the component must not poll catalogs at all. */
+export function shouldRefreshDraftMachineCatalogs(input: {
+  readonly activeProjectEnvironmentId: string | null;
+  readonly environmentIds: ReadonlyArray<string>;
+}): boolean {
+  return draftMachineCatalogRequests(input).length > 0;
 }

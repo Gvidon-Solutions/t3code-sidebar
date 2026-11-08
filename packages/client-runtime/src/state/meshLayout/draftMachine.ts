@@ -82,7 +82,38 @@ export function hasSelectedDraftModel(
   projectId: ProjectId | null,
 ): boolean | null {
   if (selection === null) return null;
+  // An empty model is the "no provider yet" placeholder, not a model to explain.
+  if (selection.model.trim() === "") return null;
+  // An empty catalog has not arrived yet; do not call a known model missing.
+  if (!config || config.providers.length === 0) return null;
   return draftModelUnavailableReason(config, selection, projectId) === null;
+}
+
+/**
+ * Whether a machine can hold a copy of the draft's project: it already has the
+ * project, it can host a replica, or the draft has no project (scratch).
+ */
+export function draftMachineCanHostCopy(input: {
+  readonly hasProject: boolean;
+  readonly supportsReplicas: boolean;
+  readonly isScratchDraft: boolean;
+}): boolean {
+  return input.hasProject || input.isScratchDraft || input.supportsReplicas;
+}
+
+/** One machine's answer to "could this draft start here right now". */
+export function draftMachineUsable(input: {
+  readonly connected: boolean;
+  readonly hasUsableModels: boolean | null;
+  readonly selectedModelUsable: boolean;
+  readonly canHostCopy: boolean;
+}): boolean {
+  return (
+    input.connected &&
+    input.hasUsableModels === true &&
+    input.selectedModelUsable &&
+    input.canHostCopy
+  );
 }
 
 /** Whether a machine can start a draft for this project: any enabled, usable model. */
@@ -142,4 +173,18 @@ export function defaultUsableDraftModel(
       .find((selection) => draftModelUnavailableReason(config, selection, projectId) === null) ??
     null
   );
+}
+
+/**
+ * The one rule for remembering a draft's machine: an explicit choice is saved,
+ * the automatic default is not, so a temporarily unreachable machine is never
+ * replaced in the person's memory.
+ */
+export function savedDraftMachineChoice(input: {
+  readonly remember: boolean;
+  readonly preferenceKey: string | null;
+  readonly environmentId: string;
+}): { readonly preferenceKey: string; readonly environmentId: string } | null {
+  if (!input.remember || input.preferenceKey === null) return null;
+  return { preferenceKey: input.preferenceKey, environmentId: input.environmentId };
 }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  dismissMeshConnectIds,
   dismissMeshConnectPrompt,
+  pruneMeshConnectDismissed,
   planMeshConnect,
   shouldShowMeshConnectPrompt,
 } from "./meshConnectPrompt.ts";
@@ -65,4 +67,9 @@ describe("planMeshConnect", () => {
       needed: true,
     });
   });
+});
+
+it("prunes machines that left the mesh and records only settled ids", () => {
+  expect(pruneMeshConnectDismissed(["studio", "gone"], ["studio", "cloudbox"])).toEqual(["studio"]);
+  expect(dismissMeshConnectIds(["studio"], ["studio", "cloudbox"])).toEqual(["cloudbox", "studio"]);
 });

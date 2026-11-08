@@ -404,7 +404,7 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
 /** The full reason for a replica row's tooltip when its one-line copy is shortened. */
 export function replicaStatusDetail(input: ReplicaStatusCopyInput): string {
   if (input.state === "error" && (!input.message || /reach|route/iu.test(input.message))) {
-    return `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Check the SSH route in Mesh config`;
+    return `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Ask an agent to fix the connection`;
   }
   return replicaStatusCopy(input);
 }
