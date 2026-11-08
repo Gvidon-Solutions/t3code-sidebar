@@ -3,12 +3,3 @@ export function withoutMeshThreadHeader(text: string) {
     prefix ? `${prefix}User message:\n` : "",
   );
 }
-
-export function withoutMeshThreadHeaders(value: unknown): unknown {
-  if (typeof value === "string") return withoutMeshThreadHeader(value);
-  if (Array.isArray(value)) return value.map(withoutMeshThreadHeaders);
-  if (typeof value !== "object" || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, withoutMeshThreadHeaders(item)]),
-  );
-}

@@ -1,4 +1,3 @@
-import { withoutMeshThreadHeaders } from "../../../testFixtures/meshPrompt.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { CodexSettings, type ProviderReplayTranscript } from "@t3tools/contracts";
@@ -70,8 +69,6 @@ export function withCodexReplayChildMetadata(
   );
   return {
     ...client,
-    request: (method, params) =>
-      client.request(method, withoutMeshThreadHeaders(params) as typeof params),
     raw: {
       ...client.raw,
       request: (method, params) =>

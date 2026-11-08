@@ -1,3 +1,5 @@
+import { withoutMeshThreadHeader } from "../../../testFixtures/meshPrompt.ts";
+import type * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
 import * as MeshTestServices from "../../../testFixtures/meshServices.ts";
 import * as RequiredAdmission from "../../mesh/DeliveryAdmission.ts";
 import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
@@ -306,7 +308,45 @@ export function layerWithRegistry<Error>(
   // Share one continuation queue across adapters, orchestrator, and worker through layer memoization.
   const layerContinuationRequests =
     options.runContinuationWorker === true ? ProviderContinuationRequests.layer : Layer.empty;
-  const layerProvidedRegistry = registryLayer.pipe(
+  // Protocol fixtures omit dynamic mesh identity; prompt tests cover that header.
+  const replayRegistry = Layer.effect(
+    ProviderAdapterRegistry.ProviderAdapterRegistryV2,
+    Effect.map(ProviderAdapterRegistry.ProviderAdapterRegistryV2, (registry) => ({
+      ...registry,
+      get: Effect.fn("ReplayRegistry.get")((id) =>
+        registry.get(id).pipe(
+          Effect.map((adapter) => ({
+            ...adapter,
+            openSession: Effect.fn("ReplayAdapter.openSession")((input) =>
+              adapter.openSession(input).pipe(
+                Effect.map((session) => {
+                  const prompt = (turn: ProviderAdapter.ProviderAdapterV2TurnInput) => ({
+                    ...turn,
+                    message: { ...turn.message, text: withoutMeshThreadHeader(turn.message.text) },
+                  });
+                  const compact = session.compactThread;
+                  return {
+                    ...session,
+                    startTurn: Effect.fn("ReplaySession.startTurn")((turn) =>
+                      session.startTurn(prompt(turn)),
+                    ),
+                    ...(compact
+                      ? {
+                          compactThread: Effect.fn("ReplaySession.compactThread")((turn) =>
+                            compact(prompt(turn)),
+                          ),
+                        }
+                      : {}),
+                  };
+                }),
+              ),
+            ),
+          })),
+        ),
+      ),
+    })),
+  ).pipe(Layer.provide(registryLayer));
+  const layerProvidedRegistry = replayRegistry.pipe(
     Layer.provide(Layer.merge(layerContinuationRequests, McpProviderSessions.layer)),
   );
   const layerServerSettings = Layer.unwrap(

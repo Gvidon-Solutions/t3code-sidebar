@@ -1,4 +1,3 @@
-import { withoutMeshThreadHeader } from "../../../testFixtures/meshPrompt.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import type { InteractionUpdate, RunResult } from "@cursor/sdk";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -148,8 +147,7 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function normalizeContextHandoffText(input: string): string {
-  const value = withoutMeshThreadHeader(input);
+function normalizeContextHandoffText(value: string): string {
   if (!value.startsWith("Context handoff (")) {
     return value;
   }

@@ -1,4 +1,3 @@
-import { withoutMeshThreadHeader } from "../../../testFixtures/meshPrompt.ts";
 import { ClaudeSettings } from "@t3tools/contracts";
 import {
   forkSession,
@@ -290,8 +289,7 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function normalizeContextHandoffText(input: string): string {
-  const value = withoutMeshThreadHeader(input);
+function normalizeContextHandoffText(value: string): string {
   if (!value.startsWith("Context handoff (")) {
     return value;
   }
