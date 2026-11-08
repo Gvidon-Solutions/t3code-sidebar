@@ -77,9 +77,15 @@ describe("draft machine defaults", () => {
           ...config,
           settings: {
             ...config!.settings!,
-            providerInstances: { [instanceId]: { driver: "codex", enabled: false, config: {} } },
+            providerInstances: {
+              [instanceId]: {
+                driver: ProviderDriverKind.make("codex"),
+                enabled: false,
+                config: {},
+              },
+            },
           },
-        },
+        } as unknown as Parameters<typeof hasUsableDraftModels>[0],
         null,
       ),
     ).toBe(false);
@@ -106,7 +112,12 @@ describe("draft machine defaults", () => {
   });
 });
 
-import { DEFAULT_SERVER_SETTINGS, ProviderInstanceId, type ServerConfig } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  type ServerConfig,
+} from "@t3tools/contracts";
 import { draftModelUnavailableReason } from "./draftMachine.ts";
 
 it("maps authentication, installation, availability and missing models", () => {
