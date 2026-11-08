@@ -817,7 +817,7 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
         const active = await new Promise((resolve, reject) => {
           const socket = NodeNet.connect(NodePath.join(data, "daemon/daemon.sock"));
           socket.once("connect", () => {
-            socket.end();
+            socket.destroy();
             resolve(true);
           });
           socket.once("error", (error) => {

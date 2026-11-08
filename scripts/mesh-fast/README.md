@@ -283,3 +283,7 @@ the saved clock from retained valid rows, so clock correction permits startup.
 Successful public/SSH runtime installation fixtures carry the same ownership
 marker as server fixtures, so their installed executables are reclaimed after
 assertions. Failed installation state and all diagnostic logs are retained.
+
+Public/SSH runtime helpers execute in a separate process. Their synchronous tar
+and SSH work must not block the runner’s TLS peer pipes or daemon shutdown probes
+while other meshes are running. The runner still checks the real installed binaries.

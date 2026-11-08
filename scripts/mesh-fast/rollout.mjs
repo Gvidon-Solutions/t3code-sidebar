@@ -5,18 +5,23 @@ import * as NodePath from "node:path";
 import * as NodeHttp from "node:http";
 import * as NodeHttps from "node:https";
 import * as NodeCrypto from "node:crypto";
-import * as NodeChildProcess from "node:child_process";
 import * as NodeURL from "node:url";
 import * as NodeEvents from "node:events";
 import { productRoot } from "./paths.mjs";
-const { installPublicRuntime, installSshRuntime } = await import(
-  NodeURL.pathToFileURL(
-    NodePath.join(productRoot, "agent-kit/skills/t3/scripts/server-runtime.mjs"),
-  ).href
-);
 import { MiniMesh, allocatePort as port } from "./mesh.mjs";
 import { containerBoot } from "./boot.mjs";
 import { project, rpc, mcp, until, run, invariant } from "./helpers.mjs";
+const installRuntime = async (input) =>
+  JSON.parse(
+    await run(
+      process.execPath,
+      [
+        NodeURL.fileURLToPath(new URL("runtime-install.mjs", import.meta.url)),
+        JSON.stringify(input),
+      ],
+      { env: { ...process.env, MESH_FAST_PRODUCT_ROOT: productRoot } },
+    ),
+  );
 export const rolloutScenarios = {
   "bootstrap-rollout": async (directory) => {
     const realistic = process.env.MESH_FAST_REALISTIC === "1";
@@ -574,7 +579,8 @@ export const rolloutScenarios = {
           "runtime installer fixture\n",
         );
       }
-      const publicRuntime = await installPublicRuntime({
+      const publicRuntime = await installRuntime({
+        action: "public",
         home: NodePath.join(directory, "public-install"),
         repository: "fixture",
         want: "latest",
@@ -584,17 +590,13 @@ export const rolloutScenarios = {
         (await run(NodePath.join(publicRuntime.path, "t3"), ["--version"])).trim(),
         "t3 v0.1.5",
       );
-      const copiedRuntime = installSshRuntime({
+      const copiedRuntime = await installRuntime({
+        action: "ssh",
         home: NodePath.join(directory, "ssh-install"),
         want: "0.1.5",
         destination: "t3-studio",
         remoteHome: studio.base,
-        run: (command, args, options) =>
-          NodeChildProcess.execFileSync(
-            command,
-            ["-F", NodePath.join(laptop.home, ".ssh/config"), ...args],
-            options,
-          ),
+        sshConfig: NodePath.join(laptop.home, ".ssh/config"),
       });
       NodeAssert.equal(
         (await run(NodePath.join(copiedRuntime.path, "t3"), ["--version"])).trim(),
