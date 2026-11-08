@@ -27,6 +27,12 @@ scripts/mesh-e2e/teardown.sh
 `build.sh` stages a runtime and Docker image; `deploy.sh` installs only the bed units and
 container. `pair.sh` links those servers and configures the fixture routes. Round scripts
 exercise replication, files, networking and restart recovery using fixture projects.
+Round one expects seeded legacy snapshots at `STATE_DIR/legacy/studio.json` and
+`cloudbox.json`: include one `main` workspace, an independent workspace and at least two
+registered logical projects with placements. Its outside-project file cases require an explicit
+`files: all` grant in the isolated bed config. A fresh profile does not inherit those fixtures.
+Provision the container home for its image UID, use a private temporary directory for IPC,
+and provide Node 26 at the configured remote binary directory before deployment.
 Use a unique stage prefix and acquire the shared bed lock through the configured nodeB SSH
 profile before operating shared infrastructure; release it afterward. Keep other stages' data.
 

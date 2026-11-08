@@ -30,8 +30,15 @@ The server closes admission to new turns and waits for active work up to `maxWai
 Dormant accepted starts remain persisted and resume after healthy activation and cancellation.
 The request token survives restart; the target verifies the same drained token immediately
 before stopping. Healthy activation or restored health releases it.
-A deadline failure cancels the drain and leaves the existing runtime running. Older servers
-without the drain API need an initial approved maintenance installation outside this lane.
+A deadline failure cancels the drain and leaves the existing runtime running. For older servers
+whose drain-status tool is absent (including released `.62`), delivery uses a legacy idle window:
+poll local running threads, including subagents, up to `maxWaitMs`, then recheck immediately before
+stopping. A deadline refusal leaves the runtime unchanged; `--now` explicitly skips the idle wait.
+This first hop has no admission fence: new work can race the observed idle window. Authentication,
+network and other tool errors never select this path. The journal marks `legacy-idle` and retains
+the same stopped-database backup, serial health checks and automatic rollback. Restoring its old
+database does not inject a newer admission table. Every subsequent rollout probes capability again
+and uses drain once the upgraded server supports it.
 `--now` still closes and verifies the admission fence, but skips waiting for existing work and
 permits interruption. New submissions continue retrying until health and cancellation.
 

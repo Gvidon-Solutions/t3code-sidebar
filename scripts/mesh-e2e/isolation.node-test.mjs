@@ -143,3 +143,52 @@ NodeTest.test(
     }
   },
 );
+
+NodeTest.test("round helpers resolve only the configured disposable runtime and base", () => {
+  const fixture = setup();
+  try {
+    NodeFS.copyFileSync(
+      NodePath.join(directory, "round1.sh"),
+      NodePath.join(fixture.bed, "round1.sh"),
+    );
+    const bin = NodePath.join(fixture.root, "bin");
+    NodeFS.mkdirSync(bin);
+    for (const name of ["ssh", "scp", "docker"])
+      NodeFS.writeFileSync(NodePath.join(bin, name), "#!/bin/sh\nexit 91\n", { mode: 0o755 });
+    configured(
+      fixture,
+      `NODE_A_NODE_BIN_DIR='${bin}'\nNODE_B_STATE_DIR='${fixture.root}/remote'\nNODE_B_DEMO_DIR='${fixture.root}/remote/demo'`,
+    );
+    NodeFS.mkdirSync(NodePath.join(fixture.state, "artifacts"), { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(fixture.state, "artifacts/build.env"),
+      "BUILD_VERSION=test\nARCHIVE=/fixture/archive\nRUNTIME_DIR=/fixture/runtime\n",
+    );
+    const result = NodeChildProcess.spawnSync(
+      "/bin/bash",
+      [
+        "-c",
+        '. "$1"; printf "%s\\n" "$NODE_B_BIN" "$NODE_B_UNIT" "$NODE_B_BASE_DIR"',
+        "fixture",
+        NodePath.join(fixture.bed, "round1.sh"),
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          ...fixture.env,
+          PATH: bin + ":/usr/bin:/bin",
+          MESH_E2E_HELPERS_ONLY: "1",
+          MESH_E2E_ROUND1_WORK: NodePath.join(fixture.root, "work"),
+        },
+      },
+    );
+    NodeAssert.equal(result.status, 0, result.stderr);
+    NodeAssert.deepEqual(result.stdout.trim().split("\n"), [
+      fixture.root + "/remote/runtime/test/t3",
+      "t3-mesh-e2e-nodeB.service",
+      fixture.root + "/remote/server",
+    ]);
+  } finally {
+    NodeFS.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});

@@ -129,6 +129,17 @@ the watcher fix and passes afterward. F2 integration uses pinned HTTPS/bootstrap
 trust and upgrades an already-paired previous release. Focused regressions cover
 clock correction after quarantine and asynchronous-pong heartbeat scheduling.
 
+### 2026-11-08 — R2 legacy release transition
+
+- **What.** Private delivery can upgrade a released server that predates admission drain.
+- **How.** A missing drain-status tool selects a bounded running-thread idle check, repeated
+  before stop; `--now` skips that wait. The journal identifies this unfenced transition.
+  Database backup, serial health checks and rollback remain in force. The next delivery
+  probes again and uses drain; rollback to the old runtime preserves its original DB schema.
+  Health compares canonical title watermarks across N-1, and restored layout generations/cursors
+  reset so peers resend changes acknowledged after the snapshot.
+- **Where.** `scripts/delivery/target.mjs`, `rollout.mjs`, `legacy-idle.node-test.mjs`.
+
 ### 2026-11-08 — F2b layout and replica-run data-loss fixes
 
 - **What.** Offline edits survive derived-config upgrades; rejected optimistic writes roll back,

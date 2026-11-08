@@ -12,7 +12,7 @@ chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
 TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-900}
 RPC_TIMEOUT=${MESH_E2E_ROUND2_RPC_TIMEOUT:-900}
 PASS=0; FAIL=0; FAILED=()
-CTL="$HOME/.agents/skills/t3-next/scripts/t3ctl.mjs"
+CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
 for m in nodeA nodeB cloud; do
   cat > "$WORK/t3-$m" <<EOF
 #!/usr/bin/env bash
