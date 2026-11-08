@@ -2,6 +2,8 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeAssert from "node:assert/strict";
 import * as NodeCrypto from "node:crypto";
+import * as NodeHttp from "node:http";
+import { allocatePort } from "./mesh.mjs";
 import {
   fixture,
   project,
@@ -22,21 +24,70 @@ const write = (root, file, value) =>
   );
 const state = (node, p) => mcp(node, "t3_project_machines", { project: p.key });
 export const replicaScenarios = {
-  "installer-cold": (directory) =>
-    fixture(
-      directory,
-      async (mesh) => {
-        const p = await project(mesh, "cold-install"),
-          target = mesh.nodes[1],
-          rep = await place(target, p);
-        NodeAssert.match(
-          await run(NodePath.join(target.base, "bin/mutagen"), ["version"]),
-          /0\.18\.1/,
+  "installer-cold": async (directory) => {
+    const realistic = process.env.MESH_FAST_REALISTIC === "1";
+    const archive = await NodeFSP.readFile(
+      NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "mutagen.tar.gz"),
+    );
+    let downloads = 0;
+    const mirror = NodeHttp.createServer((request, response) => {
+      if (
+        request.method !== "GET" ||
+        request.url !==
+          "/mutagen-io/mutagen/releases/download/v0.18.1/mutagen_linux_amd64_v0.18.1.tar.gz"
+      ) {
+        response.writeHead(404).end();
+        return;
+      }
+      downloads++;
+      response.writeHead(200, { "content-length": archive.length }).end(archive);
+    });
+    const mirrorPort = await allocatePort();
+    if (!realistic)
+      await new Promise((resolve, reject) => {
+        mirror.once("error", reject);
+        mirror.listen(mirrorPort, "127.0.0.1", resolve);
+      });
+    try {
+      await fixture(
+        directory,
+        async (mesh) => {
+          const target = mesh.nodes[1];
+          await NodeAssert.rejects(NodeFSP.stat(NodePath.join(target.base, "bin/mutagen")), {
+            code: "ENOENT",
+          });
+          const p = await project(mesh, "cold-install"),
+            rep = await place(target, p);
+          NodeAssert.match(
+            await run(NodePath.join(target.base, "bin/mutagen"), ["version"]),
+            /0\.18\.1/,
+          );
+          await content(NodePath.join(rep.path, "README.md"), p.title);
+          if (!realistic)
+            NodeAssert.ok(downloads > 0, "The real installer must download its pinned archive");
+          await NodeFSP.writeFile(
+            NodePath.join(directory, "cold-install.json"),
+            JSON.stringify({ downloads, version: "0.18.1", watching: true }),
+          );
+        },
+        {
+          coldInstall: true,
+          names: ["studio", "laptop"],
+          ...(!realistic
+            ? {
+                environment: { T3_MESH_TEST_ASSET_ORIGIN: `http://127.0.0.1:${mirrorPort}` },
+                extraRoutes: [mirrorPort],
+              }
+            : {}),
+        },
+      );
+    } finally {
+      if (mirror.listening)
+        await new Promise((resolve, reject) =>
+          mirror.close((error) => (error ? reject(error) : resolve())),
         );
-        await content(NodePath.join(rep.path, "README.md"), p.title);
-      },
-      { coldInstall: true, names: ["studio", "laptop"] },
-    ),
+    }
+  },
   "replica-policies": (directory) =>
     fixture(directory, async (mesh) => {
       const [studio, hub, laptop] = mesh.nodes,

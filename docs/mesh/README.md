@@ -827,3 +827,9 @@ The preceding release can expose an epoch-zero migration tombstone while current
 peers collect it; requiring its physical retention creates a false failure.
 Harness OAuth requests share the normal RPC deadline, while the command's global
 wall budget remains authoritative under concurrent authentication work.
+
+Cold Mutagen installation uses a private mirror of the original pinned archive
+in fast tests. The real installer still verifies its digest, extracts the tools
+and completes synchronization. The loopback-only asset override is unavailable
+in production bundles and non-test source execution; nightly retains the public
+release URL. This keeps parallel cold installs independent of GitHub throughput.

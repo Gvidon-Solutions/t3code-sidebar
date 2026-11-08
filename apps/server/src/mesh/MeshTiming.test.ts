@@ -1,11 +1,15 @@
 // @effect-diagnostics nodeBuiltinImport:off -- A separate Node process verifies module-load environment selection.
 import * as NodeChildProcess from "node:child_process";
 import { expect, it } from "vite-plus/test";
-import { meshMillis, resolveMeshTimeScale } from "./MeshTiming.ts";
+import { meshMillis, resolveMeshTimeScale, resolveMeshAssetUrl } from "./MeshTiming.ts";
 
 it("retains production timings even with a hostile test environment", () => {
   for (const value of [undefined, "0.001", "0", "NaN", "", "-1", "2"])
     expect(resolveMeshTimeScale(value, true)).toBe(1);
+  for (const origin of [undefined, "http://127.0.0.1:1234", "not-a-url"])
+    expect(resolveMeshAssetUrl("https://github.com/fixture/archive", origin, true)).toBe(
+      "https://github.com/fixture/archive",
+    );
 });
 
 it("retains all default mesh durations at scale one", () => {
@@ -13,12 +17,27 @@ it("retains all default mesh durations at scale one", () => {
   expect(resolveMeshTimeScale("1", false)).toBe(1);
   for (const value of [200, 1000, 15_000, 30_000, 45_000, 60_000, 120_000, 600_000, 2_592_000_000])
     expect(meshMillis(value)).toBe(value);
+  expect(resolveMeshAssetUrl("https://github.com/fixture/archive", undefined, false)).toBe(
+    "https://github.com/fixture/archive",
+  );
 });
 
 it("scales test time and refuses invalid multipliers", () => {
   expect(resolveMeshTimeScale("0.01", false)).toBe(0.01);
   for (const value of ["0", "NaN", "", "-1", "2", "Infinity"])
     expect(() => resolveMeshTimeScale(value, false)).toThrow("T3_MESH_TIME_SCALE");
+  expect(
+    resolveMeshAssetUrl("https://github.com/fixture/archive", "http://127.0.0.1:1234", false),
+  ).toBe("http://127.0.0.1:1234/fixture/archive");
+  for (const origin of [
+    "http://example.com",
+    "https://127.0.0.1",
+    "http://127.0.0.1/path",
+    "http://user@127.0.0.1",
+  ])
+    expect(() => resolveMeshAssetUrl("https://github.com/fixture/archive", origin, false)).toThrow(
+      "loopback HTTP origin",
+    );
 });
 
 it("accelerates the real peer heartbeat and reconnect schedule in a source process", () => {

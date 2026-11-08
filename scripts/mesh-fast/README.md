@@ -35,6 +35,12 @@ Bootstrap, installation, rollout and realistic nightly scenarios still execute
 the native artifacts. Behavior that needs only two machines uses a two-node mesh;
 relay faults, collisions, grouping and cross-machine matrices keep three.
 
+The cold installer downloads the original checksum-pinned Mutagen archive from
+a private loopback mirror, then performs real verification, extraction and sync.
+`T3_MESH_TEST_ASSET_ORIGIN` is accepted only by test runtimes; production bundles
+and non-test source execution retain the original release URL. Nightly leaves
+the mirror unset and downloads from the real release service.
+
 Full replicas execute checksum-pinned pnpm against an offline local dependency.
 The wrapper records successful frozen installs, and the scenario imports the
 installed package as well as checking first-sync and lock-change counts.
