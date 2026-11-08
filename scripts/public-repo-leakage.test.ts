@@ -25,11 +25,12 @@ it("keeps private machine infrastructure out of tracked text", () => {
     .split("\0")
     .filter(Boolean);
   const forbidden =
-    /(?:152\.89\.244|78\.17\.147|91\.77\.163)\.|id_malan[i]ya|\.nvm\/versions\/node\/v26\.12\.1|laptop-trans[f]er|vpn-[o]ps|bolych[e]v|nobodysh[u]rt|\/home\/user\b|(?<!com\.)\bgvi[d]on\b(?!-Solutions)|\boper[a]lia\b/iu;
+    /(?:152\.89\.244|78\.17\.147|91\.77\.163)\.|id_malan[i]ya|\.nvm\/versions\/node\/v26\.12\.1|gor-trans[f]er|vpn-[o]ps|bolych[e]v|nobodysh[u]rt|\/home\/user\b|(?<!com\.)\bgvi[d]on\b(?!-Solutions)|\boper[a]lia\b|gor\.local|Ант[о]н|vtb[f]amily|potential[p]lus|edu[p]latform|non-stand[a]rt/iu;
   const leaked = [...new Set([...files, ...archives])].filter((file) => {
     const data = NodeFS.readFileSync(NodePath.join(root, file));
-    return forbidden.test(
-      (file.endsWith(".gz") ? NodeZlib.gunzipSync(data) : data).toString("utf8"),
+    return (
+      (/^(?:scripts|docs)\//.test(file) && /\.t3-sidebar-serv[e]r/.test(data.toString("utf8"))) ||
+      forbidden.test((file.endsWith(".gz") ? NodeZlib.gunzipSync(data) : data).toString("utf8"))
     );
   });
   expect(leaked).toEqual([]);

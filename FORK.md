@@ -1706,7 +1706,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 
 ### 2026-10-10 — Workspace sidebar
 
-- **What.** Workspaces (e.g. personal / vtbfamily / potentialplus / eduplatform) as square
+- **What.** Workspaces (e.g. personal / studio / research / learning) as square
   tiles at the bottom, current workspace name at the top, one toggle (Alt+0) to see every
   workspace in one list. Projects are folders with one-line threads in a stable order, a
   Quiet projects group, pinned and snoozed sections, search, context menus, Alt+1…9 to switch
@@ -1864,3 +1864,12 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **What:** Existing sync sessions remain adoptable after machine display titles change.
 - **How:** Resolve their endpoints through the stable machine bindings and managed or existing SSH hosts; ambiguous hosts remain rejected.
 - **Where:** `apps/server/src/replicas/adoptionModel.ts`, `ProjectReplicaService.ts` and their tests.
+
+### 2026-11-08 — C3 public repository hygiene
+
+- **What.** Remove captured bed output and personal fixture names from public sources.
+- **How.** The leakage guard covers private hosts, project names and legacy server paths in
+  scripts/docs. Workflow policy now checks every workflow for explicit read permissions and
+  immutable action revisions; Node setup reads the root package metadata.
+- **Where.** `scripts/public-repo-leakage.test.ts`, `scripts/security-workflows.test.ts`,
+  `.github/workflows/`, mesh evaluation and workspace fixtures.

@@ -1080,3 +1080,11 @@ Future-row quarantine must also recover the saved HLC from retained valid rows:
 otherwise the bounded clock refuses every startup write after clock correction.
 Heartbeat scheduling caps a pending-pong wait at the next ping interval, since
 an asynchronous pong can shorten a deadline after its sleep was scheduled.
+
+## Public source hygiene
+
+`scripts/public-repo-leakage.test.ts` checks tracked text and compressed fixtures for private
+infrastructure and fixture names. Keep run output outside tracked sources and use neutral
+identities in evaluation captures. `scripts/security-workflows.test.ts` checks all workflows
+for explicit repository read permissions and immutable external actions; Node setup uses
+`package.json` as its version source.

@@ -64,7 +64,7 @@ if [ "${MESH_E2E_ALLOW_LIVE:-0}" != 1 ]; then
     [ "$port" != 3774 ] || { echo 'Live port requires MESH_E2E_ALLOW_LIVE=1' >&2; exit 1; }
   done
   for directory in "$STATE_DIR" "$NODE_A_BASE_DIR" "$NODE_B_STATE_DIR" "$NODE_B_BASE_DIR" "$CLOUD_DIR"; do
-    case "$directory" in */.t3|*/.t3/*|*/.t3-sidebar|*/.t3-sidebar/*|*/.t3-sidebar-server|*/.t3-sidebar-server/*|*/t3-ws|/|"$HOME")
+    case "$directory" in */.t3|*/.t3/*|*/.t3-sidebar|*/.t3-sidebar/*|*/.t3-sidebar-*|*/.t3-sidebar-*/*|*/t3-ws|/|"$HOME")
       echo 'Live data requires MESH_E2E_ALLOW_LIVE=1' >&2; exit 1 ;;
     esac
   done

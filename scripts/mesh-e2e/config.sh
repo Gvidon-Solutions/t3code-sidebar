@@ -10,7 +10,7 @@ BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-C1}
 [ "$(nodeB_ssh 'cat /tmp/mesh-bed.lock/owner')" = "$BED_LOCK_OWNER" ] || die "acquire the $BED_LOCK_OWNER bed lock first"
 chmod 700 "$WORK"
 CTL="$REPO_ROOT/agent-kit/skills/t3/scripts/t3ctl.mjs"
-NODE_B_DATA_DIR=${MESH_E2E_NODE_B_BASE_DIR:-$(nodeB_ssh 'printf "%s" "$HOME/.t3-sidebar-server"')}
+NODE_B_DATA_DIR=${MESH_E2E_NODE_B_BASE_DIR:-$(nodeB_ssh 'printf "%s" "$HOME/.t3-sidebar"')}
 for machine in nodeB cloud; do
   cat > "$WORK/t3-$machine" <<EOF
 #!/usr/bin/env bash

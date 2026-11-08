@@ -61,7 +61,7 @@ NodeTest.test("live units, ports and base directories require an explicit live o
     for (const setting of [
       "NODE_B_UNIT=t3code-sidebar.service",
       "NODE_B_PORT=3774",
-      'NODE_B_BASE_DIR="$HOME/.t3-sidebar-server"',
+      'NODE_B_BASE_DIR="$HOME/.t3-sidebar"',
     ]) {
       configured(fixture, setting);
       NodeAssert.notEqual(source(fixture).status, 0, setting);
@@ -114,7 +114,7 @@ NodeTest.test(
         .join("\n");
       NodeAssert.doesNotMatch(
         sent,
-        /t3code-sidebar\.service|\.t3-sidebar-server|--port 3774|authorized_keys/,
+        /t3code-sidebar\.service|\.t3-sidebar|--port 3774|authorized_keys/,
       );
       NodeAssert.match(sent, /t3-mesh-e2e-nodeB\.service/);
       NodeAssert.ok(sent.includes(`Environment=HOME=${remote}/server/home`));

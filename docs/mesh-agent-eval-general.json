@@ -36,90 +36,90 @@
       {
         "receivedAt": "2026-11-03T09:51:33.691Z",
         "id": "ui-request:1793699493685:1",
-        "threadId": "mcp:b935a866-0c44-45ba-8c9d-94ba3b5aa492",
+        "threadId": "mcp:00000000-0000-4000-8000-000000000001",
         "target": {
           "kind": "file",
           "path": "/home/dev/t3-replicas/demo-2/README.md",
-          "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+          "environmentId": "00000000-0000-4000-8000-000000000002"
         }
       },
       {
         "receivedAt": "2026-11-03T09:51:39.044Z",
         "id": "ui-request:1793699499043:3",
-        "threadId": "mcp:44ca8a48-7d89-46a8-9019-7d43d3c6c07e",
+        "threadId": "mcp:00000000-0000-4000-8000-000000000003",
         "target": {
           "kind": "thread",
-          "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-          "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+          "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+          "environmentId": "00000000-0000-4000-8000-000000000005"
         }
       },
       {
         "receivedAt": "2026-11-03T09:51:39.046Z",
         "id": "ui-request:1793699499045:4",
-        "threadId": "mcp:0f020a1b-8dad-459f-941c-044c6ef3fd57",
+        "threadId": "mcp:00000000-0000-4000-8000-000000000006",
         "target": {
           "kind": "thread",
-          "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
-          "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+          "threadId": "mcp:00000000-0000-4000-8000-000000000007",
+          "environmentId": "00000000-0000-4000-8000-000000000005"
         }
       },
       {
         "receivedAt": "2026-11-03T09:51:44.808Z",
         "id": "ui-request:1793699504806:5",
-        "threadId": "mcp:87235489-5edd-43c0-941f-f89ded4902bf",
+        "threadId": "mcp:00000000-0000-4000-8000-000000000008",
         "target": {
           "kind": "thread",
-          "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-          "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+          "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+          "environmentId": "00000000-0000-4000-8000-000000000005"
         }
       },
       {
         "receivedAt": "2026-11-03T09:52:39.542Z",
         "id": "ui-request:1793699559541:6",
-        "threadId": "mcp:12b61687-1726-4c90-8ac9-307d125c0a28",
+        "threadId": "mcp:00000000-0000-4000-8000-000000000009",
         "target": {
           "kind": "thread",
-          "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
-          "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+          "threadId": "mcp:00000000-0000-4000-8000-000000000007",
+          "environmentId": "00000000-0000-4000-8000-000000000005"
         }
       },
       {
         "receivedAt": "2026-11-03T09:55:19.606Z",
         "id": "ui-request:1793699719604:7",
-        "threadId": "mcp:684dee32-4e6b-489e-bd7d-8741e1eb94ed",
+        "threadId": "mcp:00000000-0000-4000-8000-000000000010",
         "target": {
           "kind": "thread",
-          "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-          "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+          "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+          "environmentId": "00000000-0000-4000-8000-000000000005"
         }
       },
       {
         "receivedAt": "2026-11-03T09:57:18.287Z",
         "id": "ui-request:1793699838286:8",
-        "threadId": "mcp:f6615644-50c9-4ff5-a5d2-91afb4890fcf",
+        "threadId": "mcp:00000000-0000-4000-8000-000000000011",
         "target": {
           "kind": "file",
           "path": "/home/dev/t3-replicas/demo-2/README.md",
-          "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+          "environmentId": "00000000-0000-4000-8000-000000000002"
         }
       }
     ],
     "children": {
-      "mcp:1a626209-09be-418f-b140-1e76f1f32621": {
-        "threadId": "mcp:1a626209-09be-418f-b140-1e76f1f32621",
-        "link": "<t3-thread://v2/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/mcp:1a626209-09be-418f-b140-1e76f1f32621>",
+      "mcp:00000000-0000-4000-8000-000000000012": {
+        "threadId": "mcp:00000000-0000-4000-8000-000000000012",
+        "link": "<t3-thread://v2/00000000-0000-4000-8000-000000000005/mcp:00000000-0000-4000-8000-000000000012>",
         "status": "completed",
-        "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+        "projectId": "00000000-0000-4000-8000-000000000013",
         "finalAnswers": [
           "Сначала посмотрю README и инструкции проекта, затем добавлю одну подходящую строку и сверю её на primary через указанную команду.",
           "Добавил в конец [README.md](/home/t3/t3-replicas/demo-6/README.md) строку: «Скрипт `scripts/run.sh` выводит содержимое `src/main.txt`.»\n\nПроверил файл на primary: строка синхронизировалась. Изменён только README."
         ]
       },
-      "mcp:eebeb73d-2bac-4300-bcbe-392916528cdc": {
-        "threadId": "mcp:eebeb73d-2bac-4300-bcbe-392916528cdc",
-        "link": "<t3-thread://v2/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/mcp:eebeb73d-2bac-4300-bcbe-392916528cdc>",
+      "mcp:00000000-0000-4000-8000-000000000014": {
+        "threadId": "mcp:00000000-0000-4000-8000-000000000014",
+        "link": "<t3-thread://v2/00000000-0000-4000-8000-000000000005/mcp:00000000-0000-4000-8000-000000000014>",
         "status": "completed",
-        "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+        "projectId": "00000000-0000-4000-8000-000000000013",
         "finalAnswers": [
           "Сначала прочитаю указанную ветку и проверю структуру проекта и README в реплике; затем добавлю одну подходящую строку и сверю результат.",
           "Реплика подключена к primary и синхронизация активна без конфликтов. Сейчас посмотрю README и файлы проекта в реплике, чтобы новая строка соответствовала содержимому, а не была общей заглушкой.",
@@ -127,11 +127,11 @@
           "Добавил в `README.md` строку: `Run \\`sh scripts/run.sh\\` to print the contents of \\`src/main.txt\\`.`\n\nПроверил её в реплике и на primary `nodeB`; синхронизация прошла. Коммит не создавал."
         ]
       },
-      "mcp:6231f506-e60c-471e-a083-b957d61013af": {
-        "threadId": "mcp:6231f506-e60c-471e-a083-b957d61013af",
-        "link": "<t3-thread://v2/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/mcp:6231f506-e60c-471e-a083-b957d61013af>",
+      "mcp:00000000-0000-4000-8000-000000000015": {
+        "threadId": "mcp:00000000-0000-4000-8000-000000000015",
+        "link": "<t3-thread://v2/00000000-0000-4000-8000-000000000005/mcp:00000000-0000-4000-8000-000000000015>",
         "status": "completed",
-        "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+        "projectId": "00000000-0000-4000-8000-000000000013",
         "finalAnswers": [
           "Сначала прочитаю указанную ветку, затем просмотрю README в проекте на VPS и добавлю одну подходящую строку, сохранив остальной текст. Проверку выполню только на primary через `ssh nodeB` по указанному пути.",
           "Подтвердил, что это Mutagen-реплика проекта, синхронизация активна без конфликтов. Сейчас посмотрю README в локальном представлении и статус изменений перед правкой, чтобы сохранить существующий текст и не затронуть чужую работу.",
@@ -139,11 +139,11 @@
           "Добавлена строка: «Цель проекта — проверить двустороннюю синхронизацию файлов между копиями.»\n\nПроверки на primary прошли: `git diff --check` без замечаний, `sh scripts/run.sh` вывел `hello from nodeB`. Коммит не создавал."
         ]
       },
-      "mcp:8406a29a-5c96-47f0-b044-254b8cfa6607": {
-        "threadId": "mcp:8406a29a-5c96-47f0-b044-254b8cfa6607",
-        "link": "<t3-thread://v2/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/mcp:8406a29a-5c96-47f0-b044-254b8cfa6607>",
+      "mcp:00000000-0000-4000-8000-000000000016": {
+        "threadId": "mcp:00000000-0000-4000-8000-000000000016",
+        "link": "<t3-thread://v2/00000000-0000-4000-8000-000000000005/mcp:00000000-0000-4000-8000-000000000016>",
         "status": "completed",
-        "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+        "projectId": "00000000-0000-4000-8000-000000000013",
         "finalAnswers": [
           "Сначала проверю сведения о треде и структуру проекта, затем допишу строку в README на реплике `demo` и сверю diff через primary по указанной SSH-команде.",
           "Синхронизация реплики активна без конфликтов. Сейчас прочитаю README и проверю его текущее окончание, чтобы добавить короткую строку в том же тоне.",
@@ -151,31 +151,31 @@
           "В конец [README.md](/home/t3/t3-replicas/demo-6/README.md) добавил строку: «Демо показывает согласованность файлов в обеих копиях.»\n\nПроверил diff на primary через `ssh nodeB`: добавление синхронизировалось. Коммит не создавал."
         ]
       },
-      "mcp:bb6cb221-ea49-4c0e-85d3-22b88d08feec": {
-        "threadId": "mcp:bb6cb221-ea49-4c0e-85d3-22b88d08feec",
-        "link": "<t3-thread://v2/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/mcp:bb6cb221-ea49-4c0e-85d3-22b88d08feec>",
+      "mcp:00000000-0000-4000-8000-000000000017": {
+        "threadId": "mcp:00000000-0000-4000-8000-000000000017",
+        "link": "<t3-thread://v2/00000000-0000-4000-8000-000000000005/mcp:00000000-0000-4000-8000-000000000017>",
         "status": "completed",
-        "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+        "projectId": "00000000-0000-4000-8000-000000000013",
         "finalAnswers": [
           "Прочитаю README и добавлю одну строку в подходящем месте, сохранив стиль документа. Git-проверки выполню на primary; коммит создавать не буду.\n",
           "В [README.md](/home/t3/t3-replicas/demo-6/README.md:5) после строки о Mutagen добавлена одна строка в стиле соседних инструкций: `Run Git commands, builds, and tests on nodeB.`\n\nИзменение синхронизировалось на primary, `git diff --check` прошёл. Коммит не создавал."
         ]
       },
-      "mcp:9f16c4f3-a4dd-4820-92fe-ebf574250a67": {
-        "threadId": "mcp:9f16c4f3-a4dd-4820-92fe-ebf574250a67",
-        "link": "<t3-thread://v2/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/mcp:9f16c4f3-a4dd-4820-92fe-ebf574250a67>",
+      "mcp:00000000-0000-4000-8000-000000000018": {
+        "threadId": "mcp:00000000-0000-4000-8000-000000000018",
+        "link": "<t3-thread://v2/00000000-0000-4000-8000-000000000005/mcp:00000000-0000-4000-8000-000000000018>",
         "status": "completed",
-        "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+        "projectId": "00000000-0000-4000-8000-000000000013",
         "finalAnswers": [
           "Сначала проверю README и контекст проекта в реплике, затем добавлю одну подходящую строку. Git-команды не запускаю; если понадобится проверка состояния, выполню её на primary указанной командой.",
           "Добавил одну строку в README в абзац о цели проекта: проверку синхронизации можно выполнить, изменив файл в одной копии и сверив его в другой. Изменение сделано в реплике; сборку и git-команды не запускал."
         ]
       },
-      "mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3": {
-        "threadId": "mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3",
-        "link": "<t3-thread://v2/8bd7a7df-310c-48e9-9be9-f65ccd6c05f4/mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3>",
+      "mcp:00000000-0000-4000-8000-000000000019": {
+        "threadId": "mcp:00000000-0000-4000-8000-000000000019",
+        "link": "<t3-thread://v2/00000000-0000-4000-8000-000000000005/mcp:00000000-0000-4000-8000-000000000019>",
         "status": "completed",
-        "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+        "projectId": "00000000-0000-4000-8000-000000000013",
         "finalAnswers": [
           "Сначала проверю детали исходного треда и README в реплике. Затем добавлю одну строку, не запуская Git или сборки на этой машине.",
           "Синхронизация сейчас в состоянии `watching`, конфликтов и проблем нет. Найду README и добавлю строку в стиле существующего текста.",
@@ -191,44 +191,44 @@
     },
     "replicas": [
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
-        "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+        "logicalKey": "00000000-0000-4000-8000-000000000020:/home/dev/xdev-e2e/demo",
+        "environmentId": "00000000-0000-4000-8000-000000000020",
         "path": "/home/dev/xdev-e2e/demo",
         "role": "primary",
         "state": "watching",
         "source": null
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
-        "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+        "logicalKey": "00000000-0000-4000-8000-000000000020:/home/dev/xdev-e2e/demo",
+        "environmentId": "00000000-0000-4000-8000-000000000002",
         "path": "/home/dev/t3-replicas/demo-2",
         "role": "replica",
         "state": "watching",
-        "source": "34e33796-4717-4293-a955-88c2f740db4d"
+        "source": "00000000-0000-4000-8000-000000000020"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
-        "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+        "logicalKey": "00000000-0000-4000-8000-000000000020:/home/dev/xdev-e2e/demo",
+        "environmentId": "00000000-0000-4000-8000-000000000005",
         "path": "/home/t3/t3-replicas/demo-6",
         "role": "replica",
         "state": "watching",
-        "source": "34e33796-4717-4293-a955-88c2f740db4d"
+        "source": "00000000-0000-4000-8000-000000000020"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
-        "environmentId": "98fe006e-1a2f-497b-ae5d-1714bccb2052",
+        "logicalKey": "00000000-0000-4000-8000-000000000020:/home/dev/xdev-e2e/demo",
+        "environmentId": "00000000-0000-4000-8000-000000000021",
         "path": "/home/dev/t3-replicas/demo",
         "role": "replica",
         "state": "error",
-        "source": "34e33796-4717-4293-a955-88c2f740db4d"
+        "source": "00000000-0000-4000-8000-000000000020"
       },
       {
-        "logicalKey": "34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo",
-        "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+        "logicalKey": "00000000-0000-4000-8000-000000000020:/home/dev/xdev-e2e/demo",
+        "environmentId": "00000000-0000-4000-8000-000000000022",
         "path": "/tmp/t3-eval-home/demo",
         "role": "replica",
         "state": "watching",
-        "source": "34e33796-4717-4293-a955-88c2f740db4d"
+        "source": "00000000-0000-4000-8000-000000000020"
       }
     ]
   },
@@ -238,8 +238,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:8ceb1a01-debe-437c-9dbe-5783bf3e1948",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A8ceb1a01-debe-437c-9dbe-5783bf3e1948",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000023",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000023",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:43:37.416Z",
       "completedAt": "2026-11-03T09:48:15.260Z",
@@ -306,8 +306,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:36cc2091-6c84-40cd-8a94-6a8f0089cbde",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A36cc2091-6c84-40cd-8a94-6a8f0089cbde",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000024",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000024",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:43:37.562Z",
       "completedAt": "2026-11-03T09:48:15.435Z",
@@ -426,8 +426,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:f7702678-da5a-4f3b-8e34-cc71a2523d7e",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Af7702678-da5a-4f3b-8e34-cc71a2523d7e",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000025",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000025",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:43:37.717Z",
       "completedAt": "2026-11-03T09:48:15.594Z",
@@ -494,8 +494,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:f8b07a6d-fe0d-4ade-8b48-5217b4abad57",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Af8b07a6d-fe0d-4ade-8b48-5217b4abad57",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000026",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000026",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:43:37.891Z",
       "completedAt": "2026-11-03T09:48:15.775Z",
@@ -544,8 +544,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:9746f3c2-9128-411a-ae48-54eafc1fa2e9",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A9746f3c2-9128-411a-ae48-54eafc1fa2e9",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000027",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000027",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:43:38.044Z",
       "completedAt": "2026-11-03T09:48:15.957Z",
@@ -594,8 +594,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:52496766-ada9-4e44-9330-11e04c0fcf9a",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A52496766-ada9-4e44-9330-11e04c0fcf9a",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000028",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000028",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:43:38.218Z",
       "completedAt": "2026-11-03T09:48:16.148Z",
@@ -655,8 +655,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:4ed88d3f-fc1d-4bf2-9095-179dd477c4ac",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A4ed88d3f-fc1d-4bf2-9095-179dd477c4ac",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000029",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000029",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:43:38.390Z",
       "completedAt": "2026-11-03T09:48:16.319Z",
@@ -705,8 +705,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 8,
       "prompt": "в реплике demo на впс закоммить изменения",
-      "threadId": "mcp:2834f810-e148-467c-b38d-800e393fe9de",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A2834f810-e148-467c-b38d-800e393fe9de",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000030",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000030",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:45:02.614Z",
       "completedAt": "2026-11-03T09:48:16.498Z",
@@ -764,8 +764,8 @@
       "model": "gpt-6-luna",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:08538a0b-ac2c-4f07-8999-7fe7ff6099f2",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A08538a0b-ac2c-4f07-8999-7fe7ff6099f2",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000031",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000031",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:36.147Z",
       "completedAt": "2026-11-03T09:44:24.818Z",
@@ -803,22 +803,22 @@
         {
           "timestamp": "2026-11-03T09:44:01.124Z",
           "tool": "exec",
-          "input": "const results = await Promise.allSettled([\n  tools.mcp__t3_code__t3_environment_read({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}),\n  tools.mcp__t3_code__t3_project_machines({project:\"demo\",live:true})\n]);\nfor (const x of results) text(x);\n"
+          "input": "const results = await Promise.allSettled([\n  tools.mcp__t3_code__t3_environment_read({environmentId:\"00000000-0000-4000-8000-000000000005\"}),\n  tools.mcp__t3_code__t3_project_machines({project:\"demo\",live:true})\n]);\nfor (const x of results) text(x);\n"
         },
         {
           "timestamp": "2026-11-03T09:44:11.735Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n  projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n  title:\"Дополнить README\",\n  message:\"Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил.\"\n});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"00000000-0000-4000-8000-000000000005\",\n  projectId:\"00000000-0000-4000-8000-000000000013\",\n  title:\"Дополнить README\",\n  message:\"Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил.\"\n});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:44:15.912Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__orchestrator_capabilities({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__orchestrator_capabilities({environmentId:\"00000000-0000-4000-8000-000000000005\"});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:44:19.833Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n  projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n  title:\"Дополнить README\",\n  modelSelection:{provider:\"codex\",model:\"gpt-6-luna\"},\n  message:\"Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил.\"\n});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"00000000-0000-4000-8000-000000000005\",\n  projectId:\"00000000-0000-4000-8000-000000000013\",\n  title:\"Дополнить README\",\n  modelSelection:{provider:\"codex\",model:\"gpt-6-luna\"},\n  message:\"Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил.\"\n});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -837,7 +837,7 @@
         {
           "tool": "t3-code.t3_environment_read",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+            "environmentId": "00000000-0000-4000-8000-000000000005"
           }
         },
         {
@@ -850,8 +850,8 @@
         {
           "tool": "t3-code.t3_thread_launch",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-            "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
+            "projectId": "00000000-0000-4000-8000-000000000013",
             "title": "Дополнить README",
             "message": "Допиши в README.md одну короткую строку, которая уместно описывает проект и соответствует уже существующему тексту. Сохрани стиль README, не меняй другие файлы и не переписывай существующие разделы. Это синхронизируемая реплика: правь файлы здесь, а любые git-команды запускай только на primary: ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'. После правки проверь синхронизацию/результат на primary и сообщи, какую строку добавил."
           }
@@ -859,14 +859,14 @@
         {
           "tool": "t3-code.orchestrator_capabilities",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+            "environmentId": "00000000-0000-4000-8000-000000000005"
           }
         },
         {
           "tool": "t3-code.t3_thread_launch",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-            "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
+            "projectId": "00000000-0000-4000-8000-000000000013",
             "title": "Дополнить README",
             "modelSelection": {
               "provider": "codex",
@@ -876,11 +876,11 @@
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-36-01a1a0ca-ee17-73a2-bc6c-8dc4be972926.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-36-00000000-0000-4000-8000-000000000032.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": ["mcp:1a626209-09be-418f-b140-1e76f1f32621"],
+      "childThreadIds": ["mcp:00000000-0000-4000-8000-000000000012"],
       "callErrors": [
         {
           "position": 3,
@@ -904,8 +904,8 @@
       "model": "gpt-6-luna",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:c1c1f645-5221-41e0-8e3d-8b843632a969",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ac1c1f645-5221-41e0-8e3d-8b843632a969",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000033",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000033",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:36.341Z",
       "completedAt": "2026-11-03T09:44:10.947Z",
@@ -943,12 +943,12 @@
         {
           "timestamp": "2026-11-03T09:44:01.741Z",
           "tool": "exec",
-          "input": "const ids=[\"db074357-317f-4e5c-bb15-fa08074b06c1\",\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\"34e33796-4717-4293-a955-88c2f740db4d\",\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"];\nconst out=await Promise.all(ids.map(async environmentId=>({environmentId,ru:await tools.mcp__t3_code__t3_thread_search({environmentId,query:\"маунт\",limit:20}),en:await tools.mcp__t3_code__t3_thread_search({environmentId,query:\"mount\",limit:20})})));\ntext(out);\n"
+          "input": "const ids=[\"00000000-0000-4000-8000-000000000022\",\"00000000-0000-4000-8000-000000000005\",\"00000000-0000-4000-8000-000000000020\",\"00000000-0000-4000-8000-000000000002\"];\nconst out=await Promise.all(ids.map(async environmentId=>({environmentId,ru:await tools.mcp__t3_code__t3_thread_search({environmentId,query:\"маунт\",limit:20}),en:await tools.mcp__t3_code__t3_thread_search({environmentId,query:\"mount\",limit:20})})));\ntext(out);\n"
         },
         {
           "timestamp": "2026-11-03T09:44:07.744Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",threadId:\"mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a\"}});\ntext(r);\n"
+          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",environmentId:\"00000000-0000-4000-8000-000000000005\",threadId:\"mcp:00000000-0000-4000-8000-000000000004\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -967,7 +967,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+            "environmentId": "00000000-0000-4000-8000-000000000022",
             "query": "маунт",
             "limit": 20
           }
@@ -975,7 +975,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "query": "маунт",
             "limit": 20
           }
@@ -983,7 +983,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "query": "маунт",
             "limit": 20
           }
@@ -991,7 +991,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "environmentId": "00000000-0000-4000-8000-000000000002",
             "query": "маунт",
             "limit": 20
           }
@@ -999,7 +999,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+            "environmentId": "00000000-0000-4000-8000-000000000022",
             "query": "mount",
             "limit": 20
           }
@@ -1007,7 +1007,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "environmentId": "00000000-0000-4000-8000-000000000002",
             "query": "mount",
             "limit": 20
           }
@@ -1015,7 +1015,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "query": "mount",
             "limit": 20
           }
@@ -1023,7 +1023,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "query": "mount",
             "limit": 20
           }
@@ -1033,13 +1033,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a"
+              "environmentId": "00000000-0000-4000-8000-000000000005",
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-36-01a1a0ca-eed2-7ec1-84d8-ccae24bb1453.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-36-00000000-0000-4000-8000-000000000034.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1061,8 +1061,8 @@
       "model": "gpt-6-luna",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:c58696c1-a759-420a-81b5-4427a5a7fcc7",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ac58696c1-a759-420a-81b5-4427a5a7fcc7",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000035",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000035",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:36.517Z",
       "completedAt": "2026-11-03T09:43:51.082Z",
@@ -1085,7 +1085,7 @@
         {
           "timestamp": "2026-11-03T09:43:47.976Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"34e33796-4717-4293-a955-88c2f740db4d\",path:\"/home/dev/xdev-e2e/demo/README.md\"}});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"00000000-0000-4000-8000-000000000020\",path:\"/home/dev/xdev-e2e/demo/README.md\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -1094,13 +1094,13 @@
           "input": {
             "target": {
               "kind": "file",
-              "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+              "environmentId": "00000000-0000-4000-8000-000000000020",
               "path": "/home/dev/xdev-e2e/demo/README.md"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-36-01a1a0ca-ef81-73d0-a7fa-b79e89c6ba76.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-36-00000000-0000-4000-8000-000000000036.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1116,8 +1116,8 @@
       "model": "gpt-6-luna",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:c382fc0d-3d76-4f33-812e-17dca3766205",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ac382fc0d-3d76-4f33-812e-17dca3766205",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000037",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000037",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:36.717Z",
       "completedAt": "2026-11-03T09:44:29.438Z",
@@ -1165,7 +1165,7 @@
         {
           "timestamp": "2026-11-03T09:44:25.416Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_project_place({project:\"demo\",machine:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\",role:\"replica\",wait:600});\ntext(JSON.stringify(r));\n"
+          "input": "const r = await tools.mcp__t3_code__t3_project_place({project:\"demo\",machine:\"00000000-0000-4000-8000-000000000002\",role:\"replica\",wait:600});\ntext(JSON.stringify(r));\n"
         }
       ],
       "activityActions": [
@@ -1201,13 +1201,13 @@
           "tool": "t3-code.t3_project_place",
           "input": {
             "project": "demo",
-            "machine": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "machine": "00000000-0000-4000-8000-000000000002",
             "role": "replica",
             "wait": 600
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-36-01a1a0ca-f045-7673-8bc3-77e0271abcb9.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-36-00000000-0000-4000-8000-000000000038.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1229,8 +1229,8 @@
       "model": "gpt-6-luna",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:c433d1d4-3b0f-409e-af18-8313085df06b",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ac433d1d4-3b0f-409e-af18-8313085df06b",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000039",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000039",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:36.881Z",
       "completedAt": "2026-11-03T09:44:58.173Z",
@@ -1271,7 +1271,7 @@
           "command": "$ /usr/bin/zsh -lc '~/.local/bin/t3ctl status --all'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-36-01a1a0ca-f0e4-7243-867b-c8354981b6ef.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-36-00000000-0000-4000-8000-000000000040.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1287,8 +1287,8 @@
       "model": "gpt-6-luna",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:1e5e16aa-8222-492d-b09e-7568e2f335a0",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A1e5e16aa-8222-492d-b09e-7568e2f335a0",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000041",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000041",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:37.059Z",
       "completedAt": "2026-11-03T09:43:44.586Z",
@@ -1320,7 +1320,7 @@
           "input": {}
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-37-01a1a0ca-f19b-78a0-aae9-6ce680e54a3c.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-37-00000000-0000-4000-8000-000000000042.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1336,8 +1336,8 @@
       "model": "gpt-6-luna",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:f5025166-f683-43f4-938e-8d72fa26435e",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Af5025166-f683-43f4-938e-8d72fa26435e",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000043",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000043",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:37.229Z",
       "completedAt": "2026-11-03T09:45:08.956Z",
@@ -1375,17 +1375,17 @@
         {
           "timestamp": "2026-11-03T09:44:56.711Z",
           "tool": "exec",
-          "input": "const envs=[\"db074357-317f-4e5c-bb15-fa08074b06c1\",\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\"34e33796-4717-4293-a955-88c2f740db4d\",\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"];\nconst qs=[\"конфликт\",\"conflict\"];\nconst rs=await Promise.all(envs.flatMap(environmentId=>qs.map(query=>tools.mcp__t3_code__t3_thread_search({environmentId,query,limit:10}))));\ntext(JSON.stringify(rs.map((r,i)=>({env:envs[Math.floor(i/2)],query:qs[i%2],matches:r.structuredContent?.matches}))));\n"
+          "input": "const envs=[\"00000000-0000-4000-8000-000000000022\",\"00000000-0000-4000-8000-000000000005\",\"00000000-0000-4000-8000-000000000020\",\"00000000-0000-4000-8000-000000000002\"];\nconst qs=[\"конфликт\",\"conflict\"];\nconst rs=await Promise.all(envs.flatMap(environmentId=>qs.map(query=>tools.mcp__t3_code__t3_thread_search({environmentId,query,limit:10}))));\ntext(JSON.stringify(rs.map((r,i)=>({env:envs[Math.floor(i/2)],query:qs[i%2],matches:r.structuredContent?.matches}))));\n"
         },
         {
           "timestamp": "2026-11-03T09:45:01.644Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__t3_thread_read({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",threadId:\"mcp:ec5e0aed-26fc-4134-a709-897ea7829748\",limit:10,maxCharsPerItem:3000});\ntext(JSON.stringify(r.structuredContent ?? r));\n"
+          "input": "const r=await tools.mcp__t3_code__t3_thread_read({environmentId:\"00000000-0000-4000-8000-000000000005\",threadId:\"mcp:00000000-0000-4000-8000-000000000007\",limit:10,maxCharsPerItem:3000});\ntext(JSON.stringify(r.structuredContent ?? r));\n"
         },
         {
           "timestamp": "2026-11-03T09:45:06.734Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",threadId:\"mcp:ec5e0aed-26fc-4134-a709-897ea7829748\"}});\ntext(JSON.stringify(r.structuredContent ?? r));\n"
+          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",environmentId:\"00000000-0000-4000-8000-000000000005\",threadId:\"mcp:00000000-0000-4000-8000-000000000007\"}});\ntext(JSON.stringify(r.structuredContent ?? r));\n"
         }
       ],
       "activityActions": [
@@ -1400,7 +1400,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+            "environmentId": "00000000-0000-4000-8000-000000000022",
             "query": "конфликт",
             "limit": 10
           }
@@ -1408,7 +1408,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "query": "конфликт",
             "limit": 10
           }
@@ -1416,7 +1416,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+            "environmentId": "00000000-0000-4000-8000-000000000022",
             "query": "conflict",
             "limit": 10
           }
@@ -1424,7 +1424,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "query": "conflict",
             "limit": 10
           }
@@ -1432,7 +1432,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "query": "конфликт",
             "limit": 10
           }
@@ -1440,7 +1440,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "environmentId": "00000000-0000-4000-8000-000000000002",
             "query": "конфликт",
             "limit": 10
           }
@@ -1448,7 +1448,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "query": "conflict",
             "limit": 10
           }
@@ -1456,7 +1456,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "environmentId": "00000000-0000-4000-8000-000000000002",
             "query": "conflict",
             "limit": 10
           }
@@ -1464,8 +1464,8 @@
         {
           "tool": "t3-code.t3_thread_read",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-            "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
+            "threadId": "mcp:00000000-0000-4000-8000-000000000007",
             "limit": 10,
             "maxCharsPerItem": 3000
           }
@@ -1475,13 +1475,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-              "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748"
+              "environmentId": "00000000-0000-4000-8000-000000000005",
+              "threadId": "mcp:00000000-0000-4000-8000-000000000007"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-37-01a1a0ca-f23d-7142-b3c4-5a19edb15782.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-37-00000000-0000-4000-8000-000000000044.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1497,8 +1497,8 @@
       "model": "gpt-6-luna",
       "request": 8,
       "prompt": "в реплике demo на впс закоммить изменения",
-      "threadId": "mcp:7812febe-d3d1-47c7-800f-9675aae700e9",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A7812febe-d3d1-47c7-800f-9675aae700e9",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000045",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000045",
       "status": "completed",
       "requestedAt": "2026-11-03T09:45:01.390Z",
       "completedAt": "2026-11-03T09:45:20.601Z",
@@ -1561,7 +1561,7 @@
           "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git status --short --branch && git log -1 --oneline --decorate && git show --stat --oneline -1' \""
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-45-01-01a1a0cc-3b1f-7321-a7e2-def8b717585d.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-45-01-00000000-0000-4000-8000-000000000046.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1583,8 +1583,8 @@
       "model": "gpt-6.1-sol",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:493f3015-2272-464d-bc32-f7926446c2ca",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A493f3015-2272-464d-bc32-f7926446c2ca",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000047",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000047",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:34.585Z",
       "completedAt": "2026-11-03T09:44:14.903Z",
@@ -1612,7 +1612,7 @@
         {
           "timestamp": "2026-11-03T09:43:58.218Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__t3_thread_launch({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",title:\"Добавить строку в README\",message:\"Антон просит дописать одну уместную строку в README проекта demo. Прочитай README и добавь строку по смыслу. Работай в текущей реплике на VPS /home/t3/t3-replicas/demo-6. Git и сборки выполняй только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. Файлы синхронизируются Mutagen. Проверь изменение и коротко сообщи добавленную строку. Коммит не требуется.\"}));\ntext(ALL_TOOLS.filter(x=>x.name.endsWith(\"t3_thread_read\")).map(x=>x.description).join(\"\\n\"));\n"
+          "input": "text(await tools.mcp__t3_code__t3_thread_launch({environmentId:\"00000000-0000-4000-8000-000000000005\",projectId:\"00000000-0000-4000-8000-000000000013\",title:\"Добавить строку в README\",message:\"Пользователь просит дописать одну уместную строку в README проекта demo. Прочитай README и добавь строку по смыслу. Работай в текущей реплике на VPS /home/t3/t3-replicas/demo-6. Git и сборки выполняй только на primary: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. Файлы синхронизируются Mutagen. Проверь изменение и коротко сообщи добавленную строку. Коммит не требуется.\"}));\ntext(ALL_TOOLS.filter(x=>x.name.endsWith(\"t3_thread_read\")).map(x=>x.description).join(\"\\n\"));\n"
         },
         {
           "timestamp": "2026-11-03T09:44:02.763Z",
@@ -1622,7 +1622,7 @@
         {
           "timestamp": "2026-11-03T09:44:10.140Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__t3_thread_read({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",threadId:\"mcp:eebeb73d-2bac-4300-bcbe-392916528cdc\",limit:1,maxCharsPerItem:500}));\n"
+          "input": "text(await tools.mcp__t3_code__t3_thread_read({environmentId:\"00000000-0000-4000-8000-000000000005\",threadId:\"mcp:00000000-0000-4000-8000-000000000014\",limit:1,maxCharsPerItem:500}));\n"
         }
       ],
       "activityActions": [
@@ -1647,10 +1647,10 @@
         {
           "tool": "t3-code.t3_thread_launch",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-            "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
+            "projectId": "00000000-0000-4000-8000-000000000013",
             "title": "Добавить строку в README",
-            "message": "Антон просит дописать одну уместную строку в README проекта demo. Прочитай README и добавь строку по смыслу. Работай в текущей реплике на VPS /home/t3/t3-replicas/demo-6. Git и сборки выполняй только на primary: ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'. Файлы синхронизируются Mutagen. Проверь изменение и коротко сообщи добавленную строку. Коммит не требуется."
+            "message": "Пользователь просит дописать одну уместную строку в README проекта demo. Прочитай README и добавь строку по смыслу. Работай в текущей реплике на VPS /home/t3/t3-replicas/demo-6. Git и сборки выполняй только на primary: ssh 'nodeB' 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'. Файлы синхронизируются Mutagen. Проверь изменение и коротко сообщи добавленную строку. Коммит не требуется."
           }
         },
         {
@@ -1660,18 +1660,18 @@
         {
           "tool": "t3-code.t3_thread_read",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-            "threadId": "mcp:eebeb73d-2bac-4300-bcbe-392916528cdc",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
+            "threadId": "mcp:00000000-0000-4000-8000-000000000014",
             "limit": 1,
             "maxCharsPerItem": 500
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-34-01a1a0ca-e8b2-7a40-92de-20692e428e82.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-34-00000000-0000-4000-8000-000000000048.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": ["mcp:eebeb73d-2bac-4300-bcbe-392916528cdc"],
+      "childThreadIds": ["mcp:00000000-0000-4000-8000-000000000014"],
       "callErrors": [
         {
           "position": 7,
@@ -1690,8 +1690,8 @@
       "model": "gpt-6.1-sol",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:8fef160f-8afc-462a-aa74-b75d4a48b398",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A8fef160f-8afc-462a-aa74-b75d4a48b398",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000049",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000049",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:34.773Z",
       "completedAt": "2026-11-03T09:44:07.231Z",
@@ -1719,7 +1719,7 @@
         {
           "timestamp": "2026-11-03T09:44:02.765Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000004\",environmentId:\"00000000-0000-4000-8000-000000000005\"}}));\n"
         }
       ],
       "activityActions": [
@@ -1740,13 +1740,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-34-01a1a0ca-e8ca-7570-b56b-4d6728e8114f.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-34-00000000-0000-4000-8000-000000000050.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1762,8 +1762,8 @@
       "model": "gpt-6.1-sol",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:8631203d-f12f-45f6-bd60-0a8958c1bbe9",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A8631203d-f12f-45f6-bd60-0a8958c1bbe9",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000051",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000051",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:35.087Z",
       "completedAt": "2026-11-03T09:43:55.653Z",
@@ -1791,7 +1791,7 @@
         {
           "timestamp": "2026-11-03T09:43:51.013Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"00000000-0000-4000-8000-000000000002\"}}));\n"
         }
       ],
       "activityActions": [
@@ -1815,12 +1815,12 @@
             "target": {
               "kind": "file",
               "path": "/home/dev/t3-replicas/demo-2/README.md",
-              "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+              "environmentId": "00000000-0000-4000-8000-000000000002"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-35-01a1a0ca-e9fc-7fe1-9aa7-7c0d64ca4036.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-35-00000000-0000-4000-8000-000000000052.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1836,8 +1836,8 @@
       "model": "gpt-6.1-sol",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:dc97ad34-5c5e-4069-b22d-77e2af043e44",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Adc97ad34-5c5e-4069-b22d-77e2af043e44",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000053",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000053",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:35.314Z",
       "completedAt": "2026-11-03T09:43:51.496Z",
@@ -1880,7 +1880,7 @@
           "command": "$ /usr/bin/zsh -lc 't3ctl machines --json'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-35-01a1a0ca-eadf-7683-b7af-0596504dc418.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-35-00000000-0000-4000-8000-000000000054.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1896,8 +1896,8 @@
       "model": "gpt-6.1-sol",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:c7fc817d-7ea9-46d7-aba6-83232ee4847f",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ac7fc817d-7ea9-46d7-aba6-83232ee4847f",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000055",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000055",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:35.539Z",
       "completedAt": "2026-11-03T09:44:14.200Z",
@@ -1947,7 +1947,7 @@
           "command": "$ /usr/bin/zsh -lc 't3ctl machines'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-35-01a1a0ca-ebb5-7800-8ad8-e62bc14f996b.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-35-00000000-0000-4000-8000-000000000056.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -1963,8 +1963,8 @@
       "model": "gpt-6.1-sol",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:f21ca13d-b696-4716-8322-fadeb5f279ce",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Af21ca13d-b696-4716-8322-fadeb5f279ce",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000057",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000057",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:35.738Z",
       "completedAt": "2026-11-03T09:43:55.041Z",
@@ -2000,7 +2000,7 @@
           "command": "$ /usr/bin/zsh -lc 't3ctl machines'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-35-01a1a0ca-ec6f-7a63-91ca-6e32ff8290c7.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-35-00000000-0000-4000-8000-000000000058.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -2015,8 +2015,8 @@
       "model": "gpt-6.1-sol",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:659cb61b-9ec7-42d7-84a1-87a00665b5eb",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A659cb61b-9ec7-42d7-84a1-87a00665b5eb",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000059",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000059",
       "status": "completed",
       "requestedAt": "2026-11-03T09:43:35.913Z",
       "completedAt": "2026-11-03T09:44:03.241Z",
@@ -2044,7 +2044,7 @@
         {
           "timestamp": "2026-11-03T09:43:58.604Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:ec5e0aed-26fc-4134-a709-897ea7829748\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000007\",environmentId:\"00000000-0000-4000-8000-000000000005\"}}));\n"
         }
       ],
       "activityActions": [
@@ -2065,13 +2065,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000007",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-43-35-01a1a0ca-ed21-7543-abed-6c3f9b5a0823.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-43-35-00000000-0000-4000-8000-000000000060.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -2087,8 +2087,8 @@
       "model": "gpt-6.1-sol",
       "request": 8,
       "prompt": "в реплике demo на впс закоммить изменения",
-      "threadId": "mcp:83784c18-cba5-4b58-a448-7c0634787842",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A83784c18-cba5-4b58-a448-7c0634787842",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000061",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000061",
       "status": "completed",
       "requestedAt": "2026-11-03T09:45:00.344Z",
       "completedAt": "2026-11-03T09:45:17.621Z",
@@ -2133,7 +2133,7 @@
           "command": "$ /usr/bin/zsh -lc \"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: document demo runner and update stage J markers\\\" && git status --short && git log -1 --format=\\\"%h %s\\\"'\""
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-45-00-01a1a0cc-36f9-7ab3-8504-82a99bc64db9.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-45-00-00000000-0000-4000-8000-000000000062.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -2149,8 +2149,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:f04d70d1-0a52-4a91-a79b-b2127703f394",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Af04d70d1-0a52-4a91-a79b-b2127703f394",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000063",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000063",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:49:07.220Z",
       "completedAt": "2026-11-03T09:50:36.429Z",
@@ -2222,8 +2222,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:e85bb069-5e31-4dd4-a644-6db2f9c02eb0",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ae85bb069-5e31-4dd4-a644-6db2f9c02eb0",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000064",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000064",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:49:07.368Z",
       "completedAt": "2026-11-03T09:50:36.600Z",
@@ -2265,8 +2265,8 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
@@ -2291,8 +2291,8 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
@@ -2315,8 +2315,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:a73888a6-e6a0-49aa-b051-f0a5d5e547bb",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Aa73888a6-e6a0-49aa-b051-f0a5d5e547bb",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000065",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000065",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:49:07.521Z",
       "completedAt": "2026-11-03T09:50:36.763Z",
@@ -2348,7 +2348,7 @@
           "tool": "t3-code_t3_project_machines",
           "input": {
             "project": "demo",
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+            "environmentId": "00000000-0000-4000-8000-000000000002"
           }
         }
       ],
@@ -2367,7 +2367,7 @@
           "tool": "t3-code_t3_project_machines",
           "input": {
             "project": "demo",
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+            "environmentId": "00000000-0000-4000-8000-000000000002"
           }
         }
       ],
@@ -2395,8 +2395,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:aa435c95-e8b4-4806-b915-3b30c2701b99",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Aaa435c95-e8b4-4806-b915-3b30c2701b99",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000066",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000066",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:49:07.663Z",
       "completedAt": "2026-11-03T09:50:36.956Z",
@@ -2423,8 +2423,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:d3595983-be85-4048-8a3d-5ec6bee7a90f",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ad3595983-be85-4048-8a3d-5ec6bee7a90f",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000067",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000067",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:49:07.818Z",
       "completedAt": "2026-11-03T09:50:37.131Z",
@@ -2451,8 +2451,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:19368194-84a2-4208-94d4-d436ea6c0cb0",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A19368194-84a2-4208-94d4-d436ea6c0cb0",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000068",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000068",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:49:07.963Z",
       "completedAt": "2026-11-03T09:50:37.294Z",
@@ -2512,8 +2512,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:be00cb91-e10a-4850-9ff3-19cc30d16e70",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Abe00cb91-e10a-4850-9ff3-19cc30d16e70",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000069",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000069",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:49:08.138Z",
       "completedAt": "2026-11-03T09:50:37.460Z",
@@ -2574,8 +2574,8 @@
       "model": "gpt-6-luna",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:ae7018bf-2c34-4d74-afd8-d714c58ddb19",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Aae7018bf-2c34-4d74-afd8-d714c58ddb19",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000070",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000070",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:06.116Z",
       "completedAt": "2026-11-03T09:50:21.725Z",
@@ -2613,7 +2613,7 @@
         {
           "timestamp": "2026-11-03T09:49:37.450Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_project_machines({project:\"demo\",environmentId:\"34e33796-4717-4293-a955-88c2f740db4d\",live:true}); text(r)\n"
+          "input": "const r = await tools.mcp__t3_code__t3_project_machines({project:\"demo\",environmentId:\"00000000-0000-4000-8000-000000000020\",live:true}); text(r)\n"
         },
         {
           "timestamp": "2026-11-03T09:49:43.616Z",
@@ -2623,7 +2623,7 @@
         {
           "timestamp": "2026-11-03T09:49:57.241Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",title:\"Дополнить строку в README\",message:\"Допиши одну подходящую строку в README проекта demo на VPS. Сначала посмотри текущий README и выбери уместную краткую строку. Это синхронизированная replica: файлы редактируй здесь, а любые git-команды и сборки выполняй на primary через `ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'`. Не делай коммит. В конце кратко сообщи, какую строку добавил и где.\",runtimeMode:\"full-access\"}); text(r)\n"
+          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({environmentId:\"00000000-0000-4000-8000-000000000005\",projectId:\"00000000-0000-4000-8000-000000000013\",title:\"Дополнить строку в README\",message:\"Допиши одну подходящую строку в README проекта demo на VPS. Сначала посмотри текущий README и выбери уместную краткую строку. Это синхронизированная replica: файлы редактируй здесь, а любые git-команды и сборки выполняй на primary через `ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'`. Не делай коммит. В конце кратко сообщи, какую строку добавил и где.\",runtimeMode:\"full-access\"}); text(r)\n"
         },
         {
           "timestamp": "2026-11-03T09:50:05.817Z",
@@ -2633,7 +2633,7 @@
         {
           "timestamp": "2026-11-03T09:50:08.879Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__orchestrator_capabilities({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}); text(r)\n"
+          "input": "const r=await tools.mcp__t3_code__orchestrator_capabilities({environmentId:\"00000000-0000-4000-8000-000000000005\"}); text(r)\n"
         }
       ],
       "activityActions": [
@@ -2649,15 +2649,15 @@
           "tool": "t3-code.t3_project_machines",
           "input": {
             "project": "demo",
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "live": true
           }
         },
         {
           "tool": "t3-code.t3_thread_launch",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-            "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
+            "projectId": "00000000-0000-4000-8000-000000000013",
             "title": "Дополнить строку в README",
             "message": "Допиши одну подходящую строку в README проекта demo на VPS. Сначала посмотри текущий README и выбери уместную краткую строку. Это синхронизированная replica: файлы редактируй здесь, а любые git-команды и сборки выполняй на primary через `ssh nodeB 'cd '\\''/home/dev/xdev-e2e/demo'\\'' && <command>'`. Не делай коммит. В конце кратко сообщи, какую строку добавил и где.",
             "runtimeMode": "full-access"
@@ -2666,11 +2666,11 @@
         {
           "tool": "t3-code.orchestrator_capabilities",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+            "environmentId": "00000000-0000-4000-8000-000000000005"
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-06-01a1a0cf-f6ee-7ee1-ac2b-6b4aafc0da85.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-06-00000000-0000-4000-8000-000000000071.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -2692,8 +2692,8 @@
       "model": "gpt-6-luna",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:8dcc4b58-6703-4a14-a489-7b8d86e6c120",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A8dcc4b58-6703-4a14-a489-7b8d86e6c120",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000072",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000072",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:06.277Z",
       "completedAt": "2026-11-03T09:49:25.186Z",
@@ -2726,7 +2726,7 @@
         {
           "timestamp": "2026-11-03T09:49:15.302Z",
           "tool": "exec",
-          "input": "const envs=[\"db074357-317f-4e5c-bb15-fa08074b06c1\",\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\"34e33796-4717-4293-a955-88c2f740db4d\",\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"];\nconst rs=await Promise.all(envs.map(environmentId=>tools.mcp__t3_code__t3_thread_search({environmentId,query:\"маунт\",limit:20})));\ntext(rs);\n"
+          "input": "const envs=[\"00000000-0000-4000-8000-000000000022\",\"00000000-0000-4000-8000-000000000005\",\"00000000-0000-4000-8000-000000000020\",\"00000000-0000-4000-8000-000000000002\"];\nconst rs=await Promise.all(envs.map(environmentId=>tools.mcp__t3_code__t3_thread_search({environmentId,query:\"маунт\",limit:20})));\ntext(rs);\n"
         },
         {
           "timestamp": "2026-11-03T09:49:19.003Z",
@@ -2736,12 +2736,12 @@
         {
           "timestamp": "2026-11-03T09:49:20.310Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__t3_thread_read({threadId:\"mcp:f316d97f-2ef2-4b05-8a05-6ef03385aa42\",limit:3});\ntext(r);\n"
+          "input": "const r=await tools.mcp__t3_code__t3_thread_read({threadId:\"mcp:00000000-0000-4000-8000-000000000073\",limit:3});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:49:22.326Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}});\ntext(r);\n"
+          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000004\",environmentId:\"00000000-0000-4000-8000-000000000005\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -2752,7 +2752,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+            "environmentId": "00000000-0000-4000-8000-000000000022",
             "query": "маунт",
             "limit": 20
           }
@@ -2760,7 +2760,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "environmentId": "00000000-0000-4000-8000-000000000002",
             "query": "маунт",
             "limit": 20
           }
@@ -2768,7 +2768,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "query": "маунт",
             "limit": 20
           }
@@ -2776,7 +2776,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "query": "маунт",
             "limit": 20
           }
@@ -2791,7 +2791,7 @@
         {
           "tool": "t3-code.t3_thread_read",
           "input": {
-            "threadId": "mcp:f316d97f-2ef2-4b05-8a05-6ef03385aa42",
+            "threadId": "mcp:00000000-0000-4000-8000-000000000073",
             "limit": 3
           }
         },
@@ -2800,13 +2800,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-06-01a1a0cf-f792-70c0-90b1-37e9a6052826.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-06-00000000-0000-4000-8000-000000000074.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -2821,8 +2821,8 @@
       "model": "gpt-6-luna",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:0679d4db-dc56-42fe-b16b-67890c4baae3",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A0679d4db-dc56-42fe-b16b-67890c4baae3",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000075",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000075",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:06.421Z",
       "completedAt": "2026-11-03T09:49:27.768Z",
@@ -2860,7 +2860,7 @@
         {
           "timestamp": "2026-11-03T09:49:25.985Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}});\ntext(r);\n"
+          "input": "const r=await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"00000000-0000-4000-8000-000000000002\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -2880,12 +2880,12 @@
             "target": {
               "kind": "file",
               "path": "/home/dev/t3-replicas/demo-2/README.md",
-              "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+              "environmentId": "00000000-0000-4000-8000-000000000002"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-06-01a1a0cf-f81e-71f1-9b4f-f29af64c1ea3.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-06-00000000-0000-4000-8000-000000000076.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -2900,8 +2900,8 @@
       "model": "gpt-6-luna",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:263787c5-a647-4963-b906-36159b0ed8dd",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A263787c5-a647-4963-b906-36159b0ed8dd",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000077",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000077",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:06.563Z",
       "completedAt": "2026-11-03T09:50:22.590Z",
@@ -2945,7 +2945,7 @@
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-06-01a1a0cf-f8aa-76d2-b3cb-472520a4acb0.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-06-00000000-0000-4000-8000-000000000078.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -2960,8 +2960,8 @@
       "model": "gpt-6-luna",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:32845ca6-c32b-4a8d-90eb-03258bc90cab",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A32845ca6-c32b-4a8d-90eb-03258bc90cab",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000079",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000079",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:06.714Z",
       "completedAt": "2026-11-03T09:49:26.610Z",
@@ -3006,7 +3006,7 @@
           "command": "$ /usr/bin/zsh -lc '~/.local/bin/t3ctl status --all && ~/.local/bin/t3ctl machines'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-06-01a1a0cf-f94a-7112-bb6a-8e7c2135db69.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-06-00000000-0000-4000-8000-000000000080.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3027,8 +3027,8 @@
       "model": "gpt-6-luna",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:6dab8e78-54ad-48fa-a531-f7b26d50ae2f",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A6dab8e78-54ad-48fa-a531-f7b26d50ae2f",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000081",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000081",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:06.880Z",
       "completedAt": "2026-11-03T09:50:14.036Z",
@@ -3060,7 +3060,7 @@
           "input": {}
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-06-01a1a0cf-f9ec-7660-a981-c82069f9e052.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-06-00000000-0000-4000-8000-000000000082.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3075,8 +3075,8 @@
       "model": "gpt-6-luna",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:a39ba754-483f-4b68-b039-3fd15f91ec79",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Aa39ba754-483f-4b68-b039-3fd15f91ec79",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000083",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000083",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:07.043Z",
       "completedAt": "2026-11-03T09:49:21.106Z",
@@ -3109,7 +3109,7 @@
         {
           "timestamp": "2026-11-03T09:49:19.763Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:ec5e0aed-26fc-4134-a709-897ea7829748\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}}); text(r);\n"
+          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000007\",environmentId:\"00000000-0000-4000-8000-000000000005\"}}); text(r);\n"
         }
       ],
       "activityActions": [
@@ -3126,13 +3126,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000007",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-07-01a1a0cf-fa96-7b32-a5d9-ee487c510753.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-07-00000000-0000-4000-8000-000000000084.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3147,8 +3147,8 @@
       "model": "gpt-6.1-sol",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:25973e4f-182f-45ce-9d77-b88f222065a4",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A25973e4f-182f-45ce-9d77-b88f222065a4",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000085",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000085",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:04.934Z",
       "completedAt": "2026-11-03T09:49:28.528Z",
@@ -3193,11 +3193,11 @@
           "command": "$ /usr/bin/zsh -lc \"t3ctl new --project demo --on vps --json 'Дополни README проекта demo одной уместной строкой, сохранив существующее содержимое. Выбери текст по контексту README. Файлы правь в представлении проекта на VPS; git и проверки выполняй только на primary через ssh nodeB в /home/dev/xdev-e2e/demo. Не делай коммит. Сообщи добавленную строку и результат проверки.'\""
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-04-01a1a0cf-f25f-7051-989d-c958a26f0be1.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-04-00000000-0000-4000-8000-000000000086.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
-      "childThreadIds": ["mcp:6231f506-e60c-471e-a083-b957d61013af"],
+      "childThreadIds": ["mcp:00000000-0000-4000-8000-000000000015"],
       "callErrors": [],
       "interruptions": [],
       "firstActionRight": null,
@@ -3209,8 +3209,8 @@
       "model": "gpt-6.1-sol",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:cf7ca493-e45f-4461-8b17-22bbbacacd4b",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Acf7ca493-e45f-4461-8b17-22bbbacacd4b",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000087",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000087",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:05.113Z",
       "completedAt": "2026-11-03T09:49:30.027Z",
@@ -3238,7 +3238,7 @@
         {
           "timestamp": "2026-11-03T09:49:26.436Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000004\",environmentId:\"00000000-0000-4000-8000-000000000005\"}}));\n"
         }
       ],
       "activityActions": [
@@ -3259,13 +3259,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-05-01a1a0cf-f30a-7fe0-b78a-a9671b7b406b.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-05-00000000-0000-4000-8000-000000000088.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3280,8 +3280,8 @@
       "model": "gpt-6.1-sol",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:863fbf83-c8db-4c55-ae86-a9ae3f1f17ce",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A863fbf83-c8db-4c55-ae86-a9ae3f1f17ce",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000089",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000089",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:05.284Z",
       "completedAt": "2026-11-03T09:49:22.587Z",
@@ -3309,7 +3309,7 @@
         {
           "timestamp": "2026-11-03T09:49:19.459Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"00000000-0000-4000-8000-000000000002\"}}));\n"
         }
       ],
       "activityActions": [
@@ -3333,12 +3333,12 @@
             "target": {
               "kind": "file",
               "path": "/home/dev/t3-replicas/demo-2/README.md",
-              "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+              "environmentId": "00000000-0000-4000-8000-000000000002"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-05-01a1a0cf-f3c4-7a00-b65b-10a8b2eba31a.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-05-00000000-0000-4000-8000-000000000090.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3353,8 +3353,8 @@
       "model": "gpt-6.1-sol",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:8060f353-1a37-40a2-ad5d-f6ec29676d26",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A8060f353-1a37-40a2-ad5d-f6ec29676d26",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000091",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000091",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:05.455Z",
       "completedAt": "2026-11-03T09:49:20.671Z",
@@ -3397,7 +3397,7 @@
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-05-01a1a0cf-f45d-7811-8b12-c009aa79b39e.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-05-00000000-0000-4000-8000-000000000092.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3412,8 +3412,8 @@
       "model": "gpt-6.1-sol",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:e976317b-e57d-4089-993f-4980be364516",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ae976317b-e57d-4089-993f-4980be364516",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000093",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000093",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:05.626Z",
       "completedAt": "2026-11-03T09:49:33.162Z",
@@ -3458,7 +3458,7 @@
           "command": "$ /usr/bin/zsh -lc '/tmp/t3-eval-home/.local/bin/t3ctl machines'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-05-01a1a0cf-f508-7d53-8a26-573fa4cdc69d.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-05-00000000-0000-4000-8000-000000000094.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3473,8 +3473,8 @@
       "model": "gpt-6.1-sol",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:cad6e4a2-12ab-448d-bff8-e9b891644058",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Acad6e4a2-12ab-448d-bff8-e9b891644058",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000095",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000095",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:05.782Z",
       "completedAt": "2026-11-03T09:49:20.553Z",
@@ -3510,7 +3510,7 @@
           "command": "$ /usr/bin/zsh -lc '/tmp/t3-eval-home/.local/bin/t3ctl machines'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-05-01a1a0cf-f5aa-73d0-ba79-7dac1a1887e5.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-05-00000000-0000-4000-8000-000000000096.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3525,8 +3525,8 @@
       "model": "gpt-6.1-sol",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:4864e7dd-823a-41b0-935f-3b59407c69fd",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A4864e7dd-823a-41b0-935f-3b59407c69fd",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000097",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000097",
       "status": "completed",
       "requestedAt": "2026-11-03T09:49:05.937Z",
       "completedAt": "2026-11-03T09:50:38.239Z",
@@ -3554,7 +3554,7 @@
         {
           "timestamp": "2026-11-03T09:50:29.171Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:ec5e0aed-26fc-4134-a709-897ea7829748\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000007\",environmentId:\"00000000-0000-4000-8000-000000000005\"}}));\n"
         }
       ],
       "activityActions": [
@@ -3575,13 +3575,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000007",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-49-05-01a1a0cf-f639-73a1-8912-8f2baed09a83.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-49-05-00000000-0000-4000-8000-000000000098.jsonl",
       "fixtureInvalid": true,
       "fixtureIssue": "Backup skill was discovered/cached or run was reset before that catalog was cleared",
       "errors": [],
@@ -3596,8 +3596,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:97b82465-d63f-4faa-9cfe-32bd8aae1877",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A97b82465-d63f-4faa-9cfe-32bd8aae1877",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000099",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000099",
       "status": "interrupted",
       "requestedAt": "2026-11-03T09:51:20.744Z",
       "completedAt": "2026-11-03T10:02:18.597Z",
@@ -3681,7 +3681,7 @@
         {
           "position": 8,
           "tool": "shell",
-          "error": "Allocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"\",\n      \"machine\": \"qa\",\n      \"status\": {\n        \"state\": \"error\",\n        \"message\": \"98fe006e-1a2f-497b-ae5d-1714bccb2052 cannot reach 34e33796-4717-4293-a955-88c2f740db4d and back. Add an ssh route in Settings › Machines\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T08:59:35.997Z\"\n      }\n    },\n    {\n      \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"path\": \"/tmp/t3-eval-home/demo\",\n      \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n      \"transport\": \"mutagen\",\n      \"pathAllocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"2026-11-03T09:02:56.915Z\",\n      \"machine\": \"eval\",\n      \"tag\": \"EV\",\n      \"driverEnvironmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"status\": {\n        \"state\": \"watching\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T09:43:32.189Z\"\n      },\n      \"live\": {\n        \"logicalKey\": \"34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo\",\n        \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n        \"state\": \"watching\",\n        \"conflicts\": [],\n        \"problems\": [],\n        \"sessionName\": \"t3-6cd3d4d7-db074357\",\n        \"localPath\": \"/tmp/t3-eval-home/demo\",\n        \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n        \"updatedAt\": \"2026-11-03T10:01:46.525Z\"\n      }\n    }\n  ]\n}\n"
+          "error": "Allocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"00000000-0000-4000-8000-000000000020\",\n      \"createdAt\": \"\",\n      \"machine\": \"qa\",\n      \"status\": {\n        \"state\": \"error\",\n        \"message\": \"00000000-0000-4000-8000-000000000021 cannot reach 00000000-0000-4000-8000-000000000020 and back. Add an ssh route in Settings › Machines\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T08:59:35.997Z\"\n      }\n    },\n    {\n      \"environmentId\": \"00000000-0000-4000-8000-000000000022\",\n      \"path\": \"/tmp/t3-eval-home/demo\",\n      \"projectId\": \"00000000-0000-4000-8000-000000000100\",\n      \"transport\": \"mutagen\",\n      \"pathAllocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"00000000-0000-4000-8000-000000000020\",\n      \"createdAt\": \"2026-11-03T09:02:56.915Z\",\n      \"machine\": \"eval\",\n      \"tag\": \"EV\",\n      \"driverEnvironmentId\": \"00000000-0000-4000-8000-000000000022\",\n      \"status\": {\n        \"state\": \"watching\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T09:43:32.189Z\"\n      },\n      \"live\": {\n        \"logicalKey\": \"00000000-0000-4000-8000-000000000020:/home/dev/xdev-e2e/demo\",\n        \"environmentId\": \"00000000-0000-4000-8000-000000000022\",\n        \"state\": \"watching\",\n        \"conflicts\": [],\n        \"problems\": [],\n        \"sessionName\": \"t3-6cd3d4d7-db074357\",\n        \"localPath\": \"/tmp/t3-eval-home/demo\",\n        \"projectId\": \"00000000-0000-4000-8000-000000000100\",\n        \"updatedAt\": \"2026-11-03T10:01:46.525Z\"\n      }\n    }\n  ]\n}\n"
         }
       ],
       "interruptions": [
@@ -3700,8 +3700,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:684dee32-4e6b-489e-bd7d-8741e1eb94ed",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A684dee32-4e6b-489e-bd7d-8741e1eb94ed",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000010",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000010",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:20.894Z",
       "completedAt": "2026-11-03T09:56:32.711Z",
@@ -3750,8 +3750,8 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
@@ -3780,8 +3780,8 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
@@ -3805,8 +3805,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:9ea8228d-c125-4b5e-b08b-53b7a0c3610e",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A9ea8228d-c125-4b5e-b08b-53b7a0c3610e",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000101",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000101",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:21.054Z",
       "completedAt": "2026-11-03T09:57:31.067Z",
@@ -3891,7 +3891,7 @@
             "target": {
               "kind": "file",
               "path": "/home/dev/t3-replicas/demo-2/README.md",
-              "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+              "environmentId": "00000000-0000-4000-8000-000000000002"
             }
           }
         }
@@ -3941,7 +3941,7 @@
             "target": {
               "kind": "file",
               "path": "/home/dev/t3-replicas/demo-2/README.md",
-              "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+              "environmentId": "00000000-0000-4000-8000-000000000002"
             }
           }
         }
@@ -3985,8 +3985,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:c449c27e-46e0-4bf6-a605-f7cc83661d03",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ac449c27e-46e0-4bf6-a605-f7cc83661d03",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000102",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000102",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:21.214Z",
       "completedAt": "2026-11-03T09:53:11.358Z",
@@ -4070,8 +4070,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:1f84e631-778d-46a8-99b2-8fc12c556f6a",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A1f84e631-778d-46a8-99b2-8fc12c556f6a",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000103",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000103",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:21.375Z",
       "completedAt": "2026-11-03T09:54:52.397Z",
@@ -4131,8 +4131,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:7165be2b-5443-4c82-b528-956876c2aafb",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A7165be2b-5443-4c82-b528-956876c2aafb",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000104",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000104",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:21.537Z",
       "completedAt": "2026-11-03T09:55:08.200Z",
@@ -4191,8 +4191,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:7bd559e6-eecb-44f1-a94d-0c84488f7a36",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A7bd559e6-eecb-44f1-a94d-0c84488f7a36",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000105",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000105",
       "status": "failed",
       "requestedAt": "2026-11-03T09:51:21.690Z",
       "completedAt": "2026-11-03T09:55:00.209Z",
@@ -4237,7 +4237,7 @@
       "nativeSession": "ses_e5f2de9b5ffeeMlJ9DJ7V3yTTP",
       "fixtureInvalid": false,
       "fixtureIssue": null,
-      "errors": ["Internal Server Error (request_id: 7a95e059-f51b-4dc2-b925-b1fa8a395ea1)"],
+      "errors": ["Internal Server Error (request_id: 00000000-0000-4000-8000-000000000106)"],
       "callErrors": [],
       "interruptions": [],
       "outcomeCorrect": false,
@@ -4250,8 +4250,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 8,
       "prompt": "в реплике demo на впс закоммить изменения",
-      "threadId": "mcp:354c0631-5ef8-4d77-895d-c1d16563f54b",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A354c0631-5ef8-4d77-895d-c1d16563f54b",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000107",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000107",
       "status": "failed",
       "requestedAt": "2026-11-03T09:53:20.100Z",
       "completedAt": "2026-11-03T09:54:35.025Z",
@@ -4264,7 +4264,7 @@
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [
-        "Service is too busy. We advise users to temporarily switch to alternative LLM API service providers. (request_id: caae9878-2df7-469c-8466-f6fe65ac8047)"
+        "Service is too busy. We advise users to temporarily switch to alternative LLM API service providers. (request_id: 00000000-0000-4000-8000-000000000108)"
       ],
       "callErrors": [],
       "interruptions": [],
@@ -4278,8 +4278,8 @@
       "model": "gpt-6-luna",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:16feb1f2-623b-457e-ae33-a7defa6ed948",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A16feb1f2-623b-457e-ae33-a7defa6ed948",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000109",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000109",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:19.284Z",
       "completedAt": "2026-11-03T09:51:59.813Z",
@@ -4312,12 +4312,12 @@
         {
           "timestamp": "2026-11-03T09:51:41.201Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n  projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n  title:\"Дополнить README\",\n  message:\"Работай в проекте demo на VPS в его синхронизируемой реплике. Добавь в README.md одну короткую содержательную строку, которая естественно дополняет текущий текст и соответствует проекту. Сначала изучи README и файлы проекта, выбери наиболее уместный факт/описание; сохрани стиль и не меняй остальное. Не запускай git, сборки или тесты в реплике. В конце сообщи, какую строку добавил и путь к файлу.\"\n});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__t3_thread_launch({\n  environmentId:\"00000000-0000-4000-8000-000000000005\",\n  projectId:\"00000000-0000-4000-8000-000000000013\",\n  title:\"Дополнить README\",\n  message:\"Работай в проекте demo на VPS в его синхронизируемой реплике. Добавь в README.md одну короткую содержательную строку, которая естественно дополняет текущий текст и соответствует проекту. Сначала изучи README и файлы проекта, выбери наиболее уместный факт/описание; сохрани стиль и не меняй остальное. Не запускай git, сборки или тесты в реплике. В конце сообщи, какую строку добавил и путь к файлу.\"\n});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:51:46.467Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__orchestrator_capabilities({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__orchestrator_capabilities({environmentId:\"00000000-0000-4000-8000-000000000005\"});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:51:53.074Z",
@@ -4348,8 +4348,8 @@
         {
           "tool": "t3-code.t3_thread_launch",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-            "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
+            "projectId": "00000000-0000-4000-8000-000000000013",
             "title": "Дополнить README",
             "message": "Работай в проекте demo на VPS в его синхронизируемой реплике. Добавь в README.md одну короткую содержательную строку, которая естественно дополняет текущий текст и соответствует проекту. Сначала изучи README и файлы проекта, выбери наиболее уместный факт/описание; сохрани стиль и не меняй остальное. Не запускай git, сборки или тесты в реплике. В конце сообщи, какую строку добавил и путь к файлу."
           }
@@ -4357,11 +4357,11 @@
         {
           "tool": "t3-code.orchestrator_capabilities",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+            "environmentId": "00000000-0000-4000-8000-000000000005"
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-19-01a1a0d1-ff7d-7742-b687-b9b182b99cf3.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-19-00000000-0000-4000-8000-000000000110.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -4384,8 +4384,8 @@
       "model": "gpt-6-luna",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:87235489-5edd-43c0-941f-f89ded4902bf",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A87235489-5edd-43c0-941f-f89ded4902bf",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000008",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000008",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:19.552Z",
       "completedAt": "2026-11-03T09:51:47.118Z",
@@ -4428,7 +4428,7 @@
         {
           "timestamp": "2026-11-03T09:51:44.767Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}}); text(r)\n"
+          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000004\",environmentId:\"00000000-0000-4000-8000-000000000005\"}}); text(r)\n"
         }
       ],
       "activityActions": [
@@ -4453,13 +4453,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-19-01a1a0d2-0035-7852-b927-4feb58e1f461.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-19-00000000-0000-4000-8000-000000000111.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -4482,8 +4482,8 @@
       "model": "gpt-6-luna",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:eda4cbd5-bbc3-441b-88ae-6df9a2bef088",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Aeda4cbd5-bbc3-441b-88ae-6df9a2bef088",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000112",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000112",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:19.742Z",
       "completedAt": "2026-11-03T09:51:36.535Z",
@@ -4516,7 +4516,7 @@
         {
           "timestamp": "2026-11-03T09:51:35.178Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\",path:\"README.md\"}});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"00000000-0000-4000-8000-000000000002\",path:\"README.md\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -4532,13 +4532,13 @@
           "input": {
             "target": {
               "kind": "file",
-              "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+              "environmentId": "00000000-0000-4000-8000-000000000002",
               "path": "README.md"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-19-01a1a0d2-010e-7ab2-9197-b7c98bc8d476.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-19-00000000-0000-4000-8000-000000000113.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -4554,8 +4554,8 @@
       "model": "gpt-6-luna",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:6573c743-1643-4dc2-9f61-e46066146add",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A6573c743-1643-4dc2-9f61-e46066146add",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000114",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000114",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:19.943Z",
       "completedAt": "2026-11-03T09:51:38.454Z",
@@ -4598,7 +4598,7 @@
         {
           "timestamp": "2026-11-03T09:51:36.820Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__t3_project_place({project:\"demo\", machine:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\", role:\"replica\", wait:600});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__t3_project_place({project:\"demo\", machine:\"00000000-0000-4000-8000-000000000002\", role:\"replica\", wait:600});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -4626,13 +4626,13 @@
           "tool": "t3-code.t3_project_place",
           "input": {
             "project": "demo",
-            "machine": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "machine": "00000000-0000-4000-8000-000000000002",
             "role": "replica",
             "wait": 600
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-20-01a1a0d2-01c2-7682-8de6-03b75ad23487.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-20-00000000-0000-4000-8000-000000000115.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -4654,8 +4654,8 @@
       "model": "gpt-6-luna",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:1f06c9f5-854a-4959-934f-9dd98d29259c",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A1f06c9f5-854a-4959-934f-9dd98d29259c",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000116",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000116",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:20.153Z",
       "completedAt": "2026-11-03T09:51:54.348Z",
@@ -4708,7 +4708,7 @@
         {
           "timestamp": "2026-11-03T09:51:49.353Z",
           "tool": "exec",
-          "input": "const envs=[\"db074357-317f-4e5c-bb15-fa08074b06c1\",\"34e33796-4717-4293-a955-88c2f740db4d\",\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"];\nconst rs=await Promise.all(envs.map(environmentId=>tools.mcp__t3_code__t3_thread_list({environmentId,allProjects:true,limit:100,statuses:[\"preparing\",\"queued\",\"starting\",\"running\",\"waiting\",\"failed\"]})));\ntext(rs.map((r,i)=>JSON.stringify({env:envs[i],data:r.structuredContent??r.content})));\n"
+          "input": "const envs=[\"00000000-0000-4000-8000-000000000022\",\"00000000-0000-4000-8000-000000000020\",\"00000000-0000-4000-8000-000000000002\"];\nconst rs=await Promise.all(envs.map(environmentId=>tools.mcp__t3_code__t3_thread_list({environmentId,allProjects:true,limit:100,statuses:[\"preparing\",\"queued\",\"starting\",\"running\",\"waiting\",\"failed\"]})));\ntext(rs.map((r,i)=>JSON.stringify({env:envs[i],data:r.structuredContent??r.content})));\n"
         }
       ],
       "activityActions": [
@@ -4727,7 +4727,7 @@
         {
           "tool": "t3-code.t3_thread_list",
           "input": {
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "allProjects": true,
             "limit": 100,
             "statuses": ["preparing", "queued", "starting", "running", "waiting", "failed"]
@@ -4736,7 +4736,7 @@
         {
           "tool": "t3-code.t3_thread_list",
           "input": {
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "environmentId": "00000000-0000-4000-8000-000000000002",
             "allProjects": true,
             "limit": 100,
             "statuses": ["preparing", "queued", "starting", "running", "waiting", "failed"]
@@ -4745,14 +4745,14 @@
         {
           "tool": "t3-code.t3_thread_list",
           "input": {
-            "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+            "environmentId": "00000000-0000-4000-8000-000000000022",
             "allProjects": true,
             "limit": 100,
             "statuses": ["preparing", "queued", "starting", "running", "waiting", "failed"]
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-20-01a1a0d2-029d-7843-b07a-6ad0e10ce926.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-20-00000000-0000-4000-8000-000000000117.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -4775,8 +4775,8 @@
       "model": "gpt-6-luna",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:706ae96d-5cd7-440b-8e77-80ac2470c7f7",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A706ae96d-5cd7-440b-8e77-80ac2470c7f7",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000118",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000118",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:20.342Z",
       "completedAt": "2026-11-03T09:52:34.750Z",
@@ -4821,7 +4821,7 @@
           "command": "$ /usr/bin/zsh -lc '~/.local/bin/t3ctl machines'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-20-01a1a0d2-0359-7fa3-93ac-8e263d5c414c.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-20-00000000-0000-4000-8000-000000000119.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -4844,8 +4844,8 @@
       "model": "gpt-6-luna",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:12b61687-1726-4c90-8ac9-307d125c0a28",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A12b61687-1726-4c90-8ac9-307d125c0a28",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000009",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000009",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:20.536Z",
       "completedAt": "2026-11-03T09:52:41.458Z",
@@ -4883,12 +4883,12 @@
         {
           "timestamp": "2026-11-03T09:52:35.997Z",
           "tool": "exec",
-          "input": "const envs = [\"db074357-317f-4e5c-bb15-fa08074b06c1\",\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\"34e33796-4717-4293-a955-88c2f740db4d\",\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"];\nconst results = await Promise.all(envs.flatMap(environmentId => [\"конфликт\",\"conflict\"].map(query => tools.mcp__t3_code__t3_thread_search({environmentId, query, limit:30}))));\nfor (let i=0;i<results.length;i++) text(JSON.stringify({env:envs[Math.floor(i/2)],q:i%2?\"conflict\":\"конфликт\",result:results[i]}));\n"
+          "input": "const envs = [\"00000000-0000-4000-8000-000000000022\",\"00000000-0000-4000-8000-000000000005\",\"00000000-0000-4000-8000-000000000020\",\"00000000-0000-4000-8000-000000000002\"];\nconst results = await Promise.all(envs.flatMap(environmentId => [\"конфликт\",\"conflict\"].map(query => tools.mcp__t3_code__t3_thread_search({environmentId, query, limit:30}))));\nfor (let i=0;i<results.length;i++) text(JSON.stringify({env:envs[Math.floor(i/2)],q:i%2?\"conflict\":\"конфликт\",result:results[i]}));\n"
         },
         {
           "timestamp": "2026-11-03T09:52:39.510Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",threadId:\"mcp:ec5e0aed-26fc-4134-a709-897ea7829748\"}});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",environmentId:\"00000000-0000-4000-8000-000000000005\",threadId:\"mcp:00000000-0000-4000-8000-000000000007\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -4907,7 +4907,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+            "environmentId": "00000000-0000-4000-8000-000000000022",
             "query": "конфликт",
             "limit": 30
           }
@@ -4915,7 +4915,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "query": "конфликт",
             "limit": 30
           }
@@ -4923,7 +4923,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "db074357-317f-4e5c-bb15-fa08074b06c1",
+            "environmentId": "00000000-0000-4000-8000-000000000022",
             "query": "conflict",
             "limit": 30
           }
@@ -4931,7 +4931,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "query": "конфликт",
             "limit": 30
           }
@@ -4939,7 +4939,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "query": "conflict",
             "limit": 30
           }
@@ -4947,7 +4947,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d",
+            "environmentId": "00000000-0000-4000-8000-000000000020",
             "query": "conflict",
             "limit": 30
           }
@@ -4955,7 +4955,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "environmentId": "00000000-0000-4000-8000-000000000002",
             "query": "конфликт",
             "limit": 30
           }
@@ -4963,7 +4963,7 @@
         {
           "tool": "t3-code.t3_thread_search",
           "input": {
-            "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+            "environmentId": "00000000-0000-4000-8000-000000000002",
             "query": "conflict",
             "limit": 30
           }
@@ -4973,13 +4973,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
-              "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748"
+              "environmentId": "00000000-0000-4000-8000-000000000005",
+              "threadId": "mcp:00000000-0000-4000-8000-000000000007"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-20-01a1a0d2-040b-7890-b78e-1e7a9a1a55c8.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-20-00000000-0000-4000-8000-000000000120.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5002,8 +5002,8 @@
       "model": "gpt-6-luna",
       "request": 8,
       "prompt": "в реплике demo на впс закоммить изменения",
-      "threadId": "mcp:9cb4018e-a325-49b1-8874-962c5aed1ba4",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A9cb4018e-a325-49b1-8874-962c5aed1ba4",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000121",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000121",
       "status": "completed",
       "requestedAt": "2026-11-03T09:52:46.636Z",
       "completedAt": "2026-11-03T09:53:18.266Z",
@@ -5074,7 +5074,7 @@
           "command": "$ /usr/bin/zsh -lc \"ssh nodeB 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git add -- stage-j-commit.txt && git commit -m \\\"Add stage-j generic luna entry\\\" && git status --short --branch'\""
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-52-46-01a1a0d3-548a-70b0-b5ea-7596c4a814ce.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-52-46-00000000-0000-4000-8000-000000000122.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5091,8 +5091,8 @@
       "model": "gpt-6.1-sol",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:a1b6140c-eb31-433f-b184-d721a0f6d406",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Aa1b6140c-eb31-433f-b184-d721a0f6d406",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000123",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000123",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:17.734Z",
       "completedAt": "2026-11-03T09:51:44.069Z",
@@ -5137,11 +5137,11 @@
           "command": "$ /usr/bin/zsh -lc \"~/.local/bin/t3ctl new --project demo --on vps 'Допиши в конец README одну короткую строку, уместную по содержанию проекта. Прочитай README и сохрани его стиль. Файлы правь в представлении demo на VPS; это синхронизируемая реплика. Любые git-команды выполняй только на primary: ssh nodeB с переходом в /home/dev/xdev-e2e/demo. Не делай коммит. Проверь diff на primary и кратко сообщи добавленную строку.' --json\""
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-18-01a1a0d1-f9f1-77f1-8e48-c0b6f015ea1f.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-18-00000000-0000-4000-8000-000000000124.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": ["mcp:8406a29a-5c96-47f0-b044-254b8cfa6607"],
+      "childThreadIds": ["mcp:00000000-0000-4000-8000-000000000016"],
       "selected": true,
       "callErrors": [],
       "interruptions": [],
@@ -5155,8 +5155,8 @@
       "model": "gpt-6.1-sol",
       "request": 2,
       "prompt": "открой тред про маунт",
-      "threadId": "mcp:44ca8a48-7d89-46a8-9019-7d43d3c6c07e",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A44ca8a48-7d89-46a8-9019-7d43d3c6c07e",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000003",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000003",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:17.900Z",
       "completedAt": "2026-11-03T09:51:41.745Z",
@@ -5184,7 +5184,7 @@
         {
           "timestamp": "2026-11-03T09:51:38.986Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000004\",environmentId:\"00000000-0000-4000-8000-000000000005\"}}));\n"
         }
       ],
       "activityActions": [
@@ -5205,13 +5205,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:fc221127-ae2b-466d-96ec-ad7e03ff858a",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000004",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-18-01a1a0d1-f9f2-7903-8ac3-2e8032bd991b.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-18-00000000-0000-4000-8000-000000000125.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5228,8 +5228,8 @@
       "model": "gpt-6.1-sol",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:b935a866-0c44-45ba-8c9d-94ba3b5aa492",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ab935a866-0c44-45ba-8c9d-94ba3b5aa492",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000001",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000001",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:18.193Z",
       "completedAt": "2026-11-03T09:51:37.784Z",
@@ -5257,7 +5257,7 @@
         {
           "timestamp": "2026-11-03T09:51:33.653Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\",path:\"/home/dev/t3-replicas/demo-2/README.md\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"file\",environmentId:\"00000000-0000-4000-8000-000000000002\",path:\"/home/dev/t3-replicas/demo-2/README.md\"}}));\n"
         }
       ],
       "activityActions": [
@@ -5280,13 +5280,13 @@
           "input": {
             "target": {
               "kind": "file",
-              "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8",
+              "environmentId": "00000000-0000-4000-8000-000000000002",
               "path": "/home/dev/t3-replicas/demo-2/README.md"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-18-01a1a0d1-fb05-7730-bddc-46ae7c850497.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-18-00000000-0000-4000-8000-000000000126.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5303,8 +5303,8 @@
       "model": "gpt-6.1-sol",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:481b0e84-8602-4048-8e32-b0530df1f3df",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A481b0e84-8602-4048-8e32-b0530df1f3df",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000127",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000127",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:18.395Z",
       "completedAt": "2026-11-03T09:51:33.206Z",
@@ -5347,7 +5347,7 @@
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-18-01a1a0d1-fbbb-7a52-a66a-aab1d4b932e8.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-18-00000000-0000-4000-8000-000000000128.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5364,8 +5364,8 @@
       "model": "gpt-6.1-sol",
       "request": 5,
       "prompt": "что сейчас работает на всех машинах",
-      "threadId": "mcp:fa9a8e85-4fa9-455c-989c-25a238b484d2",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Afa9a8e85-4fa9-455c-989c-25a238b484d2",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000129",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000129",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:18.605Z",
       "completedAt": "2026-11-03T09:51:39.607Z",
@@ -5401,7 +5401,7 @@
           "command": "$ /usr/bin/zsh -lc 't3ctl status --all'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-18-01a1a0d1-fca2-73c2-aa5c-61932363f723.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-18-00000000-0000-4000-8000-000000000130.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5418,8 +5418,8 @@
       "model": "gpt-6.1-sol",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:c0029945-18a1-4f96-aec9-ce0e971b6696",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Ac0029945-18a1-4f96-aec9-ce0e971b6696",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000131",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000131",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:18.849Z",
       "completedAt": "2026-11-03T09:51:38.103Z",
@@ -5455,7 +5455,7 @@
           "command": "$ /usr/bin/zsh -lc '/tmp/t3-eval-home/.local/bin/t3ctl machines --json'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-18-01a1a0d1-fd79-7ed3-a9d5-1d7d46ba7f44.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-18-00000000-0000-4000-8000-000000000132.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5471,8 +5471,8 @@
       "model": "gpt-6.1-sol",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:0f020a1b-8dad-459f-941c-044c6ef3fd57",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A0f020a1b-8dad-459f-941c-044c6ef3fd57",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000006",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000006",
       "status": "completed",
       "requestedAt": "2026-11-03T09:51:19.076Z",
       "completedAt": "2026-11-03T09:51:42.787Z",
@@ -5500,7 +5500,7 @@
         {
           "timestamp": "2026-11-03T09:51:38.995Z",
           "tool": "exec",
-          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:ec5e0aed-26fc-4134-a709-897ea7829748\",environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}}));\n"
+          "input": "text(await tools.mcp__t3_code__ui_open({target:{kind:\"thread\",threadId:\"mcp:00000000-0000-4000-8000-000000000007\",environmentId:\"00000000-0000-4000-8000-000000000005\"}}));\n"
         }
       ],
       "activityActions": [
@@ -5521,13 +5521,13 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000007",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-51-19-01a1a0d1-fe6c-71f2-bafe-21f739f43ad3.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-51-19-00000000-0000-4000-8000-000000000133.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5544,8 +5544,8 @@
       "model": "gpt-6.1-sol",
       "request": 8,
       "prompt": "в реплике demo на впс закоммить изменения",
-      "threadId": "mcp:27311ebb-1896-498d-9afa-7b2cb801b74c",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A27311ebb-1896-498d-9afa-7b2cb801b74c",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000134",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000134",
       "status": "completed",
       "requestedAt": "2026-11-03T09:52:17.586Z",
       "completedAt": "2026-11-03T09:52:45.649Z",
@@ -5611,7 +5611,7 @@
           "command": "$ /usr/bin/zsh -lc \"ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && git diff --check && git add -- README.md stage-j-commit.txt && git commit -m \\\"docs: clarify sync demo and record stage-j run\\\" && git status --short && git log -1 --oneline'\""
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-52-17-01a1a0d2-e2f4-7173-9000-4d6b8cb6af5f.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-52-17-00000000-0000-4000-8000-000000000135.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5628,8 +5628,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 8,
       "prompt": "в реплике demo на впс закоммить изменения",
-      "threadId": "mcp:3c2b71f0-33c9-46ff-a527-624dbbde2e51",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A3c2b71f0-33c9-46ff-a527-624dbbde2e51",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000136",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000136",
       "status": "completed",
       "requestedAt": "2026-11-03T09:57:11.317Z",
       "completedAt": "2026-11-03T10:00:14.224Z",
@@ -5735,8 +5735,8 @@
       "model": "gpt-6-luna",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:08f6d987-5389-4614-8108-9fb8c537f231",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A08f6d987-5389-4614-8108-9fb8c537f231",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000137",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000137",
       "status": "completed",
       "requestedAt": "2026-11-03T09:57:10.731Z",
       "completedAt": "2026-11-03T09:57:42.432Z",
@@ -5764,12 +5764,12 @@
         {
           "timestamp": "2026-11-03T09:57:22.789Z",
           "tool": "exec",
-          "input": "const names=ALL_TOOLS.filter(x=>/t3_thread_launch|t3_environment_links|t3_project_machines/.test(x.name)); text(names.map(x=>x.name));\nconst r=await Promise.all([\n tools.mcp__t3_code__t3_environment_links({}),\n tools.mcp__t3_code__t3_project_machines({project:\"demo\", environmentId:\"34e33796-4717-4293-a955-88c2f740db4d\"})\n]); text(r);\n"
+          "input": "const names=ALL_TOOLS.filter(x=>/t3_thread_launch|t3_environment_links|t3_project_machines/.test(x.name)); text(names.map(x=>x.name));\nconst r=await Promise.all([\n tools.mcp__t3_code__t3_environment_links({}),\n tools.mcp__t3_code__t3_project_machines({project:\"demo\", environmentId:\"00000000-0000-4000-8000-000000000020\"})\n]); text(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:57:30.008Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({\n title:\"Дополнить README\",\n projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n message:\"Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить.\"\n});\ntext(r);\n"
+          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({\n title:\"Дополнить README\",\n projectId:\"00000000-0000-4000-8000-000000000013\",\n environmentId:\"00000000-0000-4000-8000-000000000005\",\n message:\"Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить.\"\n});\ntext(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:57:33.305Z",
@@ -5779,12 +5779,12 @@
         {
           "timestamp": "2026-11-03T09:57:35.291Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__orchestrator_capabilities({environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\"}); text(r);\n"
+          "input": "const r=await tools.mcp__t3_code__orchestrator_capabilities({environmentId:\"00000000-0000-4000-8000-000000000005\"}); text(r);\n"
         },
         {
           "timestamp": "2026-11-03T09:57:38.558Z",
           "tool": "exec",
-          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({\n title:\"Дополнить README\",\n projectId:\"e8ec8f4d-d9cb-442f-8eb7-e46f44324dec\",\n environmentId:\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\n modelSelection:{provider:\"codex\",model:\"gpt-6.1-sol\"},\n message:\"Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить.\"\n}); text(r);\n"
+          "input": "const r=await tools.mcp__t3_code__t3_thread_launch({\n title:\"Дополнить README\",\n projectId:\"00000000-0000-4000-8000-000000000013\",\n environmentId:\"00000000-0000-4000-8000-000000000005\",\n modelSelection:{provider:\"codex\",model:\"gpt-6.1-sol\"},\n message:\"Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить.\"\n}); text(r);\n"
         }
       ],
       "activityActions": [
@@ -5800,30 +5800,30 @@
           "tool": "t3-code.t3_project_machines",
           "input": {
             "project": "demo",
-            "environmentId": "34e33796-4717-4293-a955-88c2f740db4d"
+            "environmentId": "00000000-0000-4000-8000-000000000020"
           }
         },
         {
           "tool": "t3-code.t3_thread_launch",
           "input": {
             "title": "Дополнить README",
-            "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "projectId": "00000000-0000-4000-8000-000000000013",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "message": "Добавь одну уместную строку в README проекта. Перед правкой прочитай README и выбери подходящее место и содержание по контексту проекта; сохрани стиль документа. Это синхронизированная реплика на VPS: редактируй рабочие файлы здесь, а git/build/test выполняй только на primary через `ssh nodeB 'cd /home/dev/xdev-e2e/demo && <command>'`. Не коммить."
           }
         },
         {
           "tool": "t3-code.orchestrator_capabilities",
           "input": {
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+            "environmentId": "00000000-0000-4000-8000-000000000005"
           }
         },
         {
           "tool": "t3-code.t3_thread_launch",
           "input": {
             "title": "Дополнить README",
-            "projectId": "e8ec8f4d-d9cb-442f-8eb7-e46f44324dec",
-            "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4",
+            "projectId": "00000000-0000-4000-8000-000000000013",
+            "environmentId": "00000000-0000-4000-8000-000000000005",
             "modelSelection": {
               "provider": "codex",
               "model": "gpt-6.1-sol"
@@ -5832,11 +5832,11 @@
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-57-10-01a1a0d7-5c05-7200-ad34-156ecbc45d60.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-57-10-00000000-0000-4000-8000-000000000138.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": ["mcp:bb6cb221-ea49-4c0e-85d3-22b88d08feec"],
+      "childThreadIds": ["mcp:00000000-0000-4000-8000-000000000017"],
       "callErrors": [
         {
           "position": 10,
@@ -5855,8 +5855,8 @@
       "model": "gpt-6-luna",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:f6615644-50c9-4ff5-a5d2-91afb4890fcf",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3Af6615644-50c9-4ff5-a5d2-91afb4890fcf",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000011",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000011",
       "status": "completed",
       "requestedAt": "2026-11-03T09:57:10.965Z",
       "completedAt": "2026-11-03T09:57:20.339Z",
@@ -5884,7 +5884,7 @@
         {
           "timestamp": "2026-11-03T09:57:18.251Z",
           "tool": "exec",
-          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"375bdc7e-f155-4b27-be6a-bcd165c9b0a8\"}});\ntext(r);\n"
+          "input": "const r = await tools.mcp__t3_code__ui_open({target:{kind:\"file\",path:\"/home/dev/t3-replicas/demo-2/README.md\",environmentId:\"00000000-0000-4000-8000-000000000002\"}});\ntext(r);\n"
         }
       ],
       "activityActions": [
@@ -5901,12 +5901,12 @@
             "target": {
               "kind": "file",
               "path": "/home/dev/t3-replicas/demo-2/README.md",
-              "environmentId": "375bdc7e-f155-4b27-be6a-bcd165c9b0a8"
+              "environmentId": "00000000-0000-4000-8000-000000000002"
             }
           }
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-57-11-01a1a0d7-5ce4-7001-9af7-79b157a2bc2a.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-57-11-00000000-0000-4000-8000-000000000139.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5923,8 +5923,8 @@
       "model": "gpt-6.1-sol",
       "request": 6,
       "prompt": "какие у меня машины",
-      "threadId": "mcp:5ce6bc80-6e4a-42d0-a58d-8231cf02ffa5",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A5ce6bc80-6e4a-42d0-a58d-8231cf02ffa5",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000140",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000140",
       "status": "completed",
       "requestedAt": "2026-11-03T09:57:11.135Z",
       "completedAt": "2026-11-03T09:57:25.714Z",
@@ -5960,7 +5960,7 @@
           "command": "$ /usr/bin/zsh -lc '~/.local/bin/t3ctl machines'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T12-57-11-01a1a0d7-5d8f-78f3-9a8e-6b7f63546de5.jsonl",
+      "nativeSession": "rollout-2026-11-03T12-57-11-00000000-0000-4000-8000-000000000141.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -5977,8 +5977,8 @@
       "model": "gpt-6-luna",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:8ba14b07-ae7b-4740-9b85-bfc8e44da97b",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A8ba14b07-ae7b-4740-9b85-bfc8e44da97b",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000142",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000142",
       "status": "completed",
       "requestedAt": "2026-11-03T10:07:36.902Z",
       "completedAt": "2026-11-03T10:08:09.185Z",
@@ -6042,11 +6042,11 @@
           "command": "$ /usr/bin/zsh -lc \"~/.local/bin/t3ctl new --project demo --on vps \\\"Добавь одну уместную строку в README проекта demo. Сначала посмотри стиль и содержание README, допиши одну строку в подходящее место. Поскольку проект — синхронизированная реплика, все git-команды и сборки запускай на primary nodeB: ssh 'nodeB' 'cd '\\\\''/home/dev/xdev-e2e/demo'\\\\'' && <command>'. Файлы редактируй в реплике; Mutagen синхронизирует изменения.\\\" --json\""
         }
       ],
-      "nativeSession": "rollout-2026-11-03T13-07-36-01a1a0e0-e9ee-7dd3-9962-55c98a895958.jsonl",
+      "nativeSession": "rollout-2026-11-03T13-07-36-00000000-0000-4000-8000-000000000143.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": ["mcp:9f16c4f3-a4dd-4820-92fe-ebf574250a67"],
+      "childThreadIds": ["mcp:00000000-0000-4000-8000-000000000018"],
       "selected": true,
       "callErrors": [],
       "interruptions": [],
@@ -6060,8 +6060,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 1,
       "prompt": "создай тред в проекте demo на впс, пусть допишет строку в README",
-      "threadId": "mcp:7a6aa5af-fc14-47e6-b8e3-e6e3c123ea83",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A7a6aa5af-fc14-47e6-b8e3-e6e3c123ea83",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000144",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000144",
       "status": "completed",
       "requestedAt": "2026-11-03T10:02:21.666Z",
       "completedAt": "2026-11-03T10:03:12.311Z",
@@ -6131,7 +6131,7 @@
           "timestamp": "2026-11-03T10:02:52.907Z",
           "tool": "bash",
           "input": {
-            "command": "t3ctl wait 95f4afbb-24f1-4b18-9770-24b8c547e1f3 --on vps --timeout 5m 2>&1 | tail -40",
+            "command": "t3ctl wait 00000000-0000-4000-8000-000000000019 --on vps --timeout 5m 2>&1 | tail -40",
             "timeout": 330000
           }
         },
@@ -6139,7 +6139,7 @@
           "timestamp": "2026-11-03T10:03:00.787Z",
           "tool": "bash",
           "input": {
-            "command": "t3ctl output 95f4afbb-24f1-4b18-9770-24b8c547e1f3 --on vps 2>&1 | tail -40"
+            "command": "t3ctl output 00000000-0000-4000-8000-000000000019 --on vps 2>&1 | tail -40"
           }
         },
         {
@@ -6153,14 +6153,14 @@
           "timestamp": "2026-11-03T10:03:04.634Z",
           "tool": "bash",
           "input": {
-            "command": "t3ctl tool t3_thread_read '{\"threadId\":\"mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3\",\"environmentId\":\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\"limit\":4,\"maxCharsPerItem\":2000}' 2>&1 | tail -60"
+            "command": "t3ctl tool t3_thread_read '{\"threadId\":\"mcp:00000000-0000-4000-8000-000000000019\",\"environmentId\":\"00000000-0000-4000-8000-000000000005\",\"limit\":4,\"maxCharsPerItem\":2000}' 2>&1 | tail -60"
           }
         },
         {
           "timestamp": "2026-11-03T10:03:06.837Z",
           "tool": "bash",
           "input": {
-            "command": "t3ctl tool t3_thread_read '{\"threadId\":\"mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3\",\"environmentId\":\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\"view\":\"messages\",\"limit\":20,\"maxCharsPerItem\":3000,\"afterPosition\":9}' 2>&1 | tail -80"
+            "command": "t3ctl tool t3_thread_read '{\"threadId\":\"mcp:00000000-0000-4000-8000-000000000019\",\"environmentId\":\"00000000-0000-4000-8000-000000000005\",\"view\":\"messages\",\"limit\":20,\"maxCharsPerItem\":3000,\"afterPosition\":9}' 2>&1 | tail -80"
           }
         },
         {
@@ -6204,11 +6204,11 @@
         },
         {
           "tool": "shell",
-          "command": "$ t3ctl wait 95f4afbb-24f1-4b18-9770-24b8c547e1f3 --on vps --timeout 5m 2>&1 | tail -40"
+          "command": "$ t3ctl wait 00000000-0000-4000-8000-000000000019 --on vps --timeout 5m 2>&1 | tail -40"
         },
         {
           "tool": "shell",
-          "command": "$ t3ctl output 95f4afbb-24f1-4b18-9770-24b8c547e1f3 --on vps 2>&1 | tail -40"
+          "command": "$ t3ctl output 00000000-0000-4000-8000-000000000019 --on vps 2>&1 | tail -40"
         },
         {
           "tool": "shell",
@@ -6216,11 +6216,11 @@
         },
         {
           "tool": "shell",
-          "command": "$ t3ctl tool t3_thread_read '{\"threadId\":\"mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3\",\"environmentId\":\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\"limit\":4,\"maxCharsPerItem\":2000}' 2>&1 | tail -60"
+          "command": "$ t3ctl tool t3_thread_read '{\"threadId\":\"mcp:00000000-0000-4000-8000-000000000019\",\"environmentId\":\"00000000-0000-4000-8000-000000000005\",\"limit\":4,\"maxCharsPerItem\":2000}' 2>&1 | tail -60"
         },
         {
           "tool": "shell",
-          "command": "$ t3ctl tool t3_thread_read '{\"threadId\":\"mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3\",\"environmentId\":\"8bd7a7df-310c-48e9-9be9-f65ccd6c05f4\",\"view\":\"messages\",\"limit\":20,\"maxCharsPerItem\":3000,\"afterPosition\":9}' 2>&1 | tail -80"
+          "command": "$ t3ctl tool t3_thread_read '{\"threadId\":\"mcp:00000000-0000-4000-8000-000000000019\",\"environmentId\":\"00000000-0000-4000-8000-000000000005\",\"view\":\"messages\",\"limit\":20,\"maxCharsPerItem\":3000,\"afterPosition\":9}' 2>&1 | tail -80"
         },
         {
           "tool": "shell",
@@ -6231,7 +6231,7 @@
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
-      "childThreadIds": ["mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3"],
+      "childThreadIds": ["mcp:00000000-0000-4000-8000-000000000019"],
       "selected": true,
       "callErrors": [
         {
@@ -6242,12 +6242,12 @@
         {
           "position": 13,
           "tool": "shell",
-          "error": "$ t3ctl wait 95f4afbb --on vps --timeout 5m 2>&1 | tail -30\nt3ctl: t3_thread_wait: {\"_tag\":\"OrchestratorMcpFailure\",\"code\":\"thread_not_found\",\"message\":\"Thread mcp:95f4afbb-24f1-4b18-9770-24b8c547e1f3 was not found.\"}\n"
+          "error": "$ t3ctl wait 95f4afbb --on vps --timeout 5m 2>&1 | tail -30\nt3ctl: t3_thread_wait: {\"_tag\":\"OrchestratorMcpFailure\",\"code\":\"thread_not_found\",\"message\":\"Thread mcp:00000000-0000-4000-8000-000000000019 was not found.\"}\n"
         },
         {
           "position": 16,
           "tool": "shell",
-          "error": "$ t3ctl output 95f4afbb-24f1-4b18-9770-24b8c547e1f3 --on vps 2>&1 | tail -40\nt3ctl: no thread matches \"95f4afbb-24f1-4b18-9770-24b8c547e1f3\" (archived threads: add --archived)\n"
+          "error": "$ t3ctl output 00000000-0000-4000-8000-000000000019 --on vps 2>&1 | tail -40\nt3ctl: no thread matches \"00000000-0000-4000-8000-000000000019\" (archived threads: add --archived)\n"
         },
         {
           "position": 18,
@@ -6268,8 +6268,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:43173308-27b9-41e6-ba7a-796bab374496",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A43173308-27b9-41e6-ba7a-796bab374496",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000145",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000145",
       "status": "interrupted",
       "requestedAt": "2026-11-03T10:03:12.635Z",
       "completedAt": "2026-11-03T10:12:25.383Z",
@@ -6311,8 +6311,8 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000007",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
@@ -6337,8 +6337,8 @@
           "input": {
             "target": {
               "kind": "thread",
-              "threadId": "mcp:ec5e0aed-26fc-4134-a709-897ea7829748",
-              "environmentId": "8bd7a7df-310c-48e9-9be9-f65ccd6c05f4"
+              "threadId": "mcp:00000000-0000-4000-8000-000000000007",
+              "environmentId": "00000000-0000-4000-8000-000000000005"
             }
           }
         }
@@ -6362,8 +6362,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 8,
       "prompt": "в реплике demo на впс закоммить изменения",
-      "threadId": "mcp:347d1fe1-7379-488b-9cf0-4405d6b625a2",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A347d1fe1-7379-488b-9cf0-4405d6b625a2",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000146",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000146",
       "status": "completed",
       "requestedAt": "2026-11-03T10:08:13.009Z",
       "completedAt": "2026-11-03T10:10:02.142Z",
@@ -6453,8 +6453,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 7,
       "prompt": "найди тред про конфликт на всех машинах",
-      "threadId": "mcp:7c9df81f-6137-45ab-8d09-7b28131c238f",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A7c9df81f-6137-45ab-8d09-7b28131c238f",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000147",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000147",
       "status": "completed",
       "requestedAt": "2026-11-03T10:09:10.359Z",
       "completedAt": "2026-11-03T10:10:14.227Z",
@@ -6524,8 +6524,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:5f759af3-de4c-4522-843e-7b4594ed1809",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A5f759af3-de4c-4522-843e-7b4594ed1809",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000148",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000148",
       "status": "interrupted",
       "requestedAt": "2026-11-03T10:16:24.068Z",
       "completedAt": "2026-11-03T10:20:21.223Z",
@@ -6555,8 +6555,8 @@
       "model": "gpt-6-luna",
       "request": 4,
       "prompt": "сделай demo репликой на гвидоне",
-      "threadId": "mcp:39405ea1-14de-4a96-a08e-7ed9c4ad8e6a",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A39405ea1-14de-4a96-a08e-7ed9c4ad8e6a",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000149",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000149",
       "status": "completed",
       "requestedAt": "2026-11-03T10:16:23.885Z",
       "completedAt": "2026-11-03T10:17:08.474Z",
@@ -6618,7 +6618,7 @@
           "command": "$ /usr/bin/zsh -lc 't3ctl place demo --on GV --wait'"
         }
       ],
-      "nativeSession": "rollout-2026-11-03T13-16-23-01a1a0e8-f482-73d0-baef-fc3a537090c2.jsonl",
+      "nativeSession": "rollout-2026-11-03T13-16-23-00000000-0000-4000-8000-000000000150.jsonl",
       "fixtureInvalid": false,
       "fixtureIssue": null,
       "errors": [],
@@ -6635,8 +6635,8 @@
       "model": "deepseek/deepseek-flash",
       "request": 3,
       "prompt": "покажи README из demo на гвидоне",
-      "threadId": "mcp:30b1d7d4-108a-4bb0-8b3e-130beae70460",
-      "link": "http://127.0.0.1:3807/db074357-317f-4e5c-bb15-fa08074b06c1/mcp%3A30b1d7d4-108a-4bb0-8b3e-130beae70460",
+      "threadId": "mcp:00000000-0000-4000-8000-000000000151",
+      "link": "http://127.0.0.1:3807/00000000-0000-4000-8000-000000000022/mcp%3A00000000-0000-4000-8000-000000000151",
       "status": "completed",
       "requestedAt": "2026-11-03T10:37:08.696Z",
       "completedAt": "2026-11-03T10:37:35.017Z",
@@ -6720,7 +6720,7 @@
         {
           "position": 6,
           "tool": "shell",
-          "error": "Allocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"\",\n      \"machine\": \"qa\",\n      \"status\": {\n        \"state\": \"error\",\n        \"message\": \"98fe006e-1a2f-497b-ae5d-1714bccb2052 cannot reach 34e33796-4717-4293-a955-88c2f740db4d and back. Add an ssh route in Settings › Machines\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T08:59:35.997Z\"\n      }\n    },\n    {\n      \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"path\": \"/tmp/t3-eval-home/demo\",\n      \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n      \"transport\": \"mutagen\",\n      \"pathAllocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"34e33796-4717-4293-a955-88c2f740db4d\",\n      \"createdAt\": \"2026-11-03T09:02:56.915Z\",\n      \"machine\": \"eval\",\n      \"tag\": \"EV\",\n      \"driverEnvironmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n      \"status\": {\n        \"state\": \"watching\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T09:43:32.189Z\"\n      },\n      \"live\": {\n        \"logicalKey\": \"34e33796-4717-4293-a955-88c2f740db4d:/home/dev/xdev-e2e/demo\",\n        \"environmentId\": \"db074357-317f-4e5c-bb15-fa08074b06c1\",\n        \"state\": \"watching\",\n        \"conflicts\": [],\n        \"problems\": [],\n        \"sessionName\": \"t3-6cd3d4d7-db074357\",\n        \"localPath\": \"/tmp/t3-eval-home/demo\",\n        \"projectId\": \"f11e227a-a53d-42d2-8e16-ed72e37f8907\",\n        \"updatedAt\": \"2026-11-03T10:36:49.074Z\"\n      }\n    }\n  ]\n}\n"
+          "error": "Allocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"00000000-0000-4000-8000-000000000020\",\n      \"createdAt\": \"\",\n      \"machine\": \"qa\",\n      \"status\": {\n        \"state\": \"error\",\n        \"message\": \"00000000-0000-4000-8000-000000000021 cannot reach 00000000-0000-4000-8000-000000000020 and back. Add an ssh route in Settings › Machines\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T08:59:35.997Z\"\n      }\n    },\n    {\n      \"environmentId\": \"00000000-0000-4000-8000-000000000022\",\n      \"path\": \"/tmp/t3-eval-home/demo\",\n      \"projectId\": \"00000000-0000-4000-8000-000000000100\",\n      \"transport\": \"mutagen\",\n      \"pathAllocated\": true,\n      \"role\": \"replica\",\n      \"source\": \"00000000-0000-4000-8000-000000000020\",\n      \"createdAt\": \"2026-11-03T09:02:56.915Z\",\n      \"machine\": \"eval\",\n      \"tag\": \"EV\",\n      \"driverEnvironmentId\": \"00000000-0000-4000-8000-000000000022\",\n      \"status\": {\n        \"state\": \"watching\",\n        \"conflicts\": 0,\n        \"updatedAt\": \"2026-11-03T09:43:32.189Z\"\n      },\n      \"live\": {\n        \"logicalKey\": \"00000000-0000-4000-8000-000000000020:/home/dev/xdev-e2e/demo\",\n        \"environmentId\": \"00000000-0000-4000-8000-000000000022\",\n        \"state\": \"watching\",\n        \"conflicts\": [],\n        \"problems\": [],\n        \"sessionName\": \"t3-6cd3d4d7-db074357\",\n        \"localPath\": \"/tmp/t3-eval-home/demo\",\n        \"projectId\": \"00000000-0000-4000-8000-000000000100\",\n        \"updatedAt\": \"2026-11-03T10:36:49.074Z\"\n      }\n    }\n  ]\n}\n"
         },
         {
           "position": 8,

@@ -17,8 +17,15 @@ it("keeps Android signing behind the release branch and protected environment", 
 });
 
 it("pins mesh actions and removes upstream-only secret workflows", () => {
-  for (const match of workflow("mesh-platform-smoke.yml").matchAll(/uses:\s*([^\s]+)/g))
-    expect(match[1]).toMatch(/@[a-f0-9]{40}$/);
+  for (const file of NodeFS.readdirSync(new URL("../.github/workflows/", import.meta.url))) {
+    if (!file.endsWith(".yml")) continue;
+    const source = workflow(file);
+    expect(source, file).toMatch(/^permissions:\n(?:  [^\n]*\n)*?  contents: read$/m);
+    for (const match of source.matchAll(/uses:\s*([^\s]+)/g)) {
+      if (match[1]!.startsWith("./")) continue;
+      expect(match[1], file).toMatch(/@[a-f0-9]{40}$/);
+    }
+  }
   for (const retired of [
     "mobile-eas-preview-fork.yml",
     "mobile-eas-preview.yml",

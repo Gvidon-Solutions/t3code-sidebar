@@ -5,6 +5,9 @@ on:
     branches: [ws]
   pull_request:
     branches: [ws]
+permissions:
+  contents: read
+
 jobs:
   mesh-fast:
     runs-on: ubuntu-latest
@@ -13,17 +16,17 @@ jobs:
       MESH_FAST_ARTIFACTS_DIR: /data/mf
       MESH_FAST_MUTAGEN_CACHE: /data/mf/tools
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "26.12.1"
+          node-version-file: package.json
           cache: pnpm
       - run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
       - run: sudo apt-get update && sudo apt-get install -y openssh-server patchelf && sudo mkdir -p /run/sshd
       - run: sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" /data/mf
       - run: pnpm install --frozen-lockfile
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             /data/mf/tools/mutagen*
@@ -35,7 +38,7 @@ jobs:
       - run: scripts/mesh-fast/setup.sh
       - id: mesh
         run: pnpm mesh:fast --jobs 2 --budget-seconds 2700
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ always() && steps.mesh.outputs.artifacts != '' }}
         with:
           name: mesh-fast-results
