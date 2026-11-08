@@ -1,3 +1,4 @@
+import { resolveSshHost } from "@t3tools/shared/meshConfig";
 /* oxlint-disable t3code/no-global-process-runtime -- Native defaults at the server platform boundary also serve standalone launchers. */
 // @effect-diagnostics nodeBuiltinImport:off -- The server platform boundary owns native paths, permissions, shells and private IPC.
 import * as NodePath from "node:path";
@@ -69,7 +70,7 @@ export const nodeCommand = (source: string) =>
   `node -e "eval(Buffer.from('${Buffer.from(source).toString("base64")}','base64').toString())"`;
 
 export function sshArguments(host: string, sshHome?: string): string[] {
-  if (!host || host.startsWith("-") || /[\s\0]/.test(host)) throw new Error("Invalid SSH host");
+  resolveSshHost(host);
   return [
     ...(sshHome ? ["-F", `${sshHome.replace(/[\\/]$/, "")}/.ssh/config`] : []),
     "-o",

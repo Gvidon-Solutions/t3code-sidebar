@@ -115,6 +115,12 @@ it("uses the user's configured host in existing SSH mode and refuses an absent h
   };
   expect(resolveRunPlan(data)).toMatchObject({ host: "studio-custom" });
   expect(() => resolveRunPlan({ ...data, machines: {} })).toThrow(/configured SSH host/);
+  expect(() =>
+    resolveRunPlan({
+      ...data,
+      machines: { cloudbox: { ssh: { host: "-oProxyCommand=id" } } },
+    }),
+  ).toThrow(/SSH host/);
 });
 
 it("uses the existing config's actual ignores when reporting ignored outputs", () => {

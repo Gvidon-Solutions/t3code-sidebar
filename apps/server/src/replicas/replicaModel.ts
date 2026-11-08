@@ -1,3 +1,4 @@
+import { resolveSshHost } from "@t3tools/shared/meshConfig";
 import { projectPolicy } from "@t3tools/shared/meshConfig";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- Session names require a synchronous deterministic hash, without a runtime.
 import * as NodeCrypto from "node:crypto";
@@ -124,7 +125,7 @@ export function sessionStatus(
 }
 
 export function sshEndpoint(route: { readonly ssh: string }, _environmentId: string, root: string) {
-  return `${route.ssh}:${root}`;
+  return `${resolveSshHost(route.ssh)}:${root}`;
 }
 
 export function remoteRepresentation(

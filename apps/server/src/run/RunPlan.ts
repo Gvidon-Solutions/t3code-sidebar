@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off -- Representation mapping must support both Windows and POSIX paths regardless of the server OS.
 import * as NodePath from "node:path";
 import type { MeshConfigDocument, SidebarWorkspacesConfig } from "@t3tools/contracts";
-import { projectPolicy, defaults } from "@t3tools/shared/meshConfig";
+import { projectPolicy, defaults, resolveSshHost } from "@t3tools/shared/meshConfig";
 
 const pathApi = (root: string) =>
   /^[A-Za-z]:[\\/]|^\\\\/.test(root) ? NodePath.win32 : NodePath.posix;
@@ -59,7 +59,7 @@ export function resolveRunPlan(input: {
     primaryEnvironmentId: primary.environmentId,
     title: input.config.projectTitles[match.logicalKey] || "Untitled project",
     machine,
-    host,
+    host: resolveSshHost(host),
     primaryRoot: primary.path,
     replicaRoot: match.replica.path,
     platform: input.config.machines[primary.environmentId]?.reported?.platform.os ?? "posix",
