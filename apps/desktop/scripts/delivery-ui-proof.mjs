@@ -51,7 +51,7 @@ async function main() {
     response.end("<h1>Hostile server UI</h1>");
   });
   await new Promise((resolve) => hostile.listen(0, "127.0.0.1", resolve));
-  const origin = new URL(`http://127.0.0.1:${hostile.address().port}/`);
+  let origin = new URL(`http://127.0.0.1:${hostile.address().port}/`);
   const window = new BrowserWindow({
     show: false,
     webPreferences: { preload, contextIsolation: true, sandbox: true },
@@ -120,8 +120,9 @@ async function main() {
             const policy = await evaluate('document.querySelector("h1").textContent');
             NodeAssert.equal(policy, "Hostile server UI");
             await evaluate('localStorage.setItem("hostile-marker","present")');
+            const firstServerPage = window.webContents.getURL();
             compatible = false;
-            await window.loadURL(`t3code://server-${window.webContents.id}/`);
+            await window.loadURL(firstServerPage);
             NodeAssert.match(window.webContents.getURL(), /app\/.*bundled=1/);
             NodeAssert.equal(await evaluate('localStorage.getItem("hostile-marker")'), null);
             NodeAssert.equal(
@@ -136,7 +137,7 @@ async function main() {
               JSON.stringify({
                 hostileServer: "denied",
                 privilegedChannels: privileged.length,
-                storage: "isolated",
+                storage: "isolated by window and source",
                 incompatibleServer: "bundled fallback",
                 output,
               }),

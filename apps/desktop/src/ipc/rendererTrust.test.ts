@@ -10,7 +10,7 @@ it("denies every privileged IPC channel to server UI, foreign origins and subfra
     sender: { id: 7 },
     senderFrame: { url, parent },
   });
-  const server = "t3code://server-7/";
+  const server = `t3code://server-7-${"a".repeat(24)}/`;
   for (const channel of [
     Channels.GET_LOCAL_ENVIRONMENT_BEARER_TOKEN_CHANNEL,
     Channels.GET_CONNECTION_CATALOG_CHANNEL,
@@ -33,9 +33,9 @@ it("denies every privileged IPC channel to server UI, foreign origins and subfra
   expect(() => authorizeDesktopIpc(event(server), Channels.UI_INFO_CHANNEL, server)).not.toThrow();
   expect(() =>
     authorizeDesktopIpc(
-      event("t3code://server-9/"),
+      event(`t3code://server-9-${"a".repeat(24)}/`),
       Channels.UI_INFO_CHANNEL,
-      "t3code://server-9/",
+      `t3code://server-9-${"a".repeat(24)}/`,
     ),
   ).toThrow();
 });
@@ -46,7 +46,7 @@ effectIt.effect(
     Effect.gen(function* () {
       let listener: DesktopIpcSyncListener | undefined;
       let called = false;
-      const url = "t3code://server-7/";
+      const url = `t3code://server-7-${"a".repeat(24)}/`;
       const ipc = make(
         {
           removeHandler: () => undefined,

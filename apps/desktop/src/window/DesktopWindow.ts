@@ -1,3 +1,4 @@
+import { isBundledUiUrl, serverUiRendererId } from "../ipc/rendererTrust.ts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -197,7 +198,9 @@ export function isSameOriginRendererNavigation(input: {
       applicationUrl.host !== "" &&
       navigationUrl.protocol === applicationUrl.protocol &&
       (navigationUrl.host === applicationUrl.host ||
-        navigationUrl.host === `server-${applicationUrl.searchParams.get("desktopWindowId")}`)
+        (applicationUrl.searchParams.has("desktopWindowId") &&
+          serverUiRendererId(navigationUrl.host) ===
+            Number(applicationUrl.searchParams.get("desktopWindowId"))))
     );
   } catch {
     return false;
@@ -624,7 +627,10 @@ export const make = Effect.gen(function* () {
     });
 
     window.webContents.setWindowOpenHandler(({ url }) => {
-      if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
+      if (
+        isBundledUiUrl(window.webContents.getURL()) &&
+        Option.isSome(ElectronShell.parseSafeExternalUrl(url))
+      ) {
         void runPromise(electronShell.openExternal(url));
       }
       return { action: "deny" };
@@ -640,7 +646,10 @@ export const make = Effect.gen(function* () {
       }
 
       event.preventDefault();
-      if (Option.isSome(ElectronShell.parseSafeExternalUrl(url))) {
+      if (
+        isBundledUiUrl(window.webContents.getURL()) &&
+        Option.isSome(ElectronShell.parseSafeExternalUrl(url))
+      ) {
         void runPromise(electronShell.openExternal(url));
       }
     });

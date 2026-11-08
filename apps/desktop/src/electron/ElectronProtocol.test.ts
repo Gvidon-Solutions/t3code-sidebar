@@ -214,18 +214,21 @@ describe("ElectronProtocol", () => {
         serverOrigin: async () => desiredOrigin,
         clerkFrontendApiHostname: undefined,
       });
-      const page = () =>
-        Effect.promise(() =>
-          handler!(
-            navigation("t3code://server-1/", {
+      let pageUrl = "";
+      const page = (id = 1) =>
+        Effect.promise(async () => {
+          const redirect = await handler!(navigation(`t3code://app/?desktopWindowId=${id}`));
+          pageUrl = redirect.headers.get("location")!;
+          return handler!(
+            navigation(pageUrl, {
               headers: {
                 accept: "text/html",
                 cookie: "local=secret",
                 authorization: "Bearer local-secret",
               },
             }),
-          ),
-        );
+          );
+        });
       netFetchMock.mockImplementation(
         async () =>
           new Response("server-v1", {
@@ -255,8 +258,9 @@ describe("ElectronProtocol", () => {
       );
       assert.isNull(first.headers.get("content-encoding"));
       assert.isNull(first.headers.get("content-length"));
+      const studioPage = pageUrl;
       desiredOrigin = new URL("https://cloudbox.example/");
-      yield* Effect.promise(() => handler!(new Request("t3code://server-1/assets/old.js")));
+      yield* Effect.promise(() => handler!(new Request(new URL("assets/old.js", studioPage))));
       assert.equal(
         netFetchMock.mock.calls.at(-1)?.[0],
         "https://studio.example/prefix/assets/old.js",
@@ -273,17 +277,20 @@ describe("ElectronProtocol", () => {
       );
       yield* Effect.promise(() =>
         handler!(
-          new Request("t3code://server-1/pretend-document", { headers: { accept: "text/html" } }),
+          new Request(new URL("pretend-document", studioPage), {
+            headers: { accept: "text/html" },
+          }),
         ),
       );
       assert.equal(
         netFetchMock.mock.calls.at(-1)?.[0],
         "https://studio.example/prefix/pretend-document",
       );
-      yield* Effect.promise(() => handler!(navigation("t3code://server-2/")));
+      yield* page(2);
       assert.equal(yield* protocol.serverOriginFor(1), "https://studio.example/prefix/");
       assert.equal(yield* protocol.serverOriginFor(2), "https://cloudbox.example/");
       const second = yield* page();
+      assert.notEqual(new URL(pageUrl).host, new URL(studioPage).host);
       assert.equal(yield* Effect.promise(() => second.text()), "server-v2");
       assert.equal(netFetchMock.mock.calls.at(-1)?.[0], "https://cloudbox.example/");
       netFetchMock.mockImplementation(async () => new Response("unavailable", { status: 503 }));

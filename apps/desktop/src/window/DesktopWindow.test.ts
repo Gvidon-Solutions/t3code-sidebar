@@ -1,6 +1,6 @@
 import { ElectronProtocol } from "../electron/ElectronProtocol.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import { DesktopSnapShotId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -1155,6 +1155,23 @@ describe("DesktopWindow", () => {
         yield* Effect.promise(() => Promise.resolve());
 
         assert.isTrue(prevented);
+        assert.deepEqual(openedExternalUrls, ["https://accounts.microsoft.com/oauth"]);
+        vi.mocked(fakeWindow.window.webContents.getURL).mockReturnValue("t3code-dev://server-7/");
+        const blocked = vi.fn();
+        willNavigate({ preventDefault: blocked }, "https://attacker.example/");
+        const popup = vi.mocked(fakeWindow.window.webContents.setWindowOpenHandler).mock
+          .calls[0]![0];
+        expect(
+          popup({
+            url: "https://attacker.example/",
+            frameName: "",
+            features: "",
+            disposition: "new-window",
+            referrer: { url: "", policy: "default" },
+          }),
+        ).toEqual({ action: "deny" });
+        yield* Effect.promise(() => Promise.resolve());
+        expect(blocked).toHaveBeenCalledOnce();
         assert.deepEqual(openedExternalUrls, ["https://accounts.microsoft.com/oauth"]);
       }).pipe(Effect.provide(layer));
     }),

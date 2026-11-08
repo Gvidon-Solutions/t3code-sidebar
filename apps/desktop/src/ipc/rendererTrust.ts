@@ -9,6 +9,16 @@ const serverChannels = new Set([
   Channels.REVEAL_WINDOW_CHANNEL,
 ]);
 
+export function serverUiRendererId(host: string): number | undefined {
+  const match = /^server-(\d+)-[a-f0-9]{24}$/.exec(host);
+  return match ? Number(match[1]) : undefined;
+}
+
+export function isBundledUiUrl(value: string): boolean {
+  const url = URL.parse(value);
+  return url !== null && ["t3code:", "t3code-dev:"].includes(url.protocol) && url.host === "app";
+}
+
 export function authorizeDesktopIpc(
   event: DesktopIpcInvokeEvent,
   channel: string,
@@ -22,8 +32,8 @@ export function authorizeDesktopIpc(
     frame?.parent !== null ||
     frame.url !== currentUrl ||
     !["t3code:", "t3code-dev:"].includes(url.protocol) ||
-    (url.host !== "app" &&
-      !(url.host === `server-${event.sender.id}` && serverChannels.has(channel)))
+    (!isBundledUiUrl(url.href) &&
+      !(serverUiRendererId(url.host) === event.sender.id && serverChannels.has(channel)))
   )
     throw new Error("Desktop IPC denied for this frame and UI origin");
 }
