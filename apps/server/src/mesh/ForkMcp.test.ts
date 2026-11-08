@@ -12,7 +12,7 @@ import * as Mcp from "../mcp/McpHttpServer.ts";
 import { McpSessionRegistry } from "../mcp/McpSessionRegistry.ts";
 import type { McpInvocationScope } from "../mcp/McpInvocationContext.ts";
 import * as Settings from "../serverSettings.ts";
-import { ThreadForkService } from "./ThreadForkService.ts";
+import { forkMarker, ThreadForkService } from "./ThreadForkService.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 import { layerLinkedTest } from "../../testFixtures/MeshLayoutTestLayer.ts";
 import * as Receipts from "../peer/connection/PeerReceipts.ts";
@@ -173,3 +173,12 @@ it.effect(
       ),
     ),
 );
+
+it("escapes a peer-supplied title in the fork marker link", () => {
+  expect(forkMarker("Fix ] link ) now", "http://host/threads/1?x=(y)", "cloudbox")).toBe(
+    "Forked from [Fix \\] link \\) now](http://host/threads/1?x=%28y%29) · cloudbox",
+  );
+  expect(forkMarker("[a](http://evil)", "http://host/t", "studio")).toBe(
+    "Forked from [\\[a\\]\\(http://evil\\)](http://host/t) · studio",
+  );
+});

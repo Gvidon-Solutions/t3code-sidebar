@@ -440,6 +440,9 @@ it.live(
           idempotencyKey: "reverse-once",
         }),
       ).toEqual({ count: 1 });
+      expect((yield* studio.auth.listSessions()).map((session) => session.client.label)).toContain(
+        "Linked machine · cloudbox",
+      );
       const reconnected = yield* waitEvent(studio, "peer.connected", cloudbox.id);
       yield* studio.sessions.close(cloudbox.id, "test network cut");
       yield* Fiber.join(reconnected);

@@ -58,6 +58,18 @@ import type { PeerCallLimits } from "../peer/PeerMcpClient.ts";
 
 const failure = (error: { readonly message: string }) =>
   new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message });
+
+/** The source title comes from a peer, so escape it before it becomes markdown link text. */
+export function forkMarker(sourceTitle: string, sourceLink: string, sourceMachine: string) {
+  const title = sourceTitle
+    .replaceAll("\\", "\\\\")
+    .replaceAll("[", "\\[")
+    .replaceAll("]", "\\]")
+    .replaceAll("(", "\\(")
+    .replaceAll(")", "\\)");
+  const link = sourceLink.replaceAll("(", "%28").replaceAll(")", "%29");
+  return `Forked from [${title}](${link}) · ${sourceMachine}`;
+}
 const invalid = (message: string) =>
   new OrchestratorMcpFailure({ code: "invalid_request", message });
 const link = (environmentId: EnvironmentId, threadId: ThreadId) =>
@@ -341,7 +353,7 @@ const serviceLayer = Layer.effect(
           interactionMode: bundle.interactionMode,
         },
         origin,
-        marker: `Forked from [${bundle.sourceTitle}](${bundle.sourceLink}) · ${bundle.sourceMachine}`,
+        marker: forkMarker(bundle.sourceTitle, bundle.sourceLink, bundle.sourceMachine),
         entries,
         ...(bundle.message === undefined ? {} : { message: bundle.message }),
       });

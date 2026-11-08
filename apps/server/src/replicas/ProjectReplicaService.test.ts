@@ -1006,6 +1006,86 @@ it.effect.each(["managed", "existing"] as const)(
   },
 );
 
+it.effect("one unusable SSH route does not fail adoption that does not need it", () => {
+  const h = harness();
+  h.foreign.sessions = [
+    {
+      identifier: "manual-copy",
+      paused: true,
+      status: "watching",
+      alpha: { protocol: "local", path: "/chosen-copy" },
+      beta: { protocol: "ssh", host: "studio-ssh", path: "/source" },
+      ignore: { paths: [] },
+    },
+  ];
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    const clock = yield* mesh.nextHlc;
+    yield* mesh.apply({
+      "mesh.config": {
+        h: clock,
+        v: {
+          revision: clock,
+          doc: {
+            schema: 1,
+            machines: {
+              source: { ssh: { host: "studio-ssh" } },
+              replica: {},
+              broken: { ssh: { host: "user@host" } },
+            },
+            ssh: { mode: "existing" },
+          },
+          author: "replica",
+          writtenAt: "",
+        },
+      },
+      "mesh.machineBinding/broken": { v: "broken", h: clock },
+    });
+    const adopted = yield* service.adopt({ project: "repo", session: "manual-copy" });
+    expect(adopted.representation).toMatchObject({ environmentId: "replica", source: "source" });
+  }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
+});
+
+it.effect("reports the unusable SSH route when adoption needs that machine", () => {
+  const h = harness();
+  h.foreign.sessions = [
+    {
+      identifier: "manual-copy",
+      paused: true,
+      status: "watching",
+      alpha: { protocol: "local", path: "/chosen-copy" },
+      beta: { protocol: "ssh", host: "user@host", path: "/source" },
+      ignore: { paths: [] },
+    },
+  ];
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    const clock = yield* mesh.nextHlc;
+    yield* mesh.apply({
+      "mesh.config": {
+        h: clock,
+        v: {
+          revision: clock,
+          doc: {
+            schema: 1,
+            machines: { source: { ssh: { host: "user@host" } }, replica: {} },
+            ssh: { mode: "existing" },
+          },
+          author: "replica",
+          writtenAt: "",
+        },
+      },
+    });
+    const error = yield* service
+      .adopt({ project: "repo", session: "manual-copy" })
+      .pipe(Effect.flip);
+    expect(error.message).toContain("unusable");
+    expect(error.message).toContain("source:");
+  }).pipe(Effect.provide(Layer.provideMerge(h.layer, MeshTestServices.required)));
+});
+
 it.effect("recovers interrupted automatic conflict resolution without resuming user pauses", () => {
   const h = harness();
   return Effect.gen(function* () {

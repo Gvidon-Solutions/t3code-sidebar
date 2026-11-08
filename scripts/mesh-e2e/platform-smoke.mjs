@@ -196,6 +196,31 @@ try {
     "mesh-platform-replica\n"
   )
     throw Error("Replica content mismatch");
+  // Exercise the built bundle's serialized worker in both foreground and background modes.
+  const replicaRun = (args) =>
+    run(process.execPath, [bin, "run", ...args], {
+      cwd: target.path,
+      env: {
+        ...process.env,
+        HOME: laptop.home,
+        USERPROFILE: laptop.home,
+        T3CODE_HOME: laptop.base,
+        T3_MESH_SSH_HOME: laptop.home,
+      },
+    });
+  const execOutput = await replicaRun([
+    "--",
+    process.execPath,
+    "-e",
+    "process.stdout.write('bundle-exec')",
+  ]);
+  if (!execOutput.includes("bundle-exec")) throw Error("Bundled worker exec failed");
+  const backgroundId = (
+    await replicaRun(["--bg", "--", process.execPath, "-e", "setTimeout(() => {}, 5000)"])
+  ).trim();
+  if (!/^[a-f0-9-]{36}$/.test(backgroundId))
+    throw Error(`Bundled worker start returned ${JSON.stringify(backgroundId)}`);
+  await replicaRun(["--stop", backgroundId]);
   const kitStatus = await until(
     "bundled skill reconciliation",
     () => mcp(studio, "t3_mesh_status"),
@@ -232,7 +257,7 @@ try {
         throw Error("Missing managed instruction block");
   }
   console.log(
-    `PASS ${process.platform}/${process.arch}: two servers, mesh config, managed SSH, real replica watching and matching file`,
+    `PASS ${process.platform}/${process.arch}: two servers, mesh config, managed SSH, real replica and bundled worker exec/start`,
   );
 } catch (error) {
   console.error(logs.join("").slice(-20000));

@@ -8,6 +8,7 @@ import { MeshConfig } from "./MeshConfig.ts";
 import * as ConfigTest from "./MeshConfigTestLayer.ts";
 import * as Kit from "./MeshAgentKit.ts";
 import * as Migration from "./MeshAgentMigration.ts";
+import * as Settings from "../serverSettings.ts";
 it.effect(
   "migrates installed private GLOBAL text once through apply and retains explicit edits",
   () =>
@@ -35,7 +36,12 @@ it.effect(
           aliases: {},
         });
       }).pipe(
-        Effect.provide(Layer.mergeAll(ConfigTest.layerTest("studio"), Kit.layer)),
+        Effect.provide(
+          Layer.mergeAll(
+            ConfigTest.layerTest("studio"),
+            Kit.layer.pipe(Layer.provide(Settings.layerTest())),
+          ),
+        ),
         Effect.provideService(HostProcess.Environment, { T3_MESH_AGENT_HOME: home }),
       );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),

@@ -8782,9 +8782,9 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         });
         yield* orchestrator.dispatch({
           type: "message.dispatch",
-          commandId: CommandId.make("F1-source-running"),
+          commandId: CommandId.make("fork-source-running"),
           threadId: sourceId,
-          messageId: MessageId.make("F1-incomplete-message"),
+          messageId: MessageId.make("fork-incomplete-message"),
           text: "This turn is unfinished",
           attachments: [],
           modelSelection,
@@ -8851,7 +8851,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         const make = Effect.fn("test.makeFork")(function* (self: string, scope?: Scope.Closeable) {
           if (!configs.has(self)) {
             const context = yield* Layer.build(
-              ServerConfig.layerTest(process.cwd(), { prefix: "F1-fork-" }).pipe(
+              ServerConfig.layerTest(process.cwd(), { prefix: "fork-fork-" }).pipe(
                 Layer.provide(NodeServices.layer),
               ),
             );
@@ -9140,7 +9140,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         };
         const refusedReplica = yield* source
           .fork(
-            { ...input, commandId: CommandId.make("C1-replica-denied") },
+            { ...input, commandId: CommandId.make("config-replica-denied") },
             { ...limits, replicas: false },
           )
           .pipe(Effect.flip);
@@ -9150,7 +9150,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         assert.equal(forked.title, "Studio notes (fork)");
         assert.equal(placed, 1);
         const existingRepresentation = yield* target.receive(
-          { action: "prepare", forkId: "C1-existing-representation", logicalKey: "logical" },
+          { action: "prepare", forkId: "config-existing-representation", logicalKey: "logical" },
           { ...limits, replicas: false },
         );
         assert.isTrue("placed" in existingRepresentation && !existingRepresentation.placed);
@@ -9187,7 +9187,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         const localFork = yield* source.fork(
           {
             ...input,
-            commandId: CommandId.make("F1-local-fork"),
+            commandId: CommandId.make("fork-local-fork"),
             targetEnvironmentId: EnvironmentId.make("A"),
             modelSelection: {
               instanceId: ProviderInstanceId.make("opencode"),
@@ -9245,7 +9245,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           providerReady = unavailable !== "not ready";
           providerAvailable = unavailable !== "unavailable";
           const unavailableProvider = yield* source
-            .fork({ ...input, commandId: CommandId.make(`F1-provider-${unavailable}`) }, limits)
+            .fork({ ...input, commandId: CommandId.make(`fork-provider-${unavailable}`) }, limits)
             .pipe(Effect.result);
           assert.equal(unavailableProvider._tag, "Failure", unavailable);
           assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
@@ -9255,31 +9255,31 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         providerAvailable = true;
         rejectPublication = true;
         const rejected = yield* source
-          .fork({ ...input, commandId: CommandId.make("F1-rejected-publication") }, limits)
+          .fork({ ...input, commandId: CommandId.make("fork-rejected-publication") }, limits)
           .pipe(Effect.flip);
         assert.equal(rejected.code, "invalid_request");
         assert.include(rejected.message, "Publication rejected");
-        assert.isUndefined(yield* journals.get("B")!.read("target:F1-rejected-publication"));
-        assert.isUndefined(yield* journals.get("A")!.read("source:F1-rejected-publication"));
+        assert.isUndefined(yield* journals.get("B")!.read("target:fork-rejected-publication"));
+        assert.isUndefined(yield* journals.get("A")!.read("source:fork-rejected-publication"));
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         rejectPublication = false;
         flushReady = false;
         const flushFailure = yield* source
-          .fork({ ...input, commandId: CommandId.make("F1-flush-failure") }, limits)
+          .fork({ ...input, commandId: CommandId.make("fork-flush-failure") }, limits)
           .pipe(Effect.flip);
         assert.include(flushFailure.message, "did not flush");
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         flushReady = true;
         rejectCopy = true;
         const copyFailure = yield* source
-          .fork({ ...input, commandId: CommandId.make("F1-copy-failure") }, limits)
+          .fork({ ...input, commandId: CommandId.make("fork-copy-failure") }, limits)
           .pipe(Effect.flip);
         assert.include(copyFailure.message, "attachment not found");
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount);
         rejectCopy = false;
         pauseFlush = true;
         const timedFork = yield* source
-          .fork({ ...input, commandId: CommandId.make("F1-flush-timeout") }, limits)
+          .fork({ ...input, commandId: CommandId.make("fork-flush-timeout") }, limits)
           .pipe(Effect.flip, Effect.forkChild);
         yield* Deferred.await(flushEntered);
         yield* TestClock.adjust("60 seconds");
@@ -9307,7 +9307,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           const path = Context.get(nodeContext, Path.Path);
           return path.join(configs.get(self)!.stateDir, "fork-transactions", `${hash}.json`);
         });
-        const abandonedId = "F1-abandoned-stage";
+        const abandonedId = "fork-abandoned-stage";
         expiredFile = yield* expiryPath(abandonedId);
         dropStageReply = true;
         const abandoned = yield* source
@@ -9319,9 +9319,9 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         const premature = yield* orchestrator
           .dispatch({
             type: "message.dispatch",
-            commandId: CommandId.make("F1-pending-cannot-run"),
+            commandId: CommandId.make("fork-pending-cannot-run"),
             threadId: stagedThreadId!,
-            messageId: MessageId.make("F1-pending-message"),
+            messageId: MessageId.make("fork-pending-message"),
             text: "must not run",
             attachments: [],
             modelSelection,
@@ -9342,12 +9342,12 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         stallCommitReply = true;
         const callsBefore = commitCalls;
         const retrying = yield* source
-          .fork({ ...input, commandId: CommandId.make("F1-dropped-commit") }, limits)
+          .fork({ ...input, commandId: CommandId.make("fork-dropped-commit") }, limits)
           .pipe(Effect.forkChild);
         yield* Deferred.await(commitDropped);
         yield* TestClock.adjust("120 seconds");
         assert.equal(
-          (yield* journals.get("A")!.read("source:F1-dropped-commit"))?.phase,
+          (yield* journals.get("A")!.read("source:fork-dropped-commit"))?.phase,
           "outgoing",
         );
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount + 1);
@@ -9361,9 +9361,9 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
           ).length,
           1,
         );
-        assert.isUndefined(yield* journals.get("A")!.read("source:F1-dropped-commit"));
+        assert.isUndefined(yield* journals.get("A")!.read("source:fork-dropped-commit"));
 
-        const sourceRestartId = "F1-outbox-restart";
+        const sourceRestartId = "fork-outbox-restart";
         expiredSignal = yield* Deferred.make<void>();
         expiredFile = yield* expiryPath(sourceRestartId, "source", "A");
         commitDropped = yield* Deferred.make<void>();
@@ -9384,7 +9384,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("fork to machine", (it) => {
         assert.isUndefined(yield* journals.get("A")!.read(`source:${sourceRestartId}`));
         assert.equal((yield* orchestrator.getShellSnapshot()).threads.length, firstThreadCount + 2);
 
-        const restartId = "F1-pending-restart";
+        const restartId = "fork-pending-restart";
         expiredSignal = yield* Deferred.make<void>();
         expiredFile = yield* expiryPath(restartId);
         dropStageReply = true;

@@ -1,10 +1,21 @@
 import { expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Kit from "./MeshAgentKit.ts";
+import * as Settings from "../serverSettings.ts";
+
+const codexInstance = (binaryPath: string) => ({
+  [ProviderInstanceId.make("codex")]: {
+    driver: ProviderDriverKind.make("codex"),
+    enabled: true,
+    config: { binaryPath },
+  },
+});
 
 it.effect(
   "installs skills and creates managed instructions in an isolated home; updates preserve surrounding text",
@@ -23,7 +34,7 @@ it.effect(
       const original = "Owner text\r\n";
       yield* fs.writeFileString(`${home}/.codex/AGENTS.md`, original);
       const kit = yield* Kit.MeshAgentKit.pipe(
-        Effect.provide(Kit.layer),
+        Effect.provide(Kit.layer.pipe(Layer.provide(Settings.layerTest()))),
         Effect.provideService(HostProcess.Environment, {
           T3_MESH_AGENT_HOME: home,
           T3_MESH_AGENT_SOURCE: source,
@@ -77,48 +88,91 @@ it.effect(
 );
 
 it.effect(
-  "keeps skills and instructions only for installed harnesses and removes our copy elsewhere",
+  "keeps a harness home and a configured provider binary installed without a PATH hit",
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const home = yield* fs.makeTempDirectoryScoped({ prefix: "b1-agent-harness-" });
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-harness-" });
       const source = `${home}/bundled`;
       yield* fs.makeDirectory(`${source}/scripts`, { recursive: true });
       yield* fs.writeFileString(`${source}/SKILL.md`, "skill v1");
       yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
-      // A stale copy and block from an earlier install of Claude, which is no longer installed.
+      // Claude is installed through its home directory, even with no binary on PATH.
       yield* fs.makeDirectory(`${home}/.claude/skills/t3`, { recursive: true });
       yield* fs.writeFileString(`${home}/.claude/skills/t3/SKILL.md`, "old skill");
-      yield* fs.writeFileString(
-        `${home}/.claude/CLAUDE.md`,
-        "Owner note\n\n<!-- t3-mesh begin -->\nold block\n<!-- t3-mesh end -->\n\nTail\n",
-      );
-      yield* fs.makeDirectory(`${home}/.codex`, { recursive: true });
+      const previous =
+        "Owner note\n\n<!-- t3-mesh begin -->\nold block\n<!-- t3-mesh end -->\n\nTail\n";
+      yield* fs.writeFileString(`${home}/.claude/CLAUDE.md`, previous);
+      // Codex is installed through an absolute provider binary, without its own home.
+      const codex = `${home}/bin/codex`;
+      yield* fs.makeDirectory(`${home}/bin`, { recursive: true });
+      yield* fs.writeFileString(codex, "#!/bin/sh\n");
       const kit = yield* Kit.MeshAgentKit.pipe(
-        Effect.provide(Kit.layer),
+        Effect.provide(
+          Kit.layer.pipe(
+            Layer.provide(
+              Settings.layerTest({
+                providerInstances: {
+                  ...codexInstance(codex),
+                },
+              }),
+            ),
+          ),
+        ),
         Effect.provideService(HostProcess.Environment, {
           T3_MESH_AGENT_HOME: home,
           T3_MESH_AGENT_SOURCE: source,
         }),
-        Effect.provideService(SpawnExecutableResolution, (command) =>
-          command === "codex" || command === "opencode"
-            ? `/usr/local/bin/${command}`
-            : undefined,
-        ),
+        Effect.provideService(SpawnExecutableResolution, () => undefined),
       );
       yield* kit.reconcile({ schema: 1, machines: { studio: { label: "ST" } } });
-      // Codex has a config directory, OpenCode has an executable; both get our files.
+      // Both detected harnesses receive the skill; Claude's owner text and our block stay.
       expect(yield* fs.readFileString(`${home}/.codex/skills/t3/SKILL.md`)).toBe("skill v1");
-      expect(yield* fs.readFileString(`${home}/.config/opencode/skills/t3/SKILL.md`)).toBe(
-        "skill v1",
-      );
-      // Claude is not installed: our skill copy and managed block are gone, owner text stays.
-      expect(yield* fs.exists(`${home}/.claude/skills/t3`)).toBe(false);
-      expect(yield* fs.readFileString(`${home}/.claude/CLAUDE.md`)).toBe(
-        "Owner note\n\nTail\n",
-      );
+      expect(yield* fs.readFileString(`${home}/.claude/skills/t3/SKILL.md`)).toBe("skill v1");
+      const claudeInstructions = yield* fs.readFileString(`${home}/.claude/CLAUDE.md`);
+      expect(claudeInstructions.startsWith("Owner note\n\n<!-- t3-mesh begin -->")).toBe(true);
+      expect(claudeInstructions.endsWith("\n\nTail\n")).toBe(true);
+      // OpenCode is positively absent: nothing of ours is created there.
+      expect(yield* fs.exists(`${home}/.config/opencode/skills/t3`)).toBe(false);
+      expect(yield* fs.exists(`${home}/.config/opencode/AGENTS.md`)).toBe(false);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
+
+it.effect("does not treat a configured provider binary that is missing on disk as installed", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-missing-binary-" });
+    const source = `${home}/bundled`;
+    yield* fs.makeDirectory(`${source}/scripts`, { recursive: true });
+    yield* fs.writeFileString(`${source}/SKILL.md`, "skill v1");
+    yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
+    const kit = yield* Kit.MeshAgentKit.pipe(
+      Effect.provide(
+        Kit.layer.pipe(
+          Layer.provide(
+            Settings.layerTest({
+              providerInstances: { ...codexInstance(`${home}/missing/codex`) },
+            }),
+          ),
+        ),
+      ),
+      Effect.provideService(HostProcess.Environment, {
+        T3_MESH_AGENT_HOME: home,
+        T3_MESH_AGENT_SOURCE: source,
+      }),
+      Effect.provideService(SpawnExecutableResolution, () => undefined),
+    );
+    yield* kit.reconcile({ schema: 1, machines: { studio: { label: "ST" } } });
+    expect(yield* fs.exists(`${home}/.codex/skills/t3`)).toBe(false);
+    expect(yield* fs.exists(`${home}/.codex/AGENTS.md`)).toBe(false);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it("removes only the managed block and never trims surrounding text", () => {
+  const original = "keep  \n<!-- t3-mesh begin -->\nbody\n<!-- t3-mesh end -->\n\n  after";
+  expect(Kit.withoutManagedBlock(original)).toBe("keep  \n\n\n  after");
+  expect(Kit.withoutManagedBlock("<!-- t3-mesh begin -->\nbody\n<!-- t3-mesh end -->\n")).toBe("");
+});
 
 it("rejects ambiguous managed blocks without truncating user content", () => {
   expect(() => Kit.instructionBlock("Owner text", "<!-- t3-mesh begin -->")).toThrow(
