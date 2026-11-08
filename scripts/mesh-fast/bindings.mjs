@@ -61,9 +61,8 @@ async function collisions(directory, reverseJoins) {
       for (const node of mesh.nodes) {
         const db = new NodeSqlite.DatabaseSync(NodePath.join(node.base, "userdata/statev2.sqlite"));
         try {
-          db.prepare("DELETE FROM mesh_layout_entries WHERE key = ? OR key = ?").run(
+          db.prepare("DELETE FROM mesh_layout_entries WHERE key = ?").run(
             "mesh.machineBinding/" + missing,
-            "mesh.machineClaim/" + laptop.id,
           );
         } finally {
           db.close();
