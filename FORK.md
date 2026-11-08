@@ -1873,3 +1873,14 @@ Newest first. Each entry: what it does for the user, how it works, where it live
   immutable action revisions; Node setup reads the root package metadata.
 - **Where.** `scripts/public-repo-leakage.test.ts`, `scripts/security-workflows.test.ts`,
   `.github/workflows/`, mesh evaluation and workspace fixtures.
+
+### 2026-11-08 — C3 shared mesh primitives
+
+- **What.** Keep hop identity checks and pinned Mutagen release metadata consistent across
+  transports and installation fixtures. Retention durations remain real time in accelerated tests.
+- **How.** Shared peer header parsing/formatting and relay validation; one Mutagen release catalog;
+  named tombstone, receipt and backup retention; a common TCP port schema. The replica layout
+  fixture lives under testFixtures. Retired bed runners are removed; platform smoke uses the fast
+  client's RPC/MCP implementation. Round two accepts isolated source paths and titles.
+- **Where.** `peer/connection/peerIdentity.ts`, `platform/mutagenRelease.ts`, `mesh/retention.ts`,
+  contracts `baseSchemas.ts`, `scripts/lib/shell.mjs` and mesh acceptance scripts.

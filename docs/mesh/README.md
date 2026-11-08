@@ -1088,3 +1088,16 @@ infrastructure and fixture names. Keep run output outside tracked sources and us
 identities in evaluation captures. `scripts/security-workflows.test.ts` checks all workflows
 for explicit repository read permissions and immutable external actions; Node setup uses
 `package.json` as its version source.
+
+Peer HTTP headers use `peer/connection/peerIdentity.ts` for hop parsing and formatting;
+HTTP and persistent relay paths share its identity/loop rules. Do not filter empty hop
+segments during parsing: malformed lists must reach validation and be refused.
+`platform/mutagenRelease.ts` owns the pinned target/version/archive/digest catalog used by
+production installation and integration fixtures. Retention values in `mesh/retention.ts`
+are independent of scheduling acceleration, including tombstones and durable receipts.
+
+The orphan standalone bootstrap/run/replica bed runners have been retired in favor of
+`scripts/mesh-fast`; native platform smoke imports the same client. Shared local shell helpers
+live in `scripts/lib/shell.mjs`; delivery setup stages that dependency with its remote script.
+Round two reads `MESH_E2E_LOCAL_PRIMARY_ROOT`, `MESH_E2E_REVERSE_ROOT`,
+`MESH_E2E_REVERSE_TITLE` and `MESH_E2E_DEMO_TITLE`, matching nightly isolation.
