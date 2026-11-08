@@ -1,4 +1,4 @@
-import type { ServerProvider } from "@t3tools/contracts";
+import type { EnvironmentId, RunId, ServerProvider, ThreadId } from "@t3tools/contracts";
 
 import type { EnvironmentThreadShell } from "./models.ts";
 import { effectiveSnoozed } from "./threadSettled.ts";
@@ -84,8 +84,8 @@ export function planForkPlacement(input: {
 
 /** A thread reference without pulling the app-specific scoped-ref helper into this module. */
 export interface ThreadForkTarget {
-  readonly environmentId: import("@t3tools/contracts").EnvironmentId;
-  readonly threadId: import("@t3tools/contracts").ThreadId;
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
 }
 
 /** An app adapter's normalized fork-command result, including interruption. */
@@ -103,13 +103,13 @@ export type ThreadForkOutcome =
 export interface ThreadForkDeps {
   readonly readThread: (target: ThreadForkTarget) => EnvironmentThreadShell | null;
   readonly threadsInEnvironment: (
-    environmentId: import("@t3tools/contracts").EnvironmentId,
+    environmentId: EnvironmentId,
   ) => readonly EnvironmentThreadShell[];
-  readonly createThreadId: () => import("@t3tools/contracts").ThreadId;
+  readonly createThreadId: () => ThreadId;
   readonly fork: (input: {
-    readonly sourceThreadId: import("@t3tools/contracts").ThreadId;
-    readonly targetThreadId: import("@t3tools/contracts").ThreadId;
-    readonly runId?: import("@t3tools/contracts").RunId;
+    readonly sourceThreadId: ThreadId;
+    readonly targetThreadId: ThreadId;
+    readonly runId?: RunId;
     readonly title: string;
   }) => Promise<ThreadForkCommandResult>;
   readonly waitForThread: (target: ThreadForkTarget) => Promise<boolean>;
@@ -123,7 +123,7 @@ export interface ThreadForkDeps {
  */
 export async function runThreadFork(
   source: ThreadForkTarget,
-  runId: import("@t3tools/contracts").RunId | undefined,
+  runId: RunId | undefined,
   deps: ThreadForkDeps,
 ): Promise<ThreadForkOutcome> {
   const sourceThread = deps.readThread(source);
@@ -160,7 +160,7 @@ export async function runThreadFork(
       deps.reorder(
         {
           environmentId: source.environmentId,
-          threadId: write.id as import("@t3tools/contracts").ThreadId,
+          threadId: write.id as ThreadId,
         },
         write.orderKey,
       ),
