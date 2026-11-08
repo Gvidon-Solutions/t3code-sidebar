@@ -63,8 +63,10 @@ machine identity, owner's SSH configuration, VPS or Mutagen daemon.
 The harness accepts a machine-name array (`MiniMesh.start(names)`); scenarios
 choose their topology. The default runner budgets four logical cores per mesh,
 capped at eight on every host. At most eight servers and two containers boot
-concurrently, including fresh bootstrap containers. Mutagen uses two Go execution
-threads per daemon/agent; native monitor compilation uses four build jobs. Ports
+concurrently, including fresh bootstrap containers. The container permit covers
+Docker launch through HTTP readiness; private file preparation and token issuance
+use the separate server-start budget. Mutagen uses two Go execution threads per
+daemon/agent; native monitor compilation uses four build jobs. Ports
 are allocated once per command. `--jobs` is an explicit operator override.
 
 ```sh

@@ -112,14 +112,7 @@ export class MiniMesh {
     this.firstName = names[0];
     this.nodeCount = names.length;
     for (const name of names) this.routes.set(name, await port());
-    const started = await Promise.allSettled(
-      names.map((name) => {
-        const start = () => boot(() => this.startNode(name));
-        return this.containerMode && (this.containerNames ?? [this.firstName]).includes(name)
-          ? containerBoot(start)
-          : start();
-      }),
-    );
+    const started = await Promise.allSettled(names.map((name) => boot(() => this.startNode(name))));
     this.nodes = started.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
     for (const result of started) if (result.status === "rejected") throw result.reason;
     for (const node of this.nodes)
@@ -526,118 +519,124 @@ exec /bin/bash --noprofile --norc -c "\${SSH_ORIGINAL_COMMAND:-exec /bin/bash --
     );
     let container;
     let child;
-    if (inContainer) {
-      container = this.network + "-" + name;
-      await until(
-        "local node routes allocated",
-        async () => this.routes.size,
-        (value) => value === this.nodeCount,
-      );
-      const containerConfig = NodePath.join(root, "container.json");
-      await NodeFSP.writeFile(
-        spec,
-        JSON.stringify({
-          command: useSource ? "/usr/local/bin/node" : serverCommand,
-          args: serverArgs,
-        }),
-      );
-      await NodeFSP.writeFile(
-        containerConfig,
-        JSON.stringify({
-          routes: [
-            ...[...this.routes]
-              .filter(([peer]) => peer !== name)
-              .map(([, port]) => ({ port, target: port })),
-            ...(this.extraRoutes ?? []).map((port) => ({ port, target: port })),
-          ],
-          children: [
-            ["/usr/sbin/sshd", "-D", "-e", "-f", sshConfig],
-            [
-              "/usr/local/bin/node",
-              NodePath.join(repo, "scripts/mesh-fast/proxy.mjs"),
-              String(front),
-              String(backend),
-              state,
-              "0.0.0.0",
-            ],
-            [
-              "/usr/local/bin/node",
-              NodePath.join(repo, "scripts/mesh-fast/supervisor.mjs"),
-              spec,
-              receipt,
-            ],
-          ],
-        }),
-      );
-      child = this.launchContainer(
-        [
-          "run",
-          "--init",
-          "--name",
-          container,
-          "--network",
-          this.network,
-          "--hostname",
-          this.hostnames?.[name] ?? name,
-          "--add-host",
-          "host.docker.internal:" + this.gateway,
-          "-p",
-          `127.0.0.1:${front}:${front}`,
-          "-v",
-          repo + ":" + repo + ":ro",
-          ...(productRoot === repo ? [] : ["-v", productRoot + ":" + productRoot + ":ro"]),
-          "-v",
-          root + ":" + root,
-          "-v",
-          process.env.MESH_FAST_RUNTIMES + ":" + process.env.MESH_FAST_RUNTIMES + ":ro",
-          "-v",
-          NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "pnpm-12.14.0") +
-            ":" +
-            NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "pnpm-12.14.0") +
-            ":ro",
-          ...(this.browser
-            ? [
-                "-v",
-                NodePath.join(this.directory, "artifacts") +
-                  ":" +
-                  NodePath.join(this.directory, "artifacts"),
-                "-v",
-                process.env.PLAYWRIGHT_BROWSERS_PATH +
-                  ":" +
-                  process.env.PLAYWRIGHT_BROWSERS_PATH +
-                  ":ro",
-              ]
-            : []),
-          ...Object.entries(env).flatMap(([key, value]) => ["-e", key + "=" + value]),
-          "mesh-fast-node:26",
-          "sh",
-          "-ec",
-          `usermod -u ${process.getuid()} -d '${home}' node; exec runuser -u node -- /usr/local/bin/node '${NodePath.join(repo, "scripts/mesh-fast/container-node.mjs")}' '${containerConfig}'`,
-        ],
-        process.env,
-        NodePath.join(root, "server.log"),
-      );
-    } else
-      child = this.launch(
-        process.execPath,
-        [NodePath.join(repo, "scripts/mesh-fast/supervisor.mjs"), spec, receipt],
-        env,
-        NodePath.join(root, "server.log"),
-      );
+    let descriptor;
     const origin = `http://127.0.0.1:${front}`;
-    const descriptor = await until(
-      `${name} ready`,
-      async () => {
-        if (child.exitCode !== null || child.signalCode !== null)
-          return { startupExit: child.exitCode ?? child.signalCode };
-        return (await fetch(`${origin}/.well-known/t3/environment`)).json();
-      },
-      (value) => value.startupExit !== undefined || !!value.environmentId,
-    );
-    if (descriptor.startupExit !== undefined)
-      throw Error(
-        `${name} exited ${descriptor.startupExit}: ${await NodeFSP.readFile(NodePath.join(root, "server.log"), "utf8")}`,
+    const ready = async () => {
+      if (this.stopping) throw Error("Fixture is closing");
+      if (inContainer) {
+        container = this.network + "-" + name;
+        await until(
+          "local node routes allocated",
+          async () => this.routes.size,
+          (value) => value === this.nodeCount,
+        );
+        const containerConfig = NodePath.join(root, "container.json");
+        await NodeFSP.writeFile(
+          spec,
+          JSON.stringify({
+            command: useSource ? "/usr/local/bin/node" : serverCommand,
+            args: serverArgs,
+          }),
+        );
+        await NodeFSP.writeFile(
+          containerConfig,
+          JSON.stringify({
+            routes: [
+              ...[...this.routes]
+                .filter(([peer]) => peer !== name)
+                .map(([, port]) => ({ port, target: port })),
+              ...(this.extraRoutes ?? []).map((port) => ({ port, target: port })),
+            ],
+            children: [
+              ["/usr/sbin/sshd", "-D", "-e", "-f", sshConfig],
+              [
+                "/usr/local/bin/node",
+                NodePath.join(repo, "scripts/mesh-fast/proxy.mjs"),
+                String(front),
+                String(backend),
+                state,
+                "0.0.0.0",
+              ],
+              [
+                "/usr/local/bin/node",
+                NodePath.join(repo, "scripts/mesh-fast/supervisor.mjs"),
+                spec,
+                receipt,
+              ],
+            ],
+          }),
+        );
+        child = this.launchContainer(
+          [
+            "run",
+            "--init",
+            "--name",
+            container,
+            "--network",
+            this.network,
+            "--hostname",
+            this.hostnames?.[name] ?? name,
+            "--add-host",
+            "host.docker.internal:" + this.gateway,
+            "-p",
+            `127.0.0.1:${front}:${front}`,
+            "-v",
+            repo + ":" + repo + ":ro",
+            ...(productRoot === repo ? [] : ["-v", productRoot + ":" + productRoot + ":ro"]),
+            "-v",
+            root + ":" + root,
+            "-v",
+            process.env.MESH_FAST_RUNTIMES + ":" + process.env.MESH_FAST_RUNTIMES + ":ro",
+            "-v",
+            NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "pnpm-12.14.0") +
+              ":" +
+              NodePath.join(process.env.MESH_FAST_MUTAGEN_CACHE, "pnpm-12.14.0") +
+              ":ro",
+            ...(this.browser
+              ? [
+                  "-v",
+                  NodePath.join(this.directory, "artifacts") +
+                    ":" +
+                    NodePath.join(this.directory, "artifacts"),
+                  "-v",
+                  process.env.PLAYWRIGHT_BROWSERS_PATH +
+                    ":" +
+                    process.env.PLAYWRIGHT_BROWSERS_PATH +
+                    ":ro",
+                ]
+              : []),
+            ...Object.entries(env).flatMap(([key, value]) => ["-e", key + "=" + value]),
+            "mesh-fast-node:26",
+            "sh",
+            "-ec",
+            `usermod -u ${process.getuid()} -d '${home}' node; exec runuser -u node -- /usr/local/bin/node '${NodePath.join(repo, "scripts/mesh-fast/container-node.mjs")}' '${containerConfig}'`,
+          ],
+          process.env,
+          NodePath.join(root, "server.log"),
+        );
+      } else
+        child = this.launch(
+          process.execPath,
+          [NodePath.join(repo, "scripts/mesh-fast/supervisor.mjs"), spec, receipt],
+          env,
+          NodePath.join(root, "server.log"),
+        );
+      descriptor = await until(
+        `${name} ready`,
+        async () => {
+          if (child.exitCode !== null || child.signalCode !== null)
+            return { startupExit: child.exitCode ?? child.signalCode };
+          return (await fetch(`${origin}/.well-known/t3/environment`)).json();
+        },
+        (value) => value.startupExit !== undefined || !!value.environmentId,
       );
+      if (descriptor.startupExit !== undefined)
+        throw Error(
+          `${name} exited ${descriptor.startupExit}: ${await NodeFSP.readFile(NodePath.join(root, "server.log"), "utf8")}`,
+        );
+    };
+    if (inContainer) await containerBoot(ready);
+    else await ready();
     const token = (
       await run(
         useSource ? process.execPath : native,
