@@ -1,5 +1,7 @@
+import { resolveAlias } from "./resolveAlias.ts";
+import { validateLayoutEntry } from "./registry.ts";
 import { sha256 } from "@noble/hashes/sha2";
-import { canonical, keys, type MeshLayoutDocument, type MeshLayoutEntry } from "./document.ts";
+import { merge, keys, type MeshLayoutDocument, type MeshLayoutEntry } from "./document.ts";
 
 const legacy = (key: string) =>
   /^(?:title:|[^:]+:(?:\/|[A-Za-z]:[\\/])|[\w.-]+\.[\w.-]+\/)/.test(key);
@@ -10,29 +12,18 @@ export function opaqueProjectId(key: string): string {
 
 // Keep original clocks: a later canonical tombstone must beat a delayed legacy replica entry.
 export function migrateLogicalProjectIds(document: MeshLayoutDocument): MeshLayoutDocument {
-  const aliases = new Map<string, string>();
+  const aliases: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const [key, entry] of Object.entries(document))
-    if (key.startsWith("alias/") && typeof entry.v === "string")
-      aliases.set(decodeURIComponent(key.slice(6)), entry.v);
-  const resolve = (key: string) => {
-    const visited: string[] = [];
-    while (aliases.has(key) && !visited.includes(key)) {
-      visited.push(key);
-      key = aliases.get(key)!;
-    }
-    if (visited.includes(key)) key = [...visited, key].sort()[0]!;
-    return opaqueProjectId(key);
-  };
-  const result: MeshLayoutDocument = {};
+    if (
+      key.startsWith("alias/") &&
+      typeof entry.v === "string" &&
+      validateLayoutEntry(key, entry) === null
+    )
+      aliases[decodeURIComponent(key.slice(6))] = entry.v;
+  const resolve = (key: string) => opaqueProjectId(resolveAlias(aliases, key));
+  let result: MeshLayoutDocument = {};
   const put = (key: string, entry: MeshLayoutEntry) => {
-    const old = result[key];
-    if (!old || entry.h > old.h || (entry.h === old.h && canonical(entry.v) > canonical(old.v)))
-      Object.defineProperty(result, key, {
-        value: entry,
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
+    result = merge(result, { [key]: entry });
   };
   const migrated = new Map<string, MeshLayoutEntry>();
   const project = (id: string, entry: MeshLayoutEntry) => {
@@ -42,6 +33,7 @@ export function migrateLogicalProjectIds(document: MeshLayoutDocument): MeshLayo
     return next;
   };
   for (const [key, entry] of Object.entries(document)) {
+    if (validateLayoutEntry(key, entry) !== null) continue;
     let target = key;
     let value = entry.v;
     const [family, a = "", b = ""] = key.split("/").map(decodeURIComponent);

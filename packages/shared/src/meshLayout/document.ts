@@ -55,9 +55,3 @@ export function merge(a: MeshLayoutDocument, b: MeshLayoutDocument): MeshLayoutD
   }
   return result;
 }
-export function apply(doc: MeshLayoutDocument, entries: MeshLayoutDocument): MeshLayoutDocument {
-  return merge(doc, entries);
-}
-export function entriesNewerThan(doc: MeshLayoutDocument, hlc: Hlc): MeshLayoutDocument {
-  return Object.fromEntries(Object.entries(doc).filter(([, entry]) => entry.h > hlc));
-}

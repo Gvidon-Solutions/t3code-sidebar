@@ -1,3 +1,4 @@
+import { compare } from "./hlc.ts";
 import { validateLayoutEntry } from "./registry.ts";
 import { normalizeRepresentationPath } from "./representationPath.ts";
 import { configFromLayout, bindingsFromLayout } from "../meshConfig/index.ts";
@@ -128,7 +129,12 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   const writers = [
     ...new Set(
       Object.keys(doc)
-        .filter((key) => key.startsWith("writer/"))
+        .filter(
+          (key) =>
+            key.startsWith("writer/") &&
+            doc[key]!.v === true &&
+            validateLayoutEntry(key, doc[key]!) === null,
+        )
         .map((key) => decodeURIComponent(key.slice(7))),
     ),
   ].sort();
@@ -141,8 +147,7 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
   );
   claims.sort(
     (a, b) =>
-      b.entry.h.localeCompare(a.entry.h) ||
-      (a.logical < b.logical ? -1 : a.logical > b.logical ? 1 : 0),
+      compare(b.entry.h, a.entry.h) || (a.logical < b.logical ? -1 : a.logical > b.logical ? 1 : 0),
   );
   const claimed = new Set<string>();
   for (const { logical, rep } of claims) {
@@ -167,6 +172,10 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
         ...(aliases ? { aliases } : {}),
       };
     }
+  const scalar = (key: string) => {
+    const entry = doc[key];
+    return entry && validateLayoutEntry(key, entry) === null ? entry.v : null;
+  };
   return {
     ...(writers.length ? { meshWriters: writers } : {}),
     workspaces: workspaces.map(({ sort: _sort, ...w }) => w),
@@ -180,8 +189,8 @@ export function materialize(doc: MeshLayoutDocument): SidebarWorkspacesConfig {
     projectAliases,
     projectMounts,
     projectMountStatus,
-    defaultWorkspace: (doc["ws.default"]?.v as string | null) ?? null,
-    quietAfterDays: (doc["ws.quietAfterDays"]?.v as number) ?? 5,
+    defaultWorkspace: (scalar("ws.default") as string | null) ?? null,
+    quietAfterDays: (scalar("ws.quietAfterDays") as number | null) ?? 5,
     projectOrder: orders.map((o) => o.id),
     alwaysShow: (legacy.alwaysShow as string[]) ?? [],
     alwaysQuiet: (legacy.alwaysQuiet as string[]) ?? [],

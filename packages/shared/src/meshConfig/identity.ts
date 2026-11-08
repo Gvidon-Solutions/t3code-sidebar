@@ -1,3 +1,4 @@
+import { compare } from "../meshLayout/hlc.ts";
 import type { MeshConfigDocument } from "@t3tools/contracts";
 import type { Json, MeshLayoutDocument } from "../meshLayout/document.ts";
 import { bindingsFromLayout, configFromLayout } from "./index.ts";
@@ -40,7 +41,7 @@ export function repairMachineIdentity(document: MeshLayoutDocument, doc: MeshCon
     if (claims.has(id)) continue;
     const historical = Object.entries(document)
       .filter(([key]) => key.startsWith("mesh.configHistory/"))
-      .sort(([, a], [, b]) => b.h.localeCompare(a.h))
+      .sort(([, a], [, b]) => compare(b.h, a.h))
       .flatMap(([, entry]) => {
         const value = entry.v;
         if (!value || typeof value !== "object" || Array.isArray(value)) return [];

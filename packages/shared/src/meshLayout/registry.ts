@@ -99,6 +99,7 @@ export function validateLayoutEntry(key: string, entry: MeshLayoutEntry): string
     ? layoutKeyFamilies[name as keyof typeof layoutKeyFamilies]
     : undefined;
   if (spec === undefined) return null;
+  if (parts.map(encodeURIComponent).join("/") !== key) return "noncanonical key encoding";
   if (parts.length !== spec.segments) return "invalid key segment count";
   if (name === "ws" && !parts[1]!.trim()) return "workspace id must not be blank";
   if (name === "mesh.machineBinding" && !isMachineName(parts[1]!))
@@ -106,5 +107,9 @@ export function validateLayoutEntry(key: string, entry: MeshLayoutEntry): string
   if (entry.v === null) return null;
   if (name === "proj" && key.endsWith(".title"))
     return typeof entry.v === "string" ? null : "project title must be a string";
-  return spec.validate(entry.v);
+  const error = spec.validate(entry.v);
+  if (error !== null) return error;
+  if (name === "rep" && (entry.v as { environmentId: string }).environmentId !== parts[2])
+    return "representation environment does not match key";
+  return null;
 }

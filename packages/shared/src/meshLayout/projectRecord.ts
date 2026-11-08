@@ -1,3 +1,4 @@
+import { resolveAlias } from "./resolveAlias.ts";
 import type { SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { normalizeRepresentationPath } from "./representationPath.ts";
 
@@ -35,15 +36,9 @@ export function logicalProjectKeyForRecord(
     project.title ? `title:${project.title.trim().replace(/\s+/g, " ").toLowerCase()}` : undefined,
     project.title ? `title:${project.title}` : undefined,
   ];
-  let key =
+  const key =
     represented ??
     candidates.find((candidate) => candidate && config.projectAliases[candidate]) ??
     fallback;
-  const visited = new Set<string>();
-  while (config.projectAliases[key]) {
-    if (visited.has(key)) return [...visited, key].sort()[0]!;
-    visited.add(key);
-    key = config.projectAliases[key]!;
-  }
-  return key;
+  return resolveAlias(config.projectAliases, key);
 }
