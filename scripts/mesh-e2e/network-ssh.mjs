@@ -14,7 +14,7 @@ if (!hostKeysFile)
   throw new Error("Usage: network-ssh.mjs T3_BINARY BASE_DIR MACHINE USER HOST_KEYS_JSON");
 const work = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "mesh-network-ssh-"));
 const key = NodePath.join(work, "identity");
-const alias = "mesh-network-network-target";
+const alias = "mesh-network-target";
 const execute = (program, args, input) =>
   new Promise((resolve, reject) => {
     const child = spawn(program, args, { stdio: ["pipe", "pipe", "pipe"] });

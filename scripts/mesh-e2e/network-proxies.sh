@@ -8,17 +8,17 @@ BED_LOCK_OWNER=${MESH_E2E_LOCK_OWNER:-mesh-network}
 [ "$owner" = "$BED_LOCK_OWNER" ] || die "$BED_LOCK_OWNER must hold the shared bed lock"
 action=${1:-up}
 name=t3-mesh-mesh-network-proxy.service
-dropin=91-mesh-network-network-proxy.conf
-state=/tmp/mesh-network-network-state.json
-proxy=/tmp/mesh-network-network-proxy.mjs
+dropin=91-mesh-network-proxy.conf
+state=/tmp/mesh-network-state.json
+proxy=/tmp/mesh-network-proxy.mjs
 node_binary=$(command -v node)
 if [ "$action" = up ]; then
   cp "$MESH_DIR/network-proxy.mjs" "$proxy"
   printf '{"denyMcp":true,"peerOnlyMcp":true,"cut":false}\n' > "$state"
   nodeB_scp "$proxy" "$NODE_B_HOST:$proxy"
   nodeB_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$state'"
-  cloud_put "$proxy" "$CLOUD_DIR/tmp/mesh-network-network-proxy.mjs"
-  cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-network-state.json'; printf '{\"denyMcp\":false,\"cut\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-outbound-state.json'; chmod 644 '$CLOUD_DIR/tmp/mesh-network-network-proxy.mjs' '$CLOUD_DIR/tmp/mesh-network-network-state.json' '$CLOUD_DIR/tmp/mesh-network-outbound-state.json'"
+  cloud_put "$proxy" "$CLOUD_DIR/tmp/mesh-network-proxy.mjs"
+  cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-state.json'; printf '{\"denyMcp\":false,\"cut\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-outbound-state.json'; chmod 644 '$CLOUD_DIR/tmp/mesh-network-proxy.mjs' '$CLOUD_DIR/tmp/mesh-network-state.json' '$CLOUD_DIR/tmp/mesh-network-outbound-state.json'"
   install -d "$HOME/.config/systemd/user/$NODE_A_UNIT.d"
   printf '[Service]\nExecStart=\nExecStart=%s/%s/t3 serve --base-dir %s --host 127.0.0.1 --port %s --no-browser\n' "$NODE_A_RUNTIME_ROOT" "$BUILD_VERSION" "$NODE_A_BASE_DIR" "$((NODE_A_PORT + 1))" > "$HOME/.config/systemd/user/$NODE_A_UNIT.d/$dropin"
   cat > "$HOME/.config/systemd/user/$name" <<EOF
@@ -55,7 +55,7 @@ services:
     command:
       - sh
       - -c
-      - node /tmp/mesh-network-network-proxy.mjs 3791 3792 /tmp/mesh-network-network-state.json 0.0.0.0 & node /tmp/mesh-network-network-proxy.mjs 13797 13797 /tmp/mesh-network-outbound-state.json 127.0.0.1 172.17.0.1 & if [ -f /tmp/mesh-network-sshd_config ]; then /usr/sbin/sshd -D -e -f /tmp/mesh-network-sshd_config & fi; echo $$$$ > /tmp/mesh-network-server-spawn.pid; exec node /opt/t3/dist/bin.mjs serve --base-dir /home/t3/.t3 --host 127.0.0.1 --port 3792 --no-browser
+      - node /tmp/mesh-network-proxy.mjs 3791 3792 /tmp/mesh-network-state.json 0.0.0.0 & node /tmp/mesh-network-proxy.mjs 13797 13797 /tmp/mesh-network-outbound-state.json 127.0.0.1 172.17.0.1 & if [ -f /tmp/mesh-network-sshd_config ]; then /usr/sbin/sshd -D -e -f /tmp/mesh-network-sshd_config & fi; echo $$$$ > /tmp/mesh-network-server-spawn.pid; exec node /opt/t3/dist/bin.mjs serve --base-dir /home/t3/.t3 --host 127.0.0.1 --port 3792 --no-browser
 EOF
   cloud_ssh "cd '$CLOUD_DIR'; docker compose -f compose.yaml -f mesh-network-compose.yaml up -d --force-recreate"
 elif [ "$action" = down ]; then
@@ -68,7 +68,7 @@ elif [ "$action" = down ]; then
 elif [ "$action" = block ]; then
   printf '{"denyMcp":true,"peerOnlyMcp":true,"cut":false}\n' > "$state"
   nodeB_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$state'"
-  cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-network-state.json'"
+  cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-state.json'"
 else
   die "Usage: network-proxies.sh up|block|down"
 fi

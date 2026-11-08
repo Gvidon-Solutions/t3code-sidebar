@@ -2,7 +2,7 @@
 set -euo pipefail
 action=${1:-}
 export MESH_E2E_HELPERS_ONLY=1
-export MESH_E2E_ROUND1_WORK=${MESH_E2E_BED_OPS:-/tmp/mesh-network-network-ops}
+export MESH_E2E_ROUND1_WORK=${MESH_E2E_BED_OPS:-/tmp/mesh-network-ops}
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/round1.sh"
 unset MESH_E2E_HELPERS_ONLY
 set -euo pipefail
@@ -28,7 +28,7 @@ NODE_A_ENV=$(descriptor_env "$NODE_A_ORIGIN")
 NODE_B_ENV=$(descriptor_env "$NODE_B_ORIGIN")
 CLOUD_ENV=$(descriptor_env "$CLOUD_ORIGIN")
 binary="$NODE_A_RUNTIME_ROOT/$BUILD_VERSION/t3"
-proof=/tmp/mesh-network-network-proof
+proof=/tmp/mesh-network-proof
 wait_connection() {
   local state=$1 direction=${2:-} deadline=$((SECONDS+90))
   while [ "$SECONDS" -lt "$deadline" ]; do
@@ -56,11 +56,11 @@ ssh_options() {
   identity=$(cat "$WORK/ssh-identity.path")
   ssh_user=$(cat "$WORK/ssh-user")
   printf -v proxy_command '%q mesh pipe %q --base-dir %q' "$binary" "$CLOUD_ENV" "$NODE_A_BASE_DIR"
-  ssh_args=(-F /dev/null -i "$identity" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WORK/ssh-known-hosts" -o "ProxyCommand=$proxy_command" "$ssh_user@mesh-network-network-target")
+  ssh_args=(-F /dev/null -i "$identity" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WORK/ssh-known-hosts" -o "ProxyCommand=$proxy_command" "$ssh_user@mesh-network-target")
 }
 case "$action" in
   nat)
-    cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false,\"denyPeer\":true}\\n' > '$CLOUD_DIR/tmp/mesh-network-network-state.json'"
+    cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false,\"denyPeer\":true}\\n' > '$CLOUD_DIR/tmp/mesh-network-state.json'"
     [ "$(curl -s -o "$WORK/inbound-peer-refusal.txt" -w '%{http_code}' "$CLOUD_ORIGIN/peer")" = 503 ]
     ws_rpc nodeB peerLinks.list '{}' > "$WORK/nat-nodeB-links.json"
     if jq -e --arg e "$CLOUD_ENV" '.links[] | select(.environmentId==$e)' "$WORK/nat-nodeB-links.json" >/dev/null; then
@@ -125,7 +125,7 @@ EOF
       cmp "$WORK/ssh-before-$machine.json" "$WORK/ssh-after-$machine.json"
     done
     printf 'PASS all persistent peer connections survived SSH transfer interruption\n'
-    jq -r '.[] | "mesh-network-network-target "+.' "$WORK/ssh-host-keys.json" > "$WORK/ssh-known-hosts"
+    jq -r '.[] | "mesh-network-target "+.' "$WORK/ssh-host-keys.json" > "$WORK/ssh-known-hosts"
     metrics
     ;;
   faults)
@@ -191,7 +191,7 @@ EOF
     printf 'PASS bed SIGKILL: automatic restart count %s -> %s, relay and SSH recovered\n' "$restarts" "$after"
     ;;
   restore)
-    cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false,\"denyPeer\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-network-state.json'"
+    cloud_ssh "printf '{\"denyMcp\":true,\"peerOnlyMcp\":true,\"cut\":false,\"denyPeer\":false}\\n' > '$CLOUD_DIR/tmp/mesh-network-state.json'"
     ws_rpc nodeB peerLinks.unlink "$(jq -nc --arg e "$CLOUD_ENV" '{environmentId:$e}')" > "$WORK/restore-unlink.json"
     for attempt in $(seq 1 60); do
       ws_rpc cloud peerLinks.list '{}' > "$WORK/restore-cloud-links.json"
