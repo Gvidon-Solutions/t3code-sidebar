@@ -120,7 +120,11 @@ export const layer = Layer.effect(
                 id: `links/${a}/${b}`,
                 machine: b,
                 server,
-                description: `Enforce link permissions between ${a} and ${b}`,
+                description: `Enforce link permissions between ${a} and ${b}: ${Object.entries(
+                  effectiveLinkPermissions(doc, a, b),
+                )
+                  .map(([key, value]) => `${key}=${value}`)
+                  .join(", ")}`,
               })),
           );
       }),

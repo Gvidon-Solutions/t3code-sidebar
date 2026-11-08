@@ -95,6 +95,14 @@ it.effect(
       const permission = (yield* plan("links").plan(doc, undefined)).find(
         (a) => a.server === "replica",
       )!;
+      expect(permission.description).toContain("files=none, replicas=false, threads=true");
+      const fullAccess = {
+        ...doc,
+        links: { overrides: [{ between: ["studio", "laptop"] as const, files: "all" as const }] },
+      };
+      expect((yield* plan("links").plan(fullAccess, undefined))[0]?.description).toContain(
+        "files=all",
+      );
       yield* plan("links").reconcile(permission, doc);
       expect((yield* mesh.read).document["mesh.linkPolicy/replica/studio"]?.v).toMatchObject({
         files: "none",
