@@ -1,5 +1,9 @@
-import { PEER_HOPS_HEADER, parseHops } from "../peer/connection/peerIdentity.ts";
-import { authenticatedPeerHops } from "../peer/connection/peerIdentity.ts";
+import {
+  PEER_HOPS_HEADER,
+  PEER_HOPS_ERROR,
+  parseHops,
+  authenticatedPeerHops,
+} from "../peer/connection/peerIdentity.ts";
 import {
   AuthAccessTokenType,
   AuthAccessWriteScope,
@@ -1364,7 +1368,7 @@ export const make = Effect.gen(function* () {
     )
       return yield* new ServerAuthInvalidCredentialError({
         peerIdentityMismatch: true,
-        diagnostic: "The peer header or relay hops do not match the authenticated link identity.",
+        diagnostic: PEER_HOPS_ERROR,
       });
     if (session.peerLink !== true && hops !== undefined)
       return yield* new ServerAuthInvalidCredentialError({
