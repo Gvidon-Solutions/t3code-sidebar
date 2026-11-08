@@ -68,6 +68,11 @@ addresses excluded through `NO_PROXY`. TLS passes through unchanged. Gvidon’s
 `t3-mesh-X1-provider-egress.service` own this route; keep them running for agent acceptance.
 They add no listeners or configuration to any other VPS stack.
 
+The recovered container’s base command retains its loopback `13797` route to the gor bridge.
+Fault injection adds a separate incoming proxy: while it is active, recreate the container
+with both `compose.yaml` and `X1-N1-compose.yaml`. Recreating from the base file alone
+removes that overlay; taking fault proxies down must retain the required outbound route.
+
 For acceptance, `/tmp/X1-fresh.env` selects independent X1 profiles on the same ports.
 Gvidon uses `/tmp/X1-fresh-studio`; gor’s base and the third container’s home/tmp/var-tmp
 mounts live below `~/.local/share/t3-mesh-e2e/X1-recovered` on gor. The preset supplies the
