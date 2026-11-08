@@ -24,6 +24,11 @@ async function boot(work) {
   }
 }
 const allocatedPorts = new Set();
+async function publish(file, value) {
+  const temporary = file + "." + NodeCrypto.randomUUID() + ".tmp";
+  await NodeFSP.writeFile(temporary, JSON.stringify(value));
+  await NodeFSP.rename(temporary, file);
+}
 async function port() {
   const socket = NodeNet.createServer();
   socket.listen(0, "127.0.0.1");
@@ -540,10 +545,10 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
   }
 
   async fault(node, state) {
-    await NodeFSP.writeFile(
-      node.state,
-      JSON.stringify({ inspectPipe: this.messageProxy && node.name === "cloudbox", ...state }),
-    );
+    await publish(node.state, {
+      inspectPipe: this.messageProxy && node.name === "cloudbox",
+      ...state,
+    });
   }
 
   async signal(node, signal) {
@@ -563,7 +568,7 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
   }
   async stop(node) {
     const spec = JSON.parse(await NodeFSP.readFile(node.spec, "utf8"));
-    await NodeFSP.writeFile(node.spec, JSON.stringify({ ...spec, paused: true }));
+    await publish(node.spec, { ...spec, paused: true });
     await this.signal(node, "SIGTERM");
     await until(
       "supervisor stopped",
@@ -574,10 +579,7 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
     delete node.mcpSession;
   }
   async resume(node) {
-    await NodeFSP.writeFile(
-      node.spec,
-      JSON.stringify({ command: node.serverCommand, args: node.serverArgs }),
-    );
+    await publish(node.spec, { command: node.serverCommand, args: node.serverArgs });
     await until(
       node.name + " resumed",
       async () => (await fetch(node.origin + "/.well-known/t3/environment")).json(),
@@ -585,13 +587,7 @@ const fs=require('node:fs');if(JSON.stringify(process.argv.slice(2))!==JSON.stri
     );
   }
   async restart(node) {
-    await NodeFSP.writeFile(
-      node.spec,
-      JSON.stringify({
-        command: node.serverCommand,
-        args: node.serverArgs,
-      }),
-    );
+    await publish(node.spec, { command: node.serverCommand, args: node.serverArgs });
     const before = await this.signal(node, "SIGKILL");
     await until(
       "automatic supervisor restart",
