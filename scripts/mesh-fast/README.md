@@ -147,8 +147,8 @@ fixture symlinks into external data.
 
 `T3_MESH_TIME_SCALE` is the only server timing knob. `(0,1]` is accepted in source
 execution; unset or `1` preserves defaults. The runner uses `0.04` for ordinary
-bundled servers, `0.075` for native launcher/previous-version meshes, or `0.2`
-on hosts with fewer than eight logical CPUs to keep health windows usable while
+bundled servers, `0.075` for previous-version meshes, and `0.2` for native
+bootstrap or hosts with fewer than eight logical CPUs to keep health windows usable while
 native subprocesses start. It scales
 heartbeat/dead detection, reconnect backoff, exchange/retry/debounce, config,
 bootstrap and replica reconciliation, rollout health windows, pending fork leases

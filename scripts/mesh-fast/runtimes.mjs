@@ -136,6 +136,13 @@ async function buildRuntimes(cache) {
     })));`,
       ),
     );
+    await NodeFSP.writeFile(
+      rolloutSource,
+      (await NodeFSP.readFile(rolloutSource, "utf8")).replace(
+        "Effect.retry({ schedule: Schedule.spaced(meshMillis(500)), times: 180 })",
+        'Effect.tapError(error => Effect.logWarning("Fast rollout health pending", error)), Effect.retry({ schedule: Schedule.spaced(meshMillis(500)), times: 180 })',
+      ),
+    );
     const monitor = NodePath.join(root, "monitor");
     await NodeFSP.mkdir(monitor);
     await NodeFSP.copyFile(

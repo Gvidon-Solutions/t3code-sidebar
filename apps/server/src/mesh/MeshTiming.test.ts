@@ -42,13 +42,15 @@ it("scales test time and refuses invalid multipliers", () => {
 
 it("accelerates the real peer heartbeat and reconnect schedule in a source process", () => {
   const source = new URL("../peer/connection/PeerChannel.ts", import.meta.url).href;
+  const retry = new URL("./retryBackoff.ts", import.meta.url).href;
   const result = NodeChildProcess.execFileSync(
     process.execPath,
     [
       "--input-type=module",
       "-e",
       `
-    import { PeerChannel, reconnectDelay } from ${JSON.stringify(source)};
+    import { PeerChannel } from ${JSON.stringify(source)};
+    import { meshRetryDelay as reconnectDelay } from ${JSON.stringify(retry)};
     let now = 0;
     const frames = [], closed = [];
     const peer = new PeerChannel({ now: () => now, send: (wire) => frames.push(JSON.parse(wire)),

@@ -115,6 +115,7 @@ export const rolloutScenarios = {
     });
     const sshPort = await port(),
       apiPort = await port();
+    const upgradedSockets = new Set();
     const api = NodeHttps.createServer(
       { key: await NodeFSP.readFile(privateKey), cert: await NodeFSP.readFile(certificate) },
       (request, response) => {
@@ -149,6 +150,55 @@ export const rolloutScenarios = {
         request.pipe(upstream);
       },
     );
+    api.on("upgrade", (request, socket, head) => {
+      const outgoing = NodeHttp.request({
+        hostname: "127.0.0.1",
+        port: apiPort,
+        path: request.url,
+        headers: {
+          ...request.headers,
+          "x-forwarded-proto": "https",
+          "x-forwarded-host": request.headers.host,
+        },
+      });
+      outgoing.on("upgrade", (response, remote, remoteHead) => {
+        NodeFS.appendFileSync(
+          NodePath.join(directory, "bootstrap-http.jsonl"),
+          JSON.stringify({ path: "/peer", status: response.statusCode }) + "\n",
+        );
+        upgradedSockets.add(socket);
+        upgradedSockets.add(remote);
+        socket.write(
+          `HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n${response.rawHeaders.reduce((lines, value, index, values) => (index % 2 === 0 ? [...lines, value + ": " + values[index + 1]] : lines), []).join("\r\n")}\r\n\r\n`,
+        );
+        if (head.length) remote.write(head);
+        if (remoteHead.length) socket.write(remoteHead);
+        socket.once("close", () => {
+          upgradedSockets.delete(socket);
+          remote.destroy();
+        });
+        remote.once("close", () => {
+          upgradedSockets.delete(remote);
+          socket.destroy();
+        });
+        socket.on("error", (error) => remote.destroy(error));
+        remote.on("error", () => socket.destroy());
+        socket.pipe(remote);
+        remote.pipe(socket);
+      });
+      outgoing.on("response", (response) => {
+        socket.end(`HTTP/1.1 ${response.statusCode} Upgrade refused\r\nConnection: close\r\n\r\n`);
+        response.resume();
+      });
+      outgoing.on("error", (error) => {
+        NodeFS.appendFileSync(
+          NodePath.join(directory, "bootstrap-http.jsonl"),
+          JSON.stringify({ upgradeError: error.message }) + "\n",
+        );
+        socket.destroy();
+      });
+      outgoing.end();
+    });
     api.on("tlsClientError", (error) =>
       NodeFS.appendFileSync(
         NodePath.join(directory, "bootstrap-http.jsonl"),
@@ -161,6 +211,7 @@ export const rolloutScenarios = {
     });
     const mesh = Object.assign(new MiniMesh(directory), {
       launcher: true,
+      timeScale: 0.2,
       environment: {
         T3CODE_RELEASE_BASE_URL: `https://127.0.0.1:${secureReleasePort}`,
         NODE_EXTRA_CA_CERTS: certificate,
@@ -199,6 +250,7 @@ export const rolloutScenarios = {
         ]);
         await run("docker", ["rm", "-f", owned]);
       }
+      for (const socket of upgradedSockets) socket.destroy();
       for (const endpoint of [secure, api])
         if (endpoint.listening)
           await new Promise((resolve, reject) =>
