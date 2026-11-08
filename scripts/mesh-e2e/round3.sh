@@ -33,10 +33,14 @@ ws_rpc() {
 printf '%s' "$$" > "$WORK/N-round3-runner.pid"
 set -e
 TIMEOUT=${MESH_E2E_ROUND3_TIMEOUT:-900}
-PAUSED_SERVER=
-PAUSED_SERVER_PID=
 PARTITION_ACTIVE=0
 CRASH_TARGET=
+MOUNT_WATCH_PID=
+PLACEMENT_PID=
+FROZEN_CONTAINER_ID=
+FROZEN_DRIVER_RECORD=
+DAEMON_SETTINGS_MACHINE=
+DAEMON_SETTINGS_ENABLED=
 declare -A CRASH_PEERS=()
 source_commit=$(git -C "$REPO_ROOT" log -1 --format=%H -- apps/server/src/replicas/ProjectReplicaService.ts apps/server/src/mesh/MeshSettings.ts packages/shared/src/meshLayout)
 git -C "$REPO_ROOT" merge-base --is-ancestor "$source_commit" "$COMMIT" || die "Build lacks N: use MESH_E2E_BUILD_CURRENT=1 build.sh xdev-n, then deploy.sh while the bed is free"
@@ -82,7 +86,7 @@ rexec() {
   esac
 }
 env_of() { case "$1" in gv) echo "$GV_ENV";; gor) echo "$GOR_ENV";; vps) echo "$VPS_ENV";; esac; }
-GOR_REMOTE_BASE=$(gor_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')
+GOR_REMOTE_BASE=${MESH_E2E_GOR_BASE_DIR:-$(gor_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')}
 base_of() { case "$1" in gv) echo "$GV_BASE_DIR";; gor) echo "$GOR_REMOTE_BASE";; vps) echo /home/t3/.t3;; esac; }
 mut_bin() {
   local m=$1 configured cache="$WORK/$N_KEY-mutagen-bin-$1"
@@ -116,12 +120,6 @@ restart_count() {
     vps) vps_ssh 'docker inspect -f "{{.RestartCount}}" t3-mesh-e2e';;
   esac
 }
-server_process() {
-  require_bed_lock || return 1
-  local machine=$1 signal=$2 expected=$3 base
-  base=$(base_of "$machine")
-  rexec "$machine" node -e 'const fs=require("node:fs"),[base,signal,raw]=process.argv.slice(1),expected=Number(raw),{pid}=JSON.parse(fs.readFileSync(base+"/userdata/server-runtime.json","utf8")); if(!["read","SIGSTOP","SIGCONT"].includes(signal)||!Number.isSafeInteger(expected)||expected<0||!Number.isSafeInteger(pid)||pid<=1||pid===process.pid||(signal!=="read"&&expected<=1)||(expected!==0&&pid!==expected))throw Error("Invalid captured test server PID"); const args=fs.readFileSync(`/proc/${pid}/cmdline`,"utf8").split("\0"),index=args.indexOf("--base-dir"); if(!args.includes("serve")||index<0||args[index+1]!==base||fs.statSync(`/proc/${pid}`).uid!==process.getuid())throw Error("PID does not belong to this isolated server"); if(signal!=="read")process.kill(pid,signal); console.log(pid);' "$base" "$signal" "$expected"
-}
 crash() {
   require_bed_lock || return 1
   local before after peer
@@ -154,19 +152,57 @@ project_options() {
   config=$(ws_rpc gv meshConfig.get '{}')
   ws_rpc gv meshConfig.apply "$(jq -nc --argjson config "$config" --arg project "$project" --argjson options "$options" '{baseRevision:$config.current.revision,doc:($config.current.doc | .projects.overrides = ((.projects.overrides // []) + [($options + {project:$project})]))}')"
 }
+restore_daemon_settings() {
+  [ -n "$DAEMON_SETTINGS_MACHINE" ] || return 0
+  ws_rpc "$DAEMON_SETTINGS_MACHINE" server.updateSettings "$(jq -nc --argjson enabled "$DAEMON_SETTINGS_ENABLED" '{patch:{replicasEnabled:$enabled}}')" > "$WORK/N-daemon-settings-restored-$DAEMON_SETTINGS_MACHINE.json" || return 1
+  jq -e --argjson enabled "$DAEMON_SETTINGS_ENABLED" '.replicasEnabled==$enabled' "$WORK/N-daemon-settings-restored-$DAEMON_SETTINGS_MACHINE.json" >/dev/null || return 1
+  DAEMON_SETTINGS_MACHINE=
+  DAEMON_SETTINGS_ENABLED=
+}
+restore_partition() {
+  cp "$WORK/N-partition-proxy-before-gv.json" /tmp/N1-partition-state.json || return 1
+  mv /tmp/N1-partition-state.json /tmp/N1-network-state.json || return 1
+  gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json" || return 1
+  vps_put "$WORK/N-partition-proxy-before-vps.json" "$VPS_DIR/tmp/N1-partition-state.json" || return 1
+  vps_ssh "chmod 644 '$VPS_DIR/tmp/N1-partition-state.json' && mv '$VPS_DIR/tmp/N1-partition-state.json' '$VPS_DIR/tmp/N1-network-state.json'" || return 1
+}
+resume_container_driver() {
+  [ -n "$FROZEN_DRIVER_RECORD" ] || return 0
+  local args
+  printf -v args '%q ' node "$driver_signal" resume "$(base_of vps)" "$FROZEN_DRIVER_RECORD"
+  vps_ssh "docker exec '$FROZEN_CONTAINER_ID' $args" || return 1
+  FROZEN_DRIVER_RECORD=
+  FROZEN_CONTAINER_ID=
+}
 ws_get gv > "$WORK/N-before.json"
 restore() {
-  local rc=$?
-  if require_bed_lock; then
-    if [ -n "$PAUSED_SERVER" ]; then
-      server_process "$PAUSED_SERVER" SIGCONT "$PAUSED_SERVER_PID" >/dev/null || rc=1
+  local rc=$? child child_status
+  for child in "$MOUNT_WATCH_PID" "$PLACEMENT_PID"; do
+    if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
+      kill "$child" || rc=1
+      if wait "$child"; then
+        printf 'Round three child %s finished during cleanup.\n' "$child"
+      else
+        child_status=$?
+        printf 'Round three child %s cleanup exit %s.\n' "$child" "$child_status" >&2
+        [ "$child_status" = 143 ] || rc=1
+      fi
     fi
+  done
+  if ! resume_container_driver; then
+    printf 'Could not resume our captured container driver.\n' >&2
+    rc=1
+  fi
+  if require_bed_lock; then
     for m in gv gor vps; do unit "$m" start || rc=1; done
     if [ "$PARTITION_ACTIVE" = 1 ]; then
-      gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json" || rc=1
+      restore_partition || rc=1
     fi
     gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT" || rc=1
     wait_health "$GV_ORIGIN" "$TIMEOUT" || rc=1
+    if [ -n "$DAEMON_SETTINGS_MACHINE" ]; then
+      wait_health "$(origin_of "$DAEMON_SETTINGS_MACHINE")" "$TIMEOUT" && restore_daemon_settings || rc=1
+    fi
   else
     printf 'Bed lock lost; leaving shared services and settings untouched.\n' >&2
     rc=1
@@ -181,11 +217,11 @@ rexec gor git init -q "$N_ROOT"
 rexec gor sh -c "printf 'baseline' > '$N_FILE'; dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=32 status=none"
 project_options "$N_KEY" '{"conflicts":"primary-wins"}' > "$WORK/N-primary-policy.json"
 add_rep() {
-  local m=$1 role=$2 env source
+  local m=$1 role=$2 control=${3:-gv} env source
   env=$(env_of "$m"); source=null; [ "$role" = primary ] || source="\"$GOR_ENV\""
   local rep
   rep=$(jq -nc --arg env "$env" --arg p "$N_ROOT" --arg role "$role" --argjson source "$source" '{environmentId:$env,path:$p,pathAllocated:true,role:$role,transport:(if $role=="primary" then "git" else "mutagen" end),createdAt:""} + (if $source==null then {} else {source:$source} end)')
-  ws_rpc gv meshLayout.apply "$(entry "rep/$N_KEY/$env" "$rep")" > "$WORK/N-add-$m.json"
+  ws_rpc "$control" meshLayout.apply "$(entry "rep/$N_KEY/$env" "$rep")" > "$WORK/N-add-$m.json"
 }
 add_rep gor primary
 for m in gv vps; do add_rep "$m" replica; done
@@ -296,10 +332,28 @@ for m in gv gor vps; do
     sleep 1
   done
   rexec gor sh -c "dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=128 status=none"
-  for replica in gv vps; do add_rep "$replica" replica; done
   mount_observer=gv; [ "$m" != vps ] || mount_observer=vps
-  wait_state "$mount_observer" mounting
+  control=gor; [ "$m" != gor ] || control=vps
+  ready="$WORK/N-mount-ready-$RUN_TS-$m"
+  node "$WS" wait-replica "$N_KEY" "$(env_of "$mount_observer")" mounting "$ready" --origin "$(origin_of "$mount_observer")" --token "$(token_of "$mount_observer")" --timeout "$((TIMEOUT*1000))" > "$WORK/N-mount-transition-$m.json" &
+  MOUNT_WATCH_PID=$!
+  end=$((SECONDS+TIMEOUT))
+  until [ -f "$ready" ]; do
+    kill -0 "$MOUNT_WATCH_PID" 2>/dev/null || { wait "$MOUNT_WATCH_PID"; exit 1; }
+    [ "$SECONDS" -lt "$end" ] || exit 1
+    sleep 0.1
+  done
+  add_rep "$mount_observer" replica "$control" &
+  PLACEMENT_PID=$!
+  wait "$MOUNT_WATCH_PID"
+  MOUNT_WATCH_PID=
+  printf 'PASS N observed mounting transition before killing %s\n' "$m"
   crash "$m"
+  wait "$PLACEMENT_PID"
+  PLACEMENT_PID=
+  for replica in gv vps; do
+    if [ "$replica" != "$mount_observer" ]; then add_rep "$replica" replica; fi
+  done
   assert_converged "N mid-mount crash $m"
   rexec gor sh -c "dd if=/dev/urandom of='$N_ROOT/payload' bs=1048576 count=256 status=none; printf '$m-sync' > '$N_FILE'"
   wait_staging "$mount_observer" "$m"
@@ -307,20 +361,31 @@ for m in gv gor vps; do
   assert_converged "N mid-sync crash $m"
 done
 # Kill only a private daemon PID captured when this script launched it.
+driver_signal="/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs"
+vps_put "$MESH_DIR/round3-driver.mjs" "$VPS_DIR/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs"
+vps_ssh "chmod 644 '$VPS_DIR/tmp/$BED_LOCK_OWNER-N-driver-signal.mjs'"
 for m in gv vps; do
-  # Restart to drain in-flight commands before capturing our daemon.
-  unit "$m" stop
-  unit "$m" start
-  wait_health "$(origin_of "$m")" "$TIMEOUT"
   base=$(base_of "$m")
   daemon_dir="$base/N-faults/$N_KEY"
   rexec "$m" mkdir -p "$daemon_dir"
   daemon_binary=$(mut_bin "$m")
-  PAUSED_SERVER_PID=$(server_process "$m" read 0)
-  PAUSED_SERVER=$m
-  # Freeze status readers while establishing ownership of the fault-test daemon.
-  server_process "$m" SIGSTOP "$PAUSED_SERVER_PID" >/dev/null
-  if rexec "$m" node -e 'const s=require("node:net").connect(process.argv[1]); s.once("connect",()=>{s.end();process.exit(0)}); s.once("error",()=>process.exit(1)); s.setTimeout(1000,()=>process.exit(1));' "$base/mutagen/daemon/daemon.sock"; then mut "$m" daemon stop; fi
+  ws_rpc "$m" server.getConfig '{}' > "$WORK/N-daemon-settings-before-$m.json"
+  DAEMON_SETTINGS_ENABLED=$(jq -r '.settings.replicasEnabled' "$WORK/N-daemon-settings-before-$m.json")
+  case "$DAEMON_SETTINGS_ENABLED" in true|false) ;; *) die 'Invalid replica enable setting';; esac
+  DAEMON_SETTINGS_MACHINE=$m
+  ws_rpc "$m" server.updateSettings '{"patch":{"replicasEnabled":false}}' > "$WORK/N-daemon-settings-disabled-$m.json"
+  jq -e '.replicasEnabled==false' "$WORK/N-daemon-settings-disabled-$m.json" >/dev/null
+  if ! daemon_lock "$m" 0; then
+    mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-daemon-before-stop-$m.json"
+    mut "$m" daemon stop
+  fi
+  if [ "$m" = vps ]; then
+    FROZEN_CONTAINER_ID=$(vps_ssh 'docker inspect -f "{{.Id}}" t3-mesh-e2e')
+    FROZEN_DRIVER_RECORD="$daemon_dir/server-paused.json"
+    rexec vps node "$driver_signal" pause "$base" "$FROZEN_DRIVER_RECORD"
+  else
+    unit "$m" stop
+  fi
   end=$((SECONDS+TIMEOUT))
   until daemon_lock "$m" 0; do
     [ "$SECONDS" -lt "$end" ] || exit 1
@@ -330,9 +395,9 @@ for m in gv vps; do
   wait_daemon "$m"
   captured_pid=$(rexec "$m" cat "$daemon_dir/daemon.pid")
   daemon_lock "$m" "$captured_pid"
-  server_process "$m" SIGCONT "$PAUSED_SERVER_PID" >/dev/null
-  PAUSED_SERVER=
-  PAUSED_SERVER_PID=
+  if [ "$m" = vps ]; then resume_container_driver; else unit "$m" start; fi
+  wait_health "$(origin_of "$m")" "$TIMEOUT"
+  restore_daemon_settings
   before=$(restart_count "$m")
   daemon_lock "$m" "$captured_pid"
   printf 'PASS N captured daemon owns private lock %s\n' "$m"
@@ -349,13 +414,20 @@ for m in gv vps; do
   printf 'PASS N daemon recovered without server restart %s\n' "$m"
 done
 # Cut both peer directions before writing divergent versions, without user pauses.
+cp /tmp/N1-network-state.json "$WORK/N-partition-proxy-before-gv.json"
 gor_ssh 'cat /tmp/N1-network-state.json' > "$WORK/N-partition-proxy-before.json"
-jq -e '.cut==false' "$WORK/N-partition-proxy-before.json" >/dev/null
+vps_ssh "cat '$VPS_DIR/tmp/N1-network-state.json'" > "$WORK/N-partition-proxy-before-vps.json"
+for state_file in "$WORK"/N-partition-proxy-before*.json; do jq -e '.cut==false' "$state_file" >/dev/null; done
 for m in gv vps; do
   mut "$m" sync list --label-selector t3-logical --template '{{json .}}' > "$WORK/N-before-partition-$m.json"
   jq -e --arg p "$N_ROOT" 'any(.[]; .beta.path==$p and .paused==false and .alpha.connected==true)' "$WORK/N-before-partition-$m.json" >/dev/null
 done
 PARTITION_ACTIVE=1
+jq '.cut=true' "$WORK/N-partition-proxy-before-gv.json" > /tmp/N1-partition-state.json
+mv /tmp/N1-partition-state.json /tmp/N1-network-state.json
+jq '.cut=true' "$WORK/N-partition-proxy-before-vps.json" > "$WORK/N-vps-cut.json"
+vps_put "$WORK/N-vps-cut.json" "$VPS_DIR/tmp/N1-partition-state.json"
+vps_ssh "chmod 644 '$VPS_DIR/tmp/N1-partition-state.json' && mv '$VPS_DIR/tmp/N1-partition-state.json' '$VPS_DIR/tmp/N1-network-state.json'"
 jq '.cut=true' "$WORK/N-partition-proxy-before.json" | gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json'
 gor_ssh "systemctl --user stop $GOR_TUNNEL_UNIT"
 for m in gv vps; do
@@ -367,12 +439,12 @@ for m in gv vps; do
     sleep 1
   done
 done
-rexec gor sh -c "printf 'N-authority-wins' > '$N_FILE'"
+rexec gor sh -c "printf 'N-primary-wins' > '$N_FILE'"
 rexec gv sh -c "printf 'N-gv-loses' > '$N_FILE'"
 rexec vps sh -c "printf 'N-vps-loses' > '$N_FILE'"
 for _ in $(seq 1 180); do sleep 1; done
 require_bed_lock || die 'Bed lock lost during partition'
-gor_ssh 'cat > /tmp/N1-partition-state.json && mv /tmp/N1-partition-state.json /tmp/N1-network-state.json' < "$WORK/N-partition-proxy-before.json"
+restore_partition
 gor_ssh "systemctl --user start $GOR_TUNNEL_UNIT"
 PARTITION_ACTIVE=0
 # The reconciler must resume and resolve automatically; no retry/resume command here.
@@ -382,7 +454,7 @@ for m in gv vps; do
   rg "N-$m-loses" "$WORK/N-copies-$m.txt"
 done
 crash gor
-assert_converged 'N authority restart'
+assert_converged 'N primary restart'
 for order in 'gv gor vps' 'gv vps gor' 'gor gv vps' 'gor vps gv' 'vps gv gor' 'vps gor gv'; do
   for m in gv gor vps; do unit "$m" stop; done
   for m in $order; do unit "$m" start; wait_health "$(origin_of "$m")" "$TIMEOUT"; done
@@ -393,6 +465,13 @@ runtime_root="/tmp/N-runtime-$RUN_TS"
 gor_ssh "mkdir -p '$runtime_root-source/runtime/versions/0.0.4-N'; printf '#!/bin/sh\nexit 0\n' > '$runtime_root-source/runtime/versions/0.0.4-N/t3'; chmod 700 '$runtime_root-source/runtime/versions/0.0.4-N/t3'"
 vps_ssh "mkdir -p '$runtime_root'"
 tar -czf "$WORK/N-runtime-scripts.tar.gz" -C "$REPO_ROOT/agent-kit/skills/t3" scripts
-scp -q -F "$VPS_SSH_CONFIG" "$WORK/N-runtime-scripts.tar.gz" "$MESH_DIR/round3-runtime.sh" "$VPS_HOST:$runtime_root/"
+vps_put "$WORK/N-runtime-scripts.tar.gz" "$runtime_root/N-runtime-scripts.tar.gz"
+jq -n \
+  --arg destination "${MESH_E2E_RUNTIME_SSH_DESTINATION:-$(gor_ssh 'id -un')@172.17.0.1:22022}" \
+  --arg identityFile "${MESH_E2E_RUNTIME_SSH_IDENTITY:-$VPS_DATA/.ssh/id_mesh_gor}" \
+  --arg knownHostsFile "${MESH_E2E_RUNTIME_SSH_KNOWN_HOSTS:-$VPS_DATA/.ssh/known_hosts}" \
+  '{destination:$destination,identityFile:$identityFile,knownHostsFile:$knownHostsFile}' > "$WORK/N-runtime-ssh.json"
+vps_put "$WORK/N-runtime-ssh.json" "$runtime_root/ssh-copy.json"
+vps_put "$MESH_DIR/round3-runtime.sh" "$runtime_root/round3-runtime.sh"
 vps_ssh "tar -xzf '$runtime_root/N-runtime-scripts.tar.gz' -C '$runtime_root'; bash '$runtime_root/round3-runtime.sh' '$runtime_root'" | tee "$WORK/N-system-services.log"
-printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, authority, 6 restart orders; evidence %s\n' "$WORK"
+printf 'PASS N round3: crash/mount/sync, daemon, partition/conflicts, primary, 6 restart orders; evidence %s\n' "$WORK"

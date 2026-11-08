@@ -81,8 +81,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 const root=process.argv[2];
 const { installSshRuntime }=await import(pathToFileURL(root+'/scripts/server-runtime.mjs'));
-const run=(command,args,options)=>execFileSync(command,command==='ssh' ? ['-o','UserKnownHostsFile=/opt/t3-mesh-e2e/home/.ssh/known_hosts',...args] : args,options);
-const result=installSshRuntime({home:root+'/ssh-copy',want:'0.0.4-N',destination:'user@172.17.0.1:22022',identityFile:'/opt/t3-mesh-e2e/home/.ssh/id_mesh_gor',remoteHome:root+'-source',run});
+const route=JSON.parse(fs.readFileSync(root+'/ssh-copy.json','utf8'));
+const run=(command,args,options)=>execFileSync(command,command==='ssh' ? ['-F','/dev/null','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+route.knownHostsFile,...args] : args,options);
+const result=installSshRuntime({home:root+'/ssh-copy',want:'0.0.4-N',destination:route.destination,identityFile:route.identityFile,remoteHome:root+'-source',run});
 if(!fs.existsSync(result.path+'/t3')) throw Error('SSH runtime missing');
 console.log('PASS N runtime copied from linked gor over SSH without gh');
 JS

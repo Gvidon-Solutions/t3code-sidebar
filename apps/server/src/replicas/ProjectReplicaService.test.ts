@@ -117,6 +117,9 @@ it.effect(
           },
         });
         yield* service.reconcile;
+        expect((yield* service.status)[0]?.state).toBe("mounting");
+        h.setSession({ status: "watching" });
+        yield* service.reconcile;
         expect((yield* service.status)[0]?.state).toBe("watching");
         h.setSession({ lastError: "offline" });
         yield* service.reconcile;
@@ -133,7 +136,10 @@ it.effect(
           },
         }));
         yield* service.reconcile;
-        expect(h.terminated).toEqual([sessionIdentity("repo", "replica").name]);
+        expect(h.terminated).toEqual([
+          sessionIdentity("repo", "replica").name,
+          sessionIdentity("repo", "replica").name,
+        ]);
         expect(
           (yield* service.status).some(
             (row) => row.sessionName === sessionIdentity("repo", "replica").name,
@@ -899,3 +905,155 @@ it.effect(
     }).pipe(Effect.provide(h.layer));
   },
 );
+
+it.effect("retains a representation's own ignores while config migration is incomplete", () =>
+  Effect.gen(function* () {
+    const h = harness();
+    yield* Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMounts: {
+          ...config.projectMounts,
+          repo: config.projectMounts.repo!.map((rep) =>
+            rep.role === "replica" ? { ...rep, ignores: ["/large-data", "*.weights"] } : rep,
+          ),
+        },
+      }));
+      const clock = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.config": {
+          h: clock,
+          v: {
+            revision: clock,
+            doc: {
+              schema: 1,
+              machines: { source: {}, replica: {} },
+              replicas: { ignore: ["*.cache"] },
+            },
+            author: "replica",
+            writtenAt: "",
+          },
+        },
+      });
+      yield* (yield* ReplicaService.ProjectReplicaService).reconcile;
+      expect(h.created[0]?.ignores).toEqual(
+        expect.arrayContaining(["/large-data", "*.weights", "*.cache"]),
+      );
+    }).pipe(Effect.provide(h.layer));
+  }),
+);
+
+it.effect.each(["managed", "existing"] as const)(
+  "adopts a reversed session using its bound SSH host rather than its display title (%s)",
+  (mode) => {
+    const h = harness();
+    const host = mode === "managed" ? "t3-source" : "studio-ssh";
+    h.foreign.sessions = [
+      {
+        identifier: "manual-copy",
+        paused: true,
+        status: "watching",
+        alpha: { protocol: "local", path: "/chosen-copy" },
+        beta: { protocol: "ssh", host, path: "/source" },
+        ignore: { paths: ["/private-data"] },
+      },
+    ];
+    return Effect.gen(function* () {
+      const service = yield* ReplicaService.ProjectReplicaService;
+      const mesh = yield* MeshLayoutService;
+      const clock = yield* mesh.nextHlc;
+      yield* mesh.apply({
+        "mesh.config": {
+          h: clock,
+          v: {
+            revision: clock,
+            doc: {
+              schema: 1,
+              machines: {
+                source: { title: "Studio display", label: "ST", ssh: { host: "studio-ssh" } },
+                replica: { title: "Laptop display", label: "LT" },
+              },
+              ssh: { mode },
+            },
+            author: "replica",
+            writtenAt: "",
+          },
+        },
+      });
+      const adopted = yield* service.adopt({ project: "repo", session: "manual-copy" });
+      expect(adopted.representation).toMatchObject({
+        environmentId: "replica",
+        source: "source",
+        path: "/chosen-copy",
+        ignores: ["/private-data"],
+        adoption: { environmentId: "replica", sessionIdentifier: "manual-copy" },
+      });
+      expect((yield* mesh.read).config.projectMounts.repo).toContainEqual(adopted.representation);
+    }).pipe(Effect.provide(h.layer));
+  },
+);
+
+it.effect("recovers interrupted automatic conflict resolution without resuming user pauses", () => {
+  const h = harness();
+  return Effect.gen(function* () {
+    const service = yield* ReplicaService.ProjectReplicaService;
+    const mesh = yield* MeshLayoutService;
+    const name = sessionIdentity("repo", "replica").name;
+    yield* service.reconcile;
+    h.setSession({ status: "watching", conflicts: [{ root: "payload" }] });
+    h.validation.beforePause = Effect.gen(function* () {
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+        resolvingConflicts: name,
+      });
+    });
+    h.validation.preserve = Effect.fail(
+      new ReplicaError({
+        reason: "unreachable",
+        message: "Connection closed while preserving the losing version.",
+      }),
+    );
+    yield* service.reconcile;
+    expect((yield* service.status)[0]).toMatchObject({
+      state: "error",
+      message: "Connection closed while preserving the losing version.",
+    });
+    expect((yield* mesh.read).config.projectMountStatus.repo?.replica).toMatchObject({
+      resolvingConflicts: name,
+    });
+    h.validation.preserve = Effect.void;
+    yield* Effect.gen(function* () {
+      const restarted = yield* ReplicaService.ProjectReplicaService;
+      yield* restarted.reconcile;
+      expect((yield* restarted.status)[0]?.state).toBe("mounting");
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).not.toHaveProperty(
+        "resolvingConflicts",
+      );
+      yield* restarted.reconcile;
+      expect(h.preserved).toHaveLength(2);
+      expect(h.preserved.at(-1)).toMatchObject({ root: "/replica", paths: ["payload"] });
+      h.setSession({ status: "watching", conflicts: [] });
+      yield* restarted.reconcile;
+      expect((yield* restarted.status)[0]?.state).toBe("watching");
+      h.setSession({ paused: true });
+      yield* mesh.edit((config) => ({
+        ...config,
+        projectMountStatus: {
+          ...config.projectMountStatus,
+          repo: {
+            ...config.projectMountStatus.repo,
+            replica: {
+              ...config.projectMountStatus.repo!.replica!,
+              resolvingConflicts: "another-session",
+            },
+          },
+        },
+      }));
+      yield* restarted.reconcile;
+      expect((yield* restarted.status)[0]?.state).toBe("paused");
+      expect((yield* mesh.read).config.projectMountStatus.repo?.replica).not.toHaveProperty(
+        "resolvingConflicts",
+      );
+    }).pipe(Effect.provide(Layer.fresh(ReplicaService.layer)));
+  }).pipe(Effect.provide(h.layer));
+});

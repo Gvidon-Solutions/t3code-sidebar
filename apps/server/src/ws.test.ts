@@ -1,3 +1,5 @@
+import * as RpcAuthorization from "./auth/RpcAuthorization.ts";
+import * as MeshLayoutLive from "./mesh/MeshLayoutServiceLive.ts";
 import { MeshLayoutService } from "./mesh/MeshLayoutService.ts";
 import { ThreadForkService } from "./mesh/ThreadForkService.ts";
 import { ThreadMoveService } from "./mesh/ThreadMoveService.ts";
@@ -9,12 +11,16 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
   AuthSessionId,
+  AuthOrchestrationReadScope,
+  AuthSettingsWriteScope,
   EnvironmentId,
   ProjectId,
   ThreadId,
   ProviderDriverKind,
   ProviderInstanceId,
   WS_METHODS,
+  WsRpcGroup,
+  type SidebarWorkspacesConfig,
   WsServerRefreshProvidersRpc,
   MeshRpcs,
   MESH_WS_METHODS,
@@ -1411,4 +1417,164 @@ it.effect("thread resume at its own high-water below the pruned boundary skips t
     // A snapshot load dies with "snapshot", so success means the resume replayed nothing.
     assert.isTrue(Exit.isSuccess(exit));
   }).pipe(Effect.scoped, Effect.provide(ReplayTestLayer)),
+);
+
+it.effect(
+  "keeps legacy RPC layout baselines per client and advances them to the merged response",
+  () =>
+    Effect.gen(function* () {
+      const mesh = yield* MeshLayoutService;
+      yield* mesh.edit((config) => ({
+        ...config,
+        workspaces: [
+          { id: "studio", name: "Studio" },
+          { id: "cloudbox", name: "Cloudbox" },
+        ],
+      }));
+      const responses = yield* Queue.unbounded<SidebarWorkspacesConfig>();
+      const services = Layer.mergeAll(
+        layerUnusedConfigRpcServices,
+        Layer.succeed(MeshLayoutService, mesh),
+        Layer.mock(ScratchThreadPromotion.ScratchThreadPromotion)({}),
+        Layer.mock(UsageLimitSources.UsageLimitSources)({ current: Effect.succeed([]) }),
+        Layer.mock(ExternalLauncher.ExternalLauncher)({
+          resolveAvailableEditors: () => Effect.succeed([]),
+          // @effect-diagnostics-next-line effectSucceedWithVoid:off -- The optional discovery result is undefined.
+          resolveFileManagerRevealKind: () => Effect.succeed(undefined),
+        }),
+        Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
+        Layer.mock(RemoteOpenTargets.RemoteOpenTargets)({
+          resolveTargets: () => Effect.succeed([]),
+        }),
+        Layer.mock(DirectEndpoints.DirectEndpoints)({ resolve: () => Effect.succeed([]) }),
+        Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+          scratchRoot: Effect.succeedNone,
+          namedProjectsRoot: process.cwd(),
+        }),
+        Layer.mock(EnvironmentAuth.EnvironmentAuth)({
+          getDescriptor: () =>
+            Effect.succeed({
+              sessionCookieName: "legacy-test",
+              policy: "loopback-browser",
+              bootstrapMethods: [],
+              sessionMethods: [],
+            }),
+        }),
+      );
+      const server = yield* RpcServer.makeNoSerialization(
+        RpcGroup.make(
+          ...Array.from(WsRpcGroup.requests.values()).filter(
+            (
+              rpc,
+            ): rpc is Extract<
+              RpcGroup.Rpcs<typeof WsRpcGroup>,
+              {
+                readonly _tag:
+                  | typeof WS_METHODS.serverGetConfig
+                  | typeof WS_METHODS.serverUpdateSettings;
+              }
+            > =>
+              rpc._tag === WS_METHODS.serverGetConfig ||
+              rpc._tag === WS_METHODS.serverUpdateSettings,
+          ),
+        ),
+        {
+          ...WS_RPC_SERVER_OPTIONS,
+          onFromServer: (response) => {
+            if (response._tag !== "Exit") return Effect.void;
+            if (response.exit._tag === "Failure") return Effect.die(response.exit.cause);
+            const value = response.exit.value;
+            return Queue.offer(
+              responses,
+              "settings" in value ? value.settings.sidebarWorkspaces : value.sidebarWorkspaces,
+            ).pipe(Effect.asVoid);
+          },
+        },
+      ).pipe(
+        Effect.provide(
+          Layer.merge(
+            layerWsRpc(
+              {
+                sessionId: AuthSessionId.make("legacy-test"),
+                subject: "legacy-test",
+                method: "browser-session-cookie",
+                scopes: [],
+              },
+              {},
+              yield* ServerBrowser.ServerBrowser,
+              () => Effect.void,
+              { secretReferences: true },
+            ).pipe(Layer.provide(services)),
+            RpcAuthorization.layer([AuthOrchestrationReadScope, AuthSettingsWriteScope]),
+          ),
+        ),
+      );
+      let requestId = 0;
+      const read = (client: number) =>
+        server
+          .write(client, {
+            _tag: "Request",
+            id: RpcMessage.RequestId(String(requestId++)),
+            tag: WS_METHODS.serverGetConfig,
+            payload: {},
+            headers: Headers.empty,
+          })
+          .pipe(Effect.andThen(Queue.take(responses)));
+      const write = (client: number, layout: SidebarWorkspacesConfig) =>
+        server
+          .write(client, {
+            _tag: "Request",
+            id: RpcMessage.RequestId(String(requestId++)),
+            tag: WS_METHODS.serverUpdateSettings,
+            payload: { patch: { sidebarWorkspaces: layout } },
+            headers: Headers.empty,
+          })
+          .pipe(Effect.andThen(Queue.take(responses)));
+      const rename = (config: SidebarWorkspacesConfig, id: string, name: string) => ({
+        ...config,
+        workspaces: config.workspaces.map((workspace) =>
+          workspace.id === id ? { ...workspace, name } : workspace,
+        ),
+      });
+      const first = yield* read(0);
+      yield* mesh.edit((config) => rename(config, "studio", "Studio remote"));
+      const second = yield* read(1);
+      const merged = yield* write(0, rename(first, "cloudbox", "Cloudbox first"));
+      assert.deepEqual(merged.workspaces, [
+        { id: "studio", name: "Studio remote" },
+        { id: "cloudbox", name: "Cloudbox first" },
+      ]);
+      yield* mesh.edit((config) => rename(config, "studio", "Studio newer"));
+      const repeated = yield* write(0, { ...merged, quietAfterDays: 23 });
+      assert.equal(repeated.workspaces[0]?.name, "Studio newer");
+      const other = yield* write(1, rename(second, "cloudbox", "Cloudbox second"));
+      assert.deepEqual(other.workspaces, [
+        { id: "studio", name: "Studio newer" },
+        { id: "cloudbox", name: "Cloudbox second" },
+      ]);
+      assert.equal(other.quietAfterDays, 23);
+      assert.deepEqual((yield* mesh.read).config, other);
+    }).pipe(
+      Effect.provide(
+        MeshLayoutLive.layer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              Layer.fresh(layerConfigSources),
+              Layer.mock(ServerEnvironment.ServerEnvironment)({
+                getEnvironmentId: Effect.succeed(EnvironmentId.make("studio")),
+                getDescriptor: Effect.succeed({
+                  environmentId: EnvironmentId.make("studio"),
+                  label: "Studio",
+                  platform: { os: "linux", arch: "x64" },
+                  serverVersion: "0.0.0",
+                  capabilities: { repositoryIdentity: false },
+                }),
+              }),
+              Layer.mock(ServerBrowser.ServerBrowser)({}),
+            ),
+          ),
+        ),
+      ),
+      Effect.scoped,
+    ),
 );

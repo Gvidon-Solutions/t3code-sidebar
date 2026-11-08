@@ -206,7 +206,13 @@ export const layer = Layer.effect(
               ...config.projectMounts,
               [key]: (config.projectMounts[key] ?? []).map((rep) =>
                 rep.environmentId === mesh.environmentId && rep.role === "replica"
-                  ? { ...rep, ignores: policy.ignore, mode: policy.replica }
+                  ? {
+                      ...rep,
+                      ...(rep.ignores?.every((pattern) => policy.ignore.includes(pattern))
+                        ? { ignores: [] }
+                        : {}),
+                      mode: policy.replica,
+                    }
                   : rep,
               ),
             },
@@ -345,9 +351,20 @@ export const layer = Layer.effect(
           },
         ]),
       ),
-      reconcile: Effect.fn("MeshConfigPlanners.agents.reconcile")((_action, doc) =>
-        agents.reconcile(doc),
-      ),
+      reconcile: Effect.fn("MeshConfigPlanners.agents.reconcile")(function* (_action, doc) {
+        const bindings = bindingsFromLayout((yield* snapshot).document);
+        const name = Object.keys(bindings).find((key) => bindings[key] === mesh.environmentId);
+        if (!name)
+          return yield* new MeshConfigError({
+            reason: "validation",
+            message: "Local machine binding is unavailable",
+          });
+        const machine = doc.machines[name];
+        yield* agents.reconcile(doc, {
+          title: machine?.title ?? name,
+          label: machine?.label ?? name,
+        });
+      }),
     };
     const bootstrapPlanner: ConfigPlanner = {
       name: "bootstrap",

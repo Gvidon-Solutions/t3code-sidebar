@@ -106,3 +106,24 @@ it("maps Windows replicas to POSIX primaries without depending on the local OS",
   });
   expect(resolveRunPlan({ ...data, cwd: "D:\\copies\\app" })).toEqual({ kind: "local" });
 });
+
+it("uses the user's configured host in existing SSH mode and refuses an absent host", () => {
+  const data = {
+    ...input(),
+    sshMode: "existing" as const,
+    machines: { cloudbox: { ssh: { host: "studio-custom" } } },
+  };
+  expect(resolveRunPlan(data)).toMatchObject({ host: "studio-custom" });
+  expect(() => resolveRunPlan({ ...data, machines: {} })).toThrow(/configured SSH host/);
+});
+
+it("uses the existing config's actual ignores when reporting ignored outputs", () => {
+  const plan = resolveRunPlan({
+    ...input(),
+    desiredConfig: { schema: 1, machines: {}, replicas: { ignore: ["/private"] } },
+  });
+  expect(plan.kind).toBe("remote");
+  if (plan.kind !== "remote") throw new Error("Expected a remote plan");
+  expect(plan.ignores).toContain("/private");
+  expect(plan.ignores).not.toContain("*.pdf");
+});

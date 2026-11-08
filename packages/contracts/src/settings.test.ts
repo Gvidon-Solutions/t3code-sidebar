@@ -1,3 +1,4 @@
+import { DEFAULT_REPLICA_IGNORES } from "./sidebarWorkspaces.ts";
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
@@ -352,16 +353,7 @@ describe("ServerSettings replica defaults", () => {
     expect(settings.replicasEnabled).toBe(true);
     expect(settings.mutagenPath).toBe("");
     expect(settings.replicaRoot).toBe("");
-    expect(settings.replicaIgnores).toEqual([
-      "/node_modules",
-      "/.venv",
-      "/dist",
-      "/build",
-      "/target",
-      "/.t3",
-      "/.t3-conflicts",
-      "node_modules",
-    ]);
+    expect(settings.replicaIgnores).toEqual([...DEFAULT_REPLICA_IGNORES]);
     expect(
       decodeServerSettingsPatch({
         replicasEnabled: false,

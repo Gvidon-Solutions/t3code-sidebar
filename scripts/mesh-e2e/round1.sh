@@ -20,6 +20,7 @@ set -uo pipefail
 set +e
 load_build_env
 require_bins
+GOR_BASE_DIR=${MESH_E2E_GOR_BASE_DIR:-$(gor_ssh 'printf "%s/.t3-sidebar-server" "$HOME"')}
 
 TIMEOUT="${MESH_E2E_ROUND1_TIMEOUT:-60}"
 if [ "${1:-}" = "--timeout" ]; then
@@ -117,6 +118,15 @@ const ws = new WebSocket(
 const pending = new Map();
 let seq = 0;
 let connected = false;
+ws.addEventListener("close", () => {
+  connected = false;
+  for (const [id, request] of pending) {
+    if (request.matches) {
+      pending.delete(id);
+      request.resolve({ ok: false, error: "replica stream closed before the requested transition" });
+    }
+  }
+});
 ws.onmessage = (event) => {
   for (const line of String(event.data).split("\n")) {
     if (!line.trim()) continue;
@@ -128,7 +138,21 @@ ws.onmessage = (event) => {
     const request = pending.get(message.requestId);
     if (!request) continue;
     if (message._tag === "Chunk") {
-      request.chunks.push(...message.values);
+      if (request.matches) {
+        request.chunks = message.values;
+        if (!request.ready) {
+          request.ready = true;
+          writeFileSync(request.readyFile, "ready");
+          ws.send(JSON.stringify({ _tag: "Ack", requestId: message.requestId }));
+          continue;
+        }
+        if (!message.values.some(request.matches)) {
+          ws.send(JSON.stringify({ _tag: "Ack", requestId: message.requestId }));
+          continue;
+        }
+      } else {
+        request.chunks.push(...message.values);
+      }
       if (request.firstChunk) {
         pending.delete(message.requestId);
         ws.send(JSON.stringify({ _tag: "Interrupt", requestId: message.requestId }));
@@ -138,7 +162,9 @@ ws.onmessage = (event) => {
       }
     } else if (message._tag === "Exit") {
       pending.delete(message.requestId);
-      if (request.firstChunk && message.exit._tag === "Success" && request.chunks.length > 0) {
+      if (request.matches) {
+        request.resolve({ ok: false, error: "replica stream ended before the requested transition" });
+      } else if (request.firstChunk && message.exit._tag === "Success" && request.chunks.length > 0) {
         request.resolve({ ok: true, value: request.chunks });
       } else if (message.exit._tag === "Success") {
         request.resolve({ ok: true, value: message.exit.value });
@@ -165,7 +191,7 @@ try {
 }
 
 let nextId = 0;
-const rpc = (method, payload = {}, { first = false } = {}) =>
+const rpc = (method, payload = {}, { first = false, matches, readyFile } = {}) =>
   new Promise((resolve, reject) => {
     if (!connected) return reject(new Error("websocket closed"));
     const id = String(nextId++);
@@ -176,6 +202,9 @@ const rpc = (method, payload = {}, { first = false } = {}) =>
     pending.set(id, {
       chunks: [],
       firstChunk: first,
+      matches,
+      readyFile,
+      ready: false,
       resolve: (value) => {
         clearTimeout(timer);
         resolve(value);
@@ -255,6 +284,15 @@ try {
     const method = argv[1];
     const value = await call(method, parseJson(argv[2]), { first: argv.includes("--first") });
     console.log(JSON.stringify(value, null, 2));
+  } else if (command === "wait-replica") {
+    const [logicalKey, environmentId, state, readyFile] = argv.slice(1);
+    if (!logicalKey || !environmentId || !state || !readyFile) fail("wait-replica needs logical key, environment id, state and ready file");
+    const value = await call("replicas.status", {}, {
+      first: true,
+      readyFile,
+      matches: (snapshot) => snapshot.replicas.some((row) => row.logicalKey === logicalKey && row.environmentId === environmentId && row.state === state),
+    });
+    console.log(JSON.stringify(value, null, 2));
   } else if (command === "get") {
     const value = await snapshot();
     if (canonical(materialize(value.document)) !== canonical(value.config)) fail("server config differs from materialize(document)");
@@ -313,12 +351,13 @@ descriptor_version() { # descriptor_version <origin>
 }
 
 mint_token_once() { # mint_token_once gv|gor|vps
-  local ttl=${MESH_E2E_SESSION_TTL:-30m} quoted_ttl
+  local ttl=${MESH_E2E_SESSION_TTL:-30m} quoted_ttl quoted_base
   printf -v quoted_ttl '%q' "$ttl"
+  printf -v quoted_base '%q' "$GOR_BASE_DIR"
   case "$1" in
     gv) "$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" auth session issue --base-dir "$GV_BASE_DIR" \
       --ttl "$ttl" --label mesh-e2e-round1 --token-only 2>/dev/null ;;
-    gor) gor_ssh "$GOR_BIN auth session issue --base-dir ~/.t3-sidebar-server --ttl $quoted_ttl \
+    gor) gor_ssh "$GOR_BIN auth session issue --base-dir $quoted_base --ttl $quoted_ttl \
       --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
     vps) vps_ssh "docker exec t3-mesh-e2e node $VPS_BIN auth session issue \
       --base-dir /home/t3/.t3 --ttl $quoted_ttl --label mesh-e2e-round1 --token-only" 2>/dev/null ;;
@@ -335,11 +374,12 @@ mint_token() { # mint_token gv|gor|vps — a just-restarted server can answer em
 }
 
 pair_code() { # pair_code gv|gor|vps
-  local out
+  local out quoted_base
+  printf -v quoted_base '%q' "$GOR_BASE_DIR"
   case "$1" in
     gv) out="$("$GV_RUNTIME_ROOT/$BUILD_VERSION/t3" auth pairing create --base-dir "$GV_BASE_DIR" \
       --ttl 20m --label mesh-e2e-link --json 2>/dev/null)" ;;
-    gor) out="$(gor_ssh "$GOR_BIN auth pairing create --base-dir ~/.t3-sidebar-server \
+    gor) out="$(gor_ssh "$GOR_BIN auth pairing create --base-dir $quoted_base \
       --ttl 20m --label mesh-e2e-link --json" 2>/dev/null)" ;;
     vps) out="$(vps_ssh "docker exec t3-mesh-e2e node $VPS_BIN auth pairing create \
       --base-dir /home/t3/.t3 --ttl 20m --label mesh-e2e-link --json" 2>/dev/null)" ;;

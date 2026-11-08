@@ -65,6 +65,8 @@ export const makeReplicaHarness = (
   const terminated: string[] = [];
   const validation = {
     pending: [] as readonly string[],
+    beforePause: Effect.void as Effect.Effect<void, ReplicaError>,
+    preserve: Effect.void as Effect.Effect<void, ReplicaError>,
     check: (
       _input: Parameters<Runner.MutagenRunner["Service"]["assertReplicaPath"]>[0],
     ): Effect.Effect<void, ReplicaError> => Effect.void,
@@ -90,7 +92,7 @@ export const makeReplicaHarness = (
       preserveConflicts: (input) =>
         Effect.sync(() => {
           preserved.push(input);
-        }),
+        }).pipe(Effect.andThen(validation.preserve)),
       conflictMtime: (input) => Effect.sync(() => onConflictMtime(input.root, input.paths)),
       list: (selector = "t3-logical") =>
         Effect.sync(() =>
@@ -124,9 +126,13 @@ export const makeReplicaHarness = (
           sessions = sessions.filter((s) => s.name !== name && s.identifier !== name);
         }),
       pause: () =>
-        Effect.sync(() => {
-          sessions = sessions.map((session) => ({ ...session, paused: true }));
-        }),
+        validation.beforePause.pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              sessions = sessions.map((session) => ({ ...session, paused: true }));
+            }),
+          ),
+        ),
       resume: () =>
         Effect.sync(() => {
           sessions = sessions.map((s) => ({ ...s, paused: false }));

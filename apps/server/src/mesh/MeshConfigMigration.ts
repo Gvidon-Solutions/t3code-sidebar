@@ -1,3 +1,4 @@
+import { ProjectService } from "../project/ProjectService.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { MeshConfigRevision } from "@t3tools/contracts";
 import { localMachineClaim } from "@t3tools/shared/meshConfig";
@@ -35,6 +36,11 @@ export const layer = Layer.effectDiscard(
       self,
       peers,
       settings.replicaIgnores,
+      (yield* (yield* ProjectService).snapshot).projects.map((project) => ({
+        environmentId: self.environmentId,
+        path: project.workspaceRoot,
+        title: project.title,
+      })),
     );
     if (!migration) return;
     const h = yield* mesh.nextHlc;

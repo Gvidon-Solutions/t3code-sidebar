@@ -263,3 +263,24 @@ it("rejects conflicting overlapping project globs but merges compatible ignore o
     },
   ]);
 });
+
+it("seeds code-only ignores for new configs without expanding existing configs", () => {
+  const initial = defaults();
+  for (const pattern of [
+    ".venv",
+    "__pycache__",
+    "*.pyc",
+    "*.tar.gz",
+    "*.pdf",
+    "*.gguf",
+    "*.parquet",
+    "dist",
+    "/build",
+    "/.t3",
+  ])
+    expect(projectPolicy(initial, "Application").ignore).toContain(pattern);
+  expect(
+    projectPolicy({ schema: 1, machines: {}, replicas: { ignore: ["/private"] } }, "Application")
+      .ignore,
+  ).not.toContain("*.pdf");
+});

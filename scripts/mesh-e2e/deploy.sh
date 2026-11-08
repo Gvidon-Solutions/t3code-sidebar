@@ -30,14 +30,18 @@ vps_ssh "install -d -m 700 '$VPS_DIR' '$VPS_DATA'"
 
 log "transferring image $IMAGE to the VPS"
 docker save "$IMAGE" | gzip -1 | vps_ssh 'gunzip | docker load'
-sed "s|image: t3-mesh-e2e:dev|image: $IMAGE|" "$MESH_DIR/compose.yaml" | vps_ssh "cat > '$VPS_DIR/compose.yaml'"
+sed "s|t3-mesh-e2e:dev|$IMAGE|" "${MESH_E2E_COMPOSE_TEMPLATE:-$MESH_DIR/compose.yaml}" | vps_ssh "cat > '$VPS_DIR/compose.yaml'"
 
 log "preserving VPS temporary project folders across container recreation"
 vps_ssh 'bash -s' <<EOF
 set -euo pipefail
 install -d -m 1777 '$VPS_DIR/tmp' '$VPS_DIR/var-tmp'
 if docker container inspect t3-mesh-e2e >/dev/null 2>&1; then
-  docker exec t3-mesh-e2e sh -c 'printf "%s\\n" "$COMMIT" > /tmp/N-deploy-$COMMIT_SHORT'
+  if [ "\$(docker inspect -f '{{.State.Running}}' t3-mesh-e2e)" = true ]; then
+    docker exec t3-mesh-e2e sh -c 'printf "%s\\n" "$COMMIT" > /tmp/N-deploy-$COMMIT_SHORT'
+  else
+    printf '%s\n' '$COMMIT' > '$VPS_DIR/tmp/N-deploy-$COMMIT_SHORT'
+  fi
   mounted=\$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/tmp"}}{{.Source}}{{end}}{{end}}' t3-mesh-e2e)
   var_mounted=\$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/tmp"}}{{.Source}}{{end}}{{end}}' t3-mesh-e2e)
   if [ "\$mounted" != '$VPS_DIR/tmp' ] || [ "\$var_mounted" != '$VPS_DIR/var-tmp' ]; then

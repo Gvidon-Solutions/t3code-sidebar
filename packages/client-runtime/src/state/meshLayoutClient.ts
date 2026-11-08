@@ -9,6 +9,7 @@ import {
 import {
   diff,
   materialize,
+  migrateLogicalProjectIds,
   merge,
   tick,
   keys,
@@ -167,7 +168,7 @@ export function mergeMeshLayoutSnapshot(
   remote: MeshLayoutSnapshot,
   _now: number = 0,
 ): MeshLayoutClientState {
-  const document = merge(state.snapshot?.document ?? {}, remote.document);
+  const document = migrateLogicalProjectIds(merge(state.snapshot?.document ?? {}, remote.document));
   const outbox = Object.fromEntries(
     Object.entries(state.outbox).filter(([key, entry]) => {
       const seen = remote.document[key];

@@ -351,7 +351,13 @@ export function deriveMeshFooterStatus(input: {
 }): MeshFooterStatus {
   const { active: machines } = partitionMeshMachines(input.machines, { machines: {} }, input.now);
   if (!input.enabled || machines.length === 0) return { kind: "hidden" };
-  const failing = machines.find((machine) => machine.lastError !== null);
+  const failing = machines.find(
+    (machine) =>
+      !machine.connectedHere &&
+      machine.network?.state !== "direct" &&
+      machine.network?.state !== "relayed" &&
+      machine.lastError !== null,
+  );
   if (failing !== undefined) {
     const last = failing.lastExchangeAt === null ? input.now : Date.parse(failing.lastExchangeAt);
     const elapsed = Number.isFinite(last) ? Math.max(0, input.now - last) : 0;

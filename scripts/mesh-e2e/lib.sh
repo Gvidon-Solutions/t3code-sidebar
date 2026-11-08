@@ -30,19 +30,19 @@ VPS_BIND=172.17.0.1
 VPS_SSH_GOR=22022
 VPS_SSH_GV=22023
 
-GV_BASE_DIR=/tmp/t3-mesh-e2e-gv
+GV_BASE_DIR="${MESH_E2E_GV_BASE_DIR:-/tmp/t3-mesh-e2e-gv}"
 GV_RUNTIME_ROOT="$HOME/.t3-mesh-e2e-gv-runtime"
-GOR_BASE_DIR="$HOME/.t3-sidebar-server"
+GOR_BASE_DIR="${MESH_E2E_GOR_BASE_DIR:-$HOME/.t3-sidebar-server}"
 GOR_RUNTIME_ROOT="$HOME/.t3-sidebar-server/runtime/versions"
 GOR_LEGACY_BASE_DIR="$HOME/.t3-mesh-e2e"
-VPS_DIR=/opt/t3-mesh-e2e
+VPS_DIR="${MESH_E2E_VPS_DIR:-/opt/t3-mesh-e2e}"
 VPS_DATA="$VPS_DIR/home"
 
 GV_UNIT=t3-mesh-e2e-gv.service
 GOR_UNIT=t3code-sidebar.service
 GOR_LEGACY_UNIT=t3-mesh-e2e.service
 GV_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
-GOR_TUNNEL_UNIT=t3-mesh-e2e-tunnels.service
+GOR_TUNNEL_UNIT="${MESH_E2E_GOR_TUNNEL_UNIT:-t3-mesh-e2e-tunnels.service}"
 IMAGE="${MESH_E2E_IMAGE:-t3-mesh-e2e:dev}"
 MUTAGEN_VERSION=0.18.1
 MUTAGEN_SHA256=7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f
@@ -84,7 +84,19 @@ vps_ssh() {
   if [ -n "${MESH_E2E_SSH_CONTROL_DIR:-}" ]; then
     control=(-o ControlMaster=auto -o ControlPersist=600 -o "ControlPath=$MESH_E2E_SSH_CONTROL_DIR/vps")
   fi
-  ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$VPS_HOST" "$@"
+  local remote_command
+  if [ "${MESH_E2E_VPS_SUDO:-0}" = 1 ]; then
+    printf -v remote_command '%q' "$*"
+    ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$VPS_HOST" "sudo -n bash -c $remote_command"
+  else
+    ssh -F "$VPS_SSH_CONFIG" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ConnectTimeout=10 "${control[@]}" "$VPS_HOST" "$@"
+  fi
+}
+
+vps_put() {
+  local destination
+  printf -v destination '%q' "$2"
+  vps_ssh "cat > $destination" < "$1"
 }
 
 require_bins() {

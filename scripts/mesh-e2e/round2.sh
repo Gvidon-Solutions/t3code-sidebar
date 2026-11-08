@@ -10,7 +10,8 @@ unset MESH_E2E_HELPERS_ONLY
 export MESH_E2E_SSH_CONTROL_DIR="${MESH_E2E_SSH_CONTROL_DIR:-$WORK/round2-ssh}"
 mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
 chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
-TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-120}
+TIMEOUT=${MESH_E2E_ROUND2_TIMEOUT:-900}
+RPC_TIMEOUT=${MESH_E2E_ROUND2_RPC_TIMEOUT:-900}
 PASS=0; FAIL=0; FAILED=()
 CTL="$HOME/.agents/skills/t3-next/scripts/t3ctl.mjs"
 for m in gv gor vps; do
@@ -30,10 +31,22 @@ done
 ctl() {
  local machine=$1; shift
  local base="$GV_BASE_DIR"
- case "$machine" in gor) base=/home/user/.t3-sidebar-server;; vps) base=/home/t3/.t3;; esac
- XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" T3CTL_T3_BIN="$WORK/t3-$machine" timeout 180 node "$CTL" "$@"
+ case "$machine" in gor) base="$GOR_BASE_DIR";; vps) base=/home/t3/.t3;; esac
+ XDG_CONFIG_HOME="$WORK/auth-$machine" T3CODE_HOME="$base" T3CTL_ORIGIN="$(origin_of "$machine")" T3CTL_T3_BIN="$WORK/t3-$machine" timeout "$RPC_TIMEOUT" node "$CTL" "$@"
 }
 tool() { local machine=$1 name=$2; shift 2; ctl "$machine" tool "$name" "$@"; }
+all_projects() {
+ local machine=$1 cursor merged="$WORK/all-projects-$1.json" next="$WORK/next-projects-$1.json"
+ tool "$machine" t3_project_list '{"limit":100}' > "$merged" || return
+ cursor=$(jq -r '.nextCursor // empty' "$merged") || return
+ while [ -n "$cursor" ]; do
+  tool "$machine" t3_project_list "$(jq -nc --argjson cursor "$cursor" '{limit:100,cursor:$cursor}')" > "$next" || return
+  jq -s '{projects:(.[0].projects+.[1].projects),nextCursor:.[1].nextCursor}' "$merged" "$next" > "$merged.tmp" || return
+  mv "$merged.tmp" "$merged" || return
+  cursor=$(jq -r '.nextCursor // empty' "$merged") || return
+ done
+ cat "$merged"
+}
 probe() {
  local name=$1; shift
  local start; start=$(now_ms)
@@ -67,13 +80,14 @@ wait_converged 'routes converge'
 probe route-gv-gor wait_ssh ssh -F "$GV_BASE_DIR/home/.ssh/config" -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
 probe route-vps-gor wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GOR_NAME" hostname
 probe route-vps-gv wait_ssh vexec ssh -o BatchMode=yes -o ConnectTimeout=10 "t3-$GV_NAME" hostname
-probe route-gor-vps wait_ssh gor_ssh "ssh -o BatchMode=yes -o ConnectTimeout=10 t3-$VPS_NAME hostname"
+printf -v gor_ssh_config '%q' "$GOR_BASE_DIR/home/.ssh/config"
+probe route-gor-vps wait_ssh gor_ssh "ssh -F $gor_ssh_config -o BatchMode=yes -o ConnectTimeout=10 t3-$VPS_NAME hostname"
 if ! ws_rpc gor peerLinks.list '{}' | jq -e --arg e "$GV_ENV" '.links[] | select(.environmentId==$e and .access=="full-access")' > "$WORK/gor-gv-link.json"; then
  code=$(pair_code gv)
  probe link-gor-gv ws_rpc gor peerLinks.link "$(jq -nc --arg code "$code" --arg e "$GV_ENV" '{url:"http://127.0.0.1:13795",pairingCode:$code,access:"full-access",expectedEnvironmentId:$e}')"
 fi
 
-probe projects tool gor t3_project_list '{"limit":100}'
+probe projects all_projects gor
 DEMO=$(jq -r '.. | objects | select(.workspaceRoot? == "/home/user/xdev-e2e/demo") | .id' "$WORK/projects.out" | head -1)
 if [ -z "$DEMO" ]; then
  probe register-demo tool gor t3_project_create '{"title":"demo","workspaceRoot":"/home/user/xdev-e2e/demo"}'
@@ -83,10 +97,10 @@ KEY=$(node --input-type=module -e 'import {createHash} from "node:crypto"; conso
 MARK="round2-$RUN_TS"
 LAUNCH=$(jq -nc --arg p "$DEMO" --arg e "$VPS_ENV" --arg key "$MARK-a" --arg msg "In your current working directory on this VPS replica, use a local shell command to append the exact line $MARK-a to README.md. Mutagen syncs this local edit back to gor. Do not access the primary, request a machine link, run git, or create other files. Finish after making the local edit." '{projectId:$p,environmentId:$e,clientRequestId:$key,title:$key,message:$msg,modelSelection:{instanceId:"codex",model:"gpt-6-luna"},runtimeMode:"full-access"}')
 wait_replica() {
- local m=$1 key=$2 env=$3 state=$4 deadline=$((SECONDS+TIMEOUT))
+ local m=$1 key=$2 env=$3 state=$4 copies=${5:-} deadline=$((SECONDS+TIMEOUT))
  while [ "$SECONDS" -lt "$deadline" ]; do
   ws_rpc "$m" replicas.status '{}' --first > "$WORK/status-$m.json" || return
-  if jq -e --arg k "$key" --arg e "$env" --arg s "$state" '.. | objects | select(.logicalKey?==$k and .environmentId?==$e and .state?==$s)' "$WORK/status-$m.json" >/dev/null; then cat "$WORK/status-$m.json"; return 0; fi
+  if jq -e --arg k "$key" --arg e "$env" --arg s "$state" --arg copies "$copies" '.. | objects | select(.logicalKey?==$k and .environmentId?==$e and .state?==$s and ($copies=="" or (.conflictCopies.path? // "")!=""))' "$WORK/status-$m.json" >/dev/null; then cat "$WORK/status-$m.json"; return 0; fi
   sleep 2
  done
  cat "$WORK/status-$m.json"; return 1
@@ -102,6 +116,16 @@ if wait "$launch_pid"; then record_pass a-mcp-launch "$(elapsed_ms "$launch_star
 probe a-machines tool gor t3_project_machines "$(jq -nc --arg p "$KEY" '{project:$p}')"
 VPATH=$(jq -r --arg e "$VPS_ENV" '.representations[]? | select(.environmentId==$e) | .path' "$WORK/a-machines.out")
 probe a-watching wait_replica vps "$KEY" "$VPS_ENV" watching
+transfer_checksum() {
+ local source_file quoted_source expected actual
+ source_file=$(jq -r --arg e "$GOR_ENV" '.representations[] | select(.environmentId==$e) | .path' "$WORK/a-machines.out")/round2-transfer.bin
+ printf -v quoted_source '%q' "$source_file"
+ expected=$(gor_ssh "sha256sum $quoted_source" | cut -d' ' -f1) || return
+ actual=$(vexec sha256sum "$VPATH/round2-transfer.bin" | cut -d' ' -f1) || return
+ printf '128 MiB primary=%s replica=%s\n' "$expected" "$actual"
+ [ "$expected" = "$actual" ] && [ "$(vexec stat -c %s "$VPATH/round2-transfer.bin")" = 134217728 ]
+}
+probe a-transfer-checksum transfer_checksum
 probe a-installer vexec sh -c 'test "$(/home/t3/.t3/bin/mutagen version)" = 0.18.1 && sha256sum /home/t3/.t3/bin/mutagen' 
 probe a-excludes vexec sh -c "test -f '$VPATH/README.md' && test ! -e '$VPATH/.git' && test ! -e '$VPATH/node_modules'"
 wait_edit() {
@@ -114,11 +138,11 @@ wait_edit() {
 }
 probe a-agent-edit wait_edit "$MARK-a"
 probe f-transfer-cleanup gor_ssh 'rm -f /home/user/xdev-e2e/demo/round2-transfer.bin' 
-probe b-cli-launch ctl gor new --project demo --on vps --agent codex --model gpt-6-luna --title "$MARK-b" "Use a local shell command in your current VPS replica directory to append the exact line $MARK-b to README.md. Mutagen syncs the edit to gor. Do not access the primary, request a link, run git, or create other files. Finish after making the local edit."
+probe b-cli-launch ctl gor new --project demo --on "$VPS_ENV" --agent codex --model gpt-6-luna --title "$MARK-b" "Use a local shell command in your current VPS replica directory to append the exact line $MARK-b to README.md. Mutagen syncs the edit to gor. Do not access the primary, request a link, run git, or create other files. Finish after making the local edit."
 probe b-agent-edit wait_edit "$MARK-b"
 # Reverse source endpoint runs through docker exec; no ssh daemon in the container.
 probe c-vps-source vexec sh -c 'mkdir -p /home/t3/round2-primary; cd /home/t3/round2-primary; test -d .git || git init -q; printf "reverse primary\n" > README.md; mkdir -p node_modules; touch node_modules/excluded'
-probe c-projects tool vps t3_project_list '{"limit":100}'
+probe c-projects all_projects vps
 cp "$WORK/c-projects.out" "$WORK/vps-projects.json"
 REV=$(jq -r '.. | objects | select(.workspaceRoot?=="/home/t3/round2-primary") | .id' "$WORK/vps-projects.json" | head -1)
 if [ -z "$REV" ]; then
@@ -212,7 +236,7 @@ probe e-alpha gor_ssh "printf 'alpha-$MARK\n' > /home/user/xdev-e2e/demo/round2-
 probe e-beta vexec sh -c "printf 'beta-$MARK\n' > '$VPATH/round2-conflict.txt'"
 probe e-resume mut sync resume "$SESSION"
 probe e-enable ws_rpc vps server.updateSettings '{"patch":{"replicasEnabled":true}}'
-probe e-recovered wait_replica vps "$KEY" "$VPS_ENV" watching
+probe e-recovered wait_replica vps "$KEY" "$VPS_ENV" watching copies
 probe e-flush mut sync flush "$SESSION"
 probe e-content vexec grep -F "alpha-$MARK" "$VPATH/round2-conflict.txt"
 probe e-preserved-loser vexec sh -c 'find "$1/.t3-conflicts" -type f -name round2-conflict.txt -exec cat {} \; | grep -F "$2"' sh "$VPATH" "beta-$MARK"
@@ -223,7 +247,7 @@ probe f-restart vps_ssh 'docker restart t3-mesh-e2e'
 probe f-health wait_health "$VPS_ORIGIN" 60
 probe f-recovered wait_replica vps "$KEY" "$VPS_ENV" watching
 probe f-sessions mut sync list --label-selector t3-logical --template '{{json .}}'
-probe f-projects tool vps t3_project_list '{"limit":100}'
+probe f-projects all_projects vps
 probe f-one-project jq -e --arg path "$VPATH" '[.. | objects | select(.workspaceRoot?==$path)] | length==1' "$WORK/f-projects.out"
 probe f-one-session jq -e --arg s "$SESSION" '[.[]|select(.name==$s)]|length==1' "$WORK/f-sessions.out"
 GV_PROJECT=$(jq -r --arg e "$GV_ENV" --arg k "$KEY" '.config.projectMounts[$k][] | select(.environmentId==$e) | .projectId' "$WORK/grouping.json")
@@ -258,7 +282,7 @@ wait_gone() {
 }
 probe g-terminated wait_gone
 probe g-files-kept vexec test -f "$VPATH/README.md"
-probe g-project-list tool vps t3_project_list '{"limit":100}'
+probe g-project-list all_projects vps
 probe g-project-kept jq -e --arg path "$VPATH" '.. | objects | select(.workspaceRoot?==$path)' "$WORK/g-project-list.out"
 probe g-orphan-create vexec sh -c 'mkdir -p /home/t3/round2-orphan-a /home/t3/round2-orphan-b; export MUTAGEN_DATA_DIRECTORY=/home/t3/.t3/mutagen; if /home/t3/.t3/bin/mutagen sync list --label-selector t3-env=orphan --template "{{json .}}" | jq -e "length > 0"; then exit 0; fi; /home/t3/.t3/bin/mutagen sync create --name round2-orphan -l t3-logical=deadbeef -l t3-env=orphan /home/t3/round2-orphan-a /home/t3/round2-orphan-b'
 wait_orphan() {

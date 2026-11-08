@@ -113,6 +113,7 @@ KbdInteractiveAuthentication no
 UsePAM no
 StrictModes yes
 AllowUsers $ssh_user
+Subsystem sftp internal-sftp
 EOF
     vps_ssh "chmod 644 '$VPS_DIR/tmp/N1-sshd_config'; docker exec t3-mesh-e2e /usr/sbin/sshd -t -f /tmp/N1-sshd_config"
     vps_ssh "docker exec -d t3-mesh-e2e sh -c 'if [ -s /tmp/N1-sshd.pid ] && kill -0 \"\$(cat /tmp/N1-sshd.pid)\" 2>/dev/null; then exit 0; fi; exec /usr/sbin/sshd -D -e -f /tmp/N1-sshd_config'"

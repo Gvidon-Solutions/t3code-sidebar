@@ -1,3 +1,10 @@
+import upgradeFixture from "../../../../../packages/client-runtime/src/state/meshLayout/fixtures/upgrade.json";
+import { materialize } from "@t3tools/shared/meshLayout";
+import {
+  emptyMeshLayoutState,
+  mergeMeshLayoutSnapshot,
+} from "@t3tools/client-runtime/state/mesh-layout-client";
+import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
 import { describe, expect, it } from "vite-plus/test";
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG as empty,
@@ -103,4 +110,45 @@ describe("mobilePendingReplicaItems", () => {
   it("does not list another project's replicas", () => {
     expect(mobilePendingReplicaItems(config, [live("beta", {})], "other")).toEqual([]);
   });
+});
+
+it("keeps the unreachable primary beside its replica after a phone cache upgrade", () => {
+  const legacy = "studio:/work/application";
+  const cachedDocument = {
+    [`rep/${encodeURIComponent(legacy)}/studio`]: {
+      v: {
+        environmentId: "studio",
+        path: "/work/application",
+        transport: "git",
+        role: "primary",
+        createdAt: "",
+      },
+      h: "0000000000002.00000.phone",
+    },
+  };
+  const state = mergeMeshLayoutSnapshot(
+    {
+      ...emptyMeshLayoutState(),
+      snapshot: {
+        environmentId: "studio",
+        document: cachedDocument,
+        config: materialize(cachedDocument),
+      },
+    },
+    { ...upgradeFixture, config: materialize(upgradeFixture.document) },
+  );
+  const config = state.snapshot!.config;
+  const strip = projectMachineStrip(
+    config,
+    {
+      projectKey: "lp-application",
+      environmentIds: ["cloudbox"],
+      knownEnvironmentIds: ["cloudbox"],
+    },
+    [],
+  );
+  expect(strip.chips.map((chip) => [chip.machine.tag, chip.role])).toEqual([
+    ["ST", "primary"],
+    ["CB", "replica"],
+  ]);
 });

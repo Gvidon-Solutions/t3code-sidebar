@@ -600,6 +600,8 @@ it.live("converges simultaneous real WebSocket dials to the same authenticated c
 it.live("reaches an incoming-only machine through one relay for calls and a local IPC pipe", () =>
   Effect.gen(function* () {
     const sockets = new Set<NodeNet.Socket>();
+    let receivedFirstHalf: (() => void) | undefined;
+    let recordMode = true;
     const echo = yield* Effect.acquireRelease(
       Effect.promise(
         () =>
@@ -608,7 +610,21 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
               sockets.add(socket);
               socket.on("error", () => socket.destroy());
               socket.on("close", () => sockets.delete(socket));
-              socket.pipe(socket);
+              socket.setNoDelay(true);
+              let pending = Buffer.alloc(0);
+              socket.on("data", (chunk: Buffer) => {
+                if (!recordMode) {
+                  socket.write(chunk);
+                  return;
+                }
+                pending = Buffer.concat([pending, chunk]);
+                if (pending.length === 1024) receivedFirstHalf?.();
+                if (pending.length === 2048) {
+                  socket.write(pending);
+                  pending = Buffer.alloc(0);
+                }
+              });
+              socket.on("end", () => socket.end());
             });
             server.listen(0, "127.0.0.1", () => resolve(server));
           }),
@@ -712,6 +728,41 @@ it.live("reaches an incoming-only machine through one relay for calls and a loca
         [studio.id]: { ...config.machines[studio.id], title: "Studio build" },
       },
     }));
+    const records = yield* PipeIpc.connectLocalPipe(laptop.baseDir, "Studio build");
+    yield* Effect.addFinalizer(() => Effect.sync(() => records.destroy()));
+    const recordReader = records[Symbol.asyncIterator]();
+    const half = Buffer.alloc(1024, 37);
+    const writeHalf = () =>
+      Effect.promise(
+        () =>
+          new Promise<void>((resolve, reject) =>
+            records.write(half, (error) => (error ? reject(error) : resolve())),
+          ),
+      );
+    // SSH records may arrive in separate writes while the previous TCP segment is unacknowledged.
+    for (let index = 0; index < 4096; index++) {
+      const firstHalf = new Promise<void>((resolve) => {
+        receivedFirstHalf = resolve;
+      });
+      yield* writeHalf();
+      yield* Effect.promise(() => firstHalf);
+      yield* writeHalf();
+      const record = yield* Effect.promise(async () => {
+        const chunks: Buffer[] = [];
+        let bytes = 0;
+        while (bytes < 2048) {
+          const chunk = await recordReader.next();
+          if (chunk.done) throw new Error("SSH record stream ended early");
+          const data = Buffer.from(chunk.value);
+          bytes += data.length;
+          chunks.push(data);
+        }
+        return Buffer.concat(chunks);
+      });
+      expect(record).toEqual(Buffer.concat([half, half]));
+    }
+    records.destroy();
+    recordMode = false;
     const stream = yield* PipeIpc.connectLocalPipe(laptop.baseDir, "Studio build");
     const payload = Buffer.alloc(1024 * 1024, 71);
     const received = yield* Effect.promise(async () => {

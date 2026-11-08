@@ -134,8 +134,21 @@ export function diff(
     const a = doc[key]?.v ?? null,
       b = next[key] ?? null;
     const changed = canonical(previous[key] ?? null) !== canonical(b);
-    const repair = a !== null && b !== null && typeof b === "object" && "sort" in b;
-    if ((changed || repair) && canonical(a) !== canonical(b)) entries[key] = { v: b, h: nextHlc };
+    if (changed && canonical(a) !== canonical(b)) entries[key] = { v: b, h: nextHlc };
+    else if (
+      !changed &&
+      a !== null &&
+      b !== null &&
+      typeof a === "object" &&
+      typeof b === "object" &&
+      !Array.isArray(a) &&
+      !Array.isArray(b) &&
+      "sort" in a &&
+      "sort" in b &&
+      a.sort !== b.sort
+    ) {
+      entries[key] = { v: { ...a, sort: b.sort }, h: nextHlc };
+    }
   }
   for (const [key, entry] of Object.entries(doc)) {
     if (
