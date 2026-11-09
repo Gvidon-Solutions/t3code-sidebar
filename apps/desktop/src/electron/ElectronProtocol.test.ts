@@ -46,6 +46,7 @@ describe("ElectronProtocol", () => {
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
+        sourceSalt: "test-salt",
         clerkFrontendApiHostname: undefined,
       });
       const request = (pathname: string, init?: RequestInit) =>
@@ -227,6 +228,7 @@ describe("ElectronProtocol", () => {
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
+        sourceSalt: "test-salt",
         serverOrigin: async () => desiredOrigin,
         serverName: async () => "Studio",
         onSource: async (origin) => {
@@ -361,6 +363,7 @@ describe("ElectronProtocol", () => {
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
+        sourceSalt: "test-salt",
         serverOrigin: async () => new URL("https://studio.example/"),
         serverAuthorization: async () => null,
         clerkFrontendApiHostname: undefined,
@@ -387,10 +390,12 @@ describe("ElectronProtocol", () => {
       yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
+      const requestToken = yield* protocol.serverUiRequestTokenFor(new URL(pageUrl).host);
+      assert.ok(requestToken);
       const api = yield* Effect.promise(() =>
         handler!(
           new Request(new URL("api/auth/session", pageUrl), {
-            headers: { "sec-fetch-site": "same-origin" },
+            headers: { "sec-fetch-site": "same-origin", "x-t3-server-ui": requestToken },
           }),
         ),
       );
@@ -420,6 +425,7 @@ describe("ElectronProtocol", () => {
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
+        sourceSalt: "test-salt",
         serverOrigin: async () => new URL("https://studio.example/"),
         serverName: async () => "Studio",
         serverAuthorization: async () => credential,
@@ -487,6 +493,7 @@ describe("ElectronProtocol", () => {
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
+        sourceSalt: "test-salt",
         serverOrigin: async () => new URL("https://studio.example/"),
         serverAuthorization: async () => null,
         clerkFrontendApiHostname: undefined,
@@ -508,6 +515,8 @@ describe("ElectronProtocol", () => {
       yield* Effect.promise(() =>
         handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
       );
+      const requestToken = yield* protocol.serverUiRequestTokenFor(new URL(pageUrl).host);
+      assert.ok(requestToken);
 
       const readCookie = (url: URL) =>
         Effect.gen(function* () {
@@ -517,6 +526,7 @@ describe("ElectronProtocol", () => {
               new Request(url, {
                 headers: {
                   "sec-fetch-site": "same-origin",
+                  "x-t3-server-ui": requestToken,
                   cookie: "local=secret",
                   authorization: "Bearer local-secret",
                 },
@@ -564,6 +574,7 @@ describe("ElectronProtocol", () => {
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
+        sourceSalt: "test-salt",
         serverOrigin: async () => origin,
         serverAuthorization: async () => ({
           authorization: "studio-token",
@@ -590,11 +601,17 @@ describe("ElectronProtocol", () => {
       yield* Effect.promise(() =>
         handler!(navigation(studioPage, { headers: { accept: "text/html" } })),
       );
+      const requestToken = yield* protocol.serverUiRequestTokenFor(new URL(studioPage).host);
+      assert.ok(requestToken);
       const before = netFetchMock.mock.calls.length;
       const cross = yield* Effect.promise(() =>
         handler!(
           new Request(new URL("api/auth/session", studioPage), {
-            headers: { origin: "https://evil.example", "sec-fetch-site": "cross-site" },
+            headers: {
+              origin: "https://evil.example",
+              "sec-fetch-site": "cross-site",
+              "x-t3-server-ui": requestToken,
+            },
           }),
         ),
       );
@@ -604,7 +621,7 @@ describe("ElectronProtocol", () => {
       const same = yield* Effect.promise(() =>
         handler!(
           new Request(new URL("api/thing", studioPage), {
-            headers: { "sec-fetch-site": "same-origin" },
+            headers: { "sec-fetch-site": "same-origin", "x-t3-server-ui": requestToken },
           }),
         ),
       );
@@ -612,6 +629,19 @@ describe("ElectronProtocol", () => {
       const forwarded = netFetchMock.mock.calls.at(-1)?.[1].headers as Headers;
       assert.equal(forwarded.get("authorization"), "Bearer studio-token");
       assert.equal(forwarded.get("origin"), "https://studio.example");
+
+      // A sandboxed frame has no request token, so it must not get credentials.
+      const withoutToken = yield* Effect.promise(() =>
+        handler!(
+          new Request(new URL("api/thing", studioPage), {
+            headers: { "sec-fetch-site": "same-origin" },
+          }),
+        ),
+      );
+      assert.equal(withoutToken.status, 200);
+      const uncredentialed = netFetchMock.mock.calls.at(-1)?.[1].headers as Headers;
+      assert.isFalse(uncredentialed.has("authorization"));
+      assert.isFalse(uncredentialed.has("cookie"));
 
       origin = new URL("https://cloudbox.example/");
       const secondRedirect = yield* Effect.promise(() =>
@@ -624,7 +654,7 @@ describe("ElectronProtocol", () => {
       const stale = yield* Effect.promise(() =>
         handler!(
           new Request(new URL("api/thing", studioPage), {
-            headers: { "sec-fetch-site": "same-origin" },
+            headers: { "sec-fetch-site": "same-origin", "x-t3-server-ui": requestToken },
           }),
         ),
       );
@@ -646,6 +676,7 @@ describe("ElectronProtocol", () => {
       yield* protocol.registerDesktopProtocol({
         scheme: "t3code",
         assetDirectory: directory,
+        sourceSalt: "test-salt",
         serverOrigin: async () => new URL("https://studio.example/t3/"),
         serverAuthorization: async () => ({ authorization: "token", environmentId: "studio" }),
         noteAuthorizationRejected: async () => {
@@ -689,6 +720,148 @@ describe("ElectronProtocol", () => {
       assert.equal(rejected.status, 302);
       assert.equal(new URL(rejected.headers.get("location")!).searchParams.get("auth"), "1");
       assert.equal(state.rejected, 1);
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
+  );
+  it("keeps the server-UI host stable for one install salt", () => {
+    const origin = new URL("https://studio.example/");
+    assert.equal(
+      ElectronProtocol.serverUiSourceHost(7, origin, "install-salt"),
+      ElectronProtocol.serverUiSourceHost(7, origin, "install-salt"),
+    );
+    assert.notEqual(
+      ElectronProtocol.serverUiSourceHost(7, origin, "install-salt"),
+      ElectronProtocol.serverUiSourceHost(7, origin, "other-salt"),
+    );
+  });
+
+  it.effect("matches cookie paths with the origin prefix and a segment boundary", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.writeFileString(directory + "/index.html", "bundled");
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerDesktopProtocol({
+        scheme: "t3code",
+        assetDirectory: directory,
+        sourceSalt: "test-salt",
+        serverOrigin: async () => new URL("https://studio.example/t3/"),
+        serverAuthorization: async () => null,
+        clerkFrontendApiHostname: undefined,
+      });
+      netFetchMock.mockImplementation(async () => {
+        const headers = new Headers({
+          "content-type": "text/html",
+          "t3-desktop-ui-protocol": "1",
+          "t3-desktop-bridge": "reduced-1",
+        });
+        headers.append("set-cookie", "session=abc; Path=/t3/; HttpOnly");
+        headers.append("set-cookie", "api=yes; Path=/t3/api; HttpOnly");
+        return new Response("server", { headers });
+      });
+      const redirect = yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1")),
+      );
+      const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() =>
+        handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
+      );
+      const token = yield* protocol.serverUiRequestTokenFor(new URL(pageUrl).host);
+      assert.ok(token);
+      const cookieFor = (path: string) =>
+        Effect.gen(function* () {
+          netFetchMock.mockImplementation(async () => new Response("{}"));
+          yield* Effect.promise(() =>
+            handler!(
+              new Request(new URL(path, pageUrl), {
+                headers: { "sec-fetch-site": "same-origin", "x-t3-server-ui": token },
+              }),
+            ),
+          );
+          const headers = netFetchMock.mock.calls.at(-1)?.[1].headers as Headers;
+          return headers.get("cookie") ?? "";
+        });
+      const apiCookies = yield* cookieFor("api/auth/session");
+      assert.include(apiCookies, "session=abc");
+      assert.include(apiCookies, "api=yes");
+      const sibling = yield* cookieFor("apix");
+      assert.include(sibling, "session=abc");
+      assert.notInclude(sibling, "api=yes");
+    }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
+  );
+
+  it.effect("drops a stale jar cookie that shadows the valid bearer", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const directory = yield* fileSystem.makeTempDirectoryScoped();
+      yield* fileSystem.writeFileString(directory + "/index.html", "bundled");
+      let handler: ((request: Request) => Promise<Response>) | undefined;
+      handleMock.mockImplementation((_scheme, nextHandler) => {
+        handler = nextHandler;
+      });
+      let credential: { authorization: string; environmentId: string } | null = null;
+      const rejected: Array<string> = [];
+      const protocol = yield* ElectronProtocol.ElectronProtocol;
+      yield* protocol.registerDesktopProtocol({
+        scheme: "t3code",
+        assetDirectory: directory,
+        sourceSalt: "test-salt",
+        serverOrigin: async () => new URL("https://studio.example/"),
+        serverAuthorization: async () => credential,
+        noteAuthorizationRejected: async (_origin, token) => {
+          rejected.push(token);
+        },
+        clerkFrontendApiHostname: undefined,
+      });
+      let setCookie = true;
+      netFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (String(url).endsWith("/api/auth/session")) {
+          const headers = new Headers(init?.headers);
+          return Response.json({
+            authenticated:
+              headers.get("authorization") === "Bearer good-token" &&
+              headers.get("cookie") === null,
+          });
+        }
+        const headers = new Headers({
+          "content-type": "text/html",
+          "t3-desktop-ui-protocol": "1",
+          "t3-desktop-bridge": "reduced-1",
+        });
+        if (setCookie) headers.append("set-cookie", "session=stale; Path=/; HttpOnly");
+        return new Response("server", { headers });
+      });
+      const redirect = yield* Effect.promise(() =>
+        handler!(navigation("t3code://app/?desktopWindowId=1")),
+      );
+      const pageUrl = redirect.headers.get("location")!;
+      yield* Effect.promise(() =>
+        handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
+      );
+
+      credential = { authorization: "good-token", environmentId: "studio" };
+      setCookie = false;
+      const document = yield* Effect.promise(() =>
+        handler!(navigation(pageUrl, { headers: { accept: "text/html" } })),
+      );
+      assert.equal(document.status, 200);
+      assert.deepEqual(rejected, []);
+      const token = yield* protocol.serverUiRequestTokenFor(new URL(pageUrl).host);
+      assert.ok(token);
+      const subresource = yield* Effect.promise(() =>
+        handler!(
+          new Request(new URL("api/thing", pageUrl), {
+            headers: { "sec-fetch-site": "same-origin", "x-t3-server-ui": token },
+          }),
+        ),
+      );
+      assert.equal(subresource.status, 200);
+      const forwarded = netFetchMock.mock.calls.at(-1)?.[1].headers as Headers;
+      assert.equal(forwarded.get("authorization"), "Bearer good-token");
+      assert.isNull(forwarded.get("cookie"));
     }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
 });

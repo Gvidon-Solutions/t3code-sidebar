@@ -17,11 +17,11 @@ import * as Scope from "effect/Scope";
 import * as Electron from "electron";
 
 export const DESKTOP_HOST = "app";
-// Per install, so a hostile renderer cannot derive another window's source host.
-const SERVER_UI_ORIGIN_SALT = NodeCrypto.randomBytes(16).toString("hex");
-function sourceHost(id: number, origin: URL): string {
+
+/** Stable for the install, so browser storage is not orphaned on a restart. */
+export function serverUiSourceHost(id: number, origin: URL, salt: string): string {
   return `server-${id}-${NodeCrypto.createHash("sha256")
-    .update(`${SERVER_UI_ORIGIN_SALT}\0${origin.href}`)
+    .update(`${salt}\0${origin.href}`)
     .digest("hex")
     .slice(0, 24)}`;
 }
@@ -77,6 +77,7 @@ export type DesktopProtocolRegistrationInput = {
   | { readonly targetOrigin: URL }
   | {
       readonly assetDirectory: string;
+      readonly sourceSalt: string;
       readonly serverOrigin?: () => Promise<URL | null>;
       readonly serverName?: () => Promise<string | null>;
       readonly serverAuthorization?: (
@@ -91,6 +92,7 @@ export class ElectronProtocol extends Context.Service<
   ElectronProtocol,
   {
     readonly serverOriginFor: (rendererId: number) => Effect.Effect<string | null>;
+    readonly serverUiRequestTokenFor: (host: string) => Effect.Effect<string | null>;
     readonly trackWindow: (contents: Electron.WebContents) => Effect.Effect<void>;
     readonly registerDesktopProtocol: (
       input: DesktopProtocolRegistrationInput,
@@ -236,9 +238,12 @@ interface ServerUiCookie {
 
 interface ServerUiSession {
   readonly cookies: Map<string, ServerUiCookie>;
+  readonly requestToken: string;
   authorization: string | null;
   environmentId: string | null;
 }
+
+const SERVER_UI_REQUEST_HEADER = "x-t3-server-ui";
 
 function readSetCookieHeaders(headers: Headers): ReadonlyArray<string> {
   const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
@@ -295,6 +300,12 @@ function mergeServerUiCookies(session: ServerUiSession, response: Response, now:
   }
 }
 
+function cookiePathMatches(requestPath: string, cookiePath: string): boolean {
+  if (cookiePath === "/") return true;
+  const base = cookiePath.endsWith("/") ? cookiePath.slice(0, -1) : cookiePath;
+  return requestPath === base || requestPath.startsWith(`${base}/`);
+}
+
 function cookieHeader(session: ServerUiSession, now: number, requestPath: string): string | null {
   const pairs: string[] = [];
   for (const [key, cookie] of session.cookies) {
@@ -302,7 +313,7 @@ function cookieHeader(session: ServerUiSession, now: number, requestPath: string
       session.cookies.delete(key);
       continue;
     }
-    if (!requestPath.startsWith(cookie.path)) continue;
+    if (!cookiePathMatches(requestPath, cookie.path)) continue;
     pairs.push(`${cookie.name}=${cookie.value}`);
   }
   return pairs.length === 0 ? null : pairs.join("; ");
@@ -364,9 +375,18 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
     headers.delete(name);
   }
   const now = yield* Clock.currentTimeMillis;
-  const injectedAuthorization = options.session?.authorization ?? null;
-  const injectedCookie =
-    options.session === undefined ? null : cookieHeader(options.session, now, requestUrl.pathname);
+  const requestToken = headers.get(SERVER_UI_REQUEST_HEADER);
+  const hasRequestToken =
+    options.session !== undefined &&
+    requestToken !== null &&
+    requestToken === options.session.requestToken;
+  headers.delete(SERVER_UI_REQUEST_HEADER);
+  const injectCredentials =
+    options.session !== undefined && (options.document === true || hasRequestToken);
+  const injectedAuthorization = injectCredentials ? options.session!.authorization : null;
+  const injectedCookie = injectCredentials
+    ? cookieHeader(options.session!, now, targetUrl.pathname)
+    : null;
   if (options.session !== undefined) {
     if (injectedCookie !== null) headers.set("cookie", injectedCookie);
     if (injectedAuthorization !== null) {
@@ -374,14 +394,16 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
     }
     // The server's cookie-origin defence must see a real origin. The shell is the
     // trusted caller of a first-party session, so it names the server itself.
-    if (injectedAuthorization !== null || injectedCookie !== null) {
+    if (injectedAuthorization !== null) {
       headers.set("origin", targetOrigin.origin);
+      // A Host-rewriting reverse proxy must still tell the server the public host.
+      headers.set("x-forwarded-host", targetOrigin.host);
     }
   }
   const init: RequestInit = {
     method: request.method,
     headers,
-    ...(serverUi ? { credentials: "omit" as const, redirect: "error" as const } : {}),
+    ...(serverUi ? { redirect: "error" as const } : {}),
   };
   if (options.document || request.mode === "navigate") {
     init.cache = "no-store";
@@ -491,6 +513,7 @@ export const make = Effect.gen(function* () {
     if (existing === undefined) {
       const created: ServerUiSession = {
         cookies: new Map(),
+        requestToken: NodeCrypto.randomBytes(24).toString("hex"),
         authorization: credential?.authorization ?? null,
         environmentId: credential?.environmentId ?? null,
       };
@@ -527,12 +550,19 @@ export const make = Effect.gen(function* () {
     if (fetchSite !== null && fetchSite !== "same-origin" && fetchSite !== "none") return false;
     return true;
   };
-  const serverCredentialAccepted = async (origin: URL, authorization: string): Promise<boolean> => {
+  const serverCredentialAccepted = async (
+    origin: URL,
+    authorization: string,
+    cookie: string | null = null,
+  ): Promise<boolean> => {
     try {
       const sessionUrl = `${origin.href.replace(/\/$/, "")}/api/auth/session`;
       const response = await runPromise(
         netFetch(sessionUrl, {
-          headers: { authorization: `Bearer ${authorization}` },
+          headers: {
+            authorization: `Bearer ${authorization}`,
+            ...(cookie === null ? {} : { cookie }),
+          },
           cache: "no-store",
           credentials: "omit",
           redirect: "error",
@@ -614,7 +644,7 @@ export const make = Effect.gen(function* () {
                 ) {
                   const origin = await input.serverOrigin();
                   if (origin) {
-                    const next = `${input.scheme}://${sourceHost(Number(id), origin)}/`;
+                    const next = `${input.scheme}://${serverUiSourceHost(Number(id), origin, input.sourceSalt)}/`;
                     navigations.set(Number(id), next);
                     return Response.redirect(next, 302);
                   }
@@ -622,26 +652,40 @@ export const make = Effect.gen(function* () {
                 if (serverHost && isDocument && input.serverOrigin) {
                   const origin = await input.serverOrigin();
                   if (origin) {
-                    if (requestUrl.host !== sourceHost(rendererId, origin)) {
+                    if (
+                      requestUrl.host !== serverUiSourceHost(rendererId, origin, input.sourceSalt)
+                    ) {
                       clearOtherServerUiSources(rendererId, requestUrl.host);
-                      const next = `${input.scheme}://${sourceHost(rendererId, origin)}/`;
+                      const next = `${input.scheme}://${serverUiSourceHost(rendererId, origin, input.sourceSalt)}/`;
                       navigations.set(rendererId, next);
                       return Response.redirect(next, 302);
                     }
                     const credential = (await input.serverAuthorization?.(origin)) ?? null;
                     const session = serverUiSession(requestUrl.host, credential);
                     const authorization = credential?.authorization ?? null;
-                    if (
-                      authorization !== null &&
-                      !(await serverCredentialAccepted(origin, authorization))
-                    ) {
-                      session.cookies.clear();
-                      await input.noteAuthorizationRejected?.(origin, authorization);
-                      // The trusted client's credential no longer works, so server UI auth
-                      // is impossible. Return to the bundled client with saved connections.
-                      return await redirectToBundled(input, origin, rendererId, requestUrl.host, {
-                        auth: true,
-                      });
+                    if (authorization !== null) {
+                      const sessionPath = `${origin.pathname.replace(/\/$/, "")}/api/auth/session`;
+                      const now = await runPromise(Clock.currentTimeMillis);
+                      const jarCookie =
+                        session.cookies.size === 0 ? null : cookieHeader(session, now, sessionPath);
+                      let accepted = await serverCredentialAccepted(
+                        origin,
+                        authorization,
+                        jarCookie,
+                      );
+                      if (!accepted && jarCookie !== null) {
+                        // A stale jar cookie shadows the valid bearer; drop it and retry.
+                        session.cookies.clear();
+                        accepted = await serverCredentialAccepted(origin, authorization, null);
+                      }
+                      if (!accepted) {
+                        await input.noteAuthorizationRejected?.(origin, authorization);
+                        // The trusted client's credential no longer works, so server UI auth
+                        // is impossible. Return to the bundled client with saved connections.
+                        return await redirectToBundled(input, origin, rendererId, requestUrl.host, {
+                          auth: true,
+                        });
+                      }
                     }
                     const origins = (await input.connectionOrigins?.()) ?? [origin.origin];
                     const policy = makeDesktopContentSecurityPolicy(input, origins);
@@ -738,6 +782,9 @@ export const make = Effect.gen(function* () {
     trackWindow,
     serverOriginFor: Effect.fn("desktop.protocol.serverOriginFor")((id: number) =>
       Effect.sync(() => currentOrigins.get(id)?.href ?? null),
+    ),
+    serverUiRequestTokenFor: Effect.fn("desktop.protocol.serverUiRequestTokenFor")((host: string) =>
+      Effect.sync(() => serverUiSessions.get(host)?.requestToken ?? null),
     ),
   });
 });

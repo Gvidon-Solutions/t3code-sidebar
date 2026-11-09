@@ -1,4 +1,5 @@
 import * as DesktopUi from "./DesktopUi.ts";
+import { loadServerUiOriginSalt } from "./DesktopUiOriginSalt.ts";
 import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import * as Duration from "effect/Duration";
@@ -161,6 +162,12 @@ const stopAllPoolInstances = Effect.fn("desktop.app.stopAllPoolInstances")(
   },
 );
 
+/** The explicit dev/QA override still wins over a saved or local source. */
+export const preferConfiguredUiOrigin = (
+  configured: URL | null,
+  selected: URL | null,
+): URL | null => configured ?? selected;
+
 const bootstrap = Effect.gen(function* () {
   const state = yield* DesktopState.DesktopState;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
@@ -175,12 +182,14 @@ const bootstrap = Effect.gen(function* () {
   const resolveUiOrigin = Effect.runPromiseWith(yield* Effect.context<never>());
   const desktopUi = yield* DesktopUi.DesktopUi;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
+  const sourceSalt = yield* loadServerUiOriginSalt(environment.stateDir);
   yield* electronProtocol.registerDesktopProtocol({
     scheme: ElectronProtocol.getDesktopScheme(environment.isDevelopment),
     ...(environment.isDevelopment
       ? { targetOrigin: Option.getOrThrow(environment.devServerUrl) }
       : {
           assetDirectory: environment.clientAssetsDir,
+          sourceSalt,
           connectionOrigins: () => resolveUiOrigin(desktopUi.connectionOrigins),
           onSource: (origin, reason) => resolveUiOrigin(desktopUi.recordSource(origin, reason)),
           serverAuthorization: (origin) => resolveUiOrigin(desktopUi.serverAuthorization(origin)),
@@ -189,7 +198,9 @@ const bootstrap = Effect.gen(function* () {
           serverOrigin: () =>
             resolveUiOrigin(
               desktopUi.sourceOrigin.pipe(
-                Effect.map((selected) => selected ?? Option.getOrNull(uiOrigin)),
+                Effect.map((selected) =>
+                  preferConfiguredUiOrigin(Option.getOrNull(uiOrigin), selected),
+                ),
               ),
             ),
           serverName: () => resolveUiOrigin(desktopUi.selectionLabel),

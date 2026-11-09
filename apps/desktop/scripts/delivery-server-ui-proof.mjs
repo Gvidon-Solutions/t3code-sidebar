@@ -238,7 +238,7 @@ async function main() {
   const tlsPort = await freePort();
   const baseDir = NodePath.join(output, "server");
   const binDir = NodePath.join(output, "bin");
-  NodeFSP.mkdir(binDir, { recursive: true });
+  await NodeFSP.mkdir(binDir, { recursive: true });
   const hostnamectl = NodePath.join(binDir, "hostnamectl");
   await NodeFSP.writeFile(hostnamectl, "#!/bin/sh\nprintf 'studio\\n'\n", { mode: 0o755 });
   const projectDir = NodePath.join(output, "studio-project");
@@ -331,7 +331,7 @@ async function main() {
   };
   const sessionState = () =>
     evaluate(
-      `fetch("/api/auth/session", { cache: "no-store" }).then((r) => r.json()).then((v) => v.authenticated === true).catch(() => false)`,
+      `fetch("/api/auth/session", { cache: "no-store", headers: { "x-t3-server-ui": window.desktopShell?.requestToken ?? "" } }).then((r) => r.json()).then((v) => v.authenticated === true).catch(() => false)`,
     );
   const bodyText = () => evaluate("document.body.innerText");
   const appShell = async () => {
@@ -445,10 +445,24 @@ async function main() {
           }
 
           const protocolService = yield* EP.ElectronProtocol;
+          yield* ipc.handleSync({
+            channel: Channels.UI_REQUEST_TOKEN_CHANNEL,
+            handler: (event) => {
+              if (!event) return Effect.succeed(null);
+              let host = "";
+              try {
+                host = new URL(event.senderFrame?.url ?? "").host;
+              } catch {
+                return Effect.succeed(null);
+              }
+              return protocolService.serverUiRequestTokenFor(host);
+            },
+          });
           yield* protocolService.trackWindow(window.webContents);
           yield* protocolService.registerDesktopProtocol({
             scheme: "t3code",
             assetDirectory: assets,
+            sourceSalt: "proof-salt",
             serverOrigin: async () => serverOriginUrl,
             serverName: async () => serverName,
             serverAuthorization: async (origin) => {
@@ -483,27 +497,14 @@ async function main() {
             const token = server.pairingToken;
             NodeAssert.ok(token, "server pairing token");
             await loadServerUi(token);
-            try {
-              await waitFor("server UI authenticated", appShell, 60_000);
-            } catch (error) {
-              console.log(
-                JSON.stringify({
-                  phase: "pairing-debug",
-                  url: window.webContents.getURL(),
-                  text: (await bodyText()).slice(0, 500),
-                }),
-              );
-              console.log(server.log.slice(-2000));
-              await screenshot("debug-pairing.png");
-              throw error;
-            }
+            await waitFor("server UI authenticated", appShell, 60_000);
             await finishOnboarding();
             await waitForStableShell();
             await waitFor(
               "server UI WebSocket ticket",
               () =>
                 evaluate(
-                  `fetch("/api/auth/websocket-ticket/rpc", { method: "POST" }).then((r) => r.ok).catch(() => false)`,
+                  `fetch("/api/auth/websocket-ticket/rpc", { method: "POST", headers: { "x-t3-server-ui": window.desktopShell?.requestToken ?? "" } }).then((r) => r.ok).catch(() => false)`,
                 ),
               20_000,
             );
@@ -516,7 +517,8 @@ async function main() {
             // (a2) A media ticket minted through the proxy opens a preview-stream socket,
             // and an HTML page served by the machine renders inside the server UI.
             await evaluate(`(async () => {
-              const ticket = await (await fetch("/api/auth/websocket-ticket/media", { method: "POST" })).json();
+              const requestHeaders = { "x-t3-server-ui": window.desktopShell?.requestToken ?? "" };
+              const ticket = await (await fetch("/api/auth/websocket-ticket/media", { method: "POST", headers: requestHeaders })).json();
               const origin = new URL(window.desktopShell.origin);
               origin.protocol = "wss:";
               origin.pathname = "/api/preview-stream/ws";
@@ -666,27 +668,15 @@ async function main() {
             console.log(
               JSON.stringify({ phase: "auth-impossible-loaded", url: window.webContents.getURL() }),
             );
-            try {
-              await waitFor(
-                "bundled fallback after rejected credential",
-                async () => {
-                  if (!window.webContents.getURL().includes("bundled=1")) return false;
-                  if (!rejected.includes("rejected-token")) return false;
-                  return (await bodyText()).includes("studio-project");
-                },
-                90_000,
-              );
-            } catch (error) {
-              console.log(
-                JSON.stringify({
-                  phase: "bundled-debug",
-                  url: window.webContents.getURL(),
-                  text: (await bodyText()).slice(0, 400),
-                }),
-              );
-              await screenshot("debug-bundled.png");
-              throw error;
-            }
+            await waitFor(
+              "bundled fallback after rejected credential",
+              async () => {
+                if (!window.webContents.getURL().includes("bundled=1")) return false;
+                if (!rejected.includes("rejected-token")) return false;
+                return (await bodyText()).includes("studio-project");
+              },
+              90_000,
+            );
             await sleep(1_000);
             const fallbackText = await bodyText();
             console.log(

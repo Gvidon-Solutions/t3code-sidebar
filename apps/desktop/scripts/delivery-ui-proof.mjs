@@ -100,10 +100,15 @@ async function main() {
             channel: Channels.UI_SERVER_NAME_CHANNEL,
             handler: () => Effect.succeed("Studio"),
           });
+          yield* ipc.handleSync({
+            channel: Channels.UI_REQUEST_TOKEN_CHANNEL,
+            handler: () => Effect.succeed("proof-request-token"),
+          });
           yield* protocolService.trackWindow(window.webContents);
           yield* protocolService.registerDesktopProtocol({
             scheme: "t3code",
             assetDirectory: assets,
+            sourceSalt: "proof-salt",
             serverOrigin: async () => origin,
             connectionOrigins: async () => [origin.origin],
             clerkFrontendApiHostname: undefined,
