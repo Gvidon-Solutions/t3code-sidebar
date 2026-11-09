@@ -26,7 +26,7 @@ export function draftModelUnavailableReason(
   )
     return "Provider disabled for this project";
   if (!provider.installed) return "Provider not installed";
-  if (provider.auth.status === "unauthenticated") return "Provider not authenticated";
+  if (provider.auth?.status === "unauthenticated") return "Provider not authenticated";
   if (provider.status === "error" || provider.availability === "unavailable")
     return "Provider unavailable";
   if (!provider.models.some((model) => model.slug === selection.model)) return "Model unavailable";
@@ -73,6 +73,22 @@ export function defaultDraftMachine(
   const anyUsable = machines.find(usable);
   if (anyUsable) return anyUsable.environmentId;
   return (machines.find((machine) => machine.primary) ?? machines[0])?.environmentId ?? null;
+}
+
+/**
+ * The one answer to "will this machine run a usable model for the draft": the person's explicit
+ * selection when there is one, otherwise the machine's own default. Null while the catalog is
+ * unknown, so a card never calls a model missing before the machine has answered.
+ */
+export function draftMachineModelUsable(
+  config: ProviderCatalog | null | undefined,
+  selection: ModelSelection | null,
+  projectId: ProjectId | null,
+): boolean | null {
+  if (!config || config.providers.length === 0) return null;
+  if (selection !== null && selection.model.trim() !== "")
+    return draftModelUnavailableReason(config, selection, projectId) === null;
+  return defaultUsableDraftModel(config, projectId) !== null;
 }
 
 /** Null when no model is chosen; otherwise whether the chosen model can run on this machine. */

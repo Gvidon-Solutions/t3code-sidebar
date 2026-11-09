@@ -9,6 +9,7 @@ import {
   runThreadFork,
 } from "./threadForks.ts";
 import { sortActiveThreadsByOrderKey } from "./threadSort.ts";
+import { hasUsableDraftModels } from "./meshLayout/draftMachine.ts";
 
 const NOW = "2026-10-12T12:00:00.000Z";
 
@@ -57,9 +58,9 @@ function orderAfter(threads: EnvironmentThreadShell[], sourceId: string, forkId:
 
 describe("defaultForkTarget", () => {
   const candidates = [
-    { environmentId: "studio", connected: true, hasModels: true },
-    { environmentId: "cloudbox", connected: true, hasModels: false },
-    { environmentId: "laptop", connected: true, hasModels: true },
+    { environmentId: "studio", connected: true, hasUsableModel: true },
+    { environmentId: "cloudbox", connected: true, hasUsableModel: false },
+    { environmentId: "laptop", connected: true, hasUsableModel: true },
   ];
 
   it("skips a connected machine without usable models", () => {
@@ -70,7 +71,7 @@ describe("defaultForkTarget", () => {
     expect(
       defaultForkTarget({
         sourceEnvironmentId: "studio",
-        candidates: candidates.map((candidate) => ({ ...candidate, hasModels: false })),
+        candidates: candidates.map((candidate) => ({ ...candidate, hasUsableModel: false })),
       }),
     ).toBe("cloudbox");
   });
@@ -266,5 +267,54 @@ describe("runThreadFork", () => {
       target: { environmentId: "studio", threadId: "new" },
     });
     expect(setup.reorders).toEqual([]);
+  });
+});
+
+describe("defaultForkTarget with the shared model resolver", () => {
+  it("chooses a machine whose default model is usable, not one that merely has providers", () => {
+    const laptopCatalog = {
+      providers: [
+        {
+          instanceId: "codex",
+          enabled: true,
+          installed: true,
+          status: "ready",
+          availability: "available",
+          auth: { status: "authenticated" },
+          models: [{ slug: "fixture" }],
+        },
+      ],
+    } as never;
+    const cloudboxCatalog = {
+      providers: [
+        {
+          instanceId: "codex",
+          enabled: false,
+          installed: true,
+          status: "ready",
+          availability: "available",
+          auth: { status: "authenticated" },
+          models: [{ slug: "fixture" }],
+        },
+      ],
+    } as never;
+    const candidates = [
+      {
+        environmentId: "studio",
+        connected: true,
+        hasUsableModel: hasUsableDraftModels(laptopCatalog, null),
+      },
+      {
+        environmentId: "cloudbox",
+        connected: true,
+        hasUsableModel: hasUsableDraftModels(cloudboxCatalog, null),
+      },
+      {
+        environmentId: "laptop",
+        connected: true,
+        hasUsableModel: hasUsableDraftModels(laptopCatalog, null),
+      },
+    ];
+    expect(defaultForkTarget({ sourceEnvironmentId: "studio", candidates })).toBe("laptop");
   });
 });

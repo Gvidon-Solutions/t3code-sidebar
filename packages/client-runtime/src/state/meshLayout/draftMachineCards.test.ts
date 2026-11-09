@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  DRAFT_MACHINE_CARD_TEXT_MAX,
   draftMachineCatalogRequests,
   draftMachineCardState,
-  draftMachineCards,
   draftMachineCardSync,
+  draftMachineCardTexts,
+  draftMachineCards,
   nextSelectableMachineCard,
   retainedCatalogRequests,
   shouldRefreshDraftMachineCatalogs,
@@ -30,7 +32,7 @@ describe("draftMachineCardState", () => {
         hasUsableModels: true,
         sync: "copying",
       }).text,
-    ).toBe("Copying files…");
+    ).toBe("Copying…");
     expect(
       draftMachineCardState({
         label: "cloudbox",
@@ -54,7 +56,7 @@ describe("draftMachineCardState", () => {
       }),
     ).toEqual({
       status: "will-copy",
-      text: "Will set up a copy here",
+      text: "Will set up a copy",
       selectable: true,
       guidance: null,
     });
@@ -71,7 +73,7 @@ describe("draftMachineCardState", () => {
       }),
     ).toEqual({
       status: "no-models",
-      text: "No models set up on cloudbox",
+      text: "No models here",
       selectable: false,
       guidance: null,
     });
@@ -89,7 +91,7 @@ describe("draftMachineCardState", () => {
       }),
     ).toEqual({
       status: "cannot-host",
-      text: "Can't set up a copy on oldbox",
+      text: "Can't host a copy",
       selectable: false,
       guidance: null,
     });
@@ -122,7 +124,7 @@ describe("draftMachineCardState", () => {
       hasSelectedModel: false,
     });
     expect(state.selectable).toBe(true);
-    expect(state.guidance).toBe("Model not set up here");
+    expect(state.guidance).toBe("Model not available here");
     const rows = draftMachineCards({
       config,
       choices: [
@@ -149,7 +151,7 @@ describe("draftMachineCardState", () => {
       selectedEnvironmentId: "studio",
     });
     expect(rows.find((row) => row.environmentId === "cloudbox")?.note).toBe(
-      "Model not set up here",
+      "Model not available here",
     );
   });
 
@@ -176,7 +178,7 @@ describe("draftMachineCardState", () => {
       }),
     ).toEqual({
       status: "will-copy",
-      text: "Will set up a copy here",
+      text: "Will set up a copy",
       selectable: false,
       guidance: null,
     });
@@ -190,7 +192,7 @@ describe("draftMachineCardState", () => {
       }),
     ).toEqual({
       status: "unreachable",
-      text: "Can't reach laptop",
+      text: "Not connected here",
       selectable: false,
       guidance: null,
     });
@@ -268,8 +270,8 @@ describe("draftMachineCards", () => {
     expect(rows[0]?.machine.tag).toBe("ST");
     expect(rows[0]?.note).toBeNull();
     expect(rows[1]?.note).toBeNull();
-    expect(rows[2]?.note).toBe("Not connected to this device");
-    expect(rows[2]?.hint).toContain("Will set up a copy here");
+    expect(rows[2]?.note).toBe("Not connected here");
+    expect(rows[2]?.hint).toContain("not connected to laptop");
   });
 });
 
@@ -341,7 +343,7 @@ describe("draftMachineCardState host and copy wording", () => {
   it("only refuses a copy when a project needs one and the server is known unable", () => {
     expect(draftMachineCardState({ ...base, hasProject: false, canHostCopy: false })).toEqual({
       status: "cannot-host",
-      text: "Can't set up a copy on cloudbox",
+      text: "Can't host a copy",
       selectable: false,
       guidance: null,
     });
@@ -369,5 +371,101 @@ describe("nextSelectableMachineCard", () => {
       nextSelectableMachineCard([{ environmentId: "studio", selectable: false }], "studio", 1),
     ).toBeNull();
     expect(nextSelectableMachineCard([], null, 1)).toBeNull();
+  });
+});
+
+describe("draft card model resolution", () => {
+  const instanceId = "codex";
+  const catalog = {
+    providers: [
+      {
+        instanceId,
+        enabled: true,
+        installed: true,
+        status: "ready",
+        availability: "available",
+        auth: { status: "authenticated" },
+        models: [{ slug: "fixture" }],
+      },
+    ],
+  } as never;
+  const config = {
+    machines: {
+      studio: { title: "studio", tag: "ST" },
+      laptop: { title: "laptop", tag: "LT" },
+    },
+  } as const;
+
+  it("judges a fresh draft by the model the composer will send on each machine", () => {
+    const rows = draftMachineCards({
+      config,
+      choices: [
+        {
+          environmentId: "studio",
+          label: "studio",
+          projectId: "p1",
+          primary: true,
+          connected: true,
+          hasUsableModels: true,
+          config: catalog,
+        },
+        {
+          environmentId: "laptop",
+          label: "laptop",
+          projectId: "p1",
+          primary: false,
+          connected: true,
+          hasUsableModels: true,
+          config: catalog,
+        },
+      ],
+      reachability: {},
+      selectedEnvironmentId: "studio",
+      selection: null,
+    });
+    expect(rows.map((row) => row.text)).toEqual(["Synced", "Synced"]);
+    expect(rows.map((row) => row.guidance)).toEqual([null, null]);
+    expect(rows.map((row) => row.note)).toEqual([null, null]);
+  });
+
+  it("still names a model the person explicitly chose and that is missing", () => {
+    const rows = draftMachineCards({
+      config,
+      choices: [
+        {
+          environmentId: "studio",
+          label: "studio",
+          projectId: "p1",
+          primary: true,
+          connected: true,
+          hasUsableModels: true,
+          config: catalog,
+        },
+        {
+          environmentId: "laptop",
+          label: "laptop",
+          projectId: "p1",
+          primary: false,
+          connected: true,
+          hasUsableModels: true,
+          config: catalog,
+        },
+      ],
+      reachability: {},
+      selectedEnvironmentId: "studio",
+      selection: { instanceId, model: "gone" } as never,
+    });
+    expect(rows.find((row) => row.environmentId === "laptop")?.guidance).toBe(
+      "Model not available here",
+    );
+    expect(rows.find((row) => row.environmentId === "laptop")?.note).toBe(
+      "Model not available here",
+    );
+  });
+
+  it("keeps every short phrase inside the one-line budget", () => {
+    for (const text of Object.values(draftMachineCardTexts))
+      expect(text.length).toBeLessThanOrEqual(DRAFT_MACHINE_CARD_TEXT_MAX);
+    expect(draftMachineCardTexts.modelMissing.length).toBe(24);
   });
 });

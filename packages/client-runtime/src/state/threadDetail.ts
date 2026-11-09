@@ -251,12 +251,17 @@ export function createEnvironmentThreadDetailAtoms<E>(
 ) {
   const threadStateValueAtomFamily = Atom.family((key: string) => {
     const ref = parseThreadKey(key);
-    return Atom.make((get) =>
-      AsyncResult.getOrElse(
+    // Keep the last synchronized conversation when its machine goes offline: the
+    // thread stays readable (and its composer explains why it is read-only).
+    let previous = EMPTY_ENVIRONMENT_THREAD_STATE;
+    return Atom.make((get) => {
+      const value = AsyncResult.getOrElse(
         get(threadStateAtom(ref.environmentId, ref.threadId)),
-        () => EMPTY_ENVIRONMENT_THREAD_STATE,
-      ),
-    ).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-state-value:${key}`));
+        () => previous,
+      );
+      previous = value;
+      return value;
+    }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-state-value:${key}`));
   });
 
   const threadAtomFamily = Atom.family((key: string) => {

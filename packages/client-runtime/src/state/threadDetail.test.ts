@@ -386,3 +386,27 @@ describe("deriveWorkspaceMutationId", () => {
     );
   });
 });
+
+describe("offline thread fallback", () => {
+  it("keeps the last synchronized conversation while the machine cannot answer", () => {
+    const projection = withItem(assistant);
+    const state = Atom.make(
+      AsyncResult.success({ ...EMPTY_ENVIRONMENT_THREAD_STATE, data: Option.some(projection) }),
+    );
+    const details = createEnvironmentThreadDetailAtoms(() => state);
+    const ref = { environmentId: EnvironmentId.make("env"), threadId: v2ThreadId };
+    const registry = AtomRegistry.make();
+    const unmount = registry.mount(details.quietThreadAtom(ref));
+    const loaded = registry.get(details.quietThreadAtom(ref));
+
+    registry.set(
+      state,
+      AsyncResult.fail({ _tag: "Unavailable", message: "machine offline" }) as never,
+    );
+
+    expect(registry.get(details.quietThreadAtom(ref))).toBe(loaded);
+    expect(registry.get(details.quietThreadAtom(ref))).not.toBeNull();
+    unmount();
+    registry.dispose();
+  });
+});
