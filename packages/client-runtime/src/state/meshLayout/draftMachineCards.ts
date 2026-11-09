@@ -5,6 +5,7 @@ import { machineDisplayOf, type MachineDisplay } from "../machineDisplay.ts";
 
 /** How a new-thread machine card describes the copy the draft would use. */
 export type DraftMachineCardStatus =
+  | "available"
   | "synced"
   | "copying"
   | "out-of-sync"
@@ -20,7 +21,10 @@ export interface DraftMachineCardStateInput {
   /** The mesh can reach the machine, even when this client is not connected to it. */
   readonly reachable: boolean;
   readonly viaLabel?: string | null | undefined;
+  /** The machine already holds the draft's project. */
   readonly hasProject: boolean;
+  /** False for a scratch draft, which has no project and therefore no copies. */
+  readonly draftHasProject?: boolean;
   /** Null when the machine's provider catalog is unknown to this client. */
   readonly hasUsableModels: boolean | null;
   /** False when the draft's selected model is missing there; null when no model is chosen. */
@@ -58,7 +62,8 @@ export function draftMachineCardState(input: DraftMachineCardStateInput): DraftM
   // A machine reached through the mesh still describes its copy; this device just
   // cannot start a thread there until it connects to that machine directly.
   const selectable = input.connected;
-  if (!input.hasProject && input.canHostCopy === false) {
+  const draftHasProject = input.draftHasProject !== false;
+  if (draftHasProject && !input.hasProject && input.canHostCopy === false) {
     return withGuidance({
       status: "cannot-host",
       text: `Can't set up a copy on ${input.label}`,
@@ -77,6 +82,10 @@ export function draftMachineCardState(input: DraftMachineCardStateInput): DraftM
   }
   if (input.sync === "out-of-sync") {
     return withGuidance({ status: "out-of-sync", text: "Out of sync", selectable });
+  }
+  // A draft without a project has no copies to make; only the machine and its model matter.
+  if (!draftHasProject) {
+    return withGuidance({ status: "available", text: "Available", selectable });
   }
   if (!input.hasProject) {
     return withGuidance({ status: "will-copy", text: "Will set up a copy here", selectable });
@@ -125,6 +134,8 @@ export function draftMachineCards(input: {
   readonly reachability: Readonly<Record<string, DraftMachineCardReachability | undefined>>;
   readonly selectedEnvironmentId: string | null;
   readonly selection?: ModelSelection | null;
+  /** False for a scratch draft, which has no project and therefore no copies. */
+  readonly draftHasProject?: boolean;
 }): DraftMachineCardRow[] {
   if (input.choices.length <= 1) return [];
   return input.choices
@@ -136,6 +147,7 @@ export function draftMachineCards(input: {
         reachable: reach?.reachable ?? false,
         viaLabel: reach?.viaLabel ?? null,
         hasProject: choice.projectId !== null,
+        draftHasProject: input.draftHasProject ?? true,
         hasUsableModels: choice.hasUsableModels,
         hasSelectedModel:
           choice.hasSelectedModel ??
@@ -182,6 +194,26 @@ export function draftMachineCards(input: {
       if (left.selectable !== right.selectable) return left.selectable ? -1 : 1;
       return left.label.localeCompare(right.label);
     });
+}
+
+/**
+ * The next selectable card in arrow-key order, skipping disabled cards and
+ * wrapping around. Null when no card can be picked.
+ */
+export function nextSelectableMachineCard(
+  cards: ReadonlyArray<{ readonly environmentId: string; readonly selectable: boolean }>,
+  currentEnvironmentId: string | null,
+  direction: 1 | -1,
+): string | null {
+  if (!cards.some((card) => card.selectable)) return null;
+  const current = cards.findIndex((card) => card.environmentId === currentEnvironmentId);
+  const start = current < 0 ? (direction === 1 ? -1 : 0) : current;
+  for (let offset = 1; offset <= cards.length; offset += 1) {
+    const index = (((start + direction * offset) % cards.length) + cards.length) % cards.length;
+    const card = cards[index]!;
+    if (card.selectable) return card.environmentId;
+  }
+  return null;
 }
 
 /** Sync state from a live replica status, in the card's three plain words. */

@@ -182,6 +182,30 @@ const netFetch = (url: string, init: RequestInit) =>
     catch: (cause) => new ElectronProtocolFetchError({ cause }),
   });
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+/** Dev-only shell fallback when the Vite target server is down (production serves bundled assets). */
+export function offlineShellResponse(targetOrigin: URL): Response {
+  const label = escapeHtml(targetOrigin.host || targetOrigin.href);
+  return new Response(
+    `<!doctype html><meta charset="utf-8"><title>Can't reach ${label}</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#000;color:#eee;font:15px system-ui,sans-serif"><main style="text-align:center;padding:24px"><h1 style="font-size:20px;font-weight:600">Can't reach ${label}</h1><p style="color:#aaa">The desktop app is showing its bundled UI. Start the server, then retry.</p><button onclick="location.reload()" style="margin-top:8px;padding:8px 14px;border-radius:8px;border:1px solid #444;background:#222;color:#eee;font:inherit;cursor:pointer">Retry</button></main></body>`,
+    {
+      status: 503,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "content-security-policy":
+          "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+      },
+    },
+  );
+}
+
 const fetchWithTransientRetry = (url: string, init: RequestInit) =>
   netFetch(url, init).pipe(
     Effect.retry({ schedule: Schedule.exponential("50 millis", 3), times: 2 }),
@@ -407,9 +431,12 @@ export const make = Effect.gen(function* () {
                     null,
                     "Server UI unavailable or incompatible; using bundled client",
                   );
-                  const fallback = `${input.scheme}://app/?desktopWindowId=${rendererId}&bundled=1`;
-                  navigations.set(rendererId, fallback);
-                  return Response.redirect(fallback, 302);
+                  const fallback = new URL(`${input.scheme}://app/`);
+                  fallback.searchParams.set("desktopWindowId", String(rendererId));
+                  fallback.searchParams.set("bundled", "1");
+                  if (origin) fallback.searchParams.set("server", origin.href);
+                  navigations.set(rendererId, fallback.href);
+                  return Response.redirect(fallback.href, 302);
                 }
                 if (serverHost) {
                   const origin = pageOrigins.get(requestUrl.host);
@@ -441,7 +468,10 @@ export const make = Effect.gen(function* () {
               return runPromise(
                 proxyRequest(request, input.targetOrigin, contentSecurityPolicy).pipe(
                   Effect.catchTags({
-                    ElectronProtocolFetchError: (error) => Effect.die(error.cause),
+                    ElectronProtocolFetchError: (error) =>
+                      request.mode === "navigate"
+                        ? Effect.succeed(offlineShellResponse(input.targetOrigin))
+                        : Effect.die(error.cause),
                   }),
                 ),
               );

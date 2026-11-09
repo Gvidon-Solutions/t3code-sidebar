@@ -56,7 +56,7 @@ export function PendingReplicaRow(props: {
       {canRetry ? (
         <button
           type="button"
-          aria-label={`Retry replica on ${machine.label}`}
+          aria-label={`Retry copy on ${machine.label}`}
           className="flex h-5 shrink-0 items-center rounded px-1 text-2xs font-medium text-sidebar-foreground hover:bg-foreground/8 focus-visible:outline-2 focus-visible:outline-ring"
           onClick={() => props.onRetry(row)}
         >

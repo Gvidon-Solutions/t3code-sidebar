@@ -1009,7 +1009,9 @@ export function NewTaskFlowProvider(
         )?.projectId ??
         null) as import("@t3tools/contracts").ProjectId | null;
       const serverConfig = serverConfigs.get(environmentId) ?? null;
-      const supportsReplicas = serverConfig?.environment.capabilities.replicas === true;
+      const supportsReplicas = serverConfig
+        ? serverConfig.environment.capabilities.replicas === true
+        : null;
       const canHostCopy = draftMachineCanHostCopy({
         hasProject: projectId !== null,
         supportsReplicas,
@@ -1096,6 +1098,7 @@ export function NewTaskFlowProvider(
     selectedEnvironmentId:
       switchingToEnvironmentId ?? pendingMount?.environmentId ?? selectedEnvironmentId ?? null,
     selection: selectedModelForCards,
+    draftHasProject: !isScratchDraft,
   });
   const mountRep =
     pendingMount &&
@@ -1229,7 +1232,7 @@ export function NewTaskFlowProvider(
             const driver = replicaDriverEnvironment(meshLayout.config!, mountRow.rep);
             if (!driver) {
               Dialog.alert(
-                "Cannot retry replica",
+                "Cannot retry copy",
                 "Ask an agent to fix the connection between these machines.",
               );
               return;

@@ -300,6 +300,27 @@ Shared client-runtime decisions keep web and Android answering these questions t
   `aria-disabled` while staying focusable. Unconnected catalogs refresh only while a machine is
   unconnected, with one bounded request key per project and destination.
 
+### Full-review fixes (F5)
+
+- **Desktop fallback.** `ElectronProtocol` appends the attempted `server` to the bundled
+  fallback URL; web `desktopBundledFallback.ts` reads it and `DesktopBundledOffline` draws
+  "Can't reach <server> — Retry". Retry drops `bundled` so the shell tries the saved server
+  again. The dev target-origin path also returns a plain retry page instead of dying.
+- **Home and draft choice.** mobile `useSidebarWorkspaces` applies client-runtime
+  `withImplicitWorkspace`, so a mesh with machines but no configured workspaces still shows one
+  "Personal" folder list. Card wording separates a scratch draft (`draftHasProject: false`, no
+  copy language) from a project destination that lacks a copy. Unknown replica capability is not
+  a refusal: only a server known to lack it says "Can't set up a copy".
+- **Usable fork target.** `defaultForkTarget` picks the first other connected machine with a
+  model, then any connected other machine so its card explains why.
+- **Wording and access.** Short copy errors (`Can't reach <source>` / `Copy failed`) keep the
+  reason in `replicaStatusDetail`; user copy says "copy". `mod+alt+h` cycles the draft host and
+  arrow keys move between selectable cards. Clipboard failures show the prompt selected for
+  manual copy on both clients.
+- **Theme and version.** `ThemeRouteSync` subscribes every route, including `/pair`, `/connect`,
+  `/connect-agent` and guest pages, to the saved/system appearance. Release bundle CI sets
+  `APP_VERSION` and `scripts/verify-app-version.mjs` checks the built client contains it.
+
 ## Interfaces
 
 `t3 run [--bg] [--ports P[,P]] [--timeout D] -- <command…>` runs locally outside a lite
@@ -496,6 +517,17 @@ catalog, not a machine name or an assumed operating system.
   Await the resulting diagnostics too, since session replacement first publishes `mounting`.
 - Quiesce and drain replica reconciliation before constructing conflicting test files: it
   automatically resumes paused sessions and can otherwise overwrite a fixture during setup.
+
+- A config with no `ws/<id>` entries means "one implicit Personal workspace", not "no workspace
+  mode". Web had the stand-in; mobile's Home did not, so it hid every project folder behind
+  "No threads yet". Use `withImplicitWorkspace` on both clients.
+- A bare `machine/<env>` layout fact is not a configured machine. First-config migration must
+  keep it only when a link, a project copy or the local server still references that machine;
+  otherwise it revives a forgotten machine as active.
+- An unreachable desktop server must reach a real bundled page, not an empty protocol response.
+  Add the attempted server to the fallback URL so the page can name it and retry.
+- `replicaStatusCopy` is visible row text: keep it to one short sentence and leave the server's
+  long reason to `replicaStatusDetail`'s tooltip.
 
 ## Mesh config core
 

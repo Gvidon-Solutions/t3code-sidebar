@@ -83,7 +83,9 @@ export function useLogicalProjectEnvironments(
       connected,
       reachable,
       via,
-      supportsMesh: environment?.serverConfig?.environment.capabilities.replicas === true,
+      supportsMesh: environment?.serverConfig
+        ? environment.serverConfig.environment.capabilities.replicas === true
+        : null,
       isPrimary: environmentId === primaryEnvironmentId,
       machine: resolveEnvironmentMachineKind(environment?.serverConfig ?? null),
     });

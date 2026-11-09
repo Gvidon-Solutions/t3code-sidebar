@@ -73,6 +73,19 @@ vi.mock("../../state/environments", async (importOriginal) => ({
           },
         ],
       ],
+      [
+        "D",
+        [
+          {
+            instanceId: "codex",
+            driver: "codex",
+            enabled: true,
+            installed: true,
+            status: "ready",
+            models: [{ slug: "gpt-5", name: "GPT-5" }],
+          },
+        ],
+      ],
     ]),
 }));
 vi.mock("../../state/meshReplicas", async (importOriginal) => ({
@@ -100,7 +113,11 @@ it("offers machine titles, explains unavailable models and loads an unconnected 
     // This dialog does not navigate.
     { router: false },
   );
-  await expect.element(screen.getByRole("heading", { name: "Fork to Laptop" })).toBeInTheDocument();
+  // Cloudbox (first other) has no models, so the dialog starts on the first other
+  // machine that can run one.
+  await expect
+    .element(screen.getByRole("heading", { name: "Fork to Travel laptop" }))
+    .toBeInTheDocument();
   const select = screen.getByRole("combobox", { name: "Fork target machine" });
   await userEvent.fill(select, "Cloudbox");
   await page.getByRole("option", { name: "Cloudbox", exact: true }).click();

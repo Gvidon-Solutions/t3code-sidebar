@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { EnvironmentThreadShell } from "./models.ts";
 import {
   canForkThreadFromMenu,
+  defaultForkTarget,
   nextForkTitle,
   planForkPlacement,
   runThreadFork,
@@ -53,6 +54,33 @@ function orderAfter(threads: EnvironmentThreadShell[], sourceId: string, forkId:
     ),
   ).map((thread) => thread.id);
 }
+
+describe("defaultForkTarget", () => {
+  const candidates = [
+    { environmentId: "studio", connected: true, hasModels: true },
+    { environmentId: "cloudbox", connected: true, hasModels: false },
+    { environmentId: "laptop", connected: true, hasModels: true },
+  ];
+
+  it("skips a connected machine without usable models", () => {
+    expect(defaultForkTarget({ sourceEnvironmentId: "studio", candidates })).toBe("laptop");
+  });
+
+  it("falls back to the first other connected machine so its card explains why", () => {
+    expect(
+      defaultForkTarget({
+        sourceEnvironmentId: "studio",
+        candidates: candidates.map((candidate) => ({ ...candidate, hasModels: false })),
+      }),
+    ).toBe("cloudbox");
+  });
+
+  it("keeps the source when it is the only machine", () => {
+    expect(
+      defaultForkTarget({ sourceEnvironmentId: "studio", candidates: candidates.slice(0, 1) }),
+    ).toBe("studio");
+  });
+});
 
 describe("nextForkTitle", () => {
   it("numbers forks of one thread consecutively", () => {

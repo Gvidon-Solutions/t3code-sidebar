@@ -872,6 +872,15 @@ export function NewTaskDraftScreen(props: {
     navigation.navigate(routeName);
   };
 
+  const machineCards = (
+    <DraftMachineCards
+      rows={flow.machineCards}
+      onSelect={(environmentId) => {
+        if (isComposerInteractionLocked) return;
+        void flow.switchEnvironment(EnvironmentId.make(environmentId));
+      }}
+    />
+  );
   const environmentControl = (
     <View>
       <DraftMachineStatus
@@ -887,13 +896,6 @@ export function NewTaskDraftScreen(props: {
               }
             : (flow.retryMount ?? undefined)
         }
-      />
-      <DraftMachineCards
-        rows={flow.machineCards}
-        onSelect={(environmentId) => {
-          if (isComposerInteractionLocked) return;
-          void flow.switchEnvironment(EnvironmentId.make(environmentId));
-        }}
       />
     </View>
   );
@@ -1048,6 +1050,7 @@ export function NewTaskDraftScreen(props: {
         }
       >
         <View className="flex-1 justify-end gap-3 p-4">
+          {machineCards}
           {environmentControl}
           <Text className="text-foreground-muted">
             Your draft is saved on this device. Connect to an environment to choose its first model.
@@ -1111,6 +1114,7 @@ export function NewTaskDraftScreen(props: {
                   />
                 </View>
               ) : null}
+              {machineCards}
               {flow.canChooseWorkspace ? workspaceControls : null}
             </View>
           ),

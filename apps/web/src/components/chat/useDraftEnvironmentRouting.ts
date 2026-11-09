@@ -449,7 +449,9 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
               draftModelUnavailableReason(catalog, input.selection, machine.projectId) === null,
             canHostCopy: draftMachineCanHostCopy({
               hasProject: machine.projectId !== null,
-              supportsReplicas: serverConfig?.environment.capabilities.replicas === true,
+              supportsReplicas: serverConfig
+                ? serverConfig.environment.capabilities.replicas === true
+                : null,
               isScratchDraft: activeProjectIsScratch,
             }),
           }),
@@ -490,7 +492,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
             if (!driver) {
               toastManager.add({
                 type: "error",
-                title: "Cannot retry replica",
+                title: "Cannot retry copy",
                 description: "Ask an agent to fix the connection between these machines.",
               });
               return;

@@ -31,3 +31,19 @@ it("opens a prepared thread and offers a copy fallback", async () => {
   });
   clipboard.mockRestore();
 });
+
+it("shows the prompt selected for manual copy when the clipboard is unavailable", async () => {
+  const clipboard = vi.spyOn(navigator, "clipboard", "get").mockReturnValue({
+    writeText: vi.fn(async () => {
+      throw new Error("Clipboard blocked");
+    }),
+  } as unknown as Clipboard);
+  await using screen = await render(<AgentFixActions prompt={prompt} />, {
+    router: "/settings/mesh",
+  });
+  await screen.getByRole("button", { name: "Copy prompt", exact: true }).click();
+  const field = screen.getByRole("textbox", { name: "Prompt to copy" });
+  await expect.element(screen.getByText("Copy the prompt by hand")).toBeInTheDocument();
+  await expect.element(field).toHaveValue(prompt);
+  clipboard.mockRestore();
+});

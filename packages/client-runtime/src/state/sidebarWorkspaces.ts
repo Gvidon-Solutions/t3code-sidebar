@@ -14,6 +14,20 @@ export const WORKSPACE_COLORS = [
   "#8f9a5a",
 ] as const;
 
+/** Stand-in until the user creates a workspace: everything lives here. */
+export const IMPLICIT_WORKSPACE: SidebarWorkspace = { id: "personal", name: "Personal" };
+
+/** A config with no workspaces shows everything in one implicit workspace. */
+export function withImplicitWorkspace(config: SidebarWorkspacesConfig): SidebarWorkspacesConfig {
+  return config.workspaces.length > 0
+    ? config
+    : {
+        ...config,
+        workspaces: [IMPLICIT_WORKSPACE],
+        defaultWorkspace: IMPLICIT_WORKSPACE.id,
+      };
+}
+
 /** `icon` values with this prefix name a built-in glyph; anything else is a short label. */
 export const WORKSPACE_GLYPH_PREFIX = "glyph:";
 /** Longest tile label, in user-perceived characters (an emoji counts as one). */

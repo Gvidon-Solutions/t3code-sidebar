@@ -34,13 +34,29 @@ export function migrateConfig(
   const bindings: Record<string, string> = {};
   const migration: Record<string, { peerLabels: string[]; ssh?: Record<string, unknown> }> = {};
   const machines: Record<string, MeshConfigDocument["machines"][string]> = {};
+  const peerIds = new Set(peers.map((peer) => peer.environmentId));
+  const represented = new Set(
+    Object.values(layout.projectMounts)
+      .flat()
+      .map((rep) => rep.environmentId),
+  );
+  // A reported fact alone is not a configured machine. Keep a layout machine
+  // without a binding only when a link, a project copy or this server still
+  // uses it; otherwise it is a forgotten machine's leftover fact.
+  const forgottenFact = (environmentId: string) =>
+    environmentId !== self.environmentId &&
+    !peerIds.has(environmentId) &&
+    !represented.has(environmentId) &&
+    Object.hasOwn(document, `machine/${encodeURIComponent(environmentId)}`);
   const environments = [
     ...new Set([
       ...Object.keys(layout.machines),
       self.environmentId,
       ...peers.map((peer) => peer.environmentId),
     ]),
-  ].sort();
+  ]
+    .filter((environmentId) => !forgottenFact(environmentId))
+    .sort();
   for (const environmentId of environments) {
     const machine = layout.machines[environmentId];
     const title =

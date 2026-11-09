@@ -11,6 +11,7 @@ import {
   type WorkspaceProjectIdentity,
   type WorkspaceSequenceOf,
   type ProjectFoldMode,
+  withImplicitWorkspace,
 } from "@t3tools/client-runtime/state/sidebar-workspaces";
 import {
   mergeLogicalProjects,
@@ -52,7 +53,10 @@ export function useSidebarWorkspaces() {
   }, [serverConfigs]);
   // T3 Mesh (fork): the replicated document wins; without a mesh source keep the legacy
   // first-server-by-id path unchanged.
-  const config = mesh.config ?? sources[0]?.config ?? null;
+  // With no configured workspaces, Home still needs one place for every project,
+  // exactly as the web sidebar's implicit "Personal" workspace.
+  const storedConfig = mesh.config ?? sources[0]?.config ?? null;
+  const config = storedConfig === null ? null : withImplicitWorkspace(storedConfig);
 
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : null;
   const storedWorkspaceId = preferences?.sidebarWorkspaceId;

@@ -249,7 +249,7 @@ describe("representationRow", () => {
       "demo",
       config.projectMounts.demo![1]!,
     );
-    expect(row.text).toBe("Disk is full");
+    expect(row.text).toBe("Copy failed");
     expect(row.retry).toMatchObject({
       logicalKey: "demo",
       message: "Disk is full",
@@ -354,7 +354,10 @@ describe("replicaStatusCopy", () => {
       }),
     ).toBe("Can't reach atlas from Boreal. Ask an agent to fix the connection");
     expect(replicaStatusCopy({ ...base, state: "error", message: "Disk is full" })).toBe(
-      "Disk is full",
+      "Copy failed",
+    );
+    expect(replicaStatusDetail({ ...base, state: "error", message: "Disk is full" })).toBe(
+      "Disk is full. Ask an agent to fix the copy",
     );
   });
 });

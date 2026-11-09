@@ -203,7 +203,7 @@ export function WorkspaceTitlebar({
           </TooltipPopup>
         </Tooltip>
       )}
-      <div className="flex shrink-0 items-center gap-0.5">{actions}</div>
+      <div className="flex shrink-0 items-center gap-1">{actions}</div>
     </div>
   );
 }

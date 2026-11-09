@@ -95,10 +95,13 @@ export function hasSelectedDraftModel(
  */
 export function draftMachineCanHostCopy(input: {
   readonly hasProject: boolean;
-  readonly supportsReplicas: boolean;
+  /** Null when this client has not seen the machine's capabilities yet. */
+  readonly supportsReplicas: boolean | null | undefined;
   readonly isScratchDraft: boolean;
 }): boolean {
-  return input.hasProject || input.isScratchDraft || input.supportsReplicas;
+  // An unknown capability is not a refusal: only a server known to lack the
+  // capability cannot host a copy.
+  return input.hasProject || input.isScratchDraft || input.supportsReplicas !== false;
 }
 
 /** One machine's answer to "could this draft start here right now". */

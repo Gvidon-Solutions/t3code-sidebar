@@ -87,6 +87,47 @@ it("migrates a three-machine layout and existing routes, aliases, ignores and pe
   ).toBeUndefined();
 });
 
+it("does not revive a forgotten machine from a leftover reported fact", () => {
+  const layout = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: {
+      studio: { title: "Studio" },
+      "old-machine": { title: "Old machine", label: "Old machine" },
+      replica: { title: "Replica" },
+    },
+    projectMounts: {
+      app: [
+        {
+          environmentId: "replica",
+          path: "/copies/app",
+          role: "replica" as const,
+          transport: "manual" as const,
+          source: "studio",
+          createdAt: "",
+        },
+      ],
+    },
+  };
+  const result = migrateConfig(
+    {
+      "machine/old-machine": {
+        h: "0000000000000.00000.studio",
+        v: {
+          title: "Old machine",
+          label: "Old machine",
+          reported: { version: "0.1.5", reportedAt: "2020-01-01T00:00:00.000Z" },
+        },
+      },
+    },
+    layout,
+    { environmentId: "studio", label: "studio-host" },
+    [],
+    [],
+  );
+  expect(result?.bindings).toEqual({ studio: "studio", replica: "replica" });
+  expect(Object.keys(result!.doc.machines).sort()).toEqual(["replica", "studio"]);
+});
+
 it("keeps migration-only peer identities and SSH routes outside the public config document", () => {
   const migrated = migrateConfig(
     {

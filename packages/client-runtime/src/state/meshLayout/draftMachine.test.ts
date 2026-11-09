@@ -240,6 +240,17 @@ it("has one host rule for scratch drafts, existing copies and replica-capable se
   expect(
     draftMachineCanHostCopy({ hasProject: false, supportsReplicas: false, isScratchDraft: true }),
   ).toBe(true);
+  // Only a server known to lack copies is refused; an unseen capability may still host one.
+  expect(
+    draftMachineCanHostCopy({ hasProject: false, supportsReplicas: null, isScratchDraft: false }),
+  ).toBe(true);
+  expect(
+    draftMachineCanHostCopy({
+      hasProject: false,
+      supportsReplicas: undefined,
+      isScratchDraft: false,
+    }),
+  ).toBe(true);
 });
 
 it("treats an unarrived provider catalog as unknown for the selected model", () => {

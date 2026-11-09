@@ -1,5 +1,9 @@
 import { useScratchProject } from "../../hooks/useScratchProject";
 import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  IMPLICIT_WORKSPACE,
+  withImplicitWorkspace,
+} from "@t3tools/client-runtime/state/sidebar-workspaces";
 import { ProjectMachineStrip } from "./ProjectMachineStrip";
 import { threadDropProject } from "./threadDrop.logic";
 /**
@@ -202,8 +206,6 @@ import {
 
 const FOLDER_PREVIEW_COUNT = 8;
 const SETTLED_PAGE_COUNT = 10;
-/** Stand-in until the user creates a workspace: everything lives here. */
-const IMPLICIT_WORKSPACE: SidebarWorkspace = { id: "personal", name: "Personal" };
 const SCRATCH_LABEL = "No project";
 
 interface FolderModel {
@@ -322,14 +324,7 @@ export default function WorkspaceSidebar() {
   // per-server shared setting path unchanged.
   const storedConfig = mesh.config ?? remoteConfig?.[1].settings.sidebarWorkspaces ?? primaryConfig;
   const baseConfig = storedConfig ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
-  const config: SidebarWorkspacesConfig =
-    baseConfig.workspaces.length > 0
-      ? baseConfig
-      : {
-          ...baseConfig,
-          workspaces: [IMPLICIT_WORKSPACE],
-          defaultWorkspace: IMPLICIT_WORKSPACE.id,
-        };
+  const config: SidebarWorkspacesConfig = withImplicitWorkspace(baseConfig);
   const writeConfig = (update: (current: SidebarWorkspacesConfig) => SidebarWorkspacesConfig) => {
     if (mesh.source !== null) mesh.edit(update);
     else updatePrimarySettings({ sidebarWorkspaces: update(config) });
@@ -874,7 +869,7 @@ export default function WorkspaceSidebar() {
     const driver = replicaDriverEnvironment(config, row.rep);
     if (driver === null) {
       failureToast(
-        "Can't retry this replica",
+        "Can't retry this copy",
         new Error(`Ask an agent to fix the connection between these machines.`),
       );
       return;

@@ -511,8 +511,10 @@ it("keeps forgotten layout facts absent when desired config and an old phone con
 
 it("formats offline durations without an ISO date", () => {
   const now = Date.parse("2026-05-10T00:00:00Z");
-  expect(offlineMachineText("2026-05-07T00:00:00Z", now)).toBe("offline 3 d");
-  expect(offlineMachineText("2026-05-09T22:00:00Z", now)).toBe("offline 2 h");
+  expect(offlineMachineText("2026-05-07T00:00:00Z", now)).toBe("Offline · 3 d");
+  expect(offlineMachineText("2026-05-09T22:00:00Z", now)).toBe("Offline · 2 h");
+  expect(offlineMachineText("2026-05-09T23:58:00Z", now)).toBe("Offline · 2 min");
+  expect(offlineMachineText("2026-05-09T23:59:30Z", now)).toBe("Offline");
   expect(offlineMachineText("invalid", now)).toBe("Offline");
 });
 

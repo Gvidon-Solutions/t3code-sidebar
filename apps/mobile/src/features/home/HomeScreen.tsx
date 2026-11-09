@@ -84,6 +84,7 @@ import type { HomeListFilterMenuEnvironment } from "./home-list-filter-menu";
 import {
   buildHomeProjectScopes,
   findHomeProjectScope,
+  shouldShowAndroidHomeEmptyState,
   shouldShowHomeEmptyState,
   type HomeProjectSortOrder,
 } from "./homeThreadList";
@@ -515,7 +516,7 @@ export function HomeScreen(props: HomeScreenProps) {
   const retryPendingItem = (item: MobilePendingReplicaItem) => {
     if (item.retryEnvironmentId === null) {
       Dialog.alert(
-        "Can't retry this replica",
+        "Can't retry this copy",
         `Add an ssh route between ${item.label} and its source in Settings › Machines.`,
       );
       return;
@@ -529,7 +530,7 @@ export function HomeScreen(props: HomeScreenProps) {
     const driver = replicaDriverEnvironment(replicaConfig, row.rep);
     if (driver === null) {
       Dialog.alert(
-        "Can't retry this replica",
+        "Can't retry this copy",
         `Add an ssh route between ${row.rep.environmentId} and ${row.rep.source ?? "its source"} in Settings › Machines.`,
       );
       return;
@@ -1047,7 +1048,10 @@ export function HomeScreen(props: HomeScreenProps) {
       />
     );
 
-  if (Platform.OS === "android" && threadListV2Items.length === 0) {
+  if (
+    Platform.OS === "android" &&
+    shouldShowAndroidHomeEmptyState(threadListV2Items.length, homeListItems)
+  ) {
     return (
       <View className="flex-1 bg-header">
         <View

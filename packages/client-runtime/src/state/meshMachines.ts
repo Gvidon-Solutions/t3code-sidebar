@@ -502,11 +502,10 @@ export function offlineMachineText(
   now = DateTime.toEpochMillis(DateTime.nowUnsafe()),
 ): string {
   const elapsed = since ? Math.max(0, now - Date.parse(since)) : NaN;
-  if (!Number.isFinite(elapsed)) return "Offline";
-  if (elapsed < 60_000) return "offline now";
-  if (elapsed < 3_600_000) return `offline ${Math.floor(elapsed / 60_000)} min`;
-  if (elapsed < 86_400_000) return `offline ${Math.floor(elapsed / 3_600_000)} h`;
-  return `offline ${Math.floor(elapsed / 86_400_000)} d`;
+  if (!Number.isFinite(elapsed) || elapsed < 60_000) return "Offline";
+  if (elapsed < 3_600_000) return `Offline · ${Math.floor(elapsed / 60_000)} min`;
+  if (elapsed < 86_400_000) return `Offline · ${Math.floor(elapsed / 3_600_000)} h`;
+  return `Offline · ${Math.floor(elapsed / 86_400_000)} d`;
 }
 
 export interface MeshProjectRow {
@@ -702,7 +701,7 @@ export function offlineMachinePrompt(
 export function replicaProblemPrompt(projectTitle: string, machineLabel: string): string {
   return fitMeshPrompt([
     `Fix the copy of project ${quotedData(projectTitle, 80)} on machine ${quotedData(machineLabel, 80)}. It cannot reach its main copy.`,
-    "Check the replica state and repair it, then report what you changed.",
+    "Check the copy's state and repair it, then report what you changed.",
   ]);
 }
 

@@ -1,8 +1,22 @@
 import * as Linking from "expo-linking";
 import { View } from "react-native";
 
+import * as Dialog from "../../components/ui/Dialog";
 import { Button } from "../../components/ui/Button";
-import { copyTextWithHaptic } from "../../lib/copyTextWithHaptic";
+import { tryCopyTextWithHaptic } from "../../lib/copyTextWithHaptic";
+
+/** Copies a prepared prompt, or shows it selected when the clipboard refuses the write. */
+export async function copyMeshPrompt(prompt: string): Promise<boolean> {
+  if (await tryCopyTextWithHaptic(prompt, { target: "prompt" })) return true;
+  Dialog.prompt({
+    title: "Copy the prompt by hand",
+    message: "The clipboard is unavailable. The text is selected; copy it from here.",
+    initialValue: prompt,
+    confirmText: "Done",
+    onConfirm: () => undefined,
+  });
+  return false;
+}
 
 /** One prepared request the owner can hand to an agent, on the machine that must fix it. */
 export function MeshAgentFixActions(props: {
@@ -34,7 +48,7 @@ export function MeshAgentFixActions(props: {
         label="Copy prompt"
         size="compact"
         tone="text"
-        onPress={() => copyTextWithHaptic(props.prompt, { target: "prompt" })}
+        onPress={() => void copyMeshPrompt(props.prompt)}
       />
     </View>
   );

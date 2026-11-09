@@ -143,7 +143,7 @@ export function meshMachineDetailRows(
     for (const rep of reps) {
       if (rep.environmentId !== machine.environmentId || rep.role !== "replica") continue;
       rows.push({
-        label: config.projectTitles[key] ?? "Project replica",
+        label: config.projectTitles[key] ?? "Project copy",
         ...plainReplicaState(key, machine, config, live),
       });
     }

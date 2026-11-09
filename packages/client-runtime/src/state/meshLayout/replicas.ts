@@ -393,9 +393,9 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
     case "paused":
       return "Paused";
     case "error":
-      return input.message && !/reach|route/iu.test(input.message)
-        ? input.message
-        : `Can't reach ${input.sourceLabel}`;
+      return input.message && /reach|route/iu.test(input.message)
+        ? `Can't reach ${input.sourceLabel}`
+        : "Copy failed";
     case "removed":
       return "Removed";
   }
@@ -403,8 +403,10 @@ export function replicaStatusCopy(input: ReplicaStatusCopyInput): string {
 
 /** The full reason for a replica row's tooltip when its one-line copy is shortened. */
 export function replicaStatusDetail(input: ReplicaStatusCopyInput): string {
-  if (input.state === "error" && (!input.message || /reach|route/iu.test(input.message))) {
-    return `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Ask an agent to fix the connection`;
+  if (input.state === "error") {
+    if (!input.message || /reach|route/iu.test(input.message))
+      return `Can't reach ${input.sourceLabel} from ${input.targetLabel}. Ask an agent to fix the connection`;
+    return `${input.message}. Ask an agent to fix the copy`;
   }
   return replicaStatusCopy(input);
 }
