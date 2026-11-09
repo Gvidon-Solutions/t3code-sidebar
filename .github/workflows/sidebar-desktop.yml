@@ -76,6 +76,7 @@ jobs:
     timeout-minutes: 30
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      APP_VERSION: ${{ needs.version.outputs.version }}
     outputs:
       version: ${{ needs.version.outputs.version }}
     steps:
@@ -118,6 +119,9 @@ jobs:
 
       - name: Build server and web
         run: vp run --filter t3 build
+
+      - name: Verify the client carries the release version
+        run: node scripts/verify-app-version.mjs "$VERSION" apps/server/dist/client
 
       - name: Build desktop shell
         if: needs.version.outputs.desktop == 'true'

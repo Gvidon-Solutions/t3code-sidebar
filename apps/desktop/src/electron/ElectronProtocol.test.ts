@@ -141,6 +141,15 @@ describe("ElectronProtocol", () => {
     }).pipe(Effect.provide(layerProtocol)),
   );
 
+  it("renders a retry page when the dev target server is unreachable", async () => {
+    const response = ElectronProtocol.offlineShellResponse(new URL("http://127.0.0.1:3773/"));
+    assert.equal(response.status, 503);
+    const html = await response.text();
+    assert.include(html, "Can't reach 127.0.0.1:3773");
+    assert.include(html, "Retry");
+    assert.include(response.headers.get("content-security-policy") ?? "", "default-src 'none'");
+  });
+
   it.effect("keeps proxied paths on the configured server", () =>
     Effect.gen(function* () {
       let handler: ((request: Request) => Promise<Response>) | undefined;
@@ -306,7 +315,9 @@ describe("ElectronProtocol", () => {
       netFetchMock.mockImplementation(async () => new Response("unavailable", { status: 503 }));
       const offline = yield* page();
       assert.equal(offline.status, 302);
-      assert.include(offline.headers.get("location")!, "bundled=1");
+      const fallback = new URL(offline.headers.get("location")!);
+      assert.equal(fallback.searchParams.get("bundled"), "1");
+      assert.equal(fallback.searchParams.get("server"), "https://cloudbox.example/");
       netFetchMock.mockImplementation(
         async () =>
           new Response("server-v3", {
