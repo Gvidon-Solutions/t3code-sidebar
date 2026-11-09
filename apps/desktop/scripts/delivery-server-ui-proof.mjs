@@ -3,7 +3,6 @@
 // Electron profile trusts the self-signed certificate; no installed profile or live
 // server is used.
 import { app, BrowserWindow, ipcMain, net, protocol, session } from "electron";
-import * as NodeCrypto from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeHttp from "node:http";
@@ -21,8 +20,8 @@ import * as Ipc from "../src/ipc/DesktopIpc.ts";
 import * as Channels from "../src/ipc/channels.ts";
 
 const REPO = NodePath.resolve(import.meta.dirname, "../../..");
-const OUT = "/data/w2-shots";
 const output = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-server-ui-proof-"));
+const OUT = process.env.T3_PROOF_SHOTS_DIR ?? NodePath.join(output, "shots");
 app.setPath("userData", NodePath.join(output, "profile"));
 app.disableHardwareAcceleration();
 protocol.registerSchemesAsPrivileged([
@@ -233,9 +232,6 @@ async function main() {
   NodeFSP.mkdir(OUT, { recursive: true });
   await app.whenReady();
   const defaultSession = session.defaultSession;
-  // Trust only the temporary self-signed certificate used by this proof.
-  await defaultSession.setCertificateVerifyProc((_request, callback) => callback(0));
-
   const assets = NodePath.join(REPO, "apps/web/dist");
   const preload = await buildPreload();
   const httpPort = await freePort();
@@ -254,6 +250,16 @@ async function main() {
     '<!doctype html><meta charset="utf-8"><title>HTML preview</title><body style="margin:0;font:15px system-ui,sans-serif;background:#faf9f7;color:#222"><main style="padding:24px"><h1 style="margin:0 0 8px;font-size:20px">HTML preview</h1><p style="margin:0;color:#666">Served by this machine and rendered inside the server UI.</p><p style="margin:16px 0 0;padding:12px 14px;border:1px solid #ddd;border-radius:10px;background:#fff">If you can read this, the preview surface is working.</p></main></body>',
   );
   const certificate = createCertificate(output);
+  const certificatePem = NodeFS.readFileSync(NodePath.join(output, "cert.pem"), "utf8").replace(
+    /\s+/g,
+    "",
+  );
+  // Trust only this proof's certificate and only for its loopback host.
+  await defaultSession.setCertificateVerifyProc((request, callback) => {
+    const hostAllowed = request.hostname === "127.0.0.1" || request.hostname === "localhost";
+    const sameCertificate = request.certificate.data.replace(/\s+/g, "") === certificatePem;
+    callback(hostAllowed && sameCertificate ? 0 : -2);
+  });
   const origin = new URL(`https://127.0.0.1:${tlsPort}/`);
   let serverOriginUrl = origin;
   const proxy = await createHttpsProxy(certificate, httpPort, tlsPort);
@@ -268,8 +274,9 @@ async function main() {
 
   let selectCalls = [];
   let serverName = "Studio";
-  let authorization = null;
+  let serverUiCredentialOverride = null;
   let rejected = [];
+  let serverUiPageUrl = null;
   let catalog = {
     schemaVersion: 1,
     targets: [],
@@ -308,13 +315,19 @@ async function main() {
     const image = await window.webContents.capturePage();
     await NodeFSP.writeFile(NodePath.join(OUT, name), image.toPNG());
   };
-  const serverUrl = (token) => {
-    const hash = NodeCrypto.createHash("sha256")
-      .update(serverOriginUrl.href)
-      .digest("hex")
-      .slice(0, 24);
-    const host = `server-${window.webContents.id}-${hash}`;
-    return `t3code://${host}/${token ? `#token=${encodeURIComponent(token)}` : ""}`;
+  const loadServerUi = async (token) => {
+    if (serverUiPageUrl === null) {
+      await window.loadURL(`t3code://app/?desktopWindowId=${window.webContents.id}`);
+      serverUiPageUrl = window.webContents.getURL();
+    }
+    if (!token) {
+      await window.loadURL(serverUiPageUrl);
+      return;
+    }
+    const url = new URL(serverUiPageUrl);
+    url.searchParams.set("t", String(Date.now()));
+    url.hash = `token=${encodeURIComponent(token)}`;
+    await window.loadURL(url.toString());
   };
   const sessionState = () =>
     evaluate(
@@ -438,7 +451,25 @@ async function main() {
             assetDirectory: assets,
             serverOrigin: async () => serverOriginUrl,
             serverName: async () => serverName,
-            serverAuthorization: async () => authorization,
+            serverAuthorization: async (origin) => {
+              if (serverUiCredentialOverride !== null) return serverUiCredentialOverride;
+              const target = origin.href.replace(/\/$/, "");
+              const profile = catalog.profiles.find(
+                (entry) =>
+                  entry._tag === "BearerConnectionProfile" &&
+                  entry.httpBaseUrl.replace(/\/$/, "") === target,
+              );
+              if (!profile) return null;
+              const credential = catalog.credentials.find(
+                (entry) => entry.connectionId === profile.connectionId,
+              );
+              return credential === undefined
+                ? null
+                : {
+                    authorization: credential.credential.token,
+                    environmentId: profile.environmentId,
+                  };
+            },
             noteAuthorizationRejected: async (_origin, token) => {
               rejected.push(token);
             },
@@ -451,8 +482,21 @@ async function main() {
             // (a) Pairing in server UI mode reaches an authenticated session and the shell.
             const token = server.pairingToken;
             NodeAssert.ok(token, "server pairing token");
-            await window.loadURL(serverUrl(token));
-            await waitFor("server UI authenticated", appShell, 60_000);
+            await loadServerUi(token);
+            try {
+              await waitFor("server UI authenticated", appShell, 60_000);
+            } catch (error) {
+              console.log(
+                JSON.stringify({
+                  phase: "pairing-debug",
+                  url: window.webContents.getURL(),
+                  text: (await bodyText()).slice(0, 500),
+                }),
+              );
+              console.log(server.log.slice(-2000));
+              await screenshot("debug-pairing.png");
+              throw error;
+            }
             await finishOnboarding();
             await waitForStableShell();
             await waitFor(
@@ -537,6 +581,7 @@ async function main() {
               () => !server.exited && server.pairingToken !== null,
               60_000,
             );
+            await window.webContents.reload();
             await waitForStableShell();
             await screenshot("04-recovered-app-shell.png");
             console.log(JSON.stringify({ phase: "restart", recovered: true }));
@@ -568,10 +613,10 @@ async function main() {
             // (d) A credential the server rejects sends the window to the bundled client,
             // which connects with the saved bearer connection and shows this server's project.
             console.log(JSON.stringify({ phase: "auth-impossible-start" }));
-            authorization = "rejected-token";
-            // A new source hash gets a fresh shell session, so only the rejected credential
-            // can authenticate this document.
+            // Simulate a stale shell credential while the saved connection keeps working.
+            serverUiCredentialOverride = null;
             serverOriginUrl = new URL(`https://localhost:${tlsPort}/`);
+            serverUiPageUrl = null;
             rejected = [];
             const bearerToken = await mintBearerToken(serverOriginUrl, server.pairingToken);
             console.log(JSON.stringify({ phase: "bearer", length: bearerToken.length }));
@@ -580,6 +625,10 @@ async function main() {
             );
             if (!descriptorResponse.ok) throw new Error("environment descriptor failed");
             const descriptor = await descriptorResponse.json();
+            serverUiCredentialOverride = {
+              authorization: "rejected-token",
+              environmentId: descriptor.environmentId,
+            };
             const connectionId = "desktop-server";
             catalog = {
               schemaVersion: 1,
@@ -611,9 +660,9 @@ async function main() {
               disabledEnvironmentIds: [],
             };
             console.log(JSON.stringify({ phase: "auth-impossible-load" }));
-            await window
-              .loadURL(serverUrl(null))
-              .catch((error) => console.error("phase-c loadURL rejected", error));
+            await loadServerUi(null).catch((error) =>
+              console.error("phase-c loadURL rejected", error),
+            );
             console.log(
               JSON.stringify({ phase: "auth-impossible-loaded", url: window.webContents.getURL() }),
             );
@@ -666,7 +715,7 @@ async function main() {
         "| --- | --- |",
         "| 01-paired-app-shell.png | Server UI paired through the shell proxy; app shell rendered |",
         "| 02-html-preview.png | A media ticket minted through the proxy opens a preview socket and an HTML page served by the machine renders in server UI |",
-        "| 03-reconnecting.png | Chunk load failed during a server restart; a calm reconnecting surface replaces the boot error |",
+        "| 03-reconnecting.png | Chunk load failed during a server restart; a calm reconnecting overlay appears without touching the mounted app |",
         "| 04-recovered-app-shell.png | Server restarted; the page reloaded and the server UI shell renders again |",
         "| 05-offline-fallback.png | Reload while the server is down falls back to the bundled client's offline page |",
         "| 06-auth-impossible-bundled.png | Server rejected the shell credential; the bundled client connected with its saved bearer and shows studio-project |",
