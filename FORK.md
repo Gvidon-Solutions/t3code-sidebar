@@ -109,6 +109,40 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — F5 fixes from the full UI review
+
+- **What.** The desktop shell shows a plain "Can't reach <server> — Retry" bundled page instead of
+  a black window when its UI server is unreachable. Android Home shows the workspace's project
+  folders and threads even when no workspace is configured (the shared implicit "Personal"
+  workspace), and a new-thread machine choice sits centred above the composer. A fork starts on
+  the first other machine that can run a model. A forgotten machine's leftover layout fact is no
+  longer revived by the first mesh-config migration, and an unconnected mesh machine with unknown
+  replica capability is no longer labelled "Can't set up a copy". `composer.cycleHost` has a
+  default `mod+alt+h` binding and arrow keys move between selectable machine cards. Sidebar copy
+  errors read "Can't reach <machine>" or "Copy failed" with the reason in the tooltip; machine
+  status uses "Offline" / "Offline · 3 min"; user copy says "copy" instead of "replica".
+  Clipboard failures keep the prompt reachable in a selected-text dialog on web and mobile.
+  Pre-auth pages follow the saved/system theme on every route. Release CI sets `APP_VERSION`
+  explicitly and fails the bundle job when the built client does not contain it.
+- **How.** Shared client-runtime rules gained `withImplicitWorkspace`,
+  `nextSelectableMachineCard`, `defaultForkTarget`, tri-state `draftMachineCanHostCopy`,
+  `draftHasProject` card wording, short `replicaStatusCopy` errors and the `Offline · N min`
+  format. Web gained `ThemeRouteSync`, `DesktopBundledOffline` (the shell fallback URL carries
+  the attempted server), a copy-failure dialog in `AgentFixActions`, and header shrink fixes;
+  mobile gained the shared workspace default, card placement in the composer controls and a
+  manual-copy prompt. `migrateConfig` only keeps layout machines with a link, a project copy or
+  the local server.
+- **Where.** client-runtime `state/{sidebarWorkspaces,meshMachines,threadForks}.ts`,
+  `state/meshLayout/{draftMachine,draftMachineCards,replicas}.ts`, `state/meshConfigStatus.ts`;
+  shared `meshConfig/migration.ts`, `keybindings.ts`; web `routes/__root.tsx`,
+  `components/{ThemeRouteSync,desktop/DesktopBundledOffline,desktop/desktopBundledFallback,
+  chat/{DraftMachineCards,ChatHeader},workspaces/{AgentFixActions,MachinesDialog,
+  PendingReplicaRow,WorkspaceChrome,WorkspaceSidebar}}`; mobile
+  `features/{home/HomeScreen,home/homeThreadList,workspaces/{useSidebarWorkspaces,
+  MeshAgentFixActions,MachinesSheet},threads/{NewTaskDraftScreen,new-task-flow-provider}}`;
+  desktop `electron/ElectronProtocol.ts`; CI `sidebar-desktop.yml`,
+  `scripts/verify-app-version.mjs`.
+
 ### 2026-11-08 — F4b client fixes from audit round 4
 
 - **What.** User guidance no longer points at the deleted Settings › Mesh config editor: retry
