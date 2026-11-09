@@ -1,4 +1,5 @@
 import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import { offlineConversationStatus } from "@t3tools/client-runtime/state/mesh-machines";
 
 export interface FloatingStatusAction {
   readonly label: string;
@@ -50,9 +51,10 @@ export function connectionFloatingStatus(input: {
   readonly connectionError: string | null;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly environmentLabel: string | null;
+  readonly hasCachedConversation?: boolean;
   readonly onReconnect: () => void;
 }): FloatingWorkingStatus | null {
-  const environmentLabel = input.environmentLabel ?? "Environment";
+  const environmentLabel = input.environmentLabel ?? "Machine";
   const unavailable = (label: string): FloatingWorkingStatus => ({
     kind: "connection",
     tone: "unavailable",
@@ -76,12 +78,18 @@ export function connectionFloatingStatus(input: {
       return unavailable("You are offline");
     case "unsupported":
       return unavailable("Client not supported");
-    case "error":
+    case "error": {
+      const status = offlineConversationStatus({
+        label: environmentLabel,
+        reconnecting: false,
+        hasCachedConversation: input.hasCachedConversation === true,
+      });
       return unavailable(
-        input.connectionError
-          ? `Failed to connect to ${environmentLabel}: ${input.connectionError}`
-          : `Failed to connect to ${environmentLabel}`,
+        input.hasCachedConversation
+          ? `${status.title} · showing the last saved conversation`
+          : `${status.title} · Retry`,
       );
+    }
     case "available":
       return unavailable(`${environmentLabel} is not connected`);
     case "connected":

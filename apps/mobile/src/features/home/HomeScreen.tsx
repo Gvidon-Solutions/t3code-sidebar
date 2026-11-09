@@ -15,6 +15,7 @@ import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-searc
 import {
   DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
   EnvironmentId,
+  ProjectId,
   type SidebarProjectGroupingMode,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
@@ -115,6 +116,7 @@ import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { ThreadListFilters } from "./ThreadListFilters";
 import {
+  hasUsableDraftModels,
   planThreadOnMachine,
   removeRepresentation,
   replicaDriverEnvironment,
@@ -428,17 +430,26 @@ export function HomeScreen(props: HomeScreenProps) {
   const replicaStatuses = useReplicaStatuses();
   const serverConfigs = useServerConfigs();
   const replicaConfig = workspaceHome.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
-  const machineChoices = mobileMachineChoices(
-    replicaConfig,
-    props.environments.map((environment) => ({
-      environmentId: environment.environmentId,
-      label: environment.label,
-      connected: environment.connectionState === "connected",
-      supportsMesh:
-        serverConfigs.get(environment.environmentId)?.environment.capabilities.replicas === true,
-    })),
-  );
-  const machineActions = machineSubactions(machineChoices);
+  const machineInputs = (projectKey: string | null) =>
+    props.environments.map((environment) => {
+      const serverConfig = serverConfigs.get(environment.environmentId) ?? null;
+      const projectId =
+        projectKey === null
+          ? null
+          : (replicaConfig.projectMounts[projectKey]?.find(
+              (rep) => rep.environmentId === environment.environmentId,
+            )?.projectId ?? null);
+      return {
+        environmentId: environment.environmentId,
+        label: environment.label,
+        connected: environment.connectionState === "connected",
+        supportsMesh: serverConfig?.environment.capabilities.replicas === true,
+        hasUsableModel: hasUsableDraftModels(serverConfig, projectId as ProjectId | null),
+      };
+    });
+  const machineChoices = mobileMachineChoices(replicaConfig, machineInputs(null));
+  const machineActionsFor = (projectKey: string) =>
+    machineSubactions(mobileMachineChoices(replicaConfig, machineInputs(projectKey), projectKey));
   const retryReplicaCommand = useAtomCommand(replicaStatusEnvironment.retry, {
     label: "replica retry",
     reportFailure: true,
@@ -742,7 +753,7 @@ export function HomeScreen(props: HomeScreenProps) {
           onFoldMode={workspaceHome.setFoldMode}
           onNewThread={startFolderThread}
           mesh={workspaceHome.meshActionsFor(item.projectKey)}
-          machineSubactions={machineActions}
+          machineSubactions={machineActionsFor}
           onNewThreadOnMachine={startOnMachine}
           onOpenMachines={setMachinesProjectKey}
           onRetryReplica={retryPendingItem}

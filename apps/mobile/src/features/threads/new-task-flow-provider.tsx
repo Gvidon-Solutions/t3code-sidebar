@@ -538,7 +538,8 @@ export function NewTaskFlowProvider(
     projectId: selectedProject?.id ?? null,
     now: modelSelectionNow,
   }).selection;
-  const selectedModelForCards = useMemo(() => selectedModel, [selectedModel]);
+  // Cards judge only an explicit pick; otherwise each machine answers with its default.
+  const selectedModelForCards = draftModelSelection;
   const selectedModelKey = selectedModel
     ? `${selectedModel.instanceId}:${selectedModel.model}`
     : null;
@@ -1040,8 +1041,8 @@ export function NewTaskFlowProvider(
           connected,
           hasUsableModels,
           selectedModelUsable:
-            selectedModel !== null &&
-            draftModelUnavailableReason(serverConfig, selectedModel, projectId) === null,
+            draftModelSelection === null ||
+            draftModelUnavailableReason(serverConfig, draftModelSelection, projectId) === null,
           canHostCopy,
         }),
         primary:
