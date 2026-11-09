@@ -270,7 +270,12 @@ jobs:
       - name: Verify ad hoc signature
         run: |
           set -euo pipefail
-          app="$(find release -maxdepth 3 -name '*.app' -type d | head -n 1)"
+          ls -la release
+          dmg="$(ls release/*.dmg | head -n 1)"
+          mnt="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
+          trap 'hdiutil detach "$mnt" || true' EXIT
+          app="$(find "$mnt" -maxdepth 1 -name '*.app' -type d | head -n 1)"
           test -n "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
           codesign -dv "$app" 2>&1 | grep -E 'Signature=|Identifier='
