@@ -205,8 +205,8 @@ jobs:
             release/latest-linux.yml
           if-no-files-found: error
 
-  # Apple Silicon DMG. The fork has no Apple Developer ID, so electron-builder
-  # signs the app ad hoc: macOS asks once to allow it (Privacy & Security ›
+  # Apple Silicon DMG. The fork has no Apple Developer ID, so the app is
+  # signed ad hoc: macOS asks once to allow it (Privacy & Security ›
   # Open Anyway, or `xattr -dr com.apple.quarantine` on the app). Squirrel.Mac
   # refuses updates for ad hoc apps, so no latest-mac.yml is published and the
   # app is updated by installing the next DMG.
@@ -266,26 +266,32 @@ jobs:
           vp run dist:desktop:artifact --platform mac --target dmg --arch arm64 \
             --build-version "$VERSION" --skip-build --verbose
 
-      # Apple Silicon will not launch an unsigned app; fail here rather than ship one.
-      - name: Verify ad hoc signature
+      # electron-builder skips signing without an identity and leaves Electron's
+      # stale signature, which macOS reports as a damaged app. Re-sign the app
+      # ad hoc, verify it, and rebuild the DMG around it.
+      - name: Re-sign ad hoc and rebuild DMG
         run: |
           set -euo pipefail
-          ls -la release
           dmg="$(ls release/*.dmg | head -n 1)"
           mnt="$(mktemp -d)"
+          stage="$(mktemp -d)"
           hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
-          trap 'hdiutil detach "$mnt" || true' EXIT
-          app="$(find "$mnt" -maxdepth 1 -name '*.app' -type d | head -n 1)"
-          test -n "$app"
-          codesign --verify --deep --strict --verbose=2 "$app"
-          codesign -dv "$app" 2>&1 | grep -E 'Signature=|Identifier='
+          app_name="$(cd "$mnt" && ls -d *.app | head -n 1)"
+          test -n "$app_name"
+          ditto "$mnt/$app_name" "$stage/$app_name"
+          hdiutil detach "$mnt"
+          codesign --force --deep --sign - "$stage/$app_name"
+          codesign --verify --deep --strict --verbose=2 "$stage/$app_name"
+          codesign -dv "$stage/$app_name" 2>&1 | grep -E 'Signature=|Identifier='
+          ln -s /Applications "$stage/Applications"
+          rm -f "$dmg" "$dmg.blockmap"
+          hdiutil create -volname "${app_name%.app}" -srcfolder "$stage" -fs HFS+ -format UDZO -ov "$dmg"
+          hdiutil verify "$dmg"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-mac-arm64
-          path: |
-            release/*.dmg
-            release/*.dmg.blockmap
+          path: release/*.dmg
           if-no-files-found: error
 
   runtime:
