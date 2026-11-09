@@ -1396,7 +1396,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         accessibilityRole="button"
         accessibilityState={{ selected }}
         className={rowAppearance.className}
-        hitSlop={verticalHitSlop(32)}
+        hitSlop={verticalHitSlop(44)}
         onPress={() => {
           close();
           onSelectThread(thread);

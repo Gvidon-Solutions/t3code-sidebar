@@ -56,7 +56,7 @@ export function WorkspaceThreadLine(props: {
   return (
     <View
       className={cn(
-        "min-h-8 flex-row items-center gap-2.5 py-0.5 pr-5",
+        "min-h-[44px] flex-row items-center gap-2.5 pr-5",
         props.nested ? "pl-[48px]" : "pl-7",
       )}
     >
