@@ -251,3 +251,11 @@ test("expands the systemd home specifier in the unit executable the tools run", 
   assert.equal(unitExecutable("ExecStart=/opt/t3 serve\n", "/home/owner"), "/opt/t3");
   assert.equal(unitExecutable("", "/home/owner"), "");
 });
+
+test("the target script runs alone on a machine, so it imports only Node builtins", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./target.mjs", import.meta.url), "utf8");
+  const specifiers = [...source.matchAll(/^\s*import\s[^;]*?from\s+"([^"]+)"/gms)].map((m) => m[1]);
+  assert.ok(specifiers.length > 0);
+  assert.deepEqual(specifiers.filter((specifier) => !specifier.startsWith("node:")), []);
+});
