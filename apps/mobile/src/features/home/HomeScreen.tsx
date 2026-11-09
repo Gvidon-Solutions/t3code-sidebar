@@ -114,6 +114,8 @@ import {
 } from "../workspaces/workspaceNavigator";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { replicaConnectionFixText } from "@t3tools/client-runtime/state/mesh-machines";
 import { ThreadListFilters } from "./ThreadListFilters";
 import {
   hasUsableDraftModels,
@@ -526,10 +528,7 @@ export function HomeScreen(props: HomeScreenProps) {
   };
   const retryPendingItem = (item: MobilePendingReplicaItem) => {
     if (item.retryEnvironmentId === null) {
-      Dialog.alert(
-        "Can't retry this copy",
-        `Add an ssh route between ${item.label} and its source in Settings › Machines.`,
-      );
+      Dialog.alert("Can't retry this copy", replicaConnectionFixText({ targetLabel: item.label }));
       return;
     }
     void retryReplicaCommand({
@@ -542,7 +541,13 @@ export function HomeScreen(props: HomeScreenProps) {
     if (driver === null) {
       Dialog.alert(
         "Can't retry this copy",
-        `Add an ssh route between ${row.rep.environmentId} and ${row.rep.source ?? "its source"} in Settings › Machines.`,
+        replicaConnectionFixText({
+          targetLabel: machineDisplayOf(replicaConfig, row.rep.environmentId, row.rep.environmentId)
+            .label,
+          sourceLabel: row.rep.source
+            ? machineDisplayOf(replicaConfig, row.rep.source, row.rep.source).label
+            : null,
+        }),
       );
       return;
     }

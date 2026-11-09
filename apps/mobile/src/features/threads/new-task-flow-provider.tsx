@@ -10,11 +10,10 @@ import {
   draftMachineCanHostCopy,
   draftMachineCardSync,
   draftMachineCatalogsKnown,
-  draftMachineUsable,
+  draftMachineCandidate,
   savedDraftMachineChoice,
   hasUsableDraftModels,
   draftMachineCards,
-  draftModelUnavailableReason,
   planThreadOnMachine,
   resolveLogicalProjectKey,
   representationRow,
@@ -1038,14 +1037,15 @@ export function NewTaskFlowProvider(
         disabled: !connected || !canHostCopy,
         projectId,
         canHostCopy,
-        usable: draftMachineUsable({
+        usable: draftMachineCandidate({
+          environmentId,
           connected,
-          hasUsableModels,
-          selectedModelUsable:
-            draftModelSelection === null ||
-            draftModelUnavailableReason(serverConfig, draftModelSelection, projectId) === null,
+          projectId,
+          catalog: serverConfig,
+          selection: draftModelSelection,
           canHostCopy,
-        }),
+          primary: false,
+        }).usable,
         primary:
           meshLayout.config?.projectMounts[preferenceKey ?? ""]?.some(
             (rep) => rep.environmentId === environmentId && rep.role === "primary",

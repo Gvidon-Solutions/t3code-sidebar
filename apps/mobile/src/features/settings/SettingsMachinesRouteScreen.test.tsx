@@ -1,5 +1,6 @@
 const mocks = vi.hoisted(() => ({
   source: "studio" as string | null,
+  connectedEnvironmentId: null as string | null,
   document: {} as Record<string, { h: string; v: unknown }>,
   openURL: vi.fn(),
 }));
@@ -76,7 +77,19 @@ vi.mock("./components/SettingsSection", () => ({
 vi.mock("./MeshLinkForm", () => ({ MeshLinkForm: () => <div>Pairing code</div> }));
 vi.mock("../../state/mesh-layout", () => ({ meshLayoutAtoms: { configStatus: () => null } }));
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: null, error: null }) }));
-vi.mock("../../state/environments", () => ({ useEnvironments: () => ({ environments: [] }) }));
+vi.mock("../../state/environments", () => ({
+  useEnvironments: () => ({
+    environments:
+      mocks.connectedEnvironmentId === null
+        ? []
+        : [
+            {
+              environmentId: mocks.connectedEnvironmentId,
+              connection: { phase: "connected" },
+            },
+          ],
+  }),
+}));
 vi.mock("../workspaces/useMeshLayout", () => ({
   useMeshLayout: () => ({
     source: mocks.source,
@@ -115,7 +128,7 @@ import { SettingsMachinesRouteScreen } from "./SettingsMachinesRouteScreen";
 function config(): SidebarWorkspacesConfig {
   return {
     ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-    machines: { studio: { title: "Studio" }, cloudbox: { title: "Studio" } },
+    machines: { studio: { title: "Zulu" }, cloudbox: { title: "Alpha" } },
   };
 }
 
@@ -136,13 +149,18 @@ function renderScreen() {
 
 it("shows machine state and pairing without machine settings fields", () => {
   mocks.source = "studio";
+  mocks.connectedEnvironmentId = "studio";
   mocks.document = {};
   const screen = renderScreen();
   try {
     screen.render();
     expect(screen.container.textContent).toContain("2 machines · 2 online");
-    expect(screen.container.textContent).toContain("Studio (linux · desk:3795)");
-    expect(screen.container.textContent).toContain("Studio (darwin · laptop:3795)");
+    // A phone has no "this machine": rows sort by title, not by the layout source.
+    expect(screen.container.textContent).toContain("Alpha");
+    expect(screen.container.textContent).toContain("Zulu");
+    expect(screen.container.textContent!.indexOf("Alpha")).toBeLessThan(
+      screen.container.textContent!.indexOf("Zulu"),
+    );
     expect(screen.container.querySelector("input")).toBeNull();
     expect(screen.container.textContent).toContain("Set up the mesh with an agent");
     act(() =>
@@ -158,6 +176,7 @@ it("shows machine state and pairing without machine settings fields", () => {
 
 it("shows a failed update with a project-aware agent action", () => {
   mocks.source = "studio";
+  mocks.connectedEnvironmentId = "studio";
   mocks.openURL.mockReset();
   mocks.document = {
     "mesh.updateFailure/r7": {
@@ -169,11 +188,11 @@ it("shows a failed update with a project-aware agent action", () => {
   try {
     screen.render();
     expect(screen.container.textContent).toContain(
-      "Update to 0.1.7 failed on Studio: health check failed",
+      "Update to 0.1.7 failed on Zulu: health check failed",
     );
     const fix = [...screen.container.querySelectorAll("button")].find(
       (button) =>
-        button.getAttribute("aria-label") === "Fix the update failure on Studio with an agent",
+        button.getAttribute("aria-label") === "Fix the update failure on Zulu with an agent",
     );
     expect(fix).toBeDefined();
     act(() => fix!.click());
@@ -183,8 +202,29 @@ it("shows a failed update with a project-aware agent action", () => {
   }
 });
 
-it("disables the setup action without a mesh source", () => {
+it("enables setup through a connected machine even when the layout source is unknown", () => {
   mocks.source = null;
+  mocks.connectedEnvironmentId = "cloudbox";
+  mocks.document = {};
+  mocks.openURL.mockReset();
+  const screen = renderScreen();
+  try {
+    screen.render();
+    const setup = [...screen.container.querySelectorAll("button")].find(
+      (button) => button.getAttribute("aria-label") === "Set up the mesh with an agent",
+    );
+    expect(setup).toBeDefined();
+    expect(setup!.disabled).toBe(false);
+    act(() => setup!.click());
+    expect(mocks.openURL).toHaveBeenCalledWith(expect.stringContaining("env=cloudbox"));
+  } finally {
+    screen.dispose();
+  }
+});
+
+it("disables the setup action without any connected machine and explains it", () => {
+  mocks.source = null;
+  mocks.connectedEnvironmentId = null;
   mocks.document = {};
   const screen = renderScreen();
   try {
@@ -194,6 +234,9 @@ it("disables the setup action without a mesh source", () => {
     );
     expect(setup).toBeDefined();
     expect(setup!.disabled).toBe(true);
+    expect(screen.container.textContent).toContain(
+      "Connect this phone to a machine to set up the mesh.",
+    );
   } finally {
     screen.dispose();
   }

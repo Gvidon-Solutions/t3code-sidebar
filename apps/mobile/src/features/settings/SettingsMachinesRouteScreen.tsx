@@ -48,7 +48,8 @@ export function SettingsMachinesRouteScreen() {
     config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
     now,
   );
-  const machines = sortMeshMachinesForSettings(active, mesh.source);
+  // A phone has no local server, so no machine is "this machine": sort by title.
+  const machines = sortMeshMachinesForSettings(active, null);
   const [forgottenOpen, setForgottenOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
@@ -85,9 +86,9 @@ export function SettingsMachinesRouteScreen() {
             <Button
               label="Set up the mesh with an agent"
               tone="primary"
-              disabled={mesh.source === null}
+              disabled={agentEnvironmentId === null}
               onPress={() => {
-                if (mesh.source === null) return;
+                if (agentEnvironmentId === null) return;
                 void Linking.openURL(
                   Linking.createURL("new", {
                     queryParams: {
@@ -103,12 +104,17 @@ export function SettingsMachinesRouteScreen() {
               tone="secondary"
               onPress={() => setLinkOpen(!linkOpen)}
             />
+            {agentEnvironmentId === null ? (
+              <AppText className="text-xs text-foreground-muted">
+                Connect this phone to a machine to set up the mesh.
+              </AppText>
+            ) : null}
           </View>
           {linkOpen ? (
             <MeshLinkForm
               links={links}
               machines={machines}
-              thisMachineId={mesh.source}
+              thisMachineId={null}
               onDone={() => setLinkOpen(false)}
             />
           ) : null}
