@@ -232,6 +232,14 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   The sidebar fork sequence (`nextForkTitle`, `planForkPlacement`, `runThreadFork`) is shared in
   `client-runtime/state/threadForks.ts`; app hooks inject the fork command, shell wait, reorder
   and navigation.
+  Every place that names an environment uses `machineDisplay.environmentNameOf`: a machine the
+  mesh config lists shows its configured tag and title, and only an environment outside any mesh
+  keeps the connection's own label (usually its OS hostname). The Environments pages therefore
+  list this device's connections by tag + title, muted address, state, switch and an overflow menu
+  for routes, permissions and remove; with a mesh they drop the per-server "Linked environments"
+  sections, because peer links live in Mesh › machine detail › Diagnostics (with Forget and the
+  access each link grants). Settings › Mesh machine rows and both PR-routing lists use the same
+  resolver, so three servers that share one host name no longer look like duplicates.
   New-thread machine choice is one card per machine, derived by
   `meshLayout/draftMachineCards.ts` (primary first; single machine hides the cards). Its
   reachability comes from mesh peer state, not this client's connections, so a machine the
@@ -562,6 +570,12 @@ catalog, not a machine name or an assumed operating system.
 
 ## Lessons already paid for (do not repeat)
 
+- Name an environment from the mesh config, never from the OS hostname. A three-machine bed on one
+  host made every Environments row "gvidon"; `environmentNameOf` is the one resolver both clients
+  use, and a client outside a mesh keeps the saved host label.
+- Peer links have one home: Settings › Mesh › machine detail › Diagnostics, where the config's
+  names, the link access and Forget are together. Listing per-server link sections on Environments
+  duplicated the Mesh UI and repeated the same host name.
 - Forget must remove the machine binding and detach replica source references as well as
   reported facts, or materialization reconstructs the forgotten machine. Keep replica folders.
 - Shell readiness is a store milestone. Project visibility is not a receipt: quiet folders,
