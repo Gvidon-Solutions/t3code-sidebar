@@ -1030,6 +1030,7 @@ export type DesktopShellBridge = Pick<
 > & {
   readonly origin: string | null;
   readonly name: string | null;
+  readonly requestToken: string | null;
   readonly returnToBundled: () => void;
   readonly ui: Pick<NonNullable<DesktopBridge["ui"]>, "getInfo" | "select">;
 };

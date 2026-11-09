@@ -26,11 +26,15 @@ export async function readServerUiWebSocketTicket(): Promise<string | null> {
   if (typeof window === "undefined" || window.desktopShell === undefined) {
     return null;
   }
+  const requestToken = window.desktopShell?.requestToken;
   const response = await fetch(resolvePrimaryEnvironmentHttpUrl("/api/auth/websocket-ticket/rpc"), {
     method: "POST",
     cache: "no-store",
     credentials: "same-origin",
-    headers: { accept: "application/json" },
+    headers: {
+      accept: "application/json",
+      ...(requestToken ? { "x-t3-server-ui": requestToken } : {}),
+    },
   });
   if (!response.ok) {
     throw new Error(`Server UI WebSocket ticket request failed (HTTP ${response.status}).`);
