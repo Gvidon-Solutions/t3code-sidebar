@@ -154,6 +154,8 @@ import { useRightPanelStore } from "../rightPanelStore";
 import { readThreadShell, useProjects } from "../state/entities";
 import { environmentSummaries } from "../state/presentation";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { openCommandPalette } from "../commandPaletteBus";
+import { showFileLocateDialog } from "./files/FileLocateDialogHost";
 import { serverEnvironment } from "../state/server";
 import { shellEnvironment } from "../state/shell";
 import { assetEnvironment } from "../state/assets";
@@ -165,6 +167,7 @@ import {
 import { previewEnvironment } from "../state/preview";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
+import { filesEnvironment } from "../state/files";
 import { projectEnvironment } from "../state/projects";
 import { filesystemEnvironment } from "../state/filesystem";
 import {
@@ -552,6 +555,10 @@ function useChatMarkdownState({
     reportFailure: false,
     refresh: true,
   });
+  const locateFile = useAtomQueryRunner(filesEnvironment.locate, {
+    reportFailure: false,
+    refresh: true,
+  });
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });
@@ -798,39 +805,83 @@ function useChatMarkdownState({
     return metadata._tag === "Success" && metadata.value.entries[0] === null ? match : null;
   };
   const openFileInPanel = (fileLinkMeta: MarkdownFileLinkMeta, panelPath: string) => {
-    if (!threadRef) return;
+    if (!threadRef || environmentId === null) return;
     // Every open supersedes pending lookups, including synchronous opens.
     const isLatestLookup = claimWorkspaceBasenameLookup();
-    const openAt = (path: string) => {
-      const targetEnvironmentId = fileLinkMeta.environmentId;
+    const openAt = (
+      targetEnvironmentId: EnvironmentId | undefined,
+      path: string,
+      line?: number,
+      extra?: { readonly notSynced?: boolean; readonly rawPath?: string },
+    ) => {
       if (targetEnvironmentId !== undefined && targetEnvironmentId !== threadRef.environmentId) {
         const label =
           appAtomRegistry
             .get(environmentSummaries.identitiesAtom)
             .find((identity) => identity.environmentId === targetEnvironmentId)?.label ??
           String(targetEnvironmentId);
-        useRightPanelStore.getState().openFile(threadRef, path, fileLinkMeta.line, {
+        useRightPanelStore.getState().openFile(threadRef, path, line, {
           environmentId: targetEnvironmentId,
           workspaceRoot: "/",
           projectName: label,
+          ...(extra?.notSynced ? { notSynced: true } : {}),
+          ...(extra?.rawPath === undefined ? {} : { rawPath: extra.rawPath }),
         });
         return;
       }
-      useRightPanelStore.getState().openFile(threadRef, path, fileLinkMeta.line);
+      useRightPanelStore.getState().openFile(threadRef, path, line);
     };
-    if (
-      fileLinkMeta.workspaceLookupPath === null ||
-      !cwd ||
-      (!needsWorkspaceBasenameLookup(panelPath) &&
-        stripRepeatedWorkspacePrefix(panelPath, cwd) === null)
-    ) {
-      openAt(panelPath);
-      return;
-    }
     void (async () => {
-      const match = await findWorkspaceFileMatch(fileLinkMeta);
+      const outcome = await locateFile({
+        environmentId,
+        input: {
+          rawPath: panelPath,
+          threadId: threadRef.threadId,
+          ...(cwd === undefined ? {} : { cwd }),
+          ...(fileLinkMeta.environmentId === undefined
+            ? {}
+            : { environmentId: fileLinkMeta.environmentId }),
+        },
+      });
       if (!isLatestLookup()) return;
-      openAt(match ?? panelPath);
+      if (outcome._tag !== "Success") {
+        openAt(fileLinkMeta.environmentId, panelPath, fileLinkMeta.line);
+        return;
+      }
+      const result = outcome.value;
+      const target = result.target;
+      if (result.status === "found" && target !== undefined) {
+        openAt(target.environmentId, target.absolutePath, target.line ?? fileLinkMeta.line, {
+          rawPath: panelPath,
+          ...(target.notSynced ? { notSynced: true } : {}),
+        });
+        if (target.environmentId !== threadRef.environmentId) {
+          const label =
+            appAtomRegistry
+              .get(environmentSummaries.identitiesAtom)
+              .find((identity) => identity.environmentId === target.environmentId)?.label ??
+            String(target.environmentId);
+          toastManager.add({
+            type: "info",
+            title: `Opened on ${label} (not on this machine)`,
+          });
+        }
+        return;
+      }
+      showFileLocateDialog(
+        panelPath,
+        result,
+        (resolved) =>
+          openAt(
+            resolved.environmentId,
+            resolved.absolutePath,
+            resolved.line ?? fileLinkMeta.line,
+            {
+              rawPath: panelPath,
+            },
+          ),
+        (term) => openCommandPalette({ query: term }),
+      );
     })();
   };
   const fileLinkChip = (

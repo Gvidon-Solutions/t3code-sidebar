@@ -205,8 +205,21 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   `PendingDraftOutbox` reconciles registration with fixed server command/thread/message IDs.
   Both `PendingMeshDraftCoordinator`s build their machine map with `pendingDraftMachines` and run
   `launchPendingDraft`; each app supplies only its byte-upload adapter and command runner.
-- **Files anywhere.** `apps/server/src/files/` (`files.read/list`, forwarded via `callRouted`;
-  error reasons travel as `[files:<reason>]`).
+- **Files anywhere.** `apps/server/src/files/` (`files.read/list/stat/readBytes`, forwarded via
+  `callRouted`; error reasons travel as `[files:<reason>]`). **Opening any path** goes through
+  `files.locate` (`FileLocator.ts`), which normalises the raw link, then tries the explicit
+  machine, the exact path, the representation map, other machines, the thread cwd, the project
+  root, ancestors, a suffix/basename lookup, and finally the primary through the representation
+  map. `locateContextFor` supplies the thread's cwd, project and touched files. Ranking prefers
+  files this thread touched, the worktree, recent mtime and a short path; several top-ranked
+  candidates ask, and a picker is never bypassed across machines or sibling worktrees. The
+  suffix lookup runs `git ls-files` (or a pruned bounded walk) inside the worktree, not the
+  fuzzy index. A file the replica ignores is read on the primary and marked "not synced"; text
+  uses forwarded `files.read`, binaries mint a `peer-file` asset that `/api/assets` proxies as
+  ranged requests over the peer link. `ui_open` and `t3ctl open-file` call the same resolver and
+  return its outcome; `t3_files_locate`/`t3ctl locate` expose it to agents. Web
+  `FileLocateDialogHost` and mobile `FileLocateSheet` render the choose and not-found states.
+  A removed worktree falls back to the project root and reports `worktreeRemoved` once.
 - **Context injection.** Every turn gets a short machine/project/representation note (budget in
   `apps/server/src/provider/agentContextBudget.json`; update it to the measured size when you add
   tools or text, and justify growth).

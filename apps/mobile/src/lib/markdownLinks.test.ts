@@ -14,6 +14,17 @@ describe("resolveMarkdownLinkPresentation", () => {
     });
   });
 
+  it("C3 · opens a t3-file link in chat on the machine it names", () => {
+    expect(
+      resolveMarkdownLinkPresentation("t3-file://cloudbox/%2Fsrv%2Fapp%2Fsrc%2Flib%2Fx.ts%3A12"),
+    ).toMatchObject({
+      kind: "file",
+      environmentId: "cloudbox",
+      path: "/srv/app/src/lib/x.ts",
+      line: 12,
+    });
+  });
+
   it("treats protocol-relative media as an external URL, not a filesystem path", () => {
     expect(resolveMarkdownLinkPresentation("//cdn.example.com/clip.mp4?sig=a%2fb#t=2")).toEqual({
       kind: "external",

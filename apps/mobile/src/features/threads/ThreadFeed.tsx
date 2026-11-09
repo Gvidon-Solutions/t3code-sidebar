@@ -247,12 +247,8 @@ import { ThreadMcpApp } from "./McpAppWebView";
 import { assetEnvironment, useAssetUrl, useRefreshAssetUrl } from "../../state/assets";
 import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
 import { readEnvironmentScope, usePreparedConnection } from "../../state/session";
+import { filesEnvironment } from "../../state/files";
 import { projectEnvironment } from "../../state/projects";
-import {
-  needsWorkspaceBasenameLookup,
-  pickWorkspaceBasenameMatch,
-  WORKSPACE_BASENAME_LOOKUP_LIMIT,
-} from "@t3tools/client-runtime/workspace-basename-lookup";
 import {
   resolveThreadLink,
   useLiveThreadLinkLabels,
@@ -269,12 +265,8 @@ import { environmentThreadShells, threadEnvironment } from "../../state/threads"
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ThreadWorkflowOpening, useWorkflowOpening } from "./thread-workflow-opening";
 import { useV2ItemSupport } from "../../state/v2-item-support";
-import {
-  fileRoutePathSegments,
-  resolveFileLinkPath,
-  resolveWorkspaceFilePath,
-  resolveWorkspaceRelativeFilePath,
-} from "../files/filePath";
+import { showFileLocateSheet } from "../files/FileLocateSheet";
+import { fileRoutePathSegments, resolveFileLinkPath } from "../files/filePath";
 import { useForkThread } from "../workspaces/useForkThread";
 import { resolveUserMessageIntentBadge } from "./userMessageIntentBadge";
 import { fileChipClipboardPath, fileChipMenu, resolveFileChipTarget } from "./fileChipMenu";
@@ -2897,70 +2889,89 @@ export const ThreadFeed = memo(function ThreadFeed({
 
     const presentation = resolveMarkdownLinkPresentation(href);
     if (presentation.kind === "file") {
-      const path = resolveFileLinkPath(props.workspaceRoot, presentation.path);
-      if (path === null) return;
-      const relativePath = resolveWorkspaceRelativeFilePath(props.workspaceRoot, path);
-      const openAt = (target: string) => {
+      const openResolved = (target: {
+        readonly environmentId: EnvironmentId;
+        readonly absolutePath: string;
+        readonly line?: number;
+      }) => {
         if (request.signal.aborted) return;
         void Haptics.selectionAsync();
+        const sameMachine = String(target.environmentId) === String(props.environmentId);
         navigation.navigate("ThreadFile", {
-          environmentId: String(props.environmentId),
-          threadId: String(props.threadId),
-          path: fileRoutePathSegments(target),
-          ...(presentation.line ? { line: String(presentation.line) } : {}),
+          environmentId: String(target.environmentId),
+          ...(sameMachine
+            ? { threadId: String(props.threadId) }
+            : {
+                sourceEnvironmentId: String(props.environmentId),
+                cwd: "/",
+                projectName: String(target.environmentId),
+              }),
+          path: fileRoutePathSegments(target.absolutePath),
+          ...(target.line === undefined ? {} : { line: String(target.line) }),
         });
       };
-      if (
-        props.workspaceRoot &&
-        relativePath &&
-        !/[\\/]$/.test(presentation.path) &&
-        needsWorkspaceBasenameLookup(relativePath) &&
-        readEnvironmentScope(props.environmentId, AuthFilesystemReadScope)
-      ) {
-        const originalPath = resolveWorkspaceFilePath(props.workspaceRoot, relativePath);
-        void executeAtomQuery(
-          appAtomRegistry,
-          projectEnvironment.searchEntries({
-            environmentId: props.environmentId,
-            input: {
-              cwd: props.workspaceRoot,
-              query: relativePath,
-              kind: "file",
-              limit: WORKSPACE_BASENAME_LOOKUP_LIMIT,
-            },
-          }),
-          { signal: request.signal, reportFailure: false, reportDefect: false },
-        ).then(
-          (result) => {
-            const match =
-              result._tag === "Success"
-                ? pickWorkspaceBasenameMatch(relativePath, result.value.entries)
-                : null;
-            if (!match || match === relativePath) {
-              openAt(relativePath);
-              return;
-            }
-            if (request.signal.aborted) return;
-            void executeAtomQuery(
-              appAtomRegistry,
-              projectEnvironment.fileMetadata({
-                environmentId: props.environmentId,
-                input: { path: originalPath },
-              }),
-              { signal: request.signal, reportFailure: false, reportDefect: false },
-            ).then(
-              (metadata) =>
-                openAt(
-                  metadata._tag === "Success" && metadata.value?.kind !== "directory"
-                    ? match
-                    : relativePath,
-                ),
-              () => openAt(relativePath),
-            );
+      void executeAtomQuery(
+        appAtomRegistry,
+        filesEnvironment.locate({
+          environmentId: props.environmentId,
+          input: {
+            rawPath: presentation.path,
+            threadId: props.threadId,
+            ...(props.workspaceRoot ? { cwd: props.workspaceRoot } : {}),
+            ...(presentation.environmentId === undefined
+              ? {}
+              : { environmentId: presentation.environmentId as EnvironmentId }),
           },
-          () => openAt(relativePath),
-        );
-      } else openAt(relativePath ?? path);
+        }),
+        { signal: request.signal, reportFailure: false, reportDefect: false },
+      ).then(
+        (outcome) => {
+          if (request.signal.aborted) return;
+          if (outcome._tag !== "Success") {
+            const path = resolveFileLinkPath(props.workspaceRoot, presentation.path);
+            if (path !== null) {
+              openResolved({
+                environmentId: props.environmentId,
+                absolutePath: path,
+                ...(presentation.line === undefined ? {} : { line: presentation.line }),
+              });
+            }
+            return;
+          }
+          const result = outcome.value;
+          const target = result.target;
+          if (result.status === "found" && target !== undefined) {
+            openResolved({
+              environmentId: target.environmentId,
+              absolutePath: target.absolutePath,
+              ...(target.line === undefined ? {} : { line: target.line }),
+            });
+            return;
+          }
+          showFileLocateSheet({
+            rawPath: presentation.path,
+            result,
+            openTarget: openResolved,
+            search: () => {
+              navigation.navigate("ThreadFiles", {
+                environmentId: String(props.environmentId),
+                threadId: String(props.threadId),
+                ...(props.workspaceRoot ? { cwd: props.workspaceRoot } : {}),
+              });
+            },
+          });
+        },
+        () => {
+          const path = resolveFileLinkPath(props.workspaceRoot, presentation.path);
+          if (path !== null && !request.signal.aborted) {
+            openResolved({
+              environmentId: props.environmentId,
+              absolutePath: path,
+              ...(presentation.line === undefined ? {} : { line: presentation.line }),
+            });
+          }
+        },
+      );
       return;
     }
 

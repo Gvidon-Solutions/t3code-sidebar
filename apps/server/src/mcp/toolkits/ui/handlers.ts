@@ -2,6 +2,9 @@ import { OrchestratorMcpFailure, ThreadId } from "@t3tools/contracts";
 import { discoverThreadMachines, probeThread } from "../../../mesh/MeshThreadAccess.ts";
 import * as Effect from "effect/Effect";
 
+import * as ServerEnvironment from "../../../environment/ServerEnvironment.ts";
+import { FileLocator } from "../../../files/FileLocator.ts";
+import { locateContextFor } from "../../../files/locateContext.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as VoiceSessionService from "../../../orchestration-v2/VoiceSessionService.ts";
 import * as UiRequests from "../../../uiRequests/UiRequests.ts";
@@ -68,6 +71,35 @@ export const layer = McpToolAccess.toLayer(UiToolkit, {
             }
             yield* Effect.logDebug("UI thread location probe failed", found.failure);
           }
+      }
+      if (resolved.kind === "file") {
+        const environment = yield* ServerEnvironment.ServerEnvironment;
+        const descriptor = yield* environment.getDescriptor;
+        const locator = yield* FileLocator;
+        const locate = yield* locator.locate(
+          {
+            rawPath: resolved.path,
+            threadId: thread.threadId,
+            ...(resolved.environmentId === undefined
+              ? {}
+              : { environmentId: resolved.environmentId }),
+          },
+          yield* locateContextFor({
+            environmentId: descriptor.environmentId,
+            threadId: thread.threadId,
+          }),
+        );
+        if (locate.status === "notFound" || locate.target === undefined) {
+          return { clients: 0, locate };
+        }
+        resolved = {
+          kind: "file",
+          path: locate.target.absolutePath,
+          environmentId: locate.target.environmentId,
+          ...(locate.target.line === undefined ? {} : { line: locate.target.line }),
+        };
+        const clients = yield* uiRequests.open({ threadId: thread.threadId, target: resolved });
+        return { clients, locate };
       }
       const clients = yield* uiRequests.open({ threadId: thread.threadId, target: resolved });
       return { clients };

@@ -1,4 +1,6 @@
+import { useAtomValue } from "@effect/atom-react";
 import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-actions";
+import { pickFilesEnvironment } from "@t3tools/client-runtime/files";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { resolveFilesystemReadAccess } from "@t3tools/client-runtime/state/filesystem";
 import { environmentSession } from "../../state/session";
@@ -40,7 +42,8 @@ import { type MediaActionsSource } from "../../lib/mediaActionsSource";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useEnvironmentQuery } from "../../state/query";
-import { useEnvironmentPresentation } from "../../state/presentation";
+import { connectedEnvironmentIdsAtom, useEnvironmentPresentation } from "../../state/presentation";
+import { filesEnvironment } from "../../state/files";
 import { projectEnvironment } from "../../state/projects";
 import type { AssetUrlFailureReason } from "../../state/asset-url-state";
 import {
@@ -702,6 +705,14 @@ export function ThreadFileView(
   const { canReadFiles } = fileAccess;
   const targetPath =
     cwd !== null && relativePath !== null ? resolveWorkspaceFilePath(cwd, relativePath) : null;
+  const connectedIds = useAtomValue(connectedEnvironmentIdsAtom);
+  const readThroughEnvironmentId =
+    environmentId !== null ? pickFilesEnvironment(environmentId, connectedIds) : null;
+  const remoteRead =
+    !canReadFiles &&
+    environmentId !== null &&
+    readThroughEnvironmentId !== null &&
+    targetPath !== null;
   const metadata = useEnvironmentQuery(
     canReadFiles && environmentId !== null && targetPath !== null
       ? projectEnvironment.fileMetadata({ environmentId, input: { path: targetPath } })
@@ -755,6 +766,9 @@ export function ThreadFileView(
     relativePath: assetPreviewPath,
     threadId,
     draftCwd: threadId === null ? cwd : null,
+    ...(remoteRead
+      ? { peerEnvironmentId: environmentId, callEnvironmentId: readThroughEnvironmentId }
+      : {}),
   });
   const assetPreviewUri = assetPreview._tag === "Success" ? assetPreview.url : null;
   const mediaSource: MediaActionsSource | undefined =
@@ -816,7 +830,24 @@ export function ThreadFileView(
         })
       : null,
   );
-  const fileData = fileQuery.data as ProjectReadFileResult | null;
+  const remoteFileQuery = useEnvironmentQuery(
+    remoteRead && readThroughEnvironmentId !== null && environmentId !== null && targetPath !== null
+      ? filesEnvironment.read({
+          environmentId: readThroughEnvironmentId,
+          input: { environmentId, absolutePath: targetPath },
+        })
+      : null,
+  );
+  const remoteProjectResult: ProjectReadFileResult | null =
+    remoteFileQuery.data === null
+      ? null
+      : {
+          relativePath: relativePath ?? targetPath ?? "",
+          contents: remoteFileQuery.data.contents,
+          byteLength: remoteFileQuery.data.byteLength,
+          truncated: remoteFileQuery.data.truncated,
+        };
+  const fileData = (fileQuery.data as ProjectReadFileResult | null) ?? remoteProjectResult;
   useWorkspaceFileRefresh({
     enabled: canReadFiles && cwd !== null && relativePath !== null && needsFileContents,
     poll:
@@ -1133,7 +1164,11 @@ export function ThreadFileView(
           mediaSource={mediaSource}
           resolveVideoUri={assetPreview.refresh}
           fileContents={fileData?.contents ?? null}
-          fileError={fileQuery.error}
+          fileError={
+            fileQuery.error === null && remoteFileQuery.error === null
+              ? null
+              : "This file could not be read. It may have moved or been deleted."
+          }
           initialLine={targetLine}
           relativePath={relativePath}
           threadId={threadId}

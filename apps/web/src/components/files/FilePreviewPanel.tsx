@@ -135,6 +135,10 @@ interface FilePreviewPanelProps {
   cwd: string;
   projectName: string;
   relativePath: string | null;
+  /** Read from a primary because the thread's replica does not sync it. */
+  notSynced?: boolean;
+  /** The path as written, when it differs from the resolved one. */
+  rawPath?: string;
   attachment?: ChatFileAttachment;
   threadRef: ScopedThreadRef;
   composerDraftTarget: ScopedThreadRef | DraftId;
@@ -990,6 +994,8 @@ export default function FilePreviewPanel({
   cwd,
   projectName,
   relativePath: requestedPath,
+  notSynced,
+  rawPath,
   attachment,
   threadRef,
   composerDraftTarget,
@@ -1325,6 +1331,17 @@ export default function FilePreviewPanel({
               <FolderTree className="size-3.5" />
             </FileSurfaceAction>
           ) : null}
+        </div>
+      ) : null}
+      {notSynced ? (
+        <div className="shrink-0 border-b px-3 py-1.5 text-2xs text-muted-foreground">
+          Not synced · from {projectName || "the main copy"}
+        </div>
+      ) : null}
+      {rawPath !== undefined && relativePath !== null && rawPath !== relativePath ? (
+        <div className="shrink-0 border-b px-3 py-1 text-2xs text-muted-foreground">
+          <code className="font-mono">{rawPath}</code> →{" "}
+          <code className="font-mono">{relativePath}</code>
         </div>
       ) : null}
       {relativePath && !attachment && !isHostFile && !canWriteFiles && !fileAccess.isPending ? (

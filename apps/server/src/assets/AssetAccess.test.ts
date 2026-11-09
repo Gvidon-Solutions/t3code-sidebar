@@ -7,6 +7,7 @@ import {
   AssetAccessError,
   AssetCreateUrlInput,
   AssetPreviewTypeValidationError,
+  EnvironmentId,
   SOURCE_CONTROL_MEDIA_ASSET,
   ThreadId,
   TurnItemId,
@@ -207,6 +208,27 @@ describe("AssetAccess", () => {
         resource: { ...resource, itemId: oversizedScreenshotItem.id },
       }).pipe(Effect.flip);
       expect(oversized._tag).toBe("AssetWorkspaceAssetNotFoundError");
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect("issues a peer-file claim that names the machine and path to proxy", () =>
+    Effect.gen(function* () {
+      const result = yield* issueAssetUrl({
+        resource: {
+          _tag: "peer-file",
+          environmentId: EnvironmentId.make("cloudbox"),
+          path: "/srv/app/results/report.pdf",
+        },
+      });
+      const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const separator = suffix.indexOf("/");
+      expect(yield* resolveAsset(suffix.slice(0, separator), suffix.slice(separator + 1))).toEqual({
+        kind: "remote-file",
+        environmentId: "cloudbox",
+        filePath: "/srv/app/results/report.pdf",
+        fileName: "report.pdf",
+        mimeType: "application/pdf",
+      });
     }).pipe(Effect.provide(layerTest)),
   );
 

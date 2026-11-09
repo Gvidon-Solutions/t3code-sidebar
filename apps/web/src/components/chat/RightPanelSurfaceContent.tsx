@@ -223,6 +223,10 @@ export function RightPanelSurfaceContent(props: {
             availableEditors={files.availableEditors}
             openInShortcutEnabled={visible}
             relativePath={surface.kind === "file" ? surface.relativePath : null}
+            {...(externalSurface?.notSynced ? { notSynced: true } : {})}
+            {...(externalSurface?.rawPath === undefined
+              ? {}
+              : { rawPath: externalSurface.rawPath })}
             {...(attachment ? { attachment } : {})}
             revealLine={surface.kind === "file" ? (surface.revealLine ?? null) : null}
             revealRequestId={surface.kind === "file" ? surface.revealRequestId : 0}

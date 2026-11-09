@@ -1,6 +1,7 @@
 import { installSelfHostedUpdateStatus } from "./features/updates/self-hosted-updates";
 import { MeshLayoutProvider } from "./features/workspaces/useMeshLayout";
 import { PendingMeshDraftCoordinator } from "./features/workspaces/PendingMeshDraftCoordinator";
+import { FileLocateSheetHost } from "./features/files/FileLocateSheet";
 import { MoveThreadSheet } from "./features/workspaces/MoveThreadSheet";
 import { ForkThreadSheet } from "./features/workspaces/ForkThreadSheet";
 import { installPermissionUpdateNotice } from "./features/connection/permissionUpdateNotice";
@@ -256,6 +257,7 @@ function AppContent() {
                   onStateChange={handleNavigationStateChange}
                 />
                 <Dialog.Host />
+                <FileLocateSheetHost />
                 <ThreadArrangementHost />
                 <MoveThreadSheet />
                 <ForkThreadSheet />

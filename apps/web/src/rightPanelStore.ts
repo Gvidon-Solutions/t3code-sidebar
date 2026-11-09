@@ -66,6 +66,10 @@ export type RightPanelSurface =
       environmentId?: string;
       workspaceRoot?: string;
       projectName?: string;
+      /** The file was read from a primary because the thread's replica does not sync it. */
+      notSynced?: boolean;
+      /** The path as the person wrote it, kept for the remap caption. */
+      rawPath?: string;
     }
   | {
       id: `pull-request:${string}`;
@@ -141,6 +145,8 @@ interface RightPanelStoreState {
       readonly environmentId: string;
       readonly workspaceRoot: string;
       readonly projectName: string;
+      readonly notSynced?: boolean;
+      readonly rawPath?: string;
     },
   ) => void;
   /** Moves in place; "" opens the root explorer. folderTrail keeps the return path; keepSource opens beside the source. */
@@ -248,6 +254,8 @@ const fileSurface = (
     readonly environmentId: string;
     readonly workspaceRoot: string;
     readonly projectName: string;
+    readonly notSynced?: boolean;
+    readonly rawPath?: string;
   },
 ): RightPanelSurface => ({
   id: `file:${external === undefined ? "" : `${external.environmentId}:`}${relativePath}`,
