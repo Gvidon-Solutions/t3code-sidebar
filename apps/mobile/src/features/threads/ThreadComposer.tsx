@@ -222,6 +222,8 @@ export interface ThreadComposerProps {
   readonly fullScreenTop?: number | null;
   readonly connectionState: RemoteClientConnectionState;
   readonly environmentLabel: string | null;
+  /** The centred pane already says the conversation's machine is offline. */
+  readonly offlineConversation: boolean;
   readonly selectedThread: EnvironmentThreadShell;
   readonly reportedModelSelection?: ModelSelection | null;
   readonly hasCompactableConversation: boolean;
@@ -630,7 +632,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     />
   ) : null;
   const isSubmissionLocked =
-    props.interactionLocked === true || queuedEdit?.saving === true || voiceInput.blocksSubmission;
+    props.interactionLocked === true ||
+    props.offlineConversation ||
+    queuedEdit?.saving === true ||
+    voiceInput.blocksSubmission;
   const voicePresentation = resolveVoiceComposerPresentation(
     voiceInput.state,
     voiceInput.elapsedSeconds,

@@ -22,6 +22,7 @@ import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 import {
   ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
   environmentUnavailableBannerStatus,
+  showsEnvironmentUnavailableBanner,
 } from "../ChatView.logic";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
@@ -47,6 +48,8 @@ interface SystemComposerBannersInput {
   readonly activeEnvironmentUnavailable: boolean;
   readonly activeEnvironmentUnavailableState: EnvironmentUnavailableState | null;
   readonly hasCachedConversation: boolean;
+  /** The centred offline conversation pane is already naming the machine. */
+  readonly offlineConversationEmpty: boolean;
   readonly activeThreadEnvironmentId: EnvironmentId | null;
   readonly serverConfig: EnvironmentPresentation["serverConfig"] | null;
   readonly hasMultipleRegisteredEnvironments: boolean;
@@ -64,6 +67,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
     activeEnvironmentUnavailable,
     activeEnvironmentUnavailableState,
     hasCachedConversation,
+    offlineConversationEmpty,
     activeThreadEnvironmentId,
     serverConfig,
     hasMultipleRegisteredEnvironments,
@@ -181,13 +185,19 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
       unavailableConnection !== null &&
       (unavailableConnection.phase === "connecting" ||
         unavailableConnection.phase === "reconnecting");
-    const suppressUnavailableBanner =
-      environmentReconnecting && (updateRunning || !reconnectWarningGraceElapsed);
-    const showUnavailableBanner =
+    const showUnavailableBanner = showsEnvironmentUnavailableBanner({
+      hasUnavailableEnvironment:
+        activeEnvironmentUnavailableState !== null && unavailableConnection !== null,
+      reconnecting: environmentReconnecting,
+      reconnectWindowElapsed: reconnectWarningGraceElapsed,
+      serverUpdateRunning: updateRunning,
+      offlineConversationEmpty,
+    });
+    if (
+      showUnavailableBanner &&
       activeEnvironmentUnavailableState !== null &&
-      unavailableConnection !== null &&
-      !suppressUnavailableBanner;
-    if (showUnavailableBanner) {
+      unavailableConnection !== null
+    ) {
       items.push({
         id: `environment-unavailable:${activeEnvironmentUnavailableState.environmentId}`,
         variant: unavailableConnection.phase === "error" ? "error" : "warning",

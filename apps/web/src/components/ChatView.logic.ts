@@ -1644,6 +1644,21 @@ export function showsOfflineConversationEmpty(input: {
   );
 }
 
+/**
+ * Whether the composer names an unavailable machine. The centred offline conversation pane says it
+ * once, so the banner yields to it; other banners are independent.
+ */
+export function showsEnvironmentUnavailableBanner(input: {
+  readonly hasUnavailableEnvironment: boolean;
+  readonly reconnecting: boolean;
+  readonly reconnectWindowElapsed: boolean;
+  readonly serverUpdateRunning: boolean;
+  readonly offlineConversationEmpty: boolean;
+}): boolean {
+  if (!input.hasUnavailableEnvironment || input.offlineConversationEmpty) return false;
+  return !(input.reconnecting && (input.serverUpdateRunning || !input.reconnectWindowElapsed));
+}
+
 /** The composer banner's words: a still-retrying machine reads offline once the window passes. */
 export function environmentUnavailableBannerStatus(input: {
   readonly label: string | null | undefined;

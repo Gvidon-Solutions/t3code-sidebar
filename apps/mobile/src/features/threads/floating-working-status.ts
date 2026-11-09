@@ -54,8 +54,11 @@ export function connectionFloatingStatus(input: {
   readonly hasCachedConversation?: boolean;
   /** The reconnect window passed, so a still-retrying connection is offline. */
   readonly reconnectWindowElapsed?: boolean;
+  /** The centred conversation pane already names the offline machine. */
+  readonly offlinePaneVisible?: boolean;
   readonly onReconnect: () => void;
 }): FloatingWorkingStatus | null {
+  if (input.offlinePaneVisible === true) return null;
   const environmentLabel = input.environmentLabel ?? "Machine";
   const unavailable = (label: string): FloatingWorkingStatus => ({
     kind: "connection",
