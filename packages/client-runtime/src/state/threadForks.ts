@@ -82,6 +82,30 @@ export function planForkPlacement(input: {
   });
 }
 
+/**
+ * The machine a fork dialog starts on: the first other machine whose catalog can
+ * run a model, then any connected other machine so its card can explain why,
+ * then the source itself.
+ */
+export function defaultForkTarget(input: {
+  readonly sourceEnvironmentId: string;
+  readonly candidates: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly connected: boolean;
+    readonly hasModels: boolean;
+  }>;
+}): string {
+  const others = input.candidates.filter(
+    (candidate) => candidate.environmentId !== input.sourceEnvironmentId,
+  );
+  return (
+    others.find((candidate) => candidate.connected && candidate.hasModels)?.environmentId ??
+    others.find((candidate) => candidate.connected)?.environmentId ??
+    others[0]?.environmentId ??
+    input.sourceEnvironmentId
+  );
+}
+
 /** A thread reference without pulling the app-specific scoped-ref helper into this module. */
 export interface ThreadForkTarget {
   readonly environmentId: EnvironmentId;

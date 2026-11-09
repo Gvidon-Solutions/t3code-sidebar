@@ -4,6 +4,7 @@ import {
   draftMachineCardState,
   draftMachineCards,
   draftMachineCardSync,
+  nextSelectableMachineCard,
   retainedCatalogRequests,
   shouldRefreshDraftMachineCatalogs,
 } from "./draftMachineCards.ts";
@@ -305,4 +306,68 @@ it("polls catalogs only for unconnected machines and keeps a bounded key set", (
   expect(
     retainedCatalogRequests(["studio:cloudbox", "studio:old"], new Set(["studio:cloudbox"])),
   ).toEqual(["studio:cloudbox"]);
+});
+
+describe("draftMachineCardState host and copy wording", () => {
+  const base = {
+    label: "cloudbox",
+    connected: true,
+    reachable: true,
+    hasUsableModels: true,
+  };
+
+  it("does not talk about copies when the draft has no project", () => {
+    expect(draftMachineCardState({ ...base, hasProject: false, draftHasProject: false })).toEqual({
+      status: "available",
+      text: "Available",
+      selectable: true,
+      guidance: null,
+    });
+    expect(
+      draftMachineCardState({
+        ...base,
+        hasProject: false,
+        draftHasProject: false,
+        canHostCopy: false,
+      }),
+    ).toEqual({
+      status: "available",
+      text: "Available",
+      selectable: true,
+      guidance: null,
+    });
+  });
+
+  it("only refuses a copy when a project needs one and the server is known unable", () => {
+    expect(draftMachineCardState({ ...base, hasProject: false, canHostCopy: false })).toEqual({
+      status: "cannot-host",
+      text: "Can't set up a copy on cloudbox",
+      selectable: false,
+      guidance: null,
+    });
+    expect(draftMachineCardState({ ...base, hasProject: true, canHostCopy: true }).status).toBe(
+      "synced",
+    );
+  });
+});
+
+describe("nextSelectableMachineCard", () => {
+  const cards = [
+    { environmentId: "studio", selectable: true },
+    { environmentId: "cloudbox", selectable: false },
+    { environmentId: "laptop", selectable: true },
+  ];
+
+  it("skips disabled cards in both directions and wraps", () => {
+    expect(nextSelectableMachineCard(cards, "studio", 1)).toBe("laptop");
+    expect(nextSelectableMachineCard(cards, "laptop", 1)).toBe("studio");
+    expect(nextSelectableMachineCard(cards, "laptop", -1)).toBe("studio");
+  });
+
+  it("returns null when nothing can be picked", () => {
+    expect(
+      nextSelectableMachineCard([{ environmentId: "studio", selectable: false }], "studio", 1),
+    ).toBeNull();
+    expect(nextSelectableMachineCard([], null, 1)).toBeNull();
+  });
 });

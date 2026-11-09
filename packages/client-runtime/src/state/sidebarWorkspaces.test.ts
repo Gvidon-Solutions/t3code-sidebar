@@ -5,6 +5,7 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  IMPLICIT_WORKSPACE,
   WORKSPACE_COLORS,
   addWorkspace,
   deleteWorkspace,
@@ -18,6 +19,7 @@ import {
   setProjectFoldMode,
   sortWorkspaceProjects,
   toggleProjectWorkspace,
+  withImplicitWorkspace,
   updateWorkspace,
 } from "./sidebarWorkspaces.ts";
 
@@ -196,5 +198,28 @@ describe("moving projects into quiet projects by hand", () => {
     expect(projectFoldModeOf(auto, "home", "a")).toBe("auto");
     expect(auto.workspaceFold).toEqual({ work: { a: "active" } });
     expect(deleteWorkspace(both, "work").workspaceFold).toEqual({ home: { a: "quiet" } });
+  });
+});
+
+describe("withImplicitWorkspace", () => {
+  it("gives a config with no workspaces one Personal workspace for every project", () => {
+    const config = withImplicitWorkspace(DEFAULT_SIDEBAR_WORKSPACES_CONFIG);
+    expect(config.workspaces).toEqual([IMPLICIT_WORKSPACE]);
+    expect(config.defaultWorkspace).toBe(IMPLICIT_WORKSPACE.id);
+    expect(
+      resolveProjectWorkspaceIds(
+        { projectKey: "app", workspaceRoots: ["/app"], isScratch: false },
+        config,
+      ),
+    ).toEqual([IMPLICIT_WORKSPACE.id]);
+  });
+
+  it("leaves a configured workspace list alone", () => {
+    const configured: SidebarWorkspacesConfig = {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      workspaces: [{ id: "work", name: "Work" }],
+      defaultWorkspace: "work",
+    };
+    expect(withImplicitWorkspace(configured)).toBe(configured);
   });
 });
