@@ -144,4 +144,91 @@ describe("Desktop connected UI source", () => {
         );
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
+  it.effect("keeps the server UI credential in memory and downgrades a rejected one", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const stateDir = yield* fs.makeTempDirectoryScoped();
+      const raw = yield* Ref.make(
+        JSON.stringify({
+          schemaVersion: 1,
+          targets: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionTarget",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+          })),
+          profiles: [
+            {
+              _tag: "BearerConnectionProfile",
+              connectionId: studio.environmentId,
+              environmentId: studio.environmentId,
+              label: studio.environmentId,
+              httpBaseUrl: studio.httpBaseUrl,
+              wsBaseUrl: "wss://studio.example",
+            },
+            {
+              _tag: "BearerConnectionProfile",
+              connectionId: cloudbox.environmentId,
+              environmentId: cloudbox.environmentId,
+              label: cloudbox.environmentId,
+              httpBaseUrl: cloudbox.httpBaseUrl,
+              wsBaseUrl: "wss://cloudbox.example",
+            },
+          ],
+          credentials: [],
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        }),
+      );
+      const program = Effect.gen(function* () {
+        const ui = yield* make;
+        expect(yield* ui.select({ ...studio, authorization: "token-a" })).toBe(true);
+        const origin = new URL(studio.httpBaseUrl + "/");
+        expect(yield* ui.serverAuthorization(origin)).toBe("token-a");
+        const persisted = yield* fs.readFileString(stateDir + "/ui-source.json");
+        expect(persisted).not.toContain("token-a");
+
+        yield* ui.noteAuthorizationRejected(origin, "token-a");
+        expect(yield* ui.serverAuthorization(origin)).toBeNull();
+        expect((yield* ui.getInfo).reason).toContain("authentication");
+
+        expect(yield* ui.select({ ...studio, authorization: "token-a" })).toBe(true);
+        expect((yield* ui.selection)?.httpBaseUrl).toBeNull();
+
+        expect(yield* ui.select({ ...studio, authorization: "token-b" })).toBe(true);
+        expect((yield* ui.selection)?.httpBaseUrl).toBe(studio.httpBaseUrl);
+        expect(yield* ui.serverAuthorization(origin)).toBe("token-b");
+
+        expect(yield* ui.select(studio)).toBe(false);
+        expect(yield* ui.serverAuthorization(origin)).toBe("token-b");
+
+        // A reduced server UI switch carries no credential; hop through the trusted client.
+        expect(
+          yield* ui.select({ ...cloudbox, serverVersion: "3" }, { trustedClient: false }),
+        ).toBe(true);
+        expect((yield* ui.selection)?.httpBaseUrl).toBeNull();
+        expect(
+          yield* ui.select({ ...cloudbox, serverVersion: "3", authorization: "cloudbox-token" }),
+        ).toBe(true);
+        expect((yield* ui.selection)?.httpBaseUrl).toBe(cloudbox.httpBaseUrl);
+      });
+      yield* program.pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          stateDir,
+          appVersion: "1",
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(
+          Catalog.DesktopConnectionCatalogStore,
+          Catalog.DesktopConnectionCatalogStore.of({
+            get: Ref.get(raw).pipe(Effect.asSome),
+            set: () => Effect.succeed(true),
+          }),
+        ),
+        Effect.provideService(Exposure.DesktopServerExposure, {
+          backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+        } as Exposure.DesktopServerExposure["Service"]),
+      );
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
 });

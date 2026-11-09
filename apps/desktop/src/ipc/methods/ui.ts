@@ -4,6 +4,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { DesktopUi, DesktopUiError } from "../../app/DesktopUi.ts";
 import { ElectronWindow } from "../../electron/ElectronWindow.ts";
+import { isBundledUiUrl } from "../rendererTrust.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
 import * as Channels from "../channels.ts";
 
@@ -30,7 +31,12 @@ export const select = DesktopIpc.makeIpcMethod({
   result: Schema.Boolean,
   handler: Effect.fn("desktop.ipc.ui.select")(function* (selection, event) {
     yield* authorizeUiSender(event);
-    return yield* (yield* DesktopUi).select(selection);
+    // Only the trusted bundled client may hand the shell a credential; the reduced
+    // server UI keeps whatever authorization the shell already holds for its origin.
+    const trusted = event?.senderFrame?.url !== undefined && isBundledUiUrl(event.senderFrame.url);
+    const { authorization, ...rest } = selection;
+    const input = trusted && authorization !== undefined ? selection : rest;
+    return yield* (yield* DesktopUi).select(input, { trustedClient: trusted });
   }),
 });
 export const getInfo = DesktopIpc.makeIpcMethod({

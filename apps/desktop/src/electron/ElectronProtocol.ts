@@ -58,6 +58,11 @@ export class ElectronProtocolUnregistrationError extends Schema.TaggedError<Elec
   }
 }
 
+export type DesktopAssetProtocolInput = Extract<
+  DesktopProtocolRegistrationInput,
+  { assetDirectory: string }
+>;
+
 export type DesktopProtocolRegistrationInput = {
   readonly scheme: string;
   readonly clerkFrontendApiHostname: string | undefined;
@@ -68,6 +73,8 @@ export type DesktopProtocolRegistrationInput = {
       readonly assetDirectory: string;
       readonly serverOrigin?: () => Promise<URL | null>;
       readonly serverName?: () => Promise<string | null>;
+      readonly serverAuthorization?: (origin: URL) => Promise<string | null>;
+      readonly noteAuthorizationRejected?: (origin: URL, authorization: string) => Promise<void>;
       readonly onSource?: (origin: URL | null, reason?: string) => Promise<void>;
     }
 );
@@ -212,15 +219,57 @@ const fetchWithTransientRetry = (url: string, init: RequestInit) =>
     Effect.retry({ schedule: Schedule.exponential("50 millis", 3), times: 2 }),
   );
 
+interface ServerUiSession {
+  readonly cookies: Map<string, string>;
+}
+
+function readSetCookieHeaders(headers: Headers): ReadonlyArray<string> {
+  const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  if (typeof getSetCookie === "function") return getSetCookie.call(headers);
+  const value = headers.get("set-cookie");
+  return value === null ? [] : [value];
+}
+
+function isExpiredCookie(raw: string): boolean {
+  const maxAge = /max-age\s*=\s*(-?\d+)/i.exec(raw);
+  if (maxAge && Number(maxAge[1]) <= 0) return true;
+  // Expiry is expressed as Max-Age by the server; a past Expires date is not used here.
+  return false;
+}
+
+/** Keeps browser-session cookies in the shell, never in the reduced server UI. */
+function mergeServerUiCookies(session: ServerUiSession, response: Response): void {
+  for (const raw of readSetCookieHeaders(response.headers)) {
+    const pair = raw.split(";")[0] ?? "";
+    const separator = pair.indexOf("=");
+    if (separator <= 0) continue;
+    const name = pair.slice(0, separator).trim();
+    const value = pair.slice(separator + 1).trim();
+    if (name.length === 0) continue;
+    if (value.length === 0 || isExpiredCookie(raw)) session.cookies.delete(name);
+    else session.cookies.set(name, value);
+  }
+}
+
+function cookieHeader(session: ServerUiSession): string | null {
+  if (session.cookies.size === 0) return null;
+  return [...session.cookies].map(([name, value]) => `${name}=${value}`).join("; ");
+}
+
 const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   request: Request,
   targetOrigin: URL,
   contentSecurityPolicy: string,
-  publicUi = false,
-  document = false,
+  options: {
+    readonly serverUi?: boolean;
+    readonly session?: ServerUiSession;
+    readonly authorization?: string | null;
+    readonly document?: boolean;
+  } = {},
 ) {
+  const serverUi = options.serverUi ?? false;
   if (
-    publicUi &&
+    serverUi &&
     (targetOrigin.username ||
       targetOrigin.password ||
       (targetOrigin.protocol !== "https:" &&
@@ -246,7 +295,8 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   const headersToRemove: string[] = [];
   for (const name of headers.keys()) {
     if (
-      (publicUi && (name === "cookie" || name === "authorization")) ||
+      ((serverUi || options.session !== undefined) &&
+        (name === "cookie" || name === "authorization")) ||
       name === "host" ||
       name === "origin" ||
       name === "referer" ||
@@ -262,12 +312,20 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
   for (const name of headersToRemove) {
     headers.delete(name);
   }
+  if (options.session !== undefined) {
+    const cookie = cookieHeader(options.session);
+    if (cookie !== null) headers.set("cookie", cookie);
+    const authorization = options.authorization;
+    if (authorization !== undefined && authorization !== null && authorization.length > 0) {
+      headers.set("authorization", `Bearer ${authorization}`);
+    }
+  }
   const init: RequestInit = {
     method: request.method,
     headers,
-    ...(publicUi ? { credentials: "omit" as const, redirect: "error" as const } : {}),
+    ...(serverUi ? { credentials: "omit" as const, redirect: "error" as const } : {}),
   };
-  if (document || request.mode === "navigate") {
+  if (options.document || request.mode === "navigate") {
     init.cache = "no-store";
     init.signal = AbortSignal.timeout(5_000);
   }
@@ -279,7 +337,8 @@ const proxyRequest = Effect.fn("desktop.protocol.proxyRequest")(function* (
     request.method === "GET" || request.method === "HEAD"
       ? yield* fetchWithTransientRetry(targetUrl.toString(), init)
       : yield* netFetch(targetUrl.toString(), init);
-  if (publicUi) {
+  if (serverUi) {
+    if (options.session !== undefined) mergeServerUiCookies(options.session, response);
     const responseHeaders = new Headers(response.headers);
     responseHeaders.delete("set-cookie");
     responseHeaders.delete("content-encoding");
@@ -341,6 +400,7 @@ export const make = Effect.gen(function* () {
   const navigations = new Map<number, string>();
   const pageOrigins = new Map<string, URL>();
   const currentOrigins = new Map<number, URL>();
+  const serverUiSessions = new Map<string, ServerUiSession>();
   const trackWindow = Effect.fn("desktop.protocol.trackWindow")((contents: Electron.WebContents) =>
     Effect.sync(() => {
       const started = (
@@ -352,6 +412,8 @@ export const make = Effect.gen(function* () {
       contents.once("destroyed", () => {
         for (const host of pageOrigins.keys())
           if (serverUiRendererId(host) === contents.id) pageOrigins.delete(host);
+        for (const host of serverUiSessions.keys())
+          if (serverUiRendererId(host) === contents.id) serverUiSessions.delete(host);
         currentOrigins.delete(contents.id);
         navigations.delete(contents.id);
         contents.removeListener("did-start-navigation", started);
@@ -360,6 +422,59 @@ export const make = Effect.gen(function* () {
   );
   const context = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
   const runPromise = Effect.runPromiseWith(context);
+  const serverUiSession = (host: string): ServerUiSession => {
+    const existing = serverUiSessions.get(host);
+    if (existing !== undefined) return existing;
+    const created: ServerUiSession = { cookies: new Map() };
+    serverUiSessions.set(host, created);
+    return created;
+  };
+  const serverCredentialAccepted = async (origin: URL, authorization: string): Promise<boolean> => {
+    try {
+      const response = await Electron.net.fetch(new URL("/api/auth/session", origin).toString(), {
+        headers: { authorization: `Bearer ${authorization}` },
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (response.status === 401 || response.status === 403) return false;
+      if (response.ok) {
+        const body: unknown = await response.json().catch(() => null);
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "authenticated" in body &&
+          typeof body.authenticated === "boolean"
+        ) {
+          return body.authenticated;
+        }
+      }
+      return true;
+    } catch {
+      // Unreachable is not a rejected credential; the document request decides.
+      return true;
+    }
+  };
+  const redirectToBundled = async (
+    input: DesktopAssetProtocolInput,
+    origin: URL | null,
+    rendererId: number,
+    host: string,
+  ): Promise<Response> => {
+    // Keep the shell session across a transient outage; the same server may come back.
+    pageOrigins.delete(host);
+    currentOrigins.delete(rendererId);
+    await input.onSource?.(null, "Server UI unavailable or incompatible; using bundled client");
+    const fallback = new URL(`${input.scheme}://app/`);
+    fallback.searchParams.set("desktopWindowId", String(rendererId));
+    fallback.searchParams.set("bundled", "1");
+    // Only the origin: no path, query or userinfo belongs in the navigation map or history.
+    if (origin) fallback.searchParams.set("server", origin.origin);
+    const name = input.serverName ? await input.serverName() : null;
+    if (name) fallback.searchParams.set("name", name.trim().slice(0, 60));
+    navigations.set(rendererId, fallback.href);
+    return Response.redirect(fallback.href, 302);
+  };
 
   const registerDesktopProtocol = Effect.fn("desktop.electron.protocol.registerDesktopProtocol")(
     function* (input: DesktopProtocolRegistrationInput) {
@@ -404,10 +519,26 @@ export const make = Effect.gen(function* () {
                       navigations.set(rendererId, next);
                       return Response.redirect(next, 302);
                     }
+                    const session = serverUiSession(requestUrl.host);
+                    const authorization = (await input.serverAuthorization?.(origin)) ?? null;
+                    if (
+                      authorization !== null &&
+                      !(await serverCredentialAccepted(origin, authorization))
+                    ) {
+                      await input.noteAuthorizationRejected?.(origin, authorization);
+                      // The trusted client's credential no longer works, so server UI auth
+                      // is impossible. Return to the bundled client with saved connections.
+                      return await redirectToBundled(input, origin, rendererId, requestUrl.host);
+                    }
                     const origins = (await input.connectionOrigins?.()) ?? [origin.origin];
                     const policy = makeDesktopContentSecurityPolicy(input, origins);
                     const response = await runPromise(
-                      proxyRequest(request, origin, policy, true, true).pipe(
+                      proxyRequest(request, origin, policy, {
+                        serverUi: true,
+                        session,
+                        authorization,
+                        document: true,
+                      }).pipe(
                         Effect.catchTags({
                           ElectronProtocolFetchError: (error) =>
                             Effect.logWarning("Server UI unavailable", error).pipe(Effect.as(null)),
@@ -426,21 +557,7 @@ export const make = Effect.gen(function* () {
                       return response;
                     }
                   }
-                  pageOrigins.delete(requestUrl.host);
-                  currentOrigins.delete(rendererId);
-                  await input.onSource?.(
-                    null,
-                    "Server UI unavailable or incompatible; using bundled client",
-                  );
-                  const fallback = new URL(`${input.scheme}://app/`);
-                  fallback.searchParams.set("desktopWindowId", String(rendererId));
-                  fallback.searchParams.set("bundled", "1");
-                  // Only the origin: no path, query or userinfo belongs in the navigation map or history.
-                  if (origin) fallback.searchParams.set("server", origin.origin);
-                  const name = input.serverName ? await input.serverName() : null;
-                  if (name) fallback.searchParams.set("name", name.trim().slice(0, 60));
-                  navigations.set(rendererId, fallback.href);
-                  return Response.redirect(fallback.href, 302);
+                  return await redirectToBundled(input, origin, rendererId, requestUrl.host);
                 }
                 if (serverHost) {
                   const origin = pageOrigins.get(requestUrl.host);
@@ -453,7 +570,11 @@ export const make = Effect.gen(function* () {
                         input,
                         (await input.connectionOrigins?.()) ?? [origin.origin],
                       ),
-                      true,
+                      {
+                        serverUi: true,
+                        session: serverUiSession(requestUrl.host),
+                        authorization: (await input.serverAuthorization?.(origin)) ?? null,
+                      },
                     ),
                   );
                 }

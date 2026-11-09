@@ -46,7 +46,12 @@ export class DesktopUi extends Context.Service<
     readonly selection: Effect.Effect<DesktopUiSelection | null>;
     readonly selectionLabel: Effect.Effect<string | null>;
     readonly connectionOrigins: Effect.Effect<ReadonlyArray<string>, DesktopUiError>;
-    readonly select: (selection: DesktopUiSelection) => Effect.Effect<boolean, DesktopUiError>;
+    readonly select: (
+      selection: DesktopUiSelection,
+      options?: { readonly trustedClient?: boolean },
+    ) => Effect.Effect<boolean, DesktopUiError>;
+    readonly serverAuthorization: (origin: URL) => Effect.Effect<string | null>;
+    readonly noteAuthorizationRejected: (origin: URL, authorization: string) => Effect.Effect<void>;
     readonly getInfo: Effect.Effect<DesktopUiInfo>;
     readonly recordSource: (origin: URL | null, reason?: string) => Effect.Effect<void>;
   }
@@ -59,6 +64,8 @@ export const make = Effect.gen(function* () {
   const catalog = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
   const exposure = yield* DesktopServerExposure.DesktopServerExposure;
   const selected = yield* Ref.make<DesktopUiSelection | null>(null);
+  const authorizations = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+  const rejectedAuthorizations = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
   const loaded = yield* Ref.make<{
     origin: string | null;
     reason: string | null;
@@ -145,14 +152,38 @@ export const make = Effect.gen(function* () {
     ),
   );
   const select = Effect.fn("desktop.ui.select")(
-    function* (input: DesktopUiSelection) {
+    function* (input: DesktopUiSelection, options?: { readonly trustedClient?: boolean }) {
       yield* restore;
+      const { authorization, ...selection } = input;
       const direct = yield* authorize(input);
-      const normalized = {
-        ...input,
-        httpBaseUrl: direct ? desktopUiOrigin(input.httpBaseUrl!) : null,
-      };
+      const origin = direct ? desktopUiOrigin(input.httpBaseUrl!) : null;
       const current = yield* Ref.get(selected);
+      const rejected =
+        origin !== null && authorization !== undefined
+          ? (yield* Ref.get(rejectedAuthorizations)).get(origin) === authorization
+          : false;
+      const hasStoredAuthorization =
+        origin !== null && (yield* Ref.get(authorizations)).has(origin);
+      // A server UI switch carries no credential (the reduced renderer cannot hold one).
+      // Hop through the trusted client so it can select the new source with its own.
+      const requiresTrustedHop =
+        options?.trustedClient === false &&
+        direct &&
+        authorization === undefined &&
+        !hasStoredAuthorization &&
+        current !== null &&
+        current.environmentId !== input.environmentId;
+      // An auto-selected source whose credential the server rejected never strands the
+      // window on pairing; keep the trusted bundled client instead.
+      const normalized = {
+        ...selection,
+        httpBaseUrl: direct && !rejected && !requiresTrustedHop ? origin : null,
+      };
+      if (origin !== null && authorization !== undefined) {
+        yield* Ref.update(authorizations, (current) =>
+          rejected ? current : new Map(current).set(origin, authorization),
+        );
+      }
       if (
         current?.environmentId === normalized.environmentId &&
         current.httpBaseUrl === normalized.httpBaseUrl &&
@@ -212,6 +243,30 @@ export const make = Effect.gen(function* () {
       return label === undefined || label.trim() === "" ? null : label.trim();
     }).pipe(Effect.orElseSucceed(() => null)),
     select,
+    serverAuthorization: Effect.fn("desktop.ui.serverAuthorization")(function* (origin: URL) {
+      const key = desktopUiOrigin(origin.href);
+      return (yield* Ref.get(authorizations)).get(key) ?? null;
+    }),
+    noteAuthorizationRejected: Effect.fn("desktop.ui.noteAuthorizationRejected")(function* (
+      origin: URL,
+      authorization: string,
+    ) {
+      const key = desktopUiOrigin(origin.href);
+      yield* Ref.update(rejectedAuthorizations, (current) =>
+        new Map(current).set(key, authorization),
+      );
+      yield* Ref.update(authorizations, (current) => {
+        const next = new Map(current);
+        if (next.get(key) === authorization) next.delete(key);
+        return next;
+      });
+      yield* Ref.set(loaded, {
+        origin: null,
+        reason: "Server UI authentication failed; using bundled client",
+        version: environment.appVersion,
+        environmentId: (yield* Ref.get(selected))?.environmentId ?? null,
+      });
+    }),
     recordSource: Effect.fn("desktop.ui.recordSource")(function* (origin, reason) {
       const current = yield* Ref.get(selected);
       yield* Ref.set(loaded, {

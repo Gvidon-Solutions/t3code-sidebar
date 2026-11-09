@@ -184,6 +184,9 @@ const bootstrap = Effect.gen(function* () {
           assetDirectory: environment.clientAssetsDir,
           connectionOrigins: () => resolveUiOrigin(desktopUi.connectionOrigins),
           onSource: (origin, reason) => resolveUiOrigin(desktopUi.recordSource(origin, reason)),
+          serverAuthorization: (origin) => resolveUiOrigin(desktopUi.serverAuthorization(origin)),
+          noteAuthorizationRejected: (origin, authorization) =>
+            resolveUiOrigin(desktopUi.noteAuthorizationRejected(origin, authorization)),
           serverOrigin: () =>
             resolveUiOrigin(
               Effect.gen(function* () {
