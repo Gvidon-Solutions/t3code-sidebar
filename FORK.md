@@ -109,6 +109,25 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — F8 final polish before 0.1.7-sidebar.63
+
+- **What.** The Link dialog's "Link from" now starts on the machine that serves the UI, even when
+  saved connections resolve first, so a browser opened on studio no longer starts on cloudbox. A
+  thread whose machine is offline and whose conversation was never saved says that once: the
+  centred pane carries it, the duplicated banner/pill is gone, and the disabled composer reads the
+  short "<machine> is offline" on web and Android. A saved conversation keeps its read-only banner.
+  Android light/dark captures for the coordinator are in `/data/f8-shots/android/` with an index.
+- **How.** `LinkWithDialog` keeps only a person's explicit source pick as state and otherwise
+  follows `defaultLinkSource(sources, primaryEnvironmentId)` as the catalog settles. Shared
+  client-runtime added `offlineComposerPlaceholder`; web added `showsEnvironmentUnavailableBanner`
+  and passes `offlineConversationEmpty` into the composer banners; mobile hides
+  `connectionFloatingStatus` when the centred pane is showing and locks/relabels the composer with
+  `offlineConversation`.
+- **Where.** client-runtime `state/meshMachines.ts`; web
+  `components/workspaces/MeshSettingsPanel.tsx`, `components/chat/{ChatComposer,
+  useSystemComposerBanners}.tsx`, `components/ChatView.logic.ts`, `components/ChatView.tsx`; mobile
+  `features/threads/{ThreadDetailScreen,ThreadComposer,floating-working-status}.ts`.
+
 ### 2026-11-09 — F7 coordinator UI review round 2 before 0.1.7-sidebar.63
 
 - **What.** A thread on an offline machine whose conversation was never saved shows a calm centred
