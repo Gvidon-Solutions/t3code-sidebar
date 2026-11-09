@@ -374,6 +374,39 @@ Shared client-runtime decisions keep web and Android answering these questions t
   bundled fallback URL; `DesktopBundledOffline` shows plain copy, the address as a muted detail, and
   no "bundled UI" wording.
 
+### Client audit fixes (F9b)
+
+- **One draft key.** Web `state/draftProjectKey.ts` resolves the mesh logical project (falling back
+  to the grouping key) and plans re-keys for drafts made before the mesh snapshot loaded. The
+  new-thread handler, the PR draft flow, the bootstrap project expander and draft routing use it;
+  the handler also finds a pre-snapshot draft by its grouping key and remaps it, and
+  `useDraftProjectKeyReconcile` re-keys persisted drafts once the layout arrives. The
+  `composerDraftStore` gained `rekeyLogicalProjectDraft`, which never steals another draft's key.
+- **Stored machine choice.** `useHandleNewThread` writes `environmentSelection` on every draft
+  write: an explicit "New thread on…" pick and an existing manual choice stay manual, a plain new
+  thread is automatic. `useDraftEnvironmentRouting` writes `auto` for the automatic default
+  (`draftEnvironmentSelection`) and re-applies that default when the main copy returns, so an
+  offline fallback returns home while a manual pick and a load-balanced choice do not.
+- **Destination defaults.** New-draft env-mode defaults read the project file, project settings and
+  workspace root from the destination machine's copy, not the clicked copy.
+- **Cycle host.** `composer.cycleHost` uses `draftMachineCandidate`, the same effective-model rule
+  as the cards and mobile, so it works with no explicit model selected.
+- **Composer grace.** `composerEnvironmentUnavailableState` keeps the editor usable during the
+  2 s reconnect window (connecting/reconnecting) and never blocks a draft, which may queue its
+  message for a machine that is currently unreachable.
+- **Desktop escape hatch.** The offline page keeps Retry primary and adds "Choose another server":
+  `desktopBundledLocalSettingsUrl` points at the bundled Settings › Connections, and the root
+  renders the normal branch for `/settings/*` in bundled mode (`showsDesktopBundledFallback`).
+  `desktopFallbackServerLabel` never turns an IPv4/IPv6 literal into a name, caps a configured
+  name and keeps the address as a muted detail. `ElectronProtocol` stores only `origin.origin` and a
+  capped name in the fallback URL.
+- **Wording and caches.** `offlineMachinePrompt` strips the age separator once; mobile Home and
+  Settings › Mesh use `replicaConnectionFixText` and the web "this machine" ordering rule (a phone
+  has none). A thread detail keeps its saved conversation on `EnvironmentRpcUnavailableError` only
+  and clears it on terminal failures, per thread key. Command-palette project rows add a muted
+  path tail only for duplicate titles. Both `MeshConnectPrompt`s guard the reconnect sequence with
+  a ref, merge a dismissal made meanwhile and leave never-added machines undismissed.
+
 ## Interfaces
 
 `t3 run [--bg] [--ports P[,P]] [--timeout D] -- <command…>` runs locally outside a lite
