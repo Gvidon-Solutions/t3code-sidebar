@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildPairingUrl, extractPairingUrlFromQrPayload, parsePairingUrl } from "./pairing";
+import {
+  buildPairingUrl,
+  extractPairingUrlFromQrPayload,
+  parsePairingUrl,
+  resolvePairingInput,
+} from "./pairing";
 
 describe("buildPairingUrl", () => {
   it("uses HTTP for a schemeless IP address", () => {
@@ -42,5 +47,20 @@ describe("parsePairingUrl", () => {
       host: "https://desktop.tailnet.ts.net",
       code: "pairing-token",
     });
+  });
+});
+
+describe("resolvePairingInput", () => {
+  it("uses a whole pairing link pasted into either field", () => {
+    expect(resolvePairingInput("", "https://studio.example/pair#token=abc")).toBe(
+      "https://studio.example/pair#token=abc",
+    );
+    expect(
+      resolvePairingInput(
+        "t3code://pair?pairingUrl=https%3A%2F%2Fstudio.example%2Fpair%23token%3Dabc",
+        "",
+      ),
+    ).toBe("https://studio.example/pair#token=abc");
+    expect(resolvePairingInput("studio.example", "abc")).toBe("https://studio.example/#token=abc");
   });
 });

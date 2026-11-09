@@ -1,4 +1,4 @@
-import { readHostedPairingRequest } from "@t3tools/shared/remote";
+import { readHostedPairingRequest, readPairingUrlInput } from "@t3tools/shared/remote";
 import * as Schema from "effect/Schema";
 
 const MOBILE_PAIRING_URL_PARAM = "pairingUrl";
@@ -40,6 +40,11 @@ export function buildPairingUrl(host: string, code: string): string {
   } catch {
     return `${h}#token=${c}`;
   }
+}
+
+/** A pasted whole pairing link wins over the separate host and code fields. */
+export function resolvePairingInput(host: string, code: string): string {
+  return readPairingUrlInput(code) ?? readPairingUrlInput(host) ?? buildPairingUrl(host, code);
 }
 
 export function parsePairingUrl(url: string): { host: string; code: string } {
