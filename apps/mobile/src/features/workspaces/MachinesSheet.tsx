@@ -219,13 +219,13 @@ export function MachinesSheet(props: {
         })}
         {candidates.length > 0 ? (
           <View className="gap-2 border-t border-border pt-3">
-            <Text className="text-xs font-t3-medium text-foreground-muted">Add replica on…</Text>
+            <Text className="text-xs font-t3-medium text-foreground-muted">Add a copy on…</Text>
             <View className="flex-row flex-wrap gap-2">
               {candidates.map((machine) => (
                 <Pressable
                   key={machine.environmentId}
                   accessibilityRole="button"
-                  accessibilityLabel={`Add replica on ${machine.label}`}
+                  accessibilityLabel={`Add a copy on ${machine.label}`}
                   onPress={() => props.onAddReplica(machine.environmentId)}
                   className="min-h-[45px] max-w-full flex-row items-center gap-1.5 rounded-full border border-border px-3 py-1.5"
                 >

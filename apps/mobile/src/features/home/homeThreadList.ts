@@ -31,6 +31,18 @@ export function shouldShowHomeEmptyState(
   return !hasThreads && !items.some((item) => item.type === "ws-folder");
 }
 
+/**
+ * Android draws its own full-height empty surface. It must also account for
+ * workspace rows (folders, shelf rows) that are not thread items, or a
+ * workspace with projects but no visible thread rows reads as empty.
+ */
+export function shouldShowAndroidHomeEmptyState(
+  threadItemCount: number,
+  items: ReadonlyArray<unknown>,
+): boolean {
+  return threadItemCount === 0 && items.length === 0;
+}
+
 export interface HomeProjectScope {
   /** T3 Mesh (fork): only reachable on a machine this client is not connected to. */
   readonly meshOffline?: {

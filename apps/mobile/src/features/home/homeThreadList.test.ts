@@ -16,6 +16,7 @@ import {
   buildHomeProjectScopes,
   findHomeProjectScope,
   homeProjectWorkspaceIds,
+  shouldShowAndroidHomeEmptyState,
   shouldShowHomeEmptyState,
 } from "./homeThreadList";
 import { makeThreadShellFixture } from "../../test-fixtures";
@@ -329,5 +330,12 @@ describe("T3 Mesh home scopes", () => {
     ).toBe(false);
     expect(shouldShowHomeEmptyState(false, [])).toBe(true);
     expect(shouldShowHomeEmptyState(true, [])).toBe(false);
+  });
+
+  it("keeps an Android workspace with folders visible when no thread row is listed", () => {
+    expect(shouldShowAndroidHomeEmptyState(0, [{ type: "ws-folder" }])).toBe(false);
+    expect(shouldShowAndroidHomeEmptyState(0, [{ type: "ws-section" }])).toBe(false);
+    expect(shouldShowAndroidHomeEmptyState(0, [])).toBe(true);
+    expect(shouldShowAndroidHomeEmptyState(1, [])).toBe(false);
   });
 });
