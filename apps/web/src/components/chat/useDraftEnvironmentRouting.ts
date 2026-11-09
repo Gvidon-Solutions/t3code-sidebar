@@ -469,6 +469,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
     defaultApplied.current = { draftId, environmentId: target };
     onEnvironmentChange(EnvironmentId.make(target), true, false);
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- keeps the draft store in step with machine catalogs that load after mount
   useEffect(() => {
     applyDefault();
   });

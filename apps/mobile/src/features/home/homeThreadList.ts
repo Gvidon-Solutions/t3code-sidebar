@@ -145,28 +145,25 @@ export function buildHomeProjectScopes(input: {
   const merged = scopes.map((scope): HomeProjectScope => {
     const entries = offlineByKey.get(scope.key);
     if (entries === undefined) return scope;
-    let next = scope;
+    const projects = [...scope.projects];
+    const projectRefs = [...scope.projectRefs];
     for (const entry of entries) {
       if (entry.projectId === null) continue;
       if (
-        next.projectRefs.some(
+        projectRefs.some(
           (ref) => ref.environmentId === entry.environmentId && ref.projectId === entry.projectId,
         )
       )
         continue;
-      next = {
-        ...next,
-        projects: [...next.projects, projectOf(entry)],
-        projectRefs: [
-          ...next.projectRefs,
-          {
-            environmentId: entry.environmentId as EnvironmentId,
-            projectId: entry.projectId as ProjectId,
-          },
-        ],
-      };
+      projects.push(projectOf(entry));
+      projectRefs.push({
+        environmentId: entry.environmentId as EnvironmentId,
+        projectId: entry.projectId as ProjectId,
+      });
     }
-    return next;
+    return projectRefs.length === scope.projectRefs.length
+      ? scope
+      : { ...scope, projects, projectRefs };
   });
   const existing = new Set(merged.map((scope) => scope.key));
   const placeholders = offline
