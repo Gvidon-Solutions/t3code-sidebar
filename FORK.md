@@ -114,8 +114,9 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **What.** Desktop server UI can authenticate again. Its HTTP is first-party through the shell
   proxy, so the pairing cookie survives; the proxy holds the session cookie and the bearer the
   trusted bundled client hands over at selection, and the reduced renderer never sees either.
+  The server-UI origin uses a salt persisted once per install, so drafts survive restarts.
   WebSocket, preview streams and device mirroring use short-lived RPC/media tickets minted
-  through the same proxy. If the server rejects the shell's credential, the bundled client opens
+  through the same proxy, and credentialed subresources carry a per-window proof header. If the server rejects the shell's credential, the bundled client opens
   in its normal state (not the offline page) and connects through the saved bearer connection. A chunk or CSS preload failure during a server restart now shows
   "Reconnecting to <machine>…" and reloads when the server answers, instead of the boot error.
   A whole pairing link (including `t3code://pair?pairingUrl=`) can be pasted into the pairing
@@ -128,8 +129,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   page) renders. `resolveDeviceHubAccess` mints a media ticket through the proxy and points
   preview/device HTTP, EventSource and WebSocket traffic at the server with `wsTicket`. The
   server CSP allows same-origin frames for HTML previews. `vite:preloadError` and chunk failures
-  install a reconnecting surface before mount and an overlay after mount, with "Use the
-  built-in version". `extractPairingCredential` and
+  install a reconnecting surface before mount and an overlay with reload after mount, with
+  "Use the built-in version"; the reload budget clears only after a healthy mount. `extractPairingCredential` and
   `readPairingUrlInput` in shared/remote parse links before submission.
 - **Where.** `apps/desktop/src/electron/ElectronProtocol.ts`, `apps/desktop/src/app/DesktopUi.ts`,
   `apps/desktop/src/ipc/{methods/ui,DesktopIpcHandlers,channels,rendererTrust}.ts`,
