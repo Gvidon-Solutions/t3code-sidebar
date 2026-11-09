@@ -420,6 +420,15 @@ Shared client-runtime decisions keep web and Android answering these questions t
   and clears it on terminal failures, per thread key. Command-palette project rows add a muted
   path tail only for duplicate titles. Both `MeshConnectPrompt`s guard the reconnect sequence with
   a ref, merge a dismissal made meanwhile and leave never-added machines undismissed.
+- **Android follow-ups.** `offlineLogicalProjects` returns the representations on unreachable
+  machines even when another copy is connected, so `buildHomeProjectScopes` adds their project
+  refs to the reachable scope: cached threads on an offline machine stay in the folder and the
+  folder keeps its multi-machine tags (`machineTagOffline` dims the row's tag). The connect prompt
+  skips a machine the mesh reports offline (`online: false`); only an online machine that this
+  device has not added or switched on is actionable. `forkMachineChoices` drops the thread's own
+  machine, orders usable machines first and keeps a no-model machine visible but disabled with
+  "No models here" and its tag. The new-task screen renders the project heading and machine cards
+  together in the centred hero instead of pinning the cards above the composer.
 
 ## Interfaces
 

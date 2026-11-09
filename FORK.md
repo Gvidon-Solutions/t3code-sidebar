@@ -127,7 +127,11 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   A thread detail drops its saved conversation on a terminal failure but keeps it for an offline
   machine, and drafts in the command palette add a muted path tail only when two projects share a
   title. "Connect all" ignores a second tap, merges a dismissal made meanwhile and no longer marks
-  machines it never added as dismissed.
+  machines it never added as dismissed. Android's fork picker offers other machines only, puts a
+  usable machine first and disables one without models with "No models here" and its tag. Home
+  keeps an offline machine's threads listed with a dimmed tag, and the connect prompt no longer
+  asks to reconnect a machine the mesh reports offline. New-task headings and their machine cards
+  sit together in the vertical middle instead of pinning the cards above the composer.
 - **How.** Shared client-runtime added `draftMachineCandidate`, `draftEnvironmentSelection`,
   `replicaConnectionFixText` and a terminal-failure check in the thread detail atoms. Web added
   `state/draftProjectKey.ts` (the one draft key plus the pre-snapshot re-key plan),
@@ -143,8 +147,11 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `components/chat/{useDraftEnvironmentRouting,usePullRequestDraftThread}.ts`,
   `components/desktop/{DesktopBundledOffline,desktopBundledFallback}.tsx|ts`,
   `components/sidebar/MeshConnectPrompt.tsx`, `routes/__root.tsx`; mobile
-  `features/{home/HomeScreen,settings/SettingsMachinesRouteScreen,threads/new-task-flow-provider,
-  workspaces/MeshConnectPrompt}.tsx`; desktop `src/electron/ElectronProtocol.ts`.
+  `features/{home/{HomeScreen,homeThreadList},settings/SettingsMachinesRouteScreen,
+  threads/{NewTaskDraftScreen,new-task-flow-provider},workspaces/{ForkThreadSheet,
+  MeshConnectPrompt,WorkspaceThreadLine,workspaceNavigator,useWorkspaceHome}}.tsx`,
+  `components/sidebar/MeshConnectPrompt.tsx`; desktop `src/electron/ElectronProtocol.ts`.
+  Shared logic: `state/meshLayout/{logicalProjects,replicas,meshConnectPrompt}.ts`.
 
 ### 2026-11-09 — F8 final polish before 0.1.7-sidebar.63
 
