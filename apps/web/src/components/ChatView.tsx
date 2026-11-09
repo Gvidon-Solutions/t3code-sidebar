@@ -1,4 +1,7 @@
 import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
+import { OfflineConversationEmptyState } from "./chat/OfflineConversationEmptyState";
+import { environmentCatalog } from "../connection/catalog";
+import { useEnvironmentStateHeldFor } from "../hooks/useEnvironmentDisconnectDelay";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
@@ -11,6 +14,8 @@ import {
   deriveAvailableRevertTurnCounts,
   deriveThreadPendingBackgroundTasks,
   presentThreadShellFromProjection,
+  showsOfflineConversationEmpty,
+  ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
 } from "./ChatView.logic";
 import { usePullRequestDraftThread } from "./chat/usePullRequestDraftThread";
 import { useComposerSelection } from "./chat/useComposerSelection";
@@ -1209,6 +1214,33 @@ export default function ChatView(props: ChatViewProps) {
       connection: activeEnvironment.connection,
     };
   })() as EnvironmentUnavailableState | null;
+  const retryEnvironment = useAtomCommand(environmentCatalog.retryNow, {
+    reportFailure: false,
+  });
+  const offlineReconnectWindowElapsed = useEnvironmentStateHeldFor(
+    activeEnvironmentUnavailable ? (activeEnvironment?.environmentId ?? null) : null,
+    ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
+  );
+  const showOfflineConversationEmpty = showsOfflineConversationEmpty({
+    isServerThread,
+    environmentUnavailable: activeEnvironmentUnavailable,
+    hasConversation: serverProjection !== null,
+    reconnectWindowElapsed: offlineReconnectWindowElapsed,
+  });
+  const retryOfflineConversation = () => {
+    const environmentId = activeEnvironmentUnavailableState?.environmentId;
+    if (!environmentId) return;
+    void retryEnvironment(environmentId).then((result) => {
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: "Could not reconnect environment",
+          description: error instanceof Error ? error.message : "Failed to reconnect.",
+        });
+      }
+    });
+  };
   const activeProjectIsScratch =
     activeProject !== null &&
     isScratchProject(
@@ -3582,6 +3614,15 @@ export default function ChatView(props: ChatViewProps) {
                     : { historyControls: threadHistoryControls })}
                 />
               </WorkspaceMutationIdContext>
+
+              {showOfflineConversationEmpty ? (
+                <div className="absolute inset-0 z-10 flex flex-col bg-background px-6 pb-24">
+                  <OfflineConversationEmptyState
+                    machineLabel={activeEnvironmentUnavailableLabel}
+                    onRetry={retryOfflineConversation}
+                  />
+                </div>
+              ) : null}
 
               {showScrollToBottom && !isThreadFindActive && (
                 <ScrollToEndButton

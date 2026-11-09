@@ -2,6 +2,7 @@ import { Button } from "../ui/button";
 import { StandalonePage } from "../ui/standalone-page";
 import {
   desktopBundledRetryUrl,
+  desktopFallbackServerAddress,
   desktopFallbackServerLabel,
   type DesktopBundledFallback,
 } from "./desktopBundledFallback";
@@ -12,16 +13,19 @@ export function DesktopBundledOffline(props: {
   /** Where Retry navigates; defaults to asking the shell for the server UI again. */
   readonly retryHref?: string;
 }) {
-  const label = desktopFallbackServerLabel(props.fallback.server);
+  const label = desktopFallbackServerLabel(props.fallback);
+  const address = desktopFallbackServerAddress(props.fallback);
   const retryHref = props.retryHref ?? desktopBundledRetryUrl(window.location.href);
   return (
     <StandalonePage>
-      <div className="flex flex-col gap-3">
-        <h1 className="text-xl leading-tight font-semibold">Can't reach {label}</h1>
-        <p className="text-sm text-muted-foreground">
-          The desktop app is showing its bundled UI. Start {label} or check the connection, then
-          retry.
-        </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-xl leading-tight font-semibold">Can't reach {label}</h1>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            T3 Code can't reach {label}. Make sure it is running, then try again.
+          </p>
+        </div>
+        {address === null ? null : <p className="text-xs text-muted-foreground/70">{address}</p>}
         <div>
           <Button render={<a href={retryHref} />} className="inline-flex">
             Retry

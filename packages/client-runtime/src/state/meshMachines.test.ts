@@ -22,6 +22,9 @@ import {
   safePromptAddress,
   sortMeshMachinesForSettings,
   offlineConversationStatus,
+  offlineConversationEmptyText,
+  offlineMeshEnvironmentIds,
+  meshMachineOfflineText,
 } from "./meshMachines.ts";
 
 const base: SidebarWorkspacesConfig = {
@@ -742,6 +745,37 @@ describe("offline conversation", () => {
         hasCachedConversation: true,
       }).title,
     ).toBe("laptop is reconnecting");
+  });
+
+  it("says where an unsaved conversation lives", () => {
+    expect(offlineConversationEmptyText("laptop")).toBe(
+      "This conversation lives on laptop, which is offline. It appears here when laptop is back.",
+    );
+    expect(offlineConversationEmptyText(null)).toBe(
+      "This conversation lives on this machine, which is offline. It appears here when this machine is back.",
+    );
+  });
+
+  it("reads offline machines and their age from the mesh status", () => {
+    const now = Date.parse("2026-11-09T12:10:00.000Z");
+    const machines = [
+      {
+        environmentId: "laptop",
+        label: "laptop",
+        network: { state: "offline" as const },
+        lastSeenAt: "2026-11-09T12:07:00.000Z",
+        lastExchangeAt: null,
+      },
+      {
+        environmentId: "studio",
+        label: "studio",
+        network: { state: "direct" as const },
+        lastSeenAt: null,
+        lastExchangeAt: "2026-11-09T12:10:00.000Z",
+      },
+    ];
+    expect(offlineMeshEnvironmentIds(machines)).toEqual(["laptop"]);
+    expect(meshMachineOfflineText(machines[0]!, now)).toBe("laptop is offline · 3 min");
   });
 
   it("marks project rows as last known while the machine is offline", () => {

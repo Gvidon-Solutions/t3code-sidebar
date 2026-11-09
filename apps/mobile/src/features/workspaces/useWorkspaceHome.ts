@@ -25,6 +25,8 @@ import { useCallback, useMemo } from "react";
 
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { useServerConfigs } from "../../state/entities";
+import { offlineMeshEnvironmentIds } from "@t3tools/client-runtime/state/mesh-machines";
+import { useMeshOverview } from "./useMeshOverview";
 import { useReplicaStatuses } from "../../state/meshReplicas";
 import { connectedEnvironmentIdsAtom } from "../../state/presentation";
 import { homeProjectWorkspaceIds, type HomeProjectScope } from "../home/homeThreadList";
@@ -65,6 +67,15 @@ export function useWorkspaceHome(input: {
   } = workspaces;
   const serverConfigs = useServerConfigs();
   const replicaStatuses = useReplicaStatuses();
+  const { machines } = useMeshOverview({ config });
+  const offlineMachines = useMemo(
+    () => machines.filter((machine) => machine.network?.state === "offline"),
+    [machines],
+  );
+  const offlineEnvironmentIds = useMemo(
+    () => offlineMeshEnvironmentIds(offlineMachines),
+    [offlineMachines],
+  );
   const connectedEnvironmentIds = useAtomValue(connectedEnvironmentIdsAtom);
   const resolveMachineDisplay = useCallback(
     (environmentId: EnvironmentId) =>
@@ -267,6 +278,8 @@ export function useWorkspaceHome(input: {
         voiceThreadKey,
         // Offline machines stay dimmed in the strip; a registered config is not a connection.
         connectedEnvironmentIds: [...new Set(connectedEnvironmentIds)],
+        offlineEnvironmentIds,
+        offlineMachines,
         resolveMachineDisplay,
         now: Date.now(),
         toRow: list.toRow,
@@ -286,6 +299,8 @@ export function useWorkspaceHome(input: {
       toggles,
       voiceThreadKey,
       connectedEnvironmentIds,
+      offlineEnvironmentIds,
+      offlineMachines,
       resolveMachineDisplay,
     ],
   );

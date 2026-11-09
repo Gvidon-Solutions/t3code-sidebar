@@ -15,6 +15,7 @@ import {
   ITEM_ICON_CLASS,
 } from "./CommandPalette.logic";
 import { ProjectFavicon } from "./ProjectFavicon";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 export interface CommandPaletteProjectLocation {
   readonly label: string | null;
@@ -88,7 +89,7 @@ export function buildNewThreadInProjectItems(input: ProjectItemsInput) {
 }
 
 /** One row per logical project: its machines as config tags, main copy first. */
-function ProjectMachineDescription(props: {
+export function ProjectMachineDescription(props: {
   readonly config: SidebarWorkspacesConfig | null;
   readonly group: SidebarProjectSnapshot | undefined;
   readonly project: CommandPaletteProject;
@@ -107,20 +108,25 @@ function ProjectMachineDescription(props: {
       </span>
     );
   }
+  const names = tags.map((tag) => tag.label).join(" · ");
   return (
-    <span className="flex min-w-0 items-center gap-1">
-      <span className="inline-flex min-w-0 items-center gap-1">
-        {tags.map((tag) => (
-          <span
-            key={tag.environmentId}
-            className="shrink-0 rounded bg-foreground/[0.06] px-1 py-0.5 font-semibold text-3xs uppercase tracking-wide text-muted-foreground"
-          >
-            {tag.tag}
-          </span>
-        ))}
-        <span className="truncate">{tags.map((tag) => tag.label).join(" · ")}</span>
-      </span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className="flex min-w-0 items-center gap-1" aria-label={`On ${names}`} />}
+      >
+        <span className="inline-flex min-w-0 items-center gap-1">
+          {tags.map((tag) => (
+            <span
+              key={tag.environmentId}
+              className="shrink-0 rounded bg-foreground/[0.06] px-1 py-0.5 font-semibold text-3xs uppercase tracking-wide text-muted-foreground"
+            >
+              {tag.tag}
+            </span>
+          ))}
+        </span>
+      </TooltipTrigger>
+      <TooltipPopup side="top">{names}</TooltipPopup>
+    </Tooltip>
   );
 }
 

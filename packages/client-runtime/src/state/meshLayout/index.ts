@@ -2,6 +2,7 @@ export * from "@t3tools/shared/meshLayout";
 export * from "./logicalProjects.ts";
 export * from "./replicas.ts";
 export * from "./projectMachineStrip.ts";
+export * from "./linkSource.ts";
 export * from "./gitVisibility.ts";
 export * from "./threadMove.ts";
 export * from "./draftMachine.ts";

@@ -1,4 +1,5 @@
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import { offlineConversationEmptyText } from "@t3tools/client-runtime/state/mesh-machines";
 
 export type ThreadContentPresentation =
   | { readonly kind: "ready" }
@@ -7,6 +8,7 @@ export type ThreadContentPresentation =
       readonly kind: "unavailable";
       readonly title: string;
       readonly detail: string;
+      readonly onRetry?: (() => void) | undefined;
     };
 
 export function projectThreadContentPresentation(input: {
@@ -14,6 +16,9 @@ export function projectThreadContentPresentation(input: {
   readonly detailError: string | null;
   readonly detailDeleted: boolean;
   readonly connectionState: EnvironmentConnectionPhase;
+  readonly machineLabel: string | null;
+  readonly reconnectWindowElapsed: boolean;
+  readonly onRetry?: (() => void) | undefined;
 }): ThreadContentPresentation {
   if (input.hasDetail) {
     return { kind: "ready" };
@@ -32,16 +37,18 @@ export function projectThreadContentPresentation(input: {
       detail: input.detailError,
     };
   }
-  if (
-    input.connectionState === "connected" ||
-    input.connectionState === "connecting" ||
-    input.connectionState === "reconnecting"
-  ) {
+  if (input.connectionState === "connected") {
+    return { kind: "loading" };
+  }
+  const reconnecting =
+    input.connectionState === "connecting" || input.connectionState === "reconnecting";
+  if (reconnecting && !input.reconnectWindowElapsed) {
     return { kind: "loading" };
   }
   return {
     kind: "unavailable",
-    title: "Messages not cached",
-    detail: "Reconnect this environment to load the conversation.",
+    title: `${input.machineLabel ?? "This machine"} is offline`,
+    detail: offlineConversationEmptyText(input.machineLabel),
+    onRetry: input.onRetry,
   };
 }

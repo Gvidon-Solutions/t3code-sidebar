@@ -20,6 +20,9 @@ import { CheckIcon } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { useMeshLayout } from "../../hooks/useMeshLayout";
+import { useNowMinute } from "../../hooks/useNowMinute";
+import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
+import { offlineMachineText } from "@t3tools/client-runtime/state/mesh-machines";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { useClientSettings } from "../../hooks/useSettings";
 import { useEnvironmentProviders } from "../../state/environments";
@@ -45,6 +48,7 @@ export function DraftMachineCards(props: {
 }) {
   const mesh = useMeshLayout();
   const { machines } = useMeshOverview({ config: mesh.config });
+  const nowMs = minuteTickToEpochMs(useNowMinute());
   const providersByEnvironment = useEnvironmentProviders();
   const serverConfigs = useServerConfigs();
   const statuses = useReplicaStatuses();
@@ -133,6 +137,7 @@ export function DraftMachineCards(props: {
         machine.network?.state === "relayed"
           ? (machines.find((other) => other.environmentId === machine.network?.via)?.label ?? null)
           : null;
+      const offline = machine.network?.state === "offline";
       return [
         machine.environmentId,
         {
@@ -141,6 +146,10 @@ export function DraftMachineCards(props: {
             machine.network?.state === "direct" ||
             machine.network?.state === "relayed",
           viaLabel: via,
+          offline,
+          offlineText: offline
+            ? offlineMachineText(machine.lastSeenAt ?? machine.lastExchangeAt, nowMs)
+            : null,
         },
       ] as const;
     }),

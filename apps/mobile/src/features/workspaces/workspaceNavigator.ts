@@ -11,6 +11,10 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import {
+  meshMachineOfflineText,
+  type MeshMachine,
+} from "@t3tools/client-runtime/state/mesh-machines";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 import {
   type AgentRunState,
@@ -301,8 +305,14 @@ export function buildWorkspaceHomeItems(input: {
   readonly voiceThreadKey?: string | null;
   /** Connected machines; a cross-project section tags rows only when there are two or more. */
   readonly connectedEnvironmentIds: ReadonlyArray<string>;
+  /** Machines the mesh reports offline, so their strip tag dims before this phone notices. */
+  readonly offlineEnvironmentIds?: ReadonlyArray<string>;
   /** How the sidebar names a machine on one environment. */
   readonly resolveMachineDisplay: (environmentId: EnvironmentId) => MachineDisplay;
+  /** Offline machines as the mesh reports them, with their last-seen time. */
+  readonly offlineMachines?: ReadonlyArray<
+    Pick<MeshMachine, "environmentId" | "label" | "lastSeenAt" | "lastExchangeAt">
+  >;
   readonly now: number;
   readonly toRow: (item: ThreadListV2Item) => ThreadListV2ThreadListItem;
 }): WorkspaceHomeListItem[] {
@@ -529,10 +539,17 @@ export function buildWorkspaceHomeItems(input: {
             ? model.all.map((thread) => thread.environmentId)
             : model.input.environmentIds,
           knownEnvironmentIds: input.connectedEnvironmentIds,
+          ...(input.offlineEnvironmentIds === undefined
+            ? {}
+            : { offlineEnvironmentIds: input.offlineEnvironmentIds }),
           isScratch: model.input.isScratch,
         },
         input.liveStatuses ?? [],
         (id) => input.resolveMachineDisplay(id as EnvironmentId),
+        (id) => {
+          const machine = input.offlineMachines?.find((entry) => entry.environmentId === id);
+          return machine === undefined ? null : meshMachineOfflineText(machine, input.now);
+        },
       ),
       pending: model.input.pending ?? [],
     });

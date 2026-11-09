@@ -55,6 +55,7 @@ describe("Desktop connected UI source", () => {
         const program = Effect.gen(function* () {
           const ui = yield* make;
           expect(yield* ui.select(studio)).toBe(true);
+          expect(yield* ui.selectionLabel).toBe("studio");
           expect(yield* ui.connectionOrigins).toEqual([
             "https://studio.example",
             "https://cloudbox.example",

@@ -275,6 +275,67 @@ describe("draftMachineCards", () => {
   });
 });
 
+describe("offline machine cards", () => {
+  const config = {
+    machines: {
+      studio: { title: "studio", tag: "ST" },
+      laptop: { title: "laptop", tag: "LT" },
+    },
+  } as const;
+
+  it("says Offline for a machine the mesh reports offline", () => {
+    expect(
+      draftMachineCardState({
+        label: "laptop",
+        connected: false,
+        reachable: false,
+        offline: true,
+        offlineText: "Offline · 3 min",
+        hasProject: true,
+        hasUsableModels: null,
+      }),
+    ).toEqual({
+      status: "offline",
+      text: "Offline",
+      selectable: false,
+      guidance: null,
+    });
+  });
+
+  it("keeps the offline age in the card tooltip", () => {
+    const rows = draftMachineCards({
+      config,
+      choices: [
+        {
+          environmentId: "studio",
+          label: "studio",
+          projectId: "p1",
+          primary: true,
+          connected: true,
+          hasUsableModels: true,
+        },
+        {
+          environmentId: "laptop",
+          label: "laptop",
+          projectId: "p1",
+          primary: false,
+          connected: false,
+          hasUsableModels: null,
+        },
+      ],
+      reachability: {
+        laptop: { reachable: false, offline: true, offlineText: "Offline · 3 min" },
+      },
+      selectedEnvironmentId: "studio",
+    });
+    const laptop = rows.find((row) => row.environmentId === "laptop");
+    expect(laptop?.status).toBe("offline");
+    expect(laptop?.text).toBe("Offline");
+    expect(laptop?.note).toBeNull();
+    expect(laptop?.hint).toBe("Offline · 3 min");
+  });
+});
+
 describe("draftMachineCardSync", () => {
   it("maps live replica states to the three card words", () => {
     expect(draftMachineCardSync("watching")).toBe("synced");

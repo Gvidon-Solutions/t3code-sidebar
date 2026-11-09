@@ -118,6 +118,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkspaceContentWidth } from "../layout/workspace-content-width";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { useReconnectWindow } from "../connection/useReconnectWindow";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
 import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
@@ -573,6 +574,7 @@ function ThreadDetailBody(
   const threadSyncLabel = useDelayedStatus(selectedThreadKey, realThreadSyncLabel);
   const connectionRetrying =
     props.connectionStateLabel === "connecting" || props.connectionStateLabel === "reconnecting";
+  const reconnectWindowElapsed = useReconnectWindow(connectionRetrying);
   const retryError = connectionRetrying ? props.connectionError : null;
   const retryConnectionError = useDelayedStatus(
     `${props.environmentId}:${retryError !== null}`,
@@ -738,6 +740,7 @@ function ThreadDetailBody(
       connectionState: props.connectionStateLabel,
       environmentLabel: meshEnvironmentLabel,
       hasCachedConversation: props.selectedThreadFeed.length > 0,
+      reconnectWindowElapsed,
       onReconnect: props.onReconnectEnvironment,
     });
     if (connectionStatus !== null && !props.draftMode) {

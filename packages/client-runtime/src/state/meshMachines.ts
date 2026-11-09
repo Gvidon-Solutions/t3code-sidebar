@@ -508,6 +508,26 @@ export function offlineMachineText(
   return `Offline · ${Math.floor(elapsed / 86_400_000)} d`;
 }
 
+/** Offline machines as the mesh reports them, even before this client's own connection drops. */
+export function offlineMeshEnvironmentIds(
+  machines: ReadonlyArray<{
+    readonly environmentId: string;
+    readonly network?: { readonly state: string } | null | undefined;
+  }>,
+): string[] {
+  return machines
+    .filter((machine) => machine.network?.state === "offline")
+    .map((machine) => machine.environmentId);
+}
+
+/** One machine's configured name and offline age, e.g. "laptop is offline · 3 min". */
+export function meshMachineOfflineText(
+  machine: Pick<MeshMachine, "label" | "lastSeenAt" | "lastExchangeAt">,
+  now = DateTime.toEpochMillis(DateTime.nowUnsafe()),
+): string {
+  return `${machine.label} is ${offlineMachineText(machine.lastSeenAt ?? machine.lastExchangeAt, now).toLowerCase()}`;
+}
+
 export interface MeshProjectRow {
   readonly key: string;
   readonly title: string;
@@ -749,4 +769,10 @@ export function offlineConversationStatus(input: {
       ? "Showing the last saved conversation. It is read-only until the machine is back."
       : "This machine is offline. Retry to load the conversation.",
   };
+}
+
+/** What a thread with no saved conversation says while its machine is offline. */
+export function offlineConversationEmptyText(label: string | null | undefined): string {
+  const machine = label?.trim() || "this machine";
+  return `This conversation lives on ${machine}, which is offline. It appears here when ${machine} is back.`;
 }

@@ -12,7 +12,8 @@ export type DraftMachineCardStatus =
   | "will-copy"
   | "no-models"
   | "cannot-host"
-  | "unreachable";
+  | "unreachable"
+  | "offline";
 
 export interface DraftMachineCardStateInput {
   readonly label: string;
@@ -21,6 +22,10 @@ export interface DraftMachineCardStateInput {
   /** The mesh can reach the machine, even when this client is not connected to it. */
   readonly reachable: boolean;
   readonly viaLabel?: string | null | undefined;
+  /** The mesh reports the machine offline, not merely absent from this client. */
+  readonly offline?: boolean;
+  /** The machine's offline age, e.g. "Offline · 3 min", for the tooltip. */
+  readonly offlineText?: string | null | undefined;
   /** The machine already holds the draft's project. */
   readonly hasProject: boolean;
   /** False for a scratch draft, which has no project and therefore no copies. */
@@ -48,6 +53,7 @@ export const DRAFT_MACHINE_CARD_TEXT_MAX = 24;
 /** Short visible phrases; the full sentence lives in the tooltip/aria-description. */
 export const draftMachineCardTexts = {
   unreachable: "Not connected here",
+  offline: "Offline",
   cannotHost: "Can't host a copy",
   noModels: "No models here",
   copying: "Copying…",
@@ -71,8 +77,9 @@ export function draftMachineCardState(input: DraftMachineCardStateInput): DraftM
   });
   if (!input.connected && !input.reachable) {
     return withGuidance({
-      status: "unreachable",
-      text: draftMachineCardTexts.unreachable,
+      status: input.offline === true ? "offline" : "unreachable",
+      text:
+        input.offline === true ? draftMachineCardTexts.offline : draftMachineCardTexts.unreachable,
       selectable: false,
     });
   }
@@ -131,6 +138,8 @@ export interface DraftMachineCardChoice {
 export interface DraftMachineCardReachability {
   readonly reachable: boolean;
   readonly viaLabel?: string | null | undefined;
+  readonly offline?: boolean;
+  readonly offlineText?: string | null | undefined;
 }
 
 export interface DraftMachineCardRow extends DraftMachineCardState {
@@ -167,6 +176,8 @@ export function draftMachineCards(input: {
         connected: choice.connected,
         reachable: reach?.reachable ?? false,
         viaLabel: reach?.viaLabel ?? null,
+        offline: reach?.offline ?? false,
+        offlineText: reach?.offlineText ?? null,
         hasProject: choice.projectId !== null,
         draftHasProject: input.draftHasProject ?? true,
         hasUsableModels: choice.hasUsableModels,
@@ -186,21 +197,25 @@ export function draftMachineCards(input: {
           ? null
           : state.selectable
             ? (state.guidance ?? null)
-            : state.status === "no-models" || state.status === "unreachable"
+            : state.status === "no-models" ||
+                state.status === "unreachable" ||
+                state.status === "offline"
               ? null
               : draftMachineCardTexts.notConnected;
       const hint =
         state.status === "cannot-host"
           ? `This server can't host a copy of the project. Update it to a version that supports the mesh.`
-          : state.status === "unreachable"
-            ? `Can't reach ${choice.label}. Connect this device to ${choice.label} to start a thread here.`
-            : state.status === "no-models"
-              ? `${choice.label} has no usable models for this project. Add or enable a provider there.`
-              : state.guidance !== null
-                ? `The selected model isn't available on ${choice.label}. Pick another machine or choose a model that exists there.`
-                : note !== null
-                  ? `This device is not connected to ${choice.label}${via ? `; the mesh reaches it through ${via}` : ""}. Connect this device to start a thread here.`
-                  : null;
+          : state.status === "offline"
+            ? (reach?.offlineText ?? draftMachineCardTexts.offline)
+            : state.status === "unreachable"
+              ? `Can't reach ${choice.label}. Connect this device to ${choice.label} to start a thread here.`
+              : state.status === "no-models"
+                ? `${choice.label} has no usable models for this project. Add or enable a provider there.`
+                : state.guidance !== null
+                  ? `The selected model isn't available on ${choice.label}. Pick another machine or choose a model that exists there.`
+                  : note !== null
+                    ? `This device is not connected to ${choice.label}${via ? `; the mesh reaches it through ${via}` : ""}. Connect this device to start a thread here.`
+                    : null;
       return {
         ...state,
         environmentId: choice.environmentId,

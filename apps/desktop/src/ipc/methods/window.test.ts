@@ -263,6 +263,7 @@ describe("readMedia", () => {
             Layer.mergeAll(
               Layer.mock(ElectronWindow.ElectronWindow)({ main: Effect.succeedSome(main) }),
               Layer.mock(DesktopUi)({
+                selectionLabel: Effect.succeed(null),
                 connectionOrigins: Effect.succeed(["https://example.com"]),
               }),
             ),

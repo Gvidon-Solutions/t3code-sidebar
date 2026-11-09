@@ -26,6 +26,8 @@ export function projectMachineStrip(
     readonly projectKey: string;
     readonly environmentIds: ReadonlyArray<string>;
     readonly knownEnvironmentIds: ReadonlyArray<string>;
+    /** Machines the mesh reports offline, even if this client has not noticed yet. */
+    readonly offlineEnvironmentIds?: ReadonlyArray<string>;
     readonly isScratch?: boolean;
   },
   liveStatuses: ReadonlyArray<ReplicaLiveStatus>,
@@ -34,6 +36,7 @@ export function projectMachineStrip(
 ): ProjectMachineStripModel {
   const reps = group.isScratch ? [] : (config.projectMounts[group.projectKey] ?? []);
   const connectedHere = new Set(group.knownEnvironmentIds);
+  const offlineHere = new Set(group.offlineEnvironmentIds ?? []);
   const known = new Set([
     ...group.knownEnvironmentIds,
     ...Object.keys(config.machines),
@@ -52,6 +55,7 @@ export function projectMachineStrip(
           const { status } = representationRow(config, liveStatuses, group.projectKey, rep);
           const state = status.state;
           const machine = displayOf(rep.environmentId);
+          const offline = offlineHere.has(rep.environmentId);
           const detail =
             status.message && (status.message.startsWith("Resolved ") || Boolean(status.skipped))
               ? status.message
@@ -84,20 +88,25 @@ export function projectMachineStrip(
                       ? "grey"
                       : "neutral",
             pending: state === "pending" || state === "mounting",
-            muted: !connectedHere.has(rep.environmentId),
+            muted: offline || !connectedHere.has(rep.environmentId),
             description:
               (rep.role === "primary"
                 ? `Primary on ${machine.label}`
                 : `Replica on ${machine.label} (${detail})`) +
-              (connectedHere.has(rep.environmentId)
-                ? ""
-                : offlineDescriptionOf?.(rep.environmentId)
+              (offline
+                ? offlineDescriptionOf?.(rep.environmentId)
                   ? ` · ${offlineDescriptionOf(rep.environmentId)}`
-                  : ""),
+                  : " · offline"
+                : connectedHere.has(rep.environmentId)
+                  ? ""
+                  : offlineDescriptionOf?.(rep.environmentId)
+                    ? ` · ${offlineDescriptionOf(rep.environmentId)}`
+                    : ""),
           };
         })
       : [...new Set(group.environmentIds)].map((environmentId) => {
           const machine = displayOf(environmentId);
+          const offline = offlineHere.has(environmentId);
           return {
             environmentId,
             machine,
@@ -105,14 +114,18 @@ export function projectMachineStrip(
             state: "watching",
             tone: "green",
             pending: false,
-            muted: !connectedHere.has(environmentId),
+            muted: offline || !connectedHere.has(environmentId),
             description:
               (group.isScratch ? `Scratch on ${machine.label}` : `Primary on ${machine.label}`) +
-              (connectedHere.has(environmentId)
-                ? ""
-                : offlineDescriptionOf?.(environmentId)
+              (offline
+                ? offlineDescriptionOf?.(environmentId)
                   ? ` · ${offlineDescriptionOf(environmentId)}`
-                  : ""),
+                  : " · offline"
+                : connectedHere.has(environmentId)
+                  ? ""
+                  : offlineDescriptionOf?.(environmentId)
+                    ? ` · ${offlineDescriptionOf(environmentId)}`
+                    : ""),
           };
         });
   return {

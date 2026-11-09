@@ -342,15 +342,37 @@ Shared client-runtime decisions keep web and Android answering these questions t
   copies by title (`sortRepresentationsMainFirst`). New-thread machine choices use the same rule.
 - **Offline machines.** A thread detail keeps its last synchronized conversation when the machine
   cannot answer; the composer is read-only and the banner names the configured machine rather than
-  its hostname (`offlineConversationStatus`). Sidebar strips dim unreachable tags with the offline
-  age, the footer says `<machine> is offline`, and machine detail project rows read
-  "last known: …".
+  its hostname (`offlineConversationStatus`). A thread whose conversation was never saved shows a
+  centred `offlineConversationEmptyText` pane with Retry. After the reconnect window a still-retrying
+  environment reads as offline, not "reconnecting". Sidebar strips dim tags that the mesh reports
+  offline even before this client's socket drops (`offlineMeshEnvironmentIds`), the footer says
+  `<machine> is offline`, and machine detail project rows read "last known: …".
 - **Provider instance patches.** Web settings send one instance through the shared
   `buildProviderInstancePatch`; adding a Codex account no longer sends the whole map, so an omitted
   instance survives the server merge and `null` deletes exactly one.
 - **Agent-kit adoption.** `MeshAgentKit` adopts an unmarked skill directory only when its
   `SKILL.md` frontmatter name is `t3` and it has `scripts/t3ctl.mjs`; it writes the managed marker
   and syncs. Any other unmarked directory is left untouched and reported.
+
+### Client review fixes (F7)
+
+- **Offline thread.** Web `OfflineConversationEmptyState` replaces the blank timeline when a server
+  thread has no saved projection and its environment stayed unavailable for
+  `ENVIRONMENT_RECONNECT_WARNING_GRACE_MS`; mobile `projectThreadContentPresentation` does the same
+  after `useReconnectWindow`. Both use `offlineConversationEmptyText` and offer Retry. The composer
+  banner passes `reconnecting: false` once that window passed.
+- **Offline machine cards.** `draftMachineCards` carries the mesh's `offline` state and its
+  `offlineMachineText` age from `DraftMachineCards` and the mobile new-task flow, so the card says
+  "Offline" while "Not connected here" stays for a machine the mesh reaches but this device does
+  not. The age is the tooltip.
+- **Machine tags.** `projectMachineStrip` takes `offlineEnvironmentIds`; a tag is muted when the
+  mesh reports it offline, independent of this client's connection. Web keeps the tag in the
+  breadcrumb immediately after the thread title (the title truncates first); the project picker
+  shows tags only and keeps names in its tooltip/`aria-label`. Link dialogs start from
+  `defaultLinkSource` (this machine first).
+- **Desktop fallback.** `ElectronProtocol` adds the attempted server's configured name to the
+  bundled fallback URL; `DesktopBundledOffline` shows plain copy, the address as a muted detail, and
+  no "bundled UI" wording.
 
 ## Interfaces
 

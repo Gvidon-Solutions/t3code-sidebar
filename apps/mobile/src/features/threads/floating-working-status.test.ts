@@ -37,3 +37,30 @@ describe("connectionFloatingStatus", () => {
     ).toBe("laptop is offline · Retry");
   });
 });
+
+it("stops saying reconnecting once the reconnect window has passed", () => {
+  expect(
+    labelOf(
+      connectionFloatingStatus({
+        connectionError: null,
+        connectionState: "reconnecting",
+        environmentLabel: "laptop",
+        hasCachedConversation: false,
+        reconnectWindowElapsed: true,
+        onReconnect: () => undefined,
+      }),
+    ),
+  ).toBe("laptop is offline · Retry");
+  expect(
+    labelOf(
+      connectionFloatingStatus({
+        connectionError: null,
+        connectionState: "reconnecting",
+        environmentLabel: "laptop",
+        hasCachedConversation: false,
+        reconnectWindowElapsed: false,
+        onReconnect: () => undefined,
+      }),
+    ),
+  ).toBe("Reconnecting to laptop...");
+});

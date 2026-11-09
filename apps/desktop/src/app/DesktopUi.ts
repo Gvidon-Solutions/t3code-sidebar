@@ -44,6 +44,7 @@ export class DesktopUi extends Context.Service<
   DesktopUi,
   {
     readonly selection: Effect.Effect<DesktopUiSelection | null>;
+    readonly selectionLabel: Effect.Effect<string | null>;
     readonly connectionOrigins: Effect.Effect<ReadonlyArray<string>, DesktopUiError>;
     readonly select: (selection: DesktopUiSelection) => Effect.Effect<boolean, DesktopUiError>;
     readonly getInfo: Effect.Effect<DesktopUiInfo>;
@@ -198,6 +199,18 @@ export const make = Effect.gen(function* () {
       ),
     ),
     selection: restore.pipe(Effect.andThen(Ref.get(selected))),
+    selectionLabel: Effect.gen(function* () {
+      yield* restore;
+      const current = yield* Ref.get(selected);
+      if (current === null) return null;
+      const raw = yield* catalog.get;
+      if (Option.isNone(raw)) return null;
+      const doc = yield* decodeCatalog(raw.value);
+      const label = doc.targets.find(
+        (target) => target.environmentId === current.environmentId,
+      )?.label;
+      return label === undefined || label.trim() === "" ? null : label.trim();
+    }).pipe(Effect.orElseSucceed(() => null)),
     select,
     recordSource: Effect.fn("desktop.ui.recordSource")(function* (origin, reason) {
       const current = yield* Ref.get(selected);

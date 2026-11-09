@@ -95,7 +95,10 @@ import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
-import { offlineMachineText } from "@t3tools/client-runtime/state/mesh-machines";
+import {
+  meshMachineOfflineText,
+  offlineMeshEnvironmentIds,
+} from "@t3tools/client-runtime/state/mesh-machines";
 import {
   useClientSettings,
   usePrimarySettings,
@@ -363,14 +366,12 @@ export default function WorkspaceSidebar() {
   const connectedEnvironmentIds = environments
     .filter((environment) => environment.connection.phase === "connected")
     .map((environment) => environment.environmentId);
+  // The mesh knows a machine is offline before this client's own socket notices.
+  const offlineEnvironmentIds = offlineMeshEnvironmentIds(meshMachineRows);
   const offlineDescriptionFor = (environmentId: string): string | null => {
-    if (connectedEnvironmentIds.some((id) => String(id) === environmentId)) return null;
     const machine = meshMachineRows.find((row) => row.environmentId === environmentId);
-    const text = offlineMachineText(
-      machine?.lastSeenAt ?? machine?.lastExchangeAt ?? null,
-      minuteTickToEpochMs(nowMinute),
-    );
-    return `${machine?.label ?? machineDisplayFor(environmentId).label} is ${text.toLowerCase()}`;
+    if (machine === undefined) return null;
+    return meshMachineOfflineText(machine, minuteTickToEpochMs(nowMinute));
   };
   // Rows outside a folder (pinned, snoozed, voice, search) show tags only when the
   // list can mix machines at all.
@@ -1719,6 +1720,7 @@ export default function WorkspaceSidebar() {
                     ? folder.all.map((thread) => thread.environmentId)
                     : folder.group.memberProjects.map((member) => member.environmentId),
                   knownEnvironmentIds: connectedEnvironmentIds,
+                  offlineEnvironmentIds,
                   isScratch: folder.isScratch,
                 },
                 liveReplicaStatuses,

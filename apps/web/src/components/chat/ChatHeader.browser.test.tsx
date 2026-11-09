@@ -3,6 +3,7 @@ import { expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
 const persisted = vi.hoisted(() => ({ title: "" }));
+const mesh = vi.hoisted(() => ({ config: null as unknown }));
 vi.mock(import("../../state/session"), async (importOriginal) => ({
   ...(await importOriginal()),
   useEnvironmentScope: () => true,
@@ -20,7 +21,12 @@ vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
   useThreadActionMenu: () => ({ openMenu: () => {}, closeMenu: () => {} }),
 }));
 vi.mock(import("../../hooks/useMeshLayout"), () => ({
-  useMeshLayout: () => ({ config: null, source: null, state: {} as never, edit: () => {} }),
+  useMeshLayout: () => ({
+    config: mesh.config as never,
+    source: null,
+    state: {} as never,
+    edit: () => {},
+  }),
 }));
 
 import { render } from "../../../test/render";
@@ -48,6 +54,7 @@ function header(title: string) {
 it.each(["blur", "Enter"] as const)(
   "preserves a concurrent title update when an untouched rename ends with %s",
   async (finish) => {
+    mesh.config = null;
     persisted.title = "New thread";
     await using screen = await render(header(persisted.title));
     await screen.getByRole("button", { name: "Thread actions for New thread" }).dblClick();
@@ -74,3 +81,27 @@ it.each(["blur", "Enter"] as const)(
     expect(persisted.title).toBe("My edited title");
   },
 );
+
+it("keeps the machine tag directly after the thread title", async () => {
+  mesh.config = {
+    machines: {
+      environment: { title: "Laptop", tag: "LT" },
+      studio: { title: "Studio", tag: "ST" },
+    },
+    projectMounts: {},
+    projectMountStatus: {},
+  } as never;
+  await using screen = await render(header("A thread title long enough to need truncation"));
+  const breadcrumb = screen.container.querySelector('[aria-label="Thread breadcrumb"]');
+  const title = screen.container.querySelector(
+    '[aria-label="Thread actions for A thread title long enough to need truncation"]',
+  );
+  const tag = screen.container.querySelector('[role="img"][aria-label="Machine: Laptop"]');
+  expect(breadcrumb).not.toBeNull();
+  expect(title).not.toBeNull();
+  expect(tag).not.toBeNull();
+  expect(breadcrumb!.contains(tag!)).toBe(true);
+  expect(title!.compareDocumentPosition(tag!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // The title no longer grows to the far end of the header; it truncates before the tag.
+  expect(getComputedStyle(title!).flexGrow).toBe("0");
+});

@@ -98,6 +98,7 @@ import type { ReviewCommentContext } from "../reviewCommentContext";
 import { derivePhase, type TimelineEntry } from "../session-logic";
 import type { PreviewMiniPlayerSource } from "../previewMiniPlayerStore";
 import type { DesktopPreviewOverlay } from "../previewStateStore";
+import { offlineConversationStatus } from "@t3tools/client-runtime/state/mesh-machines";
 import type { RightPanelSurface } from "../rightPanelStore";
 import {
   NO_PROVIDER_MODEL_SELECTION,
@@ -1626,4 +1627,33 @@ export function deriveAvailableRevertTurnCounts(projection: ThreadStructure | nu
     if (providerTurn?.providerThreadId === providerThread.id) available.add(run.ordinal);
   }
   return available;
+}
+
+/** A thread with no saved conversation shows a calm offline pane instead of an empty timeline. */
+export function showsOfflineConversationEmpty(input: {
+  readonly isServerThread: boolean;
+  readonly environmentUnavailable: boolean;
+  readonly hasConversation: boolean;
+  readonly reconnectWindowElapsed: boolean;
+}): boolean {
+  return (
+    input.isServerThread &&
+    input.environmentUnavailable &&
+    !input.hasConversation &&
+    input.reconnectWindowElapsed
+  );
+}
+
+/** The composer banner's words: a still-retrying machine reads offline once the window passes. */
+export function environmentUnavailableBannerStatus(input: {
+  readonly label: string | null | undefined;
+  readonly reconnecting: boolean;
+  readonly reconnectWindowElapsed: boolean;
+  readonly hasCachedConversation: boolean;
+}) {
+  return offlineConversationStatus({
+    label: input.label,
+    reconnecting: input.reconnecting && !input.reconnectWindowElapsed,
+    hasCachedConversation: input.hasCachedConversation,
+  });
 }

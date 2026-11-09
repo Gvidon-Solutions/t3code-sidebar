@@ -19,12 +19,14 @@ import { useEnvironments } from "../../state/environments";
 import { peerLinkEnvironment } from "../../state/peerLinks";
 import { mintPairingCodeOn } from "../../state/peerPairingCode";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { defaultLinkSource } from "@t3tools/client-runtime/state/mesh-layout";
 import { meshLinkSourceOptions, meshLinkTargets } from "./mesh-settings.logic";
 
 export function MeshLinkForm(props: {
   readonly machines: readonly MeshMachine[];
   readonly onDone: () => void;
   readonly links: ReadonlyArray<MeshLinkSource>;
+  readonly thisMachineId?: string | null;
 }) {
   const { environments } = useEnvironments();
   const permitted = useEnvironmentsWithScope(environments, AuthAccessWriteScope);
@@ -36,7 +38,14 @@ export function MeshLinkForm(props: {
         props.machines.find((machine) => machine.environmentId === source.environmentId)?.label ??
         source.label,
     }));
-  const [source, setSource] = useState(sources[0]?.environmentId ?? null);
+  const [source, setSource] = useState(
+    defaultLinkSource(sources, (props.thisMachineId as EnvironmentId | null | undefined) ?? null),
+  );
+  const selectedSource =
+    source ??
+    defaultLinkSource(sources, (props.thisMachineId as EnvironmentId | null | undefined) ?? null) ??
+    sources[0]?.environmentId ??
+    null;
   const [target, setTarget] = useState<MeshMachine | null>(null);
   const canMint =
     useEnvironmentScope(
@@ -52,7 +61,7 @@ export function MeshLinkForm(props: {
     reportFailure: true,
   });
   const submit = async () => {
-    if (!source || source === target?.environmentId || !url.trim()) return;
+    if (!selectedSource || selectedSource === target?.environmentId || !url.trim()) return;
     const chosenTarget =
       target === null
         ? null
@@ -60,7 +69,7 @@ export function MeshLinkForm(props: {
     setBusy(true);
     try {
       const result = await linkMeshMachines({
-        source,
+        source: selectedSource,
         target: chosenTarget,
         url,
         code,
@@ -96,13 +105,13 @@ export function MeshLinkForm(props: {
           }}
         >
           <Text>
-            {e.environmentId === source ? "✓ " : ""}
+            {e.environmentId === selectedSource ? "✓ " : ""}
             {e.label}
           </Text>
         </Pressable>
       ))}
       <Text>Link to</Text>
-      {meshLinkTargets(props.machines, source).map((m) => (
+      {meshLinkTargets(props.machines, selectedSource).map((m) => (
         <Pressable
           accessibilityRole="button"
           className="min-h-[45px] justify-center"
@@ -153,7 +162,7 @@ export function MeshLinkForm(props: {
         <Pressable
           accessibilityRole="button"
           className="min-h-[45px] justify-center"
-          disabled={busy || !source || !url.trim() || (!canMint && !code.trim())}
+          disabled={busy || !selectedSource || !url.trim() || (!canMint && !code.trim())}
           onPress={() => void submit()}
         >
           <Text>{busy ? "Linking…" : "Link"}</Text>

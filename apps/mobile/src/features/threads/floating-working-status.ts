@@ -52,6 +52,8 @@ export function connectionFloatingStatus(input: {
   readonly connectionState: EnvironmentConnectionPhase;
   readonly environmentLabel: string | null;
   readonly hasCachedConversation?: boolean;
+  /** The reconnect window passed, so a still-retrying connection is offline. */
+  readonly reconnectWindowElapsed?: boolean;
   readonly onReconnect: () => void;
 }): FloatingWorkingStatus | null {
   const environmentLabel = input.environmentLabel ?? "Machine";
@@ -65,6 +67,18 @@ export function connectionFloatingStatus(input: {
   switch (input.connectionState) {
     case "connecting":
     case "reconnecting":
+      if (input.reconnectWindowElapsed === true) {
+        const status = offlineConversationStatus({
+          label: environmentLabel,
+          reconnecting: false,
+          hasCachedConversation: input.hasCachedConversation === true,
+        });
+        return unavailable(
+          input.hasCachedConversation
+            ? `${status.title} · showing the last saved conversation`
+            : `${status.title} · Retry`,
+        );
+      }
       return {
         kind: "connection",
         tone: "reconnecting",
