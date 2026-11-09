@@ -470,6 +470,29 @@ describe("new draft destination", () => {
     expect(call?.[3]).toMatchObject({ environmentSelection: "manual" });
   });
 
+  it("keeps a stored manual machine choice on a plain new thread", async () => {
+    testState.reset({
+      draftId: "draft-chosen",
+      environmentId: "environment-ssh",
+      promotedTo: null,
+      threadId: "thread-chosen",
+      environmentSelection: "manual",
+    } as never);
+    testState.setMeshConfig(meshConfig);
+
+    await useNewThreadHandler()(
+      { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+      {},
+    );
+
+    const call = testState.draftStore.setLogicalProjectDraftThreadId.mock.calls.at(-1);
+    expect(call?.[1]).toEqual({
+      environmentId: "environment-ssh",
+      projectId: "project-remote",
+    });
+    expect(call?.[3]).toMatchObject({ environmentSelection: "manual" });
+  });
+
   it("reuses a draft made before the mesh snapshot under the grouping key", async () => {
     testState.reset({
       draftId: "draft-early",

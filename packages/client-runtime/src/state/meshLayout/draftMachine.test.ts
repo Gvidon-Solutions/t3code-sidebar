@@ -28,6 +28,16 @@ describe("draft machine defaults", () => {
     expect(defaultDraftMachine(machines, "primary")).toBe("authenticated");
     expect(defaultDraftMachine(machines, "offline")).toBe("authenticated");
   });
+  it("returns to the main copy once it is usable again", () => {
+    const offlineMain = machines.map((machine) =>
+      machine.environmentId === "primary" ? { ...machine, connected: false } : machine,
+    );
+    expect(defaultDraftMachine(offlineMain, null)).toBe("authenticated");
+    const backOnline = machines.map((machine) =>
+      machine.environmentId === "primary" ? { ...machine, connected: true, usable: true } : machine,
+    );
+    expect(defaultDraftMachine(backOnline, null)).toBe("primary");
+  });
   it("never picks an offline remembered machine", () => {
     const onlyOfflineRemembered = machines.filter(
       (machine) => machine.environmentId !== "authenticated",
