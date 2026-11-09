@@ -330,3 +330,71 @@ it.effect("never writes through a symlinked instruction file and reports it", ()
     expect(yield* fs.readFileString(`${home}/.claude/skills/t3/SKILL.md`)).toBe("skill v1");
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
+
+it.effect("adopts an unmarked skill the retired kit wrote and syncs it", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-adopt-" });
+    const source = `${home}/bundled`;
+    yield* fs.makeDirectory(`${source}/scripts`, { recursive: true });
+    yield* fs.writeFileString(
+      `${source}/SKILL.md`,
+      "---\nname: t3\ndescription: bundle\n---\n\nnew body\n",
+    );
+    yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
+    yield* fs.makeDirectory(`${home}/.codex/skills/t3/scripts`, { recursive: true });
+    yield* fs.writeFileString(
+      `${home}/.codex/skills/t3/SKILL.md`,
+      "---\nname: t3\ndescription: old\n---\n\nold body\n",
+    );
+    yield* fs.writeFileString(`${home}/.codex/skills/t3/scripts/t3ctl.mjs`, "export {};");
+    const kit = yield* Kit.MeshAgentKit.pipe(
+      Effect.provide(Kit.layer.pipe(Layer.provide(Settings.layerTest()))),
+      Effect.provideService(HostProcess.Environment, {
+        T3_MESH_AGENT_HOME: home,
+        T3_MESH_AGENT_SOURCE: source,
+      }),
+      Effect.provideService(SpawnExecutableResolution, () => undefined),
+    );
+    yield* kit.reconcile({ schema: 1, machines: { studio: { label: "ST" } } });
+    expect(yield* fs.exists(`${home}/.codex/skills/t3/.t3-managed`)).toBe(true);
+    expect(yield* fs.readFileString(`${home}/.codex/skills/t3/SKILL.md`)).toContain("new body");
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("refuses an unmarked skill directory that is not recognisably ours", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-refuse-" });
+    const source = `${home}/bundled`;
+    yield* fs.makeDirectory(`${source}/scripts`, { recursive: true });
+    yield* fs.writeFileString(`${source}/SKILL.md`, "---\nname: t3\n---\nnew\n");
+    yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
+    // Our name, but not our layout: no scripts/t3ctl.mjs.
+    yield* fs.makeDirectory(`${home}/.codex/skills/t3`, { recursive: true });
+    yield* fs.writeFileString(
+      `${home}/.codex/skills/t3/SKILL.md`,
+      "---\nname: t3\ndescription: imported\n---\n\nowner body\n",
+    );
+    const kit = yield* Kit.MeshAgentKit.pipe(
+      Effect.provide(Kit.layer.pipe(Layer.provide(Settings.layerTest()))),
+      Effect.provideService(HostProcess.Environment, {
+        T3_MESH_AGENT_HOME: home,
+        T3_MESH_AGENT_SOURCE: source,
+      }),
+      Effect.provideService(SpawnExecutableResolution, () => undefined),
+    );
+    const failure = yield* kit.reconcile({ schema: 1, machines: {} }).pipe(Effect.flip);
+    expect(failure.reason).toBe("validation");
+    expect(failure.message).toContain("not a T3-managed t3 skill");
+    expect(yield* fs.exists(`${home}/.codex/skills/t3/.t3-managed`)).toBe(false);
+    expect(yield* fs.readFileString(`${home}/.codex/skills/t3/SKILL.md`)).toContain("owner body");
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it("recognises only a t3 frontmatter name", () => {
+  expect(Kit.isRecognizablyT3Skill("---\nname: t3\ndescription: x\n---\nbody")).toBe(true);
+  expect(Kit.isRecognizablyT3Skill("---\nname: 't3'\n---\nbody")).toBe(true);
+  expect(Kit.isRecognizablyT3Skill("---\nname: other\n---\nbody")).toBe(false);
+  expect(Kit.isRecognizablyT3Skill("no frontmatter name: t3")).toBe(false);
+});
