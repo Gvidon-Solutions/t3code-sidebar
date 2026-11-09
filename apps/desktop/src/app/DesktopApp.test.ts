@@ -152,6 +152,7 @@ it.effect(
             DesktopUi.DesktopUi,
             DesktopUi.DesktopUi.of({
               selection: Effect.succeed(null),
+              selectionLabel: Effect.succeed(null),
               connectionOrigins: Effect.succeed([]),
               select: () => Effect.succeed(false),
               recordSource: () => Effect.void,

@@ -195,6 +195,7 @@ const bootstrap = Effect.gen(function* () {
                 );
               }),
             ),
+          serverName: () => resolveUiOrigin(desktopUi.selectionLabel),
         }),
     clerkFrontendApiHostname: DesktopClerk.desktopClerkFrontendApiHostname,
   });

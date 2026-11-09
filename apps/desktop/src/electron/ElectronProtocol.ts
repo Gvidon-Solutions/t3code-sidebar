@@ -67,6 +67,7 @@ export type DesktopProtocolRegistrationInput = {
   | {
       readonly assetDirectory: string;
       readonly serverOrigin?: () => Promise<URL | null>;
+      readonly serverName?: () => Promise<string | null>;
       readonly onSource?: (origin: URL | null, reason?: string) => Promise<void>;
     }
 );
@@ -192,9 +193,9 @@ function escapeHtml(value: string): string {
 
 /** Dev-only shell fallback when the Vite target server is down (production serves bundled assets). */
 export function offlineShellResponse(targetOrigin: URL): Response {
-  const label = escapeHtml(targetOrigin.host || targetOrigin.href);
+  const address = escapeHtml(targetOrigin.host || targetOrigin.href);
   return new Response(
-    `<!doctype html><meta charset="utf-8"><title>Can't reach ${label}</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#000;color:#eee;font:15px system-ui,sans-serif"><main style="text-align:center;padding:24px"><h1 style="font-size:20px;font-weight:600">Can't reach ${label}</h1><p style="color:#aaa">The desktop app is showing its bundled UI. Start the server, then retry.</p><button onclick="location.reload()" style="margin-top:8px;padding:8px 14px;border-radius:8px;border:1px solid #444;background:#222;color:#eee;font:inherit;cursor:pointer">Retry</button></main></body>`,
+    `<!doctype html><meta charset="utf-8"><title>Can't reach the server</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#000;color:#eee;font:15px system-ui,sans-serif"><main style="text-align:center;padding:24px;max-width:420px"><h1 style="font-size:20px;font-weight:600">Can't reach the server</h1><p style="color:#aaa;line-height:1.6">T3 Code can't reach the server. Make sure it is running, then try again.</p><p style="color:#777;font-size:12px">${address}</p><button onclick="location.reload()" style="margin-top:12px;padding:8px 14px;border-radius:8px;border:1px solid #444;background:#222;color:#eee;font:inherit;cursor:pointer">Retry</button></main></body>`,
     {
       status: 503,
       headers: {
@@ -435,6 +436,8 @@ export const make = Effect.gen(function* () {
                   fallback.searchParams.set("desktopWindowId", String(rendererId));
                   fallback.searchParams.set("bundled", "1");
                   if (origin) fallback.searchParams.set("server", origin.href);
+                  const name = input.serverName ? await input.serverName() : null;
+                  if (name) fallback.searchParams.set("name", name);
                   navigations.set(rendererId, fallback.href);
                   return Response.redirect(fallback.href, 302);
                 }
