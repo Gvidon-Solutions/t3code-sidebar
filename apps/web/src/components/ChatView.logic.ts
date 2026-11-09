@@ -1657,3 +1657,21 @@ export function environmentUnavailableBannerStatus(input: {
     hasCachedConversation: input.hasCachedConversation,
   });
 }
+
+/**
+ * Whether the composer treats the machine as offline and blocks typing. A normal
+ * reconnect keeps the editor usable during the grace window, and a draft may
+ * queue its message for a machine the composer cannot reach right now.
+ */
+export function composerEnvironmentUnavailableState<
+  T extends { connection: { phase: string } },
+>(input: {
+  readonly isDraft: boolean;
+  readonly state: T | null;
+  readonly reconnectWindowElapsed: boolean;
+}): T | null {
+  if (input.isDraft || input.state === null) return null;
+  const phase = input.state.connection.phase;
+  const reconnecting = phase === "connecting" || phase === "reconnecting";
+  return reconnecting && !input.reconnectWindowElapsed ? null : input.state;
+}
