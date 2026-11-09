@@ -118,6 +118,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkspaceContentWidth } from "../layout/workspace-content-width";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { offlineComposerPlaceholder } from "@t3tools/client-runtime/state/mesh-machines";
 import { useReconnectWindow } from "../connection/useReconnectWindow";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
@@ -575,6 +576,8 @@ function ThreadDetailBody(
   const connectionRetrying =
     props.connectionStateLabel === "connecting" || props.connectionStateLabel === "reconnecting";
   const reconnectWindowElapsed = useReconnectWindow(connectionRetrying);
+  const offlineConversation =
+    props.contentPresentation.kind === "unavailable" && props.connectionStateLabel !== "connected";
   const retryError = connectionRetrying ? props.connectionError : null;
   const retryConnectionError = useDelayedStatus(
     `${props.environmentId}:${retryError !== null}`,
@@ -741,6 +744,9 @@ function ThreadDetailBody(
       environmentLabel: meshEnvironmentLabel,
       hasCachedConversation: props.selectedThreadFeed.length > 0,
       reconnectWindowElapsed,
+      offlinePaneVisible:
+        props.contentPresentation.kind === "unavailable" &&
+        props.connectionStateLabel !== "connected",
       onReconnect: props.onReconnectEnvironment,
     });
     if (connectionStatus !== null && !props.draftMode) {
@@ -1807,8 +1813,11 @@ function ThreadDetailBody(
                             ? props.activePendingApproval.supportsFeedback
                               ? "Send feedback to decline this request"
                               : "Send a message to decline and redirect the agent"
-                            : "Ask anything"
+                            : offlineConversation
+                              ? offlineComposerPlaceholder(meshEnvironmentLabel)
+                              : "Ask anything"
                         }
+                        offlineConversation={offlineConversation}
                         contentMaxWidth={contentMaxWidth}
                         draftControls={props.draftMode?.controls}
                         draftFooter={props.draftMode?.footer}

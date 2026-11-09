@@ -23,6 +23,7 @@ import {
   sortMeshMachinesForSettings,
   offlineConversationStatus,
   offlineConversationEmptyText,
+  offlineComposerPlaceholder,
   offlineMeshEnvironmentIds,
   meshMachineOfflineText,
 } from "./meshMachines.ts";
@@ -754,6 +755,12 @@ describe("offline conversation", () => {
     expect(offlineConversationEmptyText(null)).toBe(
       "This conversation lives on this machine, which is offline. It appears here when this machine is back.",
     );
+  });
+
+  it("gives the disabled composer a short machine-named placeholder", () => {
+    expect(offlineComposerPlaceholder("laptop")).toBe("laptop is offline");
+    expect(offlineComposerPlaceholder(" laptop ")).toBe("laptop is offline");
+    expect(offlineComposerPlaceholder(null)).toBe("This machine is offline");
   });
 
   it("reads offline machines and their age from the mesh status", () => {

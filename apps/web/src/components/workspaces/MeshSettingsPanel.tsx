@@ -93,7 +93,7 @@ function LinkWithDialog(props: {
   }>;
   readonly defaultSource: EnvironmentId | null;
 }) {
-  const [source, setSource] = useState<EnvironmentId | null>(props.defaultSource);
+  const [chosenSource, setChosenSource] = useState<EnvironmentId | null>(null);
   const [target, setTarget] = useState<string | null>(null);
   const [url, setUrl] = useState("");
   const [pairingCode, setPairingCode] = useState("");
@@ -103,14 +103,22 @@ function LinkWithDialog(props: {
   const targetEnvironmentId = (targetMachine?.environmentId as EnvironmentId | undefined) ?? null;
   const connected = usePreparedConnection(targetEnvironmentId);
   const mayMint = useEnvironmentScope(targetEnvironmentId, AuthAccessWriteScope);
+  const link = useAtomCommand(peerLinkEnvironment.link, { label: "link environment" });
+  // The default follows the environment that serves this UI as the catalog settles. A pick made
+  // here outranks it, but only while that machine is still offered.
+  const selectedSource =
+    (chosenSource !== null && props.sources.some((entry) => entry.environmentId === chosenSource)
+      ? chosenSource
+      : null) ??
+    props.defaultSource ??
+    props.sources[0]?.environmentId ??
+    null;
   const canMint =
     targetMachine !== null &&
-    targetMachine.environmentId !== source &&
+    targetMachine.environmentId !== selectedSource &&
     targetMachine.connectedHere &&
     Option.isSome(connected) &&
     mayMint;
-  const link = useAtomCommand(peerLinkEnvironment.link, { label: "link environment" });
-  const selectedSource = source ?? props.defaultSource ?? props.sources[0]?.environmentId ?? null;
   const ready =
     selectedSource !== null && url.trim().length > 0 && (canMint || pairingCode.trim().length > 0);
   const reset = () => {
@@ -183,7 +191,7 @@ function LinkWithDialog(props: {
                 <Select
                   value={selectedSource}
                   onValueChange={(value) => {
-                    setSource(value as EnvironmentId);
+                    setChosenSource(value as EnvironmentId);
                     reset();
                   }}
                 >

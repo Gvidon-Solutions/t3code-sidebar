@@ -64,3 +64,30 @@ it("stops saying reconnecting once the reconnect window has passed", () => {
     ),
   ).toBe("Reconnecting to laptop...");
 });
+
+it("yields to the centred offline conversation pane", () => {
+  expect(
+    connectionFloatingStatus({
+      connectionError: null,
+      connectionState: "error",
+      environmentLabel: "laptop",
+      hasCachedConversation: false,
+      reconnectWindowElapsed: true,
+      offlinePaneVisible: true,
+      onReconnect: () => undefined,
+    }),
+  ).toBeNull();
+  expect(
+    labelOf(
+      connectionFloatingStatus({
+        connectionError: null,
+        connectionState: "error",
+        environmentLabel: "laptop",
+        hasCachedConversation: true,
+        reconnectWindowElapsed: true,
+        offlinePaneVisible: false,
+        onReconnect: () => undefined,
+      }),
+    ),
+  ).toBe("laptop is offline · showing the last saved conversation");
+});
