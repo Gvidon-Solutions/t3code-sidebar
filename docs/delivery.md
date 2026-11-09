@@ -179,15 +179,35 @@ local credentials and storage apart. Privileged IPC checks the sender frame and 
 when the preload is bypassed. HTML bypasses cache; resources remain pinned to the document's
 server. Server responses must advertise `t3-desktop-ui-protocol: 1` and
 `t3-desktop-bridge: reduced-1`. Missing/incompatible headers or unavailable HTML redirect to the
-bundled client. Relay-only connections also use the bundled client. Server UI pairs as a web
-client and cannot manage the desktop's saved connections. Settings › About offers **Open desktop settings** to return to the trusted local client. `T3CODE_DESKTOP_UI_URL` follows the
+bundled client. Relay-only connections also use the bundled client. Settings › About offers **Open desktop settings** to return to the trusted local client. `T3CODE_DESKTOP_UI_URL` follows the
 same secure-source and compatibility checks.
+
+Server UI authenticates first-party through the shell proxy. Its document keeps the
+`t3code://server-…` origin, and its HTTP base is that same origin: the shell forwards requests to
+the server, injects the bearer the trusted bundled client handed over when it selected the
+source, and keeps browser-session cookies in the shell's own jar. Credentials and the cookie jar
+never enter the reduced renderer; the server UI can still pair as a web client, which is the
+fallback when no bearer exists. WebSocket upgrades cannot use a custom scheme, so the client mints
+a short-lived RPC ticket through the same proxy and connects to the server's own WSS origin.
+Before serving an auto-selected document, the shell verifies the injected credential with
+`/api/auth/session`; a rejected credential marks the source and keeps the bundled client. Chunk
+and `vite:preloadError` failures during a restart show "Reconnecting to <machine>…", retry the
+session endpoint, then reload, or return to the bundled client.
 
 Run `xvfb-run -a apps/desktop/node_modules/electron/dist/electron --no-sandbox
 apps/desktop/scripts/delivery-ui-proof.mjs` to run a hostile HTTP loopback server against the
 production preload and IPC transport, in a temporary Electron profile. It verifies denied
 credential/catalog/SSH/exposure/media/external IPC, isolated storage and compatibility fallback.
 No installed desktop profile or live T3 server is used. Xvfb is unnecessary on a graphical desktop.
+
+Run `xvfb-run -a apps/desktop/node_modules/electron/dist/electron --no-sandbox
+apps/desktop/scripts/delivery-server-ui-proof.mjs` for the complementary real-session proof. It
+starts a real `t3 serve` from this checkout behind a temporary HTTPS proxy with a self-signed
+certificate trusted only by the temporary Electron profile, then shows: pairing reaches an
+authenticated server UI and shell; a chunk failure during a restart shows the reconnecting
+surface and recovers; a reload during downtime uses the bundled offline page; and a credential
+the server rejects selects the bundled client. Screenshots and an index are written to
+`/data/w2-shots/`.
 
 Native APK offers require OTA-key-signed metadata containing the update origin, target runtime
 and SHA-256. The build embeds the same public certificate used by Expo code signing; rotating it

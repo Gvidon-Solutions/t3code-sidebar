@@ -109,6 +109,35 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — Desktop server UI: pairing, restart recovery and safe fallback
+
+- **What.** Desktop server UI can authenticate again. Its HTTP is first-party through the shell
+  proxy, so the pairing cookie survives; the proxy holds the session cookie and the bearer the
+  trusted bundled client hands over at selection, and the reduced renderer never sees either.
+  WebSocket uses a short-lived ticket minted through the same proxy. If the server rejects the
+  shell's credential, the document is not served: the bundled client with the saved connections
+  is used instead. A chunk or CSS preload failure during a server restart now shows
+  "Reconnecting to <machine>…" and reloads when the server answers, instead of the boot error.
+  A whole pairing link (including `t3code://pair?pairingUrl=`) can be pasted into the pairing
+  token field on web, Settings › Connections and mobile.
+- **How.** The server UI API base is its own renderer origin; the shell proxy captures
+  `Set-Cookie` into a per-window jar and injects credentials for proxied requests. `ui.select`
+  carries the credential from the trusted bundled client only, keeps it in memory, and never
+  persists it. A `/api/auth/session` preflight rejects a document whose injected credential does
+  not authenticate. `vite:preloadError` and chunk failures install a reconnecting surface on the
+  server-UI origin. `extractPairingCredential` and `readPairingUrlInput` in shared/remote parse
+  links before submission.
+- **Where.** `apps/desktop/src/electron/ElectronProtocol.ts`, `apps/desktop/src/app/DesktopUi.ts`,
+  `apps/desktop/src/ipc/{methods/ui,DesktopIpcHandlers,channels,rendererTrust}.ts`,
+  `apps/desktop/src/preload.ts`; web `components/desktop/{DesktopUiCoordinator,serverUiSource}.ts(x)`,
+  `components/auth/PairingRouteSurface.tsx`, `components/settings/ConnectionsSettings.logic.ts`,
+  `environments/primary/{target,desktopAuth}.ts`, `lib/serverUiReconnect.ts`, `bootstrap.ts`;
+  client-runtime `platform/capabilities.ts`, `connection/resolver.ts`; mobile
+  `features/connection/{pairing,ConnectionsNewRouteScreen}.ts(x)`; contracts
+  `desktopUi.ts`, `ipc.ts`; `packages/shared/src/remote.ts`;
+  `apps/desktop/scripts/delivery-server-ui-proof.mjs`; `docs/delivery.md`,
+  `docs/mesh/README.md`.
+
 ### 2026-11-09 — Environments screens speak mesh names
 
 - **What.** Every surface that names a server now follows one rule: a machine the mesh config lists

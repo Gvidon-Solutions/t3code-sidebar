@@ -1334,6 +1334,17 @@ or unavailable sources redirect to the bundled origin. Server CSP forbids object
 connections to saved catalog origins. Media IPC permits only saved origins, omits credentials
 and refuses redirects. The isolated hostile-server proof is documented in delivery.md.
 
+Server-UI HTTP stays on the same `t3code://server-…` origin; the shell proxy forwards it and
+injects the bearer the trusted bundled client handed over at `ui.select`, so the reduced renderer
+never holds a credential. Browser-session cookies from the pairing flow live in the shell's jar,
+not in renderer storage. WebSocket upgrades cannot run over a custom scheme, so the client mints
+an RPC ticket through the proxy and connects to the server's own WSS origin. A document selected
+with an injected credential is preflighted against `/api/auth/session`; a rejected credential
+selects the bundled client instead of a pair page. Chunk and preload failures during a restart
+show "Reconnecting to <machine>…" and reload after the server answers, or fall back. The real
+session proof (`delivery-server-ui-proof.mjs`) covers pairing, restart recovery and the fallback
+in delivery.md.
+
 Bootstrap requires an explicit HTTPS `reach.address`, an accepted OpenSSH public key in
 `bootstrap.hostKey`, and a pinned runtime digest in `t3.runtimeChecksums` before download.
 The plan displays the SSH SHA-256 fingerprint; obtain and compare the key through a trusted
