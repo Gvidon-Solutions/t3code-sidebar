@@ -322,6 +322,36 @@ Shared client-runtime decisions keep web and Android answering these questions t
   `/connect-agent` and guest pages, to the saved/system appearance. Release bundle CI sets
   `APP_VERSION` and `scripts/verify-app-version.mjs` checks the built client contains it.
 
+### Client review fixes (F6)
+
+- **One draft model answer.** `draftMachineModelUsable` is the only resolver for a machine card,
+  fork target and new-thread menu: the person's explicit selection when there is one, otherwise
+  the machine's own default usable model. Cards therefore say "No models here" only when no model
+  can run there; an explicit choice that is missing says "Model not available here". Card text
+  stays within `DRAFT_MACHINE_CARD_TEXT_MAX`; the full sentence lives in the tooltip and
+  `aria-description`. Web and mobile pass only the explicit composer selection to these decisions.
+- **Draft identity and destination.** `useHandleNewThread` resolves the mesh logical key and a new
+  draft lands on the main copy unless the caller passes `environmentSelection: "manual"` (a picked
+  machine). `mainRepresentationRef` supplies that copy; a stored manual choice is preserved.
+- **Project picker and names.** The command palette groups representations through the replicated
+  layout, so one logical project has one row. Descriptions use `projectMachineTags` (config titles,
+  main copy first); a non-mesh project shows a muted path tail, never "Local" or an OS hostname.
+  Link sources are named from the same machine list.
+- **Ordering.** Settings › Mesh puts this machine first then sorts by title
+  (`sortMeshMachinesForSettings`); the Machines dialog and sheet put the main copy first then sort
+  copies by title (`sortRepresentationsMainFirst`). New-thread machine choices use the same rule.
+- **Offline machines.** A thread detail keeps its last synchronized conversation when the machine
+  cannot answer; the composer is read-only and the banner names the configured machine rather than
+  its hostname (`offlineConversationStatus`). Sidebar strips dim unreachable tags with the offline
+  age, the footer says `<machine> is offline`, and machine detail project rows read
+  "last known: …".
+- **Provider instance patches.** Web settings send one instance through the shared
+  `buildProviderInstancePatch`; adding a Codex account no longer sends the whole map, so an omitted
+  instance survives the server merge and `null` deletes exactly one.
+- **Agent-kit adoption.** `MeshAgentKit` adopts an unmarked skill directory only when its
+  `SKILL.md` frontmatter name is `t3` and it has `scripts/t3ctl.mjs`; it writes the managed marker
+  and syncs. Any other unmarked directory is left untouched and reported.
+
 ## Interfaces
 
 `t3 run [--bg] [--ports P[,P]] [--timeout D] -- <command…>` runs locally outside a lite
