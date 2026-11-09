@@ -19,6 +19,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopConnectionCatalogStore from "./DesktopConnectionCatalogStore.ts";
 import * as DesktopLocalEnvironmentAuth from "../backend/DesktopLocalEnvironmentAuth.ts";
+import * as DesktopSshEnvironment from "../ssh/DesktopSshEnvironment.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
 
 const decodeSelection = Schema.decodeEffect(Schema.fromJsonString(SelectionSchema));
@@ -48,6 +49,28 @@ function desktopUiOrigin(value: string): string {
       "UI source requires HTTPS or loopback HTTP without credentials, query or fragment",
     );
   return url.href.replace(/\/$/, "");
+}
+
+function sameSshTarget(
+  left: {
+    readonly alias: string;
+    readonly hostname: string;
+    readonly username?: string | null;
+    readonly port?: number | null;
+  },
+  right: {
+    readonly alias: string;
+    readonly hostname: string;
+    readonly username?: string | null;
+    readonly port?: number | null;
+  },
+): boolean {
+  return (
+    left.alias === right.alias &&
+    left.hostname === right.hostname &&
+    (left.username ?? null) === (right.username ?? null) &&
+    (left.port ?? null) === (right.port ?? null)
+  );
 }
 
 function isLoopbackOrigin(origin: string): boolean {
@@ -95,6 +118,7 @@ export const make = Effect.gen(function* () {
   const catalog = yield* DesktopConnectionCatalogStore.DesktopConnectionCatalogStore;
   const exposure = yield* DesktopServerExposure.DesktopServerExposure;
   const localAuth = yield* DesktopLocalEnvironmentAuth.DesktopLocalEnvironmentAuth;
+  const ssh = yield* DesktopSshEnvironment.DesktopSshEnvironment;
   const selected = yield* Ref.make<DesktopUiSelection | null>(null);
   const rejections = yield* Ref.make<ReadonlyMap<string, RejectionRecord>>(new Map());
   const loaded = yield* Ref.make<{
@@ -224,12 +248,15 @@ export const make = Effect.gen(function* () {
           .token ?? null
       );
     }
-    const ssh = doc.profiles.find(
+    const sshProfile = doc.profiles.find(
       (entry) => entry.environmentId === environmentId && entry._tag === "SshConnectionProfile",
     );
-    if (ssh && isLoopbackOrigin(origin)) {
+    if (sshProfile?._tag === "SshConnectionProfile" && isLoopbackOrigin(origin)) {
+      const active = yield* ssh.activeEnvironments.pipe(Effect.orElseSucceed(() => []));
+      const tunnel = active.find((entry) => desktopUiOrigin(entry.httpBaseUrl) === origin);
+      if (tunnel === undefined || !sameSshTarget(tunnel.target, sshProfile.target)) return null;
       return (
-        doc.credentials.find((entry) => entry.connectionId === ssh.connectionId)?.credential
+        doc.credentials.find((entry) => entry.connectionId === sshProfile.connectionId)?.credential
           .token ?? null
       );
     }

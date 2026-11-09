@@ -3,6 +3,7 @@ import type { DesktopUiInfo } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
 import { APP_VERSION } from "../../branding";
 import { SettingsRow } from "./settingsLayout";
+import { withoutBundledFallback } from "../desktop/desktopBundledFallback";
 
 export function DesktopUiVersionRow() {
   const ui = window.desktopBridge?.ui ?? window.desktopShell?.ui;
@@ -44,7 +45,9 @@ export function DesktopUiVersionRow() {
             variant="outline"
             size="sm"
             onClick={() => {
-              void retryServerUi().then(() => window.location.reload());
+              void retryServerUi().then(() =>
+                window.location.assign(withoutBundledFallback(window.location.href)),
+              );
             }}
           >
             Retry server UI
