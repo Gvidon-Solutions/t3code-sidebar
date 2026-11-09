@@ -270,16 +270,20 @@ it.effect("never replaces a skill directory it does not own and reports it", () 
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
-it.effect("syncs a marked skill directory exactly and removes stale files", () =>
+it.effect("removes only files named by the previous manifest and keeps unknown files", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-managed-skill-" });
     const source = yield* bundledSkill(home);
     yield* fs.makeDirectory(`${home}/.claude/skills/t3/old`, { recursive: true });
-    yield* fs.writeFileString(`${home}/.claude/skills/t3/.t3-managed`, "ours\n");
+    yield* fs.writeFileString(
+      `${home}/.claude/skills/t3/.t3-managed`,
+      JSON.stringify({ files: ["SKILL.md", "scripts/t3ctl.mjs", "stale.txt", "old/stale.txt"] }),
+    );
     yield* fs.writeFileString(`${home}/.claude/skills/t3/SKILL.md`, "old skill");
     yield* fs.writeFileString(`${home}/.claude/skills/t3/stale.txt`, "stale");
     yield* fs.writeFileString(`${home}/.claude/skills/t3/old/stale.txt`, "stale");
+    yield* fs.writeFileString(`${home}/.claude/skills/t3/user-notes.txt`, "mine");
     const kit = yield* reconcileWith(home, source);
     yield* kit.reconcile({ schema: 1, machines: {} });
     expect(yield* fs.readFileString(`${home}/.claude/skills/t3/SKILL.md`)).toBe("skill v1");
@@ -288,7 +292,10 @@ it.effect("syncs a marked skill directory exactly and removes stale files", () =
     );
     expect(yield* fs.exists(`${home}/.claude/skills/t3/stale.txt`)).toBe(false);
     expect(yield* fs.exists(`${home}/.claude/skills/t3/old`)).toBe(false);
-    expect(yield* fs.exists(`${home}/.claude/skills/t3/.t3-managed`)).toBe(true);
+    expect(yield* fs.readFileString(`${home}/.claude/skills/t3/user-notes.txt`)).toBe("mine");
+    expect(
+      Kit.skillManifestFiles(yield* fs.readFileString(`${home}/.claude/skills/t3/.t3-managed`)),
+    ).toEqual(["SKILL.md", "scripts/t3ctl.mjs"]);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
@@ -331,7 +338,7 @@ it.effect("never writes through a symlinked instruction file and reports it", ()
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
-it.effect("adopts an unmarked skill the retired kit wrote and syncs it", () =>
+it.effect("adopts the retired kit, backs it up, keeps every unknown file and syncs ours", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-adopt-" });
@@ -342,12 +349,20 @@ it.effect("adopts an unmarked skill the retired kit wrote and syncs it", () =>
       "---\nname: t3\ndescription: bundle\n---\n\nnew body\n",
     );
     yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
-    yield* fs.makeDirectory(`${home}/.codex/skills/t3/scripts`, { recursive: true });
+    yield* fs.writeFileString(`${source}/scripts/dropped.mjs`, "shipped once");
+    const target = `${home}/.codex/skills/t3`;
+    yield* fs.makeDirectory(`${target}/scripts`, { recursive: true });
+    yield* fs.makeDirectory(`${target}/global`, { recursive: true });
+    yield* fs.makeDirectory(`${target}/agents`, { recursive: true });
     yield* fs.writeFileString(
-      `${home}/.codex/skills/t3/SKILL.md`,
+      `${target}/SKILL.md`,
       "---\nname: t3\ndescription: old\n---\n\nold body\n",
     );
-    yield* fs.writeFileString(`${home}/.codex/skills/t3/scripts/t3ctl.mjs`, "export {};");
+    yield* fs.writeFileString(`${target}/scripts/t3ctl.mjs`, "old control");
+    yield* fs.writeFileString(`${target}/global/GLOBAL.md`, "legacy owner instructions");
+    yield* fs.writeFileString(`${target}/global/machines.json`, "{}");
+    yield* fs.writeFileString(`${target}/agents/custom.md`, "custom agent");
+    yield* fs.writeFileString(`${target}/user-notes.txt`, "mine");
     const kit = yield* Kit.MeshAgentKit.pipe(
       Effect.provide(Kit.layer.pipe(Layer.provide(Settings.layerTest()))),
       Effect.provideService(HostProcess.Environment, {
@@ -357,8 +372,32 @@ it.effect("adopts an unmarked skill the retired kit wrote and syncs it", () =>
       Effect.provideService(SpawnExecutableResolution, () => undefined),
     );
     yield* kit.reconcile({ schema: 1, machines: { studio: { label: "ST" } } });
-    expect(yield* fs.exists(`${home}/.codex/skills/t3/.t3-managed`)).toBe(true);
-    expect(yield* fs.readFileString(`${home}/.codex/skills/t3/SKILL.md`)).toContain("new body");
+    const backups = (yield* fs.readDirectory(`${home}/.codex/skills`)).filter((name) =>
+      name.startsWith("t3.backup-"),
+    );
+    expect(backups).toHaveLength(1);
+    const backup = `${home}/.codex/skills/${backups[0]}`;
+    expect(yield* fs.readFileString(`${backup}/global/GLOBAL.md`)).toBe(
+      "legacy owner instructions",
+    );
+    expect(yield* fs.readFileString(`${target}/SKILL.md`)).toContain("new body");
+    expect(yield* fs.readFileString(`${target}/scripts/t3ctl.mjs`)).toBe("export {};");
+    expect(yield* fs.readFileString(`${target}/global/GLOBAL.md`)).toBe(
+      "legacy owner instructions",
+    );
+    expect(yield* fs.readFileString(`${target}/global/machines.json`)).toBe("{}");
+    expect(yield* fs.readFileString(`${target}/agents/custom.md`)).toBe("custom agent");
+    expect(yield* fs.readFileString(`${target}/user-notes.txt`)).toBe("mine");
+    // A file we shipped before and no longer ship is the only thing a later sync removes.
+    yield* fs.remove(`${source}/scripts/dropped.mjs`);
+    yield* kit.reconcile({ schema: 1, machines: { studio: { label: "ST" } } });
+    expect(yield* fs.exists(`${target}/scripts/dropped.mjs`)).toBe(false);
+    expect(yield* fs.readFileString(`${target}/user-notes.txt`)).toBe("mine");
+    expect(yield* fs.readFileString(`${target}/global/GLOBAL.md`)).toBe(
+      "legacy owner instructions",
+    );
+    const afterSecondSync = yield* fs.readDirectory(`${home}/.codex/skills`);
+    expect(afterSecondSync.filter((name) => name.startsWith("t3.backup-"))).toHaveLength(1);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 

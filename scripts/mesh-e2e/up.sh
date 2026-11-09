@@ -2,7 +2,7 @@
 # One command: build a ref, deploy it to nodeB + isolated studio + CLOUD, bring
 # tunnels up, print health.
 #
-# Usage: up.sh [--no-build] [ref]     (default ref: xdev)
+# Usage: up.sh [--no-build] [ref]     (default ref: HEAD)
 set -euo pipefail
 
 # shellcheck source=lib.sh
@@ -13,7 +13,7 @@ if [ "${1:-}" = "--no-build" ]; then
   BUILD=0
   shift
 fi
-REF="${1:-xdev}"
+REF="${1:-HEAD}"
 
 if [ "$BUILD" = 1 ]; then
   "$MESH_DIR/build.sh" "$REF"

@@ -8,7 +8,14 @@ import {
   meshTimer,
   resolveMeshTimeScale,
   resolveMeshAssetUrl,
+  resolveMeshTestValue,
 } from "./MeshTiming.ts";
+
+it("ignores test-only path redirects in production builds", () => {
+  expect(resolveMeshTestValue("/tmp/agent-home", true)).toBeUndefined();
+  expect(resolveMeshTestValue(undefined, true)).toBeUndefined();
+  expect(resolveMeshTestValue("/tmp/agent-home", false)).toBe("/tmp/agent-home");
+});
 
 it("retains production timings even with a hostile test environment", () => {
   for (const value of [undefined, "0.001", "0", "NaN", "", "-1", "2"])
@@ -45,6 +52,27 @@ it("scales test time and refuses invalid multipliers", () => {
     expect(() => resolveMeshAssetUrl("https://github.com/fixture/archive", origin, false)).toThrow(
       "loopback HTTP origin",
     );
+});
+
+it("ignores test path redirects when the environment is production", () => {
+  const result = NodeChildProcess.execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+    import { meshTestValue } from ${JSON.stringify(new URL("./MeshTiming.ts", import.meta.url).href)};
+    if (meshTestValue("/tmp/agent-home") !== undefined) throw Error("test redirect was honoured");
+    console.log("gated");
+  `,
+    ],
+    {
+      cwd: new URL("../../", import.meta.url),
+      env: { ...process.env, NODE_ENV: "production" },
+      encoding: "utf8",
+    },
+  );
+  expect(result.trim()).toBe("gated");
 });
 
 it("accelerates the real peer heartbeat and reconnect schedule in a source process", () => {

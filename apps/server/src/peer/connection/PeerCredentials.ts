@@ -17,12 +17,15 @@ const PEER_LABEL_LIMIT = 64;
 /** A peer supplies its own label; keep it single-line, bounded and safe for session lists. */
 export function peerSessionLabel(label: string | undefined): string {
   const cleaned = (label ?? "")
-    .replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ")
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
   if (cleaned === "") return "Linked machine";
+  const characters = Array.from(cleaned);
   const bounded =
-    cleaned.length > PEER_LABEL_LIMIT ? `${cleaned.slice(0, PEER_LABEL_LIMIT - 1)}…` : cleaned;
+    characters.length > PEER_LABEL_LIMIT
+      ? `${characters.slice(0, PEER_LABEL_LIMIT - 1).join("")}…`
+      : cleaned;
   return `Linked machine · ${bounded}`;
 }
 

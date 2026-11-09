@@ -658,7 +658,14 @@ const layerMeshConfig = MeshConfig.layer.pipe(
   ),
   Layer.provide(MeshConfigMigration.layer.pipe(Layer.provide(PeerLinks.layer))),
 );
-const layerMeshConfigRuntime = Layer.merge(MeshConfig.startedLayer, MeshAgentMigration.layer).pipe(
+// The legacy import must read GLOBAL.md before a reconcile can adopt the skill directory.
+const layerMeshConfigRuntime = Layer.effectDiscard(
+  Effect.gen(function* () {
+    yield* MeshAgentMigration.migrate;
+    const config = yield* MeshConfig.MeshConfig;
+    yield* config.start;
+  }),
+).pipe(
   Layer.provideMerge(layerMeshConfig),
   Layer.provide(MeshAgentKit.layer),
   Layer.provideMerge(layerMeshBootstrap),

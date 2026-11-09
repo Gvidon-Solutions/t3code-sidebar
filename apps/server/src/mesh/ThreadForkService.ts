@@ -59,7 +59,7 @@ import type { PeerCallLimits } from "../peer/PeerMcpClient.ts";
 const failure = (error: { readonly message: string }) =>
   new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message });
 
-const forkLinkProtocols = new Set(["t3-thread:", "http:", "https:"]);
+const forkLinkProtocols = new Set(["t3-thread:"]);
 
 /** A peer supplies the link, so only an actual thread link may become markdown. */
 function forkLink(sourceLink: string): string | undefined {

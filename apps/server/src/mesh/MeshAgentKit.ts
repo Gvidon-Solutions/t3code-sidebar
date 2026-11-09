@@ -2,6 +2,7 @@ import { MeshConfigError, type MeshConfigDocument } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -9,6 +10,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import { ServerSettingsService } from "../serverSettings.ts";
+import { meshTestValue } from "./MeshTiming.ts";
 
 const begin = "<!-- t3-mesh begin -->";
 const end = "<!-- t3-mesh end -->";
@@ -34,7 +36,24 @@ function instanceBinaryPath(config: unknown): string | undefined {
 
 const sharedSkill = ".agents/skills/t3";
 const skillMarker = ".t3-managed";
-const skillMarkerContents = "This directory is managed by T3 Code.\n";
+
+/**
+ * Older kits wrote prose into the marker. A marker we cannot read leaves every existing file
+ * unknown, so a later sync only adds our files and never removes somebody else's.
+ */
+export function skillManifestFiles(marker: string): ReadonlyArray<string> {
+  if (!marker.trimStart().startsWith("{")) return [];
+  try {
+    const parsed = JSON.parse(marker) as { files?: unknown };
+    if (!Array.isArray(parsed.files)) return [];
+    return [...new Set(parsed.files.filter((file): file is string => typeof file === "string"))];
+  } catch {
+    return [];
+  }
+}
+
+const skillManifest = (files: ReadonlyArray<string>) =>
+  `${JSON.stringify({ files: [...files].sort() }, null, 2)}\n`;
 
 /** A skill the retired kit wrote: our frontmatter name and our command layout. */
 export function isRecognizablyT3Skill(skillText: string): boolean {
@@ -143,7 +162,7 @@ export const layer = Layer.effect(
     const settings = yield* ServerSettingsService;
     const packaged = path.join(path.dirname(executable), "agent-kit/skills/t3");
     const source =
-      env.T3_MESH_AGENT_SOURCE ??
+      meshTestValue(env.T3_MESH_AGENT_SOURCE) ??
       (yield* Effect.gen(function* () {
         if (yield* fs.exists(packaged)) return packaged;
         const bundled = yield* path.fromFileUrl(new URL("./agent-kit/skills/t3", import.meta.url));
@@ -166,23 +185,28 @@ export const layer = Layer.effect(
       }
       return files;
     });
-    const listExisting = Effect.fn("MeshAgentKit.listExisting")(function* (
-      directory: string,
-      relative = "",
-    ): Effect.fn.Return<
-      ReadonlyArray<{ readonly relative: string; readonly type: string }>,
-      import("effect/PlatformError").PlatformError
-    > {
-      const entries: { relative: string; type: string }[] = [];
-      for (const entry of yield* fs.readDirectoryEntries(directory)) {
-        const childRelative = relative === "" ? entry.name : `${relative}/${entry.name}`;
-        entries.push({ relative: childRelative, type: entry.type });
-        if (entry.type === "Directory")
-          entries.push(...(yield* listExisting(path.join(directory, entry.name), childRelative)));
-      }
-      return entries;
-    });
     const conflictText = (target: string) => `${target} is not a T3-managed t3 skill`;
+    /** First adoption keeps the old directory beside the managed one; nothing is lost. */
+    const backupSkill = Effect.fn("MeshAgentKit.backupSkill")(function* (directory: string) {
+      const stamp = DateTime.formatIso(yield* DateTime.now).replaceAll(/[:.]/g, "-");
+      let backup = `${directory}.backup-${stamp}`;
+      for (let suffix = 1; yield* fs.exists(backup); suffix++)
+        backup = `${directory}.backup-${stamp}-${suffix}`;
+      yield* fs.copy(directory, backup);
+    });
+    /** Only empty directories left behind by files we removed are pruned. */
+    const pruneEmptyParents = Effect.fn("MeshAgentKit.pruneEmptyParents")(function* (
+      root: string,
+      from: string,
+    ) {
+      let directory = from;
+      while (directory !== root && directory.startsWith(root)) {
+        const entries = yield* fs.readDirectoryEntries(directory);
+        if (entries.length > 0) return;
+        yield* fs.remove(directory, { recursive: true });
+        directory = path.dirname(directory);
+      }
+    });
     // The retired kit wrote the same files without a marker. Adopt only that exact layout;
     // anything else in the directory belongs to somebody else.
     const adoptableSkill = Effect.fn("MeshAgentKit.adoptableSkill")(function* (directory: string) {
@@ -200,45 +224,39 @@ export const layer = Layer.effect(
       conflicts: string[],
     ): Effect.fn.Return<void, import("effect/PlatformError").PlatformError> {
       const existing = yield* fs.lstat(to).pipe(Effect.option);
+      let previous: ReadonlyArray<string> = [];
       if (Option.isSome(existing)) {
         if (existing.value.type !== "Directory") {
           conflicts.push(conflictText(to));
           return;
         }
         const marker = yield* fs.lstat(path.join(to, skillMarker)).pipe(Effect.option);
-        if (Option.isNone(marker) || marker.value.type !== "File") {
+        if (Option.isSome(marker) && marker.value.type === "File") {
+          previous = skillManifestFiles(yield* fs.readFileString(path.join(to, skillMarker)));
+        } else if (Option.isSome(marker)) {
+          conflicts.push(conflictText(to));
+          return;
+        } else {
           if (!(yield* adoptableSkill(to))) {
             conflicts.push(conflictText(to));
             return;
           }
-          yield* fs.writeFileString(path.join(to, skillMarker), skillMarkerContents);
+          yield* backupSkill(to);
         }
       } else {
         yield* fs.makeDirectory(to, { recursive: true });
-        yield* fs.writeFileString(path.join(to, skillMarker), skillMarkerContents);
       }
       const desired = new Set(yield* listSkillFiles(from));
-      const desiredDirectories = new Set<string>();
-      for (const relative of desired) {
-        const segments = relative.split("/");
-        for (let index = 1; index < segments.length; index++)
-          desiredDirectories.add(segments.slice(0, index).join("/"));
+      // A manifest lists only files we wrote; anything else in the directory is somebody's.
+      for (const relative of previous) {
+        if (desired.has(relative)) continue;
+        const target = path.join(to, relative);
+        const info = yield* fs.lstat(target).pipe(Effect.option);
+        if (Option.isNone(info) || info.value.type === "Directory") continue;
+        yield* fs.remove(target);
+        yield* pruneEmptyParents(to, path.dirname(target));
       }
-      const entries = [...(yield* listExisting(to))].sort((left, right) =>
-        right.relative.localeCompare(left.relative),
-      );
-      for (const entry of entries) {
-        if (entry.relative === skillMarker) continue;
-        const target = path.join(to, entry.relative);
-        if (entry.type === "Directory")
-          if (!desiredDirectories.has(entry.relative))
-            yield* fs.remove(target, { recursive: true });
-        if (
-          (entry.type === "File" || entry.type === "SymbolicLink") &&
-          !desired.has(entry.relative)
-        )
-          yield* fs.remove(target);
-      }
+      const written = new Set<string>();
       for (const relative of desired) {
         const target = path.join(to, relative);
         let symlinked = false;
@@ -261,7 +279,9 @@ export const layer = Layer.effect(
         }
         yield* fs.makeDirectory(path.dirname(target), { recursive: true });
         yield* fs.copyFile(path.join(from, relative), target);
+        written.add(relative);
       }
+      yield* fs.writeFileString(path.join(to, skillMarker), skillManifest([...written]));
     });
     const reconcile = Effect.fn("MeshAgentKit.reconcile")(
       function* (
@@ -400,7 +420,8 @@ export const layer = Layer.effect(
       ),
     );
     const legacyFile =
-      env.T3_MESH_LEGACY_GLOBAL ?? path.join(home, ".agents/skills/t3/global/GLOBAL.md");
+      meshTestValue(env.T3_MESH_LEGACY_GLOBAL) ??
+      path.join(home, ".agents/skills/t3/global/GLOBAL.md");
     const legacyInstructions = Effect.gen(function* () {
       return (yield* fs.exists(legacyFile)) ? yield* fs.readFileString(legacyFile) : undefined;
     }).pipe(

@@ -1,14 +1,13 @@
 # T3 Mesh: one layout, logical projects, replicas on any machine (fork feature spec)
 
 This specification describes customer-managed installations and their agents.
-Integration branch `xdev` (worktree `/home/dev/Repos/t3/t3code-xdev`, from `origin/ws` d439778e41).
 Read `AGENTS.md` and `FORK.md` first. Fork code goes into fork-only files; seams into upstream
 files stay small and are listed in FORK.md.
 
 ## Product in one paragraph
 
-The owner runs T3 servers on several machines (today studio, Cloudbox, nodeB, a VPS, a Windows
-desktop; tomorrow maybe two "main" machines). They form a **mesh**: every server knows the others,
+The owner runs T3 servers on several machines (for example studio, cloudbox and laptop, on any
+OS; a mesh may have two "main" machines). They form a **mesh**: every server knows the others,
 holds a replica of one shared **layout document** (workspaces, placements, order, fold, machine
 names/tags, logical projects) and merges edits from any server or client automatically, offline
 included. A **logical project** is one card in the sidebar with **representations** on machines:
@@ -27,7 +26,7 @@ Primitives (unchanged, owned by T3/upstream or the OS): **Machine** (one T3 serv
 
 Layers built on them:
 
-1. **Mesh** = machines + links. Exactly one **authority** machine: layout entry `mesh.authority` = environmentId (configurable in Settings › Mesh; the owner's is studio; default when unset = the machine with the lowest environmentId among those that ever wrote, shown in the UI as "Authority: <label>"). The mesh needs connectivity, not a full graph: calls relay through linked peers (≤ 2 hops).
+1. **Mesh** = machines + links. Exactly one **authority** machine: layout entry `mesh.authority` = environmentId (configurable in Settings › Mesh; default when unset = the machine with the lowest environmentId among those that ever wrote, shown in the UI as "Authority: <label>"). The mesh needs connectivity, not a full graph: calls relay through linked peers (≤ 2 hops).
 2. **Project** (logical) = opaque stable id (the logical key; NEVER shown to the user anywhere — UI, CLI output, MCP text; only ids in JSON fields) + **title** (one name for the whole mesh, renameable from any machine; layout `proj/<id>.title`) + **representations**: (machine, folder path, role, transport, projectId on that machine). Roles: **primary** (owns `.git`, builds, tests; ≥ 0 per project, usually 1) and **replica** (folder kept equal to one primary by one sync session). Legacy keys (`github.com/…`, `<env>:<path>`, `title:…`) are only **aliases** of the id. A server's own project record is the representation's local handle, not the project.
 3. **Sync**: one replica ↔ exactly one sync session with its source primary (alpha = primary, beta = replica). Driver = the side that can ssh to the other (replica side first). States: pending → mounting → watching; conflict, error, paused; removed. Ignores: VCS + the configured list.
 4. **Presentation**: workspaces (placement, order, fold), machine labels/tags/colors and user-defined aliases stored on `machine/<env>`, the per-row machine strip. Purely organisational; nothing in sync or threads depends on them.
@@ -55,7 +54,7 @@ Thread rules: a thread runs on one machine; its working directory is inside one 
 
 Kill -9 each server mid-sync and mid-mount; kill the Mutagen daemon; cut a link/tunnel for minutes; restart the authority; reboot order permutations — everything converges without manual steps, no duplicate sessions/projects, no lost file versions (losers in .t3-conflicts), layout identical everywhere.
 
-## Facts from the code today (verify line numbers on xdev)
+## Facts from the code today (verify line numbers in this checkout)
 
 - Layout = `ServerSettings.sidebarWorkspaces` (`packages/contracts/src/sidebarWorkspaces.ts`),
   per server, replaced whole on write (`packages/shared/src/serverSettings.ts`, "Fork: clients
@@ -65,7 +64,7 @@ Kill -9 each server mid-sync and mid-mount; kill the Mutagen daemon; cut a link/
   by id" (`apps/web/src/components/workspaces/WorkspaceSidebar.tsx`), phone reads the first server
   by id and writes `edit(source.config)` per server
   (`apps/mobile/src/features/workspaces/useSidebarWorkspaces.ts`). Copies drift; phone shows
-  Cloudbox's layout.
+  cloudbox's layout.
 - Live data: a mesh has workspace tiles, logical projects and machine placements; keys can mix
   repository aliases, `<envId>:<path>` and older client forms. Keys of offline environments must
   never be pruned.
@@ -78,11 +77,11 @@ Kill -9 each server mid-sync and mid-mount; kill the Mutagen daemon; cut a link/
 - Server-to-server links exist: `PeerLinks` (`apps/server/src/peer/`), stored per server, call the
   peer's `/mcp` with a session made from a pairing code (`packages/contracts/src/peerLink.ts`);
   `PeerMcpClient`, `PeerForwarding`, `RemoteDelegation` (finds a project there only by repository
-  key). Gated by setting `linkedEnvironmentsEnabled` (off on Cloudbox today). Fenced (non
+  key). Gated by setting `linkedEnvironmentsEnabled` (off on cloudbox by default). Fenced (non
   full-access) links may not change projects/settings (`apps/server/src/mcp/linkOrigin.ts`).
 - MCP project toolkit (`apps/server/src/mcp/toolkits/project/tools.ts`): `t3_project_create`,
   `t3_project_clone`, `t3_thread_launch` accept `environmentId` (forwarded over links).
-- Contracts already on `xdev` (commit "layout revision, machines, project aliases and mounts"):
+- Contracts in this checkout (commit "layout revision, machines, project aliases and mounts"):
   `SidebarWorkspacesConfig` gained `machines`, `projectAliases`, `projectMounts`
   (representations: environmentId, path, projectId?, transport git|mutagen|sshfs|manual,
   role primary|replica, source?, ignores?), `projectMountStatus`.
@@ -204,8 +203,8 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 - Mutagen is installed by T3 itself when missing: `MutagenInstaller` downloads the pinned release
   (0.18.1, sha256-checked) for the host OS/arch into `<baseDir>/bin/mutagen` (+ agents bundle) on
   first use; `mutagenPath` overrides. Each T3 server uses its own `MUTAGEN_DATA_DIRECTORY` under its
-  base dir so it never collides with a user's own daemon/sessions (e.g. studio's existing
-  `mutagen-daemon.service` with sessions `manual-session-a`, `manual-session-b` — never touched).
+  base dir so it never collides with a user's own daemon/sessions (for example an existing
+  `mutagen-daemon.service` with manual sessions — never touched).
 - Existing manual sessions can be adopted: Settings › Machines lists the user's foreign sessions.
   Adoption records `transport: mutagen`, pauses the original, recreates the same endpoints under
   T3's private daemon and terminates the original only after the replacement watches. Conflicts
@@ -213,10 +212,9 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 
 ### 2a. Links and routing (decided after the survey)
 
-- Links today: none; `linkedEnvironmentsEnabled=false` on studio/Cloudbox; nodeB runs 0.0.45 without
-  links. HTTP reachability: studio→Cloudbox `https://cloudbox.example.test:3774`; Cloudbox→studio
-  `https://node-a.example.test`; studio↔nodeB only through ssh tunnels (nodeB listens on loopback);
-  Cloudbox↔nodeB no route.
+- Links may already exist between some machines; a machine without one is reachable through a
+  relay. Reachability is deployment-specific: a peer may answer directly over HTTPS, over an SSH
+  tunnel, or not at all, so routing never assumes a fixed graph.
 - The mesh does not need a full graph: layout gossips over any connected graph. Tool calls to a
   machine without a direct link are relayed: `PeerForwarding` forwards to a linked peer that has a
   link to the target (max 2 hops, loop guard by a hop header, the target's access rules still apply).
@@ -293,7 +291,7 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 
 ### 11. Agents everywhere understand the mesh
 
-- Global agent instructions on every machine (studio, Cloudbox, nodeB): `~/.claude/CLAUDE.md`,
+- Global agent instructions on every machine (studio, cloudbox, laptop): `~/.claude/CLAUDE.md`,
   `~/.codex/AGENTS.md` (and other harnesses' global files that exist), kept identical in content:
   the machines, their roles, the mesh, the `t3` skill and when to use it, Mutagen rules (git and
   builds on the primary), how to open threads/files on any machine.
@@ -305,8 +303,8 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 
 ## Disposable test bed
 
-The nodeA, nodeB and cloud fixtures use separate units, state directories, sandbox homes and
-loopback ports. Copy `scripts/mesh-e2e/local.env.example` to the gitignored `local.env` and
+The three bed fixtures use separate units, state directories, sandbox homes and loopback
+ports. Copy `scripts/mesh-e2e/local.env.example` to the gitignored `local.env` and
 configure your own infrastructure there. No production server or account SSH authorization
 file is part of the bed. See [the harness guide](../scripts/mesh-e2e/README.md) for setup,
 commands, the shared lock and cleanup rules.

@@ -20,3 +20,14 @@ export function assertReleaseBuildEnv(env: NodeJS.ProcessEnv = process.env): voi
       `Refusing a release build with test-only flags set: ${flags.join(", ")}. Unset them and build again.`,
     );
 }
+
+/** A build is a release build when CI or an explicit release channel/version is set. */
+export function isReleaseBuildEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (isEnabled(env.T3CODE_BUILT_DEV)) return false;
+  const channel = env.VITE_RELEASE_CHANNEL?.trim();
+  return (
+    isEnabled(env.CI) ||
+    (channel !== undefined && channel !== "" && channel !== "dev") ||
+    isEnabled(env.APP_VERSION)
+  );
+}

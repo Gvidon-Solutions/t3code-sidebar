@@ -4,7 +4,7 @@ import * as NodePath from "node:path";
 
 if (process.env.T3_DELIVERY_FIXTURE_GATE !== "1") {
   throw new Error(
-    "This gate is only the isolated delivery transport fixture. Configure the real T1 command for releases, or explicitly set T3_DELIVERY_FIXTURE_GATE=1 for isolated E2E.",
+    "This gate is only the isolated delivery transport fixture. Configure the release gate command in config.gate, or explicitly set T3_DELIVERY_FIXTURE_GATE=1 for isolated E2E.",
   );
 }
 if (!process.env.T3_DELIVERY_FIXTURE_GATE_LOG)

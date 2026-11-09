@@ -86,11 +86,6 @@ export class MeshConfig extends Context.Service<
   }
 >()("t3/mesh/MeshConfig") {}
 export type MeshConfigService = MeshConfig["Service"];
-const startEffect: Effect.Effect<void, never, MeshConfig | Scope.Scope> = Effect.gen(function* () {
-  const config = (yield* MeshConfig) as MeshConfigService;
-  yield* config.start;
-});
-export const startedLayer = Layer.effectDiscard(startEffect);
 const decodeActionStatus = Schema.decodeUnknownOption(MeshConfigActionStatus);
 const decodeStatus = Schema.decodeUnknownOption(MeshConfigServerStatus);
 const encodeStatus = Schema.encodeEffect(MeshConfigServerStatus);

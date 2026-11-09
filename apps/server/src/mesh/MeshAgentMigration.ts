@@ -4,29 +4,29 @@ import { MeshAgentKit } from "./MeshAgentKit.ts";
 import { MeshConfig } from "./MeshConfig.ts";
 import { MeshLayoutService } from "./MeshLayoutService.ts";
 
-export const layer = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const config = yield* MeshConfig;
-    const mesh = yield* MeshLayoutService;
-    const kit = yield* MeshAgentKit;
-    const key = `mesh.agentMigration/${encodeURIComponent(mesh.environmentId)}`;
-    if ((yield* mesh.read).document[key]?.v === true) return;
-    const current = yield* config.current;
-    if (!current || current.doc.schema !== 1) return;
-    const legacy =
-      current.doc.agents?.instructions === undefined ? yield* kit.legacyInstructions : undefined;
-    if (legacy !== undefined)
-      yield* config.apply(
-        {
-          ...current.doc,
-          agents: {
-            ...current.doc.agents,
-            instructions: legacy,
-          },
+export const migrate = Effect.gen(function* () {
+  const config = yield* MeshConfig;
+  const mesh = yield* MeshLayoutService;
+  const kit = yield* MeshAgentKit;
+  const key = `mesh.agentMigration/${encodeURIComponent(mesh.environmentId)}`;
+  if ((yield* mesh.read).document[key]?.v === true) return;
+  const current = yield* config.current;
+  if (!current || current.doc.schema !== 1) return;
+  const legacy =
+    current.doc.agents?.instructions === undefined ? yield* kit.legacyInstructions : undefined;
+  if (legacy !== undefined)
+    yield* config.apply(
+      {
+        ...current.doc,
+        agents: {
+          ...current.doc.agents,
+          instructions: legacy,
         },
-        current.revision,
-      );
-    const h = yield* mesh.nextHlc;
-    yield* mesh.apply({ [key]: { v: true, h } });
-  }),
-);
+      },
+      current.revision,
+    );
+  const h = yield* mesh.nextHlc;
+  yield* mesh.apply({ [key]: { v: true, h } });
+});
+
+export const layer = Layer.effectDiscard(migrate);

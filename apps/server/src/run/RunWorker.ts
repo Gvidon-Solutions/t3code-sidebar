@@ -308,25 +308,41 @@ export function runWorkerMain(
       }
     }
     if (follow) {
+      let stopped = false;
+      let pollTimer: ReturnType<typeof setTimeout> | undefined;
+      let watcher: ReturnType<typeof fs.watch> | undefined;
+      const startPolling = () => {
+        if (stopped) return;
+        const poll = () => {
+          if (stopped) return;
+          drain().catch(fail);
+          if (!stopped) pollTimer = setTimeout(poll, 500);
+        };
+        pollTimer = setTimeout(poll, 500);
+      };
+      const stop = () => {
+        stopped = true;
+        if (pollTimer !== undefined) clearTimeout(pollTimer);
+        pollTimer = undefined;
+        watcher?.close();
+        watcher = undefined;
+      };
+      stopWatcher = stop;
       try {
-        const watcher = fs.watch(root, (_, name) => {
+        watcher = fs.watch(root, (_, name) => {
           if (name === id + ".json" || name === id + ".ndjson") drain().catch(fail);
         });
-        stopWatcher = () => watcher.close();
+        // A watcher can fail after it starts; fall back to polling instead of throwing.
+        watcher.on("error", () => {
+          watcher?.close();
+          watcher = undefined;
+          startPolling();
+        });
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
         if (code !== "ENOSPC" && code !== "EMFILE") throw error;
         // A busy host can exhaust inotify; poll the durable record instead of failing the wait.
-        let stopped = false;
-        const poll = () => {
-          if (stopped) return;
-          drain().catch(fail);
-          if (!stopped) setTimeout(poll, 500);
-        };
-        stopWatcher = () => {
-          stopped = true;
-        };
-        setTimeout(poll, 500);
+        startPolling();
       }
       process.stdin.on("end", close);
       process.stdin.resume();

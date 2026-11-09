@@ -204,7 +204,7 @@ t3:
   version: 0.1.7-sidebar.1 # target server version; absent = no managed updates
 machines:
   studio: # machine name: stable slug used everywhere in the config
-    label: GV # tag shown in the UI
+    label: ST # tag shown in the UI
     title: studio
     color: blue
     reach: auto # auto | { address: https://host:port } | { via: <machine> }
@@ -276,7 +276,7 @@ target; macOS and Windows nodes must work through the same code and are covered 
 
 ## 12. Robustness tests (must stay green; run before every release)
 
-On the bed (nodeB + VPS container + studio isolated server): network cut mid-call and mid-pipe;
+On a three-machine bed (a primary, a replica and an isolated server): network cut mid-call and mid-pipe;
 `kill -9` of each server and of the Mutagen daemon mid-sync; machine asleep 10 min; proxy that
 drops idle connections; IP change; one server on N-1; clock skewed +1 h; conflict right before
 `t3 run`; Ctrl-C of a long `t3 run`; `t3 run` with nvm/uv only in the login profile; output into

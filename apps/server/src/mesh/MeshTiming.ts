@@ -13,6 +13,14 @@ export function resolveMeshTimeScale(value: string | undefined, production: bool
   return scale;
 }
 
+export function resolveMeshTestValue(value: string | undefined, production: boolean) {
+  return production ? undefined : value;
+}
+
+/** Test-only path redirects; a production build ignores them. */
+export const meshTestValue = (value: string | undefined) =>
+  resolveMeshTestValue(value, productionBuild || process.env.NODE_ENV === "production");
+
 export const MeshTimeScale = Context.Reference<number>("t3/mesh/TimeScale", {
   defaultValue: () =>
     resolveMeshTimeScale(
