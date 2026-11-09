@@ -629,6 +629,7 @@ describe("ElectronProtocol", () => {
       const forwarded = netFetchMock.mock.calls.at(-1)?.[1].headers as Headers;
       assert.equal(forwarded.get("authorization"), "Bearer studio-token");
       assert.equal(forwarded.get("origin"), "https://studio.example");
+      assert.equal(forwarded.get("x-forwarded-host"), "studio.example");
 
       // A sandboxed frame has no request token, so it must not get credentials.
       const withoutToken = yield* Effect.promise(() =>
