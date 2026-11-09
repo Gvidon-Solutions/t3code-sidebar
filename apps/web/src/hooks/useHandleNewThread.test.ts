@@ -4,6 +4,8 @@ import type { RuntimeMode } from "@t3tools/contracts";
 const testState = vi.hoisted(() => {
   let completeProjectFileRead: (value: null) => void = () => undefined;
   let projectFileRead = Promise.resolve<null>(null);
+  let projectFileReads: Array<{ environmentId: string; workspaceRoot: string }> = [];
+  let draftLookupByKey: ((key: string) => unknown) | null = null;
   let projectRemoved = false;
   let connectedEnvironmentIds = ["environment-primary", "environment-ssh"];
   let meshConfig: unknown = null;
@@ -48,7 +50,9 @@ const testState = vi.hoisted(() => {
   };
   const draftStore = {
     getComposerDraft: vi.fn((draftId: string) => ({ draftId })),
-    getDraftSessionByLogicalProjectKey: vi.fn(() => storedDraft),
+    getDraftSessionByLogicalProjectKey: vi.fn((key: string) =>
+      draftLookupByKey === null ? storedDraft : draftLookupByKey(key),
+    ),
     getDraftSession: vi.fn(() =>
       openDraftRoute === null
         ? null
@@ -74,6 +78,12 @@ const testState = vi.hoisted(() => {
     draftStore,
     get projectFileRead() {
       return projectFileRead;
+    },
+    get projectFileReads() {
+      return projectFileReads;
+    },
+    setDraftLookupByKey(lookup: ((key: string) => unknown) | null) {
+      draftLookupByKey = lookup;
     },
     get projectRemoved() {
       return projectRemoved;
@@ -137,6 +147,8 @@ const testState = vi.hoisted(() => {
       projectFileRead = new Promise<null>((resolve) => {
         completeProjectFileRead = resolve;
       });
+      projectFileReads = [];
+      draftLookupByKey = null;
     },
     router,
   };
@@ -230,7 +242,10 @@ vi.mock("../lib/chatThreadActions", async (importOriginal) => ({
 }));
 vi.mock("../providerInstances", () => ({ resolveDefaultProviderModelSelection: () => null }));
 vi.mock("../lib/t3ProjectFileDefaults", () => ({
-  readT3ProjectFile: () => testState.projectFileRead,
+  readT3ProjectFile: (environmentId: string, workspaceRoot: string) => {
+    testState.projectFileReads.push({ environmentId, workspaceRoot });
+    return testState.projectFileRead;
+  },
 }));
 vi.mock("../lib/utils", () => ({
   newDraftId: () => "draft-delayed",
@@ -435,9 +450,11 @@ describe("new draft destination", () => {
       environmentId: "environment-primary",
       projectId: "project-primary",
     });
+    // A plain new thread stays automatic and may return to the main copy.
+    expect(call?.[3]).toMatchObject({ environmentSelection: "auto" });
   });
 
-  it("keeps a machine the person explicitly picked", async () => {
+  it("stores an explicit machine pick as manual", async () => {
     testState.reset(null);
     testState.setMeshConfig(meshConfig);
     await useNewThreadHandler()(
@@ -450,5 +467,53 @@ describe("new draft destination", () => {
       environmentId: "environment-ssh",
       projectId: "project-remote",
     });
+    expect(call?.[3]).toMatchObject({ environmentSelection: "manual" });
+  });
+
+  it("reuses a draft made before the mesh snapshot under the grouping key", async () => {
+    testState.reset({
+      draftId: "draft-early",
+      environmentId: "environment-ssh",
+      promotedTo: null,
+      threadId: "thread-early",
+    });
+    testState.setMeshConfig(meshConfig);
+    testState.setDraftLookupByKey((key) =>
+      key === "remote-project"
+        ? {
+            draftId: "draft-early",
+            environmentId: "environment-ssh",
+            promotedTo: null,
+            threadId: "thread-early",
+          }
+        : null,
+    );
+
+    const opened = await useNewThreadHandler()(
+      { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+      {},
+    );
+
+    expect(opened?.draftId).toBe("draft-early");
+    const call = testState.draftStore.setLogicalProjectDraftThreadId.mock.calls.at(-1);
+    expect(call?.[0]).toBe("logical-project");
+    expect(call?.[2]).toBe("draft-early");
+  });
+
+  it("reads the project file, settings and workspace root from the destination machine", async () => {
+    testState.reset(null, { envMode: null, startFromOrigin: false });
+    testState.setMeshConfig(meshConfig);
+
+    const pending = useNewThreadHandler()(
+      { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+      {},
+    );
+    await Promise.resolve();
+    expect(testState.projectFileReads.at(-1)).toEqual({
+      environmentId: "environment-primary",
+      workspaceRoot: "/primary/project",
+    });
+    testState.completeProjectFileRead(null);
+    await pending;
   });
 });

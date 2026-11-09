@@ -6,10 +6,8 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { useNavigate } from "@tanstack/react-router";
 import { DEFAULT_INTERACTION_MODE } from "../../types";
 import { newDraftId, newThreadId } from "~/lib/utils";
-import {
-  deriveLogicalProjectKeyFromSettings,
-  selectProjectGroupingSettings,
-} from "@t3tools/client-runtime/state/project-grouping";
+import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
+import { resolveDraftLogicalProjectKey } from "../../state/draftProjectKey";
 import { buildDraftThreadRouteParams } from "../../threadRoutes";
 import { type DraftThreadEnvMode, useComposerDraftStore, DraftId } from "../../composerDraftStore";
 import { openPullRequestThreadDialog } from "./ChatOverlayHosts";
@@ -67,10 +65,7 @@ export function usePullRequestDraftThread(input: PullRequestDraftThreadInput) {
       throw new Error("No active project is available for this pull request.");
     }
     const activeProjectRef = scopeProjectRef(activeProject.environmentId, activeProject.id);
-    const logicalProjectKey = deriveLogicalProjectKeyFromSettings(
-      activeProject,
-      projectGroupingSettings,
-    );
+    const logicalProjectKey = resolveDraftLogicalProjectKey(activeProject, projectGroupingSettings);
     const storedDraftSession = getDraftSessionByLogicalProjectKey(logicalProjectKey);
     if (storedDraftSession) {
       setDraftThreadContext(storedDraftSession.draftId, input);

@@ -1266,6 +1266,18 @@ describe("composerDraftStore project draft thread mapping", () => {
     });
     expect(store.getComposerDraft(draftId)?.prompt).toBe("keep this prompt");
   });
+
+  it("rekeys a draft from the grouping key to the mesh key without duplicating it", () => {
+    const store = useComposerDraftStore.getState();
+    store.setLogicalProjectDraftThreadId("studio:/project", projectRef, draftId, { threadId });
+    expect(store.getDraftSessionByLogicalProjectKey("studio:/project")?.draftId).toBe(draftId);
+
+    store.rekeyLogicalProjectDraft(draftId, "mesh-project");
+
+    expect(store.getDraftSessionByLogicalProjectKey("studio:/project")).toBeNull();
+    expect(store.getDraftSessionByLogicalProjectKey("mesh-project")?.draftId).toBe(draftId);
+    expect(store.getDraftThread(draftId)?.logicalProjectKey).toBe("mesh-project");
+  });
 });
 
 function modelReconciliationHarness(
