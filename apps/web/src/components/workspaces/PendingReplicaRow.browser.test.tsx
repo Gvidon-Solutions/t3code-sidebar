@@ -47,7 +47,7 @@ it("names connected machines in a truncated error and lets the keyboard retry th
   await expect.element(page.getByText(detail, { exact: true }).first()).toBeVisible();
   await userEvent.tab();
   await expect
-    .element(screen.getByRole("button", { name: "Retry replica on QA machine" }))
+    .element(screen.getByRole("button", { name: "Retry copy on QA machine" }))
     .toHaveFocus();
   await userEvent.keyboard("{Enter}");
   expect(retry).toHaveBeenCalledExactlyOnceWith(row);

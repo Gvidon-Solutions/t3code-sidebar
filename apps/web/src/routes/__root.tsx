@@ -41,6 +41,9 @@ import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
+import { ThemeRouteSync } from "../components/ThemeRouteSync";
+import { DesktopBundledOffline } from "../components/desktop/DesktopBundledOffline";
+import { desktopBundledFallback } from "../components/desktop/desktopBundledFallback";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { Button } from "../components/ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
@@ -139,10 +142,16 @@ function RootRouteNotFoundView() {
 function RootRouteView() {
   // Above every branch: app services raise toasts for the whole page, so the surface they write to
   // must not unmount when the root switches branches (for example /welcome to the app shell).
+  const bundledFallback = isElectron ? desktopBundledFallback(window.location.search) : null;
   return (
     <ToastProvider>
       <AnchoredToastProvider>
-        <RootRouteBranch />
+        <ThemeRouteSync />
+        {bundledFallback ? (
+          <DesktopBundledOffline fallback={bundledFallback} />
+        ) : (
+          <RootRouteBranch />
+        )}
       </AnchoredToastProvider>
     </ToastProvider>
   );

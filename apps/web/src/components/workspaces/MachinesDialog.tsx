@@ -250,7 +250,7 @@ export function MachinesDialog(props: {
           )}
           {candidates.length > 0 ? (
             <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
-              <span className="text-xs font-medium text-muted-foreground">Add replica on…</span>
+              <span className="text-xs font-medium text-muted-foreground">Add a copy on…</span>
               <div className="flex flex-wrap gap-2">
                 {candidates.map((machine) => {
                   const display = machineDisplayOf(

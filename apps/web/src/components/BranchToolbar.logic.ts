@@ -23,7 +23,7 @@ export interface EnvironmentOption {
   /** The mesh can reach this machine even when this client is not connected to it. */
   reachable?: boolean;
   via?: string | null;
-  supportsMesh?: boolean;
+  supportsMesh?: boolean | null;
 }
 
 /** "Add to another machine" stays muted until hovered: easy to find, quieter than the machines. */

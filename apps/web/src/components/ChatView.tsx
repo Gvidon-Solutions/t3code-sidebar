@@ -2777,7 +2777,7 @@ export default function ChatView(props: ChatViewProps) {
                   draftModelUnavailableReason(catalog, selection, environment.projectId) === null,
                 canHostCopy: draftMachineCanHostCopy({
                   hasProject: environment.projectId !== null,
-                  supportsReplicas: environment.supportsMesh === true,
+                  supportsReplicas: environment.supportsMesh ?? null,
                   isScratchDraft: activeProjectIsScratch,
                 }),
               }),

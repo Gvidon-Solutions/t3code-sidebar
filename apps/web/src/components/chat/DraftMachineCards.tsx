@@ -6,6 +6,7 @@ import {
   retainedCatalogRequests,
   shouldRefreshDraftMachineCatalogs,
   hasUsableDraftModels,
+  nextSelectableMachineCard,
   type DraftMachineCardRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import {
@@ -16,7 +17,7 @@ import type { ModelSelection, ProjectId, ServerProvider } from "@t3tools/contrac
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { resolveLogicalProjectKey } from "@t3tools/client-runtime/state/mesh-layout";
 import { CheckIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useMeshOverview } from "../../hooks/useMeshOverview";
@@ -56,6 +57,7 @@ export function DraftMachineCards(props: {
   const requestedCatalogs = useRef(new Map<string, number>());
   const [catalogRefresh, setCatalogRefresh] = useState(0);
   const projectSettings = useClientSettings(selectProjectGroupingSettings);
+  const cardsRef = useRef<HTMLDivElement | null>(null);
   const catalogKey = props.choices
     .filter((choice) => !choice.connected)
     .map((choice) => choice.environmentId)
@@ -186,7 +188,7 @@ export function DraftMachineCards(props: {
         config: catalog,
         canHostCopy: draftMachineCanHostCopy({
           hasProject: projectId !== null,
-          supportsReplicas: choice.supportsMesh === true,
+          supportsReplicas: choice.supportsMesh ?? null,
           isScratchDraft: props.activeProject?.isScratch === true,
         }),
         sync,
@@ -195,10 +197,34 @@ export function DraftMachineCards(props: {
     reachability,
     selectedEnvironmentId: props.selectedEnvironmentId,
     selection: props.selection,
+    draftHasProject: props.activeProject?.isScratch !== true,
   });
   if (rows.length === 0) return null;
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const direction =
+      event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? -1
+          : null;
+    if (direction === null) return;
+    const focused = (event.target as HTMLElement).closest<HTMLElement>("[data-draft-machine-card]");
+    const current = focused?.dataset.draftMachineCard ?? props.selectedEnvironmentId;
+    const next = nextSelectableMachineCard(rows, current ?? null, direction);
+    if (next === null) return;
+    event.preventDefault();
+    props.onSelect(next as EnvironmentOption["environmentId"]);
+    window.requestAnimationFrame(() => {
+      const card = Array.from(
+        cardsRef.current?.querySelectorAll<HTMLElement>("[data-draft-machine-card]") ?? [],
+      ).find((element) => element.dataset.draftMachineCard === next);
+      card?.focus();
+    });
+  };
   return (
     <div
+      ref={cardsRef}
+      onKeyDown={onKeyDown}
       role="radiogroup"
       aria-label="Machine for this thread"
       data-draft-machine-cards

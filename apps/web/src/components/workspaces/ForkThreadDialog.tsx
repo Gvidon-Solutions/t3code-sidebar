@@ -8,6 +8,7 @@ import type {
   ThreadForkCatalog,
 } from "@t3tools/contracts";
 import { replicaStatusCopy } from "@t3tools/client-runtime/state/mesh-layout";
+import { defaultForkTarget } from "@t3tools/client-runtime/state/thread-forks";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useRef, useState } from "react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
@@ -87,14 +88,24 @@ export function ForkThreadDialog(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Never default to the machine the thread already runs on when another can take it.
-  const defaultTarget =
-    environments.find(
-      (entry) =>
-        entry.environmentId !== source.environmentId && entry.connection.phase === "connected",
-    )?.environmentId ??
-    environments.find((entry) => entry.environmentId !== source.environmentId)?.environmentId ??
-    source.environmentId;
+  // Never default to the machine the thread already runs on when another can take it,
+  // and prefer one whose catalog can actually run a model.
+  const defaultTarget = defaultForkTarget({
+    sourceEnvironmentId: source.environmentId as string,
+    candidates: environments.map((entry) => ({
+      environmentId: entry.environmentId,
+      connected: entry.connection.phase === "connected",
+      hasModels: (providersByEnvironment.get(entry.environmentId) ?? []).some(
+        (provider) =>
+          provider.models.length > 0 &&
+          provider.enabled !== false &&
+          provider.installed !== false &&
+          provider.auth?.status !== "unauthenticated" &&
+          provider.status !== "error" &&
+          provider.availability !== "unavailable",
+      ),
+    })),
+  }) as EnvironmentId;
   const target = targetEnvironmentId ?? defaultTarget;
   const connected = environments.some(
     (entry) => entry.environmentId === target && entry.connection.phase === "connected",
