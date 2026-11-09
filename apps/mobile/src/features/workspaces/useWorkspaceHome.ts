@@ -195,7 +195,14 @@ export function useWorkspaceHome(input: {
         memberKeys: scope.projectRefs.map((member) =>
           scopedProjectKey(member.environmentId, member.projectId),
         ),
-        environmentIds: scope.projectRefs.map((member) => member.environmentId),
+        // Copies on an offline machine still make this a multi-machine project, so
+        // its rows keep their tags even before this phone reconnects.
+        environmentIds: [
+          ...new Set([
+            ...scope.projectRefs.map((member) => member.environmentId),
+            ...(config?.projectMounts[scope.key]?.map((rep) => rep.environmentId) ?? []),
+          ]),
+        ],
         isScratch: isScratchScope(scope),
         workspaceIds: workspaceIdsOf(scope),
         ...(scope.meshOffline === undefined ? {} : { meshOffline: scope.meshOffline }),

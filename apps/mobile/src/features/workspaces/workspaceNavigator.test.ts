@@ -52,6 +52,7 @@ function build(
     projectOrder?: ReadonlyArray<string>;
     voiceThreadKey?: string;
     connectedEnvironmentIds?: ReadonlyArray<string>;
+    offlineEnvironmentIds?: ReadonlyArray<string>;
     config?: SidebarWorkspacesConfig;
   } = {},
 ): WorkspaceHomeListItem[] {
@@ -70,6 +71,9 @@ function build(
     selectedThreadKey: null,
     ...(options.voiceThreadKey ? { voiceThreadKey: options.voiceThreadKey } : {}),
     connectedEnvironmentIds: options.connectedEnvironmentIds ?? [environmentId],
+    ...(options.offlineEnvironmentIds
+      ? { offlineEnvironmentIds: options.offlineEnvironmentIds }
+      : {}),
     ...(options.config ? { config: options.config } : {}),
     resolveMachineDisplay: (id) => ({ label: id, tag: "EN", color: "#000000" }),
     now: NOW,
@@ -312,6 +316,25 @@ describe("buildWorkspaceHomeItems", () => {
       items.find((item) => item.type === "ws-thread")?.machineTag ?? null;
     expect(tagOf(single)).toBeNull();
     expect(tagOf(shared)?.tag).toBe("EN");
+  });
+
+  it("keeps a row and dims its tag for a machine the mesh reports offline", () => {
+    const offline = EnvironmentId.make("other");
+    const items = build([thread("one", "a", { environmentId: offline })], [], {
+      folders: [
+        {
+          ...folder("a", "Alpha"),
+          memberKeys: [`${offline}:a`],
+          environmentIds: [environmentId, offline],
+        },
+      ],
+      offlineEnvironmentIds: [offline],
+    });
+    const row = items.find((item) => item.type === "ws-thread");
+    expect(row?.type).toBe("ws-thread");
+    if (row?.type !== "ws-thread") throw new Error("Missing offline thread row");
+    expect(row.machineTag?.tag).toBe("EN");
+    expect(row.machineTagOffline).toBe(true);
   });
 
   it("tags cross-project sections when more than one machine is connected", () => {

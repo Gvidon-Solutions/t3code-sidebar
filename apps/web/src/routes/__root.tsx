@@ -1,5 +1,6 @@
 import { DesktopUiCoordinator } from "../components/desktop/DesktopUiCoordinator";
 import { MeshLayoutProvider } from "../hooks/useMeshLayout";
+import { useDraftProjectKeyReconcile } from "../hooks/useDraftProjectKeyReconcile";
 import { PendingMeshDraftCoordinator } from "../components/workspaces/PendingMeshDraftCoordinator";
 import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -43,7 +44,10 @@ import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcome
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { ThemeRouteSync } from "../components/ThemeRouteSync";
 import { DesktopBundledOffline } from "../components/desktop/DesktopBundledOffline";
-import { desktopBundledFallback } from "../components/desktop/desktopBundledFallback";
+import {
+  desktopBundledFallback,
+  showsDesktopBundledFallback,
+} from "../components/desktop/desktopBundledFallback";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { Button } from "../components/ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
@@ -53,10 +57,10 @@ import { isElectron } from "../env";
 import { cn } from "../lib/utils";
 import { useClientSettings } from "../hooks/useSettings";
 import {
-  deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKeyFromPath,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
+import { resolveDraftLogicalProjectKey } from "../state/draftProjectKey";
 import { useUiStateStore } from "../uiStateStore";
 import { configureClientTracing } from "../observability/clientTracing";
 import { resolveInitialServerAuthGateState } from "../environments/primary";
@@ -142,12 +146,14 @@ function RootRouteNotFoundView() {
 function RootRouteView() {
   // Above every branch: app services raise toasts for the whole page, so the surface they write to
   // must not unmount when the root switches branches (for example /welcome to the app shell).
+  const pathname = useLocation({ select: (location) => location.pathname });
   const bundledFallback = isElectron ? desktopBundledFallback(window.location.search) : null;
+  const showBundledOffline = showsDesktopBundledFallback({ fallback: bundledFallback, pathname });
   return (
     <ToastProvider>
       <AnchoredToastProvider>
         <ThemeRouteSync />
-        {bundledFallback ? (
+        {showBundledOffline && bundledFallback ? (
           <DesktopBundledOffline fallback={bundledFallback} />
         ) : (
           <RootRouteBranch />
@@ -237,6 +243,7 @@ function RootRouteBranch() {
           <AddProjectToMachineDialogHost />
           <ForkThreadDialogHost />
           <PendingMeshDraftCoordinator />
+          <DraftProjectKeyReconcile />
           {import.meta.env.DEV && primaryEnvironmentAuthenticated ? <DevReplayHost /> : null}
           {primaryEnvironmentAuthenticated ? (
             <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
@@ -339,6 +346,11 @@ function errorReport(error: unknown, pathname: string): string {
   return lines.join("\n");
 }
 
+function DraftProjectKeyReconcile() {
+  useDraftProjectKeyReconcile();
+  return null;
+}
+
 function EventRouter({
   skipInitialBootstrapNavigation,
 }: {
@@ -365,7 +377,7 @@ function EventRouter({
       );
       const bootstrapProjectKey =
         (bootstrapProject
-          ? deriveLogicalProjectKeyFromSettings(bootstrapProject, projectGroupingSettings)
+          ? resolveDraftLogicalProjectKey(bootstrapProject, projectGroupingSettings)
           : null) ??
         (serverConfig?.cwd
           ? derivePhysicalProjectKeyFromPath(payload.environment.environmentId, serverConfig.cwd)

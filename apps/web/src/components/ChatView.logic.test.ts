@@ -10,6 +10,7 @@ import {
   realDraftModelSelection,
   showsOfflineConversationEmpty,
   environmentUnavailableBannerStatus,
+  composerEnvironmentUnavailableState,
   showsEnvironmentUnavailableBanner,
 } from "./ChatView.logic";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
@@ -1287,6 +1288,38 @@ it("replaces a blank server thread with the offline pane only once it has no sav
   expect(showsOfflineConversationEmpty({ ...base, reconnectWindowElapsed: false })).toBe(false);
   expect(showsOfflineConversationEmpty({ ...base, environmentUnavailable: false })).toBe(false);
   expect(showsOfflineConversationEmpty({ ...base, isServerThread: false })).toBe(false);
+});
+
+it("keeps the composer usable during a reconnect window and for a draft", () => {
+  const state = { connection: { phase: "reconnecting" } };
+  expect(
+    composerEnvironmentUnavailableState({
+      isDraft: false,
+      state,
+      reconnectWindowElapsed: false,
+    }),
+  ).toBeNull();
+  expect(
+    composerEnvironmentUnavailableState({
+      isDraft: false,
+      state,
+      reconnectWindowElapsed: true,
+    }),
+  ).toBe(state);
+  expect(
+    composerEnvironmentUnavailableState({
+      isDraft: false,
+      state: { connection: { phase: "error" } },
+      reconnectWindowElapsed: false,
+    }),
+  ).toEqual({ connection: { phase: "error" } });
+  expect(
+    composerEnvironmentUnavailableState({
+      isDraft: true,
+      state,
+      reconnectWindowElapsed: true,
+    }),
+  ).toBeNull();
 });
 
 it("hides the machine banner when the centred empty conversation pane already says it", () => {

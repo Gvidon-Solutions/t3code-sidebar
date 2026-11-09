@@ -11,6 +11,7 @@ import { usePasteToFocusComposer } from "./chat/usePasteToFocusComposer";
 import { configuredHostedAppUrl } from "../hostedPairing";
 import { announcedRun, isDetailBehindShell } from "./chat/threadActivityAnnouncement";
 import {
+  composerEnvironmentUnavailableState,
   deriveAvailableRevertTurnCounts,
   deriveThreadPendingBackgroundTasks,
   presentThreadShellFromProjection,
@@ -367,10 +368,8 @@ import { ThreadVisitWatermark } from "./chat/ThreadVisitWatermark";
 import { ChatTerminalDrawers } from "./chat/ChatTerminalDrawers";
 import { ChatRightPanel } from "./chat/ChatRightPanel";
 import {
-  draftModelUnavailableReason,
-  hasUsableDraftModels,
   draftMachineCanHostCopy,
-  draftMachineUsable,
+  draftMachineCandidate,
   nextSelectableDraftMachine,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { useDraftEnvironmentRouting } from "./chat/useDraftEnvironmentRouting";
@@ -1221,6 +1220,11 @@ export default function ChatView(props: ChatViewProps) {
     activeEnvironmentUnavailable ? (activeEnvironment?.environmentId ?? null) : null,
     ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
   );
+  const composerEnvironmentUnavailable = composerEnvironmentUnavailableState({
+    isDraft: routeKind === "draft",
+    state: activeEnvironmentUnavailableState,
+    reconnectWindowElapsed: offlineReconnectWindowElapsed,
+  });
   const showOfflineConversationEmpty = showsOfflineConversationEmpty({
     isServerThread,
     environmentUnavailable: activeEnvironmentUnavailable,
@@ -2814,24 +2818,19 @@ export default function ChatView(props: ChatViewProps) {
             const providers = providersByEnvironment.get(environment.environmentId);
             const catalog =
               serverConfig && providers ? { providers, settings: serverConfig.settings } : null;
-            const selection = explicitDraftModelSelection;
-            return {
+            return draftMachineCandidate({
               environmentId: environment.environmentId,
               connected: environment.connected !== false,
-              usable: draftMachineUsable({
-                connected: environment.connected !== false,
-                hasUsableModels: hasUsableDraftModels(catalog, environment.projectId),
-                selectedModelUsable:
-                  selection !== null &&
-                  draftModelUnavailableReason(catalog, selection, environment.projectId) === null,
-                canHostCopy: draftMachineCanHostCopy({
-                  hasProject: environment.projectId !== null,
-                  supportsReplicas: environment.supportsMesh ?? null,
-                  isScratchDraft: activeProjectIsScratch,
-                }),
+              projectId: environment.projectId,
+              catalog,
+              selection: explicitDraftModelSelection,
+              canHostCopy: draftMachineCanHostCopy({
+                hasProject: environment.projectId !== null,
+                supportsReplicas: environment.supportsMesh ?? null,
+                isScratchDraft: activeProjectIsScratch,
               }),
               primary: environment.isPrimary,
-            };
+            });
           }),
           readPendingEnvironmentChange()?.environmentId ?? environmentId,
         );
@@ -3772,8 +3771,8 @@ export default function ChatView(props: ChatViewProps) {
                               sendDisabledReason={
                                 !canOperateThread
                                   ? "This connection cannot change threads."
-                                  : activeEnvironmentUnavailable
-                                    ? `${activeEnvironmentUnavailableLabel ?? "This machine"} is offline. Reconnect to send.`
+                                  : composerEnvironmentUnavailable
+                                    ? `${composerEnvironmentUnavailable.label} is offline. Reconnect to send.`
                                     : isRevertingCheckpoint
                                       ? "Rewinding conversation"
                                       : feedbackUploading
@@ -3802,7 +3801,7 @@ export default function ChatView(props: ChatViewProps) {
                                   ? openUsageLimits
                                   : undefined
                               }
-                              environmentUnavailable={activeEnvironmentUnavailableState}
+                              environmentUnavailable={composerEnvironmentUnavailable}
                               activePendingApproval={activePendingApproval}
                               pendingApprovals={pendingApprovals}
                               onHeldRequestIdsChange={onHeldRequestIdsChange}
@@ -3816,7 +3815,7 @@ export default function ChatView(props: ChatViewProps) {
                               showPlanFollowUpPrompt={showPlanFollowUpPrompt}
                               activeProposedPlan={activeProposedPlan}
                               threadSyncPhase={
-                                activeEnvironmentUnavailable ? null : threadSyncPhase
+                                composerEnvironmentUnavailable ? null : threadSyncPhase
                               }
                               runtimeMode={runtimeMode}
                               defaultRuntimeMode={defaultRuntimeMode}

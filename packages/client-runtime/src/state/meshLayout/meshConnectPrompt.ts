@@ -1,6 +1,8 @@
 export interface MeshConnectMachine {
   readonly environmentId: string;
   readonly label: string;
+  /** The mesh reports the machine online; an offline machine is not a connection to fix. */
+  readonly online?: boolean;
 }
 
 export interface MeshConnectCatalogEntry {
@@ -25,8 +27,11 @@ export function planMeshConnect(input: {
   readonly connectedEnvironmentIds: ReadonlySet<string>;
   readonly entries: ReadonlyMap<string, MeshConnectCatalogEntry>;
 }): MeshConnectPlan {
+  // An offline machine cannot be switched on by a connection action: wait for it
+  // to come back instead of telling the person their device is not connected.
   const offline = input.machines.filter(
-    (machine) => !input.connectedEnvironmentIds.has(machine.environmentId),
+    (machine) =>
+      machine.online !== false && !input.connectedEnvironmentIds.has(machine.environmentId),
   );
   // A saved connection that is already enabled needs no action from this prompt:
   // switching it on again would be a no-op while the machine is simply down.

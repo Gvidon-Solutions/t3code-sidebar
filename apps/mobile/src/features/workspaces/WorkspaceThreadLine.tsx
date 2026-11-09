@@ -42,6 +42,8 @@ export function WorkspaceThreadLine(props: {
   readonly projectLabel: string | null;
   /** Set when the list can mix machines: a tag before the title, the full name in its label. */
   readonly machineTag?: MachineDisplay | null;
+  /** The mesh reports the machine offline: keep the tag, dim it. */
+  readonly machineTagOffline?: boolean;
   readonly timeLabel: string;
   readonly working: boolean;
   readonly hasQueuedMessages: boolean;
@@ -77,11 +79,16 @@ export function WorkspaceThreadLine(props: {
       {props.machineTag ? (
         <View
           accessible
-          accessibilityLabel={`Machine: ${props.machineTag.label}`}
-          className="shrink-0 rounded px-1 py-0.5"
+          accessibilityLabel={`Machine: ${props.machineTag.label}${props.machineTagOffline ? ", offline" : ""}`}
+          className={cn("shrink-0 rounded px-1 py-0.5", props.machineTagOffline && "opacity-50")}
           style={{ backgroundColor: machineTagBackground(props.machineTag.color) }}
         >
-          <Text className="text-3xs font-t3-bold uppercase text-foreground">
+          <Text
+            className={cn(
+              "text-3xs font-t3-bold uppercase",
+              props.machineTagOffline ? "text-foreground-muted" : "text-foreground",
+            )}
+          >
             {props.machineTag.tag}
           </Text>
         </View>

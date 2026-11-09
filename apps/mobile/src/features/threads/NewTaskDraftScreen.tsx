@@ -952,6 +952,14 @@ export function NewTaskDraftScreen(props: {
       {shareUnavailableNotice}
     </View>
   );
+  // Keep the project heading and its machine cards together, centred like web,
+  // instead of leaving the cards pinned above the composer.
+  const heroWithCards = (
+    <View className="w-full items-center gap-4">
+      {hero}
+      {machineCards}
+    </View>
+  );
   // The nested hero scroll view does not receive UIKit's automatic navigation inset in split columns.
   const heroViewport = (headerInset: number, bottomInset: number, availableHeight: number) =>
     availableHeight < 180 ? null : (
@@ -982,7 +990,7 @@ export function NewTaskDraftScreen(props: {
             testID="new-task-hero-scroll"
           >
             <View style={{ flexGrow: 1 }} />
-            {hero}
+            {heroWithCards}
             <View style={{ flexGrow: 2 }} />
           </ScrollView>
         </View>
@@ -1114,7 +1122,6 @@ export function NewTaskDraftScreen(props: {
                   />
                 </View>
               ) : null}
-              {machineCards}
               {flow.canChooseWorkspace ? workspaceControls : null}
             </View>
           ),

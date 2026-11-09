@@ -137,6 +137,8 @@ export interface WorkspaceThreadListItem extends Omit<ThreadListV2ThreadListItem
   readonly projectLabel: string | null;
   /** The machine tag shown before the title in a list that can mix machines. */
   readonly machineTag: MachineDisplay | null;
+  /** The mesh reports that machine offline: keep the tag, dim it. */
+  readonly machineTagOffline?: boolean;
   /** An agent drawn under the thread that started it. */
   readonly nested?: boolean;
   /** The thread holding this device's voice conversation, drawn first with a wave. */
@@ -442,6 +444,9 @@ export function buildWorkspaceHomeItems(input: {
       timeLabel: row.snoozeWakeLabelText ?? compactAgo(threadActivityMs(thread), input.now),
       projectLabel,
       machineTag: showMachineTag ? input.resolveMachineDisplay(thread.environmentId) : null,
+      ...(showMachineTag && input.offlineEnvironmentIds?.includes(thread.environmentId)
+        ? { machineTagOffline: true }
+        : {}),
       ...(flags.nested ? { nested: true } : {}),
       ...(flags.voice ? { voice: true } : {}),
     });

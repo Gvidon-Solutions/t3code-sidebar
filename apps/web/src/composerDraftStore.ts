@@ -453,6 +453,7 @@ interface ComposerDraftStoreState {
   getDraftThread: (threadRef: ComposerThreadTarget) => DraftThreadState | null;
   listDraftThreadKeys: () => string[];
   hasDraftThreadsInEnvironment: (environmentId: EnvironmentId) => boolean;
+  rekeyLogicalProjectDraft: (draftId: DraftId, logicalProjectKey: string) => void;
   setLogicalProjectDraftThreadId: (
     logicalProjectKey: string,
     projectRef: ScopedProjectRef,
@@ -2600,6 +2601,45 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           Object.values(get().draftThreadsByThreadKey).some(
             (draftThread) => draftThread.environmentId === environmentId,
           ),
+        rekeyLogicalProjectDraft: (draftId, logicalProjectKey) => {
+          const normalizedLogicalProjectKey = logicalProjectDraftKey(logicalProjectKey);
+          if (normalizedLogicalProjectKey.length === 0) return;
+          set((state) => {
+            const existingThread = state.draftThreadsByThreadKey[draftId];
+            if (
+              existingThread === undefined ||
+              existingThread.logicalProjectKey === normalizedLogicalProjectKey
+            ) {
+              return state;
+            }
+            const logicalProjectDraftThreadKeyByLogicalProjectKey: Record<string, string> =
+              Object.fromEntries(
+                Object.entries(state.logicalProjectDraftThreadKeyByLogicalProjectKey).filter(
+                  ([logicalKey, mappedDraftId]) =>
+                    mappedDraftId !== draftId || logicalKey === normalizedLogicalProjectKey,
+                ),
+              );
+            // Another draft already owns the target logical project: keep its mapping
+            // and leave this one reachable by its project ref only, never overwrite it.
+            if (
+              logicalProjectDraftThreadKeyByLogicalProjectKey[normalizedLogicalProjectKey] ===
+              undefined
+            ) {
+              logicalProjectDraftThreadKeyByLogicalProjectKey[normalizedLogicalProjectKey] =
+                draftId;
+            }
+            return {
+              draftThreadsByThreadKey: {
+                ...state.draftThreadsByThreadKey,
+                [draftId]: {
+                  ...existingThread,
+                  logicalProjectKey: normalizedLogicalProjectKey,
+                },
+              },
+              logicalProjectDraftThreadKeyByLogicalProjectKey,
+            };
+          });
+        },
         setLogicalProjectDraftThreadId: (logicalProjectKey, projectRef, draftId, options) => {
           const normalizedLogicalProjectKey = logicalProjectDraftKey(logicalProjectKey);
           if (normalizedLogicalProjectKey.length === 0 || draftId.length === 0) {

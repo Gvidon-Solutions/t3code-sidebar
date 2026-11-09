@@ -1,6 +1,7 @@
 import { Button } from "../ui/button";
 import { StandalonePage } from "../ui/standalone-page";
 import {
+  desktopBundledLocalSettingsUrl,
   desktopBundledRetryUrl,
   desktopFallbackServerAddress,
   desktopFallbackServerLabel,
@@ -12,10 +13,14 @@ export function DesktopBundledOffline(props: {
   readonly fallback: DesktopBundledFallback;
   /** Where Retry navigates; defaults to asking the shell for the server UI again. */
   readonly retryHref?: string;
+  /** Where "Choose another server" goes; defaults to the bundled Settings › Connections. */
+  readonly chooseServerHref?: string;
 }) {
   const label = desktopFallbackServerLabel(props.fallback);
   const address = desktopFallbackServerAddress(props.fallback);
   const retryHref = props.retryHref ?? desktopBundledRetryUrl(window.location.href);
+  const chooseServerHref =
+    props.chooseServerHref ?? desktopBundledLocalSettingsUrl(window.location.href);
   return (
     <StandalonePage>
       <div className="flex flex-col gap-4">
@@ -26,9 +31,12 @@ export function DesktopBundledOffline(props: {
           </p>
         </div>
         {address === null ? null : <p className="text-xs text-muted-foreground/70">{address}</p>}
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button render={<a href={retryHref} />} className="inline-flex">
             Retry
+          </Button>
+          <Button variant="outline" render={<a href={chooseServerHref} />} className="inline-flex">
+            Choose another server
           </Button>
         </div>
       </div>

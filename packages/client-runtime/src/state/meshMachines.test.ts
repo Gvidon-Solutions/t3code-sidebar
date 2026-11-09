@@ -26,6 +26,8 @@ import {
   offlineComposerPlaceholder,
   offlineMeshEnvironmentIds,
   meshMachineOfflineText,
+  offlineMachinePrompt,
+  replicaConnectionFixText,
 } from "./meshMachines.ts";
 
 const base: SidebarWorkspacesConfig = {
@@ -522,6 +524,30 @@ it("formats offline durations without an ISO date", () => {
   expect(offlineMachineText("2026-05-09T23:58:00Z", now)).toBe("Offline · 2 min");
   expect(offlineMachineText("2026-05-09T23:59:30Z", now)).toBe("Offline");
   expect(offlineMachineText("invalid", now)).toBe("Offline");
+});
+
+it("says an offline machine's age once, without a stray separator", () => {
+  const prompt = offlineMachinePrompt("laptop", "Offline · 3 min");
+  expect(prompt).toContain('Machine "laptop" has been offline for 3 min.');
+  expect(prompt).not.toContain("for ·");
+  expect(offlineMachinePrompt("laptop", "Offline")).toContain(
+    'Machine "laptop" has just gone offline.',
+  );
+});
+
+it("names a copy's machines in a plain retry sentence", () => {
+  const sentence = replicaConnectionFixText({
+    targetLabel: "Laptop",
+    sourceLabel: "Studio",
+  });
+  expect(sentence).toBe(
+    "The copy on Laptop can't reach Studio. Ask an agent to fix the connection between these machines.",
+  );
+  expect(replicaConnectionFixText({ targetLabel: "Laptop" })).toBe(
+    "The copy on Laptop can't reach its main copy. Ask an agent to fix the connection.",
+  );
+  expect(sentence).not.toContain("ssh route");
+  expect(sentence).not.toMatch(/environment-\d/);
 });
 
 it("keeps equal titles distinct even when platform and hostname are identical", () => {

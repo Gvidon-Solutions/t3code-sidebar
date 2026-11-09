@@ -191,6 +191,8 @@ export function machineTag(
 export interface OfflineLogicalProject {
   readonly logicalKey: string;
   readonly environmentId: string;
+  /** The physical project on that machine, when the layout names one. */
+  readonly projectId: string | null;
   readonly path: string;
   readonly state: string | null;
   readonly updatedAt: string | null;
@@ -198,9 +200,9 @@ export interface OfflineLogicalProject {
 }
 
 /**
- * Logical projects whose every representation sits on a machine this client cannot reach. A
- * project with one connected representation is already in the normal project list; excluding it
- * here prevents a duplicate greyed card.
+ * Representations on machines this client cannot reach. Callers that already list a logical
+ * project through a connected copy use these entries to keep the reachable copies, their
+ * project refs and their machine tags; callers with no connected copy render one greyed card.
  */
 export function offlineLogicalProjects(
   config: SidebarWorkspacesConfig,
@@ -211,12 +213,13 @@ export function offlineLogicalProjects(
   for (const [logicalKey, reps] of Object.entries(config.projectMounts).sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0,
   )) {
-    if (reps.some((rep) => connectedEnvironmentIds.has(rep.environmentId))) continue;
     for (const rep of reps) {
+      if (connectedEnvironmentIds.has(rep.environmentId)) continue;
       const status = config.projectMountStatus[logicalKey]?.[rep.environmentId];
       result.push({
         logicalKey,
         environmentId: rep.environmentId,
+        projectId: rep.projectId ?? null,
         path: rep.path,
         state: status?.state ?? null,
         updatedAt: status?.updatedAt ?? null,

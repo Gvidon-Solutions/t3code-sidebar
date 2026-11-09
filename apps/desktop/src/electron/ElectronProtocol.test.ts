@@ -324,7 +324,7 @@ describe("ElectronProtocol", () => {
       assert.equal(offline.status, 302);
       const fallback = new URL(offline.headers.get("location")!);
       assert.equal(fallback.searchParams.get("bundled"), "1");
-      assert.equal(fallback.searchParams.get("server"), "https://cloudbox.example/");
+      assert.equal(fallback.searchParams.get("server"), "https://cloudbox.example");
       assert.equal(fallback.searchParams.get("name"), "Studio");
       netFetchMock.mockImplementation(
         async () =>

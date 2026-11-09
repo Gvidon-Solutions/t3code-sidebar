@@ -10,6 +10,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import { useNavigation } from "@react-navigation/native";
 import { AsyncResult } from "effect/reactivity";
 import { Pressable, View } from "react-native";
+import { useRef, useState } from "react";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { SymbolView } from "../../components/ui/AppSymbol";
@@ -33,6 +34,8 @@ export function MeshConnectPrompt() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomSet(updateMobilePreferencesAtom);
   const preferences = AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : {};
+  const [isConnecting, setIsConnecting] = useState(false);
+  const connectingRef = useRef(false);
   const dismissed = pruneMeshConnectDismissed(
     preferences.meshConnectPromptDismissed ?? [],
     machines.map((machine) => machine.environmentId),
@@ -47,6 +50,7 @@ export function MeshConnectPrompt() {
     machines: machines.map((machine) => ({
       environmentId: machine.environmentId,
       label: machine.label,
+      online: machine.network?.state !== "offline",
     })),
     connectedEnvironmentIds: new Set(
       environments
@@ -62,10 +66,13 @@ export function MeshConnectPrompt() {
   });
   if (!enabled || !shouldShowMeshConnectPrompt(plan, dismissed)) return null;
   const rememberDismissed = (environmentIds: ReadonlyArray<string>) => {
-    const current = preferences.meshConnectPromptDismissed ?? [];
+    // Merge into the freshest saved list: a dismissal made meanwhile must survive.
     savePreferences({
-      transform: (_value) => ({
-        meshConnectPromptDismissed: dismissMeshConnectIds(current, environmentIds),
+      transform: (value) => ({
+        meshConnectPromptDismissed: dismissMeshConnectIds(
+          value.meshConnectPromptDismissed ?? [],
+          environmentIds,
+        ),
       }),
     });
   };
@@ -79,25 +86,35 @@ export function MeshConnectPrompt() {
       }),
     });
   };
-  const connectAll = async () => {
-    const settled = plan.missing.map((machine) => machine.environmentId);
-    const failed: string[] = [];
-    for (const machine of plan.reconnect) {
-      const result = await setEnabled({
-        environmentId: machine.environmentId as EnvironmentId,
-        enabled: true,
-      });
-      if (result._tag === "Success") settled.push(machine.environmentId);
-      else failed.push(machine.label);
-    }
-    if (settled.length > 0) rememberDismissed(settled);
-    if (failed.length > 0) {
-      Dialog.alert(
-        "Couldn't connect every machine",
-        `Ask an agent to fix the connection to ${failed.join(", ")}.`,
-      );
-    }
-    if (plan.missing.length > 0) openSettings(navigation, "SettingsEnvironments");
+  const connectAll = () => {
+    if (connectingRef.current) return;
+    connectingRef.current = true;
+    setIsConnecting(true);
+    const sequence = (async () => {
+      // Never mark a machine that was never added as dismissed: it must keep asking.
+      const settled: string[] = [];
+      const failed: string[] = [];
+      for (const machine of plan.reconnect) {
+        const result = await setEnabled({
+          environmentId: machine.environmentId as EnvironmentId,
+          enabled: true,
+        });
+        if (result._tag === "Success") settled.push(machine.environmentId);
+        else failed.push(machine.label);
+      }
+      if (settled.length > 0) rememberDismissed(settled);
+      if (failed.length > 0) {
+        Dialog.alert(
+          "Couldn't connect every machine",
+          `Ask an agent to fix the connection to ${failed.join(", ")}.`,
+        );
+      }
+      if (plan.missing.length > 0) openSettings(navigation, "SettingsEnvironments");
+    })();
+    void sequence.finally(() => {
+      connectingRef.current = false;
+      setIsConnecting(false);
+    });
   };
   return (
     <View
@@ -128,9 +145,12 @@ export function MeshConnectPrompt() {
         <Pressable
           accessibilityRole="button"
           className="min-h-11 justify-center"
-          onPress={() => void connectAll()}
+          disabled={isConnecting}
+          onPress={connectAll}
         >
-          <Text className="text-sm font-t3-medium text-primary-text">Connect all</Text>
+          <Text className="text-sm font-t3-medium text-primary-text">
+            {isConnecting ? "Connecting…" : "Connect all"}
+          </Text>
         </Pressable>
         <Pressable accessibilityRole="button" className="min-h-11 justify-center" onPress={dismiss}>
           <Text className="text-sm text-foreground-muted">Not now</Text>

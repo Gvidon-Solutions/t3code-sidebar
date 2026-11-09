@@ -20,10 +20,7 @@ import {
   getProjectOrderKey,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
-import {
-  mainRepresentationRef,
-  resolveLogicalProjectKey,
-} from "@t3tools/client-runtime/state/mesh-layout";
+import { mainRepresentationRef } from "@t3tools/client-runtime/state/mesh-layout";
 import { resolveNewThreadEnvMode, resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   readProject,
@@ -45,6 +42,7 @@ import { environmentSummaries } from "../state/presentation";
 import { environmentServerConfigsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { readMeshLayoutConfigSnapshot } from "../state/meshLayoutConfig";
+import { resolveDraftLogicalProjectKey } from "../state/draftProjectKey";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { getClientSettings } from "./useSettings";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
@@ -149,17 +147,25 @@ export function createNewThreadHandler(router: AnyRouter) {
       : scopedProjectKey(projectRef);
     const meshConfig = readMeshLayoutConfigSnapshot();
     // Drafts are keyed by the logical project, so a copy never owns its own draft.
-    const logicalProjectKey =
-      project && meshConfig
-        ? resolveLogicalProjectKey(project, meshConfig, () => fallbackLogicalKey)
-        : fallbackLogicalKey;
+    const logicalProjectKey = project
+      ? resolveDraftLogicalProjectKey(project, projectGroupingSettings, meshConfig)
+      : fallbackLogicalKey;
     const explicitMachine = options?.environmentSelection === "manual";
     const hasBranchOption = options?.branch !== undefined;
     const hasWorktreePathOption = options?.worktreePath !== undefined;
     const hasEnvModeOption = options?.envMode !== undefined;
     const hasStartFromOriginOption = options?.startFromOrigin !== undefined;
-    const storedDraftThread = getDraftSessionByLogicalProjectKey(logicalProjectKey);
+    // A draft made before the mesh snapshot loaded still carries the grouping key.
+    const readStoredDraftThread = () =>
+      getDraftSessionByLogicalProjectKey(logicalProjectKey) ??
+      (logicalProjectKey === fallbackLogicalKey
+        ? null
+        : getDraftSessionByLogicalProjectKey(fallbackLogicalKey));
+    const storedDraftThread = readStoredDraftThread();
     const storedMachineChoice = storedDraftThread?.environmentSelection === "manual";
+    // An explicit pick is manual and survives a later plain "new thread"; a plain
+    // new thread stays automatic so the default can return to the main copy.
+    const nextEnvironmentSelection = explicitMachine || storedMachineChoice ? "manual" : "auto";
     const mainRef =
       explicitMachine || storedMachineChoice
         ? null
@@ -232,22 +238,25 @@ export function createNewThreadHandler(router: AnyRouter) {
       // Environment queries wait for a connection, so reading the project file on an
       // offline machine would never settle and the draft would never open.
       const consultProjectFile =
-        project !== undefined &&
+        destinationProject !== undefined &&
         projectSettings.settings.defaultThreadEnvMode === null &&
         appAtomRegistry
           .get(environmentSummaries.connectedEnvironmentIdsAtom)
-          .includes(project.environmentId);
+          .includes(destinationProject.environmentId);
       const projectFile = consultProjectFile
-        ? await readT3ProjectFile(project.environmentId, project.workspaceRoot)
+        ? await readT3ProjectFile(
+            destinationProject.environmentId,
+            destinationProject.workspaceRoot,
+          )
         : null;
       return resolveNewThreadEnvMode({
         projectSettings: resolveProjectSettings(
           targetServerSettings,
-          project?.id ?? null,
-          project,
+          destinationProject?.id ?? null,
+          destinationProject,
           projectFile,
         ),
-        workspaceRoot: project?.workspaceRoot ?? null,
+        workspaceRoot: destinationProject?.workspaceRoot ?? null,
         newProjectsRoot: environmentServerConfigs.get(destinationRef.environmentId)
           ?.newProjectsRoot,
         projectHasThreads:
@@ -308,8 +317,7 @@ export function createNewThreadHandler(router: AnyRouter) {
           const promotedMeanwhile =
             storedDraftThreadRef !== null && readThreadShell(storedDraftThreadRef) !== null;
           const remappedMeanwhile =
-            getDraftSessionByLogicalProjectKey(logicalProjectKey)?.draftId !==
-            emptyStoredDraftThread.draftId;
+            readStoredDraftThread()?.draftId !== emptyStoredDraftThread.draftId;
           const investedMeanwhile = composerDraftHasUserContent(
             getComposerDraft(emptyStoredDraftThread.draftId),
           );
@@ -329,6 +337,7 @@ export function createNewThreadHandler(router: AnyRouter) {
         if (workspaceContext) {
           setDraftThreadContext(emptyStoredDraftThread.draftId, {
             ...workspaceContext,
+            environmentSelection: nextEnvironmentSelection,
             ...(!isDraftAlreadyOpen ? { runtimeMode: defaultRuntimeMode } : {}),
             ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
           });
@@ -354,6 +363,7 @@ export function createNewThreadHandler(router: AnyRouter) {
           {
             threadId: emptyStoredDraftThread.threadId,
             ...workspaceContext,
+            environmentSelection: nextEnvironmentSelection,
             ...(!isDraftAlreadyOpen ? { runtimeMode: defaultRuntimeMode } : {}),
             ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
           },
@@ -382,7 +392,8 @@ export function createNewThreadHandler(router: AnyRouter) {
     if (
       latestActiveDraftThread &&
       currentRouteTarget?.kind === "draft" &&
-      latestActiveDraftThread.logicalProjectKey === logicalProjectKey &&
+      (latestActiveDraftThread.logicalProjectKey === logicalProjectKey ||
+        latestActiveDraftThread.logicalProjectKey === fallbackLogicalKey) &&
       latestActiveDraftThread.promotedTo == null &&
       !composerDraftHasUserContent(getComposerDraft(currentRouteTarget.draftId))
     ) {
@@ -403,6 +414,7 @@ export function createNewThreadHandler(router: AnyRouter) {
           createdAt: latestActiveDraftThread.createdAt,
           runtimeMode: latestActiveDraftThread.runtimeMode,
           interactionMode: latestActiveDraftThread.interactionMode,
+          environmentSelection: nextEnvironmentSelection,
           ...pickExplicitWorkspaceOptions(options),
         },
       );
@@ -422,7 +434,7 @@ export function createNewThreadHandler(router: AnyRouter) {
         return null;
       }
       // Reuse drafts registered while awaiting so their pending navigation cannot lose them.
-      const racedDraft = getDraftSessionByLogicalProjectKey(logicalProjectKey);
+      const racedDraft = readStoredDraftThread();
       if (
         racedDraft &&
         racedDraft.draftId !== storedDraftThread?.draftId &&
@@ -433,6 +445,7 @@ export function createNewThreadHandler(router: AnyRouter) {
           createdAt: racedDraft.createdAt,
           runtimeMode: racedDraft.runtimeMode,
           interactionMode: racedDraft.interactionMode,
+          environmentSelection: nextEnvironmentSelection,
           ...pickExplicitWorkspaceOptions(options),
         });
         seedPrompt(racedDraft.draftId);
@@ -456,6 +469,7 @@ export function createNewThreadHandler(router: AnyRouter) {
             newWorktreesStartFromOrigin: projectSettings.settings.newWorktreesStartFromOrigin,
           }),
         runtimeMode: defaultRuntimeMode,
+        environmentSelection: nextEnvironmentSelection,
         ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
       });
       applyStickyState(draftId);

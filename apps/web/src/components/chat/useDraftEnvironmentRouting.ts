@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { pendingMeshDrafts } from "../../state/pendingMeshDrafts";
 import {
   defaultDraftMachine,
+  draftEnvironmentSelection,
   draftMachineCanHostCopy,
   draftMachineCatalogsKnown,
   draftMachineUsable,
@@ -9,7 +10,6 @@ import {
   hasUsableDraftModels,
   savedDraftMachineChoice,
   planThreadOnMachine,
-  resolveLogicalProjectKey,
   representationRow,
   replicaProjectId,
   replicaDriverEnvironment,
@@ -32,11 +32,9 @@ import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { plainErrorMessage } from "@t3tools/client-runtime/errors";
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { toastManager } from "../ui/toast";
-import {
-  deriveLogicalProjectKeyFromSettings,
-  selectProjectGroupingSettings,
-} from "@t3tools/client-runtime/state/project-grouping";
+import { selectProjectGroupingSettings } from "@t3tools/client-runtime/state/project-grouping";
 import { useComposerDraftStore, DraftId } from "../../composerDraftStore";
+import { resolveDraftLogicalProjectKey } from "../../state/draftProjectKey";
 import { type EnvironmentPresentation, useEnvironmentProviders } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import type { DraftSessionState } from "../../composerDraftStore";
@@ -278,9 +276,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
   const preferenceKey = activeProjectIsScratch
     ? "scratch"
     : preferenceProject && config
-      ? resolveLogicalProjectKey(preferenceProject, config, (project) =>
-          deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings),
-        )
+      ? resolveDraftLogicalProjectKey(preferenceProject, projectGroupingSettings, config)
       : activeProjectKey;
   const onEnvironmentChange = (
     nextEnvironmentId: EnvironmentId,
@@ -310,8 +306,11 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
         console.warn("Could not remember draft machine", error);
       }
     }
+    // An explicit switch is manual; the automatic default stays automatic so it can
+    // return to the main copy once that machine is back.
+    const environmentSelection = draftEnvironmentSelection(remember);
     setDraftThreadContext(draftId, {
-      environmentSelection: "manual",
+      environmentSelection,
       loadBalancedEnvironmentId: null,
     });
     const request = { environmentId: target.environmentId, scope: environmentChangeScope };
@@ -332,15 +331,15 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       const projectRef = scopeProjectRef(target.environmentId, project.id);
       if (activeProjectIsScratch) {
         setLogicalProjectDraftThreadId(
-          deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings),
+          resolveDraftLogicalProjectKey(project, projectGroupingSettings, config),
           projectRef,
           draftId,
-          { environmentSelection: "manual", loadBalancedEnvironmentId: null },
+          { environmentSelection, loadBalancedEnvironmentId: null },
         );
       } else {
         setDraftThreadContext(draftId, {
           projectRef,
-          environmentSelection: "manual",
+          environmentSelection,
           loadBalancedEnvironmentId: null,
         });
       }
@@ -369,9 +368,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
         finish();
         return;
       }
-      const logicalKey = resolveLogicalProjectKey(source, config, (project) =>
-        deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings),
-      );
+      const logicalKey = resolveDraftLogicalProjectKey(source, projectGroupingSettings, config);
       mesh.edit(
         (current) =>
           planThreadOnMachine({
@@ -399,13 +396,14 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       .finally(finish);
   };
   const onEnvironmentChangeStable = useStableCallback(onEnvironmentChange);
-  const defaultApplied = useRef<DraftId | null>(null);
+  const defaultApplied = useRef<{ draftId: DraftId; environmentId: string | null } | null>(null);
   const applyDefault = useEffectEvent(() => {
     if (
       !draftId ||
       !config ||
-      defaultApplied.current === draftId ||
-      draftThread?.environmentSelection === "manual"
+      draftThread?.environmentSelection === "manual" ||
+      // Load balancing owns an automatic draft that already picked a machine.
+      draftThread?.loadBalancedEnvironmentId != null
     )
       return;
     // A default chosen before the provider catalogs arrive would mark every
@@ -418,7 +416,6 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       new Set(providersByEnvironment.keys()),
     );
     if (!catalogsKnown) return;
-    defaultApplied.current = draftId;
     let remembered: string | null = null;
     try {
       remembered = window.localStorage.getItem(`t3.draftMachine.${preferenceKey ?? "scratch"}`);
@@ -459,12 +456,20 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
       }),
       remembered,
     );
-    if (target && target !== draftThread?.environmentId)
-      onEnvironmentChange(EnvironmentId.make(target), true, false);
+    if (target === null) return;
+    if (target === draftThread?.environmentId) {
+      defaultApplied.current = { draftId, environmentId: target };
+      return;
+    }
+    if (
+      defaultApplied.current?.draftId === draftId &&
+      defaultApplied.current.environmentId === target
+    )
+      return;
+    defaultApplied.current = { draftId, environmentId: target };
+    onEnvironmentChange(EnvironmentId.make(target), true, false);
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- applies the device's remembered machine after the mesh snapshot loads for a new persistent draft
   useEffect(() => {
-    // oxlint-disable-next-line react/set-state-in-effect -- applying the remembered machine updates the draft store, which is this pass's purpose
     applyDefault();
   });
 

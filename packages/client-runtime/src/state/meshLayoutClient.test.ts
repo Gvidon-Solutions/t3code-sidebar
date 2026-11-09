@@ -360,10 +360,11 @@ describe("logical project helpers", () => {
     ).toBe("VPS");
   });
 
-  it("lists a project only when every representation is unreachable", () => {
+  it("lists every representation on an unreachable machine, connected copies or not", () => {
     const offline = offlineLogicalProjects(config, new Set(["env-a"]));
-    expect(offline.map((entry) => entry.logicalKey)).toEqual(["logical-b"]);
+    expect(offline.map((entry) => entry.logicalKey)).toEqual(["logical-b", "logical-c"]);
     expect(offline[0]).toMatchObject({ environmentId: "env-b", state: "watching", tag: "BO" });
+    expect(offline[1]).toMatchObject({ environmentId: "env-b", logicalKey: "logical-c" });
   });
 
   it("suggests a merge by title across machines", () => {

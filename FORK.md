@@ -109,6 +109,50 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — F9b client audit round 5
+
+- **What.** A machine picked with "New thread on…" is stored as a manual draft choice and survives
+  the next plain "New thread"; the automatic default stays automatic, so a draft that fell back
+  while the main copy was offline returns to it once the main copy is back. `composer.cycleHost`
+  now judges each machine by its own default model when no model was chosen, matching the cards.
+  One draft key is used by the new-thread handler, the PR draft flow and the bootstrap project
+  expander, and drafts made before the mesh snapshot loaded re-key to the mesh logical project
+  instead of producing a second draft. New drafts read the project file, settings and workspace
+  root from the destination machine, not the clicked copy. The composer keeps typing enabled during
+  a normal reconnect window and for drafts that can queue. The desktop offline page offers
+  "Choose another server" (the bundled Settings › Connections) beside Retry; it names an IP literal
+  "the server", caps a long machine name and keeps the address as a muted detail only. Offline
+  ages read "offline for 3 min" without a stray separator. Mobile Home's copy-retry alert and
+  Settings › Mesh use the same plain machine-named wording and "no this machine" ordering as web.
+  A thread detail drops its saved conversation on a terminal failure but keeps it for an offline
+  machine, and drafts in the command palette add a muted path tail only when two projects share a
+  title. "Connect all" ignores a second tap, merges a dismissal made meanwhile and no longer marks
+  machines it never added as dismissed. Android's fork picker offers other machines only, puts a
+  usable machine first and disables one without models with "No models here" and its tag. Home
+  keeps an offline machine's threads listed with a dimmed tag, and the connect prompt no longer
+  asks to reconnect a machine the mesh reports offline. New-task headings and their machine cards
+  sit together in the vertical middle instead of pinning the cards above the composer.
+- **How.** Shared client-runtime added `draftMachineCandidate`, `draftEnvironmentSelection`,
+  `replicaConnectionFixText` and a terminal-failure check in the thread detail atoms. Web added
+  `state/draftProjectKey.ts` (the one draft key plus the pre-snapshot re-key plan),
+  `useDraftProjectKeyReconcile`, the `rekeyLogicalProjectDraft` store action, and passes the
+  destination project through `useHandleNewThread`. The composer grace uses the shared
+  `composerEnvironmentUnavailableState`. Desktop fallback adds `desktopBundledLocalSettingsUrl` and
+  `showsDesktopBundledFallback`; the root renders the normal branch on `/settings/*` so the person
+  can leave a dead server. The Electron fallback URL carries only the origin and a capped name.
+- **Where.** client-runtime `state/{meshMachines,threadDetail}.ts`,
+  `state/meshLayout/draftMachine.ts`; web `hooks/{useHandleNewThread,useDraftProjectKeyReconcile}.ts`,
+  `state/draftProjectKey.ts`, `composerDraftStore.ts`,
+  `components/{ChatView,ChatView.logic,CommandPalette,CommandPaletteProjectItems}.tsx`,
+  `components/chat/{useDraftEnvironmentRouting,usePullRequestDraftThread}.ts`,
+  `components/desktop/{DesktopBundledOffline,desktopBundledFallback}.tsx|ts`,
+  `components/sidebar/MeshConnectPrompt.tsx`, `routes/__root.tsx`; mobile
+  `features/{home/{HomeScreen,homeThreadList},settings/SettingsMachinesRouteScreen,
+  threads/{NewTaskDraftScreen,new-task-flow-provider},workspaces/{ForkThreadSheet,
+  MeshConnectPrompt,WorkspaceThreadLine,workspaceNavigator,useWorkspaceHome}}.tsx`,
+  `components/sidebar/MeshConnectPrompt.tsx`; desktop `src/electron/ElectronProtocol.ts`.
+  Shared logic: `state/meshLayout/{logicalProjects,replicas,meshConnectPrompt}.ts`.
+
 ### 2026-11-09 — F8 final polish before 0.1.7-sidebar.63
 
 - **What.** The Link dialog's "Link from" now starts on the machine that serves the UI, even when

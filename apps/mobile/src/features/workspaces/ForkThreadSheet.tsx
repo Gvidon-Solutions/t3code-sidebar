@@ -1,9 +1,15 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEnvironments } from "../../state/environments";
-import { MachinePickerGroups } from "./MachinePickerGroups";
 import { rootNavigationRef } from "../../lib/rootNavigation";
 import { useAtomValue } from "@effect/atom-react";
-import { replicaStatusCopy } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  forkMachineChoices,
+  hasUsableDraftModels,
+  machineChoiceText,
+  machineChoices,
+  replicaStatusCopy,
+  type MeshMachineInfo,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import {
   type EnvironmentId,
@@ -120,33 +126,67 @@ export function ForkThreadSheet() {
   };
   const label = (environmentId: string) =>
     machineDisplayOf(sourceConfig, environmentId, environmentId).label;
+  const logicalKey = Object.keys(sourceConfig.projectMounts).find((key) =>
+    sourceConfig.projectMounts[key]?.some(
+      (rep) => rep.environmentId === thread.environmentId && rep.projectId === thread.projectId,
+    ),
+  );
   const machineIds = new Set<string>([
     ...Object.keys(sourceConfig.machines ?? {}),
     ...serverConfigs.keys(),
     thread.environmentId,
   ]);
+  const forkChoices = forkMachineChoices(
+    machineChoices(
+      sourceConfig,
+      [...machineIds].map((environmentId): MeshMachineInfo => {
+        const serverConfig = serverConfigs.get(environmentId as EnvironmentId) ?? null;
+        const projectId =
+          sourceConfig.projectMounts[logicalKey ?? ""]?.find(
+            (rep) => rep.environmentId === environmentId,
+          )?.projectId ?? null;
+        const connectedHere = connected.has(environmentId);
+        // A cached config without a provider list has not answered the model question.
+        const catalog = serverConfig?.providers ? serverConfig : null;
+        return {
+          environmentId,
+          label: label(environmentId),
+          connected: connectedHere,
+          supportsMesh: serverConfig
+            ? serverConfig.environment?.capabilities?.replicas === true
+            : true,
+          hasUsableModel: connectedHere
+            ? hasUsableDraftModels(catalog, projectId as ProjectId | null)
+            : null,
+        };
+      }),
+    ),
+    thread.environmentId,
+  );
   if (target === null)
     return (
       <Sheet title="Fork to machine…" onClose={close}>
         <ScrollView>
-          <MachinePickerGroups
-            machines={[...machineIds]}
-            available={(environmentId) => connected.has(environmentId)}
-          >
-            {(environmentId) => (
+          {forkChoices.length === 0 ? (
+            <AppText className="p-4 text-foreground-muted">
+              No other machine is connected to this device.
+            </AppText>
+          ) : (
+            forkChoices.map((choice) => (
               <Pressable
-                key={environmentId}
+                key={choice.environmentId}
                 accessibilityRole="button"
-                className="p-4"
-                onPress={() => selectTarget(environmentId as EnvironmentId)}
+                accessibilityState={{ disabled: choice.disabled }}
+                disabled={choice.disabled}
+                className={`min-h-[52px] justify-center border-b border-border px-4 py-3 ${
+                  choice.disabled ? "opacity-50" : ""
+                }`}
+                onPress={() => selectTarget(choice.environmentId as EnvironmentId)}
               >
-                <AppText>{label(environmentId)}</AppText>
-                {catalogs[environmentId]?.error ? (
-                  <AppText className="text-xs text-foreground-muted">Unavailable</AppText>
-                ) : null}
+                <AppText>{machineChoiceText(choice)}</AppText>
               </Pressable>
-            )}
-          </MachinePickerGroups>
+            ))
+          )}
         </ScrollView>
       </Sheet>
     );
@@ -159,11 +199,6 @@ export function ForkThreadSheet() {
   const online = connected.has(target) || catalog?.value !== undefined;
   const loadingModels =
     !connected.has(target) && catalog !== undefined && !catalog.value && !catalog.error;
-  const logicalKey = Object.keys(sourceConfig.projectMounts).find((key) =>
-    sourceConfig.projectMounts[key]?.some(
-      (rep) => rep.environmentId === thread.environmentId && rep.projectId === thread.projectId,
-    ),
-  );
   const status = logicalKey ? sourceConfig.projectMountStatus[logicalKey]?.[target] : undefined;
   const progress = status
     ? replicaStatusCopy({

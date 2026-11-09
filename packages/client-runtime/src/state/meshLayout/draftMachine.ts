@@ -40,6 +40,43 @@ export interface DraftMachineCandidate {
   readonly primary: boolean;
 }
 
+/**
+ * One machine judged for switching or cycling a draft. The explicit selection is
+ * optional: without one, each machine answers with its own default model, the
+ * same rule the machine cards use.
+ */
+export function draftMachineCandidate(input: {
+  readonly environmentId: string;
+  readonly connected: boolean;
+  readonly projectId: ProjectId | null;
+  readonly catalog: ProviderCatalog | null | undefined;
+  readonly selection: ModelSelection | null;
+  readonly canHostCopy: boolean;
+  readonly primary: boolean;
+}): DraftMachineCandidate {
+  return {
+    environmentId: input.environmentId,
+    connected: input.connected,
+    usable: draftMachineUsable({
+      connected: input.connected,
+      hasUsableModels: hasUsableDraftModels(input.catalog, input.projectId),
+      selectedModelUsable:
+        draftMachineModelUsable(input.catalog, input.selection, input.projectId) === true,
+      canHostCopy: input.canHostCopy,
+    }),
+    primary: input.primary,
+  };
+}
+
+/**
+ * How a machine switch is recorded on the draft. An explicit choice is manual and
+ * survives later plain "new thread" clicks; the automatic default stays automatic
+ * so it can return to the main copy once that machine is back.
+ */
+export function draftEnvironmentSelection(remember: boolean): "manual" | "auto" {
+  return remember ? "manual" : "auto";
+}
+
 export function machineForDraftModel<
   T extends {
     connected: boolean;
