@@ -11,6 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Pressable, View } from "react-native";
 import { AppText as Text } from "../../components/ui/AppText";
+import { cn } from "../../lib/cn";
 
 const colors = {
   green: "#22c55e",
@@ -80,11 +81,15 @@ export function ProjectMachineStrip({
             className="h-4 flex-row items-center gap-0.5 rounded px-1"
             style={{
               backgroundColor: machineTagBackground(chip.machine.color),
+              opacity: chip.muted ? 0.45 : 1,
             }}
           >
             <Text
-              className="font-mono text-[10px] font-t3-bold"
-              style={{ color: chip.machine.color }}
+              className={cn(
+                "font-mono text-[10px] font-t3-bold",
+                chip.muted && "text-foreground-muted",
+              )}
+              style={chip.muted ? undefined : { color: chip.machine.color }}
             >
               {chip.machine.tag}
             </Text>

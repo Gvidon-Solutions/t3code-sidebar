@@ -49,6 +49,7 @@ import { pipe } from "effect/Function";
 import { useProjects, useServerConfigs, useThreadShells } from "../../state/entities";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useMeshOverview } from "../workspaces/useMeshOverview";
+import { offlineMachineText } from "@t3tools/client-runtime/state/mesh-machines";
 import type { TurnCommandMetadata } from "../../lib/commandMetadata";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
 import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
@@ -1081,20 +1082,28 @@ export function NewTaskFlowProvider(
       sync: environment.sync,
     })),
     reachability: Object.fromEntries(
-      meshOverview.machines.map((machine) => [
-        machine.environmentId,
-        {
-          reachable:
-            machine.connectedHere ||
-            machine.network?.state === "direct" ||
-            machine.network?.state === "relayed",
-          viaLabel:
-            machine.network?.state === "relayed"
-              ? (meshOverview.machines.find((other) => other.environmentId === machine.network?.via)
-                  ?.label ?? null)
+      meshOverview.machines.map((machine) => {
+        const offline = machine.network?.state === "offline";
+        return [
+          machine.environmentId,
+          {
+            reachable:
+              machine.connectedHere ||
+              machine.network?.state === "direct" ||
+              machine.network?.state === "relayed",
+            viaLabel:
+              machine.network?.state === "relayed"
+                ? (meshOverview.machines.find(
+                    (other) => other.environmentId === machine.network?.via,
+                  )?.label ?? null)
+                : null,
+            offline,
+            offlineText: offline
+              ? offlineMachineText(machine.lastSeenAt ?? machine.lastExchangeAt, modelSelectionNow)
               : null,
-        },
-      ]),
+          },
+        ] as const;
+      }),
     ),
     selectedEnvironmentId:
       switchingToEnvironmentId ?? pendingMount?.environmentId ?? selectedEnvironmentId ?? null,

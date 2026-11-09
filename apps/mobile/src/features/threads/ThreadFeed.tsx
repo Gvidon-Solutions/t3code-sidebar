@@ -2515,6 +2515,7 @@ function ThreadFeedPlaceholder(props: {
   readonly bottomInset: number;
   readonly detail: string;
   readonly horizontalPadding: number;
+  readonly onRetry?: (() => void) | undefined;
   readonly title: string;
   readonly topInset: number;
 }) {
@@ -2535,6 +2536,7 @@ function ThreadFeedPlaceholder(props: {
         <Text className="text-center text-sm leading-normal text-foreground-secondary">
           {props.detail}
         </Text>
+        {props.onRetry ? <Button label="Retry" tone="secondary" onPress={props.onRetry} /> : null}
       </View>
     </View>
   );
@@ -3770,6 +3772,7 @@ export const ThreadFeed = memo(function ThreadFeed({
       <ThreadFeedPlaceholder
         title={props.contentPresentation.title}
         detail={props.contentPresentation.detail}
+        onRetry={props.contentPresentation.onRetry}
         topInset={topContentInset}
         bottomInset={bottomContentInset}
         horizontalPadding={horizontalPadding}

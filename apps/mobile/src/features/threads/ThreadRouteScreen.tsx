@@ -96,6 +96,8 @@ import { threadEnvironment } from "../../state/threads";
 import { EMPTY_ENVIRONMENT_THREAD_STATE } from "@t3tools/client-runtime/state/threads";
 import { useProjects } from "../../state/entities";
 import { projectThreadContentPresentation } from "./threadContentPresentation";
+import { useReconnectWindow } from "../connection/useReconnectWindow";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import {
   useAdaptiveWorkspaceLayout,
@@ -540,6 +542,9 @@ function ThreadRouteContent(
   const routeConnectionState =
     routeEnvironmentRuntime?.connectionState ?? (environmentId ? "available" : connectionState);
   const routeConnectionError = routeEnvironmentRuntime?.connectionError ?? null;
+  const reconnectWindowElapsed = useReconnectWindow(
+    routeConnectionState === "connecting" || routeConnectionState === "reconnecting",
+  );
   const selectedThreadWithDraftSettings = selectedThread
     ? {
         ...selectedThread,
@@ -1037,6 +1042,14 @@ function ThreadRouteContent(
     return <OpeningThreadLoadingScreen />;
   }
 
+  const routeMachineLabel =
+    selectedEnvironmentConnection === null
+      ? null
+      : machineDisplayOf(
+          mesh.config ?? { machines: {} },
+          String(selectedThread.environmentId),
+          selectedEnvironmentConnection.environmentLabel ?? "Machine",
+        ).label;
   // Queued creation displays its prompt before server creation; temporary not-found is expected.
   const contentPresentation =
     creationState !== null
@@ -1046,6 +1059,9 @@ function ThreadRouteContent(
           detailError: Option.getOrNull(selectedThreadDetailState.error),
           detailDeleted: selectedThreadDetailState.status === "deleted",
           connectionState: routeConnectionState,
+          machineLabel: routeMachineLabel,
+          reconnectWindowElapsed,
+          onRetry: handleReconnectEnvironment,
         });
   const serverConfig = routeEnvironmentRuntime?.serverConfig ?? null;
   const renderThreadRouteBody = () => (

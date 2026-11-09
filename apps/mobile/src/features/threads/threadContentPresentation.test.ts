@@ -2,30 +2,43 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { projectThreadContentPresentation } from "./threadContentPresentation";
 
+const base = {
+  hasDetail: false,
+  detailError: null,
+  detailDeleted: false,
+  machineLabel: "laptop",
+  reconnectWindowElapsed: true,
+  onRetry: () => {},
+} as const;
+
 describe("thread content presentation", () => {
   it("renders cached detail while its environment reconnects", () => {
     expect(
       projectThreadContentPresentation({
+        ...base,
         hasDetail: true,
-        detailError: null,
-        detailDeleted: false,
         connectionState: "reconnecting",
       }),
     ).toEqual({ kind: "ready" });
   });
 
-  it("explains uncached detail while disconnected instead of loading forever", () => {
+  it("keeps loading during the reconnect window", () => {
     expect(
       projectThreadContentPresentation({
-        hasDetail: false,
-        detailError: null,
-        detailDeleted: false,
-        connectionState: "error",
+        ...base,
+        reconnectWindowElapsed: false,
+        connectionState: "reconnecting",
       }),
-    ).toEqual({
+    ).toEqual({ kind: "loading" });
+  });
+
+  it("names the offline machine and offers a retry once the window passes", () => {
+    expect(projectThreadContentPresentation({ ...base, connectionState: "reconnecting" })).toEqual({
       kind: "unavailable",
-      title: "Messages not cached",
-      detail: "Reconnect this environment to load the conversation.",
+      title: "laptop is offline",
+      detail:
+        "This conversation lives on laptop, which is offline. It appears here when laptop is back.",
+      onRetry: base.onRetry,
     });
   });
 });

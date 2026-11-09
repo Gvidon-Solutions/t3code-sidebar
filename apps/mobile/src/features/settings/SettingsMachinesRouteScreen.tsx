@@ -105,7 +105,12 @@ export function SettingsMachinesRouteScreen() {
             />
           </View>
           {linkOpen ? (
-            <MeshLinkForm links={links} machines={machines} onDone={() => setLinkOpen(false)} />
+            <MeshLinkForm
+              links={links}
+              machines={machines}
+              thisMachineId={mesh.source}
+              onDone={() => setLinkOpen(false)}
+            />
           ) : null}
           {machines.map((machine) => (
             <View key={machine.environmentId}>
