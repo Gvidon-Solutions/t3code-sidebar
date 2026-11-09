@@ -1,6 +1,12 @@
 import * as Schema from "effect/Schema";
 
-import { NonNegativeInt, ThreadId, TrimmedNonEmptyString, TurnItemId } from "./baseSchemas.ts";
+import {
+  EnvironmentId,
+  NonNegativeInt,
+  ThreadId,
+  TrimmedNonEmptyString,
+  TurnItemId,
+} from "./baseSchemas.ts";
 import {
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
@@ -28,6 +34,14 @@ export const AssetResource = Schema.Union([
   }),
   Schema.TaggedStruct("media-file", {
     threadId: ThreadId,
+    path: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
+    disposition: Schema.optionalKey(FileAssetDisposition),
+  }),
+  // A file the asking server does not hold: it proxies ranges from `environmentId`
+  // over the peer link, so a phone connected to one machine can preview a PDF
+  // that only the primary has.
+  Schema.TaggedStruct("peer-file", {
+    environmentId: EnvironmentId,
     path: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
     disposition: Schema.optionalKey(FileAssetDisposition),
   }),

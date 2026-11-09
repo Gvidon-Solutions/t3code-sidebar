@@ -4,6 +4,7 @@ import {
   EnvironmentId,
   NonNegativeInt,
   PositiveInt,
+  ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 
@@ -58,6 +59,118 @@ export const FilesListResult = Schema.Struct({
   entries: Schema.Array(FilesListEntry),
 });
 export type FilesListResult = typeof FilesListResult.Type;
+
+/** Existence and kind for one host path, used by the resolver and file pickers. */
+export const FilesStatInput = Schema.Struct({
+  environmentId: Schema.optionalKey(EnvironmentId),
+  absolutePath: AbsoluteHostPath,
+});
+export type FilesStatInput = typeof FilesStatInput.Type;
+
+export const FilesStatKind = Schema.Literals(["file", "directory", "other"]);
+export type FilesStatKind = typeof FilesStatKind.Type;
+
+export const FilesStatResult = Schema.Struct({
+  absolutePath: TrimmedNonEmptyString,
+  kind: FilesStatKind,
+  byteLength: Schema.optionalKey(NonNegativeInt),
+  mtimeMs: Schema.optionalKey(Schema.Number),
+});
+export type FilesStatResult = typeof FilesStatResult.Type;
+
+/** One base64 chunk of a host file, so a replica server can proxy bytes from its primary. */
+export const FILES_READ_BYTES_MAX = 8 * 1024 * 1024;
+
+export const FilesReadBytesInput = Schema.Struct({
+  environmentId: Schema.optionalKey(EnvironmentId),
+  absolutePath: AbsoluteHostPath,
+  offset: NonNegativeInt,
+  length: PositiveInt.check(Schema.isLessThanOrEqualTo(FILES_READ_BYTES_MAX)),
+});
+export type FilesReadBytesInput = typeof FilesReadBytesInput.Type;
+
+export const FilesReadBytesResult = Schema.Struct({
+  absolutePath: TrimmedNonEmptyString,
+  offset: NonNegativeInt,
+  bytes: Schema.String,
+  totalBytes: NonNegativeInt,
+});
+export type FilesReadBytesResult = typeof FilesReadBytesResult.Type;
+
+export const FILES_LOCATE_MAX_CANDIDATES = 50;
+
+/** How the resolver found the target; shown to people as a short caption. */
+export const FilesLocateVia = Schema.Literals([
+  "exact",
+  "cwd",
+  "ancestor",
+  "project-root",
+  "suffix",
+  "basename",
+  "representation-map",
+  "other-machine",
+  "explicit-machine",
+]);
+export type FilesLocateVia = typeof FilesLocateVia.Type;
+
+export const FilesLocateStatus = Schema.Literals(["found", "choose", "notFound"]);
+export type FilesLocateStatus = typeof FilesLocateStatus.Type;
+
+export const FilesLocateInput = Schema.Struct({
+  /** The path exactly as the person or agent wrote it. */
+  rawPath: TrimmedNonEmptyString.check(Schema.isMaxLength(FILES_PATH_MAX_LENGTH)),
+  /** The thread whose worktree the relative path belongs to. */
+  threadId: Schema.optionalKey(ThreadId),
+  /** The thread's directory when the caller already knows it. */
+  cwd: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(FILES_PATH_MAX_LENGTH))),
+  /** An explicitly named machine (`t3-file:`, `--on`, `ui_open.environmentId`). */
+  environmentId: Schema.optionalKey(EnvironmentId),
+  intent: Schema.optionalKey(Schema.Literal("open")),
+});
+export type FilesLocateInput = typeof FilesLocateInput.Type;
+
+export const FilesLocateCandidate = Schema.Struct({
+  environmentId: EnvironmentId,
+  absolutePath: TrimmedNonEmptyString,
+  kind: Schema.Literals(["file", "directory"]),
+  via: FilesLocateVia,
+  line: Schema.optionalKey(PositiveInt),
+  column: Schema.optionalKey(PositiveInt),
+  inProject: Schema.Boolean,
+  /** The thread's own representation does not have the file; another one serves it. */
+  notSynced: Schema.optionalKey(Schema.Boolean),
+  byteLength: Schema.optionalKey(NonNegativeInt),
+  mtimeMs: Schema.optionalKey(Schema.Number),
+  touchedByThread: Schema.Boolean,
+  /** The path as the person should see it after remapping. */
+  displayPath: TrimmedNonEmptyString,
+  /** The representation root the file lives under, when one contains it. */
+  root: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type FilesLocateCandidate = typeof FilesLocateCandidate.Type;
+
+export const FilesLocateTried = Schema.Struct({
+  tier: TrimmedNonEmptyString,
+  environmentId: Schema.optionalKey(EnvironmentId),
+  detail: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type FilesLocateTried = typeof FilesLocateTried.Type;
+
+export const FilesLocateResult = Schema.Struct({
+  status: FilesLocateStatus,
+  target: Schema.optionalKey(FilesLocateCandidate),
+  candidates: Schema.optionalKey(Schema.Array(FilesLocateCandidate)),
+  tried: Schema.Array(FilesLocateTried),
+  /** The machine the resolver ran on (the thread's machine). */
+  environmentId: EnvironmentId,
+  /** The logical project title, when the thread belongs to one. */
+  projectTitle: Schema.optionalKey(TrimmedNonEmptyString),
+  /** The thread's own directory, when one was resolved. */
+  cwd: Schema.optionalKey(TrimmedNonEmptyString),
+  /** True when the thread's worktree is gone and a fallback directory was used. */
+  worktreeRemoved: Schema.optionalKey(Schema.Boolean),
+});
+export type FilesLocateResult = typeof FilesLocateResult.Type;
 
 export const FilesFailure = Schema.Literals([
   "invalid_path",

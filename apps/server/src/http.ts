@@ -3,6 +3,7 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
+  type EnvironmentId,
 } from "@t3tools/contracts";
 import { isDevProxiedPath } from "@t3tools/shared/devProxy";
 import { injectMcpAppCookieBootstrap, injectMcpAppThemeBootstrap } from "@t3tools/shared/mcpApp";
@@ -30,6 +31,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import { OtlpTracer, OtlpSerialization } from "effect/observability";
 
 import * as ServerConfig from "./config.ts";
+import * as FilesRpc from "./files/FilesRpc.ts";
 import { ASSET_ROUTE_PREFIX, readMcpAppHtml, resolveAsset } from "./assets/AssetAccess.ts";
 import { sourceControlMediaResponse } from "./assets/sourceControlMediaResponse.ts";
 import { statMediaFile, streamMediaFile, type OpenMediaFile } from "./assets/MediaFile.ts";
@@ -250,6 +252,71 @@ export const assetFileResponse = Effect.fn("assetFileResponse")(function* (
   return yield* HttpServerResponse.file(asset.path, { status, offset, bytesToRead, headers });
 });
 
+const REMOTE_FILE_CHUNK_BYTES = 4 * 1024 * 1024;
+
+/**
+ * A preview of a file the client's server does not hold: ranges are fetched from
+ * the machine that does over the peer link, so a phone connected to one machine
+ * can show a PDF that only the primary has.
+ */
+const remoteFileResponse = Effect.fn("http.remoteFileResponse")(function* (
+  asset: {
+    readonly environmentId: string;
+    readonly filePath: string;
+    readonly fileName: string;
+    readonly mimeType: string;
+    readonly download?: boolean;
+  },
+  rangeHeader?: string,
+  ifRangeHeader?: string,
+  method: "GET" | "HEAD" = "GET",
+) {
+  const filesRpc = yield* FilesRpc.FilesRpc;
+  const environmentId = asset.environmentId as EnvironmentId;
+  const stat = yield* filesRpc.stat({ environmentId, absolutePath: asset.filePath });
+  const size = stat.byteLength ?? 0;
+  const headers = assetResponseHeaders(asset.fileName, asset);
+  headers["Accept-Ranges"] = "bytes";
+  let status = 200;
+  let offset = 0;
+  let length = size;
+  if (method === "GET" && rangeHeader !== undefined && ifRangeHeader === undefined) {
+    const range = assetByteRange(rangeHeader, BigInt(size));
+    if (range?._tag === "Unsatisfiable") {
+      return HttpServerResponse.empty({
+        status: 416,
+        headers: { ...headers, "Content-Range": `bytes */${size}` },
+      });
+    }
+    if (range?._tag === "Range") {
+      status = 206;
+      offset = Number(range.offset);
+      length = Number(range.bytesToRead);
+      headers["Content-Range"] = range.contentRange;
+    }
+  }
+  headers["Content-Length"] = String(length);
+  if (method === "HEAD" || length === 0) {
+    return HttpServerResponse.empty({ status, headers });
+  }
+  const body = new Uint8Array(length);
+  let written = 0;
+  while (written < length) {
+    const take = Math.min(REMOTE_FILE_CHUNK_BYTES, length - written);
+    const chunk = yield* filesRpc.readBytes({
+      environmentId,
+      absolutePath: asset.filePath,
+      offset: offset + written,
+      length: take,
+    });
+    const bytes = Buffer.from(chunk.bytes, "base64");
+    if (bytes.byteLength === 0) break;
+    body.set(bytes.subarray(0, Math.min(bytes.byteLength, length - written)), written);
+    written += Math.min(bytes.byteLength, length - written);
+  }
+  return HttpServerResponse.uint8Array(body.subarray(0, written), { status, headers });
+});
+
 export const layerHttpCompression = HttpRouter.middleware(HttpMiddleware.compression(), {
   global: true,
 });
@@ -431,6 +498,18 @@ export const layerAssetRoute = HttpRouter.add(
         contentType: asset.mimeType,
         headers: { "cache-control": "private, max-age=3600", "x-content-type-options": "nosniff" },
       });
+    }
+    if (asset.kind === "remote-file") {
+      return yield* remoteFileResponse(
+        asset,
+        request.method === "GET" ? request.headers.range : undefined,
+        request.headers["if-range"],
+        request.method === "HEAD" ? "HEAD" : "GET",
+      ).pipe(
+        Effect.orElseSucceed(() =>
+          HttpServerResponse.text("The file could not be read from its machine.", { status: 502 }),
+        ),
+      );
     }
     if (asset.kind === "source-control-media") {
       return yield* sourceControlMediaResponse(asset, request.headers).pipe(

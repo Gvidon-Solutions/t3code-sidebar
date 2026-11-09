@@ -3,12 +3,20 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   FILES_LIST_MAX_LIMIT,
+  FILES_LOCATE_MAX_CANDIDATES,
   FILES_PATH_MAX_LENGTH,
+  FILES_READ_BYTES_MAX,
   FilesError,
   FilesListInput,
   FilesListResult,
+  FilesLocateInput,
+  FilesLocateResult,
+  FilesReadBytesInput,
+  FilesReadBytesResult,
   FilesReadInput,
   FilesReadResult,
+  FilesStatInput,
+  FilesStatResult,
 } from "./files.ts";
 
 const decodeRead = Schema.decodeUnknownSync(FilesReadInput);
@@ -16,6 +24,12 @@ const decodeList = Schema.decodeUnknownSync(FilesListInput);
 const decodeReadResult = Schema.decodeUnknownSync(FilesReadResult);
 const decodeListResult = Schema.decodeUnknownSync(FilesListResult);
 const decodeFilesError = Schema.decodeUnknownSync(FilesError);
+const decodeLocate = Schema.decodeUnknownSync(FilesLocateInput);
+const decodeLocateResult = Schema.decodeUnknownSync(FilesLocateResult);
+const decodeStat = Schema.decodeUnknownSync(FilesStatInput);
+const decodeStatResult = Schema.decodeUnknownSync(FilesStatResult);
+const decodeReadBytes = Schema.decodeUnknownSync(FilesReadBytesInput);
+const decodeReadBytesResult = Schema.decodeUnknownSync(FilesReadBytesResult);
 
 describe("files contracts", () => {
   it("decodes an absolute path with and without a machine", () => {
@@ -84,6 +98,52 @@ describe("files contracts", () => {
     expect(new FilesError({ reason: "not_found" }).message).toBe(
       "The file or folder was not found.",
     );
+  });
+
+  it("decodes a locate request and a found result with its machine and tier", () => {
+    expect(decodeLocate({ rawPath: "src/lib/x.ts", intent: "open" })).toEqual({
+      rawPath: "src/lib/x.ts",
+      intent: "open",
+    });
+    const result = decodeLocateResult({
+      status: "found",
+      environmentId: "studio",
+      target: {
+        environmentId: "cloudbox",
+        absolutePath: "/srv/app/src/lib/x.ts",
+        kind: "file",
+        via: "representation-map",
+        inProject: true,
+        notSynced: true,
+        touchedByThread: false,
+        displayPath: "src/lib/x.ts",
+        line: 12,
+      },
+      tried: [{ tier: "exact", environmentId: "studio" }],
+      projectTitle: "App",
+    });
+    expect(result.target?.environmentId).toBe("cloudbox");
+    expect(result.target?.line).toBe(12);
+  });
+
+  it("caps stat and read-bytes inputs", () => {
+    expect(decodeStat({ absolutePath: " /srv/a " })).toEqual({ absolutePath: "/srv/a" });
+    expect(() => decodeReadBytes({ absolutePath: "/srv/a", offset: 0, length: 1 })).not.toThrow();
+    expect(() =>
+      decodeReadBytes({ absolutePath: "/srv/a", offset: 0, length: FILES_READ_BYTES_MAX + 1 }),
+    ).toThrow();
+    expect(() => decodeReadBytes({ absolutePath: "/srv/a", offset: -1, length: 1 })).toThrow();
+    expect(
+      decodeStatResult({ absolutePath: "/srv/a", kind: "file", byteLength: 3, mtimeMs: 1.5 }).kind,
+    ).toBe("file");
+    expect(
+      decodeReadBytesResult({ absolutePath: "/srv/a", offset: 0, bytes: "AA==", totalBytes: 1 })
+        .totalBytes,
+    ).toBe(1);
+  });
+
+  it("publishes the candidate cap", () => {
+    expect(FILES_LOCATE_MAX_CANDIDATES).toBeGreaterThan(0);
   });
 
   it("decodes a legacy message-only failure during rolling upgrades", () => {

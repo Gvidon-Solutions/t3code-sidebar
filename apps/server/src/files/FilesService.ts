@@ -4,12 +4,17 @@ import * as NodeFSP from "node:fs/promises";
 
 import {
   FILES_LIST_DEFAULT_LIMIT,
+  FILES_READ_BYTES_MAX,
   FilesError,
   type FilesListEntry,
   type FilesListInput,
   type FilesListResult,
+  type FilesReadBytesInput,
+  type FilesReadBytesResult,
   type FilesReadInput,
   type FilesReadResult,
+  type FilesStatInput,
+  type FilesStatResult,
 } from "@t3tools/contracts";
 import { expandHomePath } from "@t3tools/provider-core/server/pathExpansion";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -51,6 +56,12 @@ export class FilesService extends Context.Service<
     readonly read: (input: FilesReadInput) => Effect.Effect<FilesReadResult, FilesError>;
     /** Lists a folder or completes the last segment of a path, for the open-file dialog. */
     readonly list: (input: FilesListInput) => Effect.Effect<FilesListResult, FilesError>;
+    /** Existence and kind for one path, for the resolver and pickers. */
+    readonly stat: (input: FilesStatInput) => Effect.Effect<FilesStatResult, FilesError>;
+    /** One byte range, so a replica can proxy a binary file its primary holds. */
+    readonly readBytes: (
+      input: FilesReadBytesInput,
+    ) => Effect.Effect<FilesReadBytesResult, FilesError>;
   }
 >()("t3/files/FilesService") {}
 
@@ -228,7 +239,78 @@ const make = Effect.gen(function* () {
     return { parentPath: realParent, entries: entries.slice(0, limit) };
   });
 
-  return FilesService.of({ read, list });
+  const stat: FilesService["Service"]["stat"] = Effect.fn("FilesService.stat")(function* (input) {
+    yield* assertLinkFilesEnabled(input.absolutePath);
+    const requested = expand(input.absolutePath);
+    if (!path.isAbsolute(requested)) {
+      return yield* filesError("invalid_path", input.absolutePath);
+    }
+    const realTarget = yield* realPath(requested);
+    if (yield* isServerInternalPath(realTarget)) {
+      return yield* filesError("permission_denied", requested);
+    }
+    yield* authorizeLinkPath(realTarget);
+    const info = yield* Effect.tryPromise({
+      try: () => NodeFSP.stat(realTarget),
+      catch: (cause) => filesError(failureOf(cause), requested, cause),
+    });
+    return {
+      absolutePath: realTarget,
+      kind: info.isFile() ? "file" : info.isDirectory() ? "directory" : "other",
+      ...(info.isFile() ? { byteLength: info.size } : {}),
+      mtimeMs: info.mtimeMs,
+    } satisfies FilesStatResult;
+  });
+
+  const readBytes: FilesService["Service"]["readBytes"] = Effect.fn("FilesService.readBytes")(
+    function* (input) {
+      yield* assertLinkFilesEnabled(input.absolutePath);
+      const requested = expand(input.absolutePath);
+      if (!path.isAbsolute(requested)) {
+        return yield* filesError("invalid_path", input.absolutePath);
+      }
+      if (input.length > FILES_READ_BYTES_MAX) {
+        return yield* filesError("too_large", requested);
+      }
+      const realTarget = yield* realPath(requested);
+      if (yield* isServerInternalPath(realTarget)) {
+        return yield* filesError("permission_denied", requested);
+      }
+      yield* authorizeLinkPath(realTarget);
+      const handle = yield* Effect.tryPromise({
+        try: () =>
+          NodeFSP.open(realTarget, NodeFS.constants.O_RDONLY | (NodeFS.constants.O_NONBLOCK ?? 0)),
+        catch: (cause) => filesError(failureOf(cause), requested, cause),
+      });
+      return yield* Effect.acquireUseRelease(
+        Effect.succeed(handle),
+        (openHandle) =>
+          Effect.gen(function* () {
+            const info = yield* Effect.tryPromise({
+              try: () => openHandle.stat(),
+              catch: (cause) => filesError(failureOf(cause), realTarget, cause),
+            });
+            if (!info.isFile()) return yield* filesError("not_file", requested);
+            if (input.offset > info.size) return yield* filesError("invalid_path", requested);
+            const bytesToRead = Math.min(input.length, info.size - input.offset);
+            const buffer = Buffer.alloc(bytesToRead);
+            const { bytesRead } = yield* Effect.tryPromise({
+              try: () => openHandle.read(buffer, 0, bytesToRead, input.offset),
+              catch: (cause) => filesError(failureOf(cause), realTarget, cause),
+            });
+            return {
+              absolutePath: realTarget,
+              offset: input.offset,
+              bytes: buffer.subarray(0, bytesRead).toString("base64"),
+              totalBytes: info.size,
+            } satisfies FilesReadBytesResult;
+          }),
+        (openHandle) => Effect.promise(() => openHandle.close()).pipe(Effect.ignore),
+      );
+    },
+  );
+
+  return FilesService.of({ read, list, stat, readBytes });
 });
 
 export const layer = Layer.effect(FilesService, make);

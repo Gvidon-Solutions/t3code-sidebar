@@ -145,6 +145,7 @@ import * as T3ProjectFileLoader from "./project/T3ProjectFileLoader.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as KnownWorkspaces from "./workspace/KnownWorkspaces.ts";
+import * as FileLocator from "./files/FileLocator.ts";
 import * as FilesRpc from "./files/FilesRpc.ts";
 import * as FilesService from "./files/FilesService.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
@@ -575,6 +576,13 @@ const layerPeerMcp = PeerMcpClient.layer.pipe(
 const layerFiles = Layer.mergeAll(
   FilesService.layer,
   FilesRpc.layer.pipe(Layer.provide(FilesService.layer), Layer.provide(layerPeerMcp)),
+  FileLocator.layer.pipe(
+    Layer.provide(FilesService.layer),
+    Layer.provide(
+      FilesRpc.layer.pipe(Layer.provide(FilesService.layer), Layer.provide(layerPeerMcp)),
+    ),
+    Layer.provide(layerMesh),
+  ),
 );
 
 const layerAuth = EnvironmentAuth.layer.pipe(

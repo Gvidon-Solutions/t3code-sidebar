@@ -220,6 +220,8 @@ import {
 import { parseBase64DataUrl } from "./imageMime.ts";
 import { deletePendingAttachment, issueAttachmentUploadUrl } from "./assets/AttachmentUpload.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
+import * as FileLocator from "./files/FileLocator.ts";
+import { locateContextFor } from "./files/locateContext.ts";
 import * as FilesRpc from "./files/FilesRpc.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as KnownWorkspaces from "./workspace/KnownWorkspaces.ts";
@@ -1505,6 +1507,7 @@ export const layerWsRpc = (
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
       const filesRpc = yield* FilesRpc.FilesRpc;
+      const fileLocator = yield* FileLocator.FileLocator;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
@@ -3099,6 +3102,17 @@ export const layerWsRpc = (
         [WS_METHODS.filesystemGetMetadata]: (input) => workspaceFileSystem.getMetadata(input),
         [WS_METHODS.filesRead]: (input) => filesRpc.read(input),
         [WS_METHODS.filesList]: (input) => filesRpc.list(input),
+        [WS_METHODS.filesStat]: (input) => filesRpc.stat(input),
+        [WS_METHODS.filesReadBytes]: (input) => filesRpc.readBytes(input),
+        [WS_METHODS.filesLocate]: Effect.fn("ws.filesLocate")(function* (input) {
+          const descriptor = yield* serverEnvironment.getDescriptor;
+          const context = yield* locateContextFor({
+            environmentId: descriptor.environmentId,
+            ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+            ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+          });
+          return yield* fileLocator.locate(input, context);
+        }),
         [WS_METHODS.filesystemBrowse]: (input) =>
           workspaceEntries.browse(input).pipe(
             Effect.mapError(
@@ -3123,6 +3137,7 @@ export const layerWsRpc = (
               input.resource._tag === "attachment" ||
               input.resource._tag === "native-app-icon" ||
               input.resource._tag === "tool-output-image" ||
+              input.resource._tag === "peer-file" ||
               input.resource._tag === SOURCE_CONTROL_MEDIA_ASSET ||
               // A network path is served only from the thread's project, looked up below.
               (input.resource._tag === "media-file" &&
