@@ -436,7 +436,7 @@ describe("mesh layout project grouping", () => {
     const copy = makeProject({
       id: ProjectId.make("project-copy"),
       environmentId: remoteEnvironmentId,
-      workspaceRoot: "/home/user/Atlas",
+      workspaceRoot: "/work/atlas-copy",
       repositoryIdentity: null,
     });
     const layout: SidebarWorkspacesConfig = {
@@ -457,7 +457,7 @@ describe("mesh layout project grouping", () => {
           },
           {
             environmentId: remoteEnvironmentId,
-            path: "/home/user/Atlas",
+            path: "/work/atlas-copy",
             projectId: copy.id,
             transport: "mutagen",
             role: "replica",

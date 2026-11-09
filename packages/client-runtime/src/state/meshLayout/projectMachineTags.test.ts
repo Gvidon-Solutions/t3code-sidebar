@@ -17,7 +17,7 @@ const config: SidebarWorkspacesConfig = {
     "logical-atlas": [
       {
         environmentId: "laptop",
-        path: "/home/user/Atlas",
+        path: "/work/atlas",
         projectId: "project-laptop",
         transport: "manual",
         role: "replica",

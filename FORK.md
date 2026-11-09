@@ -109,7 +109,35 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
-### 2026-11-09 — F7 coordinator UI review round 2 before 0.1.7-sidebar.63
+### 2026-11-09 — Agent-kit manifests, release guards and repository cleanliness
+
+- **What.** Adopting an existing installed `t3` skill no longer deletes files it did not write.
+  The managed marker now lists the files T3 wrote, so a sync removes only files it previously
+  shipped and later dropped; an owner's `global/GLOBAL.md`, `global/machines.json`, extra agents
+  and notes stay. First adoption copies the old directory to a sibling `t3.backup-<timestamp>`
+  before updating ours, and the legacy instruction import reads `GLOBAL.md` before any config
+  reconcile can adopt the directory. Release builds also refuse test-only flags in the delivery
+  builder and web build; the delivery builder verifies the built client's exact release version.
+  Test-only path redirects are ignored in production builds. Background waits clear their polling
+  timer and survive a late watcher error. Fork markers link only `t3-thread:` URLs, and peer
+  labels strip bidi/zero-width characters without splitting surrogate pairs.
+- **How.** `MeshAgentKit` stores a JSON manifest of written files, backs up on adoption, keeps
+  unknown entries and prunes only empty parents of removed files; `MeshAgentMigration.migrate`
+  runs before `MeshConfig.start`; `MeshTiming.meshTestValue` gates `T3_MESH_AGENT_SOURCE` and
+  `T3_MESH_LEGACY_GLOBAL`; `release-env.ts` gains `isReleaseBuildEnv`; `verify-app-version.mjs`
+  matches with version boundaries; `RunWorker` keeps the polling handle and watches for watcher
+  errors; `forkLink` accepts only thread links; `peerSessionLabel` filters bidi controls and
+  bounds by code point. Documentation and fixtures use neutral names, and a sibling test rejects
+  development stage markers in `docs/`, `FORK.md` and `README.md`.
+- **Where.** `apps/server/src/mesh/{MeshAgentKit,MeshAgentMigration,MeshTiming,ThreadForkService}.ts`,
+  `apps/server/src/server.ts`, `apps/server/src/run/RunWorker.ts`,
+  `apps/server/src/peer/connection/PeerCredentials.ts`, `scripts/lib/release-env.ts`,
+  `scripts/delivery/builder.mjs`, `scripts/verify-app-version.mjs`,
+  `scripts/{release-env,dev-marker-leakage}.test.ts`, `apps/web/vite.config.ts`,
+  `docs/mesh/{README,CONCEPT}.md`, `docs/sidebar-cross-device.md`, `docs/operations/release.md`,
+  `scripts/mesh-e2e/{up,acceptance,resilience-acceptance}.sh`.
+
+### 2026-11-09 — Offline conversation and machine cards before 0.1.7-sidebar.63
 
 - **What.** A thread on an offline machine whose conversation was never saved shows a calm centred
   "This conversation lives on laptop, which is offline. It appears here when laptop is back." pane
@@ -139,7 +167,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   SettingsMachinesRouteScreen}}`; desktop `src/{app/DesktopApp.ts,app/DesktopUi.ts,
   electron/ElectronProtocol.ts}`.
 
-### 2026-11-09 — F6 client review fixes before 0.1.7-sidebar.63
+### 2026-11-09 — Client draft model and project naming before 0.1.7-sidebar.63
 
 - **What.** Machine cards, the fork dialog and the new-thread submenu now agree with the composer:
   they judge only an explicit model choice and otherwise the machine's own default, so a fresh
@@ -175,7 +203,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   MeshLinkForm},workspaces/{DraftMachineCards,MachinesSheet,WorkspaceChrome,replicas.logic,
   useWorkspaceHome}}`; server `mesh/MeshAgentKit.ts`; CLI `agent-kit/skills/t3/scripts/t3ctl.mjs`.
 
-### 2026-11-09 — F5 fixes from the full UI review
+### 2026-11-09 — Desktop fallback and client fixes from the full UI review
 
 - **What.** The desktop shell shows a plain "Can't reach <server> — Retry" bundled page instead of
   a black window when its UI server is unreachable. Android Home shows the workspace's project
@@ -209,7 +237,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   desktop `electron/ElectronProtocol.ts`; CI `sidebar-desktop.yml`,
   `scripts/verify-app-version.mjs`.
 
-### 2026-11-08 — F4b client fixes from audit round 4
+### 2026-11-08 — Client fixes from the audit
 
 - **What.** User guidance no longer points at the deleted Settings › Mesh config editor: retry
   failures say to ask an agent to fix the connection. Git controls hide only while a mesh layout
@@ -242,7 +270,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `DraftMachineCards`, `MeshConnectPrompt`, `MeshAgentFixActions`, `SettingsMachinesRouteScreen`,
   `MachinesSheet`, `useMeshOverview`, `newTaskPromptLink`, `prompt-link-model`.
 
-### 2026-11-09 — Server correctness and repository cleanliness (audit round 4)
+### 2026-11-09 — Server correctness and repository cleanliness
 
 - **What.** Mesh acceptance scripts dispatch to the renamed suites instead of missing round
   scripts. Agent-kit skill directories carry a `.t3-managed` marker; an unmanaged or symlinked
@@ -260,8 +288,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `scripts/lib/release-env.ts` guards the CLI, archive and desktop entry points;
   `isDeliveryUpdating` checks the `T3_UPDATING:` prefix; `forkMarker` sanitizes and validates;
   control-socket stop errors become frames; `peerSessionLabel` sanitizes. The dead client
-  `meshConfigEditor` and its test/export are removed, and stage-coded names and owner live data in
-  the cross-device spec are neutral.
+  `meshConfigEditor` and its test/export are removed; names and owner live data in the
+  cross-device spec were made neutral.
 - **Where.** `scripts/mesh-e2e/*`, `scripts/lib/release-env.ts`, `scripts/referenced-scripts.test.ts`,
   `scripts/release-env.test.ts`, `apps/server/src/mesh/{MeshAgentKit,ThreadForkService}.ts`,
   `apps/server/src/run/RunWorker.ts`, `apps/server/src/peer/connection/PeerCredentials.ts`,
@@ -278,7 +306,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `buildProviderInstanceUpdatePatch` to the shared `buildProviderInstancePatch` and adds settings
   help text; this stage does not edit `apps/web`.
 
-### 2026-11-08 — F3b client audit fixes and shared machine decisions
+### 2026-11-08 — Client audit fixes and shared machine decisions
 
 - **What.** Web and Android now make the same choices about a draft's machine, its voice button,
   the connect prompt, remove-copy copy and mobile touch areas. A draft never defaults to an
@@ -308,7 +336,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 - **What.** Agent-kit reconciliation keeps a harness's skill and managed block whenever its home directory or a configured provider `binaryPath` exists, so a short service-manager PATH cannot delete them; removal touches only our block. Settings patches can delete one provider instance with `null`. Delivery retries recognise the legacy `T3_UPDATING` marker from older peers. The voice test flag is ignored in production builds. Fork markers escape peer-supplied titles. One invalid SSH route no longer fails adoption between healthy machines, and the run plan names disabled SSH accurately. Peer credential labels include the peer's machine label. The background worker control socket reports only parse and signal errors as invalid requests.
 - **How.** `MeshAgentKit` reads provider instances; `ServerSettingsPatch.providerInstances` accepts `null` tombstones; provider-core owns one production-gated voice-flag helper; replica routes are built per machine with skipped-route reasons; `isDeliveryUpdating` checks the tag first, then the legacy message. The bundled-worker smoke test runs `t3 run` exec and background start from the built server.
 - **Where.** `apps/server/src/mesh/{MeshAgentKit,ThreadForkService}.ts`, `apps/server/src/replicas/ProjectReplicaService.ts`, `apps/server/src/run/{RunPlan,RunWorker}.ts`, `apps/server/src/peer/connection/PeerCredentials.ts`, `packages/contracts/src/{delivery,settings}.ts`, `packages/provider-core/src/server/testFlags.ts`, `scripts/mesh-e2e/platform-smoke.mjs`.
-- **Cleanliness.** Removed the private development logs, renamed stage-coded scripts by function, replaced stage-coded fixture prefixes, made the mobile pairing script read the configured bed, unified shell quoting and sleep helpers, and extended the public-repo leakage test with non-Latin machine names and neutral test names. App ids (`com.gvidon.*`) and the fork repository name stay as the owner decided.
+- **Cleanliness.** Removed the private development logs, renamed scripts by function, replaced fixture prefixes by role, made the mobile pairing script read the configured bed, unified shell quoting and sleep helpers, and extended the public-repo leakage test with non-Latin machine names and neutral test names. App ids (`com.gvidon.*`) and the fork repository name stay as the owner decided.
 
 ### 2026-11-08 — Required mesh services and shared server runtime
 
@@ -2102,8 +2130,8 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 - **How.** `launchPendingDraft`/`pendingDraftMachines`, `runThreadFork`, shared machine-choice,
   pending-row, lag, candidate, remove and adopt helpers; internal layout transforms moved off the
   public entry and dead helpers removed. Delivery and mesh scripts share one managed-sshd writer
-  and shell helpers, `bed-target.mjs` absorbs bed setup, round scripts take neutral environment
-  parameters instead of text rewriting, and stage-coded fixture names are gone.
+  and shell helpers, `bed-target.mjs` absorbs bed setup, acceptance scripts take neutral environment
+  parameters instead of text rewriting, and fixture names describe their role.
 - **Where.** `packages/client-runtime/src/state/{meshLayout/*,threadForks.ts,meshLayoutClientInternals.ts}`,
   `apps/{web,mobile}/src/**/PendingMeshDraftCoordinator.tsx`, `useForkThread.ts`,
   `replicas.logic.ts`, Machines views, `scripts/lib/{shell,managed-sshd}.mjs`,

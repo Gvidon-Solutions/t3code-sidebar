@@ -247,7 +247,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   the target machine's provider catalog; the fixture agent reports voice only when
   `T3_MESH_TEST_VOICE_PROVIDER=1` is set, and production builds ignore that flag.
 
-### Client draft, voice and prompt rules (F3b)
+### Client draft, voice and prompt rules
 
 Shared client-runtime decisions keep web and Android answering these questions the same way:
 
@@ -301,7 +301,7 @@ Shared client-runtime decisions keep web and Android answering these questions t
   `aria-disabled` while staying focusable. Unconnected catalogs refresh only while a machine is
   unconnected, with one bounded request key per project and destination.
 
-### Full-review fixes (F5)
+### Client fallback, home and draft choice
 
 - **Desktop fallback.** `ElectronProtocol` appends the attempted `server` to the bundled
   fallback URL; web `desktopBundledFallback.ts` reads it and `DesktopBundledOffline` draws
@@ -322,7 +322,7 @@ Shared client-runtime decisions keep web and Android answering these questions t
   `/connect-agent` and guest pages, to the saved/system appearance. Release bundle CI sets
   `APP_VERSION` and `scripts/verify-app-version.mjs` checks the built client contains it.
 
-### Client review fixes (F6)
+### Client draft model and project naming
 
 - **One draft model answer.** `draftMachineModelUsable` is the only resolver for a machine card,
   fork target and new-thread menu: the person's explicit selection when there is one, otherwise
@@ -350,11 +350,11 @@ Shared client-runtime decisions keep web and Android answering these questions t
 - **Provider instance patches.** Web settings send one instance through the shared
   `buildProviderInstancePatch`; adding a Codex account no longer sends the whole map, so an omitted
   instance survives the server merge and `null` deletes exactly one.
-- **Agent-kit adoption.** `MeshAgentKit` adopts an unmarked skill directory only when its
-  `SKILL.md` frontmatter name is `t3` and it has `scripts/t3ctl.mjs`; it writes the managed marker
-  and syncs. Any other unmarked directory is left untouched and reported.
+- **Agent-kit adoption.** `MeshAgentKit` adopts a recognisable unmarked skill directory once
+  (backing it up beside the managed copy), keeps every file it did not write, and removes only
+  files its manifest lists. Any other unmarked directory is left untouched and reported.
 
-### Client review fixes (F7)
+### Offline conversation and machine cards
 
 - **Offline thread.** Web `OfflineConversationEmptyState` replaces the blank timeline when a server
   thread has no saved projection and its environment stayed unavailable for
@@ -421,14 +421,19 @@ keys, daemon state and containers. The runtime tests use neutral project/machine
 ## Runtime agent-kit reconciliation
 
 `mesh/MeshAgentKit.ts` installs the bundled skill into the shared and Claude/Codex/OpenCode
-skill directories through the config `agents/kit` planner action. Every managed skill directory
-carries a `.t3-managed` marker and is synced exactly, so files removed from the bundle disappear.
-A `skills/t3` directory without that marker, a symlinked skill directory, or a symlinked
-instruction file is left untouched and reported as a config validation failure. It writes only
-the `<!-- t3-mesh begin -->` … `<!-- t3-mesh end -->` block in the three harness instruction
-files. Missing directories are created. Malformed or repeated markers fail reconciliation
-before instruction files are written. `agents.manageInstructions: false` disables instruction
-writes while skill installation remains enabled. Instruction errors appear in normal config status.
+skill directories through the config `agents/kit` planner action. The `.t3-managed` marker holds
+a manifest of the files T3 wrote. A sync removes only files named by the previous manifest that
+the bundle no longer ships; it never deletes a file or directory it did not write, so an owner's
+`global/GLOBAL.md`, extra agents or notes inside the managed directory stay. A `skills/t3`
+directory without the marker is adopted only when its `SKILL.md` names `t3` and it has
+`scripts/t3ctl.mjs`: the old directory is copied once to a sibling `t3.backup-<timestamp>`, every
+existing file is treated as unknown (kept), and our shipped files are updated. Any other unmarked
+directory, a symlinked skill directory, or a symlinked instruction file is left untouched and
+reported as a config validation failure. It writes only the
+`<!-- t3-mesh begin -->` … `<!-- t3-mesh end -->` block in the three harness instruction files.
+Missing directories are created. Malformed or repeated markers fail reconciliation before
+instruction files are written. `agents.manageInstructions: false` disables instruction writes
+while skill installation remains enabled. Instruction errors appear in normal config status.
 
 Legacy shared instructions are dropped only as a whole paragraph (or run of paragraphs) bounded
 by the file edge or blank lines, and only before the managed block exists. A mid-line mention,
@@ -441,11 +446,13 @@ directory exists. A short service-manager PATH therefore cannot remove a custome
 managed block. Only a positively absent harness loses our skill directory and block, and
 removing the block never trims text outside it.
 
-Isolated servers must set `T3_MESH_AGENT_HOME` to their sandbox home; `T3_MESH_AGENT_SOURCE`
-can select a fixture skill. CLI release archives carry `agent-kit/skills/t3` next to the
+Isolated servers must set `T3_MESH_AGENT_HOME` to their sandbox home, `T3_MESH_SSH_HOME` to
+their sandbox SSH home and `T3_MESH_SSHD_DIR` to the fixture sshd directory; these are supported
+operator overrides. `T3_MESH_AGENT_SOURCE` (a fixture skill) and `T3_MESH_LEGACY_GLOBAL` (another
+installed legacy file) are test hooks, and production builds ignore them. CLI release archives carry `agent-kit/skills/t3` next to the
 executable, excluding the legacy personal `global` directory. Source development resolves the
 checkout kit. Node builds also stage the kit below `dist/agent-kit`, beside the bundled modules, so npm and desktop server distributions install their own version. Instruction rendering uses config machine names/labels and `agents.instructions`;
-it never reads personal text from the repository. On first startup, `MeshAgentMigration.ts` imports the old installed `~/.agents/skills/t3/global/GLOBAL.md` into config if instructions are absent. The per-server migration marker prevents later explicit edits from being overwritten. `T3_MESH_LEGACY_GLOBAL` selects another installed legacy file for isolated migration.
+it never reads personal text from the repository. On first startup, `MeshAgentMigration.ts` reads the old installed `~/.agents/skills/t3/global/GLOBAL.md` into config if instructions are absent, before any config reconcile can adopt the skill directory. The per-server migration marker prevents later explicit edits from being overwritten.
 
 Replicated future-schema config remains stored and forwarded, but `MeshConfig.start` refuses to
 run planners or identity repair for it and publishes `Unsupported schema` as a failed status.
@@ -470,11 +477,13 @@ Never format `agent-kit/skills/t3/**`. Keep the skill general and compact.
   `scripts/*.{sh,mjs,cjs}`, a `knip.jsonc` entry, or a repository document does not exist, or when
   a shell script assembles a script filename from a variable.
 - Release builds refuse to start when any `T3CODE_*_TEST_BUILD*` flag is enabled:
-  `apps/server/scripts/cli.ts`, `scripts/build-cli-archive.ts` and
-  `scripts/build-desktop-artifact.ts` call `scripts/lib/release-env.ts`; `scripts/release-env.test.ts`
-  proves the subprocess exit and message.
-- Three-machine bed: `scripts/mesh-e2e/README.md` (nodeB main server + isolated studio :3795 +
-  VPS container :3791; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
+  `apps/server/scripts/cli.ts`, `scripts/build-cli-archive.ts`,
+  `scripts/build-desktop-artifact.ts`, `scripts/delivery/builder.mjs` and the web build call
+  `scripts/lib/release-env.ts`; `scripts/release-env.test.ts` proves the subprocess exit and
+  message. The delivery builder also runs `scripts/verify-app-version.mjs` on the built client,
+  which matches the release version exactly rather than accepting a longer prefix.
+- Three-machine bed: `scripts/mesh-e2e/README.md` (a main server, an isolated same-host server
+  and a container; `up.sh <ref>`, `status.sh`, `tunnels.sh up` when tunnels died).
   `mesh-core-acceptance.sh` (layout, links, files, old clients), `replica-acceptance.sh` (replicas on real Mutagen, t3ctl),
   `resilience-acceptance.sh` (crashes, partitions, duplicate claims). They must stay green.
   Runners and fault-proxy units use the configured bed base, runtime root and unit, never an

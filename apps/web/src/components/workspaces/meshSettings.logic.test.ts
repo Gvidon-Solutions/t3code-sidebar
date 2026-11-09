@@ -47,7 +47,7 @@ describe("linkSourceOptions", () => {
   it("names a machine by the mesh config, never the OS hostname", () => {
     expect(
       linkSourceOptions(
-        [environment("local", "gvidon"), environment("remote", "cloudbox-host")],
+        [environment("local", "studio"), environment("remote", "cloudbox-host")],
         [
           { environmentId: "local", label: "Studio" },
           { environmentId: "remote", label: "Cloudbox" },

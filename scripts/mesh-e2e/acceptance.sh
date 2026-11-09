@@ -63,7 +63,7 @@ for tool in cargo rustc rustdoc; do ln -sf rustup "$CARGO_HOME/bin/$tool"; done
 export PATH=$NODE_A_NODE_BIN_DIR:$CARGO_HOME/bin:$PATH
 rustup toolchain install 1.95.0 --profile minimal
 export RUSTUP_TOOLCHAIN=1.95.0
-"$MESH_DIR/build.sh" "${MESH_E2E_NIGHTLY_REF:-xdev}"
+"$MESH_DIR/build.sh" "${MESH_E2E_NIGHTLY_REF:-HEAD}"
 export MESH_FAST_PRODUCT_ROOT="$MESH_E2E_BUILD_DIR"
 "$MESH_DIR/deploy.sh"
 systemctl --user start "$STUDIO_TUNNEL_UNIT"
