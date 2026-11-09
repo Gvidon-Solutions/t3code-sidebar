@@ -488,6 +488,23 @@ export function machineChoices(
   );
 }
 
+/**
+ * Fork targets in picker order: the thread's own machine is never offered, and a
+ * machine that can run a model comes before one whose reason ("No models here",
+ * needs a newer server) explains why it cannot be picked.
+ */
+export function forkMachineChoices(
+  choices: ReadonlyArray<ReplicaMachineChoice>,
+  sourceEnvironmentId: string,
+): ReplicaMachineChoice[] {
+  return choices
+    .filter((choice) => choice.environmentId !== sourceEnvironmentId)
+    .sort(
+      (left, right) =>
+        Number(left.disabled) - Number(right.disabled) || left.label.localeCompare(right.label),
+    );
+}
+
 /** Stable menu/item id for a machine choice. */
 export function machineChoiceId(choice: ReplicaMachineChoice): string {
   return `machine:${choice.environmentId}`;

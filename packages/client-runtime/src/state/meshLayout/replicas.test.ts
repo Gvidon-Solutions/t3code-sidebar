@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 
 import {
+  forkMachineChoices,
   machineChoiceId,
   machineChoiceText,
   machineChoices,
@@ -561,6 +562,33 @@ describe("New thread on machine order", () => {
     expect(choices.map((choice) => choice.environmentId)).toEqual(["studio", "cloudbox", "laptop"]);
     expect(choices.map((choice) => choice.disabled)).toEqual([false, true, false]);
     expect(machineChoiceText(choices[1]!)).toContain("No models here");
+  });
+
+  it("offers fork targets without the source and puts usable machines first", () => {
+    const choices = replicaMachineChoices(
+      empty,
+      [
+        { environmentId: "studio", label: "studio", connected: true, supportsMesh: true },
+        {
+          environmentId: "cloudbox",
+          label: "cloudbox",
+          connected: true,
+          supportsMesh: true,
+          hasUsableModel: false,
+        },
+        { environmentId: "laptop", label: "laptop", connected: true, supportsMesh: true },
+      ],
+      (_environmentId, fallbackLabel) => ({
+        label: fallbackLabel,
+        tag: fallbackLabel.slice(0, 2).toUpperCase(),
+        color: "#000",
+      }),
+    );
+    const forked = forkMachineChoices(choices, "studio");
+    expect(forked.map((choice) => choice.environmentId)).toEqual(["laptop", "cloudbox"]);
+    expect(forked.map((choice) => choice.disabled)).toEqual([false, true]);
+    expect(machineChoiceText(forked[0]!)).toBe("LA  laptop");
+    expect(machineChoiceText(forked[1]!)).toBe("CL  cloudbox (No models here)");
   });
 
   it("orders representations in the Machines view main first, then by title", () => {

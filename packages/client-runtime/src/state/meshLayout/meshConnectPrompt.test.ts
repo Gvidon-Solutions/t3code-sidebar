@@ -24,6 +24,19 @@ describe("planMeshConnect", () => {
     ).toBe(false);
   });
 
+  it("does not offer to connect a machine the mesh reports offline", () => {
+    expect(
+      planMeshConnect({
+        machines: [
+          { environmentId: "studio", label: "studio" },
+          { environmentId: "laptop", label: "laptop", online: false },
+        ],
+        connectedEnvironmentIds: new Set(["studio"]),
+        entries: new Map([["laptop", { enabled: false }]]),
+      }),
+    ).toEqual({ reconnect: [], missing: [], needed: false });
+  });
+
   it("ignores a saved connection that is already enabled", () => {
     expect(
       planMeshConnect({
