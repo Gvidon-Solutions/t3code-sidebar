@@ -313,6 +313,10 @@ export interface MeshMachineInfo {
   readonly connected: boolean;
   /** The server runs replicas (`capabilities.replicas`). */
   readonly supportsMesh: boolean;
+  /** The main copy of the project whose menu is being built. */
+  readonly primary?: boolean;
+  /** False when the machine cannot run any usable model for that project; null when unknown. */
+  readonly hasUsableModel?: boolean | null;
 }
 
 export interface ReplicaMachineChoice {
@@ -320,14 +324,16 @@ export interface ReplicaMachineChoice {
   readonly label: string;
   readonly tag: string;
   readonly color: string;
+  readonly primary: boolean;
   readonly disabled: boolean;
   /** Why the machine is disabled, for the item label. */
   readonly reason: string | null;
 }
 
 const MACHINE_NEEDS_MESH = "update this server to use the mesh";
+const MACHINE_NO_MODELS = "No models here";
 
-/** The connected machines a folder can start a thread on, in the order given. */
+/** The connected machines a folder can start a thread on: main copy first, then by title. */
 export function replicaMachineChoices(
   config: SidebarWorkspacesConfig,
   machines: ReadonlyArray<MeshMachineInfo>,
@@ -344,15 +350,25 @@ export function replicaMachineChoices(
     .filter((machine) => machine.connected)
     .map((machine) => {
       const display = machineDisplay(machine.environmentId, machine.label);
+      const reason = !machine.supportsMesh
+        ? MACHINE_NEEDS_MESH
+        : machine.hasUsableModel === false
+          ? MACHINE_NO_MODELS
+          : null;
       return {
         environmentId: machine.environmentId,
         label: display.label,
         tag: display.tag,
         color: display.color,
-        disabled: !machine.supportsMesh,
-        reason: machine.supportsMesh ? null : MACHINE_NEEDS_MESH,
+        primary: machine.primary === true,
+        disabled: reason !== null,
+        reason,
       };
-    });
+    })
+    .sort(
+      (left, right) =>
+        Number(right.primary) - Number(left.primary) || left.label.localeCompare(right.label),
+    );
 }
 
 export interface ReplicaStatusCopyInput {
@@ -568,4 +584,15 @@ export function unmanagedSessionLabel(session: {
   readonly beta: { readonly path: string };
 }): string {
   return `Adopt ${session.name ?? "existing sync"} · ${session.alpha.path} ↔ ${session.beta.path}`;
+}
+
+/** Representations in the Machines view: the main copy first, then copies by machine title. */
+export function sortRepresentationsMainFirst<
+  T extends { readonly environmentId: string; readonly role: "primary" | "replica" },
+>(representations: ReadonlyArray<T>, labelOf: (environmentId: string) => string): T[] {
+  return [...representations].sort(
+    (left, right) =>
+      Number(right.role === "primary") - Number(left.role === "primary") ||
+      labelOf(left.environmentId).localeCompare(labelOf(right.environmentId)),
+  );
 }

@@ -20,8 +20,18 @@ export type WebMachineInput = MeshMachineInfo;
 export function folderMachineChoices(
   config: SidebarWorkspacesConfig,
   machines: ReadonlyArray<WebMachineInput>,
+  logicalKey?: string,
 ): ReplicaMachineChoice[] {
-  return machineChoices(config, machines);
+  const mounts = logicalKey === undefined ? [] : (config.projectMounts[logicalKey] ?? []);
+  return machineChoices(
+    config,
+    machines.map((machine) => ({
+      ...machine,
+      primary: mounts.some(
+        (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
+      ),
+    })),
+  );
 }
 
 /** A context-menu item per machine; an unsupported server carries the reason in its label. */

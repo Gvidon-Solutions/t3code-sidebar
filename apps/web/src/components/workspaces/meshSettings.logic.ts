@@ -27,6 +27,7 @@ interface LinkableEnvironment<Id extends string = string> {
 /** Connected machines this app can mint a code on and link from. */
 export function linkSourceOptions<Id extends string>(
   environments: ReadonlyArray<LinkableEnvironment<Id>>,
+  machines: ReadonlyArray<{ readonly environmentId: string; readonly label: string }> = [],
 ): MeshLinkSourceOption<Id>[] {
   return environments
     .filter(
@@ -37,7 +38,9 @@ export function linkSourceOptions<Id extends string>(
     )
     .map((environment) => ({
       environmentId: environment.environmentId,
-      label: environment.label,
+      label:
+        machines.find((machine) => machine.environmentId === environment.environmentId)?.label ??
+        environment.label,
     }));
 }
 

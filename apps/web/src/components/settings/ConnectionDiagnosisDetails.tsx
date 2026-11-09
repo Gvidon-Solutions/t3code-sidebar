@@ -51,15 +51,6 @@ export function useConnectionDiagnosis(environment: EnvironmentPresentation) {
   return { diagnosis, state, relayOnly };
 }
 
-/** The failure headline alone, for banners outside Settings. */
-export function ConnectionDiagnosisHeadline({
-  environment,
-}: {
-  readonly environment: EnvironmentPresentation;
-}) {
-  return useConnectionDiagnosis(environment).diagnosis?.headline ?? null;
-}
-
 const HOP_MARK = { ok: "✓", failed: "✕", unchecked: "–" } as const;
 const HOP_NOTE = { ok: "", failed: "Failed", unchecked: "Not checked" } as const;
 

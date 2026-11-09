@@ -117,6 +117,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkspaceContentWidth } from "../layout/workspace-content-width";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
 import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
 import {
@@ -390,6 +392,15 @@ function ThreadDetailBody(
   },
 ) {
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
+  const mesh = useMeshLayout();
+  const meshEnvironmentLabel =
+    props.environmentLabel === null
+      ? null
+      : machineDisplayOf(
+          mesh.config ?? { machines: {} },
+          String(props.environmentId),
+          props.environmentLabel,
+        ).label;
   const { layout } = useAdaptiveWorkspaceLayout();
   const deviceType = useDeviceType();
   const workspace = useWorkspaceTabs();
@@ -725,7 +736,8 @@ function ThreadDetailBody(
     const connectionStatus = connectionFloatingStatus({
       connectionError: connectionRetrying ? retryConnectionError : props.connectionError,
       connectionState: props.connectionStateLabel,
-      environmentLabel: props.environmentLabel,
+      environmentLabel: meshEnvironmentLabel,
+      hasCachedConversation: props.selectedThreadFeed.length > 0,
       onReconnect: props.onReconnectEnvironment,
     });
     if (connectionStatus !== null && !props.draftMode) {

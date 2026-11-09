@@ -2,7 +2,12 @@ import { projectEnvironment } from "../../state/projects";
 import { uuidv4 } from "../../lib/uuid";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { snoozeWakeLabel } from "@t3tools/client-runtime/state/thread-settled";
-import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG, EnvironmentId } from "@t3tools/contracts";
+import {
+  DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+  EnvironmentId,
+  type ProjectId,
+} from "@t3tools/contracts";
+import { hasUsableDraftModels } from "@t3tools/client-runtime/state/mesh-layout";
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
@@ -86,17 +91,26 @@ export function WorkspaceDrawer(props: {
   const serverConfigs = useServerConfigs();
   const { connectedEnvironments } = useRemoteConnectionStatus();
   const replicaConfig = workspaceHome.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
-  const machineChoices = mobileMachineChoices(
-    replicaConfig,
-    connectedEnvironments.map((environment) => ({
-      environmentId: environment.environmentId,
-      label: environment.environmentLabel,
-      connected: environment.connectionState === "connected",
-      supportsMesh:
-        serverConfigs.get(environment.environmentId)?.environment.capabilities.replicas === true,
-    })),
-  );
-  const machineActions = machineSubactions(machineChoices);
+  const machineInputs = (projectKey: string | null) =>
+    connectedEnvironments.map((environment) => {
+      const serverConfig = serverConfigs.get(environment.environmentId) ?? null;
+      const projectId =
+        projectKey === null
+          ? null
+          : (replicaConfig.projectMounts[projectKey]?.find(
+              (rep) => rep.environmentId === environment.environmentId,
+            )?.projectId ?? null);
+      return {
+        environmentId: environment.environmentId,
+        label: environment.environmentLabel,
+        connected: environment.connectionState === "connected",
+        supportsMesh: serverConfig?.environment.capabilities.replicas === true,
+        hasUsableModel: hasUsableDraftModels(serverConfig, projectId as ProjectId | null),
+      };
+    });
+  const machineChoices = mobileMachineChoices(replicaConfig, machineInputs(null));
+  const machineActionsFor = (projectKey: string) =>
+    machineSubactions(mobileMachineChoices(replicaConfig, machineInputs(projectKey), projectKey));
   const retryReplicaCommand = useAtomCommand(replicaStatusEnvironment.retry, {
     label: "replica retry",
     reportFailure: true,
@@ -269,7 +283,7 @@ export function WorkspaceDrawer(props: {
             onFoldMode={workspaceHome.setFoldMode}
             onNewThread={startFolderThread}
             mesh={workspaceHome.meshActionsFor(item.projectKey)}
-            machineSubactions={machineActions}
+            machineSubactions={machineActionsFor}
             onNewThreadOnMachine={startOnMachine}
             onOpenMachines={setMachinesProjectKey}
             onRetryReplica={retryPendingItem}

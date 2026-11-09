@@ -10,6 +10,7 @@ import {
   meshMachineDetailRows,
   partitionMeshMachines,
   forgetMachineFacts,
+  sortMeshMachinesForSettings,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import { useMeshOverview } from "../workspaces/useMeshOverview";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
@@ -42,11 +43,12 @@ export function SettingsMachinesRouteScreen() {
       ?.environmentId ??
     null;
   const now = useNowMinuteMs();
-  const { active: machines, forgotten } = partitionMeshMachines(
+  const { active, forgotten } = partitionMeshMachines(
     allMachines,
     config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
     now,
   );
+  const machines = sortMeshMachinesForSettings(active, mesh.source);
   const [forgottenOpen, setForgottenOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export function SettingsMachinesRouteScreen() {
       ? machine.network?.state === "relayed"
         ? "Online through another machine"
         : "Online"
-      : (offlineMachineText(machine.lastSeenAt) ?? "Offline");
+      : (offlineMachineText(machine.lastSeenAt ?? machine.lastExchangeAt) ?? "Offline");
   const setupPrompt = meshSetupPrompt(
     machines.map((machine) => ({
       label: machine.label,
@@ -143,13 +145,11 @@ export function SettingsMachinesRouteScreen() {
                   ? selected.network?.state === "relayed"
                     ? "Online through another machine"
                     : "Online"
-                  : (offlineMachineText(selected.lastSeenAt) ?? "Offline")}
+                  : (offlineMachineText(selected.lastSeenAt ?? selected.lastExchangeAt) ??
+                    "Offline")}
               </AppText>
               {!online(selected) ? (
                 <View className="gap-2">
-                  <AppText>
-                    {selected.label} · {statusOf(selected)}
-                  </AppText>
                   <MeshAgentFixActions
                     environmentId={agentEnvironmentId}
                     accessibilityLabel={`Fix ${selected.label} offline with an agent`}
@@ -162,7 +162,9 @@ export function SettingsMachinesRouteScreen() {
                 </View>
               ) : null}
               <View className="gap-2">
-                {meshProjectRows(base, selected.environmentId, live).map((row) => (
+                {meshProjectRows(base, selected.environmentId, live, {
+                  lastKnown: !online(selected),
+                }).map((row) => (
                   <View key={row.key} className="gap-2">
                     <AppText>{row.sentence}</AppText>
                     {row.canRetry ? (

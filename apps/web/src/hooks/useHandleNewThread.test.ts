@@ -6,6 +6,23 @@ const testState = vi.hoisted(() => {
   let projectFileRead = Promise.resolve<null>(null);
   let projectRemoved = false;
   let connectedEnvironmentIds = ["environment-primary", "environment-ssh"];
+  let meshConfig: unknown = null;
+  let projects = [
+    {
+      id: "project-primary",
+      environmentId: "environment-primary",
+      workspaceRoot: "/primary/project",
+      defaultThreadEnvMode: null,
+      defaultModelSelection: null,
+    },
+    {
+      id: "project-remote",
+      environmentId: "environment-ssh",
+      workspaceRoot: "/remote/project",
+      defaultThreadEnvMode: null,
+      defaultModelSelection: null,
+    },
+  ];
   let targetSettings = {
     defaultThreadEnvMode: "local" as "local" | "worktree" | null,
     newWorktreesStartFromOrigin: false,
@@ -84,6 +101,15 @@ const testState = vi.hoisted(() => {
     get targetSettings() {
       return targetSettings;
     },
+    get projects() {
+      return projects;
+    },
+    get meshConfig() {
+      return meshConfig;
+    },
+    setMeshConfig(value: unknown) {
+      meshConfig = value;
+    },
     reset(
       nextStoredDraft: typeof storedDraft,
       workspaceDefaults = {
@@ -96,6 +122,7 @@ const testState = vi.hoisted(() => {
       draftsWithUserText = new Set();
       projectRemoved = false;
       connectedEnvironmentIds = ["environment-primary", "environment-ssh"];
+      meshConfig = null;
       targetSettings = {
         defaultThreadEnvMode: workspaceDefaults.envMode,
         newWorktreesStartFromOrigin: workspaceDefaults.startFromOrigin,
@@ -149,7 +176,8 @@ vi.mock("@t3tools/client-runtime/environment", () => ({
   scopeProjectRef: (environmentId: string, projectId: string) => ({ environmentId, projectId }),
   scopeThreadRef: (environmentId: string, threadId: string) => ({ environmentId, threadId }),
 }));
-vi.mock("@t3tools/contracts", () => ({
+vi.mock("@t3tools/contracts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@t3tools/contracts")>()),
   DEFAULT_RUNTIME_MODE: "default",
   DEFAULT_SERVER_SETTINGS: {},
 }));
@@ -213,23 +241,22 @@ vi.mock("@t3tools/client-runtime/state/project-grouping", () => ({
   getProjectOrderKey: () => "remote-project",
   selectProjectGroupingSettings: () => ({}),
 }));
-vi.mock("../state/entities", () => {
-  const project = {
-    id: "project-remote",
-    environmentId: "environment-ssh",
-    workspaceRoot: "/remote/project",
-    defaultThreadEnvMode: null,
-    defaultModelSelection: null,
-  };
-  return {
-    readProject: () => (testState.projectRemoved ? null : project),
-    readProjects: () => (testState.projectRemoved ? [] : [project]),
-    readThreadShell: () => null,
-    readThreadShells: () => [],
-    useProjects: () => [],
-    useThread: () => null,
-  };
-});
+vi.mock("../state/entities", () => ({
+  readProject: (ref: { readonly environmentId: string; readonly projectId: string }) =>
+    testState.projectRemoved
+      ? null
+      : (testState.projects.find(
+          (project) => project.environmentId === ref.environmentId && project.id === ref.projectId,
+        ) ?? null),
+  readProjects: () => (testState.projectRemoved ? [] : testState.projects),
+  readThreadShell: () => null,
+  readThreadShells: () => [],
+  useProjects: () => [],
+  useThread: () => null,
+}));
+vi.mock("../state/meshLayoutConfig", () => ({
+  readMeshLayoutConfigSnapshot: () => testState.meshConfig,
+}));
 vi.mock("../state/olderSettledShelf", () => ({ readUnloadedThreadCount: () => 0 }));
 vi.mock("../state/presentation", () => ({
   environmentSummaries: { connectedEnvironmentIdsAtom: "connected-environment-ids" },
@@ -363,5 +390,65 @@ describe("useNewThreadHandler", () => {
 
     expect(opened).toEqual({ draftId: "draft-delayed", threadId: "thread-delayed" });
     expect(testState.router.navigate).toHaveBeenCalledOnce();
+  });
+});
+
+describe("new draft destination", () => {
+  const meshConfig = {
+    machines: {},
+    projectMounts: {
+      "logical-project": [
+        {
+          environmentId: "environment-primary",
+          path: "/primary/project",
+          projectId: "project-primary",
+          role: "primary",
+          transport: "git",
+          createdAt: "",
+        },
+        {
+          environmentId: "environment-ssh",
+          path: "/remote/project",
+          projectId: "project-remote",
+          role: "replica",
+          transport: "mutagen",
+          source: "environment-primary",
+          createdAt: "",
+        },
+      ],
+    },
+    projectAliases: {},
+    projectTitles: {},
+  };
+
+  it("keys the draft by the logical project and lands on the main copy", async () => {
+    testState.reset(null);
+    testState.setMeshConfig(meshConfig);
+    const opened = await useNewThreadHandler()(
+      { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+      {},
+    );
+    expect(opened).not.toBeNull();
+    const call = testState.draftStore.setLogicalProjectDraftThreadId.mock.calls.at(-1);
+    expect(call?.[0]).toBe("logical-project");
+    expect(call?.[1]).toEqual({
+      environmentId: "environment-primary",
+      projectId: "project-primary",
+    });
+  });
+
+  it("keeps a machine the person explicitly picked", async () => {
+    testState.reset(null);
+    testState.setMeshConfig(meshConfig);
+    await useNewThreadHandler()(
+      { environmentId: "environment-ssh", projectId: "project-remote" } as never,
+      { environmentSelection: "manual" },
+    );
+    const call = testState.draftStore.setLogicalProjectDraftThreadId.mock.calls.at(-1);
+    expect(call?.[0]).toBe("logical-project");
+    expect(call?.[1]).toEqual({
+      environmentId: "environment-ssh",
+      projectId: "project-remote",
+    });
   });
 });

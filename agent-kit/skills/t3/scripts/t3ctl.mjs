@@ -1093,6 +1093,14 @@ async function layoutSnapshot() {
   }
 }
 
+/** A link row names the configured machine, never the peer's OS hostname. */
+export function machineLinkLabel(machines, environmentId) {
+  return (
+    machines.find((machine) => machine.environmentId === environmentId)?.label ??
+    short(environmentId)
+  );
+}
+
 async function peerLinksSummary() {
   try {
     return { links: (await withWs((c) => c.rpc("peerLinks.list", {}))).links ?? [], error: null };
@@ -1140,7 +1148,8 @@ async function collectMachines({ probe = false, layout, links } = {}) {
     const entry = config.machines?.[id] ?? {};
     const link = linkById.get(id);
     const isLocal = id === local.environmentId;
-    const label = entry.label?.trim() || link?.label || (isLocal ? local.label : id);
+    const label =
+      entry.title?.trim() || entry.label?.trim() || (isLocal ? local.label : short(id));
     const machine = {
       ...base,
       environmentId: id,
@@ -2491,7 +2500,7 @@ const commands = {
       if (network.error) console.log(`  network status: ${clip(network.error, 160)}`);
       for (const link of links)
         console.log(
-          `  link ${link.status.padEnd(11)} ${tagOf(link.environmentId).padEnd(3)} ${link.label}  ${link.environmentId}  ${link.urls?.join(", ")}${link.lastReachedAt ? `  last ${ago(link.lastReachedAt)}` : ""}${link.lastError ? `  ${clip(link.lastError, 80)}` : ""}`,
+          `  link ${link.status.padEnd(11)} ${tagOf(link.environmentId).padEnd(3)} ${machineLinkLabel(machines, link.environmentId)}  ${link.environmentId}  ${link.urls?.join(", ")}${link.lastReachedAt ? `  last ${ago(link.lastReachedAt)}` : ""}${link.lastError ? `  ${clip(link.lastError, 80)}` : ""}`,
         );
       if (!links.length)
         console.log(`  no links${linksError ? ` (${clip(linksError, 120)})` : ""}`);

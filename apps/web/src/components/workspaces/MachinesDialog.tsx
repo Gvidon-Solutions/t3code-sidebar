@@ -5,6 +5,7 @@ import {
   removeRepresentationCopy,
   representationCandidates,
   representationRow,
+  sortRepresentationsMainFirst,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
@@ -76,6 +77,10 @@ export function MachinesDialog(props: {
   const [removing, setRemoving] = useState<string | null>(null);
   const reps: ReadonlyArray<SidebarProjectMount> =
     props.config.projectMounts[props.logicalKey] ?? [];
+  const orderedReps = sortRepresentationsMainFirst(
+    reps,
+    (environmentId) => machineDisplayOf(props.config, environmentId, environmentId).label,
+  );
   const removingRep = reps.find((rep) => rep.environmentId === removing) ?? null;
   const removeCopy = removingRep
     ? removeRepresentationCopy({
@@ -106,7 +111,7 @@ export function MachinesDialog(props: {
             <p className="text-sm text-muted-foreground">No machines have this project yet.</p>
           ) : (
             <div className="flex flex-col gap-2">
-              {reps.map((rep) => {
+              {orderedReps.map((rep) => {
                 const machine = machineDisplayOf(
                   props.config,
                   rep.environmentId,

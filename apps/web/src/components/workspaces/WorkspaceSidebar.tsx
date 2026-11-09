@@ -1,5 +1,8 @@
 import { useScratchProject } from "../../hooks/useScratchProject";
-import { projectMachineStrip } from "@t3tools/client-runtime/state/mesh-layout";
+import {
+  hasUsableDraftModels,
+  projectMachineStrip,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import {
   IMPLICIT_WORKSPACE,
   withImplicitWorkspace,
@@ -90,6 +93,9 @@ import { openOpenFileDialog } from "../files/openFileDialogState";
 import { useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { useMeshLayout } from "../../hooks/useMeshLayout";
 import { useNowMinute } from "../../hooks/useNowMinute";
+import { useMeshOverview } from "../../hooks/useMeshOverview";
+import { minuteTickToEpochMs } from "@t3tools/client-runtime/clock";
+import { offlineMachineText } from "@t3tools/client-runtime/state/mesh-machines";
 import {
   useClientSettings,
   usePrimarySettings,
@@ -293,6 +299,7 @@ export default function WorkspaceSidebar() {
   const mesh = useMeshLayout();
   const lastVisitedById = useUiStateStore((s) => s.threadLastVisitedAtById);
   const nowMinute = useNowMinute();
+  const { machines: meshMachineRows } = useMeshOverview({ config: mesh.config });
   const now = Date.parse(nowMinute);
 
   const view = useWorkspaceViewStore();
@@ -353,6 +360,18 @@ export default function WorkspaceSidebar() {
   );
   const machineDisplayFor = (environmentId: string) =>
     machineDisplayOf(config, environmentId, environmentLabels.get(environmentId) ?? environmentId);
+  const connectedEnvironmentIds = environments
+    .filter((environment) => environment.connection.phase === "connected")
+    .map((environment) => environment.environmentId);
+  const offlineDescriptionFor = (environmentId: string): string | null => {
+    if (connectedEnvironmentIds.some((id) => String(id) === environmentId)) return null;
+    const machine = meshMachineRows.find((row) => row.environmentId === environmentId);
+    const text = offlineMachineText(
+      machine?.lastSeenAt ?? machine?.lastExchangeAt ?? null,
+      minuteTickToEpochMs(nowMinute),
+    );
+    return `${machine?.label ?? machineDisplayFor(environmentId).label} is ${text.toLowerCase()}`;
+  };
   // Rows outside a folder (pinned, snoozed, voice, search) show tags only when the
   // list can mix machines at all.
   const sectionMachineTags = spansMultipleEnvironments(environmentLabels.keys());
@@ -800,23 +819,39 @@ export default function WorkspaceSidebar() {
   };
 
   // ── New thread on another machine ─────────────────────────────────────
-  const machineChoices = folderMachineChoices(
-    config,
-    environments.map((environment) => ({
-      environmentId: environment.environmentId,
-      label: environment.label,
-      connected: environment.connection.phase === "connected",
-      supportsMesh:
-        serverConfigs.get(environment.environmentId)?.environment.capabilities.replicas === true,
-    })),
-  );
+  const machineInputs = (logicalKey: string | null) =>
+    environments.map((environment) => {
+      const serverConfig = serverConfigs.get(environment.environmentId) ?? null;
+      const projectId =
+        logicalKey === null
+          ? null
+          : (config.projectMounts[logicalKey]?.find(
+              (rep) => rep.environmentId === environment.environmentId,
+            )?.projectId ?? null);
+      return {
+        environmentId: environment.environmentId,
+        label: environment.label,
+        connected: environment.connection.phase === "connected",
+        supportsMesh: serverConfig?.environment.capabilities.replicas === true,
+        hasUsableModel: hasUsableDraftModels(serverConfig, projectId as ProjectId | null),
+      };
+    });
+  const machineChoices = folderMachineChoices(config, machineInputs(null));
+  const machineChoicesFor = (folder: FolderModel) =>
+    folder.isScratch
+      ? machineChoices.map((choice) => ({ ...choice, disabled: false, reason: null }))
+      : folderMachineChoices(
+          config,
+          machineInputs(folder.group.projectKey),
+          folder.group.projectKey,
+        );
   const seedOf = (folder: FolderModel) =>
     primarySeedOf(folder.group.memberProjects, primaryEnvironmentId);
   const openThreadOnMachine = (environmentId: EnvironmentId, projectId: string) => {
     if (isMobile) setOpenMobile(false);
-    void handleNewThread(scopeProjectRef(environmentId, ProjectId.make(projectId))).catch((error) =>
-      failureToast("Could not create thread", error),
-    );
+    void handleNewThread(scopeProjectRef(environmentId, ProjectId.make(projectId)), {
+      environmentSelection: "manual",
+    }).catch((error) => failureToast("Could not create thread", error));
   };
   const startThreadOnMachine = (folder: FolderModel, environmentId: string) => {
     if (folder.isScratch) {
@@ -845,11 +880,7 @@ export default function WorkspaceSidebar() {
     const api = readLocalApi();
     if (!api) return;
     const clicked = await api.contextMenu.show(
-      machineMenuItems(
-        folder.isScratch
-          ? machineChoices.map((choice) => ({ ...choice, disabled: false, reason: null }))
-          : machineChoices,
-      ),
+      machineMenuItems(machineChoicesFor(folder)),
       position,
     );
     if (clicked?.startsWith("machine:")) {
@@ -1146,14 +1177,15 @@ export default function WorkspaceSidebar() {
             ...(foldMode === "auto" ? [] : [{ id: "fold:auto", label: "Fold automatically" }]),
           ]),
     ];
+    const menuMachines = machineChoicesFor(folder);
     const items: ContextMenuItem[] = [
       { id: "rename-project", label: "Rename…", icon: "pencil", disabled: folder.isScratch },
       { id: "new-thread", label: "New thread", icon: "message-square-plus" },
       {
         id: "new-thread-on",
         label: "New thread on…",
-        disabled: machineChoices.length === 0,
-        children: machineMenuItems(machineChoices),
+        disabled: menuMachines.length === 0,
+        children: machineMenuItems(menuMachines),
       },
       { id: "open-file", label: "Open file…", icon: "file", separatorBefore: true },
       ...placement,
@@ -1686,11 +1718,12 @@ export default function WorkspaceSidebar() {
                   environmentIds: folder.isScratch
                     ? folder.all.map((thread) => thread.environmentId)
                     : folder.group.memberProjects.map((member) => member.environmentId),
-                  knownEnvironmentIds: [...environmentLabels.keys()],
+                  knownEnvironmentIds: connectedEnvironmentIds,
                   isScratch: folder.isScratch,
                 },
                 liveReplicaStatuses,
                 machineDisplayFor,
+                offlineDescriptionFor,
               )}
               onOpen={() => setMachinesFolder(folder)}
             />

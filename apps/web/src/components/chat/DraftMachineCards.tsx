@@ -249,6 +249,7 @@ function MachineCard(props: { readonly row: DraftMachineCardRow; readonly onSele
       role="radio"
       aria-checked={row.selected}
       aria-disabled={!row.selectable}
+      aria-description={row.hint ?? undefined}
       onClick={() => {
         if (row.selectable) props.onSelect();
       }}

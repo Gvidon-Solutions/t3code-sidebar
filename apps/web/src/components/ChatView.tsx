@@ -37,6 +37,7 @@ import { resolveDraftHeroState } from "./ChatView.logic";
 import { useQueuedRunEdit } from "./chat/useQueuedRunEdit";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
 import { useLogicalProjectEnvironments } from "../hooks/useLogicalProjectEnvironments";
+import { useMeshLayout } from "../hooks/useMeshLayout";
 import { useStableCallback } from "../hooks/useStableCallback";
 import { useProjectScriptEditing } from "./chat/useProjectScriptEditing";
 import { RightPanelSurfaceContent } from "./chat/RightPanelSurfaceContent";
@@ -144,6 +145,7 @@ import { useWorkspaceMutationRefresh } from "../hooks/useWorkspaceMutationRefres
 import { DEFAULT_INTERACTION_MODE, type ChatMessage } from "../types";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useTheme } from "../hooks/useTheme";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { copyThreadReference } from "../lib/copyThreadReference";
 import { subscribeSnapShotComposerFocus } from "../lib/desktopSnapShot";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -811,6 +813,11 @@ export default function ChatView(props: ChatViewProps) {
   // a model that any machine is missing.
   const draftModelSelection =
     composerRealModelSelection ?? realDraftModelSelection(activeThread?.modelSelection);
+  // Cards and machine routing judge only an explicit choice; otherwise each machine
+  // answers with the default model the composer would send there.
+  const explicitDraftModelSelection = composerModelSelectionExplicit
+    ? composerRealModelSelection
+    : null;
   const serverLatestRun =
     serverProjection === null ? null : deriveLatestThreadRun(serverProjection);
   const serverActivityRun =
@@ -1182,7 +1189,15 @@ export default function ChatView(props: ChatViewProps) {
     activeThread == null ? null : (environmentById.get(activeThread.environmentId) ?? null);
   const activeEnvironmentUnavailable =
     activeEnvironment !== null && activeEnvironment.connection.phase !== "connected";
-  const activeEnvironmentUnavailableLabel = activeEnvironment?.label ?? null;
+  const mesh = useMeshLayout();
+  const activeEnvironmentUnavailableLabel =
+    activeEnvironment === null
+      ? null
+      : machineDisplayOf(
+          mesh.config ?? { machines: {} },
+          activeEnvironment.environmentId,
+          activeEnvironment.label,
+        ).label;
   const activeEnvironmentUnavailableState = (() => {
     if (!activeEnvironmentUnavailable || !activeEnvironmentUnavailableLabel || !activeEnvironment) {
       return null;
@@ -1290,6 +1305,7 @@ export default function ChatView(props: ChatViewProps) {
     activeEnvironment,
     activeEnvironmentUnavailable,
     activeEnvironmentUnavailableState,
+    hasCachedConversation: serverProjection !== null,
     activeThreadEnvironmentId: activeThread?.environmentId ?? null,
     serverConfig,
     hasMultipleRegisteredEnvironments: environments.length > 1,
@@ -1806,7 +1822,7 @@ export default function ChatView(props: ChatViewProps) {
     readPendingEnvironmentChange,
     onEnvironmentChangeStable,
   } = useDraftEnvironmentRouting({
-    selection: draftModelSelection ?? null,
+    selection: explicitDraftModelSelection,
     draftId,
     draftThread,
     envLocked,
@@ -2765,7 +2781,7 @@ export default function ChatView(props: ChatViewProps) {
             const providers = providersByEnvironment.get(environment.environmentId);
             const catalog =
               serverConfig && providers ? { providers, settings: serverConfig.settings } : null;
-            const selection = draftModelSelection ?? null;
+            const selection = explicitDraftModelSelection;
             return {
               environmentId: environment.environmentId,
               connected: environment.connected !== false,
@@ -3614,7 +3630,7 @@ export default function ChatView(props: ChatViewProps) {
                           <DraftMachineCards
                             choices={logicalProjectEnvironments}
                             activeProject={activeProject}
-                            selection={draftModelSelection ?? null}
+                            selection={explicitDraftModelSelection}
                             selectedEnvironmentId={
                               pendingDraftMachineId ??
                               activeThread?.environmentId ??
@@ -3714,15 +3730,17 @@ export default function ChatView(props: ChatViewProps) {
                               sendDisabledReason={
                                 !canOperateThread
                                   ? "This connection cannot change threads."
-                                  : isRevertingCheckpoint
-                                    ? "Rewinding conversation"
-                                    : feedbackUploading
-                                      ? "Sending feedback"
-                                      : threadDetailLoading
-                                        ? "Messages loading"
-                                        : worktreeSetupBlocksSend
-                                          ? "Preparing worktree"
-                                          : projectCloneSendBlockReason
+                                  : activeEnvironmentUnavailable
+                                    ? `${activeEnvironmentUnavailableLabel ?? "This machine"} is offline. Reconnect to send.`
+                                    : isRevertingCheckpoint
+                                      ? "Rewinding conversation"
+                                      : feedbackUploading
+                                        ? "Sending feedback"
+                                        : threadDetailLoading
+                                          ? "Messages loading"
+                                          : worktreeSetupBlocksSend
+                                            ? "Preparing worktree"
+                                            : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree && !sendQueuesBehindSetup}
                               bannerItems={

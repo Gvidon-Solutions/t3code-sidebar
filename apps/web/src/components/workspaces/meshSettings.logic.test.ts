@@ -44,6 +44,21 @@ describe("linkSourceOptions", () => {
     ).toEqual([{ environmentId: "atlas", label: "Atlas" }]);
   });
 
+  it("names a machine by the mesh config, never the OS hostname", () => {
+    expect(
+      linkSourceOptions(
+        [environment("local", "gvidon"), environment("remote", "cloudbox-host")],
+        [
+          { environmentId: "local", label: "Studio" },
+          { environmentId: "remote", label: "Cloudbox" },
+        ],
+      ),
+    ).toEqual([
+      { environmentId: "local", label: "Studio" },
+      { environmentId: "remote", label: "Cloudbox" },
+    ]);
+  });
+
   it("drops machines with no server config", () => {
     expect(
       linkSourceOptions([

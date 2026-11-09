@@ -279,3 +279,59 @@ export function renameLogicalProject(
     },
   };
 }
+
+export interface ProjectMachineTag {
+  readonly environmentId: string;
+  readonly label: string;
+  readonly tag: string;
+  readonly color: string;
+  readonly primary: boolean;
+}
+
+/**
+ * The machines a logical project lives on, main copy first then by configured title. Machine
+ * names come from the mesh config; a representation the config does not name yet still gets its
+ * machine id fallback rather than an OS hostname.
+ */
+export function projectMachineTags(
+  config: Pick<SidebarWorkspacesConfig, "machines" | "projectMounts">,
+  logicalKey: string,
+  fallbackEnvironmentIds: ReadonlyArray<string> = [],
+): ProjectMachineTag[] {
+  const reps = config.projectMounts[logicalKey] ?? [];
+  const rows = reps.length
+    ? reps.map((rep) => ({ environmentId: rep.environmentId, primary: rep.role === "primary" }))
+    : fallbackEnvironmentIds.map((environmentId, index) => ({
+        environmentId,
+        primary: index === 0,
+      }));
+  return rows
+    .map((row) => {
+      const display = machineDisplayOf(config, row.environmentId, row.environmentId);
+      return {
+        environmentId: row.environmentId,
+        label: display.label,
+        tag: display.tag,
+        color: display.color,
+        primary: row.primary,
+      };
+    })
+    .sort(
+      (left, right) =>
+        Number(right.primary) - Number(left.primary) || left.label.localeCompare(right.label),
+    );
+}
+
+/** The main copy of a logical project, or null when no representation names one. */
+export function mainRepresentationRef(
+  config: SidebarWorkspacesConfig | null | undefined,
+  logicalKey: string,
+): { readonly environmentId: string; readonly projectId: string } | null {
+  const reps = config?.projectMounts[logicalKey] ?? [];
+  const primary =
+    reps.find((rep) => rep.role === "primary" && rep.projectId !== undefined) ??
+    reps.find((rep) => rep.projectId !== undefined);
+  return primary?.projectId
+    ? { environmentId: primary.environmentId, projectId: primary.projectId }
+    : null;
+}

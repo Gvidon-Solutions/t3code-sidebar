@@ -16,6 +16,7 @@ import {
   importLegacyEntries,
   meshConfigApplyInput,
   meshSshHost,
+  machineLinkLabel,
   normalizeMachineName,
   parseArgs,
   resolveMachineRef,
@@ -339,4 +340,13 @@ NodeTest.test("explicit updating refusals retry the same call and stop on succes
   NodeAssert.equal(await retryUpdatingCall(async () => denied, async () => {}), denied);
   const text = { isError: true, content: [{ type: "text", text: "T3_UPDATING: ordinary tool output" }] };
   NodeAssert.equal(await retryUpdatingCall(async () => text, async () => { throw Error("must not retry text"); }), text);
+});
+
+NodeTest.test("mesh status link rows name the configured machine, not the hostname", () => {
+  const machines = [
+    { environmentId: "env-1", label: "laptop", tag: "LT" },
+    { environmentId: "env-2", label: "cloudbox", tag: "CB" },
+  ];
+  NodeAssert.equal(machineLinkLabel(machines, "env-2"), "cloudbox");
+  NodeAssert.equal(machineLinkLabel(machines, "env-unknown"), "env-unknown");
 });

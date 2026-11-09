@@ -22,8 +22,18 @@ export type MobileMachineInput = MeshMachineInfo;
 export function mobileMachineChoices(
   config: SidebarWorkspacesConfig,
   machines: ReadonlyArray<MobileMachineInput>,
+  logicalKey?: string,
 ): ReplicaMachineChoice[] {
-  return machineChoices(config, machines);
+  const mounts = logicalKey === undefined ? [] : (config.projectMounts[logicalKey] ?? []);
+  return machineChoices(
+    config,
+    machines.map((machine) => ({
+      ...machine,
+      primary: mounts.some(
+        (rep) => rep.environmentId === machine.environmentId && rep.role === "primary",
+      ),
+    })),
+  );
 }
 
 export interface MachineSubaction {

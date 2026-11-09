@@ -24,6 +24,7 @@ import {
   replicaExecutionLabel,
   unmanagedSessionLabel,
   replicaStatusDetail,
+  sortRepresentationsMainFirst,
 } from "./replicas.ts";
 
 const primary = (environmentId: string, path = "/work/demo"): SidebarProjectMount => ({
@@ -527,5 +528,51 @@ describe("shared machine choices", () => {
         beta: { path: "/b" },
       }),
     ).toBe("Adopt existing sync · /a ↔ /b");
+  });
+});
+
+describe("New thread on machine order", () => {
+  it("puts the main copy first, then names machines alphabetically", () => {
+    const choices = replicaMachineChoices(
+      empty,
+      [
+        { environmentId: "laptop", label: "laptop", connected: true, supportsMesh: true },
+        {
+          environmentId: "cloudbox",
+          label: "cloudbox",
+          connected: true,
+          supportsMesh: true,
+          hasUsableModel: false,
+        },
+        {
+          environmentId: "studio",
+          label: "studio",
+          connected: true,
+          supportsMesh: true,
+          primary: true,
+        },
+      ],
+      (_environmentId, fallbackLabel) => ({
+        label: fallbackLabel,
+        tag: fallbackLabel.slice(0, 2).toUpperCase(),
+        color: "#000",
+      }),
+    );
+    expect(choices.map((choice) => choice.environmentId)).toEqual(["studio", "cloudbox", "laptop"]);
+    expect(choices.map((choice) => choice.disabled)).toEqual([false, true, false]);
+    expect(machineChoiceText(choices[1]!)).toContain("No models here");
+  });
+
+  it("orders representations in the Machines view main first, then by title", () => {
+    expect(
+      sortRepresentationsMainFirst(
+        [
+          { environmentId: "laptop", role: "replica" },
+          { environmentId: "cloudbox", role: "replica" },
+          { environmentId: "studio", role: "primary" },
+        ] as never,
+        (environmentId) => environmentId,
+      ).map((rep) => rep.environmentId),
+    ).toEqual(["studio", "cloudbox", "laptop"]);
   });
 });

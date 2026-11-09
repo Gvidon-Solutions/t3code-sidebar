@@ -92,14 +92,16 @@ export function defaultForkTarget(input: {
   readonly candidates: ReadonlyArray<{
     readonly environmentId: string;
     readonly connected: boolean;
-    readonly hasModels: boolean;
+    /** The shared draft resolver's answer for the target machine, not a raw catalog count. */
+    readonly hasUsableModel: boolean | null;
   }>;
 }): string {
   const others = input.candidates.filter(
     (candidate) => candidate.environmentId !== input.sourceEnvironmentId,
   );
   return (
-    others.find((candidate) => candidate.connected && candidate.hasModels)?.environmentId ??
+    others.find((candidate) => candidate.connected && candidate.hasUsableModel === true)
+      ?.environmentId ??
     others.find((candidate) => candidate.connected)?.environmentId ??
     others[0]?.environmentId ??
     input.sourceEnvironmentId

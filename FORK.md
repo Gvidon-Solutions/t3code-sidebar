@@ -109,6 +109,42 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — F6 client review fixes before 0.1.7-sidebar.63
+
+- **What.** Machine cards, the fork dialog and the new-thread submenu now agree with the composer:
+  they judge only an explicit model choice and otherwise the machine's own default, so a fresh
+  draft no longer says its model is missing on every machine. Card notes fit one line ("Synced",
+  "Copying…", "Not connected here", "No models here", "Model not available here", "Will set up a
+  copy"), with the full sentence in the tooltip. A Home/sidebar draft is keyed by the logical
+  project and lands on the main copy unless a machine was picked. The project picker shows one row
+  per logical project with config machine tags, never "Local" or an OS hostname, and paths only as
+  a short muted tail for non-mesh projects. Machine names in Link and mesh status come from the
+  config title/label. Settings › Mesh lists this machine first then titles; the Machines views put
+  the main copy first then copies by title. A thread on an offline machine keeps its last saved
+  conversation, reads-only with a calm machine-named banner, and the sidebar/footer/machine detail
+  carry the offline age once. Provider settings send only the changed instance, and the agent kit
+  adopts an unmarked but recognizably T3 skill directory before syncing it.
+- **How.** Shared client-runtime added `draftMachineModelUsable`, short card text constants,
+  `mainRepresentationRef`, `projectMachineTags`, `sortMeshMachinesForSettings`,
+  `sortRepresentationsMainFirst`, `offlineConversationStatus`, last-known project rows and a
+  last-known fallback in the thread detail atoms. Web passes explicit-only selections to cards and
+  routing, resolves the mesh logical key in `useHandleNewThread`, groups the palette through the
+  layout, names link sources from machines and orders the mesh lists. Mobile mirrors cards,
+  ordering, machine names and offline wording. `MeshAgentKit` adopts the retired kit's unmarked
+  layout. Settings use the shared `buildProviderInstancePatch`.
+- **Where.** client-runtime `state/{meshMachines,threadDetail,threadForks}.ts`,
+  `state/meshLayout/{draftMachine,draftMachineCards,logicalProjects,projectMachineStrip,replicas}.ts`;
+  web `components/ChatView.tsx`, `hooks/useHandleNewThread.ts`, `state/meshLayoutConfig.ts`,
+  `components/CommandPalette{,Lookups,ProjectItems,ThreadItems}`,
+  `components/workspaces/{WorkspaceSidebar,MeshSettingsPanel,MachinesDialog,ForkThreadDialog,
+  meshSettings.logic,replicas.logic}`, `components/settings/{SettingsPanels.logic,
+  ProviderSettingsPanel,AddCodexAccountDialog}`, `components/chat/{DraftMachineCards,
+  useDraftEnvironmentRouting,useSystemComposerBanners,ChatComposer}`; mobile
+  `features/threads/{new-task-flow-provider,ThreadDetailScreen,floating-working-status}`,
+  `features/{home/HomeScreen,panels/WorkspaceDrawer,settings/{SettingsMachinesRouteScreen,
+  MeshLinkForm},workspaces/{DraftMachineCards,MachinesSheet,WorkspaceChrome,replicas.logic,
+  useWorkspaceHome}}`; server `mesh/MeshAgentKit.ts`; CLI `agent-kit/skills/t3/scripts/t3ctl.mjs`.
+
 ### 2026-11-09 — F5 fixes from the full UI review
 
 - **What.** The desktop shell shows a plain "Can't reach <server> — Retry" bundled page instead of

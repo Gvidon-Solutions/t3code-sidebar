@@ -36,6 +36,12 @@ const sharedSkill = ".agents/skills/t3";
 const skillMarker = ".t3-managed";
 const skillMarkerContents = "This directory is managed by T3 Code.\n";
 
+/** A skill the retired kit wrote: our frontmatter name and our command layout. */
+export function isRecognizablyT3Skill(skillText: string): boolean {
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(skillText);
+  return frontmatter !== null && /^name:\s*["']?t3["']?\s*$/m.test(frontmatter[1]!);
+}
+
 export function instructionBlock(original: string, body: string) {
   if (body.includes(begin) || body.includes(end))
     throw new Error("Managed instruction body contains reserved markers");
@@ -177,6 +183,17 @@ export const layer = Layer.effect(
       return entries;
     });
     const conflictText = (target: string) => `${target} is not a T3-managed t3 skill`;
+    // The retired kit wrote the same files without a marker. Adopt only that exact layout;
+    // anything else in the directory belongs to somebody else.
+    const adoptableSkill = Effect.fn("MeshAgentKit.adoptableSkill")(function* (directory: string) {
+      const skill = yield* fs.lstat(path.join(directory, "SKILL.md")).pipe(Effect.option);
+      const control = yield* fs
+        .lstat(path.join(directory, "scripts/t3ctl.mjs"))
+        .pipe(Effect.option);
+      if (Option.isNone(skill) || skill.value.type !== "File") return false;
+      if (Option.isNone(control) || control.value.type !== "File") return false;
+      return isRecognizablyT3Skill(yield* fs.readFileString(path.join(directory, "SKILL.md")));
+    });
     const syncSkill = Effect.fn("MeshAgentKit.syncSkill")(function* (
       from: string,
       to: string,
@@ -190,8 +207,11 @@ export const layer = Layer.effect(
         }
         const marker = yield* fs.lstat(path.join(to, skillMarker)).pipe(Effect.option);
         if (Option.isNone(marker) || marker.value.type !== "File") {
-          conflicts.push(conflictText(to));
-          return;
+          if (!(yield* adoptableSkill(to))) {
+            conflicts.push(conflictText(to));
+            return;
+          }
+          yield* fs.writeFileString(path.join(to, skillMarker), skillMarkerContents);
         }
       } else {
         yield* fs.makeDirectory(to, { recursive: true });

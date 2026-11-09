@@ -20,6 +20,8 @@ import {
   promptDataText,
   refusedLinkPrompt,
   safePromptAddress,
+  sortMeshMachinesForSettings,
+  offlineConversationStatus,
 } from "./meshMachines.ts";
 
 const base: SidebarWorkspacesConfig = {
@@ -221,7 +223,7 @@ describe("deriveMeshFooterStatus", () => {
       tag: "BO",
       minutes: 5,
     });
-    expect(meshFooterText(status)).toBe("Mesh · BO unreachable for 5 min");
+    expect(meshFooterText(status)).toBe("Boreal is offline · 5 min");
   });
 });
 
@@ -683,5 +685,67 @@ describe("agent prompts treat peer text as data", () => {
     const oversized = fitMeshPrompt(["x".repeat(MESH_PROMPT_MAX_LENGTH + 100)]);
     expect(oversized.length).toBeLessThanOrEqual(MESH_PROMPT_MAX_LENGTH);
     expect(oversized).toContain("shortened to fit the link");
+  });
+});
+
+describe("Settings › Mesh machine order", () => {
+  it("puts this machine first, then every machine by its configured title", () => {
+    expect(
+      sortMeshMachinesForSettings(
+        [
+          { environmentId: "laptop", label: "laptop" },
+          { environmentId: "cloudbox", label: "cloudbox" },
+          { environmentId: "studio", label: "studio" },
+        ],
+        "studio",
+      ).map((machine) => machine.environmentId),
+    ).toEqual(["studio", "cloudbox", "laptop"]);
+  });
+
+  it("keeps the host's order when this machine is not in the list", () => {
+    expect(
+      sortMeshMachinesForSettings(
+        [
+          { environmentId: "laptop", label: "laptop" },
+          { environmentId: "cloudbox", label: "cloudbox" },
+        ],
+        null,
+      ).map((machine) => machine.environmentId),
+    ).toEqual(["cloudbox", "laptop"]);
+  });
+});
+
+describe("offline conversation", () => {
+  it("names the machine and says the saved conversation is read-only", () => {
+    expect(
+      offlineConversationStatus({
+        label: "laptop",
+        reconnecting: false,
+        hasCachedConversation: true,
+      }),
+    ).toEqual({
+      title: "laptop is offline",
+      description:
+        "Showing the last saved conversation. It is read-only until the machine is back.",
+    });
+    expect(
+      offlineConversationStatus({
+        label: "laptop",
+        reconnecting: false,
+        hasCachedConversation: false,
+      }).description,
+    ).toBe("This machine is offline. Retry to load the conversation.");
+    expect(
+      offlineConversationStatus({
+        label: "laptop",
+        reconnecting: true,
+        hasCachedConversation: true,
+      }).title,
+    ).toBe("laptop is reconnecting");
+  });
+
+  it("marks project rows as last known while the machine is offline", () => {
+    const rows = meshProjectRows(base, "boreal", [], { lastKnown: true });
+    expect(rows.every((row) => row.sentence.includes("last known:"))).toBe(true);
   });
 });

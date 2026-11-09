@@ -9,6 +9,7 @@ import {
   offlineMachineText,
   partitionMeshMachines,
   forgetMachineFacts,
+  sortMeshMachinesForSettings,
 } from "@t3tools/client-runtime/state/mesh-machines";
 import {
   isAtomCommandInterrupted,
@@ -69,13 +70,17 @@ import { AgentFixActions } from "./AgentFixActions";
 const failureToast = (title: string, description: string) =>
   toastManager.add(stackedThreadToast({ type: "error", title, description }));
 
-function usePermittedLinkSources(): ReadonlyArray<{
+function usePermittedLinkSources(
+  machines: ReadonlyArray<{ readonly environmentId: string; readonly label: string }>,
+): ReadonlyArray<{
   readonly environmentId: EnvironmentId;
   readonly label: string;
 }> {
   const { environments } = useEnvironments();
   const permitted = useEnvironmentsWithScope(environments, AuthAccessWriteScope);
-  return linkSourceOptions(environments).filter((source) => permitted.has(source.environmentId));
+  return linkSourceOptions(environments, machines).filter((source) =>
+    permitted.has(source.environmentId),
+  );
 }
 
 function LinkWithDialog(props: {
@@ -307,12 +312,13 @@ export function MeshSettingsPanel() {
   const agentEnvironmentId = mesh.source ?? primaryEnvironmentId;
   const { machines: allMachines } = useMeshOverview({ config: mesh.config });
   const now = minuteTickToEpochMs(useNowMinute());
-  const { active: machines, forgotten } = partitionMeshMachines(
+  const { active, forgotten } = partitionMeshMachines(
     allMachines,
     mesh.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
     now,
   );
-  const sources = usePermittedLinkSources();
+  const machines = sortMeshMachinesForSettings(active, primaryEnvironmentId);
+  const sources = usePermittedLinkSources(machines);
   const { environments } = useEnvironments();
   const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
   const setEnabled = useAtomCommand(environmentCatalog.setEnabled, { reportFailure: false });
@@ -330,7 +336,7 @@ export function MeshSettingsPanel() {
       ? machine.network?.state === "relayed"
         ? "Online through another machine"
         : "Online"
-      : (offlineMachineText(machine.lastSeenAt) ?? "Offline");
+      : (offlineMachineText(machine.lastSeenAt ?? machine.lastExchangeAt) ?? "Offline");
   const updateProblems = meshUpdateProblems(mesh.state?.snapshot?.document ?? {});
   const problems = machines
     .filter((machine) => !online(machine))
@@ -446,9 +452,6 @@ export function MeshSettingsPanel() {
             <DialogPanel>
               {!online(selected) ? (
                 <div className="mb-3 space-y-2 rounded-lg border border-border/60 p-3">
-                  <p className="text-sm text-muted-foreground">
-                    {selected.label} · {machineStatus(selected)}
-                  </p>
                   <AgentFixActions
                     environmentId={agentEnvironmentId}
                     accessibleLabel={`Fix ${selected.label} offline with an agent`}
@@ -461,7 +464,9 @@ export function MeshSettingsPanel() {
                 </div>
               ) : null}
               <ul className="space-y-2 text-sm">
-                {meshProjectRows(config, selected.environmentId, live).map((project) => (
+                {meshProjectRows(config, selected.environmentId, live, {
+                  lastKnown: !online(selected),
+                }).map((project) => (
                   <li key={project.key} className="flex flex-wrap items-center gap-2">
                     <span className="min-w-0 flex-1">{project.sentence}</span>
                     {project.canRetry ? (

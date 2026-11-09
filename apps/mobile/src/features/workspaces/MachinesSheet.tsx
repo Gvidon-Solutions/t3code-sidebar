@@ -4,6 +4,7 @@ import {
   removeRepresentationCopy,
   representationCandidates,
   representationRow,
+  sortRepresentationsMainFirst,
   type PendingReplicaRow,
 } from "@t3tools/client-runtime/state/mesh-layout";
 import {
@@ -60,6 +61,10 @@ export function MachinesSheet(props: {
   const insets = useSafeAreaInsets();
   const reps: ReadonlyArray<SidebarProjectMount> =
     props.config.projectMounts[props.projectKey] ?? [];
+  const orderedReps = sortRepresentationsMainFirst(
+    reps,
+    (environmentId) => machineDisplayOf(props.config, environmentId, environmentId).label,
+  );
   const present = new Set(reps.map((rep) => rep.environmentId));
   const candidates = representationCandidates(props.machines, present);
   return (
@@ -79,7 +84,7 @@ export function MachinesSheet(props: {
         {reps.length === 0 ? (
           <Text className="text-sm text-foreground-muted">No machines have this project yet.</Text>
         ) : null}
-        {reps.map((rep) => {
+        {orderedReps.map((rep) => {
           const copies =
             props.config.projectMountStatus[props.projectKey]?.[rep.environmentId]?.conflictCopies;
           const row = representationRow(props.config, props.liveStatuses, props.projectKey, rep);

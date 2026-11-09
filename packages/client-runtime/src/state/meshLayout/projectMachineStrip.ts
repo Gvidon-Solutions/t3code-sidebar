@@ -30,6 +30,7 @@ export function projectMachineStrip(
   },
   liveStatuses: ReadonlyArray<ReplicaLiveStatus>,
   displayOf: (environmentId: string) => MachineDisplay = (id) => machineDisplayOf(config, id, id),
+  offlineDescriptionOf?: (environmentId: string) => string | null,
 ): ProjectMachineStripModel {
   const reps = group.isScratch ? [] : (config.projectMounts[group.projectKey] ?? []);
   const connectedHere = new Set(group.knownEnvironmentIds);
@@ -85,9 +86,14 @@ export function projectMachineStrip(
             pending: state === "pending" || state === "mounting",
             muted: !connectedHere.has(rep.environmentId),
             description:
-              rep.role === "primary"
+              (rep.role === "primary"
                 ? `Primary on ${machine.label}`
-                : `Replica on ${machine.label} (${detail})`,
+                : `Replica on ${machine.label} (${detail})`) +
+              (connectedHere.has(rep.environmentId)
+                ? ""
+                : offlineDescriptionOf?.(rep.environmentId)
+                  ? ` · ${offlineDescriptionOf(rep.environmentId)}`
+                  : ""),
           };
         })
       : [...new Set(group.environmentIds)].map((environmentId) => {
@@ -100,9 +106,13 @@ export function projectMachineStrip(
             tone: "green",
             pending: false,
             muted: !connectedHere.has(environmentId),
-            description: group.isScratch
-              ? `Scratch on ${machine.label}`
-              : `Primary on ${machine.label}`,
+            description:
+              (group.isScratch ? `Scratch on ${machine.label}` : `Primary on ${machine.label}`) +
+              (connectedHere.has(environmentId)
+                ? ""
+                : offlineDescriptionOf?.(environmentId)
+                  ? ` · ${offlineDescriptionOf(environmentId)}`
+                  : ""),
           };
         });
   return {

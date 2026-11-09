@@ -265,9 +265,8 @@ export function useWorkspaceHome(input: {
         queuedThreadKeys: list.queuedThreadKeys,
         selectedThreadKey: list.selectedThreadKey,
         voiceThreadKey,
-        connectedEnvironmentIds: [
-          ...new Set([...connectedEnvironmentIds, ...serverConfigs.keys()]),
-        ],
+        // Offline machines stay dimmed in the strip; a registered config is not a connection.
+        connectedEnvironmentIds: [...new Set(connectedEnvironmentIds)],
         resolveMachineDisplay,
         now: Date.now(),
         toRow: list.toRow,
@@ -287,7 +286,6 @@ export function useWorkspaceHome(input: {
       toggles,
       voiceThreadKey,
       connectedEnvironmentIds,
-      serverConfigs,
       resolveMachineDisplay,
     ],
   );

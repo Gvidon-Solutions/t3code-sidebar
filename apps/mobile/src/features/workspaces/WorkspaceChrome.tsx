@@ -298,8 +298,8 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     readonly onMerge: (key: string) => void;
     readonly onSplit: (environmentId: string) => void;
   };
-  /** "New thread on…" subactions, one per connected machine. */
-  readonly machineSubactions: ReadonlyArray<MachineSubaction>;
+  /** "New thread on…" subactions for this folder's project, ordered main copy first. */
+  readonly machineSubactions: (projectKey: string) => ReadonlyArray<MachineSubaction>;
   readonly onNewThreadOnMachine: (projectKey: string, environmentId: string) => void;
   readonly onOpenMachines: (projectKey: string) => void;
   readonly onRetryReplica: (item: MobilePendingReplicaItem) => void;
@@ -311,18 +311,19 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
   const actions = useMemo((): MenuAction[] => {
     if (offline) return [{ id: "connect", title: "Connect this machine", image: "link" }];
     const shownIn = item.workspaceIds;
+    const machineActions = props.machineSubactions(item.projectKey);
     return [
       ...(!props.mesh || item.isScratch
         ? []
         : [{ id: "rename-project", title: "Rename…", image: "square.and.pencil" }]),
       { id: "new", title: "New thread", image: "square.and.pencil" },
-      ...(props.machineSubactions.length === 0
+      ...(machineActions.length === 0
         ? []
         : [
             {
               id: "new-on",
               title: "New thread on…",
-              subactions: props.machineSubactions.map((action) => ({
+              subactions: machineActions.map((action) => ({
                 id: action.id,
                 title: action.title,
                 attributes: !item.isScratch && action.disabled ? { disabled: true } : undefined,
@@ -387,6 +388,7 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
     item.isScratch,
     item.quiet,
     item.workspaceIds,
+    item.projectKey,
     offline,
     props.machineSubactions,
     props.workspaces,

@@ -381,7 +381,7 @@ export function meshFooterText(status: MeshFooterStatus): string | null {
   if (status.kind === "synced") {
     return `Mesh · ${status.count} ${status.count === 1 ? "machine" : "machines"} · synced`;
   }
-  return `Mesh · ${status.tag} unreachable${status.minutes > 0 ? ` for ${status.minutes} min` : ""}`;
+  return `${status.label} is offline${status.minutes > 0 ? ` · ${status.minutes} min` : ""}`;
 }
 
 export async function linkMeshMachines<A>(input: {
@@ -520,8 +520,9 @@ export function meshProjectRows(
   config: SidebarWorkspacesConfig,
   environmentId: string,
   liveStatuses: ReadonlyArray<ReplicaLiveStatus> = [],
+  options: { readonly lastKnown?: boolean } = {},
 ): MeshProjectRow[] {
-  return Object.entries(config.projectMounts).flatMap(([key, reps]) =>
+  const rows = Object.entries(config.projectMounts).flatMap(([key, reps]) =>
     reps
       .filter((rep) => rep.environmentId === environmentId)
       .map((rep) => {
@@ -567,6 +568,12 @@ export function meshProjectRows(
         return { key, title, sentence: `${title} · out of sync`, canRetry: false };
       }),
   );
+  return options.lastKnown
+    ? rows.map((row) => ({
+        ...row,
+        sentence: row.sentence.replace(" · ", " · last known: "),
+      }))
+    : rows;
 }
 
 export interface MeshUpdateProblem {
@@ -714,4 +721,32 @@ export function refusedLinkPrompt(input: {
     `Linking ${quotedData(safePromptAddress(input.target), 120)} from ${quotedData(input.source, 80)} failed: ${quotedData(redactPromptAddresses(input.reason), 240)}`,
     "Diagnose the pairing or connection problem, create a fresh pairing code if needed, link the machine, and confirm the mesh layout converges. Report what you changed.",
   ]);
+}
+
+/** Settings › Mesh: this machine first, then every machine by its configured title. */
+export function sortMeshMachinesForSettings<
+  M extends { readonly environmentId: string; readonly label: string },
+>(machines: ReadonlyArray<M>, localEnvironmentId: string | null): M[] {
+  return [...machines].sort(
+    (left, right) =>
+      Number(right.environmentId === localEnvironmentId) -
+        Number(left.environmentId === localEnvironmentId) || left.label.localeCompare(right.label),
+  );
+}
+
+/** One calm sentence for a thread whose machine is offline, shown by both clients. */
+export function offlineConversationStatus(input: {
+  readonly label: string | null | undefined;
+  readonly reconnecting: boolean;
+  readonly hasCachedConversation: boolean;
+}): { readonly title: string; readonly description: string } {
+  const machine = input.label?.trim() || "This machine";
+  if (input.reconnecting)
+    return { title: `${machine} is reconnecting`, description: "Reconnecting to this machine…" };
+  return {
+    title: `${machine} is offline`,
+    description: input.hasCachedConversation
+      ? "Showing the last saved conversation. It is read-only until the machine is back."
+      : "This machine is offline. Retry to load the conversation.",
+  };
 }

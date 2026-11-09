@@ -1,0 +1,39 @@
+import { describe, expect, it } from "vite-plus/test";
+
+import { connectionFloatingStatus } from "./floating-working-status";
+
+function labelOf(status: ReturnType<typeof connectionFloatingStatus>): string {
+  if (status === null || status.kind !== "connection")
+    throw new Error("expected connection status");
+  return status.label;
+}
+
+describe("connectionFloatingStatus", () => {
+  it("names the configured machine and says the saved conversation is showing", () => {
+    expect(
+      labelOf(
+        connectionFloatingStatus({
+          connectionError: "did not answer",
+          connectionState: "error",
+          environmentLabel: "laptop",
+          hasCachedConversation: true,
+          onReconnect: () => undefined,
+        }),
+      ),
+    ).toBe("laptop is offline · showing the last saved conversation");
+  });
+
+  it("offers a retry when nothing was cached", () => {
+    expect(
+      labelOf(
+        connectionFloatingStatus({
+          connectionError: null,
+          connectionState: "error",
+          environmentLabel: "laptop",
+          hasCachedConversation: false,
+          onReconnect: () => undefined,
+        }),
+      ),
+    ).toBe("laptop is offline · Retry");
+  });
+});

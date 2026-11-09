@@ -20,6 +20,10 @@ import {
   getProjectOrderKey,
   selectProjectGroupingSettings,
 } from "@t3tools/client-runtime/state/project-grouping";
+import {
+  mainRepresentationRef,
+  resolveLogicalProjectKey,
+} from "@t3tools/client-runtime/state/mesh-layout";
 import { resolveNewThreadEnvMode, resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   readProject,
@@ -40,6 +44,7 @@ import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentSummaries } from "../state/presentation";
 import { environmentServerConfigsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
+import { readMeshLayoutConfigSnapshot } from "../state/meshLayoutConfig";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { getClientSettings } from "./useSettings";
 import { useThreadRouteTarget } from "./useThreadRouteTarget";
@@ -85,14 +90,14 @@ export function createNewThreadHandler(router: AnyRouter) {
       replace?: boolean;
       /** Composer text for the draft, set before it shows. A draft with user text keeps it. */
       prompt?: string;
+      /** The caller picked this machine; otherwise the main copy is the default. */
+      environmentSelection?: "auto" | "manual";
     },
   ): Promise<{ draftId: DraftId; threadId: ThreadId } | null> => {
     const projects = readProjects();
     const projectGroupingSettings = selectProjectGroupingSettings(getClientSettings());
     // Read at call time; status pushes replace the config map and would recreate every sidebar handler.
     const environmentServerConfigs = appAtomRegistry.get(environmentServerConfigsAtom);
-    const targetServerSettings =
-      environmentServerConfigs.get(projectRef.environmentId)?.settings ?? DEFAULT_SERVER_SETTINGS;
     const {
       getComposerDraft,
       getDraftSessionByLogicalProjectKey,
@@ -139,12 +144,60 @@ export function createNewThreadHandler(router: AnyRouter) {
         candidate.id === projectRef.projectId &&
         candidate.environmentId === projectRef.environmentId,
     );
+    const fallbackLogicalKey = project
+      ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
+      : scopedProjectKey(projectRef);
+    const meshConfig = readMeshLayoutConfigSnapshot();
+    // Drafts are keyed by the logical project, so a copy never owns its own draft.
+    const logicalProjectKey =
+      project && meshConfig
+        ? resolveLogicalProjectKey(project, meshConfig, () => fallbackLogicalKey)
+        : fallbackLogicalKey;
+    const explicitMachine = options?.environmentSelection === "manual";
+    const hasBranchOption = options?.branch !== undefined;
+    const hasWorktreePathOption = options?.worktreePath !== undefined;
+    const hasEnvModeOption = options?.envMode !== undefined;
+    const hasStartFromOriginOption = options?.startFromOrigin !== undefined;
+    const storedDraftThread = getDraftSessionByLogicalProjectKey(logicalProjectKey);
+    const storedMachineChoice = storedDraftThread?.environmentSelection === "manual";
+    const mainRef =
+      explicitMachine || storedMachineChoice
+        ? null
+        : mainRepresentationRef(meshConfig, logicalProjectKey);
+    const mainProject =
+      mainRef === null
+        ? undefined
+        : projects.find(
+            (candidate) =>
+              candidate.environmentId === mainRef.environmentId &&
+              candidate.id === mainRef.projectId,
+          );
+    const storedDestinationProject =
+      storedMachineChoice && storedDraftThread
+        ? projects.find(
+            (candidate) =>
+              candidate.environmentId === storedDraftThread.environmentId &&
+              candidate.id === storedDraftThread.projectId,
+          )
+        : undefined;
+    // A new draft lands on the main copy unless the person picked a machine.
+    const destinationProject = explicitMachine
+      ? project
+      : storedMachineChoice
+        ? (storedDestinationProject ?? project)
+        : (mainProject ?? project);
+    const destinationRef = destinationProject
+      ? scopeProjectRef(destinationProject.environmentId, destinationProject.id)
+      : projectRef;
+    const targetServerSettings =
+      environmentServerConfigs.get(destinationRef.environmentId)?.settings ??
+      DEFAULT_SERVER_SETTINGS;
     const abandonedSinceRequest = () =>
       routeChangedSinceRequest() || (project !== undefined && readProject(projectRef) === null);
     const projectSettings = resolveProjectSettings(
       targetServerSettings,
-      project?.id ?? null,
-      project,
+      destinationProject?.id ?? null,
+      destinationProject,
     );
     const configuredDefaultModelSelection = projectSettings.settings.defaultModelSelection ?? null;
     const fallbackResolution = resolveNewThreadModelSelection({
@@ -153,14 +206,14 @@ export function createNewThreadHandler(router: AnyRouter) {
         (carryModelSelection || useComposerDraftStore.getState().stickyActiveProvider !== null
           ? null
           : resolveProjectDefaultProviderModelSelection(
-              environmentServerConfigs.get(projectRef.environmentId)?.providers ?? [],
+              environmentServerConfigs.get(destinationRef.environmentId)?.providers ?? [],
               targetServerSettings,
-              projectRef.projectId,
+              destinationProject?.id ?? destinationRef.projectId,
             )),
       fallbackSelection: targetServerSettings.fallbackModelSelection ?? null,
-      providers: environmentServerConfigs.get(projectRef.environmentId)?.providers ?? [],
+      providers: environmentServerConfigs.get(destinationRef.environmentId)?.providers ?? [],
       settings: targetServerSettings,
-      projectId: projectRef.projectId,
+      projectId: destinationProject?.id ?? destinationRef.projectId,
       now: Date.now(),
     });
     const projectDefaultModelSelection = fallbackResolution.fallback
@@ -195,27 +248,20 @@ export function createNewThreadHandler(router: AnyRouter) {
           projectFile,
         ),
         workspaceRoot: project?.workspaceRoot ?? null,
-        newProjectsRoot: environmentServerConfigs.get(projectRef.environmentId)?.newProjectsRoot,
+        newProjectsRoot: environmentServerConfigs.get(destinationRef.environmentId)
+          ?.newProjectsRoot,
         projectHasThreads:
           readThreadShells().some(
             (thread) =>
-              thread.environmentId === projectRef.environmentId &&
-              thread.projectId === projectRef.projectId,
+              thread.environmentId === destinationRef.environmentId &&
+              thread.projectId === destinationRef.projectId,
           ) ||
           readUnloadedThreadCount(
-            [{ environmentId: projectRef.environmentId, id: projectRef.projectId }],
+            [{ environmentId: destinationRef.environmentId, id: destinationRef.projectId }],
             [],
           ) > 0,
       });
     };
-    const logicalProjectKey = project
-      ? deriveLogicalProjectKeyFromSettings(project, projectGroupingSettings)
-      : scopedProjectKey(projectRef);
-    const hasBranchOption = options?.branch !== undefined;
-    const hasWorktreePathOption = options?.worktreePath !== undefined;
-    const hasEnvModeOption = options?.envMode !== undefined;
-    const hasStartFromOriginOption = options?.startFromOrigin !== undefined;
-    const storedDraftThread = getDraftSessionByLogicalProjectKey(logicalProjectKey);
     const storedDraftThreadRef = storedDraftThread
       ? scopeThreadRef(storedDraftThread.environmentId, storedDraftThread.threadId)
       : null;
@@ -303,7 +349,7 @@ export function createNewThreadHandler(router: AnyRouter) {
         // Remapping physical projects clears workspace context; preserve the branch and worktree.
         setLogicalProjectDraftThreadId(
           logicalProjectKey,
-          projectRef,
+          destinationRef,
           emptyStoredDraftThread.draftId,
           {
             threadId: emptyStoredDraftThread.threadId,
@@ -348,13 +394,18 @@ export function createNewThreadHandler(router: AnyRouter) {
       ) {
         setDraftThreadContext(currentRouteTarget.draftId, pickExplicitWorkspaceOptions(options));
       }
-      setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, currentRouteTarget.draftId, {
-        threadId: latestActiveDraftThread.threadId,
-        createdAt: latestActiveDraftThread.createdAt,
-        runtimeMode: latestActiveDraftThread.runtimeMode,
-        interactionMode: latestActiveDraftThread.interactionMode,
-        ...pickExplicitWorkspaceOptions(options),
-      });
+      setLogicalProjectDraftThreadId(
+        logicalProjectKey,
+        destinationRef,
+        currentRouteTarget.draftId,
+        {
+          threadId: latestActiveDraftThread.threadId,
+          createdAt: latestActiveDraftThread.createdAt,
+          runtimeMode: latestActiveDraftThread.runtimeMode,
+          interactionMode: latestActiveDraftThread.interactionMode,
+          ...pickExplicitWorkspaceOptions(options),
+        },
+      );
       seedPrompt(currentRouteTarget.draftId);
       return Promise.resolve({
         draftId: currentRouteTarget.draftId,
@@ -377,7 +428,7 @@ export function createNewThreadHandler(router: AnyRouter) {
         racedDraft.draftId !== storedDraftThread?.draftId &&
         readThreadShell(scopeThreadRef(racedDraft.environmentId, racedDraft.threadId)) === null
       ) {
-        setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, racedDraft.draftId, {
+        setLogicalProjectDraftThreadId(logicalProjectKey, destinationRef, racedDraft.draftId, {
           threadId: racedDraft.threadId,
           createdAt: racedDraft.createdAt,
           runtimeMode: racedDraft.runtimeMode,
@@ -392,7 +443,7 @@ export function createNewThreadHandler(router: AnyRouter) {
         });
         return { draftId: racedDraft.draftId, threadId: racedDraft.threadId };
       }
-      setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, draftId, {
+      setLogicalProjectDraftThreadId(logicalProjectKey, destinationRef, draftId, {
         threadId,
         createdAt,
         branch: options?.branch ?? null,

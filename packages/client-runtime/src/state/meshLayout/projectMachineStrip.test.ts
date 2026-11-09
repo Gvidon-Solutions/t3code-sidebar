@@ -140,3 +140,23 @@ describe("projectMachineStrip", () => {
     expect(model.description).toBe("Scratch on Studio · Scratch on Laptop");
   });
 });
+
+describe("offline machine tags", () => {
+  it("dims a machine this client cannot reach and names it in the tooltip", () => {
+    const config = {
+      ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
+      projectMounts: { demo: [rep("at", "replica")] },
+      projectMountStatus: { demo: { at: { state: "watching" as const, updatedAt: "" } } },
+    };
+    const model = projectMachineStrip(
+      config,
+      { projectKey: "demo", environmentIds: ["at"], knownEnvironmentIds: ["lab"] },
+      [],
+      undefined,
+      (environmentId) => (environmentId === "at" ? "Studio is offline · 3 min" : null),
+    );
+    expect(model.chips[0]?.muted).toBe(true);
+    expect(model.description).toContain("Studio is offline · 3 min");
+  });
+});
