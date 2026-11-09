@@ -1,7 +1,7 @@
 import { showBootError } from "./lib/bootError";
 import {
   beginServerUiReconnect,
-  clearServerUiReconnectAttempts,
+  installHealthyReconnectReset,
   installServerUiReconnect,
   isChunkLoadFailure,
   isServerUiWindow,
@@ -13,7 +13,8 @@ installServerUiReconnect();
 // Shared dev chunks need the React refresh preamble first. Catch failures before React mounts.
 void import("./main").then(
   ({ startup }) => {
-    clearServerUiReconnectAttempts();
+    // A successful import is not a healthy mount; keep the reload budget until then.
+    installHealthyReconnectReset();
     return startup;
   },
   (error: unknown) => {
