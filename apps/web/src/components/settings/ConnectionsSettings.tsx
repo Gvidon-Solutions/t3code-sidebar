@@ -32,6 +32,7 @@ import {
   missingTailscaleEndpointDescription,
   resolveLocalVersionStatusLabel,
   resolveTailscaleServeBaseUrl,
+  showsMeshConnections,
 } from "./ConnectionsSettings.logic";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 import { ManagedByOrganization } from "../ManagedPolicy";
@@ -136,6 +137,8 @@ import {
   SavedBackendListRow,
 } from "./SavedEnvironmentRows";
 import { AddEnvironmentDialog } from "./AddEnvironmentDialog";
+import { useMeshLayoutOptional } from "~/hooks/useMeshLayout";
+import { environmentNameOf } from "@t3tools/client-runtime/state/machine-display";
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
 const EMPTY_ADVERTISED_ENDPOINTS: ReadonlyArray<AdvertisedEndpoint> = [];
@@ -159,6 +162,14 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
   const desktopBridge = window.desktopBridge;
   const { environments } = useEnvironments();
   const primaryEnvironment = usePrimaryEnvironment();
+  const mesh = useMeshLayoutOptional();
+  const hasMesh = showsMeshConnections(mesh.config);
+  const nameOf = (environment: EnvironmentPresentation) =>
+    environmentNameOf(
+      mesh.config,
+      environment.serverConfig?.environment.environmentId ?? environment.environmentId,
+      environment.label,
+    );
   const peerLinkHosts = usePeerLinkHosts();
   const removeEnvironment = useAtomCommand(environmentCatalog.remove, { reportFailure: false });
   const setEnvironmentEnabled = useAtomCommand(environmentCatalog.setEnabled, {
@@ -204,7 +215,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
       return [
         {
           environmentId: environment.environmentId,
-          serverLabel: environment.label,
+          serverLabel: nameOf(environment).label,
           selfUpdate,
           installation: environment.serverConfig?.environment.capabilities.serverInstallation,
           desktopAppUpdate,
@@ -601,7 +612,13 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
       return;
     }
     const confirmed = await requestConfirmDialog(
-      `Remove ${environment.label} from this device?\nThis forgets its pairing, credentials, and cached threads here. Switch it off instead to keep it saved.`,
+      `Remove ${
+        environmentNameOf(
+          mesh.config,
+          environment.serverConfig?.environment.environmentId ?? environment.environmentId,
+          environment.label,
+        ).label
+      } from this device?\nThis forgets its pairing, credentials, and cached threads here. Switch it off instead to keep it saved.`,
       { variant: "destructive" },
     );
     if (confirmed === true) await removeSavedBackend(environment);
@@ -1040,7 +1057,11 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
           <SettingsSection
             {...searchableSetting("connections-environment")}
             title={
-              primaryEnvironment?.label ?? (desktopBridge ? "This machine" : "Primary environment")
+              primaryEnvironment
+                ? nameOf(primaryEnvironment).label
+                : desktopBridge
+                  ? "This machine"
+                  : "Primary environment"
             }
             icon={
               <EnvironmentMachineIcon
@@ -1106,7 +1127,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
                       size="sm"
                       environmentId={primaryEnvironmentId}
                       serverLabel={
-                        primaryEnvironment ? `${primaryEnvironment.label} server` : "server"
+                        primaryEnvironment ? `${nameOf(primaryEnvironment).label} server` : "server"
                       }
                       selfUpdate={resolveServerSelfUpdateCapability(primaryServerConfig)}
                       installation={
@@ -1521,6 +1542,7 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
           <SavedBackendListRow
             key={environment.environmentId}
             environment={environment}
+            meshAware={hasMesh}
             removingEnvironmentId={removingSavedEnvironmentId}
             onSetEnabled={handleSetSavedBackendEnabled}
             onRemove={handleRemoveSavedBackend}
@@ -1548,14 +1570,16 @@ export function ConnectionsSettings({ view }: { readonly view: "environments" | 
           }}
         />
       ) : null}
-      {peerLinkHosts.map((environment, index) => (
-        <LinkedEnvironmentsSettings
-          key={environment.environmentId}
-          environmentId={environment.environmentId}
-          environmentLabel={peerLinkHosts.length > 1 ? environment.label : null}
-          isSearchTarget={index === 0}
-        />
-      ))}
+      {hasMesh
+        ? null
+        : peerLinkHosts.map((environment, index) => (
+            <LinkedEnvironmentsSettings
+              key={environment.environmentId}
+              environmentId={environment.environmentId}
+              environmentLabel={peerLinkHosts.length > 1 ? environment.label : null}
+              isSearchTarget={index === 0}
+            />
+          ))}
       <LoadBalancingSettings environments={loadBalancingEnvironments} />
       <PullRequestRoutingSettings environments={loadBalancingEnvironments} />
     </SettingsPageContainer>

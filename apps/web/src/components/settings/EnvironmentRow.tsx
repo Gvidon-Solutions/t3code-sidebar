@@ -5,6 +5,7 @@ import {
   connectionRoutes,
 } from "@t3tools/client-runtime/connection";
 import type { DesktopSshEnvironmentTarget, EnvironmentMachineKind } from "@t3tools/contracts";
+import type { MachineDisplay } from "@t3tools/client-runtime/state/machine-display";
 import * as Option from "effect/Option";
 import type { ReactNode } from "react";
 
@@ -13,6 +14,7 @@ import type { EnvironmentPresentation } from "~/state/environments";
 import { usePreparedConnection } from "~/state/session";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
+import { MachineTag } from "../workspaces/MachineTag";
 
 export function formatDesktopSshTarget(target: DesktopSshEnvironmentTarget): string {
   const authority = target.username ? `${target.username}@${target.hostname}` : target.hostname;
@@ -68,6 +70,7 @@ export function EnvironmentTransportLabel(props: {
 export function EnvironmentRow({
   kind,
   label,
+  machine,
   subtitle,
   below,
   detail,
@@ -77,6 +80,8 @@ export function EnvironmentRow({
 }: {
   readonly kind: EnvironmentMachineKind;
   readonly label: string;
+  /** The mesh's tag for the machine; omitted outside a mesh. */
+  readonly machine?: MachineDisplay;
   readonly subtitle: ReactNode;
   readonly below?: ReactNode;
   readonly detail?: ReactNode;
@@ -98,7 +103,10 @@ export function EnvironmentRow({
         className={cn("size-4 text-muted-foreground", dimmed && "opacity-60")}
       />
       <div className={cn("min-w-0", dimmed && "opacity-60")}>
-        <p className="truncate text-sm font-medium text-foreground">{label}</p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          {machine ? <MachineTag machine={machine} /> : null}
+          <p className="min-w-0 truncate text-sm font-medium text-foreground">{label}</p>
+        </div>
         <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
         {below}
       </div>

@@ -45,6 +45,7 @@ const peerLinksSourcesAtom = Atom.family((key: string) =>
               links: data.links.map((link) => ({
                 environmentId: link.environmentId,
                 label: link.label,
+                access: link.access,
                 urls: link.urls,
                 status: link.status,
                 lastReachedAt: link.lastReachedAt === null ? null : String(link.lastReachedAt),

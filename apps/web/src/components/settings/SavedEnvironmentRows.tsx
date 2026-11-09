@@ -4,6 +4,7 @@ import {
   ChevronsLeftRightEllipsisIcon,
   EllipsisIcon,
   RouteIcon,
+  ShieldIcon,
 } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useEffectEvent, useState } from "react";
@@ -36,6 +37,7 @@ import {
 } from "./ConnectionDiagnosisDetails";
 import { usePreparedConnection } from "~/state/session";
 import { EnvironmentRow, environmentTransportLabel } from "./EnvironmentRow";
+import { useEnvironmentName } from "~/hooks/useEnvironmentName";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
@@ -75,6 +77,8 @@ import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
 type SavedBackendListRowProps = {
   environment: EnvironmentPresentation;
   removingEnvironmentId: EnvironmentId | null;
+  /** A mesh names machines from its config and keeps routes/permissions in the overflow menu. */
+  meshAware: boolean;
   onSetEnabled: (environmentId: EnvironmentId, enabled: boolean) => void;
   onRemove: (environment: EnvironmentPresentation) => void;
   onAddRoute: (environment: EnvironmentPresentation) => void;
@@ -114,10 +118,14 @@ function savedBackendStatus(environment: EnvironmentPresentation): {
 export function SavedBackendListRow({
   environment,
   removingEnvironmentId,
+  meshAware,
   onSetEnabled,
   onRemove,
   onAddRoute,
 }: SavedBackendListRowProps) {
+  const serverEnvironmentId =
+    environment.serverConfig?.environment.environmentId ?? environment.environmentId;
+  const name = useEnvironmentName(serverEnvironmentId, environment.label);
   const [routesOpen, setRoutesOpen] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [diagnosisOpen, setDiagnosisOpen] = useState(false);
@@ -243,7 +251,8 @@ export function SavedBackendListRow({
   return (
     <EnvironmentRow
       kind={machineKind}
-      label={environment.label}
+      label={name.label}
+      {...(name.inMesh ? { machine: name } : {})}
       dimmed={!enabled}
       subtitle={
         <span className="flex min-w-0 items-center gap-1">
@@ -271,43 +280,47 @@ export function SavedBackendListRow({
               {statusTooltip}
             </TooltipPopup>
           </Tooltip>
-          <span aria-hidden className="shrink-0">
-            ·
-          </span>
-          <button
-            type="button"
-            aria-expanded={routesOpen}
-            onClick={() => setRoutesOpen((open) => !open)}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            {routeCount === 1 ? "Routes" : `${routeCount} routes`}
-            <ChevronRightIcon
-              aria-hidden
-              className={cn(
-                "size-3 shrink-0 transition-transform duration-150 motion-reduce:transition-none",
-                routesOpen && "rotate-90",
-              )}
-            />
-          </button>
-          <span aria-hidden className="shrink-0">
-            ·
-          </span>
-          <button
-            type="button"
-            aria-expanded={permissionsOpen}
-            aria-controls={`remote-permissions-${environmentId}`}
-            onClick={() => setPermissionsOpen((open) => !open)}
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            Permissions
-            <ChevronRightIcon
-              aria-hidden
-              className={cn(
-                "size-3 shrink-0 transition-transform duration-150 motion-reduce:transition-none",
-                permissionsOpen && "rotate-90",
-              )}
-            />
-          </button>
+          {meshAware ? null : (
+            <>
+              <span aria-hidden className="shrink-0">
+                ·
+              </span>
+              <button
+                type="button"
+                aria-expanded={routesOpen}
+                onClick={() => setRoutesOpen((open) => !open)}
+                className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                {routeCount === 1 ? "Routes" : `${routeCount} routes`}
+                <ChevronRightIcon
+                  aria-hidden
+                  className={cn(
+                    "size-3 shrink-0 transition-transform duration-150 motion-reduce:transition-none",
+                    routesOpen && "rotate-90",
+                  )}
+                />
+              </button>
+              <span aria-hidden className="shrink-0">
+                ·
+              </span>
+              <button
+                type="button"
+                aria-expanded={permissionsOpen}
+                aria-controls={`remote-permissions-${environmentId}`}
+                onClick={() => setPermissionsOpen((open) => !open)}
+                className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                Permissions
+                <ChevronRightIcon
+                  aria-hidden
+                  className={cn(
+                    "size-3 shrink-0 transition-transform duration-150 motion-reduce:transition-none",
+                    permissionsOpen && "rotate-90",
+                  )}
+                />
+              </button>
+            </>
+          )}
         </span>
       }
       below={
@@ -332,7 +345,7 @@ export function SavedBackendListRow({
         <>
           {diagnosis && diagnosisOpen ? (
             <ConnectionDiagnosisPanel
-              hostLabel={environment.label}
+              hostLabel={name.label}
               diagnosis={diagnosis}
               onRetry={() => void retryNow(environmentId)}
               onAddRoute={relayOnly ? () => onAddRoute(environment) : null}
@@ -364,7 +377,7 @@ export function SavedBackendListRow({
       serverUpdateState.status !== "running" ? (
         <OutdatedServerUpdateAction
           environmentId={environmentId}
-          serverLabel={`${environment.label} server`}
+          serverLabel={`${name.label} server`}
           fromVersion={lastDescriptor?.serverVersion}
           targetVersion={APP_VERSION}
           label={serverUpdateState.status === "failed" ? "Retry update" : "Update"}
@@ -373,7 +386,7 @@ export function SavedBackendListRow({
       {showUpdateAction ? (
         <ServerUpdateAction
           environmentId={environmentId}
-          serverLabel={`${environment.label} server`}
+          serverLabel={`${name.label} server`}
           selfUpdate={resolveServerSelfUpdateCapability(environment.serverConfig)}
           installation={environment.serverConfig?.environment.capabilities.serverInstallation}
           desktopAppUpdate={supportsDesktopAppUpdate(environment.serverConfig)}
@@ -389,7 +402,7 @@ export function SavedBackendListRow({
               size="sm"
               checked={enabled}
               disabled={isRemoving || blocked}
-              aria-label={`${enabled ? "Switch off" : "Switch on"} ${environment.label}`}
+              aria-label={`${enabled ? "Switch off" : "Switch on"} ${name.label}`}
               onCheckedChange={(checked) => onSetEnabled(environmentId, checked)}
             />
           }
@@ -406,7 +419,7 @@ export function SavedBackendListRow({
               variant="ghost-muted"
               size="icon-xs"
               disabled={isRemoving}
-              aria-label={`More actions for ${environment.label}`}
+              aria-label={`More actions for ${name.label}`}
             />
           }
         >
@@ -421,6 +434,12 @@ export function SavedBackendListRow({
             <RouteIcon />
             {routesOpen ? "Hide routes" : "Routes"}
           </MenuItem>
+          {meshAware ? (
+            <MenuItem onClick={() => setPermissionsOpen((open) => !open)}>
+              <ShieldIcon />
+              {permissionsOpen ? "Hide permissions" : "Permissions"}
+            </MenuItem>
+          ) : null}
           {mcpUrl ? (
             <MenuItem onClick={() => copyMcpUrl(mcpUrl, { url: mcpUrl })}>Copy MCP URL</MenuItem>
           ) : null}

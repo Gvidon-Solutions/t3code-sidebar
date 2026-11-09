@@ -30,6 +30,18 @@ const mocks = vi.hoisted(() => ({
     };
   }>,
   primaryEnvironmentId: null as string | null,
+  machineLinks: [] as ReadonlyArray<{
+    readonly environmentId: string;
+    readonly links: ReadonlyArray<{
+      readonly environmentId: string;
+      readonly label: string;
+      readonly urls: ReadonlyArray<string>;
+      readonly access: "full-access";
+      readonly status: string;
+      readonly lastReachedAt: null;
+      readonly lastError: null;
+    }>;
+  }>,
   edit: vi.fn<(update: (config: SidebarWorkspacesConfig) => SidebarWorkspacesConfig) => void>(),
 }));
 
@@ -109,7 +121,7 @@ vi.mock(import("../../hooks/useMeshOverview"), () => ({
           ],
     }),
     connections: [],
-    links: [],
+    links: mocks.machineLinks,
   }),
 }));
 vi.mock(import("../../hooks/useNowMinute"), () => ({
@@ -240,6 +252,34 @@ it("deduplicates phone-shaped connections, names unknown hosts and excludes forg
   await expect.element(screen.getByText("Old laptop · forgotten", { exact: true })).toBeVisible();
   await screen.getByRole("button", { name: "Forget", exact: true }).click();
   expect(mocks.edit).toHaveBeenCalledOnce();
+});
+
+it("shows a machine's linked peers in Diagnostics", async () => {
+  mocks.review = false;
+  mocks.collision = false;
+  mocks.link = false;
+  mocks.machineLinks = [
+    {
+      environmentId: "local",
+      links: [
+        {
+          environmentId: "remote",
+          label: "Remote",
+          urls: ["http://remote"],
+          access: "full-access",
+          status: "reachable",
+          lastReachedAt: null,
+          lastError: null,
+        },
+      ],
+    },
+  ];
+  mocks.edit.mockReset();
+  await using screen = await render(<MeshSettingsPanel />, { router: "/settings/mesh" });
+  await screen.getByRole("button", { name: "Open Local details" }).click();
+  await screen.getByText("Diagnostics").click();
+  await expect.element(screen.getByText("Linked with", { exact: true })).toBeVisible();
+  await expect.element(screen.getByText(/Remote · Full access/)).toBeVisible();
 });
 
 it("distinguishes matching machine titles by platform and short host", async () => {
