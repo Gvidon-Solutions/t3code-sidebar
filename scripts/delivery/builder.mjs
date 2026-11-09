@@ -31,6 +31,9 @@ import { cleanAgentOptions } from "./agent-options.mjs";
 import { rollout, waitForHealthy } from "./rollout.mjs";
 import { buildAssets, publishMobileUpdate } from "./assets.mjs";
 import { LONG_COMMAND_MAX_BUFFER, LONG_COMMAND_TIMEOUT_MS, quote } from "../lib/shell.mjs";
+import { assertReleaseBuildEnv } from "../lib/release-env.ts";
+
+assertReleaseBuildEnv();
 
 const exec = (command, args, options = {}) =>
   execFileSync(command, args, {
@@ -258,6 +261,11 @@ export async function deliver(config, request) {
     if (!request.hot) await run(config.gate[0], config.gate.slice(1));
     await run(process.execPath, ["scripts/update-release-package-versions.ts", version]);
     await run("vp", ["run", "--filter", "t3", "build"]);
+    await run(process.execPath, [
+      "scripts/verify-app-version.mjs",
+      version,
+      "apps/server/dist/client",
+    ]);
     await run(process.execPath, ["apps/server/scripts/cli.ts", "build-exe"]);
     await run("cargo", [
       ...(config.rustToolchain ? [`+${config.rustToolchain}`] : []),
