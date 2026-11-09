@@ -359,4 +359,88 @@ describe("Desktop connected UI source", () => {
       expect(yield* uncredentialed.sourceOrigin).toBeNull();
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
+  it.effect("keys credentials by environment and origin and drops a removed credential", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const stateDir = yield* fs.makeTempDirectoryScoped();
+      const shared = "https://shared.example";
+      const raw = yield* Ref.make(
+        JSON.stringify({
+          schemaVersion: 1,
+          targets: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionTarget",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+          })),
+          profiles: [studio, cloudbox].map((entry) => ({
+            _tag: "BearerConnectionProfile",
+            connectionId: entry.environmentId,
+            environmentId: entry.environmentId,
+            label: entry.environmentId,
+            httpBaseUrl: shared,
+            wsBaseUrl: "wss://shared.example",
+          })),
+          credentials: [
+            {
+              connectionId: studio.environmentId,
+              credential: { _tag: "BearerConnectionCredential", token: "studio-token" },
+            },
+            {
+              connectionId: cloudbox.environmentId,
+              credential: { _tag: "BearerConnectionCredential", token: "cloudbox-token" },
+            },
+          ],
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        }),
+      );
+      const ui = yield* make.pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          stateDir,
+          appVersion: "1",
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(
+          Catalog.DesktopConnectionCatalogStore,
+          Catalog.DesktopConnectionCatalogStore.of({
+            get: Ref.get(raw).pipe(Effect.asSome),
+            set: () => Effect.succeed(true),
+          }),
+        ),
+        Effect.provideService(Exposure.DesktopServerExposure, {
+          backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+        } as Exposure.DesktopServerExposure["Service"]),
+        Effect.provideService(LocalAuth.DesktopLocalEnvironmentAuth, {
+          getBearerToken: Effect.fail(
+            new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+          ),
+        } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+      );
+      const origin = new URL(shared + "/");
+      expect(yield* ui.select({ ...studio, httpBaseUrl: shared })).toBe(true);
+      expect(yield* ui.serverAuthorization(origin)).toEqual({
+        authorization: "studio-token",
+        environmentId: studio.environmentId,
+      });
+      expect(yield* ui.select({ ...cloudbox, httpBaseUrl: shared })).toBe(true);
+      expect(yield* ui.serverAuthorization(origin)).toEqual({
+        authorization: "cloudbox-token",
+        environmentId: cloudbox.environmentId,
+      });
+      yield* Ref.set(
+        raw,
+        JSON.stringify({
+          ...JSON.parse(yield* Ref.get(raw)),
+          credentials: [
+            {
+              connectionId: studio.environmentId,
+              credential: { _tag: "BearerConnectionCredential", token: "studio-token" },
+            },
+          ],
+        }),
+      );
+      expect(yield* ui.serverAuthorization(origin)).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
 });
