@@ -141,9 +141,7 @@ export function useCommandPaletteThreadItems(input: {
         <ThreadCommandSubtitle
           project={projectByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? null}
           projectTitle={projectTitle ?? null}
-          environmentLabel={
-            projectEnvironmentLocationById.get(thread.environmentId)?.label ?? "Remote"
-          }
+          environmentLabel={projectEnvironmentLocationById.get(thread.environmentId)?.label ?? ""}
           branch={thread.branch}
           worktreePath={thread.worktreePath}
           isCurrent={

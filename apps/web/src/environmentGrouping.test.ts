@@ -425,3 +425,63 @@ describe("T3 Mesh logical projects", () => {
     expect(groups[0]?.meshOffline).toMatchObject({ environmentId: remoteEnvironmentId, tag: "CB" });
   });
 });
+
+describe("mesh layout project grouping", () => {
+  it("gives the project picker one row per logical project, not one per representation", () => {
+    const primary = makeProject({
+      id: ProjectId.make("project-primary"),
+      workspaceRoot: "/work/Atlas",
+      repositoryIdentity: null,
+    });
+    const copy = makeProject({
+      id: ProjectId.make("project-copy"),
+      environmentId: remoteEnvironmentId,
+      workspaceRoot: "/home/user/Atlas",
+      repositoryIdentity: null,
+    });
+    const layout: SidebarWorkspacesConfig = {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      machines: {
+        [primaryEnvironmentId]: { title: "studio", tag: "ST" },
+        [remoteEnvironmentId]: { title: "laptop", tag: "LT" },
+      },
+      projectMounts: {
+        "logical-atlas": [
+          {
+            environmentId: primaryEnvironmentId,
+            path: "/work/Atlas",
+            projectId: primary.id,
+            transport: "git",
+            role: "primary",
+            createdAt: "",
+          },
+          {
+            environmentId: remoteEnvironmentId,
+            path: "/home/user/Atlas",
+            projectId: copy.id,
+            transport: "mutagen",
+            role: "replica",
+            source: primaryEnvironmentId,
+            createdAt: "",
+          },
+        ],
+      },
+    };
+    const snapshots = buildSidebarProjectSnapshots({
+      layout,
+      connectedEnvironmentIds: new Set([primaryEnvironmentId, remoteEnvironmentId]),
+      projects: [primary, copy],
+      settings: defaultGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: () => null,
+    });
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]?.projectKey).toBe("logical-atlas");
+    expect(
+      buildSidebarProjectPickerEntries({
+        groups: pickableProjectGroups(snapshots),
+        preferredProjectRef: null,
+      }),
+    ).toHaveLength(1);
+  });
+});

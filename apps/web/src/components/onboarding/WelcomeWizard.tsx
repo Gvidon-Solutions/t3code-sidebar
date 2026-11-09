@@ -928,7 +928,6 @@ function OnboardingCodexSetup({
       environmentId,
       input: {
         patch: buildProviderInstanceUpdatePatch({
-          settings,
           instanceId,
           instance: {
             ...instance,

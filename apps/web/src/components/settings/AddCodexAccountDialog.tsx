@@ -9,8 +9,8 @@ import {
 } from "@t3tools/contracts";
 import { useState, type ReactNode } from "react";
 import { usesChatGptSharing } from "@t3tools/shared/usageLimits";
+import { buildProviderInstancePatch } from "@t3tools/shared/serverSettings";
 
-import { useEnvironmentSettings } from "../../hooks/useSettings";
 import { randomUUID } from "../../lib/utils";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -37,7 +37,6 @@ export function AddCodexAccountDialog({
   readonly renderSetup: (instanceId: ProviderInstanceId, provider: ServerProvider) => ReactNode;
 }) {
   const canManageProviders = useEnvironmentScope(environmentId, AuthProvidersManageScope);
-  const settings = useEnvironmentSettings(environmentId);
   const providers = useAtomValue(serverEnvironment.providersValueAtom(environmentId));
   const update = useAtomCommand(serverEnvironment.updateSettings, "Add ChatGPT account");
   const [name, setName] = useState("Personal");
@@ -57,17 +56,12 @@ export function AddCodexAccountDialog({
     const result = await update({
       environmentId,
       input: {
-        patch: {
-          providerInstances: {
-            ...settings.providerInstances,
-            [id]: {
-              driver: CODEX_DRIVER_KIND,
-              displayName,
-              enabled: true,
-              config: { enabled: true, setupMode: "managed" },
-            },
-          },
-        },
+        patch: buildProviderInstancePatch(id, {
+          driver: CODEX_DRIVER_KIND,
+          displayName,
+          enabled: true,
+          config: { enabled: true, setupMode: "managed" },
+        }),
       },
     });
     if (result._tag === "Success") {

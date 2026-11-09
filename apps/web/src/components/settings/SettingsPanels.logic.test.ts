@@ -1,8 +1,15 @@
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts";
+import {
+  DEFAULT_SERVER_SETTINGS,
+  DEFAULT_UNIFIED_SETTINGS,
+  ProviderDriverKind,
+  ProviderInstanceId,
+} from "@t3tools/contracts";
+import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
 import * as Duration from "effect/Duration";
 import { describe, expect, it } from "vite-plus/test";
 import {
   backgroundActivitySharedPolicySettings,
+  buildProviderInstanceUpdatePatch,
   getChangedBrowserSettingLabels,
   hasChangedBackgroundActivitySettings,
   isProjectGroupingEnabled,
@@ -96,5 +103,42 @@ describe("project grouping toggle", () => {
     expect(isProjectGroupingEnabled("title")).toBe(true);
     expect(projectGroupingModeFromToggle(false, "title")).toBe("separate");
     expect(projectGroupingModeFromToggle(true, "title")).toBe("title");
+  });
+});
+
+describe("buildProviderInstanceUpdatePatch", () => {
+  const codex = ProviderInstanceId.make("codex");
+  const opencode = ProviderInstanceId.make("opencode");
+  const current = {
+    ...DEFAULT_SERVER_SETTINGS,
+    providerInstances: {
+      [codex]: { driver: ProviderDriverKind.make("codex"), enabled: true, config: {} },
+      [opencode]: { driver: ProviderDriverKind.make("opencode"), enabled: true, config: {} },
+    },
+  };
+
+  it("sends only the changed instance so other accounts survive the merge", () => {
+    const patch = buildProviderInstanceUpdatePatch({
+      instanceId: codex,
+      instance: {
+        driver: ProviderDriverKind.make("codex"),
+        displayName: "Work",
+        enabled: true,
+        config: {},
+      },
+    });
+    expect(Object.keys(patch.providerInstances ?? {})).toEqual([codex]);
+    const next = applyServerSettingsPatch(current, patch);
+    expect(next.providerInstances[codex]?.displayName).toBe("Work");
+    expect(next.providerInstances[opencode]).toBe(current.providerInstances[opencode]);
+  });
+
+  it("deletes only the named instance with null", () => {
+    const next = applyServerSettingsPatch(
+      current,
+      buildProviderInstanceUpdatePatch({ instanceId: codex, instance: null }),
+    );
+    expect(next.providerInstances[codex]).toBeUndefined();
+    expect(next.providerInstances[opencode]).toBe(current.providerInstances[opencode]);
   });
 });

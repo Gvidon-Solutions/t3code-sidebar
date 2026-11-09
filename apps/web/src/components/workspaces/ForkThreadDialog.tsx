@@ -4,10 +4,11 @@ import { useAtomValue } from "@effect/atom-react";
 import type {
   EnvironmentId,
   ModelSelection,
+  ProjectId,
   ThreadId,
   ThreadForkCatalog,
 } from "@t3tools/contracts";
-import { replicaStatusCopy } from "@t3tools/client-runtime/state/mesh-layout";
+import { hasUsableDraftModels, replicaStatusCopy } from "@t3tools/client-runtime/state/mesh-layout";
 import { defaultForkTarget } from "@t3tools/client-runtime/state/thread-forks";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useRef, useState } from "react";
@@ -22,7 +23,7 @@ import {
   providerInstanceEntriesFor,
   isProviderInstancePickerReady,
 } from "../../providerInstances";
-import { readThreadShell } from "../../state/entities";
+import { readThreadShell, useServerConfigs } from "../../state/entities";
 import { useEnvironments, useEnvironmentProviders } from "../../state/environments";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -55,6 +56,7 @@ export function ForkThreadDialog(props: {
   const mesh = useMeshLayout();
   const { environments } = useEnvironments();
   const providersByEnvironment = useEnvironmentProviders();
+  const serverConfigs = useServerConfigs();
   const forkCommand = useAtomCommand(threadEnvironment.fork, { reportFailure: false });
   const loadCatalog = useAtomCommand(threadEnvironment.forkCatalog, { reportFailure: false });
   const catalogRequest = useRef(0);
@@ -88,23 +90,44 @@ export function ForkThreadDialog(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const config = mesh.config;
+  const logicalKey = Object.keys(config?.projectMounts ?? {}).find((key) =>
+    config?.projectMounts[key]?.some(
+      (rep) =>
+        rep.environmentId === source.environmentId && rep.projectId === source.shell?.projectId,
+    ),
+  );
   // Never default to the machine the thread already runs on when another can take it,
-  // and prefer one whose catalog can actually run a model.
+  // and prefer one the shared draft resolver says can run a model for this project.
   const defaultTarget = defaultForkTarget({
     sourceEnvironmentId: source.environmentId as string,
-    candidates: environments.map((entry) => ({
-      environmentId: entry.environmentId,
-      connected: entry.connection.phase === "connected",
-      hasModels: (providersByEnvironment.get(entry.environmentId) ?? []).some(
-        (provider) =>
-          provider.models.length > 0 &&
-          provider.enabled !== false &&
-          provider.installed !== false &&
-          provider.auth?.status !== "unauthenticated" &&
-          provider.status !== "error" &&
-          provider.availability !== "unavailable",
-      ),
-    })),
+    candidates: environments.map((entry) => {
+      const projectId =
+        config?.projectMounts[logicalKey ?? ""]?.find(
+          (rep) => rep.environmentId === entry.environmentId,
+        )?.projectId ?? null;
+      const serverConfig = serverConfigs.get(entry.environmentId);
+      const providers = providersByEnvironment.get(entry.environmentId) ?? [];
+      const catalog =
+        serverConfig || providers.length > 0
+          ? {
+              providers,
+              ...(serverConfig
+                ? {
+                    settings: serverConfig.settings,
+                    ...(serverConfig.managedPolicy
+                      ? { managedPolicy: serverConfig.managedPolicy }
+                      : {}),
+                  }
+                : {}),
+            }
+          : null;
+      return {
+        environmentId: entry.environmentId,
+        connected: entry.connection.phase === "connected",
+        hasUsableModel: hasUsableDraftModels(catalog, projectId as ProjectId | null),
+      };
+    }),
   }) as EnvironmentId;
   const target = targetEnvironmentId ?? defaultTarget;
   const connected = environments.some(
@@ -145,13 +168,6 @@ export function ForkThreadDialog(props: {
   const selectedEntry = entries.find((entry) => entry.instanceId === initial?.instanceId);
   const online = connected || catalog?.value !== undefined;
   const loadingModels = !connected && catalog !== undefined && !catalog.value && !catalog.error;
-  const config = mesh.config;
-  const logicalKey = Object.keys(config?.projectMounts ?? {}).find((key) =>
-    config?.projectMounts[key]?.some(
-      (rep) =>
-        rep.environmentId === source.environmentId && rep.projectId === source.shell?.projectId,
-    ),
-  );
   const syncStatus = logicalKey && target ? config?.projectMountStatus[logicalKey]?.[target] : null;
   const syncCopy = syncStatus
     ? replicaStatusCopy({

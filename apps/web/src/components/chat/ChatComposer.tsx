@@ -3535,13 +3535,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                               ? "Choose a project above to start a thread"
                               : showProviderUnavailable
                                 ? "Enable a provider in Settings to send a message"
-                                : DEFAULT_COMPOSER_PLACEHOLDER
+                                : environmentUnavailable !== null
+                                  ? "This machine is offline. Reconnect to type."
+                                  : DEFAULT_COMPOSER_PLACEHOLDER
                     }
                     disabled={
                       draftSendQueued ||
                       projectSelectionRequired ||
                       isChoiceOnlyPendingQuestion ||
-                      activePendingIsResponding
+                      activePendingIsResponding ||
+                      environmentUnavailable !== null
                     }
                   />
                 </ComposerContextActionsContext>

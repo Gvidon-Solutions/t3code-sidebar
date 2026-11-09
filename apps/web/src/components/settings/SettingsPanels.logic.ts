@@ -8,6 +8,8 @@ import type {
   SidebarProjectGroupingMode,
   UnifiedSettings,
 } from "@t3tools/contracts";
+import type { ServerSettingsPatch } from "@t3tools/contracts";
+import { buildProviderInstancePatch } from "@t3tools/shared/serverSettings";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import {
   getBackgroundActivityBaseProfile,
@@ -205,18 +207,15 @@ export function backgroundActivitySharedPolicySettings(
 }
 
 export function buildProviderInstanceUpdatePatch(input: {
-  readonly settings: Pick<ServerSettings, "providerInstances">;
   readonly instanceId: ProviderInstanceId;
-  readonly instance: ProviderInstanceConfig;
+  /** Null removes the instance; omission of other instances keeps them as they are. */
+  readonly instance: ProviderInstanceConfig | null;
   readonly textGenerationModelSelection?:
     | ServerSettings["textGenerationModelSelection"]
     | undefined;
-}): Partial<UnifiedSettings> {
+}): ServerSettingsPatch {
   return {
-    providerInstances: {
-      ...input.settings.providerInstances,
-      [input.instanceId]: input.instance,
-    },
+    ...buildProviderInstancePatch(input.instanceId, input.instance),
     ...(input.textGenerationModelSelection !== undefined
       ? { textGenerationModelSelection: input.textGenerationModelSelection }
       : {}),

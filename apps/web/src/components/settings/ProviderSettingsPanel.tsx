@@ -806,7 +806,6 @@ export function EnvironmentProviderSettings({
     >[0]["textGenerationModelSelection"],
   ) => {
     const { providerInstances: _providerInstances, ...patch } = buildProviderInstanceUpdatePatch({
-      settings,
       instanceId,
       instance: next,
       textGenerationModelSelection,
@@ -1044,6 +1043,10 @@ export function EnvironmentProviderSettings({
         {deviceTabs ? (
           <div className="flex min-h-11 min-w-0 items-center gap-2 px-3 sm:px-4">{deviceTabs}</div>
         ) : null}
+        <p className="px-3 text-xs text-muted-foreground sm:px-4">
+          Saving one account sends only that provider instance. Instances you do not change stay as
+          they are.
+        </p>
         {readOnly ? (
           <SettingsGroup divided={false} className="overflow-hidden">
             <SettingsRow

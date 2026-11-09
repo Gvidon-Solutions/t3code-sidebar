@@ -1,4 +1,9 @@
-import type { EnvironmentId, EnvironmentMachineKind } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  EnvironmentMachineKind,
+  SidebarWorkspacesConfig,
+} from "@t3tools/contracts";
+import { projectMachineTags } from "@t3tools/client-runtime/state/mesh-layout";
 
 import type { SidebarProjectSnapshot } from "../sidebarProjectGrouping";
 import type { Project } from "../types";
@@ -9,26 +14,18 @@ import {
   type CommandPaletteProject,
   ITEM_ICON_CLASS,
 } from "./CommandPalette.logic";
-import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectFavicon } from "./ProjectFavicon";
-import { COMMAND_PALETTE_META_ICON_CLASS, CommandPaletteMetaDot } from "./ThreadCommandSubtitle";
 
 export interface CommandPaletteProjectLocation {
-  readonly kind: "local" | "remote";
-  readonly label: string;
+  readonly label: string | null;
   readonly machine: EnvironmentMachineKind;
 }
-
-const UNKNOWN_PROJECT_LOCATION: CommandPaletteProjectLocation = {
-  kind: "remote",
-  label: "Remote",
-  machine: "server",
-};
 
 interface ProjectItemsInput {
   readonly projects: ReadonlyArray<CommandPaletteProject>;
   readonly projectGroupByTargetKey: ReadonlyMap<string, SidebarProjectSnapshot>;
   readonly locationByEnvironmentId: ReadonlyMap<EnvironmentId, CommandPaletteProjectLocation>;
+  readonly config: SidebarWorkspacesConfig | null;
   readonly runProject: (project: CommandPaletteProject) => Promise<void>;
   readonly pin?: (project: CommandPaletteProject) => CommandPaletteItemPin | null;
 }
@@ -51,21 +48,13 @@ export function buildProjectSearchItems(input: ProjectItemsInput) {
         projects: membersOf(project),
         locationByEnvironmentId: input.locationByEnvironmentId,
       }).searchTerms,
-    renderDescription: (project) => {
-      const members = membersOf(project);
-      const metadata = buildCommandPaletteProjectMetadata({
-        projects: members,
-        locationByEnvironmentId: input.locationByEnvironmentId,
-      });
-      return members.length > 1 ? (
-        <span className="truncate">{metadata.environmentLabels.join(" · ")}</span>
-      ) : (
-        <ProjectLocationDescription
-          location={input.locationByEnvironmentId.get(project.environmentId)}
-          workspaceRoot={project.workspaceRoot}
-        />
-      );
-    },
+    renderDescription: (project) => (
+      <ProjectMachineDescription
+        config={input.config}
+        group={input.projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`)}
+        project={project}
+      />
+    ),
     icon: projectFaviconIcon,
     runProject: input.runProject,
     ...(input.pin ? { pin: input.pin } : {}),
@@ -82,13 +71,14 @@ export function buildNewThreadInProjectItems(input: ProjectItemsInput) {
       const location = input.locationByEnvironmentId.get(project.environmentId);
       return [
         ...(group?.memberProjects.flatMap((member) => [member.title, member.workspaceRoot]) ?? []),
-        ...(location ? [location.label] : []),
+        ...(location?.label ? [location.label] : []),
       ];
     },
     renderDescription: (project) => (
-      <ProjectLocationDescription
-        location={input.locationByEnvironmentId.get(project.environmentId)}
-        workspaceRoot={project.workspaceRoot}
+      <ProjectMachineDescription
+        config={input.config}
+        group={input.projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`)}
+        project={project}
       />
     ),
     icon: projectFaviconIcon,
@@ -97,25 +87,44 @@ export function buildNewThreadInProjectItems(input: ProjectItemsInput) {
   });
 }
 
-function ProjectLocationDescription(props: {
-  readonly location: CommandPaletteProjectLocation | undefined;
-  readonly workspaceRoot: string;
+/** One row per logical project: its machines as config tags, main copy first. */
+function ProjectMachineDescription(props: {
+  readonly config: SidebarWorkspacesConfig | null;
+  readonly group: SidebarProjectSnapshot | undefined;
+  readonly project: CommandPaletteProject;
 }) {
-  const location = props.location ?? UNKNOWN_PROJECT_LOCATION;
+  const members = props.group?.memberProjects ?? [props.project];
+  const tags = projectMachineTags(
+    props.config ?? { machines: {}, projectMounts: {} },
+    props.group?.projectKey ?? "",
+    members.map((member) => member.environmentId),
+  );
+  const mesh = props.config !== null && tags.some((tag) => tag.tag !== "");
+  if (!mesh) {
+    return (
+      <span className="truncate text-muted-foreground">
+        {shortProjectPath(props.project.workspaceRoot)}
+      </span>
+    );
+  }
   return (
     <span className="flex min-w-0 items-center gap-1">
       <span className="inline-flex min-w-0 items-center gap-1">
-        {location.kind === "remote" ? (
-          <EnvironmentMachineIcon
-            aria-hidden
-            kind={location.machine}
-            className={COMMAND_PALETTE_META_ICON_CLASS}
-          />
-        ) : null}
-        <span className="truncate">{location.label}</span>
+        {tags.map((tag) => (
+          <span
+            key={tag.environmentId}
+            className="shrink-0 rounded bg-foreground/[0.06] px-1 py-0.5 font-semibold text-3xs uppercase tracking-wide text-muted-foreground"
+          >
+            {tag.tag}
+          </span>
+        ))}
+        <span className="truncate">{tags.map((tag) => tag.label).join(" · ")}</span>
       </span>
-      <CommandPaletteMetaDot />
-      <span className="truncate">{props.workspaceRoot}</span>
     </span>
   );
+}
+
+function shortProjectPath(path: string): string {
+  const segments = path.split(/[\\/]/).filter(Boolean);
+  return segments.length <= 2 ? path : `…/${segments.slice(-2).join("/")}`;
 }

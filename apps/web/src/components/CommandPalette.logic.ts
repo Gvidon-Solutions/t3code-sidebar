@@ -350,15 +350,18 @@ export type CommandPaletteProject = Project & { readonly displayName: string };
 
 export function buildCommandPaletteProjectMetadata(input: {
   readonly projects: ReadonlyArray<Pick<Project, "environmentId" | "title" | "workspaceRoot">>;
-  readonly locationByEnvironmentId: ReadonlyMap<EnvironmentId, { readonly label: string }>;
+  readonly locationByEnvironmentId: ReadonlyMap<EnvironmentId, { readonly label: string | null }>;
 }) {
   const searchTerms: string[] = [];
   const environmentLabels = new Set<string>();
 
   for (const project of input.projects) {
-    const label = input.locationByEnvironmentId.get(project.environmentId)?.label ?? "Remote";
-    searchTerms.push(project.title, project.workspaceRoot, label);
-    environmentLabels.add(label);
+    const label = input.locationByEnvironmentId.get(project.environmentId)?.label;
+    searchTerms.push(project.title, project.workspaceRoot);
+    if (label) {
+      searchTerms.push(label);
+      environmentLabels.add(label);
+    }
   }
 
   return { searchTerms, environmentLabels: [...environmentLabels] };

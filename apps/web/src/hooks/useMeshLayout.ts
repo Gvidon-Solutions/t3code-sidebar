@@ -26,6 +26,7 @@ import {
 } from "react";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { meshLayoutAtoms } from "../state/meshLayout";
+import { setMeshLayoutConfigSnapshot } from "../state/meshLayoutConfig";
 import { useAtomCommand } from "../state/use-atom-command";
 const emptyState = emptyMeshLayoutState();
 const emptySnapshot = () => emptyState;
@@ -109,6 +110,11 @@ function useMeshLayoutOwner() {
     store?.subscribe ?? noSubscription,
     store?.getSnapshot ?? emptySnapshot,
   );
+  const layoutSnapshotConfig = state.snapshot?.config ?? null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Mirrors the layout for new-thread commands that run outside React.
+  useEffect(() => {
+    setMeshLayoutConfigSnapshot(layoutSnapshotConfig);
+  }, [layoutSnapshotConfig]);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Connection changes trigger source selection and offline outbox replay.
   useEffect(() => {
     current.current.sources = environments.map((environment) => ({
@@ -158,4 +164,10 @@ export function useMeshLayout(): MeshLayout {
   const value = use(MeshLayoutContext);
   if (value === null) throw new Error("MeshLayoutProvider is missing");
   return value;
+}
+
+/** For palette surfaces that also render in isolation (tests, embedded pickers). */
+export function useMeshLayoutOptional(): Pick<MeshLayout, "source" | "config"> {
+  const value = use(MeshLayoutContext);
+  return value ?? { source: null, config: null };
 }

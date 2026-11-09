@@ -1,6 +1,7 @@
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { type EnvironmentId } from "@t3tools/contracts";
 import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
+import { offlineConversationStatus } from "@t3tools/client-runtime/state/mesh-machines";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -11,7 +12,6 @@ import {
 import { WifiOffIcon } from "lucide-react";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { environmentCatalog } from "../../connection/catalog";
-import { ConnectionDiagnosisHeadline } from "../settings/ConnectionDiagnosisDetails";
 import { isDesktopLocalConnectionTarget } from "../../connection/desktopLocal";
 import {
   useEnvironmentDisconnectDelay,
@@ -44,6 +44,7 @@ interface SystemComposerBannersInput {
   readonly activeEnvironment: EnvironmentPresentation | null;
   readonly activeEnvironmentUnavailable: boolean;
   readonly activeEnvironmentUnavailableState: EnvironmentUnavailableState | null;
+  readonly hasCachedConversation: boolean;
   readonly activeThreadEnvironmentId: EnvironmentId | null;
   readonly serverConfig: EnvironmentPresentation["serverConfig"] | null;
   readonly hasMultipleRegisteredEnvironments: boolean;
@@ -60,6 +61,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
     activeEnvironment,
     activeEnvironmentUnavailable,
     activeEnvironmentUnavailableState,
+    hasCachedConversation,
     activeThreadEnvironmentId,
     serverConfig,
     hasMultipleRegisteredEnvironments,
@@ -189,10 +191,14 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
         variant: unavailableConnection.phase === "error" ? "error" : "warning",
         group: "environment",
         icon: <WifiOffIcon />,
-        title: `${activeEnvironmentUnavailableState.label} is ${environmentReconnecting ? "reconnecting" : "offline"}`,
-        description: activeEnvironment ? (
-          <ConnectionDiagnosisHeadline environment={activeEnvironment} />
-        ) : undefined,
+        ...(() => {
+          const status = offlineConversationStatus({
+            label: activeEnvironmentUnavailableState.label,
+            reconnecting: environmentReconnecting,
+            hasCachedConversation,
+          });
+          return { title: status.title, description: status.description };
+        })(),
         actions: (
           <>
             {!environmentReconnecting ? (
@@ -205,7 +211,7 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
                   )
                 }
               >
-                Reconnect
+                Retry
               </Button>
             ) : null}
             {disconnectAction}

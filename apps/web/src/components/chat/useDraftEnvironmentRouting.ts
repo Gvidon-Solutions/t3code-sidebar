@@ -445,7 +445,7 @@ export function useDraftEnvironmentRouting(input: DraftEnvironmentRoutingInput) 
             connected: machine.connected !== false,
             hasUsableModels: hasUsableDraftModels(catalog, machine.projectId),
             selectedModelUsable:
-              input.selection !== null &&
+              input.selection === null ||
               draftModelUnavailableReason(catalog, input.selection, machine.projectId) === null,
             canHostCopy: draftMachineCanHostCopy({
               hasProject: machine.projectId !== null,

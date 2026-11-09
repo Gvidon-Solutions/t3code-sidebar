@@ -227,6 +227,7 @@ import {
   useProjectLookups,
   useSortedProjectGroups,
 } from "./CommandPaletteLookups";
+import { useMeshLayoutOptional } from "../hooks/useMeshLayout";
 import {
   buildNewThreadInProjectItems,
   buildProjectSearchItems,
@@ -465,6 +466,7 @@ function OpenCommandPaletteDialog(props: {
     reportFailure: false,
   });
   const { environments } = useEnvironments();
+  const mesh = useMeshLayoutOptional();
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
@@ -816,6 +818,7 @@ function OpenCommandPaletteDialog(props: {
       projects: pickerProjects,
       projectGroupByTargetKey,
       locationByEnvironmentId: projectEnvironmentLocationById,
+      config: mesh.config,
       runProject: openProjectFromSearch,
       pin: projectPin,
     }),
@@ -831,6 +834,7 @@ function OpenCommandPaletteDialog(props: {
         projects: pickerProjects.filter((project) => !isScratch(project)),
         projectGroupByTargetKey,
         locationByEnvironmentId: projectEnvironmentLocationById,
+        config: mesh.config,
         pin: projectPin,
         runProject: async (project) => {
           const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
