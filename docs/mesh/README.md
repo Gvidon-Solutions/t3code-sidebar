@@ -195,7 +195,7 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
   place replicas or stage threads and time out after thirty seconds.
   Fork works on the same machine too. Old handoff "move" data still renders as ordinary links.
   The fork marker escapes peer titles (including newlines and backticks) and machine labels, and
-  emits a Markdown link only for `t3-thread:` or `http(s)` URLs.
+  emits a Markdown link only for `t3-thread:` targets; peer-supplied web URLs stay plain text.
 - **Draft machine selection.** Web `components/chat/useDraftEnvironmentRouting.ts` and mobile
   `features/threads/new-task-flow-provider.tsx` resolve the same logical project on the chosen
   machine with `planThreadOnMachine`. Replica status supplies progress and registration; the
