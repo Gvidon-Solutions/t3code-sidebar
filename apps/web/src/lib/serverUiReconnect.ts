@@ -47,11 +47,15 @@ function installReconnectingSurface(): void {
   detail.style.cssText = "margin:0;max-width:420px;line-height:1.6;color:#7a7a7a";
   const fallback = document.createElement("button");
   fallback.type = "button";
-  fallback.textContent = "Use the desktop app";
+  fallback.textContent = "Use the built-in version";
+  fallback.title = "Works offline with your saved connections";
   fallback.style.cssText =
     "margin-top:8px;padding:8px 14px;border-radius:8px;border:1px solid #555;background:transparent;font:inherit;cursor:pointer";
+  const fallbackNote = document.createElement("p");
+  fallbackNote.textContent = "Works offline with your saved connections.";
+  fallbackNote.style.cssText = "margin:0;max-width:420px;font-size:13px;color:#7a7a7a";
   fallback.addEventListener("click", () => window.desktopShell?.returnToBundled());
-  main.append(title, detail, fallback);
+  main.append(title, detail, fallback, fallbackNote);
   host.replaceChildren(main);
 }
 
