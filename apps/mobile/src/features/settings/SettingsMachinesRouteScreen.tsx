@@ -18,6 +18,7 @@ import { useEnvironments } from "../../state/environments";
 import { MeshAgentFixActions } from "../workspaces/MeshAgentFixActions";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import { MeshLinkForm } from "./MeshLinkForm";
+import { MachineLinkedPeers } from "./MachineLinkedPeers";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
 import { AppText } from "../../components/ui/AppText";
 import { SettingsScreen } from "./components/SettingsScreen";
@@ -193,14 +194,24 @@ export function SettingsMachinesRouteScreen() {
                 tone="text"
                 onPress={() => setDiagnosticsOpen(!diagnosticsOpen)}
               />
-              {diagnosticsOpen
-                ? meshMachineDetailRows(selected, base, live).map((row) => (
+              {diagnosticsOpen ? (
+                <>
+                  {meshMachineDetailRows(selected, base, live).map((row) => (
                     <View key={row.label}>
                       <AppText className="text-xs text-foreground-muted">{row.label}</AppText>
                       <AppText accessibilityHint={row.exact || undefined}>{row.value}</AppText>
                     </View>
-                  ))
-                : null}
+                  ))}
+                  <MachineLinkedPeers
+                    machine={selected}
+                    config={base}
+                    links={
+                      links.find((source) => source.environmentId === selected.environmentId)
+                        ?.links ?? []
+                    }
+                  />
+                </>
+              ) : null}
             </ScreenScrollView>
           </Sheet>
         ) : null}

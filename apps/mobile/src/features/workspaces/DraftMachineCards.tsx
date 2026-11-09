@@ -32,7 +32,7 @@ export function DraftMachineCards(props: {
   return (
     <View
       accessibilityRole="radiogroup"
-      className="w-full flex-row flex-wrap justify-center gap-2 px-2 pb-2"
+      className="w-full flex-row flex-wrap justify-center gap-2 px-[6px] pb-2"
     >
       {props.rows.map((row) => (
         <Pressable

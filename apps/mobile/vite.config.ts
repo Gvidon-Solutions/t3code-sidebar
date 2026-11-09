@@ -4,6 +4,8 @@ import { defineConfig, normalizePath } from "vite-plus";
 import "vite-plus/test/config";
 
 const reactTests = [
+  "src/features/connection/ConnectionEnvironmentRow.test.tsx",
+  "src/features/connection/PullRequestRoutingSettings.test.tsx",
   "src/features/workspaces/MeshInterfaces.test.tsx",
   "src/features/settings/SettingsMachinesRouteScreen.test.tsx",
   "src/features/files/OpenFileRouteScreen.test.tsx",

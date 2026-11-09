@@ -24,6 +24,8 @@ import { ConnectionDiagnosisDetails, useConnectionDiagnosis } from "./Connection
 import { ConnectionFormField } from "./ConnectionFormField";
 import { ConnectionStatusDot } from "./ConnectionStatusDot";
 import { environmentStatusText } from "./environmentStatusText";
+import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
+import { useEnvironmentName } from "../workspaces/useEnvironmentName";
 
 function connectionStatusLabel(environment: ConnectedEnvironmentSummary): string | null {
   if (!environment.isEnabled && environment.connectionState !== "unsupported") {
@@ -54,6 +56,10 @@ export function ConnectionEnvironmentRow(props: {
   const serverConfig = useAtomValue(
     serverEnvironment.configValueAtom(props.environment.environmentId),
   );
+  const name = useEnvironmentName(
+    serverConfig?.environment.environmentId ?? props.environment.environmentId,
+    props.environment.environmentLabel,
+  );
   const unsupported = props.environment.connectionState === "unsupported";
   const presentation = useAtomValue(
     environmentPresentations.presentationAtom(props.environment.environmentId),
@@ -67,9 +73,7 @@ export function ConnectionEnvironmentRow(props: {
   const statusLabel = connectionStatusLabel(props.environment);
   const statusTraceId = enabled ? props.environment.connectionErrorTraceId : null;
   const hasConnectionFailure = enabled && props.environment.connectionError !== null;
-  const freeze = enabled
-    ? hostFreezeNotice(props.environment.environmentLabel, serverConfig?.lastEventLoopStall)
-    : null;
+  const freeze = enabled ? hostFreezeNotice(name.label, serverConfig?.lastEventLoopStall) : null;
   const isRetrying =
     enabled &&
     (props.environment.connectionState === "connecting" ||
@@ -98,8 +102,8 @@ export function ConnectionEnvironmentRow(props: {
           accessibilityRole="button"
           accessibilityLabel={
             props.opensDetails
-              ? `Manage ${props.environment.environmentLabel}`
-              : `${props.expanded ? "Collapse" : "Expand"} details for ${props.environment.environmentLabel}`
+              ? `Manage ${name.label}`
+              : `${props.expanded ? "Collapse" : "Expand"} details for ${name.label}`
           }
           onPress={props.onToggle}
         >
@@ -114,11 +118,21 @@ export function ConnectionEnvironmentRow(props: {
               size={14}
               tintColorClassName="accent-foreground-muted"
             />
+            {name.tag.trim() ? (
+              <View
+                className="shrink-0 rounded px-1 py-0.5"
+                style={{ backgroundColor: machineTagBackground(name.color) }}
+              >
+                <Text className="text-[10px] font-t3-bold uppercase text-foreground">
+                  {name.tag}
+                </Text>
+              </View>
+            ) : null}
             <Text
               className="min-w-0 flex-shrink text-base font-t3-bold leading-snug text-foreground"
               numberOfLines={1}
             >
-              {props.environment.environmentLabel}
+              {name.label}
             </Text>
           </View>
           {!props.environment.isRelayManaged && props.environment.displayUrl.trim() ? (
@@ -165,7 +179,7 @@ export function ConnectionEnvironmentRow(props: {
         </Pressable>
 
         <ThemedSwitch
-          accessibilityLabel={`Enable ${props.environment.environmentLabel}`}
+          accessibilityLabel={`Enable ${name.label}`}
           style={{ alignSelf: "center" }}
           disabled={unsupported && !canRetry}
           onValueChange={(next) => props.onSetEnabled(props.environment.environmentId, next)}
@@ -175,8 +189,8 @@ export function ConnectionEnvironmentRow(props: {
           accessibilityRole="button"
           accessibilityLabel={
             props.opensDetails
-              ? `Manage ${props.environment.environmentLabel}`
-              : `${props.expanded ? "Collapse" : "Expand"} details for ${props.environment.environmentLabel}`
+              ? `Manage ${name.label}`
+              : `${props.expanded ? "Collapse" : "Expand"} details for ${name.label}`
           }
           onPress={props.onToggle}
           style={{
@@ -203,10 +217,7 @@ export function ConnectionEnvironmentRow(props: {
           className="gap-3 px-4 pb-4"
         >
           {diagnosis ? (
-            <ConnectionDiagnosisDetails
-              hostLabel={props.environment.environmentLabel}
-              diagnosis={diagnosis}
-            />
+            <ConnectionDiagnosisDetails hostLabel={name.label} diagnosis={diagnosis} />
           ) : null}
           {props.environment.isRelayManaged ? (
             <Text className="text-sm text-foreground-muted">
