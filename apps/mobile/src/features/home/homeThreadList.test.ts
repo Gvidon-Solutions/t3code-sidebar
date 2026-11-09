@@ -260,6 +260,7 @@ describe("T3 Mesh home scopes", () => {
         {
           environmentId: localEnvironmentId,
           path: local.workspaceRoot,
+          projectId: local.id,
           transport: "git",
           role: "primary",
           createdAt: "",
@@ -267,6 +268,7 @@ describe("T3 Mesh home scopes", () => {
         {
           environmentId: remoteEnvironmentId,
           path: remote.workspaceRoot,
+          projectId: remote.id,
           transport: "mutagen",
           role: "replica",
           source: localEnvironmentId,
@@ -286,6 +288,25 @@ describe("T3 Mesh home scopes", () => {
     expect(scopes).toHaveLength(1);
     expect(scopes[0]?.key).toBe("logical-shared");
     expect(scopes[0]?.projects).toHaveLength(2);
+  });
+
+  it("keeps an offline copy's project ref on the reachable project's scope", () => {
+    // The remote project is missing from this device's project list while its
+    // machine is offline; the layout still names it, so cached threads find the folder.
+    const scopes = buildHomeProjectScopes({
+      projects: [local],
+      environmentId: null,
+      projectGroupingMode: "repository",
+      layout,
+      connectedEnvironmentIds: new Set([localEnvironmentId]),
+    });
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0]?.key).toBe("logical-shared");
+    expect(scopes[0]?.projectRefs).toContainEqual({
+      environmentId: remoteEnvironmentId,
+      projectId: remote.id,
+    });
+    expect(scopes[0]?.meshOffline).toBeUndefined();
   });
 
   it("shows a project whose only machine is not connected", () => {
@@ -310,7 +331,9 @@ describe("T3 Mesh home scopes", () => {
     });
     expect(scopes).toHaveLength(1);
     expect(scopes[0]?.meshOffline).toMatchObject({ environmentId: remoteEnvironmentId, tag: "OP" });
-    expect(scopes[0]?.projectRefs).toEqual([]);
+    expect(scopes[0]?.projectRefs).toEqual([
+      { environmentId: remoteEnvironmentId, projectId: remote.id },
+    ]);
     expect(
       homeProjectWorkspaceIds(
         scopes[0]!,

@@ -71,6 +71,7 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
     machines: machines.map((machine) => ({
       environmentId: machine.environmentId,
       label: machine.label,
+      online: machine.network?.state !== "offline",
     })),
     connectedEnvironmentIds: connected,
     entries: new Map(

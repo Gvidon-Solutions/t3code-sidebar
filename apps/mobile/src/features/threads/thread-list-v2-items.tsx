@@ -635,6 +635,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly compact?: {
     readonly projectLabel: string | null;
     readonly machineTag?: MachineDisplay | null;
+    readonly machineTagOffline?: boolean;
     readonly nested?: boolean;
     readonly voice?: boolean;
   };
@@ -1410,6 +1411,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           showPin={thread.pinnedAt != null && !pinnedRow}
           projectLabel={props.compact.projectLabel}
           machineTag={props.compact.machineTag ?? null}
+          machineTagOffline={props.compact.machineTagOffline === true}
           nested={props.compact.nested === true}
           voice={props.compact.voice === true}
           timeLabel={props.timeLabel}

@@ -50,6 +50,7 @@ export function MeshConnectPrompt() {
     machines: machines.map((machine) => ({
       environmentId: machine.environmentId,
       label: machine.label,
+      online: machine.network?.state !== "offline",
     })),
     connectedEnvironmentIds: new Set(
       environments

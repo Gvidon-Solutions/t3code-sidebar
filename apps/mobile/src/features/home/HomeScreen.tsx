@@ -849,6 +849,7 @@ export function HomeScreen(props: HomeScreenProps) {
             ? {
                 projectLabel: item.projectLabel,
                 machineTag: item.machineTag,
+                machineTagOffline: item.machineTagOffline === true,
                 nested: item.nested === true,
                 voice: item.voice === true,
               }

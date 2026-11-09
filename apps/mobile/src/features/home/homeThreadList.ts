@@ -11,6 +11,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-sort";
 import type {
   EnvironmentId,
+  ProjectId,
   ScopedProjectRef,
   SidebarProjectGroupingMode,
   SidebarProjectSortOrder,
@@ -115,35 +116,77 @@ export function buildHomeProjectScopes(input: {
     };
   });
   if (input.layout === undefined || input.connectedEnvironmentIds === undefined) return scopes;
-  const existing = new Set(scopes.map((scope) => scope.key));
-  const offline = offlineLogicalProjects(input.layout, input.connectedEnvironmentIds)
-    .filter((entry) => {
-      if (existing.has(entry.logicalKey)) return false;
-      existing.add(entry.logicalKey);
-      return true;
-    })
+  const offline = offlineLogicalProjects(input.layout, input.connectedEnvironmentIds);
+  if (offline.length === 0) return scopes;
+  const titleOf = (entry: (typeof offline)[number]) =>
+    input.layout?.projectTitles[entry.logicalKey] ??
+    entry.path.split(/[\\/]/).filter(Boolean).at(-1) ??
+    entry.logicalKey;
+  const projectOf = (entry: (typeof offline)[number]): EnvironmentProject =>
+    ({
+      id: (entry.projectId ?? `mesh:${entry.logicalKey}:${entry.environmentId}`) as ProjectId,
+      environmentId: entry.environmentId,
+      title: titleOf(entry),
+      workspaceRoot: entry.path,
+      repositoryIdentity: null,
+      defaultModelSelection: null,
+      scripts: [],
+      createdAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
+      updatedAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
+    }) as unknown as EnvironmentProject;
+  const offlineByKey = new Map<string, Array<(typeof offline)[number]>>();
+  for (const entry of offline) {
+    const list = offlineByKey.get(entry.logicalKey);
+    if (list) list.push(entry);
+    else offlineByKey.set(entry.logicalKey, [entry]);
+  }
+  // A logical project with one reachable copy already has a scope; add its
+  // unreachable copies so their cached threads still find their folder.
+  const merged = scopes.map((scope): HomeProjectScope => {
+    const entries = offlineByKey.get(scope.key);
+    if (entries === undefined) return scope;
+    let next = scope;
+    for (const entry of entries) {
+      if (entry.projectId === null) continue;
+      if (
+        next.projectRefs.some(
+          (ref) => ref.environmentId === entry.environmentId && ref.projectId === entry.projectId,
+        )
+      )
+        continue;
+      next = {
+        ...next,
+        projects: [...next.projects, projectOf(entry)],
+        projectRefs: [
+          ...next.projectRefs,
+          {
+            environmentId: entry.environmentId as EnvironmentId,
+            projectId: entry.projectId as ProjectId,
+          },
+        ],
+      };
+    }
+    return next;
+  });
+  const existing = new Set(merged.map((scope) => scope.key));
+  const placeholders = offline
+    .filter((entry) => !existing.has(entry.logicalKey))
     .map((entry): HomeProjectScope => {
-      const title =
-        input.layout?.projectTitles[entry.logicalKey] ??
-        entry.path.split(/[\\/]/).filter(Boolean).at(-1) ??
-        entry.logicalKey;
-      const project = {
-        id: `mesh:${entry.logicalKey}:${entry.environmentId}`,
-        environmentId: entry.environmentId,
-        title,
-        workspaceRoot: entry.path,
-        repositoryIdentity: null,
-        defaultModelSelection: null,
-        scripts: [],
-        createdAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
-        updatedAt: entry.updatedAt ?? "1970-01-01T00:00:00.000Z",
-      } as unknown as EnvironmentProject;
+      const project = projectOf(entry);
       return {
         key: entry.logicalKey,
-        title,
+        title: project.title,
         representative: project,
         projects: [project],
-        projectRefs: [],
+        projectRefs:
+          entry.projectId === null
+            ? []
+            : [
+                {
+                  environmentId: entry.environmentId as EnvironmentId,
+                  projectId: entry.projectId as ProjectId,
+                },
+              ],
         pinned: false,
         archived: false,
         meshOffline: {
@@ -153,7 +196,16 @@ export function buildHomeProjectScopes(input: {
         },
       };
     });
-  return [...scopes, ...offline];
+  // One placeholder per logical project, even when several copies are offline.
+  const seenPlaceholders = new Set<string>();
+  return [
+    ...merged,
+    ...placeholders.filter((scope) => {
+      if (seenPlaceholders.has(scope.key)) return false;
+      seenPlaceholders.add(scope.key);
+      return true;
+    }),
+  ];
 }
 
 export function findHomeProjectScope(

@@ -126,7 +126,18 @@ vi.mock("../../state/entities", () => ({
       isScratch: false,
     },
   ],
-  useServerConfigs: () => new Map([["studio", {}]]),
+  useServerConfigs: () =>
+    new Map([
+      ["studio", {}],
+      [
+        "cloudbox",
+        {
+          providers: [],
+          settings: {},
+          environment: { capabilities: { replicas: true }, label: "Cloudbox" },
+        },
+      ],
+    ]),
   useEnvironmentServerConfig: () => ({ providers: [] }),
 }));
 vi.mock("../../state/environments", () => ({
@@ -150,7 +161,11 @@ vi.mock("./useSidebarWorkspaces", () => ({
   useSidebarWorkspaces: () => ({
     config: {
       ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-      machines: { studio: { title: "Studio" }, cloudbox: { title: "Cloudbox" } },
+      machines: {
+        studio: { title: "Studio" },
+        cloudbox: { title: "Cloudbox" },
+        laptop: { title: "Laptop" },
+      },
       projectMounts: {
         notes: [
           {
@@ -181,7 +196,11 @@ function setup() {
   mocks.confirm.mockReset();
   mocks.alert.mockReset();
   mocks.overview = false;
-  mocks.connections = [{ environmentId: "studio", connection: { phase: "connected" } }];
+  mocks.connections = [
+    { environmentId: "studio", connection: { phase: "connected" } },
+    { environmentId: "cloudbox", connection: { phase: "connected" } },
+    { environmentId: "laptop", connection: { phase: "connected" } },
+  ];
   mocks.document = {};
   mocks.models = [];
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -422,7 +441,11 @@ it("blocks removing a main copy while another copy exists and offers to promote 
   using screen = setup();
   const config: SidebarWorkspacesConfig = {
     ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
-    machines: { studio: { title: "Studio" }, cloudbox: { title: "Cloudbox" } },
+    machines: {
+      studio: { title: "Studio" },
+      cloudbox: { title: "Cloudbox" },
+      laptop: { title: "Laptop" },
+    },
     projectMounts: {
       notes: [
         {
@@ -543,9 +566,11 @@ it("warns before removing a primary, omits Adopt when synced, and opens conflict
 it("shows a short no-models reason, expandable details, provider settings and project sync status", () => {
   using screen = setup();
   screen.render(<ForkThreadSheet />);
-  screen.click("Studio");
-  expect(screen.container.textContent).toContain("No models are available on Studio.");
-  expect(screen.container.textContent).toContain("Project synced on Studio");
+  // The thread's own machine is not offered, and a machine without models stays disabled.
+  expect(screen.container.textContent).toContain("Cloudbox (No models here)");
+  screen.click("Laptop");
+  expect(screen.container.textContent).toContain("No models are available on Laptop.");
+  expect(screen.container.textContent).toContain("Preparing project on Laptop");
   expect(screen.container.textContent).not.toContain("Enable and authenticate");
   screen.click("Details");
   expect(screen.container.textContent).toContain("Enable and authenticate a provider");
@@ -558,7 +583,7 @@ it("labels the native fork model picker as Model and opens the picker", () => {
     { label: "Sol", selection: { instanceId: "codex", model: "sol" }, isUnavailable: false },
   ];
   screen.render(<ForkThreadSheet />);
-  screen.click("Studio");
+  screen.click("Laptop");
   screen.click("Fork model");
   expect(screen.container.textContent).toContain("ModelSol");
   expect(screen.container.textContent).toContain("Choose a model");
