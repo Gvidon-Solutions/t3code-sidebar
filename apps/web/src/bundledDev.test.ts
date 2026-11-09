@@ -25,6 +25,7 @@ it("initializes React refresh before a shared UI chunk runs in bundled dev", asy
 
   try {
     await NodeFSP.mkdir(NodePath.join(root, "src/lib"), { recursive: true });
+    await NodeFSP.mkdir(NodePath.join(root, "src/components/chat"), { recursive: true });
     await NodeFSP.writeFile(NodePath.join(root, "package.json"), '{"type":"module"}');
     for (const file of [
       "index.html",
@@ -37,6 +38,14 @@ it("initializes React refresh before a shared UI chunk runs in bundled dev", asy
     await NodeFSP.writeFile(
       NodePath.join(root, "src/shared.tsx"),
       "export function Shared() { return <div>ready</div>; }",
+    );
+    await NodeFSP.writeFile(
+      NodePath.join(root, "src/components/chat/draftSendState.ts"),
+      "export function afterChatSendsSettled(listener: () => void) { listener(); return () => {}; }",
+    );
+    await NodeFSP.writeFile(
+      NodePath.join(root, "src/composerDraftStore.ts"),
+      "export function flushComposerDrafts() {}",
     );
     await NodeFSP.writeFile(
       NodePath.join(root, "src/main.tsx"),
