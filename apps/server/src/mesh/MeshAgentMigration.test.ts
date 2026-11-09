@@ -46,3 +46,43 @@ it.effect(
       );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
+
+it.effect("imports GLOBAL.md before the kit adopts the legacy skill directory", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "mesh-migrate-order-" });
+    const source = `${home}/bundled`;
+    yield* fs.makeDirectory(`${source}/scripts`, { recursive: true });
+    yield* fs.writeFileString(`${source}/SKILL.md`, "---\nname: t3\n---\n\nnew skill\n");
+    yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
+    const installed = `${home}/.agents/skills/t3`;
+    yield* fs.makeDirectory(`${installed}/scripts`, { recursive: true });
+    yield* fs.makeDirectory(`${installed}/global`, { recursive: true });
+    yield* fs.writeFileString(`${installed}/SKILL.md`, "---\nname: t3\n---\n\nold skill\n");
+    yield* fs.writeFileString(`${installed}/scripts/t3ctl.mjs`, "export {};");
+    const legacy = "Private customer instructions\n";
+    yield* fs.writeFileString(`${installed}/global/GLOBAL.md`, legacy);
+    yield* Effect.gen(function* () {
+      const config = yield* MeshConfig;
+      yield* config.apply({ schema: 1, machines: { studio: {} } }, null);
+      yield* Layer.build(Migration.layer);
+      const migrated = (yield* config.current)!;
+      expect(migrated.doc.agents?.instructions).toBe(legacy);
+      const kit = yield* Kit.MeshAgentKit;
+      yield* kit.reconcile(migrated.doc);
+      expect(yield* fs.readFileString(`${installed}/SKILL.md`)).toContain("new skill");
+      expect(yield* fs.readFileString(`${installed}/global/GLOBAL.md`)).toBe(legacy);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          ConfigTest.layerTest("studio"),
+          Kit.layer.pipe(Layer.provide(Settings.layerTest())),
+        ),
+      ),
+      Effect.provideService(HostProcess.Environment, {
+        T3_MESH_AGENT_HOME: home,
+        T3_MESH_AGENT_SOURCE: source,
+      }),
+    );
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
