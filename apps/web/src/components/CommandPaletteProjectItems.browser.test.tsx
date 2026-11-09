@@ -63,3 +63,36 @@ it("shows project machine tags with names only in the tooltip", async () => {
   expect(description).not.toBeNull();
   expect(description!.textContent).toBe("STLT");
 });
+
+it("adds a muted path tail only when two projects share a title", async () => {
+  const config = {
+    machines: {
+      studio: { title: "studio", tag: "ST" },
+    },
+    projectMounts: {
+      atlas: [
+        {
+          environmentId: "studio",
+          path: "/data/one/atlas",
+          projectId: "atlas",
+          transport: "git",
+          role: "primary",
+          createdAt: "",
+        },
+      ],
+    },
+    projectMountStatus: {},
+  } as unknown as SidebarWorkspacesConfig;
+  const project = {
+    environmentId: "studio",
+    id: "atlas",
+    title: "Atlas",
+    displayName: "Atlas",
+    workspaceRoot: "/data/one/atlas",
+  } as never;
+  await using screen = await render(
+    <ProjectMachineDescription config={config} group={undefined} project={project} showPathTail />,
+    { router: false },
+  );
+  await expect.element(screen.getByText("…/one/atlas")).toBeVisible();
+});

@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, SidebarWorkspacesConfig } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { PlugZapIcon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { usePrimarySettings } from "../../hooks/useSettings";
@@ -21,6 +21,26 @@ import {
 
 export const MESH_CONNECT_PROMPT_DISMISSED_KEY = "t3code.meshConnectPrompt.dismissed";
 
+function readDismissedFromStorage(): readonly string[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(MESH_CONNECT_PROMPT_DISMISSED_KEY);
+  if (raw === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedToStorage(next: ReadonlyArray<string>) {
+  try {
+    window.localStorage.setItem(MESH_CONNECT_PROMPT_DISMISSED_KEY, JSON.stringify(next));
+  } catch (error) {
+    console.warn("Could not remember the dismissed mesh prompt", error);
+  }
+}
+
 /**
  * Fork: one calm first-run prompt when the mesh knows machines this device is not
  * connected to. It switches saved connections back on and sends the rest to Connections.
@@ -34,19 +54,9 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
   const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
   const setEnabled = useAtomCommand(environmentCatalog.setEnabled, { reportFailure: false });
   const navigate = useNavigate();
-  const [dismissed, setDismissed] = useState<readonly string[]>(() => {
-    if (typeof window === "undefined") return [];
-    const raw = window.localStorage.getItem(MESH_CONNECT_PROMPT_DISMISSED_KEY);
-    if (raw === null) return [];
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      return Array.isArray(parsed)
-        ? parsed.filter((id): id is string => typeof id === "string")
-        : [];
-    } catch {
-      return [];
-    }
-  });
+  const [isConnecting, setIsConnecting] = useState(false);
+  const connectingRef = useRef(false);
+  const [dismissed, setDismissed] = useState<readonly string[]>(readDismissedFromStorage);
   if (!enabled) return null;
   const connected = new Set(
     environments
@@ -71,46 +81,49 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
     ),
   });
   if (!shouldShowMeshConnectPrompt(plan, currentDismissed)) return null;
-  const rememberDismissed = (environmentIds: ReadonlyArray<string>) => {
-    const next = dismissMeshConnectIds(currentDismissed, environmentIds);
+  const persistDismissed = (next: ReadonlyArray<string>) => {
     setDismissed(next);
-    try {
-      window.localStorage.setItem(MESH_CONNECT_PROMPT_DISMISSED_KEY, JSON.stringify(next));
-    } catch (error) {
-      console.warn("Could not remember the dismissed mesh prompt", error);
-    }
+    writeDismissedToStorage(next);
+  };
+  const rememberDismissed = (environmentIds: ReadonlyArray<string>) => {
+    // Read storage again: another tab or surface may have dismissed a machine meanwhile.
+    persistDismissed(dismissMeshConnectIds(readDismissedFromStorage(), environmentIds));
   };
   const dismiss = () => {
-    const next = dismissMeshConnectPrompt(currentDismissed, plan);
-    setDismissed(next);
-    try {
-      window.localStorage.setItem(MESH_CONNECT_PROMPT_DISMISSED_KEY, JSON.stringify(next));
-    } catch (error) {
-      console.warn("Could not remember the dismissed mesh prompt", error);
-    }
+    persistDismissed(dismissMeshConnectPrompt(readDismissedFromStorage(), plan));
   };
-  const connectAll = async () => {
-    const settled = plan.missing.map((machine) => machine.environmentId);
-    const failed: string[] = [];
-    for (const machine of plan.reconnect) {
-      const result = await setEnabled({
-        environmentId: machine.environmentId as EnvironmentId,
-        enabled: true,
-      });
-      if (result._tag === "Success") settled.push(machine.environmentId);
-      else failed.push(machine.label);
-    }
-    if (settled.length > 0) rememberDismissed(settled);
-    if (failed.length > 0) {
-      toastManager.add({
-        type: "error",
-        title: "Couldn't connect every machine",
-        description: `Ask an agent to fix the connection to ${failed.join(", ")}.`,
-      });
-    }
-    if (plan.missing.length > 0) {
-      void navigate({ to: "/settings/connections" });
-    }
+  const connectAll = () => {
+    if (connectingRef.current) return;
+    connectingRef.current = true;
+    setIsConnecting(true);
+    const sequence = (async () => {
+      // Never mark a machine that was never added as dismissed: it must keep asking.
+      const settled: string[] = [];
+      const failed: string[] = [];
+      for (const machine of plan.reconnect) {
+        const result = await setEnabled({
+          environmentId: machine.environmentId as EnvironmentId,
+          enabled: true,
+        });
+        if (result._tag === "Success") settled.push(machine.environmentId);
+        else failed.push(machine.label);
+      }
+      if (settled.length > 0) rememberDismissed(settled);
+      if (failed.length > 0) {
+        toastManager.add({
+          type: "error",
+          title: "Couldn't connect every machine",
+          description: `Ask an agent to fix the connection to ${failed.join(", ")}.`,
+        });
+      }
+      if (plan.missing.length > 0) {
+        void navigate({ to: "/settings/connections" });
+      }
+    })();
+    void sequence.finally(() => {
+      connectingRef.current = false;
+      setIsConnecting(false);
+    });
   };
   return (
     <div
@@ -129,8 +142,8 @@ export function MeshConnectPrompt(props: { readonly config: SidebarWorkspacesCon
               : "Bring this device's other machines online."}
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <Button size="xs" onClick={() => void connectAll()}>
-              Connect all
+            <Button size="xs" disabled={isConnecting} onClick={connectAll}>
+              {isConnecting ? "Connecting…" : "Connect all"}
             </Button>
             <Button size="xs" variant="ghost" onClick={dismiss}>
               Not now

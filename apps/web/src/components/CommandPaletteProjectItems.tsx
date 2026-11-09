@@ -27,6 +27,8 @@ interface ProjectItemsInput {
   readonly projectGroupByTargetKey: ReadonlyMap<string, SidebarProjectSnapshot>;
   readonly locationByEnvironmentId: ReadonlyMap<EnvironmentId, CommandPaletteProjectLocation>;
   readonly config: SidebarWorkspacesConfig | null;
+  /** Titles that two logical projects share, so their rows need a path tail. */
+  readonly ambiguousTitles?: ReadonlySet<string>;
   readonly runProject: (project: CommandPaletteProject) => Promise<void>;
   readonly pin?: (project: CommandPaletteProject) => CommandPaletteItemPin | null;
 }
@@ -54,6 +56,7 @@ export function buildProjectSearchItems(input: ProjectItemsInput) {
         config={input.config}
         group={input.projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`)}
         project={project}
+        showPathTail={input.ambiguousTitles?.has(project.title) === true}
       />
     ),
     icon: projectFaviconIcon,
@@ -80,6 +83,7 @@ export function buildNewThreadInProjectItems(input: ProjectItemsInput) {
         config={input.config}
         group={input.projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`)}
         project={project}
+        showPathTail={input.ambiguousTitles?.has(project.title) === true}
       />
     ),
     icon: projectFaviconIcon,
@@ -93,6 +97,8 @@ export function ProjectMachineDescription(props: {
   readonly config: SidebarWorkspacesConfig | null;
   readonly group: SidebarProjectSnapshot | undefined;
   readonly project: CommandPaletteProject;
+  /** Two projects share this title, so the row needs a path tail to tell them apart. */
+  readonly showPathTail?: boolean;
 }) {
   const members = props.group?.memberProjects ?? [props.project];
   const tags = projectMachineTags(
@@ -109,6 +115,7 @@ export function ProjectMachineDescription(props: {
     );
   }
   const names = tags.map((tag) => tag.label).join(" · ");
+  const pathTail = props.showPathTail ? shortProjectPath(props.project.workspaceRoot) : null;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -123,9 +130,12 @@ export function ProjectMachineDescription(props: {
               {tag.tag}
             </span>
           ))}
+          {pathTail === null ? null : (
+            <span className="truncate text-muted-foreground/70">{pathTail}</span>
+          )}
         </span>
       </TooltipTrigger>
-      <TooltipPopup side="top">{names}</TooltipPopup>
+      <TooltipPopup side="top">{pathTail === null ? names : `${names} · ${pathTail}`}</TooltipPopup>
     </Tooltip>
   );
 }

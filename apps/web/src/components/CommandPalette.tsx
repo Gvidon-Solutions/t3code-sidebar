@@ -812,6 +812,14 @@ function OpenCommandPaletteDialog(props: {
     await handleNewThread(scopeProjectRef(project.environmentId, project.id));
   };
 
+  // Two logical projects with the same title need a path tail to tell their rows apart.
+  const ambiguousProjectTitles = (() => {
+    const counts = new Map<string, number>();
+    for (const project of pickerProjects) {
+      counts.set(project.title, (counts.get(project.title) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, count]) => count > 1).map(([title]) => title));
+  })();
   // Pinning from a row keeps rows in place while the palette is open.
   const projectSearchItems = useOrderWhileOpen(
     buildProjectSearchItems({
@@ -819,6 +827,7 @@ function OpenCommandPaletteDialog(props: {
       projectGroupByTargetKey,
       locationByEnvironmentId: projectEnvironmentLocationById,
       config: mesh.config,
+      ambiguousTitles: ambiguousProjectTitles,
       runProject: openProjectFromSearch,
       pin: projectPin,
     }),
@@ -835,6 +844,7 @@ function OpenCommandPaletteDialog(props: {
         projectGroupByTargetKey,
         locationByEnvironmentId: projectEnvironmentLocationById,
         config: mesh.config,
+        ambiguousTitles: ambiguousProjectTitles,
         pin: projectPin,
         runProject: async (project) => {
           const group = projectGroupByTargetKey.get(`${project.environmentId}:${project.id}`);
