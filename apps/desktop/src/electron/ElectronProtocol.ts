@@ -435,9 +435,10 @@ export const make = Effect.gen(function* () {
                   const fallback = new URL(`${input.scheme}://app/`);
                   fallback.searchParams.set("desktopWindowId", String(rendererId));
                   fallback.searchParams.set("bundled", "1");
-                  if (origin) fallback.searchParams.set("server", origin.href);
+                  // Only the origin: no path, query or userinfo belongs in the navigation map or history.
+                  if (origin) fallback.searchParams.set("server", origin.origin);
                   const name = input.serverName ? await input.serverName() : null;
-                  if (name) fallback.searchParams.set("name", name);
+                  if (name) fallback.searchParams.set("name", name.trim().slice(0, 60));
                   navigations.set(rendererId, fallback.href);
                   return Response.redirect(fallback.href, 302);
                 }
