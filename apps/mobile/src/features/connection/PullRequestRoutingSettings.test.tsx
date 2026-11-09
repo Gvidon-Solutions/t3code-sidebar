@@ -65,7 +65,7 @@ const catalog = {
         target: {
           _tag: "PrimaryConnectionTarget",
           environmentId,
-          label: "gvidon",
+          label: "shared-host",
           httpBaseUrl: "http://10.0.0.1",
           wsBaseUrl: "ws://10.0.0.1",
         },
@@ -92,7 +92,7 @@ it("names pull-request routing rows by mesh tag and title, one row per machine",
     for (const value of ["ST", "studio", "CB", "cloudbox", "LT", "laptop"]) {
       expect(text).toContain(value);
     }
-    expect(text).not.toContain("gvidon");
+    expect(text).not.toContain("shared-host");
     for (const title of ["studio", "cloudbox", "laptop"]) {
       expect(text.match(new RegExp(title, "g"))).toHaveLength(1);
     }
@@ -105,7 +105,7 @@ it("keeps the saved host name without a mesh", () => {
   mocks.config = null;
   const screen = renderSettings();
   try {
-    expect(screen.container.textContent!.match(/gvidon/g)).toHaveLength(3);
+    expect(screen.container.textContent!.match(/shared-host/g)).toHaveLength(3);
   } finally {
     screen.dispose();
   }

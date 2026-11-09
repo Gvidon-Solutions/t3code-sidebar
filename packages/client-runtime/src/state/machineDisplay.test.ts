@@ -80,7 +80,7 @@ describe("environmentNameOf", () => {
       },
     };
     const names = ["env-studio", "env-cloudbox", "env-laptop"].map((environmentId) =>
-      environmentNameOf(mesh, environmentId, "gvidon"),
+      environmentNameOf(mesh, environmentId, "shared-host"),
     );
     expect(names.map((name) => [name.tag, name.label])).toEqual([
       ["ST", "studio"],
@@ -92,14 +92,14 @@ describe("environmentNameOf", () => {
   });
 
   it("keeps the host name for an environment outside any mesh", () => {
-    expect(environmentNameOf(null, "env-1", "gvidon")).toEqual({
-      label: "gvidon",
+    expect(environmentNameOf(null, "env-1", "shared-host")).toEqual({
+      label: "shared-host",
       tag: "",
       color: workspaceColor({ id: "env-1" }),
       inMesh: false,
     });
-    expect(environmentNameOf({ machines: {} }, "env-1", "gvidon")).toMatchObject({
-      label: "gvidon",
+    expect(environmentNameOf({ machines: {} }, "env-1", "shared-host")).toMatchObject({
+      label: "shared-host",
       tag: "",
       inMesh: false,
     });
@@ -107,8 +107,8 @@ describe("environmentNameOf", () => {
 
   it("keeps the host name for an environment the config does not name", () => {
     expect(
-      environmentNameOf({ machines: { other: { title: "studio", tag: "ST" } } }, "env-1", "gvidon"),
-    ).toMatchObject({ label: "gvidon", tag: "", inMesh: false });
+      environmentNameOf({ machines: { other: { title: "studio", tag: "ST" } } }, "env-1", "shared-host"),
+    ).toMatchObject({ label: "shared-host", tag: "", inMesh: false });
   });
 });
 

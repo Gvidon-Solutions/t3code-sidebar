@@ -77,7 +77,7 @@ const mesh: SidebarWorkspacesConfig = {
 function summaries(): ConnectedEnvironmentSummary[] {
   return ["env-studio", "env-cloudbox", "env-laptop"].map((environmentId) => ({
     environmentId: environmentId as ConnectedEnvironmentSummary["environmentId"],
-    environmentLabel: "gvidon",
+    environmentLabel: "shared-host",
     displayUrl: "http://10.0.0.1/",
     isRelayManaged: false,
     isEnabled: true,
@@ -115,7 +115,7 @@ it("lists a mesh's connections by config tag and title, one row per machine", ()
     for (const value of ["ST", "studio", "CB", "cloudbox", "LT", "laptop"]) {
       expect(text).toContain(value);
     }
-    expect(text).not.toContain("gvidon");
+    expect(text).not.toContain("shared-host");
     for (const title of ["studio", "cloudbox", "laptop"]) {
       expect(text.match(new RegExp(title, "g"))).toHaveLength(1);
     }
@@ -128,7 +128,7 @@ it("keeps the saved host name without a mesh", () => {
   mocks.config = null;
   const screen = renderList();
   try {
-    expect(screen.container.textContent!.match(/gvidon/g)).toHaveLength(3);
+    expect(screen.container.textContent!.match(/shared-host/g)).toHaveLength(3);
   } finally {
     screen.dispose();
   }

@@ -571,7 +571,7 @@ catalog, not a machine name or an assumed operating system.
 ## Lessons already paid for (do not repeat)
 
 - Name an environment from the mesh config, never from the OS hostname. A three-machine bed on one
-  host made every Environments row "gvidon"; `environmentNameOf` is the one resolver both clients
+  host made every Environments row "shared-host"; `environmentNameOf` is the one resolver both clients
   use, and a client outside a mesh keeps the saved host label.
 - Peer links have one home: Settings › Mesh › machine detail › Diagnostics, where the config's
   names, the link access and Forget are together. Listing per-server link sections on Environments

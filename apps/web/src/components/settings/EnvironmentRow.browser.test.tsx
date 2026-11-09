@@ -24,7 +24,7 @@ function Row({
   readonly environmentId: string;
   readonly config: SidebarWorkspacesConfig | null;
 }) {
-  const name = environmentNameOf(config, environmentId, "gvidon");
+  const name = environmentNameOf(config, environmentId, "shared-host");
   return (
     <EnvironmentRow
       kind="server"
@@ -47,11 +47,11 @@ it("names three mesh machines that share one host name by tag and title", async 
   for (const value of ["ST", "studio", "CB", "cloudbox", "LT", "laptop"]) {
     expect(text).toContain(value);
   }
-  expect(text).not.toContain("gvidon");
+  expect(text).not.toContain("shared-host");
 });
 
 it("keeps the saved host name, without a tag, outside a mesh", async () => {
   await using screen = await render(<Row environmentId="env-studio" config={null} />);
-  expect(screen.container.textContent).toContain("gvidon");
+  expect(screen.container.textContent).toContain("shared-host");
   expect(screen.container.querySelector('[role="img"]')).toBeNull();
 });

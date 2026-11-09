@@ -617,14 +617,14 @@ describe("meshLinkedWithText", () => {
   it("names the peer by its config title and groups links by access", () => {
     expect(
       meshLinkedWithText(config, [
-        { environmentId: "studio", label: "gvidon", access: "full-access" },
-        { environmentId: "cloudbox", label: "gvidon", access: "full-access" },
+        { environmentId: "studio", label: "shared-host", access: "full-access" },
+        { environmentId: "cloudbox", label: "shared-host", access: "full-access" },
       ]),
     ).toBe("studio, cloudbox · Full access");
     expect(
       meshLinkedWithText(config, [
-        { environmentId: "studio", label: "gvidon", access: "read-only" },
-        { environmentId: "laptop", label: "gvidon", access: "full-access" },
+        { environmentId: "studio", label: "shared-host", access: "read-only" },
+        { environmentId: "laptop", label: "shared-host", access: "full-access" },
       ]),
     ).toBe("studio · Read only; laptop · Full access");
   });

@@ -55,14 +55,14 @@ const mesh: SidebarWorkspacesConfig = {
 function environment(environmentId: string): EnvironmentPresentation {
   return {
     environmentId: environmentId as EnvironmentPresentation["environmentId"],
-    label: "gvidon",
+    label: "shared-host",
     displayUrl: `http://127.0.0.1:${environmentId.length}/`,
     relayManaged: false,
     entry: {
       target: {
         _tag: "BearerConnectionTarget",
         environmentId,
-        label: "gvidon",
+        label: "shared-host",
         connectionId: environmentId,
       },
       profile: Option.none(),
@@ -100,7 +100,7 @@ it("lists a mesh's connections by config tag and title, without inline jargon", 
   for (const value of ["ST", "studio", "CB", "cloudbox", "LT", "laptop"]) {
     expect(text).toContain(value);
   }
-  expect(text).not.toContain("gvidon");
+  expect(text).not.toContain("shared-host");
   expect(text).not.toContain("Routes");
   expect(text).not.toContain("Permissions");
 });
@@ -123,7 +123,7 @@ it("keeps the saved host names and inline routes without a mesh", async () => {
     </div>,
   );
   const text = screen.container.textContent!;
-  expect(text.match(/gvidon/g)).toHaveLength(3);
+  expect(text.match(/shared-host/g)).toHaveLength(3);
   expect(text).toContain("Routes");
   expect(text).toContain("Permissions");
 });
