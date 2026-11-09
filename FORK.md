@@ -109,6 +109,36 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — F7 coordinator UI review round 2 before 0.1.7-sidebar.63
+
+- **What.** A thread on an offline machine whose conversation was never saved shows a calm centred
+  "This conversation lives on laptop, which is offline. It appears here when laptop is back." pane
+  with Retry instead of a blank timeline, and its banner reads "laptop is offline" once the
+  reconnect window passed. New-thread cards say "Offline" (with the age in the tooltip) for a
+  machine the mesh reports offline; "Not connected here" stays for an online machine this device
+  cannot reach. Sidebar strips dim a machine the mesh reports offline even before this client's
+  socket notices, with "laptop is offline" in the tooltip. The thread header keeps its machine tag
+  directly after the title in the breadcrumb, truncating the title first. The project picker shows
+  machine tags only, with names in the tooltip and `aria-label`. The link dialog starts from this
+  machine. The desktop offline page names the machine ("T3 Code can't reach studio. Make sure it is
+  running, then try again."), shows the address as a muted detail and never says "bundled UI".
+- **How.** Shared client-runtime added `offlineConversationEmptyText`,
+  `offlineMeshEnvironmentIds`, `meshMachineOfflineText` and `defaultLinkSource`; cards carry an
+  `offline` reachability state, strips take `offlineEnvironmentIds`, and mobile got
+  `useReconnectWindow`. Web added `OfflineConversationEmptyState` and `showsOfflineConversationEmpty`,
+  kept the header tag inside the title's breadcrumb item, and stopped the title from growing across
+  the header. Desktop `DesktopUi.selectionLabel` supplies the configured name to the protocol
+  fallback URL, which `DesktopBundledOffline` reads.
+- **Where.** client-runtime `state/meshMachines.ts`, `state/meshLayout/{draftMachineCards,
+  projectMachineStrip,linkSource}.ts`; web `components/{ChatView,ChatView.logic,CommandPaletteProjectItems,
+  chat/{ChatHeader,DraftMachineCards,OfflineConversationEmptyState,useSystemComposerBanners},
+  desktop/{DesktopBundledOffline,desktopBundledFallback},workspaces/{MachineTag,MeshSettingsPanel,
+  WorkspaceSidebar}}`; mobile `features/{connection/useReconnectWindow,threads/{ThreadDetailScreen,
+  ThreadFeed,ThreadRouteScreen,floating-working-status,new-task-flow-provider,threadContentPresentation},
+  workspaces/{ProjectMachineStrip,useWorkspaceHome,workspaceNavigator},settings/{MeshLinkForm,
+  SettingsMachinesRouteScreen}}`; desktop `src/{app/DesktopApp.ts,app/DesktopUi.ts,
+  electron/ElectronProtocol.ts}`.
+
 ### 2026-11-09 — F6 client review fixes before 0.1.7-sidebar.63
 
 - **What.** Machine cards, the fork dialog and the new-thread submenu now agree with the composer:
