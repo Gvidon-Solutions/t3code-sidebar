@@ -25,6 +25,13 @@ import {
   resolveDesktopUpdateButtonAction,
 } from "../desktopUpdate.logic";
 
+/** A mesh lists the machines the config binds; one server alone keeps today's page. */
+export function showsMeshConnections(
+  config: { readonly machines: Readonly<Record<string, unknown>> } | null,
+): boolean {
+  return config !== null && Object.keys(config.machines).length > 1;
+}
+
 /** Keep terminal:read with terminal:operate to avoid creating unseen shells on every script run. */
 export function togglePairingScopeSelection(
   current: ReadonlyArray<AuthGrantScope>,

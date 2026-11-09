@@ -75,6 +75,7 @@ vi.mock("./components/SettingsSection", () => ({
   ),
 }));
 vi.mock("./MeshLinkForm", () => ({ MeshLinkForm: () => <div>Pairing code</div> }));
+vi.mock("./MachineLinkedPeers", () => ({ MachineLinkedPeers: () => null }));
 vi.mock("../../state/mesh-layout", () => ({ meshLayoutAtoms: { configStatus: () => null } }));
 vi.mock("../../state/query", () => ({ useEnvironmentQuery: () => ({ data: null, error: null }) }));
 vi.mock("../../state/environments", () => ({

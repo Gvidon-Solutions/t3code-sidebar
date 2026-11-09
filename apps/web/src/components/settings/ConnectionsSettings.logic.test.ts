@@ -4,6 +4,7 @@ import {
   applyWslEnableSelection,
   resolveTailscaleServeBaseUrl,
   selectQrEndpointOption,
+  showsMeshConnections,
   togglePairingScopeSelection,
 } from "./ConnectionsSettings.logic";
 
@@ -142,5 +143,14 @@ describe("selectQrEndpointOption", () => {
     expect(selectQrEndpointOption(options, "tailscale-ip:gone", "nope")?.id).toBe(
       "tailscale-ip:http://100.84.12.7:4780",
     );
+  });
+});
+
+describe("showsMeshConnections", () => {
+  it("keeps the single-server page until the config names another machine", () => {
+    expect(showsMeshConnections(null)).toBe(false);
+    expect(showsMeshConnections({ machines: {} })).toBe(false);
+    expect(showsMeshConnections({ machines: { studio: {} } })).toBe(false);
+    expect(showsMeshConnections({ machines: { studio: {}, cloudbox: {} } })).toBe(true);
   });
 });

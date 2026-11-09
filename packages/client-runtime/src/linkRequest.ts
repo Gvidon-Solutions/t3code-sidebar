@@ -45,6 +45,17 @@ export function linkedEnvironmentNames(input: {
   );
 }
 
+/** Host names an access level the way both clients' access pickers do. */
+const linkAccessLabels: Readonly<Record<AuthMcpClientAccess, string>> = {
+  "read-only": "Read only",
+  "approval-required": "Supervised",
+  "auto-accept-edits": "Auto-accept edits",
+  auto: "Auto",
+  "full-access": "Full access",
+};
+
+export const linkAccessLabel = (access: AuthMcpClientAccess): string => linkAccessLabels[access];
+
 /** The access a request opens with: the agent's suggestion, else supervised. */
 export const linkRequestDefaultAccess = (
   item: Pick<LinkRequestItem, "requestedAccess">,

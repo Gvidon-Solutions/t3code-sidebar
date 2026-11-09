@@ -9,7 +9,8 @@ import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
 import { usePeerLinkHosts } from "~/state/peerLinks";
 import { useEnvironmentQuery } from "~/state/query";
 import { useEnvironmentScope } from "~/state/session";
-import { isWslSettingsRowVisible } from "./ConnectionsSettings.logic";
+import { isWslSettingsRowVisible, showsMeshConnections } from "./ConnectionsSettings.logic";
+import { useMeshLayoutOptional } from "~/hooks/useMeshLayout";
 import { isProviderSettingsEnvironmentAvailable } from "./ProviderSettingsPanel.logic";
 import type { SettingsScopeSearch } from "./settingsScope";
 import {
@@ -43,7 +44,10 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
     getThreadAutoSettlementSearchAvailability(environments).eligibleEnvironmentIds.length > 0;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const canMaintain = useEnvironmentScope(primaryEnvironmentId, AuthEnvironmentMaintainScope);
-  const hasPeerLinkHost = usePeerLinkHosts().length > 0;
+  // Mesh › machine detail owns peer links once a mesh exists, so the page no longer lists them.
+  const mesh = useMeshLayoutOptional();
+  const peerLinkHosts = usePeerLinkHosts();
+  const hasPeerLinkHost = !showsMeshConnections(mesh.config) && peerLinkHosts.length > 0;
   const cloudLinkState = usePrimaryCloudLinkState().data;
   // Same fallback as the Connections row: older servers imply a tunnel from `linked`.
   const managedTunnelActive =

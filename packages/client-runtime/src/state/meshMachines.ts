@@ -7,6 +7,7 @@ import type {
   SidebarWorkspacesConfig,
 } from "@t3tools/contracts";
 
+import { linkAccessLabel } from "../linkRequest.ts";
 import { shortMachineHost, machineDisplayOf, type MachineDisplay } from "./machineDisplay.ts";
 
 /**
@@ -27,6 +28,7 @@ export interface MeshPeerLinkView {
   readonly environmentId: string;
   readonly label: string;
   readonly urls?: readonly string[];
+  readonly access?: import("@t3tools/contracts").AuthMcpClientAccess;
   readonly status?: string;
   readonly lastReachedAt?: string | null;
   readonly lastError?: string | null;
@@ -51,6 +53,31 @@ export interface MeshLinkedWith {
   readonly environmentId: string;
   readonly label: string;
   readonly tag: string;
+}
+
+/**
+ * The one line Mesh › machine detail › Diagnostics shows for the peers a machine links to:
+ * configured names grouped by the access each link grants. Machines the config does not name
+ * keep the link's own label.
+ */
+export function meshLinkedWithText(
+  config: Pick<SidebarWorkspacesConfig, "machines">,
+  links: ReadonlyArray<Pick<MeshPeerLinkView, "environmentId" | "label" | "access">>,
+): string | null {
+  if (links.length === 0) return null;
+  const groups = new Map<string, string[]>();
+  for (const link of links) {
+    const name = machineDisplayOf(config, link.environmentId, link.label).label;
+    const key = link.access === undefined ? "" : linkAccessLabel(link.access);
+    const names = groups.get(key) ?? [];
+    names.push(name);
+    groups.set(key, names);
+  }
+  return [...groups.entries()]
+    .map(([access, names]) =>
+      access === "" ? names.join(", ") : `${names.join(", ")} · ${access}`,
+    )
+    .join("; ");
 }
 
 export interface MeshMachine extends MachineDisplay {

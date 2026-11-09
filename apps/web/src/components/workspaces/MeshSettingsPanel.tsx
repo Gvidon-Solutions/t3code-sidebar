@@ -5,12 +5,16 @@ import { useNowMinute } from "../../hooks/useNowMinute";
 import { linkRequestFailureMessage } from "@t3tools/client-runtime/link-request";
 import {
   linkMeshMachines,
+  meshLinkedWithText,
   meshMachineDetailRows,
   offlineMachineText,
   partitionMeshMachines,
   forgetMachineFacts,
   sortMeshMachinesForSettings,
+  type MeshMachine,
+  type MeshPeerLinkView,
 } from "@t3tools/client-runtime/state/mesh-machines";
+import { linkAccessLabel } from "@t3tools/client-runtime/link-request";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -66,6 +70,7 @@ import {
   showsLinkSourcePicker,
 } from "./meshSettings.logic";
 import { AgentFixActions } from "./AgentFixActions";
+import { requestConfirmDialog } from "~/confirmDialog";
 
 const failureToast = (title: string, description: string) =>
   toastManager.add(stackedThreadToast({ type: "error", title, description }));
@@ -313,12 +318,78 @@ function LinkWithDialog(props: {
   );
 }
 
+/** The peers a machine links to, with the Forget action that used to sit on Connections › Environments. */
+function MachineLinkedPeers(props: {
+  readonly machine: MeshMachine;
+  readonly config: ReturnType<typeof useMeshLayout>["config"];
+  readonly links: ReadonlyArray<MeshPeerLinkView>;
+}) {
+  const config = props.config ?? DEFAULT_SIDEBAR_WORKSPACES_CONFIG;
+  const unlink = useAtomCommand(peerLinkEnvironment.unlink, { label: "unlink environment" });
+  const canUnlink = useAtomValue(
+    peerLinkEnvironment.unlink.permissionAtom(props.machine.environmentId as EnvironmentId),
+  );
+  const [busy, setBusy] = useState<string | null>(null);
+  const summary = meshLinkedWithText(config, props.links);
+  const names = props.links.length
+    ? summary
+    : props.machine.linkedWith.map((peer) => peer.label).join(", ") || null;
+  if (names === null) return null;
+  const forget = async (link: Pick<MeshPeerLinkView, "environmentId" | "label">) => {
+    const label = machineDisplayOf(config, link.environmentId, link.label).label;
+    const confirmed = await (requestConfirmDialog(
+      `Forget ${label}? Agents here stop working there. Revoke "T3 Code · …" in ${label}'s Connections to end the session there too.`,
+      { variant: "destructive" },
+    ) ?? Promise.resolve(false));
+    if (!confirmed) return;
+    setBusy(link.environmentId);
+    const result = await unlink({
+      environmentId: props.machine.environmentId as EnvironmentId,
+      input: { environmentId: link.environmentId as EnvironmentId },
+    });
+    setBusy(null);
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      failureToast("Could not forget the link", String(squashAtomCommandFailure(result)));
+    }
+  };
+  return (
+    <div className="mt-3 space-y-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+      <p>
+        <span className="text-foreground">Linked with</span> {names}
+      </p>
+      {props.links.length > 0 && canUnlink ? (
+        <ul className="space-y-1">
+          {props.links.map((link) => {
+            const name = machineDisplayOf(config, link.environmentId, link.label).label;
+            return (
+              <li key={link.environmentId} className="flex items-center justify-between gap-2">
+                <span>
+                  {name}
+                  {link.access === undefined ? "" : ` · ${linkAccessLabel(link.access)}`}
+                </span>
+                <Button
+                  size="xs"
+                  variant="destructive-outline"
+                  disabled={busy !== null}
+                  onClick={() => void forget(link)}
+                >
+                  {busy === link.environmentId ? "Forgetting…" : "Forget"}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 export function MeshSettingsPanel() {
   const mesh = useMeshLayout();
   const navigate = useNavigate();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const agentEnvironmentId = mesh.source ?? primaryEnvironmentId;
-  const { machines: allMachines } = useMeshOverview({ config: mesh.config });
+  const { machines: allMachines, links } = useMeshOverview({ config: mesh.config });
   const now = minuteTickToEpochMs(useNowMinute());
   const { active, forgotten } = partitionMeshMachines(
     allMachines,
@@ -510,6 +581,14 @@ export function MeshSettingsPanel() {
                     </div>
                   ))}
                 </dl>
+                <MachineLinkedPeers
+                  machine={selected}
+                  config={config}
+                  links={
+                    links.find((source) => source.environmentId === selected.environmentId)
+                      ?.links ?? []
+                  }
+                />
               </details>
             </DialogPanel>
           </DialogPopup>

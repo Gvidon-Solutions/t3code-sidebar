@@ -109,6 +109,34 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — Environments screens speak mesh names
+
+- **What.** Every surface that names a server now follows one rule: a machine the mesh config lists
+  is shown by its configured tag and title, and only an environment outside any mesh keeps its
+  saved descriptor label (usually the OS hostname). Settings › Environments on web/desktop lists
+  this device's connections with tag + title, the address muted, Connected/Off, the switch and one
+  overflow menu for routes, permissions and remove; with a mesh it no longer repeats a "Linked
+  environments · <server>" section per connected server. Those peer links now live in
+  Settings › Mesh › machine detail › Diagnostics as "Linked with studio, cloudbox · Full access",
+  with the existing Forget action. Without a mesh the page keeps its previous layout and sections.
+  Android's Environments and Pull request routing lists use the same names and one row per machine,
+  and Android's new-thread machine cards sit on the composer's 16 dp gutter instead of the screen
+  edge.
+- **How.** Shared client-runtime added `machineDisplay.environmentNameOf` (built on
+  `machineDisplayOf`) and `meshMachines.meshLinkedWithText` plus `linkRequest.linkAccessLabel`;
+  peer-link views now carry their access. Web and mobile get a small `useEnvironmentName` wrapper
+  and pass the resolved display into `EnvironmentRow` / `ConnectionEnvironmentRow`; mobile extracts
+  `MachineLinkedPeers` for the Mesh sheet. The Environments page switches layout only when
+  `showsMeshConnections` sees more than one configured machine.
+- **Where.** client-runtime `state/{machineDisplay,meshMachines}.ts`, `linkRequest.ts`; web
+  `components/settings/{ConnectionsSettings,ConnectionsSettings.logic,EnvironmentRow,
+  SavedEnvironmentRows,PullRequestRoutingSettings,useAvailableSettingsSearchItems}.tsx|ts`,
+  `components/workspaces/MeshSettingsPanel.tsx`, `hooks/useEnvironmentName.ts`; mobile
+  `features/settings/{SettingsMachinesRouteScreen,MachineLinkedPeers}.tsx`,
+  `features/connection/{ConnectionEnvironmentRow,ConnectionsRouteScreen,PullRequestRoutingSettings}.tsx`,
+  `features/workspaces/{DraftMachineCards,useEnvironmentName,useMeshOverview}.ts(x)`;
+  `docs/mesh/README.md` records the naming rule and where peer links live.
+
 ### 2026-11-09 — Draft identity, machine choice and desktop offline fallback
 
 - **What.** A machine picked with "New thread on…" is stored as a manual draft choice and survives
