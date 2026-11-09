@@ -205,6 +205,95 @@ jobs:
             release/latest-linux.yml
           if-no-files-found: error
 
+  # Apple Silicon DMG. The fork has no Apple Developer ID, so the app is
+  # signed ad hoc: macOS asks once to allow it (Privacy & Security ›
+  # Open Anyway, or `xattr -dr com.apple.quarantine` on the app). Squirrel.Mac
+  # refuses updates for ad hoc apps, so no latest-mac.yml is published and the
+  # app is updated by installing the next DMG.
+  mac:
+    name: Build macOS arm64
+    needs: [version, bundle]
+    if: needs.version.outputs.desktop == 'true'
+    runs-on: macos-26
+    env:
+      VERSION: ${{ needs.bundle.outputs.version }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - run: vp install --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/scripts...
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            .vite-plus
+            apps/*/.vite-plus
+            packages/*/.vite-plus
+            node_modules/.vite
+            .turbo
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            delivery-${{ runner.os }}-${{ github.job }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin
+
+      - run: node scripts/update-release-package-versions.ts "$VERSION"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: js-bundle
+          path: apps
+
+      - name: Build desktop artifact
+        run: |
+          # GITHUB_REPOSITORY gives the app its update feed: this fork's releases.
+          vp run dist:desktop:artifact --platform mac --target dmg --arch arm64 \
+            --build-version "$VERSION" --skip-build --verbose
+
+      # electron-builder skips signing without an identity and leaves Electron's
+      # stale signature, which macOS reports as a damaged app. Re-sign the app
+      # ad hoc, verify it, and rebuild the DMG around it.
+      - name: Re-sign ad hoc and rebuild DMG
+        run: |
+          set -euo pipefail
+          dmg="$(ls release/*.dmg | head -n 1)"
+          mnt="$(mktemp -d)"
+          stage="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg"
+          app_name="$(cd "$mnt" && ls -d *.app | head -n 1)"
+          test -n "$app_name"
+          ditto "$mnt/$app_name" "$stage/$app_name"
+          hdiutil detach "$mnt"
+          codesign --force --deep --sign - "$stage/$app_name"
+          codesign --verify --deep --strict --verbose=2 "$stage/$app_name"
+          codesign -dv "$stage/$app_name" 2>&1 | grep -E 'Signature=|Identifier='
+          ln -s /Applications "$stage/Applications"
+          rm -f "$dmg" "$dmg.blockmap"
+          hdiutil create -volname "${app_name%.app}" -srcfolder "$stage" -fs HFS+ -format UDZO -ov "$dmg"
+          hdiutil verify "$dmg"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: desktop-mac-arm64
+          path: release/*.dmg
+          if-no-files-found: error
+
   runtime:
     name: Build server runtime and WSL archive
     needs: [version, bundle]
@@ -623,6 +712,22 @@ jobs:
           path: dist
       - run: gh release upload "sidebar-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
 
+  publish-mac:
+    name: Attach macOS artifacts
+    needs: [version, release, mac]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-mac-arm64
+          path: dist
+      - run: gh release upload "sidebar-v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
   publish-android:
     name: Attach android artifacts
     needs: [version, release, android]
@@ -648,10 +753,12 @@ jobs:
         runtime,
         linux,
         windows,
+        mac,
         android,
         release,
         publish-linux,
         publish-windows,
+        publish-mac,
         publish-android,
       ]
     if: always()
