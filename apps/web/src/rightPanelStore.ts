@@ -74,6 +74,12 @@ export type RightPanelSurface =
       inProject?: boolean;
       /** The resolved path as a person should read it, for the remap caption. */
       resolvedDisplayPath?: string;
+      /** The representation root the file lives under, for relative display. */
+      root?: string;
+      /** The thread worktree was gone and the project root was used instead. */
+      worktreeRemoved?: boolean;
+      /** The machine label for the not-synced banner, kept apart from the project name. */
+      machineLabel?: string;
     }
   | {
       id: `pull-request:${string}`;
@@ -151,11 +157,15 @@ interface RightPanelStoreState {
       readonly projectName: string;
       readonly notSynced?: boolean;
       readonly rawPath?: string;
+      readonly machineLabel?: string;
     },
     details?: {
       readonly notSynced?: boolean;
       readonly rawPath?: string;
       readonly inProject?: boolean;
+      readonly resolvedDisplayPath?: string;
+      readonly root?: string;
+      readonly worktreeRemoved?: boolean;
     },
   ) => void;
   /** Moves in place; "" opens the root explorer. folderTrail keeps the return path; keepSource opens beside the source. */
@@ -265,12 +275,15 @@ const fileSurface = (
     readonly projectName: string;
     readonly notSynced?: boolean;
     readonly rawPath?: string;
+    readonly machineLabel?: string;
   },
   details?: {
     readonly notSynced?: boolean;
     readonly rawPath?: string;
     readonly inProject?: boolean;
     readonly resolvedDisplayPath?: string;
+    readonly root?: string;
+    readonly worktreeRemoved?: boolean;
   },
 ): RightPanelSurface => ({
   id: `file:${external === undefined ? "" : `${external.environmentId}:`}${relativePath}`,

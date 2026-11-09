@@ -70,6 +70,9 @@ import { WorkspaceFileSvgPreview, WorkspaceFileWebPreview } from "./WorkspaceFil
 import { WorkspaceFilePdfPreview } from "./WorkspaceFilePdfPreview";
 import { ThreadTabStrip } from "../tabs/ThreadTabStrip";
 import { FileMachineTag } from "../workspaces/FileMachineTag";
+import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useThreadPager } from "../panels/threadPagerContext";
 import { useThreadTabPosition } from "../tabs/useThreadTabPosition";
 import {
@@ -387,10 +390,13 @@ type ThreadFileRouteScreenProps = StaticScreenProps<{
   readonly environmentId: string;
   readonly sourceEnvironmentId?: string;
   readonly threadId?: string;
-  readonly path: string[];
+  readonly path: string[] | string;
   readonly line?: string;
   readonly cwd?: string;
   readonly projectName?: string;
+  readonly worktreeRemoved?: string;
+  readonly notSynced?: string;
+  readonly outsideProject?: string;
 }>;
 
 function useThreadFilesWorkspace(params: {
@@ -436,6 +442,20 @@ function FilesUnavailable({
       <NativeStackScreenOptions options={{ title: "Files" }} />
       <EmptyState title="Files unavailable" detail={detail} />
     </View>
+  );
+}
+
+function NotSyncedNotice({ environmentId }: { readonly environmentId: string }) {
+  const { config } = useMeshLayout();
+  const environments = useWorkspaceEnvironments();
+  const label =
+    environments.find((environment) => environment.environmentId === environmentId)
+      ?.environmentLabel ?? environmentId;
+  const machine = machineDisplayOf(config ?? { machines: {} }, environmentId, label);
+  return (
+    <FilePreviewNotice title={`Not synced · from ${machine.label}`}>
+      The main copy holds this file.
+    </FilePreviewNotice>
   );
 }
 
@@ -1144,6 +1164,17 @@ export function ThreadFileView(
           threadEnvironmentId={params.sourceEnvironmentId}
         />
       </View>
+      {firstRouteParam(params.worktreeRemoved) !== null ? (
+        <FilePreviewNotice title="Worktree removed">
+          Opened from the project root.
+        </FilePreviewNotice>
+      ) : null}
+      {firstRouteParam(params.notSynced) !== null && environmentId !== null ? (
+        <NotSyncedNotice environmentId={String(environmentId)} />
+      ) : null}
+      {firstRouteParam(params.outsideProject) !== null ? (
+        <FilePreviewNotice title="Outside project">Read-only.</FilePreviewNotice>
+      ) : null}
       {threadId !== null ? (
         <ThreadTabStrip
           environmentId={String(environmentId)}

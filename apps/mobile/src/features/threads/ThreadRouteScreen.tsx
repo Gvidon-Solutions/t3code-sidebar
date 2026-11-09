@@ -105,6 +105,7 @@ import {
   useRegisterWorkspaceInspector,
 } from "../layout/AdaptiveWorkspaceLayout";
 import { ThreadFileNavigatorPane } from "../files/thread-file-navigator-pane";
+import { isAbsolutePath } from "../files/filePath";
 import {
   ThreadInspectorContentStack,
   type ThreadInspectorMode,
@@ -1244,7 +1245,7 @@ function ThreadRouteContent(
             route={{
               params: {
                 ...threadParams,
-                path: path.split("/").filter(Boolean),
+                path: isAbsolutePath(path) ? path : path.split("/").filter(Boolean),
                 ...(line === null ? {} : { line }),
               },
             }}

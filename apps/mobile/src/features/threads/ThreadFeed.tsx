@@ -267,7 +267,9 @@ import { useV2ItemSupport } from "../../state/v2-item-support";
 import { showFileLocateSheet } from "../files/locateFileSheetState";
 import { filesEnvironment } from "../../state/files";
 import {
+  basename,
   fileRoutePathSegments,
+  isAbsolutePath,
   resolveFileLinkPath,
   resolveWorkspaceRelativeFilePath,
 } from "../files/filePath";
@@ -2854,7 +2856,8 @@ export const ThreadFeed = memo(function ThreadFeed({
       workspaceRoot: props.workspaceRoot,
       imageEmbed,
     });
-    if (media && media.kind !== "file") {
+    // PDFs go through the server resolver so the machine that holds them is chosen.
+    if (media && media.kind !== "file" && media.kind !== "pdf") {
       void Haptics.selectionAsync();
       const scope = markdownLinkScope;
       const openMediaPreview = () => {
@@ -2897,25 +2900,76 @@ export const ThreadFeed = memo(function ThreadFeed({
         readonly environmentId: EnvironmentId;
         readonly absolutePath: string;
         readonly line?: number;
+        readonly root?: string;
+        readonly worktreeRemoved?: boolean;
+        readonly notSynced?: boolean;
+        readonly outsideProject?: boolean;
+        readonly inProject?: boolean;
+        readonly cwd?: string;
+        readonly projectTitle?: string;
       }) => {
         if (request.signal.aborted) return;
         void Haptics.selectionAsync();
         const sameMachine = String(target.environmentId) === String(props.environmentId);
-        const routePath = sameMachine
-          ? (resolveWorkspaceRelativeFilePath(props.workspaceRoot, target.absolutePath) ??
-            target.absolutePath)
-          : target.absolutePath;
+        // Outside the project the parent folder is the read root, so the absolute machine
+        // path never becomes a route segment.
+        const outside = target.inProject === false;
+        const parent =
+          outside && target.absolutePath.lastIndexOf("/") > 0
+            ? target.absolutePath.slice(0, target.absolutePath.lastIndexOf("/"))
+            : null;
+        const base = sameMachine ? props.workspaceRoot : target.root;
+        const routePath =
+          (base === undefined || base === null
+            ? null
+            : resolveWorkspaceRelativeFilePath(base, target.absolutePath)) ?? target.absolutePath;
+        // Outside the project, and when the worktree is gone, the route's selected folder
+        // is not a reliable root, so carry the absolute path itself.
+        const absoluteRoute = outside || target.worktreeRemoved === true;
+        const routeParam = absoluteRoute
+          ? target.absolutePath
+          : isAbsolutePath(routePath)
+            ? [routePath]
+            : fileRoutePathSegments(routePath);
+        if (outside || target.worktreeRemoved === true) {
+          const root = outside
+            ? parent
+            : (target.cwd ?? target.root ?? props.workspaceRoot ?? null);
+          const relative =
+            (root === null ? null : resolveWorkspaceRelativeFilePath(root, target.absolutePath)) ??
+            target.absolutePath;
+          navigation.navigate("ThreadFile", {
+            environmentId: String(target.environmentId),
+            sourceEnvironmentId: String(props.environmentId),
+            ...(root === null
+              ? {}
+              : {
+                  cwd: root,
+                  projectName: target.projectTitle ?? basename(root),
+                }),
+            path: fileRoutePathSegments(relative),
+            ...(target.line === undefined ? {} : { line: String(target.line) }),
+            ...(target.worktreeRemoved ? { worktreeRemoved: "1" } : {}),
+            ...(target.notSynced ? { notSynced: "1" } : {}),
+            ...(target.outsideProject ? { outsideProject: "1" } : {}),
+          });
+          return;
+        }
         navigation.navigate("ThreadFile", {
           environmentId: String(target.environmentId),
           ...(sameMachine
             ? { threadId: String(props.threadId) }
             : {
                 sourceEnvironmentId: String(props.environmentId),
-                cwd: "/",
-                projectName: String(target.environmentId),
+                cwd: target.root ?? "/",
+                projectName:
+                  target.root === undefined ? String(target.environmentId) : basename(target.root),
               }),
-          path: fileRoutePathSegments(routePath),
+          path: routeParam,
           ...(target.line === undefined ? {} : { line: String(target.line) }),
+          ...(target.worktreeRemoved ? { worktreeRemoved: "1" } : {}),
+          ...(target.notSynced ? { notSynced: "1" } : {}),
+          ...(target.outsideProject ? { outsideProject: "1" } : {}),
         });
       };
       void executeAtomQuery(
@@ -2953,6 +3007,13 @@ export const ThreadFeed = memo(function ThreadFeed({
               environmentId: target.environmentId,
               absolutePath: target.absolutePath,
               ...(target.line === undefined ? {} : { line: target.line }),
+              ...(target.root === undefined ? {} : { root: target.root }),
+              ...(result.worktreeRemoved ? { worktreeRemoved: true } : {}),
+              ...(target.notSynced ? { notSynced: true } : {}),
+              ...(target.inProject ? {} : { outsideProject: true }),
+              ...(target.inProject === undefined ? {} : { inProject: target.inProject }),
+              ...(result.cwd === undefined ? {} : { cwd: result.cwd }),
+              ...(result.projectTitle === undefined ? {} : { projectTitle: result.projectTitle }),
             });
             return;
           }

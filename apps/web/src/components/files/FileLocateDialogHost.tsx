@@ -1,4 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
+import { formatRelativeTimeLabel } from "~/timestampFormat";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
 import type { EnvironmentId, FilesLocateResult } from "@t3tools/contracts";
 import { ChevronDownIcon } from "lucide-react";
@@ -17,9 +18,6 @@ import {
 } from "~/components/ui/dialog";
 import { cn } from "~/lib/utils";
 import { useFileLocateDialogStore } from "./locateFileState";
-
-const formatTime = (mtimeMs: number | undefined) =>
-  mtimeMs === undefined ? null : new Date(mtimeMs).toLocaleString();
 
 const basenameOf = (value: string) => value.split(/[\\/]/).filter(Boolean).at(-1) ?? value;
 
@@ -40,6 +38,7 @@ export function FileLocateDialogHost() {
   const { result } = request;
   const threadMachine = machineOf(result.environmentId);
   const candidates = result.candidates ?? (result.target === undefined ? [] : [result.target]);
+  const mixedMachines = new Set(candidates.map((candidate) => candidate.environmentId)).size > 1;
 
   if (result.status !== "choose") {
     const checked = [
@@ -136,26 +135,37 @@ export function FileLocateDialogHost() {
         </DialogHeader>
         <DialogPanel>
           <div className="flex max-h-[60vh] flex-col gap-1 overflow-auto">
-            {candidates.map((candidate) => {
+            {candidates.map((candidate, index) => {
               const machine = machineOf(candidate.environmentId);
               const otherMachine = candidate.environmentId !== result.environmentId;
+              const best = index === 0;
               return (
                 <button
                   key={`${candidate.environmentId}:${candidate.absolutePath}`}
                   type="button"
-                  className="flex flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-accent"
+                  aria-current={best ? "true" : undefined}
+                  className={cn(
+                    "flex flex-col gap-0.5 rounded border px-2 py-1.5 text-left hover:bg-accent",
+                    best ? "border-ring bg-accent/40" : "border-transparent",
+                  )}
                   onClick={() => {
                     request.openTarget({
                       environmentId: candidate.environmentId,
                       absolutePath: candidate.absolutePath,
                       ...(candidate.line === undefined ? {} : { line: candidate.line }),
+                      ...(candidate.root === undefined ? {} : { root: candidate.root }),
                     });
                     close();
                   }}
                 >
                   <span className="flex items-center gap-2">
                     <span className="truncate font-mono text-xs">{candidate.displayPath}</span>
-                    {otherMachine || candidate.notSynced ? (
+                    {best ? (
+                      <span className="shrink-0 rounded bg-primary px-1 text-3xs text-primary-foreground">
+                        Best match
+                      </span>
+                    ) : null}
+                    {mixedMachines || otherMachine || candidate.notSynced ? (
                       <span className="shrink-0 rounded bg-muted px-1 text-3xs uppercase text-muted-foreground">
                         {machine.tag || machine.label}
                         {candidate.notSynced ? " · not synced" : ""}
@@ -168,8 +178,9 @@ export function FileLocateDialogHost() {
                     ) : null}
                   </span>
                   <span className="text-2xs text-muted-foreground">
-                    {formatTime(candidate.mtimeMs) ?? "No modification time"}
-                    {otherMachine ? ` · ${machine.label}` : ""}
+                    {candidate.mtimeMs === undefined
+                      ? "No modification time"
+                      : `${formatRelativeTimeLabel(new Date(candidate.mtimeMs).toISOString())}${otherMachine ? ` · ${machine.label}` : ""}`}
                   </span>
                 </button>
               );
@@ -188,6 +199,7 @@ export function showFileLocateDialog(
     environmentId: EnvironmentId;
     absolutePath: string;
     line?: number;
+    root?: string;
   }) => void,
   search: (term: string) => void,
 ) {

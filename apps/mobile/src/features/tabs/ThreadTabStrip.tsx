@@ -6,6 +6,7 @@ import { cn } from "../../lib/cn";
 import { terminalTabKey } from "../panels/terminalTabs";
 import { useThreadPager } from "../panels/threadPagerContext";
 import { useThreadTabs } from "./useThreadTabs";
+import { isAbsolutePath } from "../files/filePath";
 
 const basename = (path: string) => path.slice(path.lastIndexOf("/") + 1) || path;
 
@@ -39,7 +40,10 @@ export function ThreadTabStrip(props: {
       pager.goTo(path);
       return;
     }
-    const params = { ...threadParams, path: path.split("/").filter(Boolean) };
+    const params = {
+      ...threadParams,
+      path: isAbsolutePath(path) ? path : path.split("/").filter(Boolean),
+    };
     // Keep the stack at chat + one file, so Chat is always one pop away.
     navigation.dispatch(
       props.activePath === null

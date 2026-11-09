@@ -5,6 +5,7 @@ export interface FileLocateOpenTarget {
   readonly environmentId: EnvironmentId;
   readonly absolutePath: string;
   readonly line?: number;
+  readonly root?: string;
 }
 
 export interface FileLocateSheetRequest {

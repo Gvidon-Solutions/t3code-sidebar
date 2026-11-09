@@ -65,7 +65,7 @@ import { resolveDiffThemeName } from "~/lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "~/lib/syntaxHighlighting";
 import { cn } from "~/lib/utils";
 import type { ChatFileAttachment } from "~/types";
-import { isHostPath } from "@t3tools/shared/path";
+import { isHostPath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
@@ -147,6 +147,10 @@ interface FilePreviewPanelProps {
   inProject?: boolean;
   /** The resolved path as a person should read it, for the remap caption. */
   resolvedDisplayPath?: string;
+  /** The thread worktree was gone and the project root was used instead. */
+  worktreeRemoved?: boolean;
+  /** The machine serving a not-synced file, shown apart from the project name. */
+  machineLabel?: string;
   attachment?: ChatFileAttachment;
   threadRef: ScopedThreadRef;
   composerDraftTarget: ScopedThreadRef | DraftId;
@@ -1026,6 +1030,8 @@ export default function FilePreviewPanel({
   rawPath,
   inProject,
   resolvedDisplayPath,
+  worktreeRemoved,
+  machineLabel,
   attachment,
   threadRef,
   composerDraftTarget,
@@ -1090,7 +1096,7 @@ export default function FilePreviewPanel({
     peerEnvironmentId !== undefined && relativePath !== null
       ? filesEnvironment.read({
           environmentId: callEnvironmentId,
-          input: { environmentId, absolutePath: relativePath },
+          input: { environmentId, absolutePath: resolvePathLinkTarget(relativePath, cwd) },
         })
       : null,
   );
@@ -1399,6 +1405,11 @@ export default function FilePreviewPanel({
           ) : null}
         </div>
       ) : null}
+      {worktreeRemoved ? (
+        <div className="shrink-0 border-b px-3 py-1 text-2xs text-muted-foreground">
+          Worktree removed · opened from the project root
+        </div>
+      ) : null}
       {inProject === false ? (
         <div className="shrink-0 border-b px-3 py-1 text-2xs text-muted-foreground">
           Outside project
@@ -1406,15 +1417,22 @@ export default function FilePreviewPanel({
       ) : null}
       {notSynced ? (
         <div className="shrink-0 border-b px-3 py-1.5 text-2xs text-muted-foreground">
-          Not synced · from {projectName || "the main copy"}
+          Not synced · from {machineLabel ?? projectName ?? "the main copy"}
         </div>
       ) : null}
       {rawPath !== undefined &&
       relativePath !== null &&
-      rawPath !== (resolvedDisplayPath ?? relativePath) ? (
+      rawPath !==
+        (resolvedDisplayPath === undefined
+          ? relativePath
+          : (workspaceRelativeFilePath(resolvedDisplayPath, cwd) ?? resolvedDisplayPath)) ? (
         <div className="shrink-0 border-b px-3 py-1 text-2xs text-muted-foreground">
           <code className="font-mono">{rawPath}</code> →{" "}
-          <code className="font-mono">{resolvedDisplayPath ?? relativePath}</code>
+          <code className="font-mono">
+            {resolvedDisplayPath === undefined
+              ? relativePath
+              : (workspaceRelativeFilePath(resolvedDisplayPath, cwd) ?? resolvedDisplayPath)}
+          </code>
         </div>
       ) : null}
       {relativePath && !attachment && !isHostFile && !canWriteFiles && !fileAccess.isPending ? (

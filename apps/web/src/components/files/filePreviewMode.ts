@@ -9,7 +9,10 @@ import { isHostPath, workspaceRelativeFilePath } from "@t3tools/shared/path";
 
 export function resolveFilePreviewPath(path: string | null, cwd: string): string | null {
   if (path === null) return null;
-  return path === "." || workspaceRelativeFilePath(path, cwd) === "." ? null : path;
+  const relative = workspaceRelativeFilePath(path, cwd);
+  if (path === "." || relative === ".") return null;
+  // People read paths from the project, not from the machine's root.
+  return relative ?? path;
 }
 
 export const isMarkdownPreviewFile = (path: string): boolean =>

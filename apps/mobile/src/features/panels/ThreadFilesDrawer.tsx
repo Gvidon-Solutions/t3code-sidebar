@@ -9,6 +9,7 @@ import { AppText as Text } from "../../components/ui/AppText";
 import { useEnvironmentQuery } from "../../state/query";
 import { vcsEnvironment } from "../../state/vcs";
 import { useThreadTabs } from "../tabs/useThreadTabs";
+import { isAbsolutePath } from "../files/filePath";
 import { useThreadPager } from "./threadPagerContext";
 
 const splitPath = (path: string) => {
@@ -109,7 +110,7 @@ export function ThreadFilesDrawer(props: {
     navigation.dispatch(
       StackActions.push("ThreadFile", {
         ...threadParams,
-        path: path.split("/").filter(Boolean),
+        path: isAbsolutePath(path) ? path : path.split("/").filter(Boolean),
       }),
     );
   };

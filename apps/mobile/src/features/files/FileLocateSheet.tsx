@@ -3,6 +3,7 @@ import type { EnvironmentId, FilesLocateCandidate } from "@t3tools/contracts";
 import { Modal, Pressable, ScrollView, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
+import { relativeTime } from "../../lib/time";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { hideFileLocateSheet, useFileLocateSheetRequest } from "./locateFileSheetState";
@@ -29,12 +30,14 @@ export function FileLocateSheetHost() {
   };
   const candidates: ReadonlyArray<FilesLocateCandidate> =
     result.candidates ?? (result.target === undefined ? [] : [result.target]);
+  const mixedMachines = new Set(candidates.map((candidate) => candidate.environmentId)).size > 1;
   const open = (candidate: FilesLocateCandidate) => {
     hideFileLocateSheet();
     request.openTarget({
       environmentId: candidate.environmentId,
       absolutePath: candidate.absolutePath,
       ...(candidate.line === undefined ? {} : { line: candidate.line }),
+      ...(candidate.root === undefined ? {} : { root: candidate.root }),
     });
   };
   return (
@@ -49,12 +52,16 @@ export function FileLocateSheetHost() {
                 <Text className="font-mono text-foreground">{request.rawPath}</Text>.
               </Text>
               <ScrollView className="mt-3">
-                {candidates.map((candidate) => {
+                {candidates.map((candidate, index) => {
                   const otherMachine = candidate.environmentId !== result.environmentId;
+                  const best = index === 0;
                   return (
                     <Pressable
                       key={`${candidate.environmentId}:${candidate.absolutePath}`}
-                      className="rounded-lg px-2 py-2"
+                      accessibilityState={{ selected: best }}
+                      className={`rounded-lg border px-2 py-2 ${
+                        best ? "border-ring bg-accent/40" : "border-transparent"
+                      }`}
                       onPress={() => open(candidate)}
                     >
                       <View className="flex-row items-center gap-2">
@@ -64,7 +71,12 @@ export function FileLocateSheetHost() {
                         >
                           {candidate.displayPath}
                         </Text>
-                        {otherMachine || candidate.notSynced ? (
+                        {best ? (
+                          <Text className="rounded bg-primary px-1 text-2xs text-primary-foreground">
+                            Best match
+                          </Text>
+                        ) : null}
+                        {mixedMachines || otherMachine || candidate.notSynced ? (
                           <Text className="rounded bg-muted px-1 text-2xs text-muted-foreground">
                             {machineOf(candidate.environmentId).tag}
                             {candidate.notSynced ? " · not synced" : ""}
@@ -76,7 +88,7 @@ export function FileLocateSheetHost() {
                         {otherMachine ? `${machineOf(candidate.environmentId).label} · ` : ""}
                         {candidate.mtimeMs === undefined
                           ? "No modification time"
-                          : new Date(candidate.mtimeMs).toLocaleString()}
+                          : relativeTime(new Date(candidate.mtimeMs).toISOString())}
                       </Text>
                     </Pressable>
                   );

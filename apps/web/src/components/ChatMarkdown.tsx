@@ -820,6 +820,10 @@ function useChatMarkdownState({
         readonly rawPath?: string;
         readonly inProject?: boolean;
         readonly resolvedDisplayPath?: string;
+        readonly root?: string;
+        readonly worktreeRemoved?: boolean;
+        readonly projectTitle?: string;
+        readonly machineLabel?: string;
       },
     ) => {
       if (targetEnvironmentId !== undefined && targetEnvironmentId !== threadRef.environmentId) {
@@ -835,8 +839,9 @@ function useChatMarkdownState({
         ).label;
         useRightPanelStore.getState().openFile(threadRef, path, line, {
           environmentId: targetEnvironmentId,
-          workspaceRoot: "/",
-          projectName: label,
+          workspaceRoot: extra?.root ?? "/",
+          projectName: extra?.projectTitle ?? label,
+          machineLabel: extra?.machineLabel ?? label,
           ...(extra?.notSynced ? { notSynced: true } : {}),
           ...(extra?.rawPath === undefined ? {} : { rawPath: extra.rawPath }),
         });
@@ -882,6 +887,9 @@ function useChatMarkdownState({
           ...(target.notSynced ? { notSynced: true } : {}),
           ...(target.inProject ? {} : { inProject: false }),
           resolvedDisplayPath: target.displayPath,
+          ...(target.root === undefined ? {} : { root: target.root }),
+          ...(result.worktreeRemoved ? { worktreeRemoved: true } : {}),
+          ...(result.projectTitle === undefined ? {} : { projectTitle: result.projectTitle }),
         });
         if (target.environmentId !== threadRef.environmentId) {
           const identityLabel =

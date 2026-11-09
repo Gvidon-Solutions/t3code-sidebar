@@ -233,6 +233,12 @@ export function RightPanelSurfaceContent(props: {
             {...(surface.kind === "file" && surface.resolvedDisplayPath !== undefined
               ? { resolvedDisplayPath: surface.resolvedDisplayPath }
               : {})}
+            {...(surface.kind === "file" && surface.worktreeRemoved
+              ? { worktreeRemoved: true }
+              : {})}
+            {...(externalSurface?.machineLabel === undefined
+              ? {}
+              : { machineLabel: externalSurface.machineLabel })}
             {...(attachment ? { attachment } : {})}
             revealLine={surface.kind === "file" ? (surface.revealLine ?? null) : null}
             revealRequestId={surface.kind === "file" ? surface.revealRequestId : 0}
