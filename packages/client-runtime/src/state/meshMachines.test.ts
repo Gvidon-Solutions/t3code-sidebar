@@ -26,6 +26,7 @@ import {
   offlineComposerPlaceholder,
   offlineMeshEnvironmentIds,
   meshMachineOfflineText,
+  meshLinkedWithText,
   offlineMachinePrompt,
   replicaConnectionFixText,
 } from "./meshMachines.ts";
@@ -601,6 +602,36 @@ it("ignores malformed percent encoding in replicated machine facts", () => {
   expect(
     meshMachineFactTimes({ "machine/bad%": { h: "0000000000001.00000.studio", v: {} } }),
   ).toEqual({});
+});
+
+describe("meshLinkedWithText", () => {
+  const config: SidebarWorkspacesConfig = {
+    ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+    machines: {
+      studio: { title: "studio", label: "ST" },
+      cloudbox: { title: "cloudbox", label: "CB" },
+      laptop: { title: "laptop", label: "LT" },
+    },
+  };
+
+  it("names the peer by its config title and groups links by access", () => {
+    expect(
+      meshLinkedWithText(config, [
+        { environmentId: "studio", label: "gvidon", access: "full-access" },
+        { environmentId: "cloudbox", label: "gvidon", access: "full-access" },
+      ]),
+    ).toBe("studio, cloudbox · Full access");
+    expect(
+      meshLinkedWithText(config, [
+        { environmentId: "studio", label: "gvidon", access: "read-only" },
+        { environmentId: "laptop", label: "gvidon", access: "full-access" },
+      ]),
+    ).toBe("studio · Read only; laptop · Full access");
+  });
+
+  it("has nothing to say without links", () => {
+    expect(meshLinkedWithText(config, [])).toBeNull();
+  });
 });
 
 describe("meshProjectRows", () => {

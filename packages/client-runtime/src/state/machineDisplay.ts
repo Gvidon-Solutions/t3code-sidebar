@@ -71,6 +71,33 @@ export function machineDisplayOf(
   };
 }
 
+export interface EnvironmentName extends MachineDisplay {
+  /** True when the mesh config names this environment, so its tag belongs to it. */
+  readonly inMesh: boolean;
+}
+
+/**
+ * The one rule for naming an environment on any surface: the mesh config owns the name of a
+ * machine it lists (tag + title). An environment outside the mesh keeps the label its
+ * connection was saved with, which is its host name unless the person renamed it.
+ */
+export function environmentNameOf(
+  config: Pick<SidebarWorkspacesConfig, "machines"> | null | undefined,
+  environmentId: string,
+  fallbackLabel: string,
+): EnvironmentName {
+  if (config !== null && config !== undefined && config.machines[environmentId] !== undefined) {
+    return { ...machineDisplayOf(config, environmentId, fallbackLabel), inMesh: true };
+  }
+  const label = fallbackLabel.trim();
+  return {
+    label: label.length > 0 ? label : "Unnamed machine",
+    tag: "",
+    color: workspaceColor({ id: environmentId }),
+    inMesh: false,
+  };
+}
+
 export interface MachineDisplayPatch {
   readonly label?: string | null;
   readonly tag?: string | null;

@@ -5,6 +5,7 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  environmentNameOf,
   knownMachineIds,
   machineDisplayOf,
   machineTagBackground,
@@ -65,6 +66,49 @@ describe("machineDisplayOf", () => {
   it("derives the colour from the environment id like workspaces do", () => {
     expect(machineDisplayOf(config, "boreal", "x").color).toBe(workspaceColor({ id: "boreal" }));
     expect(WORKSPACE_COLORS).toContain(machineDisplayOf(config, "boreal", "x").color);
+  });
+});
+
+describe("environmentNameOf", () => {
+  it("names three mesh machines that share one OS host name by their config tag and title", () => {
+    const mesh: SidebarWorkspacesConfig = {
+      ...DEFAULT_SIDEBAR_WORKSPACES_CONFIG,
+      machines: {
+        "env-studio": { title: "studio", tag: "ST" },
+        "env-cloudbox": { title: "cloudbox", tag: "CB" },
+        "env-laptop": { title: "laptop", tag: "LT" },
+      },
+    };
+    const names = ["env-studio", "env-cloudbox", "env-laptop"].map((environmentId) =>
+      environmentNameOf(mesh, environmentId, "gvidon"),
+    );
+    expect(names.map((name) => [name.tag, name.label])).toEqual([
+      ["ST", "studio"],
+      ["CB", "cloudbox"],
+      ["LT", "laptop"],
+    ]);
+    expect(names.every((name) => name.inMesh)).toBe(true);
+    expect(new Set(names.map((name) => name.label)).size).toBe(3);
+  });
+
+  it("keeps the host name for an environment outside any mesh", () => {
+    expect(environmentNameOf(null, "env-1", "gvidon")).toEqual({
+      label: "gvidon",
+      tag: "",
+      color: workspaceColor({ id: "env-1" }),
+      inMesh: false,
+    });
+    expect(environmentNameOf({ machines: {} }, "env-1", "gvidon")).toMatchObject({
+      label: "gvidon",
+      tag: "",
+      inMesh: false,
+    });
+  });
+
+  it("keeps the host name for an environment the config does not name", () => {
+    expect(
+      environmentNameOf({ machines: { other: { title: "studio", tag: "ST" } } }, "env-1", "gvidon"),
+    ).toMatchObject({ label: "gvidon", tag: "", inMesh: false });
   });
 });
 
