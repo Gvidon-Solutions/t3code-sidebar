@@ -142,7 +142,7 @@ describe("projectMachineStrip", () => {
 });
 
 describe("offline machine tags", () => {
-  it("dims a machine this client cannot reach and names it in the tooltip", () => {
+  it("dims a machine the mesh reports offline and names it in the tooltip", () => {
     const config = {
       ...empty,
       machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
@@ -151,12 +151,54 @@ describe("offline machine tags", () => {
     };
     const model = projectMachineStrip(
       config,
-      { projectKey: "demo", environmentIds: ["at"], knownEnvironmentIds: ["lab"] },
+      {
+        projectKey: "demo",
+        environmentIds: ["at"],
+        knownEnvironmentIds: ["at"],
+        offlineEnvironmentIds: ["at"],
+      },
       [],
       undefined,
       (environmentId) => (environmentId === "at" ? "Studio is offline · 3 min" : null),
     );
     expect(model.chips[0]?.muted).toBe(true);
     expect(model.description).toContain("Studio is offline · 3 min");
+  });
+
+  it("dims an offline machine even while this client still thinks it is connected", () => {
+    const config = {
+      ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
+      projectMounts: { demo: [rep("at", "replica")] },
+    };
+    const model = projectMachineStrip(
+      config,
+      {
+        projectKey: "demo",
+        environmentIds: ["at"],
+        knownEnvironmentIds: ["at"],
+        offlineEnvironmentIds: ["at"],
+      },
+      [],
+    );
+    expect(model.chips[0]?.muted).toBe(true);
+    expect(model.description).toContain("offline");
+  });
+
+  it("dims an online machine this client cannot reach without calling it offline", () => {
+    const config = {
+      ...empty,
+      machines: { lab: { title: "Laptop" }, at: { title: "Studio" } },
+      projectMounts: { demo: [rep("at", "replica")] },
+    };
+    const model = projectMachineStrip(
+      config,
+      { projectKey: "demo", environmentIds: ["at"], knownEnvironmentIds: ["lab"] },
+      [],
+      undefined,
+      () => null,
+    );
+    expect(model.chips[0]?.muted).toBe(true);
+    expect(model.description).not.toContain("offline");
   });
 });
