@@ -175,11 +175,11 @@ it.effect(
 );
 
 it("escapes a peer-supplied title in the fork marker link", () => {
-  expect(forkMarker("Fix ] link ) now", "http://host/threads/1?x=(y)", "cloudbox")).toBe(
-    "Forked from [Fix \\] link \\) now](http://host/threads/1?x=%28y%29) · cloudbox",
+  expect(forkMarker("Fix ] link ) now", "t3-thread://v2/env/thread?x=(y)", "cloudbox")).toBe(
+    "Forked from [Fix \\] link \\) now](t3-thread://v2/env/thread?x=%28y%29) · cloudbox",
   );
-  expect(forkMarker("[a](http://evil)", "http://host/t", "studio")).toBe(
-    "Forked from [\\[a\\]\\(http://evil\\)](http://host/t) · studio",
+  expect(forkMarker("[a](http://evil)", "t3-thread://v2/env/thread", "studio")).toBe(
+    "Forked from [\\[a\\]\\(http://evil\\)](t3-thread://v2/env/thread) · studio",
   );
 });
 
@@ -189,7 +189,6 @@ it("neutralizes newlines, backticks and non-thread link schemes in the fork mark
   );
   expect(forkMarker("Title", "javascript:alert(1)", "studio")).toBe("Forked from Title · studio");
   expect(forkMarker("Title", "not a url", "studio")).toBe("Forked from Title · studio");
-  expect(forkMarker("Title", "https://host/a b[c]", "studio")).toBe(
-    "Forked from [Title](https://host/a%20b%5Bc%5D) · studio",
-  );
+  expect(forkMarker("Title", "http://host/t", "studio")).toBe("Forked from Title · studio");
+  expect(forkMarker("Title", "https://host/a b[c]", "studio")).toBe("Forked from Title · studio");
 });

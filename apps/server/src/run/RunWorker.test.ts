@@ -610,3 +610,52 @@ it.live("polls the durable record when the runtime cannot watch the run director
     }
   }),
 );
+
+it.live("switches to polling when an established watcher reports an error", () =>
+  Effect.promise(async () => {
+    const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-run-watch-error-"));
+    const namespace = NodeCrypto.createHash("sha256").update(root).digest("hex").slice(0, 16);
+    const invoke = (payload: Record<string, unknown>, prefix = "") =>
+      new Promise<{ code: number | null; frames: ReturnType<typeof decodeFrame>[] }>(
+        (resolve, reject) => {
+          const child = NodeChildProcess.spawn(process.execPath, [
+            "-e",
+            prefix + RUN_WORKER_SOURCE,
+            "--",
+            Buffer.from(
+              JSON.stringify({ root, cwd: root, namespace, ignores: [], ...payload }),
+            ).toString("base64"),
+          ]);
+          const frames: ReturnType<typeof decodeFrame>[] = [];
+          const lines = NodeReadline.createInterface({ input: child.stdout });
+          lines.on("line", (line) => frames.push(decodeFrame(line)));
+          child.once("error", reject);
+          child.once("close", (code) => resolve({ code, frames }));
+        },
+      );
+    try {
+      const started = await invoke({
+        action: "start",
+        args: [process.execPath, "-e", "setTimeout(() => process.exit(0), 100)"],
+      });
+      const ready = started.frames.find((frame) => frame.type === "ready");
+      if (ready?.type !== "ready" || ready.id === undefined) throw Error("No job id");
+      const waited = await invoke(
+        { action: "wait", id: ready.id },
+        `const EventEmitter = require('node:events').EventEmitter;
+         require('node:fs').watch = () => {
+           const watcher = new EventEmitter();
+           watcher.close = () => {};
+           setTimeout(() => watcher.emit('error', new Error('watch failed')), 20);
+           return watcher;
+         };
+        `,
+      );
+      expect(waited.code).toBe(0);
+      expect(waited.frames.some((frame) => frame.type === "error")).toBe(false);
+      expect(waited.frames.at(-1)).toEqual({ type: "done", code: 0, ignored: [] });
+    } finally {
+      await NodeFSP.rm(root, { recursive: true, force: true });
+    }
+  }),
+);

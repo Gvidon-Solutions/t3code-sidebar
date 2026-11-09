@@ -45,7 +45,7 @@ it.effect("bounds expiry retries while keeping the durable staging transaction f
     });
     const dependencies = Layer.mergeAll(
       Layout.layerTest("studio", DEFAULT_SIDEBAR_WORKSPACES_CONFIG),
-      ServerConfig.layerTest(process.cwd(), { prefix: "F2b-fork-expiry-" }),
+      ServerConfig.layerTest(process.cwd(), { prefix: "fork-expiry-" }),
       Layer.mock(ServerSecretStore)({}),
       Layer.mock(DocumentText)({}),
       Layer.mock(PeerLinks)({}),
