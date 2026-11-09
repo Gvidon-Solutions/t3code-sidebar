@@ -188,11 +188,15 @@ the server, injects the bearer the trusted bundled client handed over when it se
 source, and keeps browser-session cookies in the shell's own jar. Credentials and the cookie jar
 never enter the reduced renderer; the server UI can still pair as a web client, which is the
 fallback when no bearer exists. WebSocket upgrades cannot use a custom scheme, so the client mints
-a short-lived RPC ticket through the same proxy and connects to the server's own WSS origin.
+short-lived RPC and media tickets through the same proxy and connects to the server's own WSS
+origin. Media tickets also cover preview streams and device mirroring: their HTTP, EventSource
+and WebSocket access uses the server origin with `wsTicket` in the query instead of cookies.
 Before serving an auto-selected document, the shell verifies the injected credential with
-`/api/auth/session`; a rejected credential marks the source and keeps the bundled client. Chunk
-and `vite:preloadError` failures during a restart show "Reconnecting to <machine>…", retry the
-session endpoint, then reload, or return to the bundled client.
+`/api/auth/session`; a rejected credential marks the source and opens the bundled client in its
+normal state (`auth=1`), not the offline page, so saved bearer connections keep working. The
+bundled server CSP allows same-origin frames (`frame-ancestors 'self'`) so HTML previews render
+inside server UI. Chunk and `vite:preloadError` failures during a restart show "Reconnecting to
+<machine>…", retry the session endpoint, then reload, or return to the built-in version.
 
 Run `xvfb-run -a apps/desktop/node_modules/electron/dist/electron --no-sandbox
 apps/desktop/scripts/delivery-ui-proof.mjs` to run a hostile HTTP loopback server against the
@@ -205,9 +209,10 @@ apps/desktop/scripts/delivery-server-ui-proof.mjs` for the complementary real-se
 starts a real `t3 serve` from this checkout behind a temporary HTTPS proxy with a self-signed
 certificate trusted only by the temporary Electron profile, then shows: pairing reaches an
 authenticated server UI and shell; a chunk failure during a restart shows the reconnecting
-surface and recovers; a reload during downtime uses the bundled offline page; and a credential
-the server rejects selects the bundled client. Screenshots and an index are written to
-`/data/w2-shots/`.
+surface and recovers; a media ticket opens a preview stream and a server-served HTML page renders
+in an iframe; a reload during downtime uses the bundled offline page; and a credential the server
+rejects selects the bundled client, which connects through its saved bearer and shows the
+server's project. Screenshots and an index are written to `/data/w2-shots/`.
 
 Native APK offers require OTA-key-signed metadata containing the update origin, target runtime
 and SHA-256. The build embeds the same public certificate used by Expo code signing; rotating it
