@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   defaultDraftMachine,
+  draftEnvironmentSelection,
+  draftMachineCandidate,
   draftMachineCanHostCopy,
   draftMachineCatalogsKnown,
   draftMachineUsable,
@@ -298,4 +300,43 @@ it("saves an explicit machine choice and never the automatic default", () => {
   expect(
     savedDraftMachineChoice({ remember: true, preferenceKey: "atlas", environmentId: "a" }),
   ).toEqual({ preferenceKey: "atlas", environmentId: "a" });
+});
+
+it("marks only an explicit machine switch manual", () => {
+  expect(draftEnvironmentSelection(true)).toBe("manual");
+  expect(draftEnvironmentSelection(false)).toBe("auto");
+});
+
+it("judges a cycling candidate by the machine's own default model when none is chosen", () => {
+  const instanceId = ProviderInstanceId.make("codex");
+  const catalog = {
+    providers: [
+      {
+        instanceId,
+        enabled: true,
+        installed: true,
+        status: "ready",
+        availability: "available",
+        auth: { status: "authenticated" },
+        models: [{ slug: "fast" }],
+      },
+    ],
+  } as unknown as ProviderCatalog;
+  const base = {
+    environmentId: "a",
+    connected: true,
+    projectId: null,
+    catalog,
+    canHostCopy: true,
+    primary: true,
+  };
+  // No explicit selection: the machine's default model decides, as the cards do.
+  expect(draftMachineCandidate({ ...base, selection: null }).usable).toBe(true);
+  expect(
+    draftMachineCandidate({
+      ...base,
+      selection: { instanceId, model: "missing" },
+    }).usable,
+  ).toBe(false);
+  expect(draftMachineCandidate({ ...base, connected: false, selection: null }).usable).toBe(false);
 });

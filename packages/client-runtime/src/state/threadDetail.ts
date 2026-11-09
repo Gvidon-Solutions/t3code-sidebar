@@ -5,8 +5,10 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
+import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult, Atom } from "effect/reactivity";
+import { EnvironmentRpcUnavailableError } from "../rpc/client.ts";
 
 import {
   deriveThreadQueueWorkflowState,
@@ -243,6 +245,22 @@ export function sameThreadStructure(
   );
 }
 
+const isEnvironmentRpcUnavailable = Schema.is(EnvironmentRpcUnavailableError);
+
+/**
+ * An offline machine keeps the last synchronized conversation; a terminal failure
+ * (gone, unauthorized, forgotten) drops it instead of showing a stale conversation.
+ */
+function isTransientThreadFailure(cause: Cause.Cause<unknown>): boolean {
+  return isEnvironmentRpcUnavailable(Cause.squash(cause));
+}
+
+function isTerminalThreadFailure<E>(
+  result: AsyncResult.AsyncResult<EnvironmentThreadState, E>,
+): boolean {
+  return AsyncResult.isFailure(result) && !isTransientThreadFailure(result.cause);
+}
+
 export function createEnvironmentThreadDetailAtoms<E>(
   threadStateAtom: (
     environmentId: ScopedThreadRef["environmentId"],
@@ -251,14 +269,14 @@ export function createEnvironmentThreadDetailAtoms<E>(
 ) {
   const threadStateValueAtomFamily = Atom.family((key: string) => {
     const ref = parseThreadKey(key);
-    // Keep the last synchronized conversation when its machine goes offline: the
-    // thread stays readable (and its composer explains why it is read-only).
+    // Keep the last synchronized conversation while its machine cannot answer, so the
+    // thread stays readable. A terminal failure (gone, unauthorized, forgotten) must
+    // drop it instead of showing a stale conversation as "last saved".
     let previous = EMPTY_ENVIRONMENT_THREAD_STATE;
     return Atom.make((get) => {
-      const value = AsyncResult.getOrElse(
-        get(threadStateAtom(ref.environmentId, ref.threadId)),
-        () => previous,
-      );
+      const result = get(threadStateAtom(ref.environmentId, ref.threadId));
+      if (isTerminalThreadFailure(result)) previous = EMPTY_ENVIRONMENT_THREAD_STATE;
+      const value = AsyncResult.getOrElse(result, () => previous);
       previous = value;
       return value;
     }).pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-state-value:${key}`));

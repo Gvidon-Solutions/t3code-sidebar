@@ -713,7 +713,7 @@ export function offlineMachinePrompt(
   neverSeen = false,
 ): string {
   const label = quotedData(machineLabel, 80);
-  const duration = promptDataText(status.replace(/^offline\s*/iu, ""), 40);
+  const duration = promptDataText(status.replace(/^offline\s*[·-]?\s*/iu, ""), 40);
   const sentence = neverSeen
     ? `Machine ${label} hasn't connected yet.`
     : duration === "" || duration === "now"
@@ -730,6 +730,18 @@ export function replicaProblemPrompt(projectTitle: string, machineLabel: string)
     `Fix the copy of project ${quotedData(projectTitle, 80)} on machine ${quotedData(machineLabel, 80)}. It cannot reach its main copy.`,
     "Check the copy's state and repair it, then report what you changed.",
   ]);
+}
+
+/** The plain sentence for a copy whose retry has no driver to call: names machines, no ids. */
+export function replicaConnectionFixText(input: {
+  readonly targetLabel: string;
+  readonly sourceLabel?: string | null;
+}): string {
+  const target = input.targetLabel.trim() || "this machine";
+  const source = input.sourceLabel?.trim();
+  return source && source.length > 0
+    ? `The copy on ${target} can't reach ${source}. Ask an agent to fix the connection between these machines.`
+    : `The copy on ${target} can't reach its main copy. Ask an agent to fix the connection.`;
 }
 
 export function refusedLinkPrompt(input: {

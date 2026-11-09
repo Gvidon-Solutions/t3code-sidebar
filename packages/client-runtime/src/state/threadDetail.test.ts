@@ -15,6 +15,7 @@ import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { v2Now, v2Projection, v2ThreadId } from "./orchestrationV2TestFixtures.ts";
 import { applyOrchestrationV2ProjectionEvent } from "./orchestrationV2Projection.ts";
 import type { ThreadStructureVisibleTurnItem } from "./models.ts";
+import { EnvironmentRpcUnavailableError } from "../rpc/client.ts";
 import {
   createEnvironmentThreadDetailAtoms,
   deriveWorkspaceMutationId,
@@ -401,12 +402,46 @@ describe("offline thread fallback", () => {
 
     registry.set(
       state,
-      AsyncResult.fail({ _tag: "Unavailable", message: "machine offline" }) as never,
+      AsyncResult.fail(
+        new EnvironmentRpcUnavailableError({
+          environmentId: "env",
+          message: "machine offline",
+        }),
+      ) as never,
     );
 
     expect(registry.get(details.quietThreadAtom(ref))).toBe(loaded);
     expect(registry.get(details.quietThreadAtom(ref))).not.toBeNull();
     unmount();
+    registry.dispose();
+  });
+
+  it("drops the last conversation on a terminal failure and leaves other machines alone", () => {
+    const projection = withItem(assistant);
+    const stateFor = () =>
+      Atom.make(
+        AsyncResult.success({ ...EMPTY_ENVIRONMENT_THREAD_STATE, data: Option.some(projection) }),
+      );
+    const states = { gone: stateFor(), other: stateFor() };
+    const details = createEnvironmentThreadDetailAtoms(
+      (environmentId) => states[environmentId as keyof typeof states]!,
+    );
+    const gone = { environmentId: EnvironmentId.make("gone"), threadId: v2ThreadId };
+    const other = { environmentId: EnvironmentId.make("other"), threadId: v2ThreadId };
+    const registry = AtomRegistry.make();
+    const unmountGone = registry.mount(details.quietThreadAtom(gone));
+    const unmountOther = registry.mount(details.quietThreadAtom(other));
+    const otherLoaded = registry.get(details.quietThreadAtom(other));
+
+    registry.set(
+      states.gone,
+      AsyncResult.fail({ _tag: "EnvironmentAuthorizationError", message: "forgotten" }) as never,
+    );
+
+    expect(registry.get(details.quietThreadAtom(gone))).toBeNull();
+    expect(registry.get(details.quietThreadAtom(other))).toBe(otherLoaded);
+    unmountGone();
+    unmountOther();
     registry.dispose();
   });
 });
