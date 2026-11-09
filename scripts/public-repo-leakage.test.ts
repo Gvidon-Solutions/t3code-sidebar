@@ -25,7 +25,7 @@ it("keeps private machine infrastructure out of tracked text", () => {
     .split("\0")
     .filter(Boolean);
   const forbidden =
-    /(?:152\.89\.244|78\.17\.147|91\.77\.163|138\.249)\.|id_malan[i]ya|\.nvm\/versions\/node\/v26\.12\.1|gor-trans[f]er|vpn-[o]ps|bolych[e]v|nobodysh[u]rt|\/home\/user\b|\/home\/anto[n]\b|\/root\/\.t3\b|(?<!com\.)\bgvi[d]on\b(?!-Solutions)|\boper[a]lia\b|g[o]r\.local|\bg[o]r\b(?![.-])|\.vp[n]\b|Ант[о]н|(?<!\p{L})\u0433\u0432\u0438\u0434\u043e\u043d|(?<!\p{L})\u043e\u043f\u0435\u0440\u0430\u043b\u0438[\u0430\u044f](?!\p{L})|(?<!\p{L})\u0433\u043e\u0440[\u0430\u0435\u0443](?!\p{L})|vtb[f]amily|potential[p]lus|edu[p]latform|non-stand[a]rt/iu;
+    /(?:152\.89\.244|78\.17\.147|91\.77\.163|138\.249)\.|id_malan[i]ya|\.nvm\/versions\/node\/v26\.12\.1|gor-trans[f]er|vpn-[o]ps|bolych[e]v|nobodysh[u]rt|\/home\/user\b|\bxde[v]\b|\/home\/anto[n]\b|\/root\/\.t3\b|(?<!com\.)\bgvi[d]on\b(?!-Solutions)|\boper[a]lia\b|g[o]r\.local|\bg[o]r\b(?![.-])|\.vp[n]\b|Ант[о]н|(?<!\p{L})\u0433\u0432\u0438\u0434\u043e\u043d|(?<!\p{L})\u043e\u043f\u0435\u0440\u0430\u043b\u0438[\u0430\u044f](?!\p{L})|(?<!\p{L})\u0433\u043e\u0440[\u0430\u0435\u0443](?!\p{L})|vtb[f]amily|potential[p]lus|edu[p]latform|non-stand[a]rt/iu;
   const leaked = [...new Set([...files, ...archives])].filter((file) => {
     const data = NodeFS.readFileSync(NodePath.join(root, file));
     return (
