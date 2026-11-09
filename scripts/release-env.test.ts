@@ -52,6 +52,10 @@ it("recognises release builds without treating dev builds as releases", () => {
   expect(isReleaseBuildEnv({ VITE_RELEASE_CHANNEL: "dev" })).toBe(false);
   expect(isReleaseBuildEnv({ APP_VERSION: "0.1.7-sidebar.1" })).toBe(true);
   expect(isReleaseBuildEnv({ CI: "true", T3CODE_BUILT_DEV: "1" })).toBe(false);
+  expect(() => {
+    const env = { CI: "true", T3CODE_MESH_TEST_BUILD: "1" };
+    if (isReleaseBuildEnv(env)) assertReleaseBuildEnv(env);
+  }).toThrow("Refusing a release build");
 });
 
 it("the delivery builder refuses test-build flags before reading its config", () => {

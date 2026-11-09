@@ -272,7 +272,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ### 2026-11-09 — Server correctness and repository cleanliness
 
-- **What.** Mesh acceptance scripts dispatch to the renamed suites instead of missing round
+- **What.** Mesh acceptance scripts dispatch to the renamed suites instead of missing acceptance
   scripts. Agent-kit skill directories carry a `.t3-managed` marker; an unmanaged or symlinked
   destination and a symlinked instruction file are left alone and reported. Legacy shared
   instructions are removed only as a whole paragraph before the managed block exists. Settings
@@ -304,7 +304,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   222 s against the 360 s budget.
 - **Handoff.** Client work switches `AddCodexAccountDialog` and
   `buildProviderInstanceUpdatePatch` to the shared `buildProviderInstancePatch` and adds settings
-  help text; this stage does not edit `apps/web`.
+  help text; this change does not edit `apps/web`.
 
 ### 2026-11-08 — Client audit fixes and shared machine decisions
 
@@ -2045,7 +2045,7 @@ Newest first. Each entry: what it does for the user, how it works, where it live
 
 ### 2026-11-07 — Upstream v0.1.7 integration into Mesh v2
 
-- **What.** Integrates upstream v0.1.7 and managed policy with every Mesh v2 stage.
+- **What.** Integrates upstream v0.1.7 and managed policy with every Mesh v2 feature.
 - **How.** Peer refusals preserve link health on both persistent and HTTP transports; address
   discovery refreshes peer names while persistent connections retain incoming-only reachability.
   Upstream migrations keep ids 77–79, MeshLayout uses 80 and PeerConnections 81. Legacy fork

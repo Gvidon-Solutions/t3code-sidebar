@@ -303,8 +303,8 @@ Declarative and per machine: each server reconciles the `rep/*/<self>` entries w
 
 ## Disposable test bed
 
-The nodeA, nodeB and cloud fixtures use separate units, state directories, sandbox homes and
-loopback ports. Copy `scripts/mesh-e2e/local.env.example` to the gitignored `local.env` and
+The three bed fixtures use separate units, state directories, sandbox homes and loopback
+ports. Copy `scripts/mesh-e2e/local.env.example` to the gitignored `local.env` and
 configure your own infrastructure there. No production server or account SSH authorization
 file is part of the bed. See [the harness guide](../scripts/mesh-e2e/README.md) for setup,
 commands, the shared lock and cleanup rules.
