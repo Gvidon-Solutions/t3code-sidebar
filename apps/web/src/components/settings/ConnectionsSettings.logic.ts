@@ -240,10 +240,20 @@ export function parseManualDesktopSshTarget(input: {
   };
 }
 
+function normalizePairingHost(value: string): string | null {
+  const raw = value.replace(/\s+/g, "").trim();
+  if (!raw) return null;
+  try {
+    return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`).origin;
+  } catch {
+    return null;
+  }
+}
+
 export function parsePairingUrlFields(
   input: string,
 ): { readonly host: string; readonly pairingCode: string } | null {
-  const trimmed = input.trim();
+  const trimmed = input.replace(/\s+/g, "");
   if (!trimmed) return null;
 
   try {
@@ -281,9 +291,24 @@ export function parseRemotePairingFields(input: {
   readonly host: string;
   readonly pairingCode: string;
 } {
-  const parsedPairingUrl =
-    parsePairingUrlFields(input.host) ?? parsePairingUrlFields(input.pairingCode);
-  if (parsedPairingUrl) return parsedPairingUrl;
+  const hostLink = parsePairingUrlFields(input.host);
+  const codeLink = parsePairingUrlFields(input.pairingCode);
+  if (hostLink && codeLink) {
+    if (normalizePairingHost(hostLink.host) !== normalizePairingHost(codeLink.host)) {
+      throw new Error("The two fields name different servers. Keep one and paste only its token.");
+    }
+    return hostLink;
+  }
+  if (codeLink) {
+    const typedHost = normalizePairingHost(input.host);
+    if (typedHost !== null && typedHost !== normalizePairingHost(codeLink.host)) {
+      throw new Error(
+        "The pairing link names its own server. Clear the server field or paste only its token.",
+      );
+    }
+    return codeLink;
+  }
+  if (hostLink) return hostLink;
 
   const host = input.host.trim();
   const pairingCode = input.pairingCode.trim();

@@ -42,9 +42,29 @@ export function buildPairingUrl(host: string, code: string): string {
   }
 }
 
+function pairingHostOrigin(value: string): string | null {
+  const trimmed = value.replace(/\s+/g, "").trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`).origin;
+  } catch {
+    return null;
+  }
+}
+
 /** A pasted whole pairing link wins over the separate host and code fields. */
 export function resolvePairingInput(host: string, code: string): string {
-  return readPairingUrlInput(code) ?? readPairingUrlInput(host) ?? buildPairingUrl(host, code);
+  const codeLink = readPairingUrlInput(code);
+  if (codeLink !== null) {
+    const typedHost = pairingHostOrigin(host);
+    if (typedHost !== null && typedHost !== pairingHostOrigin(parsePairingUrl(codeLink).host)) {
+      throw new Error(
+        "The pairing link names its own server. Clear the address field or paste only the token.",
+      );
+    }
+    return codeLink;
+  }
+  return readPairingUrlInput(host) ?? buildPairingUrl(host, code);
 }
 
 export function parsePairingUrl(url: string): { host: string; code: string } {

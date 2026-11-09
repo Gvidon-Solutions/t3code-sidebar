@@ -202,13 +202,26 @@ export const readPairingAppLink = (value: string): string | null => {
 
 /** The full pairing link when `value` is one (including a `t3code://pair` app link). */
 export const readPairingUrlInput = (value: string): string | null => {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const candidate = readPairingAppLink(trimmed) ?? trimmed;
+  const compact = value.replace(/\s+/g, "");
+  if (!compact) return null;
+  const appLink = readPairingAppLink(compact);
+  const candidate = appLink ?? compact;
+  const absolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) ? candidate : `https://${candidate}`;
   try {
-    const url = new URL(candidate);
+    const url = new URL(absolute);
     if (!hasSupportedRemoteBackendProtocol(url)) return null;
-    return getPairingTokenFromUrl(url) === null ? null : candidate;
+    return getPairingTokenFromUrl(url) === null ? null : absolute;
+  } catch {
+    return null;
+  }
+};
+
+/** The backend host a pasted pairing link names, so a page can warn before submitting it. */
+export const pairingLinkHost = (value: string): string | null => {
+  const pairingUrl = readPairingUrlInput(value);
+  if (pairingUrl === null) return null;
+  try {
+    return new URL(resolveRemotePairingTarget({ pairingUrl }).httpBaseUrl).host;
   } catch {
     return null;
   }

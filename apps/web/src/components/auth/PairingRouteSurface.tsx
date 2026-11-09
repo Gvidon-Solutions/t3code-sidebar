@@ -10,7 +10,7 @@ import {
   submitServerAuthCredential,
 } from "../../environments/primary";
 import { readHostedPairingRequest } from "../../hostedPairing";
-import { extractPairingCredential } from "@t3tools/shared/remote";
+import { extractPairingCredential, pairingLinkHost } from "@t3tools/shared/remote";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
@@ -46,6 +46,21 @@ export function PairingRouteSurface({
     setIsSubmitting(true);
     setErrorMessage("");
 
+    const linkHost = pairingLinkHost(nextCredential);
+    const currentHost = (() => {
+      try {
+        return new URL(window.desktopShell?.origin ?? window.location.origin).host;
+      } catch {
+        return null;
+      }
+    })();
+    if (linkHost !== null && currentHost !== null && linkHost !== currentHost) {
+      setErrorMessage(
+        `This pairing link is for ${linkHost}. Open it from that environment or paste only its token.`,
+      );
+      setIsSubmitting(false);
+      return;
+    }
     const credentialToSubmit = extractPairingCredential(nextCredential);
     const submitError = await submitServerAuthCredential(credentialToSubmit).then(
       () => null,

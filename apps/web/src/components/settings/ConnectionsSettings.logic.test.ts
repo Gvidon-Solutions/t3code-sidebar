@@ -187,4 +187,19 @@ describe("parsePairingUrlFields", () => {
       pairingCode: "abc",
     });
   });
+
+  it("refuses two different servers pasted into the two fields", () => {
+    expect(() =>
+      parseRemotePairingFields({
+        host: "studio.example",
+        pairingCode: "https://cloudbox.example/pair#token=abc",
+      }),
+    ).toThrowError(/names its own server/);
+    expect(
+      parseRemotePairingFields({
+        host: "studio.example",
+        pairingCode: "https://studio.example/pair#token=abc",
+      }),
+    ).toEqual({ host: "https://studio.example", pairingCode: "abc" });
+  });
 });

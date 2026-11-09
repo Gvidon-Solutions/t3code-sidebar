@@ -62,5 +62,11 @@ describe("resolvePairingInput", () => {
       ),
     ).toBe("https://studio.example/pair#token=abc");
     expect(resolvePairingInput("studio.example", "abc")).toBe("https://studio.example/#token=abc");
+    expect(resolvePairingInput("", "studio.example/pair#token=abc")).toBe(
+      "https://studio.example/pair#token=abc",
+    );
+    expect(() =>
+      resolvePairingInput("studio.example", "https://cloudbox.example/pair#token=abc"),
+    ).toThrowError(/names its own server/);
   });
 });

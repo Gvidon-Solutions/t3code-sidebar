@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildPairingAppLink,
   extractPairingCredential,
+  pairingLinkHost,
   readPairingAppLink,
   readPairingUrlInput,
   RemoteBackendUrlMissingError,
@@ -173,6 +174,14 @@ describe("remote", () => {
       extractPairingCredential(buildPairingAppLink("https://vps.example.com/pair#token=XYZ")),
     ).toBe("XYZ");
     expect(extractPairingCredential(buildPairingAppLink(hosted))).toBe("hidden");
+    expect(extractPairingCredential("vps.example.com/pair#token=ABC123")).toBe("ABC123");
+    expect(extractPairingCredential("https://vps.example.com/\n  pair#token=ABC123")).toBe(
+      "ABC123",
+    );
+    expect(
+      pairingLinkHost("https://app.t3.codes/pair?host=https%3A%2F%2Fother.example%2F#token=T"),
+    ).toBe("other.example");
+    expect(pairingLinkHost("ABC123")).toBeNull();
     expect(readPairingUrlInput("t3code://pair?pairingUrl=nope")).toBeNull();
     expect(readPairingUrlInput("https://vps.example.com/pair")).toBeNull();
   });

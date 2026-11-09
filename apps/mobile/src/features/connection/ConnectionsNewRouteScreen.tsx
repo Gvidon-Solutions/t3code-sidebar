@@ -156,7 +156,13 @@ function PairingForm({
   };
 
   const handleSubmit = async () => {
-    const pairingUrl = resolvePairingInput(hostInput, codeInput);
+    let pairingUrl: string;
+    try {
+      pairingUrl = resolvePairingInput(hostInput, codeInput);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Check the pairing link.");
+      return;
+    }
     setOwnAttempt(true);
     setSubmitError(null);
     setIsSubmitting(true);
