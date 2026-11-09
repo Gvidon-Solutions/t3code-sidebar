@@ -388,7 +388,7 @@ Shared client-runtime decisions keep web and Android answering these questions t
   bundled fallback URL; `DesktopBundledOffline` shows plain copy, the address as a muted detail, and
   no "bundled UI" wording.
 
-### Client audit fixes (F9b)
+### Draft identity, machine choice and offline fallbacks
 
 - **One draft key.** Web `state/draftProjectKey.ts` resolves the mesh logical project (falling back
   to the grouping key) and plans re-keys for drafts made before the mesh snapshot loaded. The

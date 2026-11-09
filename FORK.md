@@ -109,7 +109,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
-### 2026-11-09 — F9b client audit round 5
+### 2026-11-09 — Draft identity, machine choice and desktop offline fallback
 
 - **What.** A machine picked with "New thread on…" is stored as a manual draft choice and survives
   the next plain "New thread"; the automatic default stays automatic, so a draft that fell back
@@ -153,14 +153,13 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   `components/sidebar/MeshConnectPrompt.tsx`; desktop `src/electron/ElectronProtocol.ts`.
   Shared logic: `state/meshLayout/{logicalProjects,replicas,meshConnectPrompt}.ts`.
 
-### 2026-11-09 — F8 final polish before 0.1.7-sidebar.63
+### 2026-11-09 — Link source default and single offline message
 
 - **What.** The Link dialog's "Link from" now starts on the machine that serves the UI, even when
   saved connections resolve first, so a browser opened on studio no longer starts on cloudbox. A
   thread whose machine is offline and whose conversation was never saved says that once: the
   centred pane carries it, the duplicated banner/pill is gone, and the disabled composer reads the
   short "<machine> is offline" on web and Android. A saved conversation keeps its read-only banner.
-  Android light/dark captures for the coordinator are in `/data/f8-shots/android/` with an index.
 - **How.** `LinkWithDialog` keeps only a person's explicit source pick as state and otherwise
   follows `defaultLinkSource(sources, primaryEnvironmentId)` as the catalog settles. Shared
   client-runtime added `offlineComposerPlaceholder`; web added `showsEnvironmentUnavailableBanner`
@@ -172,7 +171,7 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   useSystemComposerBanners}.tsx`, `components/ChatView.logic.ts`, `components/ChatView.tsx`; mobile
   `features/threads/{ThreadDetailScreen,ThreadComposer,floating-working-status}.ts`.
 
-### 2026-11-09 — F7 coordinator UI review round 2 before 0.1.7-sidebar.63
+### 2026-11-09 — Offline conversations, machine tags and link default
 
 ### 2026-11-09 — Agent-kit manifests, release guards and repository cleanliness
 
