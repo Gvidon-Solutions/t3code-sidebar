@@ -130,7 +130,7 @@ function makeDesktopContentSecurityPolicy(
     "frame-src 'self' blob: http: https:",
     "object-src 'none'",
     "base-uri 'none'",
-    "frame-ancestors 'none'",
+    "frame-ancestors 'self'",
     "form-action 'self'",
   ].join("; ");
 }
@@ -460,6 +460,7 @@ export const make = Effect.gen(function* () {
     origin: URL | null,
     rendererId: number,
     host: string,
+    fallbackOptions: { readonly auth?: boolean } = {},
   ): Promise<Response> => {
     // Keep the shell session across a transient outage; the same server may come back.
     pageOrigins.delete(host);
@@ -468,6 +469,9 @@ export const make = Effect.gen(function* () {
     const fallback = new URL(`${input.scheme}://app/`);
     fallback.searchParams.set("desktopWindowId", String(rendererId));
     fallback.searchParams.set("bundled", "1");
+    // An auth failure is not an outage: the bundled client can still use its saved
+    // connections, so it must render the normal app rather than the offline page.
+    if (fallbackOptions.auth) fallback.searchParams.set("auth", "1");
     // Only the origin: no path, query or userinfo belongs in the navigation map or history.
     if (origin) fallback.searchParams.set("server", origin.origin);
     const name = input.serverName ? await input.serverName() : null;
@@ -528,7 +532,9 @@ export const make = Effect.gen(function* () {
                       await input.noteAuthorizationRejected?.(origin, authorization);
                       // The trusted client's credential no longer works, so server UI auth
                       // is impossible. Return to the bundled client with saved connections.
-                      return await redirectToBundled(input, origin, rendererId, requestUrl.host);
+                      return await redirectToBundled(input, origin, rendererId, requestUrl.host, {
+                        auth: true,
+                      });
                     }
                     const origins = (await input.connectionOrigins?.()) ?? [origin.origin];
                     const policy = makeDesktopContentSecurityPolicy(input, origins);

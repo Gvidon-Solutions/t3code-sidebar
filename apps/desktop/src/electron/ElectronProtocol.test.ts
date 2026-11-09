@@ -324,6 +324,7 @@ describe("ElectronProtocol", () => {
       assert.equal(offline.status, 302);
       const fallback = new URL(offline.headers.get("location")!);
       assert.equal(fallback.searchParams.get("bundled"), "1");
+      assert.isNull(fallback.searchParams.get("auth"));
       assert.equal(fallback.searchParams.get("server"), "https://cloudbox.example");
       assert.equal(fallback.searchParams.get("name"), "Studio");
       netFetchMock.mockImplementation(
@@ -446,6 +447,7 @@ describe("ElectronProtocol", () => {
       assert.equal(fallback.status, 302);
       const location = new URL(fallback.headers.get("location")!);
       assert.equal(location.searchParams.get("bundled"), "1");
+      assert.equal(location.searchParams.get("auth"), "1");
       assert.deepEqual(rejected, ["expired-token"]);
     }).pipe(Effect.provide(Layer.merge(layerProtocol, NodeServices.layer)), Effect.scoped),
   );
