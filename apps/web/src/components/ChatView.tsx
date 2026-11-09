@@ -1342,6 +1342,7 @@ export default function ChatView(props: ChatViewProps) {
     activeEnvironmentUnavailable,
     activeEnvironmentUnavailableState,
     hasCachedConversation: serverProjection !== null,
+    offlineConversationEmpty: showOfflineConversationEmpty,
     activeThreadEnvironmentId: activeThread?.environmentId ?? null,
     serverConfig,
     hasMultipleRegisteredEnvironments: environments.length > 1,

@@ -354,6 +354,20 @@ Shared client-runtime decisions keep web and Android answering these questions t
   `SKILL.md` frontmatter name is `t3` and it has `scripts/t3ctl.mjs`; it writes the managed marker
   and syncs. Any other unmarked directory is left untouched and reported.
 
+### Client review fixes (F8)
+
+- **Link source follows the serving machine.** `defaultLinkSource` was already given the primary
+  environment, but `LinkWithDialog` froze that value with `useState` at mount. Saved connections
+  resolve from local storage before the primary environment descriptor arrives, so a client opened
+  on studio kept cloudbox selected. The dialog now keeps only the person's explicit pick as state
+  and falls back to the live default (the environment that serves this UI), dropping a pick whose
+  machine is no longer offered.
+- **Offline thread says it once.** While the centred `offlineConversationEmptyText` pane is shown,
+  `showsEnvironmentUnavailableBanner` suppresses the machine banner on web and
+  `connectionFloatingStatus` returns no pill on mobile. The composer stays disabled and its
+  placeholder is the short `<machine> is offline` (`offlineComposerPlaceholder`). A saved
+  conversation keeps the banner that explains it is read-only.
+
 ### Client review fixes (F7)
 
 - **Offline thread.** Web `OfflineConversationEmptyState` replaces the blank timeline when a server

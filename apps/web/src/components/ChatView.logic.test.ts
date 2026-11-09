@@ -11,6 +11,7 @@ import {
   showsOfflineConversationEmpty,
   environmentUnavailableBannerStatus,
   composerEnvironmentUnavailableState,
+  showsEnvironmentUnavailableBanner,
 } from "./ChatView.logic";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
 import { ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
@@ -1319,6 +1320,37 @@ it("keeps the composer usable during a reconnect window and for a draft", () => 
       reconnectWindowElapsed: true,
     }),
   ).toBeNull();
+});
+
+it("hides the machine banner when the centred empty conversation pane already says it", () => {
+  const base = {
+    hasUnavailableEnvironment: true,
+    reconnecting: false,
+    reconnectWindowElapsed: true,
+    serverUpdateRunning: false,
+    offlineConversationEmpty: false,
+  };
+  expect(showsEnvironmentUnavailableBanner(base)).toBe(true);
+  expect(showsEnvironmentUnavailableBanner({ ...base, offlineConversationEmpty: true })).toBe(
+    false,
+  );
+  expect(
+    showsEnvironmentUnavailableBanner({
+      ...base,
+      reconnecting: true,
+      reconnectWindowElapsed: false,
+    }),
+  ).toBe(false);
+  expect(
+    showsEnvironmentUnavailableBanner({
+      ...base,
+      reconnecting: true,
+      reconnectWindowElapsed: true,
+    }),
+  ).toBe(true);
+  expect(showsEnvironmentUnavailableBanner({ ...base, hasUnavailableEnvironment: false })).toBe(
+    false,
+  );
 });
 
 it("settles a reconnecting composer banner into offline after the reconnect window", () => {

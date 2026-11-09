@@ -788,3 +788,8 @@ export function offlineConversationEmptyText(label: string | null | undefined): 
   const machine = label?.trim() || "this machine";
   return `This conversation lives on ${machine}, which is offline. It appears here when ${machine} is back.`;
 }
+
+/** The disabled composer's short placeholder while its machine is offline. */
+export function offlineComposerPlaceholder(label: string | null | undefined): string {
+  return `${label?.trim() || "This machine"} is offline`;
+}
