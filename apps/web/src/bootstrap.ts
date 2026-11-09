@@ -1,4 +1,22 @@
 import { showBootError } from "./lib/bootError";
+import {
+  beginServerUiReconnect,
+  installServerUiReconnect,
+  isChunkLoadFailure,
+  isServerUiWindow,
+} from "./lib/serverUiReconnect";
+
+// Covers preload/chunk failures raised after the app starts.
+installServerUiReconnect();
 
 // Shared dev chunks need the React refresh preamble first. Catch failures before React mounts.
-void import("./main").then(({ startup }) => startup).catch(showBootError);
+void import("./main").then(
+  ({ startup }) => startup,
+  (error: unknown) => {
+    if (isServerUiWindow() && isChunkLoadFailure(error)) {
+      void beginServerUiReconnect();
+      return;
+    }
+    showBootError(error);
+  },
+);

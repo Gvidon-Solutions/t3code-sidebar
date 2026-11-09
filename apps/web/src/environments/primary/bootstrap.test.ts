@@ -34,13 +34,13 @@ describe("environmentBootstrap", () => {
     );
   });
 
-  it("uses the isolated server UI origin without a privileged desktop bridge", () => {
+  it("keeps server UI HTTP same-origin and sockets on the server origin", () => {
     vi.stubGlobal("window", {
       location: new URL("t3code://server-7/"),
       desktopShell: { origin: "https://studio.example/" },
     });
     expect(readPrimaryEnvironmentTarget()?.target).toEqual({
-      httpBaseUrl: "https://studio.example/",
+      httpBaseUrl: "t3code://server-7/",
       wsBaseUrl: "wss://studio.example/",
     });
   });

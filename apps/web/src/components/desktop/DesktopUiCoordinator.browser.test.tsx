@@ -45,6 +45,7 @@ vi.mock("../../state/environments", async () => {
 });
 vi.mock("../../composerDraftStore", () => ({
   DraftId: { make: (id: string) => id },
+  clearComposerDraftsEnvironment: vi.fn(),
   flushComposerDrafts: vi.fn(),
   useComposerDraftStore: (select: (store: { getDraftSession: () => undefined }) => unknown) =>
     select({ getDraftSession: () => undefined }),

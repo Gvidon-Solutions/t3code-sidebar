@@ -43,7 +43,10 @@ import * as Stream from "effect/Stream";
 import { FetchHttpClient } from "effect/http";
 
 import { APP_VERSION } from "../branding";
-import { readDesktopPrimaryBearerToken } from "../environments/primary/desktopAuth";
+import {
+  readDesktopPrimaryBearerToken,
+  readServerUiWebSocketTicket,
+} from "../environments/primary/desktopAuth";
 import * as PrimaryEnvironmentHttpLayer from "../environments/primary/httpLayer";
 import {
   readPrimaryEnvironmentTarget,
@@ -367,6 +370,14 @@ const layerCapabilities = Layer.effectContext(
           new ConnectionTransientError({
             reason: "remote-unavailable",
             detail: `Could not load the desktop primary credential: ${String(cause)}`,
+          }),
+      }).pipe(Effect.map(Option.fromNullishOr)),
+      webSocketTicket: Effect.tryPromise({
+        try: readServerUiWebSocketTicket,
+        catch: (cause) =>
+          new ConnectionTransientError({
+            reason: "remote-unavailable",
+            detail: `Could not get the server UI WebSocket ticket: ${String(cause)}`,
           }),
       }).pipe(Effect.map(Option.fromNullishOr)),
     });

@@ -1,13 +1,29 @@
 import { type DesktopUiInfo } from "@t3tools/contracts";
+import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { afterChatSendsSettled } from "../chat/draftSendState";
 import { DraftId, flushComposerDrafts, useComposerDraftStore } from "../../composerDraftStore";
+import { readDesktopPrimaryBearerToken } from "../../environments/primary/desktopAuth";
+import { readPreparedConnection } from "../../state/session";
 import {
   useEnvironments,
   useEnvironmentHttpBaseUrl,
   usePrimaryEnvironmentId,
 } from "../../state/environments";
+import { resolveServerUiSource } from "./serverUiSource";
+
+function serverUiSelectionUrl(httpBaseUrl: string, shellOrigin: string | undefined): string {
+  try {
+    const protocol = new URL(httpBaseUrl).protocol;
+    if (protocol === "t3code:" || protocol === "t3code-dev:") {
+      return shellOrigin ?? httpBaseUrl;
+    }
+  } catch {
+    // A malformed target is reported by the selection call; keep the value for that error.
+  }
+  return httpBaseUrl;
+}
 
 export function DesktopUiCoordinator() {
   const ui = window.desktopBridge?.ui ?? window.desktopShell?.ui;
@@ -54,22 +70,43 @@ export function DesktopUiCoordinator() {
     if (!ui || !loaded || !environmentId || !httpBaseUrl || !version) return;
     let active = true;
     let cancelReload: (() => void) | undefined;
-    void ui
-      .select({ environmentId, httpBaseUrl, serverVersion: version })
-      .then((changed) => {
-        if (active && changed) {
-          cancelReload = afterChatSendsSettled(() => {
-            if (!active) return;
-            try {
-              flushComposerDrafts();
-              window.location.reload();
-            } catch (error) {
-              console.error("Could not reload connected server UI", error);
-            }
-          });
+    void (async () => {
+      const trustedClient = window.desktopBridge !== undefined;
+      const sourceHttpBaseUrl = serverUiSelectionUrl(
+        httpBaseUrl,
+        window.desktopShell?.origin ?? undefined,
+      );
+      const primaryBearerToken =
+        trustedClient && environmentId === PRIMARY_LOCAL_ENVIRONMENT_ID
+          ? await readDesktopPrimaryBearerToken().catch((error) => {
+              console.warn("Could not read the desktop local credential", error);
+              return null;
+            })
+          : null;
+      const source = resolveServerUiSource({
+        environmentId,
+        httpBaseUrl: sourceHttpBaseUrl,
+        prepared: readPreparedConnection(environmentId),
+        primaryBearerToken,
+        trustedClient,
+      });
+      const changed = await ui.select({
+        environmentId,
+        httpBaseUrl: source.httpBaseUrl,
+        serverVersion: version,
+        ...(source.authorization !== undefined ? { authorization: source.authorization } : {}),
+      });
+      if (!active || !changed) return;
+      cancelReload = afterChatSendsSettled(() => {
+        if (!active) return;
+        try {
+          flushComposerDrafts();
+          window.location.reload();
+        } catch (error) {
+          console.error("Could not reload connected server UI", error);
         }
-      })
-      .catch((error) => console.error("Could not select connected server UI", error));
+      });
+    })().catch((error) => console.error("Could not select connected server UI", error));
     return () => {
       active = false;
       cancelReload?.();

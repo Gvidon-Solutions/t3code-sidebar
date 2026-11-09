@@ -1,7 +1,11 @@
 import * as DateTime from "effect/DateTime";
 
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "./pairingUrls";
-import { getPairingTokenFromUrl, setPairingTokenOnUrl } from "@t3tools/shared/remote";
+import {
+  getPairingTokenFromUrl,
+  readPairingAppLink,
+  setPairingTokenOnUrl,
+} from "@t3tools/shared/remote";
 import { readHostedPairingRequest } from "../../hostedPairing";
 import {
   type ServerClientSessionRecord,
@@ -243,11 +247,14 @@ export function parsePairingUrlFields(
   if (!trimmed) return null;
 
   try {
+    const appLink = readPairingAppLink(trimmed);
+    const value = appLink ?? trimmed;
     const urlLikeInput =
-      /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(trimmed) || trimmed.startsWith("//")
-        ? trimmed
-        : `https://${trimmed}`;
-    const url = new URL(urlLikeInput, window.location.origin);
+      /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//u.test(value) || value.startsWith("//")
+        ? value
+        : `https://${value}`;
+    const base = typeof window !== "undefined" ? window.location.origin : "https://pairing.invalid";
+    const url = new URL(urlLikeInput, base);
     const hostedPairingRequest = readHostedPairingRequest(url);
     if (hostedPairingRequest) {
       return {
@@ -274,7 +281,8 @@ export function parseRemotePairingFields(input: {
   readonly host: string;
   readonly pairingCode: string;
 } {
-  const parsedPairingUrl = parsePairingUrlFields(input.host);
+  const parsedPairingUrl =
+    parsePairingUrlFields(input.host) ?? parsePairingUrlFields(input.pairingCode);
   if (parsedPairingUrl) return parsedPairingUrl;
 
   const host = input.host.trim();

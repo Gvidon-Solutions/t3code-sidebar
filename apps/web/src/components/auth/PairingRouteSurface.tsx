@@ -10,6 +10,7 @@ import {
   submitServerAuthCredential,
 } from "../../environments/primary";
 import { readHostedPairingRequest } from "../../hostedPairing";
+import { extractPairingCredential } from "@t3tools/shared/remote";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
@@ -45,7 +46,8 @@ export function PairingRouteSurface({
     setIsSubmitting(true);
     setErrorMessage("");
 
-    const submitError = await submitServerAuthCredential(nextCredential).then(
+    const credentialToSubmit = extractPairingCredential(nextCredential);
+    const submitError = await submitServerAuthCredential(credentialToSubmit).then(
       () => null,
       (error) => errorMessageFromUnknown(error),
     );
