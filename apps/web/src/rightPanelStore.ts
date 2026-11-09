@@ -70,6 +70,10 @@ export type RightPanelSurface =
       notSynced?: boolean;
       /** The path as the person wrote it, kept for the remap caption. */
       rawPath?: string;
+      /** False when the file is outside the thread's project. */
+      inProject?: boolean;
+      /** The resolved path as a person should read it, for the remap caption. */
+      resolvedDisplayPath?: string;
     }
   | {
       id: `pull-request:${string}`;
@@ -147,6 +151,11 @@ interface RightPanelStoreState {
       readonly projectName: string;
       readonly notSynced?: boolean;
       readonly rawPath?: string;
+    },
+    details?: {
+      readonly notSynced?: boolean;
+      readonly rawPath?: string;
+      readonly inProject?: boolean;
     },
   ) => void;
   /** Moves in place; "" opens the root explorer. folderTrail keeps the return path; keepSource opens beside the source. */
@@ -257,6 +266,12 @@ const fileSurface = (
     readonly notSynced?: boolean;
     readonly rawPath?: string;
   },
+  details?: {
+    readonly notSynced?: boolean;
+    readonly rawPath?: string;
+    readonly inProject?: boolean;
+    readonly resolvedDisplayPath?: string;
+  },
 ): RightPanelSurface => ({
   id: `file:${external === undefined ? "" : `${external.environmentId}:`}${relativePath}`,
   kind: "file",
@@ -264,6 +279,7 @@ const fileSurface = (
   revealLine,
   revealRequestId,
   ...(external === undefined ? {} : external),
+  ...(details === undefined ? {} : details),
 });
 
 const attachmentSurface = (attachment: ChatFileAttachment): RightPanelSurface => ({
@@ -808,7 +824,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             ),
           }));
         }),
-      openFile: (ref, requestedPath, line, external) =>
+      openFile: (ref, requestedPath, line, external, details) =>
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) => {
             if (requestedPath === ".") {
@@ -832,6 +848,7 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               normalizeRevealLine(line),
               (existing?.revealRequestId ?? 0) + 1,
               external,
+              details,
             );
             return {
               ...current,

@@ -154,6 +154,8 @@ import { useRightPanelStore } from "../rightPanelStore";
 import { readThreadShell, useProjects } from "../state/entities";
 import { environmentSummaries } from "../state/presentation";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { useMeshLayoutOptional } from "../hooks/useMeshLayout";
 import { openCommandPalette } from "../commandPaletteBus";
 import { showFileLocateDialog } from "./files/FileLocateDialogHost";
 import { serverEnvironment } from "../state/server";
@@ -510,6 +512,7 @@ function useChatMarkdownState({
   headingLevelOffset = 0,
   sourceControlMedia = false,
 }: ChatMarkdownProps) {
+  const meshLayout = useMeshLayoutOptional();
   const resolvedTheme = useRenderedAppearance();
   const markdownRef = useRef<HTMLElement>(null);
   const mediaRequestId = useRef(0);
@@ -812,14 +815,24 @@ function useChatMarkdownState({
       targetEnvironmentId: EnvironmentId | undefined,
       path: string,
       line?: number,
-      extra?: { readonly notSynced?: boolean; readonly rawPath?: string },
+      extra?: {
+        readonly notSynced?: boolean;
+        readonly rawPath?: string;
+        readonly inProject?: boolean;
+        readonly resolvedDisplayPath?: string;
+      },
     ) => {
       if (targetEnvironmentId !== undefined && targetEnvironmentId !== threadRef.environmentId) {
-        const label =
+        const identityLabel =
           appAtomRegistry
             .get(environmentSummaries.identitiesAtom)
             .find((identity) => identity.environmentId === targetEnvironmentId)?.label ??
           String(targetEnvironmentId);
+        const label = machineDisplayOf(
+          meshLayout.config ?? { machines: {} },
+          targetEnvironmentId,
+          identityLabel,
+        ).label;
         useRightPanelStore.getState().openFile(threadRef, path, line, {
           environmentId: targetEnvironmentId,
           workspaceRoot: "/",
@@ -829,7 +842,7 @@ function useChatMarkdownState({
         });
         return;
       }
-      useRightPanelStore.getState().openFile(threadRef, path, line);
+      useRightPanelStore.getState().openFile(threadRef, path, line, undefined, extra);
     };
     void (async () => {
       const outcome = await locateFile({
@@ -852,15 +865,22 @@ function useChatMarkdownState({
       const target = result.target;
       if (result.status === "found" && target !== undefined) {
         openAt(target.environmentId, target.absolutePath, target.line ?? fileLinkMeta.line, {
-          rawPath: panelPath,
+          ...(target.displayPath === panelPath ? {} : { rawPath: panelPath }),
           ...(target.notSynced ? { notSynced: true } : {}),
+          ...(target.inProject ? {} : { inProject: false }),
+          resolvedDisplayPath: target.displayPath,
         });
         if (target.environmentId !== threadRef.environmentId) {
-          const label =
+          const identityLabel =
             appAtomRegistry
               .get(environmentSummaries.identitiesAtom)
               .find((identity) => identity.environmentId === target.environmentId)?.label ??
             String(target.environmentId);
+          const label = machineDisplayOf(
+            meshLayout.config ?? { machines: {} },
+            target.environmentId,
+            identityLabel,
+          ).label;
           toastManager.add({
             type: "info",
             title: `Opened on ${label} (not on this machine)`,

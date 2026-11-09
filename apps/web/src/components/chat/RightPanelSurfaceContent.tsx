@@ -223,10 +223,16 @@ export function RightPanelSurfaceContent(props: {
             availableEditors={files.availableEditors}
             openInShortcutEnabled={visible}
             relativePath={surface.kind === "file" ? surface.relativePath : null}
-            {...(externalSurface?.notSynced ? { notSynced: true } : {})}
-            {...(externalSurface?.rawPath === undefined
-              ? {}
-              : { rawPath: externalSurface.rawPath })}
+            {...(surface.kind === "file" && surface.notSynced ? { notSynced: true } : {})}
+            {...(surface.kind === "file" && surface.rawPath !== undefined
+              ? { rawPath: surface.rawPath }
+              : {})}
+            {...(surface.kind === "file" && surface.inProject === false
+              ? { inProject: false }
+              : {})}
+            {...(surface.kind === "file" && surface.resolvedDisplayPath !== undefined
+              ? { resolvedDisplayPath: surface.resolvedDisplayPath }
+              : {})}
             {...(attachment ? { attachment } : {})}
             revealLine={surface.kind === "file" ? (surface.revealLine ?? null) : null}
             revealRequestId={surface.kind === "file" ? surface.revealRequestId : 0}

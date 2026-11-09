@@ -33,8 +33,9 @@ export function shouldOpenMarkdownFileLinkInEditor(
   return isTerminalLinkActivation(event, platform);
 }
 
-export function shouldOpenMarkdownFileLinkInBrowserByDefault(path: string): boolean {
-  return /\.pdf$/i.test(path.split(/[?#]/, 1)[0] ?? "");
+export function shouldOpenMarkdownFileLinkInBrowserByDefault(_path: string): boolean {
+  // PDFs open in the file panel so the server resolver can pick the machine that holds them.
+  return false;
 }
 
 export function rewriteMarkdownFileUriHref(href: string | undefined): string | null {
