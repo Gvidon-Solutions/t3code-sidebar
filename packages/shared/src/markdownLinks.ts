@@ -177,7 +177,14 @@ export function inlineCodeFilePathCandidate(codeText: string): string | null {
 
   const candidate = isWindowsAbsolutePath(trimmed) ? trimmed : trimmed.replaceAll("\\", "/");
   const hasPosition = POSITION_SUFFIX_PATTERN.test(candidate);
-  if (!hasPosition && !PATH_SEPARATOR_PATTERN.test(candidate)) return null;
+  if (!hasPosition && !PATH_SEPARATOR_PATTERN.test(candidate)) {
+    const bare = candidate.replace(/[/\\]+$/, "");
+    const basename = bare.split(/[\\/]/).at(-1) ?? bare;
+    // Bare names are linkable when they name a file, not a version, host or prose word.
+    if (!FILE_EXTENSION_PATTERN.test(basename) && !EXTENSIONLESS_FILE_NAMES.has(basename)) {
+      return null;
+    }
+  }
 
   const hasExplicitPathShape =
     RELATIVE_PATH_PREFIX_PATTERN.test(candidate) ||
@@ -196,7 +203,13 @@ export function inlineCodeFilePathCandidate(codeText: string): string | null {
         .split(/[\\/]/)
         .at(-1) ?? "";
     if (VERSION_SUFFIX_PATTERN.test(basename)) return null;
-    if (!hasPosition && !FILE_EXTENSION_PATTERN.test(basename)) return null;
+    if (
+      !hasPosition &&
+      !FILE_EXTENSION_PATTERN.test(basename) &&
+      !EXTENSIONLESS_FILE_NAMES.has(basename)
+    ) {
+      return null;
+    }
   }
   return candidate;
 }

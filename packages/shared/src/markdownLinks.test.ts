@@ -29,6 +29,11 @@ describe("inlineCodeFilePathCandidate", () => {
     ["share/man/ls.1", "share/man/ls.1"],
     ["src/main.ts/", null],
     ["./patches/", "./patches/"],
+    // Bare file names are linkable; a version or a prose word is not.
+    ["package.json", "package.json"],
+    ["Makefile", "Makefile"],
+    ["README.md", "README.md"],
+    ["v1.2.3", null],
   ])("distinguishes file paths from code and hostnames in %s", (source, candidate) => {
     expect(inlineCodeFilePathCandidate(source)).toBe(candidate);
   });
