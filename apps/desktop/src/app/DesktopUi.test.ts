@@ -8,6 +8,7 @@ import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as Catalog from "./DesktopConnectionCatalogStore.ts";
 import * as Exposure from "../backend/DesktopServerExposure.ts";
 import * as LocalAuth from "../backend/DesktopLocalEnvironmentAuth.ts";
+import * as DesktopSshEnvironment from "../ssh/DesktopSshEnvironment.ts";
 import * as TestClock from "effect/testing/TestClock";
 import { make } from "./DesktopUi.ts";
 
@@ -154,6 +155,9 @@ describe("Desktop connected UI source", () => {
               new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
             ),
           } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+          Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+            activeEnvironments: Effect.succeed([]),
+          } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
         );
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
@@ -222,6 +226,9 @@ describe("Desktop connected UI source", () => {
         yield* ui.noteAuthorizationRejected(origin, "token-a");
         yield* ui.retryServerUi;
         expect(yield* ui.serverAuthorization(origin)).not.toBeNull();
+        expect(yield* ui.select(studio)).toBe(false);
+        expect((yield* ui.selection)?.httpBaseUrl).toBe(studio.httpBaseUrl);
+        expect(yield* ui.sourceOrigin).toEqual(origin);
 
         // A reduced server UI switch hops through the trusted client.
         expect(
@@ -252,6 +259,9 @@ describe("Desktop connected UI source", () => {
             new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
           ),
         } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+        Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+          activeEnvironments: Effect.succeed([]),
+        } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
       );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
@@ -346,15 +356,24 @@ describe("Desktop connected UI source", () => {
           new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
         ),
       } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]);
+      const ssh = Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+        activeEnvironments: Effect.succeed([]),
+      } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]);
 
-      const restored = yield* make.pipe(base, provide(withCredential), exposure, local);
+      const restored = yield* make.pipe(base, provide(withCredential), exposure, local, ssh);
       expect((yield* restored.selection)?.httpBaseUrl).toBe(studio.httpBaseUrl);
       expect(yield* restored.serverAuthorization(new URL(studio.httpBaseUrl + "/"))).toEqual({
         authorization: "token-a",
         environmentId: studio.environmentId,
       });
 
-      const uncredentialed = yield* make.pipe(base, provide(withoutCredential), exposure, local);
+      const uncredentialed = yield* make.pipe(
+        base,
+        provide(withoutCredential),
+        exposure,
+        local,
+        ssh,
+      );
       expect((yield* uncredentialed.selection)?.httpBaseUrl).toBeNull();
       expect(yield* uncredentialed.sourceOrigin).toBeNull();
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
@@ -416,6 +435,9 @@ describe("Desktop connected UI source", () => {
             new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
           ),
         } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+        Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+          activeEnvironments: Effect.succeed([]),
+        } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
       );
       const origin = new URL(shared + "/");
       expect(yield* ui.select({ ...studio, httpBaseUrl: shared })).toBe(true);
@@ -441,6 +463,97 @@ describe("Desktop connected UI source", () => {
         }),
       );
       expect(yield* ui.serverAuthorization(origin)).toBeNull();
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+  it.effect("releases an SSH credential only for its live tunnel target", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const stateDir = yield* fs.makeTempDirectoryScoped();
+      const origin = "http://127.0.0.1:4022";
+      const sshTarget = { alias: "studio-ssh", hostname: "10.0.0.5", username: "dev", port: 22 };
+      const raw = yield* Ref.make(
+        JSON.stringify({
+          schemaVersion: 1,
+          targets: [
+            {
+              _tag: "SshConnectionTarget",
+              connectionId: "ssh-1",
+              environmentId: "cloudbox",
+              label: "cloudbox",
+            },
+          ],
+          profiles: [
+            {
+              _tag: "SshConnectionProfile",
+              connectionId: "ssh-1",
+              environmentId: "cloudbox",
+              label: "cloudbox",
+              target: sshTarget,
+            },
+          ],
+          credentials: [
+            {
+              connectionId: "ssh-1",
+              credential: { _tag: "BearerConnectionCredential", token: "ssh-token" },
+            },
+          ],
+          remoteDpopTokens: [],
+          disabledEnvironmentIds: [],
+        }),
+      );
+      const tunnels = yield* Ref.make([
+        {
+          key: "ssh-1",
+          target: sshTarget,
+          httpBaseUrl: origin + "/",
+          wsBaseUrl: "ws://127.0.0.1:4022/",
+        },
+      ]);
+      const ui = yield* make.pipe(
+        Effect.provideService(DesktopEnvironment.DesktopEnvironment, {
+          stateDir,
+          appVersion: "1",
+          isDevelopment: false,
+        } as DesktopEnvironment.DesktopEnvironment["Service"]),
+        Effect.provideService(
+          Catalog.DesktopConnectionCatalogStore,
+          Catalog.DesktopConnectionCatalogStore.of({
+            get: Ref.get(raw).pipe(Effect.asSome),
+            set: () => Effect.succeed(true),
+          }),
+        ),
+        Effect.provideService(Exposure.DesktopServerExposure, {
+          backendConfig: Effect.succeed({ port: 0, httpBaseUrl: new URL("http://127.0.0.1") }),
+        } as Exposure.DesktopServerExposure["Service"]),
+        Effect.provideService(LocalAuth.DesktopLocalEnvironmentAuth, {
+          getBearerToken: Effect.fail(
+            new LocalAuth.DesktopLocalEnvironmentAuthBackendNotConfiguredError(),
+          ),
+        } as unknown as LocalAuth.DesktopLocalEnvironmentAuth["Service"]),
+        Effect.provideService(DesktopSshEnvironment.DesktopSshEnvironment, {
+          activeEnvironments: Ref.get(tunnels),
+        } as unknown as DesktopSshEnvironment.DesktopSshEnvironment["Service"]),
+      );
+      expect(
+        yield* ui.select({
+          environmentId: cloudbox.environmentId,
+          httpBaseUrl: origin,
+          serverVersion: "1",
+        }),
+      ).toBe(true);
+      expect(yield* ui.serverAuthorization(new URL(origin + "/"))).toEqual({
+        authorization: "ssh-token",
+        environmentId: cloudbox.environmentId,
+      });
+      yield* Ref.set(tunnels, [
+        {
+          key: "ssh-1",
+          target: { ...sshTarget, hostname: "10.0.0.6" },
+          httpBaseUrl: origin + "/",
+          wsBaseUrl: "ws://127.0.0.1:4022/",
+        },
+      ]);
+      expect(yield* ui.serverAuthorization(new URL(origin + "/"))).toBeNull();
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 });

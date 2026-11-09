@@ -11,6 +11,17 @@ export interface DesktopBundledFallback {
 /** Longest machine name the offline page shows; a hostile or broken name cannot overflow the title. */
 export const DESKTOP_FALLBACK_NAME_MAX = 60;
 
+/** The same window without the offline/auth flags, so the shell can choose server UI again. */
+export function withoutBundledFallback(href: string): string {
+  const url = new URL(href);
+  if (url.searchParams.get("bundled") !== "1") return href;
+  const windowId = url.searchParams.get("desktopWindowId");
+  url.search = "";
+  url.hash = "";
+  if (windowId !== null) url.searchParams.set("desktopWindowId", windowId);
+  return url.toString();
+}
+
 export function desktopBundledFallback(search: string): DesktopBundledFallback | null {
   const params = new URLSearchParams(search);
   if (params.get("bundled") !== "1") return null;

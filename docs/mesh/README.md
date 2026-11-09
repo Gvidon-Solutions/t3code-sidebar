@@ -1342,9 +1342,11 @@ through the proxy and connects to the server's own WSS origin. Media tickets car
 access for preview streams, device mirroring and their EventSource/HTTP requests. A document
 selected with an injected credential is preflighted against `/api/auth/session`; a rejected
 credential opens the bundled client in its normal state (not the offline page), so saved bearer
-connections keep working. Chunk and preload failures before mount show "Reconnecting to <machine>…", reload after the
-server answers, or fall back to the built-in version; after mount an overlay appears and the
-mounted app is left alone. The real
+connections keep working. Retry and the cooldown return to the un-flagged app URL. Source hosts
+use a salt persisted once per install, and credentialed subresources must carry the bridge's
+per-window proof header. Chunk and preload failures before mount show "Reconnecting to <machine>…", reload after the
+server answers, or fall back to the built-in version; the budget clears only after a healthy
+mount, and after mount an overlay appears and the mounted app is left alone. The real
 session proof (`delivery-server-ui-proof.mjs`) covers pairing, preview/media, restart recovery
 and the authenticated bundled fallback in delivery.md.
 

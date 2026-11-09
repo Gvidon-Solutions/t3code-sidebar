@@ -10,6 +10,7 @@ import {
   desktopFallbackServerLabel,
   DESKTOP_FALLBACK_NAME_MAX,
   showsDesktopBundledFallback,
+  withoutBundledFallback,
 } from "./desktopBundledFallback";
 
 it("reads the offline fallback from the desktop query and names the machine", () => {
@@ -114,4 +115,15 @@ it("renders the normal app when server-UI authentication failed but connections 
     auth: true,
   });
   expect(showsDesktopBundledFallback({ fallback, pathname: "/" })).toBe(false);
+});
+
+it("leaves the offline fallback with the same window id", () => {
+  expect(
+    withoutBundledFallback(
+      "t3code://app/?desktopWindowId=7&bundled=1&auth=1&server=https%3A%2F%2Fstudio.example%2F#/settings",
+    ),
+  ).toBe("t3code://app/?desktopWindowId=7");
+  expect(withoutBundledFallback("t3code://app/?desktopWindowId=7")).toBe(
+    "t3code://app/?desktopWindowId=7",
+  );
 });

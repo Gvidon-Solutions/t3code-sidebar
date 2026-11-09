@@ -41,6 +41,13 @@ it("denies every privileged IPC channel to server UI, foreign origins and subfra
       `t3code://server-9-${"a".repeat(24)}/`,
     ),
   ).toThrow();
+  // The reduced bridge exposes the request proof but not the retry action.
+  expect(() =>
+    authorizeDesktopIpc(event(server), Channels.UI_REQUEST_TOKEN_CHANNEL, server),
+  ).not.toThrow();
+  expect(() => authorizeDesktopIpc(event(server), Channels.UI_RETRY_CHANNEL, server)).toThrow(
+    /denied/,
+  );
 });
 
 effectIt.effect(

@@ -141,6 +141,14 @@ export interface SshEnvironmentManagerShape {
   readonly disconnectEnvironment: (
     target: DesktopSshEnvironmentTarget,
   ) => Effect.Effect<void, SshEnvironmentEffectError, SshEnvironmentEffectContext>;
+  readonly activeEnvironments: Effect.Effect<
+    ReadonlyArray<{
+      readonly key: string;
+      readonly target: DesktopSshEnvironmentTarget;
+      readonly httpBaseUrl: string;
+      readonly wsBaseUrl: string;
+    }>
+  >;
 }
 
 const RemoteLaunchResult = Schema.Struct({
@@ -1774,7 +1782,18 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
     );
   });
 
-  return SshEnvironmentManager.of({ ensureEnvironment, disconnectEnvironment });
+  return SshEnvironmentManager.of({
+    ensureEnvironment,
+    disconnectEnvironment,
+    activeEnvironments: Effect.sync(() =>
+      [...tunnels.values()].map((entry) => ({
+        key: entry.key,
+        target: entry.target,
+        httpBaseUrl: entry.httpBaseUrl,
+        wsBaseUrl: entry.wsBaseUrl,
+      })),
+    ),
+  });
 });
 
 /**

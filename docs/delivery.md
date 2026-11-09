@@ -196,14 +196,16 @@ and WebSocket access uses the server origin with `wsTicket` in the query instead
 Before serving an auto-selected document, the shell verifies the injected credential with
 `/api/auth/session`; two consecutive `authenticated:false` replies mark the source for a
 two-minute cooldown and open the bundled client in its normal state (`auth=1`), not the offline
-page, so saved bearer connections keep working. Settings › About offers **Retry server UI** to
-clear that memory. The
+page, so saved bearer connections keep working. Settings › About offers **Retry server UI**, and
+the bundled coordinator retries after the cooldown; both return to the un-flagged app URL so the
+shell can choose server UI again. The
 bundled server CSP allows same-origin frames (`frame-ancestors 'self'`) so HTML previews render
 inside server UI. Credentials are injected only for the request's own server host; source hosts
 carry a per-install salt and stale hosts are dropped when a window changes source. Chunk and `vite:preloadError` failures before React mounts show a bounded
 "Reconnecting to <machine>…" surface that retries, then reloads or returns to the built-in
-version; after mount a calm overlay appears and the page is never replaced or reloaded under
-an in-flight send.
+version; the reload budget clears only after the app has mounted and stayed healthy for ten
+seconds. After mount a calm overlay appears with a reload action and the page is never replaced
+or reloaded under an in-flight send.
 
 Run `xvfb-run -a apps/desktop/node_modules/electron/dist/electron --no-sandbox
 apps/desktop/scripts/delivery-ui-proof.mjs` to run a hostile HTTP loopback server against the

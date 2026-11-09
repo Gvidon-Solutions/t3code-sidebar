@@ -12,6 +12,7 @@ import {
   usePrimaryEnvironmentId,
 } from "../../state/environments";
 import { resolveServerUiSource } from "./serverUiSource";
+import { withoutBundledFallback } from "./desktopBundledFallback";
 
 function serverUiSelectionUrl(httpBaseUrl: string, shellOrigin: string | undefined): string {
   try {
@@ -36,6 +37,7 @@ export function DesktopUiCoordinator() {
   const primary = usePrimaryEnvironmentId();
   const { environments } = useEnvironments();
   const [remembered, setRemembered] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const requested = routeEnvironment ?? draftEnvironment;
   if (requested && requested !== remembered) setRemembered(requested);
   const selectedId =
@@ -95,12 +97,21 @@ export function DesktopUiCoordinator() {
         httpBaseUrl: source.httpBaseUrl,
         serverVersion: version,
       });
-      if (!active || !changed) return;
+      if (!active) return;
+      if (!changed) {
+        // A rejected server UI is retried after its TTL; keep this bundled app polling
+        // so a plain document load can pick the server UI up again.
+        if (loaded.source === "bundled" && environmentId !== null) {
+          const timer = setTimeout(() => setRetryNonce((value) => value + 1), 30_000);
+          cancelReload = () => clearTimeout(timer);
+        }
+        return;
+      }
       cancelReload = afterChatSendsSettled(() => {
         if (!active) return;
         try {
           flushComposerDrafts();
-          window.location.reload();
+          window.location.assign(withoutBundledFallback(window.location.href));
         } catch (error) {
           console.error("Could not reload connected server UI", error);
         }
@@ -110,6 +121,7 @@ export function DesktopUiCoordinator() {
       active = false;
       cancelReload?.();
     };
-  }, [ui, loaded, environmentId, httpBaseUrl, version]);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- retryNonce re-runs the source sync after the bundled retry timer
+  }, [ui, loaded, environmentId, httpBaseUrl, version, retryNonce]);
   return null;
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
+  HEALTHY_RESET_MS,
   isChunkLoadFailure,
   memoryReconnectAttempts,
+  reconnectBudgetMayReset,
   runServerUiReconnect,
   serverUiLabel,
   type ReconnectLoopHooks,
@@ -90,6 +92,32 @@ describe("runServerUiReconnect", () => {
     await runServerUiReconnect(hooks);
     expect(events).toEqual(["fallback"]);
     expect(attempts.read()).toBe(0);
+  });
+
+  it("gives up after three reloads across separate page loads", async () => {
+    const attempts = memoryReconnectAttempts(0);
+    const events: string[] = [];
+    for (let load = 0; load < 4; load += 1) {
+      await runServerUiReconnect({
+        probe: async () => "ready",
+        beforeReload: async () => {
+          events.push("before-reload");
+        },
+        reload: () => events.push("reload"),
+        fallback: () => events.push("fallback"),
+        attempts,
+        sleep: async () => {},
+        now: () => 0,
+      });
+    }
+    expect(events.filter((event) => event === "reload")).toHaveLength(3);
+    expect(events.at(-1)).toBe("fallback");
+    expect(attempts.read()).toBe(0);
+  });
+
+  it("does not clear the reload budget before a healthy mount", () => {
+    expect(reconnectBudgetMayReset(HEALTHY_RESET_MS - 1)).toBe(false);
+    expect(reconnectBudgetMayReset(HEALTHY_RESET_MS)).toBe(true);
   });
 
   it("retries an unreachable session until the deadline", async () => {

@@ -55,14 +55,23 @@ function showReconnectOverlay(): void {
   const detail = document.createElement("span");
   detail.textContent = "The server is restarting. Reload this page when it is back.";
   detail.style.cssText = "color:#aaa;line-height:1.5";
+  const actions = document.createElement("div");
+  actions.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
   const fallback = document.createElement("button");
   fallback.type = "button";
   fallback.textContent = "Use the built-in version";
   fallback.title = "Works offline with your saved connections";
   fallback.style.cssText =
-    "align-self:flex-start;padding:6px 10px;border-radius:8px;border:1px solid #555;background:transparent;color:#eee;font:inherit;cursor:pointer";
+    "padding:6px 10px;border-radius:8px;border:1px solid #555;background:transparent;color:#eee;font:inherit;cursor:pointer";
   fallback.addEventListener("click", () => window.desktopShell?.returnToBundled());
-  overlay.append(title, detail, fallback);
+  const reload = document.createElement("button");
+  reload.type = "button";
+  reload.textContent = "Reload page";
+  reload.style.cssText =
+    "padding:6px 10px;border-radius:8px;border:1px solid #555;background:transparent;color:#eee;font:inherit;cursor:pointer";
+  reload.addEventListener("click", () => window.location.reload());
+  actions.append(fallback, reload);
+  overlay.append(title, detail, actions);
   document.body.append(overlay);
 }
 
@@ -187,17 +196,44 @@ function sessionStorageAttempts(): ReconnectAttemptStore {
   };
 }
 
-export function clearServerUiReconnectAttempts(): void {
+function clearServerUiReconnectAttempts(): void {
   if (typeof sessionStorage === "undefined") return;
   sessionStorageAttempts().clear();
 }
 
+/** Clear the reload budget only after the app has mounted and stayed healthy. */
+export const HEALTHY_RESET_MS = 10_000;
+
+export function reconnectBudgetMayReset(mountedForMs: number): boolean {
+  return mountedForMs >= HEALTHY_RESET_MS;
+}
+
+export function installHealthyReconnectReset(): void {
+  if (!isServerUiWindow()) return;
+  let mountedForMs = 0;
+  const timer = setInterval(() => {
+    if (!isReactMounted()) {
+      mountedForMs = 0;
+      return;
+    }
+    mountedForMs += 1_000;
+    if (reconnectBudgetMayReset(mountedForMs)) {
+      clearInterval(timer);
+      clearServerUiReconnectAttempts();
+    }
+  }, 1_000);
+}
+
 async function probeSession(): Promise<ReconnectProbe> {
   try {
+    const requestToken = window.desktopShell?.requestToken;
     const response = await fetch(SESSION_PATH, {
       cache: "no-store",
       credentials: "same-origin",
-      headers: { accept: "application/json" },
+      headers: {
+        accept: "application/json",
+        ...(requestToken ? { "x-t3-server-ui": requestToken } : {}),
+      },
       signal: AbortSignal.timeout(SESSION_TIMEOUT_MS),
     });
     if (!response.ok) return "unavailable";

@@ -453,11 +453,13 @@ if (trustedUi) contextBridge.exposeInMainWorld("desktopBridge", desktopBridge);
 else if (serverRendererId !== undefined) {
   const origin: unknown = ipcRenderer.sendSync(IpcChannels.UI_SERVER_ORIGIN_CHANNEL);
   const name: unknown = ipcRenderer.sendSync(IpcChannels.UI_SERVER_NAME_CHANNEL);
+  const requestToken: unknown = ipcRenderer.sendSync(IpcChannels.UI_REQUEST_TOKEN_CHANNEL);
   contextBridge.exposeInMainWorld("desktopShell", {
     returnToBundled: () =>
       location.replace(`${location.protocol}//app/?desktopWindowId=${serverRendererId}&bundled=1`),
     origin: typeof origin === "string" ? origin : null,
     name: typeof name === "string" && name.trim().length > 0 ? name.trim() : null,
+    requestToken: typeof requestToken === "string" && requestToken.length > 0 ? requestToken : null,
     ui: { getInfo: desktopBridge.ui.getInfo, select: desktopBridge.ui.select },
     getAppBranding: desktopBridge.getAppBranding,
     getClientPlatform: desktopBridge.getClientPlatform,
