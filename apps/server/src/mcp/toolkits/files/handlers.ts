@@ -67,7 +67,14 @@ export const layer = McpToolAccess.toLayer(FilesToolkit, {
         ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
       });
       const locator = yield* FileLocator;
-      return yield* locator.locate({ ...input, threadId }, context);
+      const result = yield* locator.locate({ ...input, threadId }, context);
+      yield* Effect.logInfo("files.locate", {
+        status: result.status,
+        via: result.target?.via ?? null,
+        candidateCount: result.candidates?.length ?? 0,
+        tiers: result.tried.map((entry) => entry.tier),
+      });
+      return result;
     }),
   ),
 });

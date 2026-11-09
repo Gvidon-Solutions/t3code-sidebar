@@ -3111,7 +3111,14 @@ export const layerWsRpc = (
             ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
             ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
           });
-          return yield* fileLocator.locate(input, context);
+          const result = yield* fileLocator.locate(input, context);
+          yield* Effect.logInfo("files.locate", {
+            status: result.status,
+            via: result.target?.via ?? null,
+            candidateCount: result.candidates?.length ?? 0,
+            tiers: result.tried.map((entry) => entry.tier),
+          });
+          return result;
         }),
         [WS_METHODS.filesystemBrowse]: (input) =>
           workspaceEntries.browse(input).pipe(
