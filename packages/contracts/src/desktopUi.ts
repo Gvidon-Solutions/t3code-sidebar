@@ -5,6 +5,8 @@ export const DesktopUiSelection = Schema.Struct({
   environmentId: EnvironmentId,
   httpBaseUrl: Schema.NullOr(Schema.String),
   serverVersion: Schema.String,
+  /** Shell-only: the bearer the trusted client holds for this environment; never persisted or exposed to server UI. */
+  authorization: Schema.optional(Schema.String),
 });
 export type DesktopUiSelection = typeof DesktopUiSelection.Type;
 export const DesktopUiInfo = Schema.Struct({

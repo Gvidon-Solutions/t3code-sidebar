@@ -1029,6 +1029,7 @@ export type DesktopShellBridge = Pick<
   "getAppBranding" | "getClientPlatform" | "getSystemLocale" | "revealWindow"
 > & {
   readonly origin: string | null;
+  readonly name: string | null;
   readonly returnToBundled: () => void;
   readonly ui: Pick<NonNullable<DesktopBridge["ui"]>, "getInfo" | "select">;
 };

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildPairingAppLink,
+  extractPairingCredential,
   readPairingAppLink,
+  readPairingUrlInput,
   RemoteBackendUrlMissingError,
   RemotePairingTokenMissingError,
   RemotePairingUrlInvalidError,
@@ -158,5 +160,20 @@ describe("remote", () => {
     expect(
       readPairingAppLink(`https://pair?pairingUrl=${encodeURIComponent(pairingUrl)}`),
     ).toBeNull();
+  });
+
+  it("extracts the token from any pasted pairing link shape", () => {
+    const hosted =
+      "https://app.t3.codes/pair?host=https%3A%2F%2Fdesktop.tailnet.ts.net%3A44342%2F#token=hidden";
+    expect(extractPairingCredential("ABC123")).toBe("ABC123");
+    expect(extractPairingCredential("  ABC123  ")).toBe("ABC123");
+    expect(extractPairingCredential("https://vps.example.com/pair#token=ABC123")).toBe("ABC123");
+    expect(extractPairingCredential("https://vps.example.com/pair?token=ABC123")).toBe("ABC123");
+    expect(
+      extractPairingCredential(buildPairingAppLink("https://vps.example.com/pair#token=XYZ")),
+    ).toBe("XYZ");
+    expect(extractPairingCredential(buildPairingAppLink(hosted))).toBe("hidden");
+    expect(readPairingUrlInput("t3code://pair?pairingUrl=nope")).toBeNull();
+    expect(readPairingUrlInput("https://vps.example.com/pair")).toBeNull();
   });
 });

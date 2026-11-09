@@ -62,6 +62,11 @@ export class PrimaryEnvironmentAuth extends Context.Service<
   PrimaryEnvironmentAuth,
   {
     readonly bearerToken: Effect.Effect<Option.Option<string>, ConnectionAttemptError>;
+    /**
+     * A short-lived RPC ticket for a first-party cookie session the renderer cannot reach
+     * directly (the desktop server UI proxies its HTTP through the shell). None elsewhere.
+     */
+    readonly webSocketTicket: Effect.Effect<Option.Option<string>, ConnectionAttemptError>;
   }
 >()("@t3tools/client-runtime/platform/capabilities/PrimaryEnvironmentAuth") {}
 

@@ -200,6 +200,34 @@ export const readPairingAppLink = (value: string): string | null => {
   return url.searchParams.get(PAIRING_APP_LINK_PARAM)?.trim() || null;
 };
 
+/** The full pairing link when `value` is one (including a `t3code://pair` app link). */
+export const readPairingUrlInput = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const candidate = readPairingAppLink(trimmed) ?? trimmed;
+  try {
+    const url = new URL(candidate);
+    if (!hasSupportedRemoteBackendProtocol(url)) return null;
+    return getPairingTokenFromUrl(url) === null ? null : candidate;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * A pasted credential may be the bare token or a whole pairing link. Never send the link
+ * itself as the token.
+ */
+export const extractPairingCredential = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const pairingUrl = readPairingUrlInput(trimmed);
+  if (pairingUrl === null) return trimmed;
+  const hosted = readHostedPairingRequest(new URL(pairingUrl));
+  if (hosted) return hosted.token;
+  return getPairingTokenFromUrl(new URL(pairingUrl)) ?? trimmed;
+};
+
 export const resolveRemotePairingTarget = (input: {
   readonly pairingUrl?: string;
   readonly host?: string;
