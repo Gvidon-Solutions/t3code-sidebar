@@ -8,6 +8,7 @@ import {
   withMessageContext,
   deriveAvailableRevertTurnCounts,
   realDraftModelSelection,
+  showsOfflineConversationEmpty,
 } from "./ChatView.logic";
 import { recallCheckoutIsRepo, rememberCheckoutIsRepo } from "./ChatView.logic";
 import { ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
@@ -1270,4 +1271,18 @@ it("ignores the local draft's no-provider placeholder when judging a machine", (
   expect(realDraftModelSelection(null)).toBeNull();
   const selection = { instanceId: ProviderInstanceId.make("fakeCodex"), model: "fast" };
   expect(realDraftModelSelection(selection)).toBe(selection);
+});
+
+it("replaces a blank server thread with the offline pane only once it has no saved conversation", () => {
+  const base = {
+    isServerThread: true,
+    environmentUnavailable: true,
+    hasConversation: false,
+    reconnectWindowElapsed: true,
+  };
+  expect(showsOfflineConversationEmpty(base)).toBe(true);
+  expect(showsOfflineConversationEmpty({ ...base, hasConversation: true })).toBe(false);
+  expect(showsOfflineConversationEmpty({ ...base, reconnectWindowElapsed: false })).toBe(false);
+  expect(showsOfflineConversationEmpty({ ...base, environmentUnavailable: false })).toBe(false);
+  expect(showsOfflineConversationEmpty({ ...base, isServerThread: false })).toBe(false);
 });

@@ -30,7 +30,7 @@ export function MachineTag({
             aria-label={`Machine: ${machine.label}`}
             className={cn(
               "flex h-4 shrink-0 items-center gap-0.5 rounded px-1 font-mono text-3xs font-semibold tracking-tight text-foreground uppercase",
-              muted && "opacity-60",
+              muted && "text-muted-foreground opacity-45 grayscale",
             )}
             style={{ backgroundColor: machineTagBackground(machine.color) }}
           />

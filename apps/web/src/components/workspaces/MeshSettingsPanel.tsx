@@ -34,7 +34,7 @@ import { useMeshOverview } from "../../hooks/useMeshOverview";
 import { useEnvironments, usePrimaryEnvironmentId } from "../../state/environments";
 import { environmentCatalog } from "../../connection/catalog";
 import { useAtomValue } from "@effect/atom-react";
-import { planMeshConnect } from "@t3tools/client-runtime/state/mesh-layout";
+import { defaultLinkSource, planMeshConnect } from "@t3tools/client-runtime/state/mesh-layout";
 import { SettingsPageContainer, SettingsSection } from "../settings/settingsLayout";
 import { Button } from "../ui/button";
 import {
@@ -91,9 +91,9 @@ function LinkWithDialog(props: {
     readonly environmentId: EnvironmentId;
     readonly label: string;
   }>;
-  readonly initialSource: EnvironmentId | null;
+  readonly defaultSource: EnvironmentId | null;
 }) {
-  const [source, setSource] = useState<EnvironmentId | null>(props.initialSource);
+  const [source, setSource] = useState<EnvironmentId | null>(props.defaultSource);
   const [target, setTarget] = useState<string | null>(null);
   const [url, setUrl] = useState("");
   const [pairingCode, setPairingCode] = useState("");
@@ -110,7 +110,7 @@ function LinkWithDialog(props: {
     Option.isSome(connected) &&
     mayMint;
   const link = useAtomCommand(peerLinkEnvironment.link, { label: "link environment" });
-  const selectedSource = source ?? props.sources[0]?.environmentId ?? null;
+  const selectedSource = source ?? props.defaultSource ?? props.sources[0]?.environmentId ?? null;
   const ready =
     selectedSource !== null && url.trim().length > 0 && (canMint || pairingCode.trim().length > 0);
   const reset = () => {
@@ -559,7 +559,7 @@ export function MeshSettingsPanel() {
         onOpenChange={setLinkOpen}
         machines={machines}
         sources={sources}
-        initialSource={sources[0]?.environmentId ?? null}
+        defaultSource={defaultLinkSource(sources, primaryEnvironmentId)}
       />
     </SettingsPageContainer>
   );

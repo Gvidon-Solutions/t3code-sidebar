@@ -194,7 +194,8 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
         ...(() => {
           const status = offlineConversationStatus({
             label: activeEnvironmentUnavailableState.label,
-            reconnecting: environmentReconnecting,
+            // The reconnect window has passed by the time this banner is shown; it is offline now.
+            reconnecting: environmentReconnecting && !reconnectWarningGraceElapsed,
             hasCachedConversation,
           });
           return { title: status.title, description: status.description };

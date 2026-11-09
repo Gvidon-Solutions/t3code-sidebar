@@ -1627,3 +1627,18 @@ export function deriveAvailableRevertTurnCounts(projection: ThreadStructure | nu
   }
   return available;
 }
+
+/** A thread with no saved conversation shows a calm offline pane instead of an empty timeline. */
+export function showsOfflineConversationEmpty(input: {
+  readonly isServerThread: boolean;
+  readonly environmentUnavailable: boolean;
+  readonly hasConversation: boolean;
+  readonly reconnectWindowElapsed: boolean;
+}): boolean {
+  return (
+    input.isServerThread &&
+    input.environmentUnavailable &&
+    !input.hasConversation &&
+    input.reconnectWindowElapsed
+  );
+}
