@@ -1,54 +1,22 @@
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
-import type { EnvironmentId, FilesLocateCandidate, FilesLocateResult } from "@t3tools/contracts";
-import { useSyncExternalStore } from "react";
+import type { EnvironmentId, FilesLocateCandidate } from "@t3tools/contracts";
 import { Modal, Pressable, ScrollView, View } from "react-native";
 
 import { AppText as Text } from "../../components/ui/AppText";
 import { useWorkspaceEnvironments } from "../../state/workspace";
 import { useMeshLayout } from "../workspaces/useMeshLayout";
+import { hideFileLocateSheet, useFileLocateSheetRequest } from "./locateFileSheetState";
 
-export interface FileLocateOpenTarget {
-  readonly environmentId: EnvironmentId;
-  readonly absolutePath: string;
-  readonly line?: number;
-}
-
-export interface FileLocateSheetRequest {
-  readonly rawPath: string;
-  readonly result: FilesLocateResult;
-  readonly openTarget: (target: FileLocateOpenTarget) => void;
-  readonly search: (term: string) => void;
-}
-
-let current: FileLocateSheetRequest | null = null;
-const listeners = new Set<() => void>();
-const emit = () => {
-  for (const listener of listeners) listener();
-};
-
-export function showFileLocateSheet(request: FileLocateSheetRequest): void {
-  current = request;
-  emit();
-}
-
-export function hideFileLocateSheet(): void {
-  current = null;
-  emit();
-}
-
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-};
+export {
+  showFileLocateSheet,
+  type FileLocateOpenTarget,
+  type FileLocateSheetRequest,
+} from "./locateFileSheetState";
 
 const basenameOf = (value: string) => value.split(/[\\/]/).filter(Boolean).at(-1) ?? value;
 
 export function FileLocateSheetHost() {
-  const request = useSyncExternalStore(
-    subscribe,
-    () => current,
-    () => current,
-  );
+  const request = useFileLocateSheetRequest();
   const { config } = useMeshLayout();
   const environments = useWorkspaceEnvironments();
   if (request === null) return null;

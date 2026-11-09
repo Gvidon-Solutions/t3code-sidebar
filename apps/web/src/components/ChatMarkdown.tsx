@@ -842,26 +842,39 @@ function useChatMarkdownState({
         });
         return;
       }
-      useRightPanelStore.getState().openFile(threadRef, path, line, undefined, extra);
+      if (extra === undefined) {
+        useRightPanelStore.getState().openFile(threadRef, path, line);
+      } else {
+        useRightPanelStore.getState().openFile(threadRef, path, line, undefined, extra);
+      }
     };
     void (async () => {
-      const outcome = await locateFile({
-        environmentId,
-        input: {
-          rawPath: panelPath,
-          threadId: threadRef.threadId,
-          ...(cwd === undefined ? {} : { cwd }),
-          ...(fileLinkMeta.environmentId === undefined
-            ? {}
-            : { environmentId: fileLinkMeta.environmentId }),
-        },
-      });
+      let outcome: Awaited<ReturnType<typeof locateFile>>;
+      try {
+        outcome = await locateFile({
+          environmentId,
+          input: {
+            rawPath: panelPath,
+            threadId: threadRef.threadId,
+            ...(cwd === undefined ? {} : { cwd }),
+            ...(fileLinkMeta.environmentId === undefined
+              ? {}
+              : { environmentId: fileLinkMeta.environmentId }),
+          },
+        });
+      } catch {
+        if (isLatestLookup()) openAt(fileLinkMeta.environmentId, panelPath, fileLinkMeta.line);
+        return;
+      }
       if (!isLatestLookup()) return;
-      if (outcome._tag !== "Success") {
+      const result = outcome !== undefined && outcome._tag === "Success" ? outcome.value : null;
+      if (
+        result === null ||
+        (result.status !== "found" && result.status !== "choose" && result.status !== "notFound")
+      ) {
         openAt(fileLinkMeta.environmentId, panelPath, fileLinkMeta.line);
         return;
       }
-      const result = outcome.value;
       const target = result.target;
       if (result.status === "found" && target !== undefined) {
         openAt(target.environmentId, target.absolutePath, target.line ?? fileLinkMeta.line, {

@@ -247,7 +247,6 @@ import { ThreadMcpApp } from "./McpAppWebView";
 import { assetEnvironment, useAssetUrl, useRefreshAssetUrl } from "../../state/assets";
 import { useAtomQueryRunner } from "../../state/use-atom-query-runner";
 import { readEnvironmentScope, usePreparedConnection } from "../../state/session";
-import { filesEnvironment } from "../../state/files";
 import { projectEnvironment } from "../../state/projects";
 import {
   resolveThreadLink,
@@ -265,8 +264,13 @@ import { environmentThreadShells, threadEnvironment } from "../../state/threads"
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ThreadWorkflowOpening, useWorkflowOpening } from "./thread-workflow-opening";
 import { useV2ItemSupport } from "../../state/v2-item-support";
-import { showFileLocateSheet } from "../files/FileLocateSheet";
-import { fileRoutePathSegments, resolveFileLinkPath } from "../files/filePath";
+import { showFileLocateSheet } from "../files/locateFileSheetState";
+import { filesEnvironment } from "../../state/files";
+import {
+  fileRoutePathSegments,
+  resolveFileLinkPath,
+  resolveWorkspaceRelativeFilePath,
+} from "../files/filePath";
 import { useForkThread } from "../workspaces/useForkThread";
 import { resolveUserMessageIntentBadge } from "./userMessageIntentBadge";
 import { fileChipClipboardPath, fileChipMenu, resolveFileChipTarget } from "./fileChipMenu";
@@ -2897,6 +2901,10 @@ export const ThreadFeed = memo(function ThreadFeed({
         if (request.signal.aborted) return;
         void Haptics.selectionAsync();
         const sameMachine = String(target.environmentId) === String(props.environmentId);
+        const routePath = sameMachine
+          ? (resolveWorkspaceRelativeFilePath(props.workspaceRoot, target.absolutePath) ??
+            target.absolutePath)
+          : target.absolutePath;
         navigation.navigate("ThreadFile", {
           environmentId: String(target.environmentId),
           ...(sameMachine
@@ -2906,7 +2914,7 @@ export const ThreadFeed = memo(function ThreadFeed({
                 cwd: "/",
                 projectName: String(target.environmentId),
               }),
-          path: fileRoutePathSegments(target.absolutePath),
+          path: fileRoutePathSegments(routePath),
           ...(target.line === undefined ? {} : { line: String(target.line) }),
         });
       };
