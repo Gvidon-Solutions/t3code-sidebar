@@ -98,6 +98,7 @@ import type { ReviewCommentContext } from "../reviewCommentContext";
 import { derivePhase, type TimelineEntry } from "../session-logic";
 import type { PreviewMiniPlayerSource } from "../previewMiniPlayerStore";
 import type { DesktopPreviewOverlay } from "../previewStateStore";
+import { offlineConversationStatus } from "@t3tools/client-runtime/state/mesh-machines";
 import type { RightPanelSurface } from "../rightPanelStore";
 import {
   NO_PROVIDER_MODEL_SELECTION,
@@ -1641,4 +1642,18 @@ export function showsOfflineConversationEmpty(input: {
     !input.hasConversation &&
     input.reconnectWindowElapsed
   );
+}
+
+/** The composer banner's words: a still-retrying machine reads offline once the window passes. */
+export function environmentUnavailableBannerStatus(input: {
+  readonly label: string | null | undefined;
+  readonly reconnecting: boolean;
+  readonly reconnectWindowElapsed: boolean;
+  readonly hasCachedConversation: boolean;
+}) {
+  return offlineConversationStatus({
+    label: input.label,
+    reconnecting: input.reconnecting && !input.reconnectWindowElapsed,
+    hasCachedConversation: input.hasCachedConversation,
+  });
 }

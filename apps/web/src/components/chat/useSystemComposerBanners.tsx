@@ -1,7 +1,6 @@
 import { useStableCallback } from "../../hooks/useStableCallback";
 import { type EnvironmentId } from "@t3tools/contracts";
 import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
-import { offlineConversationStatus } from "@t3tools/client-runtime/state/mesh-machines";
 import { useAtomValue } from "@effect/atom-react";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -20,7 +19,10 @@ import {
 import { serverEnvironment } from "../../state/server";
 import { type EnvironmentPresentation } from "../../state/environments";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
-import { ENVIRONMENT_RECONNECT_WARNING_GRACE_MS } from "../ChatView.logic";
+import {
+  ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
+  environmentUnavailableBannerStatus,
+} from "../ChatView.logic";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { ServerUpdateAction, serverUpdateStageLabel } from "../ServerUpdateAction";
@@ -192,10 +194,10 @@ export function useSystemComposerBanners(input: SystemComposerBannersInput) {
         group: "environment",
         icon: <WifiOffIcon />,
         ...(() => {
-          const status = offlineConversationStatus({
+          const status = environmentUnavailableBannerStatus({
             label: activeEnvironmentUnavailableState.label,
-            // The reconnect window has passed by the time this banner is shown; it is offline now.
-            reconnecting: environmentReconnecting && !reconnectWarningGraceElapsed,
+            reconnecting: environmentReconnecting,
+            reconnectWindowElapsed: reconnectWarningGraceElapsed,
             hasCachedConversation,
           });
           return { title: status.title, description: status.description };
