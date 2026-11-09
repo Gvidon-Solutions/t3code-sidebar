@@ -12,6 +12,20 @@ import { PeerConnectionError } from "./PeerConnectionError.ts";
 
 const isConnectionError = Schema.is(PeerConnectionError);
 
+const PEER_LABEL_LIMIT = 64;
+
+/** A peer supplies its own label; keep it single-line, bounded and safe for session lists. */
+export function peerSessionLabel(label: string | undefined): string {
+  const cleaned = (label ?? "")
+    .replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (cleaned === "") return "Linked machine";
+  const bounded =
+    cleaned.length > PEER_LABEL_LIMIT ? `${cleaned.slice(0, PEER_LABEL_LIMIT - 1)}…` : cleaned;
+  return `Linked machine · ${bounded}`;
+}
+
 export class PeerCredentials extends Context.Service<
   PeerCredentials,
   {
@@ -82,7 +96,7 @@ export const layer = Layer.effect(
         label: string;
       }>`SELECT label FROM peer_environment_links WHERE environment_id = ${environmentId}`;
       const issued = yield* auth.issueMcpClientSession({
-        label: `Linked machine${peer[0]?.label ? ` · ${peer[0].label}` : ""}`,
+        label: peerSessionLabel(peer[0]?.label),
         access,
         peerLink: true,
         peerEnvironmentId: environmentId,

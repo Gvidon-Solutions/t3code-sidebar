@@ -1491,7 +1491,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("server settings"
           [{ name: "API_TOKEN", value: secret, sensitive: true }],
         );
         yield* service.updateSettings({
-          providerInstances: {},
+          providerInstances: { [instanceId]: null },
           sourceControlHosts: {
             github: { tokens: {} },
             bitbucket: { accessToken: "" },

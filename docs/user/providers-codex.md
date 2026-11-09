@@ -29,7 +29,9 @@ covers installation and custom configuration.
 
 Add another ChatGPT account in **Settings → Providers**, then select the account
 from the thread's model picker. Compatible accounts can continue the same thread.
-Connecting accounts through T3 Code leaves your CLI login unchanged.
+Connecting accounts through T3 Code leaves your CLI login unchanged. Removing one account
+removes only that provider instance; other accounts and their saved sign-ins stay. A settings
+update that omits an instance also leaves it in place.
 
 ### Multiple CLI logins
 

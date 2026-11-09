@@ -182,3 +182,14 @@ it("escapes a peer-supplied title in the fork marker link", () => {
     "Forked from [\\[a\\]\\(http://evil\\)](http://host/t) · studio",
   );
 });
+
+it("neutralizes newlines, backticks and non-thread link schemes in the fork marker", () => {
+  expect(forkMarker("Fix\nnow `x`", "t3-thread://v2/env/thread", "cloud\nbox")).toBe(
+    "Forked from [Fix now \\`x\\`](t3-thread://v2/env/thread) · cloud box",
+  );
+  expect(forkMarker("Title", "javascript:alert(1)", "studio")).toBe("Forked from Title · studio");
+  expect(forkMarker("Title", "not a url", "studio")).toBe("Forked from Title · studio");
+  expect(forkMarker("Title", "https://host/a b[c]", "studio")).toBe(
+    "Forked from [Title](https://host/a%20b%5Bc%5D) · studio",
+  );
+});

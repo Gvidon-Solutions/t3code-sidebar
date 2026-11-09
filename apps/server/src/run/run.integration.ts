@@ -323,7 +323,7 @@ try {
       ),
   };
   const config = Schema.decodeSync(SidebarWorkspacesConfig)({
-    projectTitles: { sample: "R1 Sample" },
+    projectTitles: { sample: "Sample" },
     projectMounts: {
       sample: [
         {

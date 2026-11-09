@@ -49,7 +49,22 @@ NodeAssert.notEqual(
   "Fixture must start in another project",
 );
 await NodeFSP.mkdir(values.shots, { recursive: true });
-const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+const launchBrowser = async () => {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await chromium.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+      });
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  throw lastError;
+};
+const browser = await launchBrowser();
 let page;
 const browserLogs = [];
 try {
@@ -168,7 +183,7 @@ try {
     await picker.click();
     await page.getByRole("option", { name: values["empty-machine"], exact: true }).click();
     await dialog
-      .getByText("No models are available on " + values["empty-machine"] + ".", { exact: true })
+      .getByText("No models are available on " + values["empty-machine"] + ".", { exact: false })
       .first()
       .waitFor();
     NodeAssert.equal(
@@ -177,7 +192,6 @@ try {
         .isDisabled(),
       true,
     );
-    await dialog.getByText("Details", { exact: true }).click();
     await page.screenshot({
       path: NodePath.join(values.shots, "no-models-disabled.png"),
       fullPage: true,

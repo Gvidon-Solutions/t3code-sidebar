@@ -451,5 +451,3 @@ export function createMeshLayoutAtoms<R, E>(
     }),
   };
 }
-
-export * from "./meshConfigEditor.ts";

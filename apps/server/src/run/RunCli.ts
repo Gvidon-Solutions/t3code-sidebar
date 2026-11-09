@@ -119,9 +119,15 @@ async function startGuardian(
     child.once("error", reject);
     child.once("exit", (code) => reject(new Error(`Port forwarding did not start (${code}).`)));
     child.once("message", (message: unknown) => {
-      if (message && typeof message === "object" && "ready" in message && message.ready === true)
+      if (message && typeof message === "object" && "ready" in message && message.ready === true) {
         resolve();
-      else reject(new Error("Port forwarding failed to become ready."));
+        return;
+      }
+      const reason =
+        message && typeof message === "object" && "message" in message
+          ? String(message.message)
+          : "Port forwarding failed to become ready.";
+      reject(new Error(reason));
     });
   });
   child.disconnect();

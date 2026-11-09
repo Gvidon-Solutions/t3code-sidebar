@@ -19,7 +19,7 @@ require_bed_lock() {
     return 1
   fi
 }
-require_bed_lock || die 'Acquire the shared bed lock before round three'
+require_bed_lock || die 'Acquire the shared bed lock before resilience acceptance'
 export MESH_E2E_SSH_CONTROL_DIR="$WORK/N-ssh"
 mkdir -p "$MESH_E2E_SSH_CONTROL_DIR"
 chmod 700 "$MESH_E2E_SSH_CONTROL_DIR"
@@ -52,7 +52,7 @@ expected_hash=$(sha256sum "$RUNTIME_DIR/t3" | cut -d' ' -f1)
 test "$(sha256sum "$NODE_A_RUNTIME_ROOT/$BUILD_VERSION/t3" | cut -d' ' -f1)" = "$expected_hash" || die 'NODE_A binary differs from build'
 test "$(nodeB_ssh "sha256sum $NODE_B_BIN" | cut -d' ' -f1)" = "$expected_hash" || die 'nodeB binary differs from build'
 test "$(cloud_ssh 'docker inspect -f "{{.Image}}" t3-mesh-e2e')" = "$(docker image inspect -f '{{.Id}}' "$IMAGE")" || die 'Wrong CLOUD image'
-nodeB_ssh 'cat /tmp/mesh-network-state.json' | jq -e '.cut==false' > "$WORK/N-proxy-ready.json" || die 'Round three requires network-proxies.sh up'
+nodeB_ssh 'cat /tmp/mesh-network-state.json' | jq -e '.cut==false' > "$WORK/N-proxy-ready.json" || die 'Resilience acceptance requires network-proxies.sh up'
 for m in nodeA nodeB cloud; do
   cat > "$WORK/N-t3-$m" <<RUNNER
 #!/usr/bin/env bash
@@ -180,10 +180,10 @@ restore() {
     if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
       kill "$child" || rc=1
       if wait "$child"; then
-        printf 'Round three child %s finished during cleanup.\n' "$child"
+        printf 'Resilience acceptance child %s finished during cleanup.\n' "$child"
       else
         child_status=$?
-        printf 'Round three child %s cleanup exit %s.\n' "$child" "$child_status" >&2
+        printf 'Resilience acceptance child %s cleanup exit %s.\n' "$child" "$child_status" >&2
         [ "$child_status" = 143 ] || rc=1
       fi
     fi

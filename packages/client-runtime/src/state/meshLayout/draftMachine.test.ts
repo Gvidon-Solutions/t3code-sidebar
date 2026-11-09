@@ -87,7 +87,7 @@ describe("draft machine defaults", () => {
             ...config!.settings!,
             providerInstances: providerInstances(false),
           },
-        },
+        } as unknown as Parameters<typeof hasUsableDraftModels>[0],
         null,
       ),
     ).toBe(false);

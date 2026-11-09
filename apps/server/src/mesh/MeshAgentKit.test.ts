@@ -99,6 +99,7 @@ it.effect(
       yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
       // Claude is installed through its home directory, even with no binary on PATH.
       yield* fs.makeDirectory(`${home}/.claude/skills/t3`, { recursive: true });
+      yield* fs.writeFileString(`${home}/.claude/skills/t3/.t3-managed`, "ours\n");
       yield* fs.writeFileString(`${home}/.claude/skills/t3/SKILL.md`, "old skill");
       const previous =
         "Owner note\n\n<!-- t3-mesh begin -->\nold block\n<!-- t3-mesh end -->\n\nTail\n";
@@ -190,23 +191,31 @@ it("rejects ambiguous managed blocks without truncating user content", () => {
   ).toBe("prefix<!-- t3-mesh begin -->\nnew\n<!-- t3-mesh end -->suffix");
 });
 
-it("replaces the retired installer's copy of the shared instructions instead of duplicating it", () => {
-  const shared = "# Как мы работаем\n\nПравила.\n";
-  const installed = `> Эта машина — **Studio** (ST): соседние: laptop (LT).\n\n${shared}`;
-  expect(Kit.withoutLegacyInstructions(installed, shared)).toBe("");
+it("removes the retired installer's instructions only as a whole paragraph", () => {
+  const shared = "# Team rules\n\nKeep every byte.\n";
+  const installed = `> This machine is Studio\n\n${shared}`;
+  expect(Kit.withoutLegacyInstructions(installed, shared)).toBe("> This machine is Studio\n");
   const withOwnText = `My own note\n\n${installed}\nAfter\n`;
-  expect(Kit.withoutLegacyInstructions(withOwnText, shared)).toBe("My own note\n\nAfter\n");
+  expect(Kit.withoutLegacyInstructions(withOwnText, shared)).toBe(
+    "My own note\n\n> This machine is Studio\n\nAfter\n",
+  );
   expect(Kit.withoutLegacyInstructions("Unrelated text\n", shared)).toBe("Unrelated text\n");
-  const blockFirst = Kit.instructionBlock(installed, "Mesh machines: studio (ST).");
-  const cleaned = Kit.withoutLegacyInstructions(blockFirst, shared);
-  expect(cleaned.startsWith("<!-- t3-mesh begin -->")).toBe(true);
-  expect(Kit.instructionBlock(cleaned, `Mesh\n\n${shared}`).split("Правила.").length - 1).toBe(1);
+  const midLine = `Owner text mentions ${shared.trim()} in one line\n`;
+  expect(Kit.withoutLegacyInstructions(midLine, shared)).toBe(midLine);
+  const inlineParagraph = `Before ${shared.trim()} after\n\nTail\n`;
+  expect(Kit.withoutLegacyInstructions(inlineParagraph, shared)).toBe(inlineParagraph);
+  const unrelatedQuote = `> An unrelated quote\n\n${shared}`;
+  expect(Kit.withoutLegacyInstructions(unrelatedQuote, shared)).toBe("> An unrelated quote\n");
+  const quoteWithoutSeparator = `> An unrelated quote\n${shared}`;
+  expect(Kit.withoutLegacyInstructions(quoteWithoutSeparator, shared)).toBe(quoteWithoutSeparator);
   const managedWithCopy = Kit.instructionBlock("", shared);
   expect(Kit.withoutLegacyInstructions(managedWithCopy, shared)).toBe(managedWithCopy);
+  expect(Kit.withoutLegacyInstructions(`${shared}Tail`, shared)).toBe(`${shared}Tail`);
   expect(Kit.withoutLegacyInstructions(installed, undefined)).toBe(installed);
   const adopted = Kit.instructionBlock(Kit.withoutLegacyInstructions(installed, shared), shared);
-  expect(adopted.split("Правила.").length - 1).toBe(1);
-  expect(adopted.startsWith("<!-- t3-mesh begin -->")).toBe(true);
+  expect(adopted.split("Keep every byte.").length - 1).toBe(1);
+  expect(adopted).toContain("<!-- t3-mesh begin -->");
+  expect(adopted).toContain("> This machine is Studio");
 });
 
 it("starts the managed body with the server's own bound identity", () => {
@@ -224,3 +233,100 @@ it("starts the managed body with the server's own bound identity", () => {
     /^This machine: Cloudbox \(CB\)\./,
   );
 });
+
+const reconcileWith = (home: string, source: string) =>
+  Kit.MeshAgentKit.pipe(
+    Effect.provide(Kit.layer.pipe(Layer.provide(Settings.layerTest()))),
+    Effect.provideService(HostProcess.Environment, {
+      T3_MESH_AGENT_HOME: home,
+      T3_MESH_AGENT_SOURCE: source,
+    }),
+    Effect.provideService(SpawnExecutableResolution, () => undefined),
+  );
+
+const bundledSkill = (home: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const source = `${home}/bundled`;
+    yield* fs.makeDirectory(`${source}/scripts`, { recursive: true });
+    yield* fs.writeFileString(`${source}/SKILL.md`, "skill v1");
+    yield* fs.writeFileString(`${source}/scripts/t3ctl.mjs`, "export {};");
+    return source;
+  });
+
+it.effect("never replaces a skill directory it does not own and reports it", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-unmanaged-skill-" });
+    const source = yield* bundledSkill(home);
+    yield* fs.makeDirectory(`${home}/.claude/skills/t3`, { recursive: true });
+    yield* fs.writeFileString(`${home}/.claude/skills/t3/SKILL.md`, "user skill");
+    const kit = yield* reconcileWith(home, source);
+    const failure = yield* kit.reconcile({ schema: 1, machines: {} }).pipe(Effect.flip);
+    expect(failure.reason).toBe("validation");
+    expect(failure.message).toContain(".claude/skills/t3");
+    expect(yield* fs.readFileString(`${home}/.claude/skills/t3/SKILL.md`)).toBe("user skill");
+    expect(yield* fs.exists(`${home}/.claude/skills/t3/.t3-managed`)).toBe(false);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("syncs a marked skill directory exactly and removes stale files", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-managed-skill-" });
+    const source = yield* bundledSkill(home);
+    yield* fs.makeDirectory(`${home}/.claude/skills/t3/old`, { recursive: true });
+    yield* fs.writeFileString(`${home}/.claude/skills/t3/.t3-managed`, "ours\n");
+    yield* fs.writeFileString(`${home}/.claude/skills/t3/SKILL.md`, "old skill");
+    yield* fs.writeFileString(`${home}/.claude/skills/t3/stale.txt`, "stale");
+    yield* fs.writeFileString(`${home}/.claude/skills/t3/old/stale.txt`, "stale");
+    const kit = yield* reconcileWith(home, source);
+    yield* kit.reconcile({ schema: 1, machines: {} });
+    expect(yield* fs.readFileString(`${home}/.claude/skills/t3/SKILL.md`)).toBe("skill v1");
+    expect(yield* fs.readFileString(`${home}/.claude/skills/t3/scripts/t3ctl.mjs`)).toBe(
+      "export {};",
+    );
+    expect(yield* fs.exists(`${home}/.claude/skills/t3/stale.txt`)).toBe(false);
+    expect(yield* fs.exists(`${home}/.claude/skills/t3/old`)).toBe(false);
+    expect(yield* fs.exists(`${home}/.claude/skills/t3/.t3-managed`)).toBe(true);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("leaves a symlinked skill directory alone and reports it", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-symlink-skill-" });
+    const source = yield* bundledSkill(home);
+    const real = `${home}/real-skill`;
+    yield* fs.makeDirectory(real, { recursive: true });
+    yield* fs.writeFileString(`${real}/SKILL.md`, "linked user skill");
+    yield* fs.makeDirectory(`${home}/.claude/skills`, { recursive: true });
+    yield* fs.symlink(real, `${home}/.claude/skills/t3`);
+    const kit = yield* reconcileWith(home, source);
+    const failure = yield* kit.reconcile({ schema: 1, machines: {} }).pipe(Effect.flip);
+    expect(failure.reason).toBe("validation");
+    expect(failure.message).toContain(".claude/skills/t3");
+    expect(yield* fs.readFileString(`${real}/SKILL.md`)).toBe("linked user skill");
+    expect(yield* fs.readLink(`${home}/.claude/skills/t3`)).toBe(real);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("never writes through a symlinked instruction file and reports it", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const home = yield* fs.makeTempDirectoryScoped({ prefix: "agent-symlink-instructions-" });
+    const source = yield* bundledSkill(home);
+    const target = `${home}/owner-instructions.md`;
+    yield* fs.writeFileString(target, "owner text");
+    yield* fs.makeDirectory(`${home}/.claude`, { recursive: true });
+    yield* fs.symlink(target, `${home}/.claude/CLAUDE.md`);
+    const kit = yield* reconcileWith(home, source);
+    const failure = yield* kit.reconcile({ schema: 1, machines: {} }).pipe(Effect.flip);
+    expect(failure.reason).toBe("validation");
+    expect(failure.message).toContain(".claude/CLAUDE.md");
+    expect(yield* fs.readFileString(target)).toBe("owner text");
+    expect(yield* fs.readLink(`${home}/.claude/CLAUDE.md`)).toBe(target);
+    // The skill is still installed; only the symlink is left alone.
+    expect(yield* fs.readFileString(`${home}/.claude/skills/t3/SKILL.md`)).toBe("skill v1");
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);

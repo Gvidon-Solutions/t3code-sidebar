@@ -16,6 +16,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { fromYaml } from "@t3tools/shared/schemaYaml";
+import { assertReleaseBuildEnv } from "./lib/release-env.ts";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import rootPackageJson from "../package.json" with { type: "json" };
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
@@ -616,6 +617,7 @@ const command = Command.make(
 ).pipe(Command.withDescription("Package the t3 single-executable into a per-platform archive."));
 
 if (import.meta.main) {
+  assertReleaseBuildEnv();
   Command.run(command, { version: "0.0.0" }).pipe(
     Effect.provide(Layer.mergeAll(Logger.layer([Logger.consolePretty()]), NodeServices.layer)),
     NodeRuntime.runMain,

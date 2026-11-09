@@ -22,4 +22,4 @@ NodeFS.appendFileSync(
   }) + "\n",
   { mode: 0o600 },
 );
-console.log("Delivery bed fixture gate passed; this does not substitute for T1 acceptance");
+console.log("Delivery bed fixture gate passed; this does not substitute for release acceptance");
