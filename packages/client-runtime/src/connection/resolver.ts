@@ -79,10 +79,14 @@ function primarySocketUrl(
   target: PrimaryConnectionTarget,
   clientMetadata: AuthClientPresentationMetadata | undefined,
   owners: ClientOwnerParams,
+  ticket?: string,
 ): string {
   const url = new URL(target.wsBaseUrl);
   if (url.pathname === "" || url.pathname === "/") {
     url.pathname = "/ws";
+  }
+  if (ticket !== undefined) {
+    url.searchParams.set("wsTicket", ticket);
   }
   appendClientConnectionParams(url, clientMetadata, "direct", owners);
   return url.toString();
@@ -98,11 +102,17 @@ const makePrimaryBroker = Effect.fn("clientRuntime.connection.broker.makePrimary
   ) {
     const bearerToken = yield* auth.bearerToken;
     if (Option.isNone(bearerToken)) {
+      const ticket = yield* auth.webSocketTicket;
       return {
         environmentId: target.environmentId,
         label: target.label,
         httpBaseUrl: target.httpBaseUrl,
-        socketUrl: primarySocketUrl(target, presentation.metadata, yield* readClientOwnerParams),
+        socketUrl: primarySocketUrl(
+          target,
+          presentation.metadata,
+          yield* readClientOwnerParams,
+          Option.getOrUndefined(ticket),
+        ),
         httpAuthorization: null,
         target,
       } satisfies PreparedConnection;

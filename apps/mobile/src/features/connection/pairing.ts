@@ -1,4 +1,4 @@
-import { readHostedPairingRequest } from "@t3tools/shared/remote";
+import { readHostedPairingRequest, readPairingUrlInput } from "@t3tools/shared/remote";
 import * as Schema from "effect/Schema";
 
 const MOBILE_PAIRING_URL_PARAM = "pairingUrl";
@@ -40,6 +40,31 @@ export function buildPairingUrl(host: string, code: string): string {
   } catch {
     return `${h}#token=${c}`;
   }
+}
+
+function pairingHostOrigin(value: string): string | null {
+  const trimmed = value.replace(/\s+/g, "").trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** A pasted whole pairing link wins over the separate host and code fields. */
+export function resolvePairingInput(host: string, code: string): string {
+  const codeLink = readPairingUrlInput(code);
+  if (codeLink !== null) {
+    const typedHost = pairingHostOrigin(host);
+    if (typedHost !== null && typedHost !== pairingHostOrigin(parsePairingUrl(codeLink).host)) {
+      throw new Error(
+        "The pairing link names its own server. Clear the address field or paste only the token.",
+      );
+    }
+    return codeLink;
+  }
+  return readPairingUrlInput(host) ?? buildPairingUrl(host, code);
 }
 
 export function parsePairingUrl(url: string): { host: string; code: string } {

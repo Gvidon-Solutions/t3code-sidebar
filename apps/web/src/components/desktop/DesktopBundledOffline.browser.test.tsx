@@ -103,3 +103,15 @@ it("shows plain copy, the machine name and a muted address detail", async () => 
     .element(screen.getByRole("link", { name: "Choose another server" }))
     .toHaveAttribute("href", "t3code://app/?desktopWindowId=7#/settings/connections");
 });
+
+it("renders the normal app when server-UI authentication failed but connections remain", () => {
+  const fallback = desktopBundledFallback(
+    "?bundled=1&auth=1&server=https%3A%2F%2Fstudio.example%2F&name=studio",
+  );
+  expect(fallback).toEqual({
+    server: "https://studio.example/",
+    name: "studio",
+    auth: true,
+  });
+  expect(showsDesktopBundledFallback({ fallback, pathname: "/" })).toBe(false);
+});

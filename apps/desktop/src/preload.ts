@@ -81,6 +81,7 @@ const desktopBridge = {
   ui: {
     select: (selection) => ipcRenderer.invoke(IpcChannels.UI_SELECT_CHANNEL, selection),
     getInfo: () => ipcRenderer.invoke(IpcChannels.UI_INFO_CHANNEL),
+    retryServerUi: () => ipcRenderer.invoke(IpcChannels.UI_RETRY_CHANNEL),
   },
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
@@ -451,10 +452,12 @@ const desktopBridge = {
 if (trustedUi) contextBridge.exposeInMainWorld("desktopBridge", desktopBridge);
 else if (serverRendererId !== undefined) {
   const origin: unknown = ipcRenderer.sendSync(IpcChannels.UI_SERVER_ORIGIN_CHANNEL);
+  const name: unknown = ipcRenderer.sendSync(IpcChannels.UI_SERVER_NAME_CHANNEL);
   contextBridge.exposeInMainWorld("desktopShell", {
     returnToBundled: () =>
       location.replace(`${location.protocol}//app/?desktopWindowId=${serverRendererId}&bundled=1`),
     origin: typeof origin === "string" ? origin : null,
+    name: typeof name === "string" && name.trim().length > 0 ? name.trim() : null,
     ui: { getInfo: desktopBridge.ui.getInfo, select: desktopBridge.ui.select },
     getAppBranding: desktopBridge.getAppBranding,
     getClientPlatform: desktopBridge.getClientPlatform,

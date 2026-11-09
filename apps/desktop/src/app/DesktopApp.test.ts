@@ -155,6 +155,10 @@ it.effect(
               selectionLabel: Effect.succeed(null),
               connectionOrigins: Effect.succeed([]),
               select: () => Effect.succeed(false),
+              sourceOrigin: Effect.succeed(null),
+              serverAuthorization: () => Effect.succeed(null),
+              noteAuthorizationRejected: () => Effect.void,
+              retryServerUi: Effect.void,
               recordSource: () => Effect.void,
               getInfo: Effect.succeed({
                 source: "bundled",

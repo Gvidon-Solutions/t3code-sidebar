@@ -2,6 +2,8 @@ import type { DesktopWslState } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
   applyWslEnableSelection,
+  parsePairingUrlFields,
+  parseRemotePairingFields,
   resolveTailscaleServeBaseUrl,
   selectQrEndpointOption,
   showsMeshConnections,
@@ -152,5 +154,52 @@ describe("showsMeshConnections", () => {
     expect(showsMeshConnections({ machines: {} })).toBe(false);
     expect(showsMeshConnections({ machines: { studio: {} } })).toBe(false);
     expect(showsMeshConnections({ machines: { studio: {}, cloudbox: {} } })).toBe(true);
+  });
+});
+
+describe("parsePairingUrlFields", () => {
+  it("reads the token from a pasted pairing link or app link", () => {
+    expect(parsePairingUrlFields("https://studio.example/pair#token=abc")).toEqual({
+      host: "https://studio.example",
+      pairingCode: "abc",
+    });
+    expect(parsePairingUrlFields("https://studio.example/pair?token=abc")).toEqual({
+      host: "https://studio.example",
+      pairingCode: "abc",
+    });
+    expect(
+      parsePairingUrlFields(
+        `t3code://pair?pairingUrl=${encodeURIComponent("https://studio.example/pair#token=abc")}`,
+      ),
+    ).toEqual({ host: "https://studio.example", pairingCode: "abc" });
+    expect(parsePairingUrlFields("plain-code")).toBeNull();
+  });
+
+  it("accepts a whole pairing link pasted into the pairing code field", () => {
+    expect(
+      parseRemotePairingFields({
+        host: "",
+        pairingCode: "https://studio.example/pair#token=abc",
+      }),
+    ).toEqual({ host: "https://studio.example", pairingCode: "abc" });
+    expect(parseRemotePairingFields({ host: "studio.example", pairingCode: "abc" })).toEqual({
+      host: "studio.example",
+      pairingCode: "abc",
+    });
+  });
+
+  it("refuses two different servers pasted into the two fields", () => {
+    expect(() =>
+      parseRemotePairingFields({
+        host: "studio.example",
+        pairingCode: "https://cloudbox.example/pair#token=abc",
+      }),
+    ).toThrowError(/names its own server/);
+    expect(
+      parseRemotePairingFields({
+        host: "studio.example",
+        pairingCode: "https://studio.example/pair#token=abc",
+      }),
+    ).toEqual({ host: "https://studio.example", pairingCode: "abc" });
   });
 });

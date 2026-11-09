@@ -109,6 +109,40 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
 
 ## Feature log
 
+### 2026-11-09 — Desktop server UI: pairing, restart recovery and safe fallback
+
+- **What.** Desktop server UI can authenticate again. Its HTTP is first-party through the shell
+  proxy, so the pairing cookie survives; the proxy holds the session cookie and the bearer the
+  trusted bundled client hands over at selection, and the reduced renderer never sees either.
+  WebSocket, preview streams and device mirroring use short-lived RPC/media tickets minted
+  through the same proxy. If the server rejects the shell's credential, the bundled client opens
+  in its normal state (not the offline page) and connects through the saved bearer connection. A chunk or CSS preload failure during a server restart now shows
+  "Reconnecting to <machine>…" and reloads when the server answers, instead of the boot error.
+  A whole pairing link (including `t3code://pair?pairingUrl=`) can be pasted into the pairing
+  token field on web, Settings › Connections and mobile.
+- **How.** The server UI API base is its own renderer origin; the shell proxy captures
+  `Set-Cookie` into a per-window jar and injects credentials for proxied requests. `ui.select`
+  carries the credential from the trusted bundled client only, keeps it in memory, and never
+  persists it. A `/api/auth/session` preflight rejects a document whose injected credential does
+  not authenticate, and the bundled redirect carries `auth=1` so the normal app (not the offline
+  page) renders. `resolveDeviceHubAccess` mints a media ticket through the proxy and points
+  preview/device HTTP, EventSource and WebSocket traffic at the server with `wsTicket`. The
+  server CSP allows same-origin frames for HTML previews. `vite:preloadError` and chunk failures
+  install a reconnecting surface before mount and an overlay after mount, with "Use the
+  built-in version". `extractPairingCredential` and
+  `readPairingUrlInput` in shared/remote parse links before submission.
+- **Where.** `apps/desktop/src/electron/ElectronProtocol.ts`, `apps/desktop/src/app/DesktopUi.ts`,
+  `apps/desktop/src/ipc/{methods/ui,DesktopIpcHandlers,channels,rendererTrust}.ts`,
+  `apps/desktop/src/preload.ts`; web `components/desktop/{DesktopUiCoordinator,serverUiSource}.ts(x)`,
+  `components/auth/PairingRouteSurface.tsx`, `components/settings/ConnectionsSettings.logic.ts`,
+  `environments/primary/{target,desktopAuth}.ts`, `lib/serverUiReconnect.ts`, `bootstrap.ts`,
+  `components/desktop/desktopBundledFallback.ts`; client-runtime `platform/capabilities.ts`,
+  `connection/resolver.ts`, `state/deviceHubAccess.ts`; mobile
+  `features/connection/{pairing,ConnectionsNewRouteScreen}.ts(x)`; contracts
+  `desktopUi.ts`, `ipc.ts`; `packages/shared/src/remote.ts`;
+  `apps/desktop/scripts/delivery-server-ui-proof.mjs`; `docs/delivery.md`,
+  `docs/mesh/README.md`.
+
 ### 2026-11-09 — Environments screens speak mesh names
 
 - **What.** Every surface that names a server now follows one rule: a machine the mesh config lists
