@@ -184,19 +184,26 @@ same secure-source and compatibility checks.
 
 Server UI authenticates first-party through the shell proxy. Its document keeps the
 `t3code://server-…` origin, and its HTTP base is that same origin: the shell forwards requests to
-the server, injects the bearer the trusted bundled client handed over when it selected the
-source, and keeps browser-session cookies in the shell's own jar. Credentials and the cookie jar
-never enter the reduced renderer; the server UI can still pair as a web client, which is the
-fallback when no bearer exists. WebSocket upgrades cannot use a custom scheme, so the client mints
+the server, reads the bearer itself from its own encrypted connection catalog (or its local
+primary session), and keeps browser-session cookies in the shell's own jar. A persisted source
+selection is only served when the shell still finds that credential, so a restart is
+authenticated from the first document. Credentials and the cookie jar never enter the reduced
+renderer; the server UI can still pair as a web client, which is the fallback when no bearer
+exists. WebSocket upgrades cannot use a custom scheme, so the client mints
 short-lived RPC and media tickets through the same proxy and connects to the server's own WSS
 origin. Media tickets also cover preview streams and device mirroring: their HTTP, EventSource
 and WebSocket access uses the server origin with `wsTicket` in the query instead of cookies.
 Before serving an auto-selected document, the shell verifies the injected credential with
-`/api/auth/session`; a rejected credential marks the source and opens the bundled client in its
-normal state (`auth=1`), not the offline page, so saved bearer connections keep working. The
+`/api/auth/session`; two consecutive `authenticated:false` replies mark the source for a
+two-minute cooldown and open the bundled client in its normal state (`auth=1`), not the offline
+page, so saved bearer connections keep working. Settings › About offers **Retry server UI** to
+clear that memory. The
 bundled server CSP allows same-origin frames (`frame-ancestors 'self'`) so HTML previews render
-inside server UI. Chunk and `vite:preloadError` failures during a restart show "Reconnecting to
-<machine>…", retry the session endpoint, then reload, or return to the built-in version.
+inside server UI. Credentials are injected only for the request's own server host; source hosts
+carry a per-install salt and stale hosts are dropped when a window changes source. Chunk and `vite:preloadError` failures before React mounts show a bounded
+"Reconnecting to <machine>…" surface that retries, then reloads or returns to the built-in
+version; after mount a calm overlay appears and the page is never replaced or reloaded under
+an in-flight send.
 
 Run `xvfb-run -a apps/desktop/node_modules/electron/dist/electron --no-sandbox
 apps/desktop/scripts/delivery-ui-proof.mjs` to run a hostile HTTP loopback server against the
@@ -212,7 +219,8 @@ authenticated server UI and shell; a chunk failure during a restart shows the re
 surface and recovers; a media ticket opens a preview stream and a server-served HTML page renders
 in an iframe; a reload during downtime uses the bundled offline page; and a credential the server
 rejects selects the bundled client, which connects through its saved bearer and shows the
-server's project. Screenshots and an index are written to `/data/w2-shots/`.
+server's project. Screenshots and an index are written to `T3_PROOF_SHOTS_DIR` when set,
+otherwise to a temporary directory; the proof prints the path.
 
 Native APK offers require OTA-key-signed metadata containing the update origin, target runtime
 and SHA-256. The build embeds the same public certificate used by Expo code signing; rotating it

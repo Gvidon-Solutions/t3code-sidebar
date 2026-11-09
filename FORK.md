@@ -128,7 +128,8 @@ schemes, no AppStream metainfo). Windows also gets its own AppUserModelID.
   page) renders. `resolveDeviceHubAccess` mints a media ticket through the proxy and points
   preview/device HTTP, EventSource and WebSocket traffic at the server with `wsTicket`. The
   server CSP allows same-origin frames for HTML previews. `vite:preloadError` and chunk failures
-  install a reconnecting surface with "Use the built-in version". `extractPairingCredential` and
+  install a reconnecting surface before mount and an overlay after mount, with "Use the
+  built-in version". `extractPairingCredential` and
   `readPairingUrlInput` in shared/remote parse links before submission.
 - **Where.** `apps/desktop/src/electron/ElectronProtocol.ts`, `apps/desktop/src/app/DesktopUi.ts`,
   `apps/desktop/src/ipc/{methods/ui,DesktopIpcHandlers,channels,rendererTrust}.ts`,
