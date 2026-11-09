@@ -237,3 +237,17 @@ test("bed bootstrap refuses unrelated units and pre-existing non-fixture databas
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("expands the systemd home specifier in the unit executable the tools run", async () => {
+  const { unitExecutable } = await import("./target.mjs");
+  assert.equal(
+    unitExecutable("ExecStart=%h/.t3/runtime/versions/1.0.0/t3 serve --port 3774\n", "/home/owner"),
+    "/home/owner/.t3/runtime/versions/1.0.0/t3",
+  );
+  assert.equal(
+    unitExecutable('ExecStart="/srv/private app/t3" serve\n', "/home/owner"),
+    "/srv/private app/t3",
+  );
+  assert.equal(unitExecutable("ExecStart=/opt/t3 serve\n", "/home/owner"), "/opt/t3");
+  assert.equal(unitExecutable("", "/home/owner"), "");
+});

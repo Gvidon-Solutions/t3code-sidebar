@@ -3,6 +3,7 @@ import { COMMAND_TIMEOUT_MS, runSync } from "../lib/shell.mjs";
 import * as NodeFS from "node:fs";
 const { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } =
   NodeFS;
+import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 const { join } = NodePath;
 import * as NodeURL from "node:url";
@@ -87,6 +88,16 @@ export function verifyMobileAssets(store) {
       throw new Error(`OTA asset bytes do not match their content hash: ${key}`);
   }
 }
+/**
+ * The executable a systemd unit starts, with the `%h` specifier (the unit user's home)
+ * expanded, because the delivery tools run it directly rather than through systemd.
+ */
+export function unitExecutable(unit, home = NodeOS.homedir()) {
+  const executable = /^ExecStart=\s*(?:"([^"]+)"|(\S+))\s/m.exec(unit);
+  const path = executable?.[1] ?? executable?.[2] ?? "";
+  return path.replace(/^%h(?=\/)/u, home);
+}
+
 export async function targetOperation(config, operation) {
   const prefix = config.scope === "user" ? ["--user"] : [];
   const systemctl = (...args) => run("systemctl", [...prefix, ...args]);
@@ -112,7 +123,6 @@ export async function targetOperation(config, operation) {
   let queryTimeout;
   const ctl = (...args) => {
     const unit = config.unitPath ? readFileSync(config.unitPath, "utf8") : "";
-    const executable = /^ExecStart=(?:"([^"]+)"|(\S+))\s/m.exec(unit);
     const result = JSON.parse(
       run(
         config.node,
@@ -121,7 +131,7 @@ export async function targetOperation(config, operation) {
           T3CODE_HOME: config.home,
           T3CTL_ORIGIN: config.origin,
           T3CTL_UNIT: config.unit,
-          T3CTL_T3_BIN: executable?.[1] ?? executable?.[2] ?? "",
+          T3CTL_T3_BIN: unitExecutable(unit),
           XDG_CONFIG_HOME: join(config.home, "delivery-client-config"),
         },
         queryTimeout ??
