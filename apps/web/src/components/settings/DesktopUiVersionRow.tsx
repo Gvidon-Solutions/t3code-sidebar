@@ -28,6 +28,9 @@ export function DesktopUiVersionRow() {
       : source.source === "development"
         ? "Development UI"
         : source.origin;
+  const retryServerUi = window.desktopBridge?.ui?.retryServerUi;
+  const showRetry =
+    retryServerUi !== undefined && source.source === "bundled" && source.environmentId !== null;
   return (
     <SettingsRow
       title={`UI ${APP_VERSION} · shell ${source.shellVersion}`}
@@ -35,6 +38,16 @@ export function DesktopUiVersionRow() {
         window.desktopShell?.returnToBundled ? (
           <Button variant="outline" size="sm" onClick={window.desktopShell.returnToBundled}>
             Open desktop settings
+          </Button>
+        ) : showRetry ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void retryServerUi().then(() => window.location.reload());
+            }}
+          >
+            Retry server UI
           </Button>
         ) : undefined
       }

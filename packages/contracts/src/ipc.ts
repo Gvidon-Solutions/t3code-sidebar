@@ -1038,6 +1038,7 @@ export interface DesktopBridge {
   ui?: {
     select: (selection: DesktopUiSelection) => Promise<boolean>;
     getInfo: () => Promise<DesktopUiInfo>;
+    retryServerUi: () => Promise<void>;
   };
   getAppBranding: () => DesktopAppBranding | null;
   getRelayTelemetryEnabled: () => boolean;

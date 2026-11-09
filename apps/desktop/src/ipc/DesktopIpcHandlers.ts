@@ -101,6 +101,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* installNotificationBadge();
   yield* ipc.handle(UiIpc.select);
   yield* ipc.handle(UiIpc.getInfo);
+  yield* ipc.handle(UiIpc.retryServerUi);
   yield* PreviewIpc.installPreviewEventForwarding();
 
   yield* ipc.handle(AppActivationIpc.setReady);

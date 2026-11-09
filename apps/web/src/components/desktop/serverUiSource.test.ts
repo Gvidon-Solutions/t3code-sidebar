@@ -37,7 +37,7 @@ describe("resolveServerUiSource", () => {
         primaryBearerToken: null,
         trustedClient: true,
       }),
-    ).toEqual({ httpBaseUrl: "https://studio.example/", authorization: "saved-token" });
+    ).toEqual({ httpBaseUrl: "https://studio.example/" });
   });
 
   it("uses the shell's local credential for the local primary", () => {
@@ -49,7 +49,7 @@ describe("resolveServerUiSource", () => {
         primaryBearerToken: "local-token",
         trustedClient: true,
       }),
-    ).toEqual({ httpBaseUrl: "http://127.0.0.1:3773/", authorization: "local-token" });
+    ).toEqual({ httpBaseUrl: "http://127.0.0.1:3773/" });
   });
 
   it("falls back to the bundled UI when no credential can authenticate server UI", () => {

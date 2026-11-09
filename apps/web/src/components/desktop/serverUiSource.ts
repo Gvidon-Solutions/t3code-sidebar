@@ -3,7 +3,6 @@ import type { PreparedConnection } from "@t3tools/client-runtime/connection";
 
 export interface ServerUiSource {
   readonly httpBaseUrl: string | null;
-  readonly authorization?: string;
 }
 
 /**
@@ -23,14 +22,14 @@ export function resolveServerUiSource(input: {
   if (!input.trustedClient) return { httpBaseUrl: input.httpBaseUrl };
   const authorization = input.prepared?.httpAuthorization;
   if (authorization?._tag === "Bearer" && authorization.token.length > 0) {
-    return { httpBaseUrl: input.httpBaseUrl, authorization: authorization.token };
+    return { httpBaseUrl: input.httpBaseUrl };
   }
   if (
     input.environmentId === PRIMARY_LOCAL_ENVIRONMENT_ID &&
     input.primaryBearerToken !== null &&
     input.primaryBearerToken.length > 0
   ) {
-    return { httpBaseUrl: input.httpBaseUrl, authorization: input.primaryBearerToken };
+    return { httpBaseUrl: input.httpBaseUrl };
   }
   return { httpBaseUrl: null };
 }

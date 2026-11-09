@@ -81,6 +81,7 @@ const desktopBridge = {
   ui: {
     select: (selection) => ipcRenderer.invoke(IpcChannels.UI_SELECT_CHANNEL, selection),
     getInfo: () => ipcRenderer.invoke(IpcChannels.UI_INFO_CHANNEL),
+    retryServerUi: () => ipcRenderer.invoke(IpcChannels.UI_RETRY_CHANNEL),
   },
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);

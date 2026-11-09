@@ -94,7 +94,6 @@ export function DesktopUiCoordinator() {
         environmentId,
         httpBaseUrl: source.httpBaseUrl,
         serverVersion: version,
-        ...(source.authorization !== undefined ? { authorization: source.authorization } : {}),
       });
       if (!active || !changed) return;
       cancelReload = afterChatSendsSettled(() => {

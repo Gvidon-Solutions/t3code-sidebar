@@ -172,7 +172,6 @@ const bootstrap = Effect.gen(function* () {
 
   const settings = yield* desktopSettings.get;
   const uiOrigin = yield* Config.URL("T3CODE_DESKTOP_UI_URL").pipe(Config.option);
-  const uiExposure = yield* DesktopServerExposure.DesktopServerExposure;
   const resolveUiOrigin = Effect.runPromiseWith(yield* Effect.context<never>());
   const desktopUi = yield* DesktopUi.DesktopUi;
   const electronProtocol = yield* ElectronProtocol.ElectronProtocol;
@@ -189,14 +188,9 @@ const bootstrap = Effect.gen(function* () {
             resolveUiOrigin(desktopUi.noteAuthorizationRejected(origin, authorization)),
           serverOrigin: () =>
             resolveUiOrigin(
-              Effect.gen(function* () {
-                const selected = yield* desktopUi.selection;
-                if (selected) return selected.httpBaseUrl ? new URL(selected.httpBaseUrl) : null;
-                const backend = yield* uiExposure.backendConfig;
-                return Option.getOrElse(uiOrigin, () =>
-                  backend.port > 0 ? backend.httpBaseUrl : null,
-                );
-              }),
+              desktopUi.sourceOrigin.pipe(
+                Effect.map((selected) => selected ?? Option.getOrNull(uiOrigin)),
+              ),
             ),
           serverName: () => resolveUiOrigin(desktopUi.selectionLabel),
         }),
