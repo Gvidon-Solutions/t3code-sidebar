@@ -7,6 +7,7 @@ import {
   type VoiceTranscriptionDestination,
 } from "@t3tools/contracts";
 import {
+  type VoiceTranscriber,
   getEnvironmentSpeechModels,
   getCloudSpeechKeys,
   getCloudSpeechModels,
@@ -238,6 +239,15 @@ export const voiceSpeechModelsAtom = Atom.family((id: EnvironmentId) =>
 export const voiceSpeechBenchmarksAtom = Atom.family((id: EnvironmentId) =>
   speechAtom(id, (prepared) => getEnvironmentSpeechModels(prepared, true)),
 );
+
+/** A chosen environment that lost its transcriber hides the mic; it must not fall back to local. */
+export function isDictationAvailable(
+  route: { readonly transcriber: VoiceTranscriber | null } | null,
+  local: VoiceTranscriber | null | "checking",
+): boolean {
+  if (route) return route.transcriber !== null;
+  return local !== null && local !== "checking";
+}
 
 // null selects on-device; a grant with no usable transcriber must never fall back.
 export const voiceRouteAtom = Atom.make((get) => {

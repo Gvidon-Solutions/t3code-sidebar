@@ -2,8 +2,10 @@ import { EnvironmentId } from "@t3tools/contracts";
 import { Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 import { appAtomRegistry } from "../../state/atom-registry";
+import type { VoiceTranscriber } from "@t3tools/client-runtime/voice-input";
 import {
   chooseVoiceDestination,
+  isDictationAvailable,
   pendingCloudVoiceChoice,
   voiceGrantAtom,
   voiceRouteAtom,
@@ -279,4 +281,18 @@ it("leaves dictation off when OpenRouter has no model to route to", () => {
   } finally {
     appAtomRegistry.reset();
   }
+});
+it("offers dictation on the chosen environment and never silently falls back", () => {
+  const transcriber: VoiceTranscriber = {
+    prepare: async () => {
+      throw new Error("unused");
+    },
+  };
+  expect(isDictationAvailable({ transcriber }, null)).toBe(true);
+  expect(isDictationAvailable({ transcriber }, "checking")).toBe(true);
+  expect(isDictationAvailable(null, transcriber)).toBe(true);
+  expect(isDictationAvailable(null, "checking")).toBe(false);
+  expect(isDictationAvailable(null, null)).toBe(false);
+  // A chosen environment that is offline hides the mic instead of recording locally.
+  expect(isDictationAvailable({ transcriber: null }, transcriber)).toBe(false);
 });

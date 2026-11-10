@@ -25,7 +25,7 @@ import { createLazyVoiceRecorder } from "./lazyVoiceRecorder";
 import { VOICE_WAVEFORM_SAMPLE_COUNT } from "./voiceInputMetering";
 import { VoiceInputSession } from "./voiceInputSession";
 import { createVoiceRecordingPermission } from "./voiceRecordingPermission";
-import { voiceRouteAtom } from "./voiceDestination";
+import { isDictationAvailable, voiceRouteAtom } from "./voiceDestination";
 import { makePermissionStatusAtom } from "../../lib/permissionStatusAtom";
 import {
   acquireAudioSession,
@@ -64,12 +64,9 @@ export const localVoiceTranscriberAtom = makePermissionStatusAtom<
   read: () => getLocalVoiceTranscriber().catch(() => null),
 }).pipe(Atom.keepAlive);
 
-const voiceInputAvailableAtom = Atom.make((get) => {
-  const route = get(voiceRouteAtom);
-  if (route) return route.transcriber !== null;
-  const transcriber = get(localVoiceTranscriberAtom);
-  return transcriber !== null && transcriber !== "checking";
-});
+const voiceInputAvailableAtom = Atom.make((get) =>
+  isDictationAvailable(get(voiceRouteAtom), get(localVoiceTranscriberAtom)),
+);
 
 /**
  * The app has one microphone and one dictation at a time, so the session
