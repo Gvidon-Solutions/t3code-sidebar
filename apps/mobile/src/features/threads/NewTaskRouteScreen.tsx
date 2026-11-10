@@ -36,6 +36,7 @@ import { useReplicaStatuses } from "../../state/meshReplicas";
 import { DEFAULT_SIDEBAR_WORKSPACES_CONFIG } from "@t3tools/contracts";
 import { planThreadOnMachine, replicaProjectId } from "@t3tools/client-runtime/state/mesh-layout";
 import { useSidebarWorkspaces } from "../workspaces/useSidebarWorkspaces";
+import { MachineTag } from "../workspaces/MachineTag";
 import { mobileMachineChoices, mobilePendingReplicaItems } from "../workspaces/replicas.logic";
 import type { HomeProjectScope } from "../home/homeThreadList";
 
@@ -421,11 +422,13 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
       <ScreenContent>
         {pendingMachineItem ? (
           <View className="mx-4 mt-2 flex-row items-center gap-2 rounded-2xl bg-grouped-card px-4 py-2.5">
-            <View className="h-4 items-center justify-center rounded bg-foreground/10 px-1">
-              <Text className="font-mono text-[10px] font-t3-bold uppercase text-foreground">
-                {pendingMachineItem.tag}
-              </Text>
-            </View>
+            <MachineTag
+              machine={{
+                label: pendingMachineItem.label,
+                tag: pendingMachineItem.tag,
+                color: pendingMachineItem.color,
+              }}
+            />
             <Text className="min-w-0 flex-1 text-sm text-foreground-muted" numberOfLines={2}>
               {pendingMachineItem.text}
             </Text>

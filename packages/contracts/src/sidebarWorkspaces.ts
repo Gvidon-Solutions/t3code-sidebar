@@ -27,6 +27,24 @@ export type SidebarWorkspaceRule = typeof SidebarWorkspaceRule.Type;
 
 export const DEFAULT_SIDEBAR_WORKSPACE_QUIET_AFTER_DAYS = 5;
 
+/** How a machine tag is drawn: tinted background, solid fill or outline. */
+export const MachineTagStyle = Schema.Literals(["tinted", "solid", "outline"]);
+export type MachineTagStyle = typeof MachineTagStyle.Type;
+/** Tag text in the machine colour or in the theme's normal foreground. */
+export const MachineTagTextColor = Schema.Literals(["machine", "neutral"]);
+export type MachineTagTextColor = typeof MachineTagTextColor.Type;
+export const MachineTagAppearance = Schema.Struct({
+  style: Schema.optionalKey(MachineTagStyle),
+  textColor: Schema.optionalKey(MachineTagTextColor),
+});
+export type MachineTagAppearance = typeof MachineTagAppearance.Type;
+
+/** Presentation choices shared by every client of every machine (mesh config `appearance`). */
+export const SidebarAppearance = Schema.Struct({
+  machineTags: Schema.optionalKey(MachineTagAppearance),
+});
+export type SidebarAppearance = typeof SidebarAppearance.Type;
+
 export const PeerConnectionStatus = Schema.Struct({
   sourceEnvironmentId: Schema.optionalKey(Schema.String),
   observedAt: Schema.optionalKey(Schema.String),
@@ -168,6 +186,8 @@ export type SidebarProjectMountStatus = typeof SidebarProjectMountStatus.Type;
 
 export const SidebarWorkspacesConfig = Schema.Struct({
   meshWriters: Schema.optionalKey(Schema.Array(Schema.String)),
+  /** How this mesh draws its machine tags; absent means the default look. */
+  appearance: Schema.optionalKey(SidebarAppearance),
   workspaces: Schema.Array(SidebarWorkspace).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   /**
    * Logical project key → workspace id. Wins over rules. Since `placements`,

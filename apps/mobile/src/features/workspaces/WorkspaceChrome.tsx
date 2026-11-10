@@ -1,3 +1,4 @@
+import { MachineTag } from "./MachineTag";
 import { ProjectMachineStrip } from "./ProjectMachineStrip";
 import * as Dialog from "../../components/ui/Dialog";
 import type { Icon } from "@tabler/icons-react-native/types";
@@ -17,7 +18,6 @@ import IconSparkles from "@tabler/icons-react-native/IconSparkles";
 import IconStar from "@tabler/icons-react-native/IconStar";
 import IconUsers from "@tabler/icons-react-native/IconUsers";
 import IconWallet from "@tabler/icons-react-native/IconWallet";
-import { machineTagBackground } from "@t3tools/client-runtime/state/machine-display";
 import {
   workspaceColor,
   workspaceMark,
@@ -435,7 +435,10 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       accessibilityLabel={offline ? `${item.title}, not connected to this device` : folderTitle}
       accessibilityRole="button"
       accessibilityState={{ expanded: item.open }}
-      className={cn("mt-0.5 min-h-[44px] flex-row items-center gap-2 pl-3 pr-2", offline && "opacity-70")}
+      className={cn(
+        "mt-0.5 min-h-[44px] flex-row items-center gap-2 pl-3 pr-2",
+        offline && "opacity-70",
+      )}
       hitSlop={verticalHitSlop(44)}
       onPress={() =>
         offline
@@ -482,7 +485,6 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
       ) : null}
       {item.machineStrip ? (
         <ProjectMachineStrip
-          compact={folderTitle.length > 20}
           model={item.machineStrip}
           onOpen={() => props.onOpenMachines(item.projectKey)}
         />
@@ -516,14 +518,9 @@ export const WorkspaceFolderRow = memo(function WorkspaceFolderRow(props: {
             className="flex-row items-center gap-2 py-0.5 pl-9 pr-2"
             testID={`workspace-pending-${pending.environmentId}`}
           >
-            <View
-              className="h-4 items-center justify-center rounded px-1"
-              style={{ backgroundColor: machineTagBackground(pending.color) }}
-            >
-              <Text className="font-mono text-[10px] font-t3-bold uppercase text-foreground">
-                {pending.tag}
-              </Text>
-            </View>
+            <MachineTag
+              machine={{ label: pending.label, tag: pending.tag, color: pending.color }}
+            />
             <Text
               accessibilityLabel={pending.text}
               className="min-w-0 flex-1 text-[13px] text-foreground-muted"

@@ -42,6 +42,7 @@ import {
 import { buildMeshMachines } from "@t3tools/client-runtime/state/mesh-machines";
 
 vi.mock("react-native", () => ({
+  useColorScheme: () => "light",
   View: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Pressable: ({
     children,
@@ -98,6 +99,7 @@ vi.mock("../workspaces/useMeshLayout", () => ({
     state: { snapshot: { document: mocks.document } },
     edit: vi.fn(),
   }),
+  useMeshLayoutOptional: () => ({ config: config() }),
 }));
 vi.mock("../workspaces/useMeshOverview", () => ({
   useMeshOverview: () => ({

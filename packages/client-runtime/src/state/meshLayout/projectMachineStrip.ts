@@ -15,7 +15,10 @@ export interface ProjectMachineChip {
 }
 
 export interface ProjectMachineStripModel {
+  /** Up to three tags drawn inline; a project with more shows `overflow` behind "+N". */
   readonly chips: ReadonlyArray<ProjectMachineChip>;
+  /** Machines beyond the third, for the "+N" label and its long-press list. */
+  readonly hidden: ReadonlyArray<ProjectMachineChip>;
   readonly overflow: number;
   readonly description: string;
 }
@@ -128,9 +131,8 @@ export function projectMachineStrip(
                     : ""),
           };
         });
-  return {
-    chips: known.size > 1 ? chips.slice(0, 3) : [],
-    overflow: known.size > 1 ? Math.max(0, chips.length - 3) : 0,
-    description: chips.map((chip) => chip.description).join(" · "),
-  };
+  const description = chips.map((chip) => chip.description).join(" · ");
+  if (known.size <= 1) return { chips: [], hidden: [], overflow: 0, description };
+  const hidden = chips.slice(3);
+  return { chips: chips.slice(0, 3), hidden, overflow: hidden.length, description };
 }

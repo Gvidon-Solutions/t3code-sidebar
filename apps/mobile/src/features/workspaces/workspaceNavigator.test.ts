@@ -376,7 +376,7 @@ it("lists scratch thread machines once and invalidates recycled rows when their 
   expect(
     workspaceHomeItemsAreEqual(row, {
       ...row,
-      machineStrip: { chips: [], overflow: 0, description: "changed" },
+      machineStrip: { chips: [], hidden: [], overflow: 0, description: "changed" },
     }),
   ).toBe(false);
 });

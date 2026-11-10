@@ -83,3 +83,23 @@ it("validates rollout drain controls and forwards unknown policy fields", () => 
   for (const maxWaitMs of [0, -1, 0.5, 3600001, "1000"])
     expect(() => decode({ schema: 1, machines: {}, t3: { drain: { maxWaitMs } } })).toThrow();
 });
+
+it("accepts the optional machine tag appearance and rejects unknown values with a plain reason", () => {
+  const decode = Schema.decodeUnknownSync(MeshConfigDocument);
+  expect(
+    decode({
+      schema: 1,
+      machines: {},
+      appearance: { machineTags: { style: "solid", textColor: "neutral" }, future: true },
+    }).appearance,
+  ).toEqual({ machineTags: { style: "solid", textColor: "neutral" }, future: true });
+  expect(decode({ schema: 1, machines: {} }).appearance).toBeUndefined();
+  for (const style of ["rainbow", 1, null])
+    expect(() =>
+      decode({ schema: 1, machines: {}, appearance: { machineTags: { style } } }),
+    ).toThrow(/tinted|solid|outline/);
+  for (const textColor of ["white", true])
+    expect(() =>
+      decode({ schema: 1, machines: {}, appearance: { machineTags: { textColor } } }),
+    ).toThrow(/machine|neutral/);
+});

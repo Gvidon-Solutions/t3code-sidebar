@@ -87,7 +87,7 @@ it("opens Machines without toggling its folder, including after a live status ch
   ).not.toContain("⇄");
 });
 
-it("collapses tags for a long project title and retains the complete machine description", async () => {
+it("shows every tag for a long project title and truncates the title instead", async () => {
   const title = "Research workspace with a deliberately long title";
   const model = projectMachineStrip(
     {
@@ -118,15 +118,44 @@ it("collapses tags for a long project title and retains the complete machine des
       >
         {title}
       </span>
-      <ProjectMachineStrip model={model} compact onOpen={() => undefined} />
+      <ProjectMachineStrip model={model} onOpen={() => undefined} />
     </div>,
   );
   expect(screen.getByText(title).element().getBoundingClientRect().width).toBeGreaterThan(140);
-  await expect.element(screen.getByText("+2")).toBeVisible();
+  expect(screen.container.textContent).not.toContain("+2");
   expect(
     screen
       .getByRole("button", { name: model.description })
       .element()
       .querySelectorAll('[role="img"]'),
-  ).toHaveLength(1);
+  ).toHaveLength(3);
+});
+
+it("shows +N only from four machines and names the hidden machines", async () => {
+  const model = projectMachineStrip(
+    {
+      ...empty,
+      machines: {
+        studio: { label: "Studio" },
+        cloudbox: { label: "Cloudbox" },
+        laptop: { label: "Laptop" },
+        bench: { label: "Bench" },
+      },
+    },
+    {
+      projectKey: "demo",
+      environmentIds: ["studio", "cloudbox", "laptop", "bench"],
+      knownEnvironmentIds: ["studio", "cloudbox", "laptop", "bench"],
+    },
+    [],
+  );
+  await using screen = await render(<ProjectMachineStrip model={model} onOpen={() => undefined} />);
+  expect(
+    screen
+      .getByRole("button", { name: model.description })
+      .element()
+      .querySelectorAll('[role="img"]'),
+  ).toHaveLength(3);
+  await expect.element(screen.getByText("+1")).toBeVisible();
+  expect(screen.getByLabelText("Also on Bench")).not.toBeNull();
 });

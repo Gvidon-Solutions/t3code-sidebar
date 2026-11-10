@@ -104,6 +104,7 @@ describe("projectMachineStrip", () => {
       color: "#123456",
     }));
     expect(model.chips.map((chip) => chip.environmentId)).toEqual(["lab", "at", "vps"]);
+    expect(model.hidden.map((chip) => chip.environmentId)).toEqual(["other"]);
     expect(model.overflow).toBe(1);
     expect(model.description).toBe(
       "Primary on LAB · Primary on AT · Replica on VPS (copying files) · Replica on OTHER (copying files)",

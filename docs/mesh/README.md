@@ -224,7 +224,12 @@ workspaces never affect sync/threads/routing, nothing hard-codes a machine.
 - **UI.** Web `apps/web/src/components/workspaces/` (MachineTag, ProjectMachineStrip
   `A ⇄ B C`, MeshSettingsPanel, MachinesDialog, PendingReplicaRow, MoveProjectDialog,
   ForkThreadDialog, MeshFooterStatus, FileMachineTag); mobile
-  `apps/mobile/src/features/workspaces/` (same names). Pure logic lives in
+  `apps/mobile/src/features/workspaces/` (same names). One `MachineTag` per client draws every
+  machine tag: the mesh config `appearance.machineTags` chooses `tinted` (default, machine-coloured
+  text on the machine tint), `solid` or `outline`, and `textColor` chooses machine or neutral text;
+  `machineTagPalette` moves only lightness for the active theme and keeps the hue. Project strips
+  draw up to three tags with `⇄` and use `+N` only from four machines; the project title truncates
+  first, and `+N` names the hidden machines for assistive tech and on long-press. Pure logic lives in
   `packages/client-runtime/src/state/{meshLayout/*,machineDisplay,meshMachines}.ts`.
   The Machines views and menus share `machineChoices`/`machineChoiceText`,
   `pendingRowsForProject`, `replicaLagText`, `representationCandidates`,
@@ -682,6 +687,10 @@ catalog, not a machine name or an assumed operating system.
   Add the attempted server to the fallback URL so the page can name it and retry.
 - `replicaStatusCopy` is visible row text: keep it to one short sentence and leave the server's
   long reason to `replicaStatusDetail`'s tooltip.
+- A machine tag has one component per client. Inline tints drift (white text on a near-black tint
+  on Android read as a different grey tag); configurable appearance belongs in the replicated mesh
+  config, not in each surface. Hiding tags behind "+N" while the title has room makes people guess
+  what "+1" means: draw every tag up to three and truncate the title instead.
 
 ## Mesh config core
 
@@ -693,7 +702,10 @@ holds the pure policy: `defaults`, `effectiveLinkPermissions`, `projectPolicy` (
 mode, merged ignores), `replicaRules`, `machineByName`/`ByEnvironment`/`ByPeerLabel`, `modelAlias`
 and `configDiff` for stale-apply hints.
 
-Storage lives in layout entries: `mesh.config` = `{ revision, doc, author, writtenAt }`,
+`appearance.machineTags` is presentation only: the schema validates `style`/`textColor`, apply
+stores it with the rest of the document, and materialize copies it into the broadcast
+`SidebarWorkspacesConfig.appearance` so every client of every machine draws the same tag without a
+new reconcile action. Storage lives in layout entries: `mesh.config` = `{ revision, doc, author, writtenAt }`,
 `mesh.configHistory/<revision>` (last fifty; older ones are tombstoned), bindings
 `mesh.machineBinding/<name>`, and each server's `mesh.configStatus/<environmentId>`. `mesh.configReplica/<project>/<environment>` tracks rule-owned placements and
 `mesh.linkPolicy/<receiver>/<peer>` reports installed permissions. These are

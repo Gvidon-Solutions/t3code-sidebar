@@ -48,6 +48,7 @@ function useSnapshot(): Snapshot {
 }
 
 vi.mock("react-native", () => ({
+  useColorScheme: () => "light",
   View: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("../../components/ui/AppText", () => ({

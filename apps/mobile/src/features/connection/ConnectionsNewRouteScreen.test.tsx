@@ -13,6 +13,7 @@ const { Children, harness } = vi.hoisted(() => ({
 }));
 
 vi.mock("react-native", () => ({
+  useColorScheme: () => "light",
   View: Children,
   Pressable: Children,
   Linking: { openSettings: vi.fn() },

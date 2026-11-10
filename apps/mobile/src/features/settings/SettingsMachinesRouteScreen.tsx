@@ -17,6 +17,7 @@ import { useMeshLayout } from "../workspaces/useMeshLayout";
 import { useEnvironments } from "../../state/environments";
 import { MeshAgentFixActions } from "../workspaces/MeshAgentFixActions";
 import { machineDisplayOf } from "@t3tools/client-runtime/state/machine-display";
+import { MachineTag } from "../workspaces/MachineTag";
 import { MeshLinkForm } from "./MeshLinkForm";
 import { MachineLinkedPeers } from "./MachineLinkedPeers";
 import { ScreenScrollView } from "../../components/ui/ScreenScrollView";
@@ -127,9 +128,9 @@ export function SettingsMachinesRouteScreen() {
                 onPress={() => setDetail(machine.environmentId)}
                 className="min-h-[52px] flex-row items-center gap-2 border-t border-border-subtle px-4 py-3"
               >
-                <AppText className="font-mono text-xs" style={{ color: machine.color }}>
-                  {machine.tag}
-                </AppText>
+                <MachineTag
+                  machine={{ label: machine.label, tag: machine.tag, color: machine.color }}
+                />
                 <AppText numberOfLines={1} className="min-w-0 flex-1 font-t3-medium">
                   {machine.label}
                 </AppText>

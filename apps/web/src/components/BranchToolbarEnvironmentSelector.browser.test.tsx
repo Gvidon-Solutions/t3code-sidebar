@@ -10,6 +10,11 @@ vi.mock("../hooks/useMeshLayout", () => ({
       machines: { bo: { label: "Boreal", tag: "BO" }, at: { label: "atlas", tag: "AT" } },
     },
   }),
+  useMeshLayoutOptional: () => ({
+    config: {
+      machines: { bo: { label: "Boreal", tag: "BO" }, at: { label: "atlas", tag: "AT" } },
+    },
+  }),
 }));
 
 it("offers a project copy on another machine and disables an unreachable machine", async () => {

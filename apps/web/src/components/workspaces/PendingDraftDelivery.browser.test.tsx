@@ -38,7 +38,10 @@ const fixture = vi.hoisted(() => ({
   useMesh: null as (() => FixtureMesh) | null,
   projects: [] as EnvironmentProject[],
 }));
-vi.mock("../../hooks/useMeshLayout", () => ({ useMeshLayout: () => fixture.useMesh!() }));
+vi.mock("../../hooks/useMeshLayout", () => ({
+  useMeshLayout: () => fixture.useMesh!(),
+  useMeshLayoutOptional: () => ({ config: fixture.useMesh!().config }),
+}));
 vi.mock("../../state/entities", () => ({ useProjects: () => fixture.projects }));
 vi.mock("../../state/meshReplicas", () => ({
   useReplicaStatuses: () => [],

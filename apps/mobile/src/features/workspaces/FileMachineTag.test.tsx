@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vite-plus/test";
 
 vi.mock("react-native", () => ({
+  useColorScheme: () => "light",
   View: ({
     children,
     accessibilityLabel,
@@ -18,6 +19,9 @@ vi.mock("../../components/ui/AppText", () => ({
 vi.mock("../../state/workspace", () => ({ useWorkspaceEnvironments: () => [] }));
 vi.mock("./useMeshLayout", () => ({
   useMeshLayout: () => ({
+    config: { machines: { remote: { label: "Build machine", tag: "BLD" } } },
+  }),
+  useMeshLayoutOptional: () => ({
     config: { machines: { remote: { label: "Build machine", tag: "BLD" } } },
   }),
 }));
