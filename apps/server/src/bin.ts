@@ -4,12 +4,13 @@ import * as NodeSea from "node:sea";
 import * as NodeURL from "node:url";
 
 import { isEntrypoint } from "./entrypoint.ts";
+import { isFastPathCommand } from "./fastPathCommands.ts";
 
-// Loads the CLI outside the launcher's module graph. Packaged builds embed it as a raw asset.
-async function loadCliMain(): Promise<typeof import("./binMain.ts")> {
-  if (!NodeSea.isSea()) return import("./binMain.ts");
+// Loads an embedded module outside the launcher's module graph. Packaged builds embed each one as a raw asset.
+async function loadEmbedded<T>(asset: string, development: () => Promise<T>): Promise<T> {
+  if (!NodeSea.isSea()) return development();
 
-  // Keep the executable's module URL so the CLI finds the web client and native packages beside it.
+  // Keep the executable's module URL so the module finds the web client and native packages beside it.
   const require = NodeModule.createRequire(import.meta.url);
   // require() resolves links in the executable path, such as a Windows junction.
   const cliUrl = NodeURL.pathToFileURL(require.resolve(process.execPath)).href;
@@ -18,17 +19,22 @@ async function loadCliMain(): Promise<typeof import("./binMain.ts")> {
       if (url !== cliUrl) return next(url, context);
       return {
         format: "module",
-        source: new Uint8Array(NodeSea.getRawAsset("binMain.mjs")),
+        source: new Uint8Array(NodeSea.getRawAsset(asset)),
         shortCircuit: true,
       };
     },
   });
   try {
-    return require(process.execPath) as typeof import("./binMain.ts");
+    return require(process.execPath) as T;
   } finally {
     hook.deregister();
   }
 }
+
+const loadCliMain = () =>
+  loadEmbedded<typeof import("./binMain.ts")>("binMain.mjs", () => import("./binMain.ts"));
+const loadFastMain = () =>
+  loadEmbedded<typeof import("./fastMain.ts")>("fastMain.mjs", () => import("./fastMain.ts"));
 
 if (
   isEntrypoint({
@@ -46,35 +52,9 @@ if (
   if (command === "__service-launcher" && process.argv.length === 3) {
     const { runServiceLauncherCli } = await import("./cli/serviceLauncher.ts");
     await runServiceLauncherCli();
-  } else if (command === "__run-worker") {
-    const { runWorker } = await import("./run/RunWorkerEntry.ts");
-    runWorker(process.argv[3]!);
-  } else if (command === "__replica-command") {
-    const { runShim } = await import("./run/RunShim.ts");
-    await runShim(process.argv[3]!, process.argv.slice(4));
-  } else if (command === "run") {
-    const { runCli } = await import("./run/RunCli.ts");
-    await runCli(process.argv.slice(3));
-  } else if (command === "__run-guardian") {
-    const { runGuardian } = await import("./run/RunGuardian.ts");
-    await runGuardian(process.argv[3]!);
-  } else if (command === "__document-text") {
-    const { extractDocumentText } = await import("./provider/documentTextWorker.ts");
-    try {
-      process.stdout.write(await extractDocumentText(process.argv[3]!, process.argv[4]!));
-    } catch (error) {
-      if (error instanceof Error && "code" in error && /^E[A-Z0-9]+$/.test(String(error.code))) {
-        throw error;
-      }
-      // Exit 2 identifies document rejections; OS and process failures remain retryable.
-      process.exitCode = 2;
-    }
-  } else if (command === "__managed-chatgpt-token") {
-    const { runManagedChatGptTokenCli } = await import("./cli/managedChatGptToken.ts");
-    await runManagedChatGptTokenCli(process.argv.slice(3));
-  } else if (command === "acp-mcp-bridge" || command === "acp-mcp-call") {
-    const { runAcpMcpCliFastPath } = await import("./mcp/AcpMcpStdioBridge.ts");
-    await runAcpMcpCliFastPath(command, process.argv.slice(3));
+  } else if (isFastPathCommand(command)) {
+    const { runFastPath } = await loadFastMain();
+    await runFastPath(command);
   } else {
     const { runCliCommand } = await loadCliMain();
     await runCliCommand();

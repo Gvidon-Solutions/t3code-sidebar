@@ -551,6 +551,10 @@
       "types": "./src/meshConfig/migration.ts",
       "import": "./src/meshConfig/migration.ts"
     },
+    "./meshConfig/sshHost": {
+      "types": "./src/meshConfig/sshHost.ts",
+      "import": "./src/meshConfig/sshHost.ts"
+    },
     "./speech": {
       "types": "./src/speech.ts",
       "import": "./src/speech.ts"

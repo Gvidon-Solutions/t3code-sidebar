@@ -162,9 +162,12 @@ async function buildRuntimes(cache) {
           NodePath.join(versionSource, "apps/server/package.json"),
           JSON.stringify({ ...original, version }, null, 2),
         );
-        // Same two passes as `cli.ts build-exe`: the CLI bundle into an asset dir, then the executable.
-        const cliAssetDir = await NodeFSP.mkdtemp(NodePath.join(root, "cli-asset-" + version + "-"));
-        for (const packMode of ["bundle", "1"])
+        // Same passes as `cli.ts build-exe`: the CLI and fast-path bundles share an asset dir,
+        // then the executable embeds both.
+        const cliAssetDir = await NodeFSP.mkdtemp(
+          NodePath.join(root, "cli-asset-" + version + "-"),
+        );
+        for (const packMode of ["bundle", "fast", "1"])
           await measured("pack-" + packMode + "-" + version, () =>
             run(NodePath.join(repo, "node_modules/.bin/vp"), ["pack"], {
               cwd: NodePath.join(versionSource, "apps/server"),
@@ -236,11 +239,15 @@ async function buildRuntimes(cache) {
             NodePath.join(versionSource, "apps/server/dist-exe/bin.mjs"),
             NodePath.join(root, "0.1.6/bin.mjs"),
           );
-          // The bootstrap keeps `./binMain.ts` external; the executable embeds it, so the plain
-          // Node entry needs the CLI bundle from the first pack pass beside it.
+          // The bootstrap keeps `./binMain.ts` and `./fastMain.ts` external; the executable
+          // embeds both, so the plain Node entry needs the two bundles beside it.
           await NodeFSP.copyFile(
             NodePath.join(cliAssetDir, "binMain.mjs"),
             NodePath.join(root, "0.1.6/binMain.ts"),
+          );
+          await NodeFSP.copyFile(
+            NodePath.join(cliAssetDir, "fastMain.mjs"),
+            NodePath.join(root, "0.1.6/fastMain.ts"),
           );
         }
       }),

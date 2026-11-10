@@ -1,7 +1,7 @@
 import { RunRemoteError } from "./RunRemoteError.ts";
 // @effect-diagnostics nodeBuiltinImport:off -- SSH processes and their stdio are the CLI transport boundary.
 // @effect-diagnostics globalTimers:off -- SSH heartbeat timers are scoped to the captured child and cleared on close.
-import { resolveSshHost } from "@t3tools/shared/meshConfig";
+import { resolveSshHost } from "@t3tools/shared/meshConfig/sshHost";
 import * as NodeChildProcess from "node:child_process";
 import * as NodeStringDecoder from "node:string_decoder";
 import type { RemoteRunPlan, WorkerFrame } from "./RunProtocol.ts";

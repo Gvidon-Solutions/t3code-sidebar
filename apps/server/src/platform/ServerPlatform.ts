@@ -1,4 +1,4 @@
-import { resolveSshHost } from "@t3tools/shared/meshConfig";
+import { resolveSshHost } from "@t3tools/shared/meshConfig/sshHost";
 /* oxlint-disable t3code/no-global-process-runtime -- Native defaults at the server platform boundary also serve standalone launchers. */
 // @effect-diagnostics nodeBuiltinImport:off -- The server platform boundary owns native paths, permissions, shells and private IPC.
 import * as NodePath from "node:path";

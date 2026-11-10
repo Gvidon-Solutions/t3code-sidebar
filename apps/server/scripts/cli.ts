@@ -137,7 +137,7 @@ const buildExeCmd = Command.make(
         (yield* HostProcess.Architecture) === "arm64";
       const spawnCommand = yield* resolveSpawnCommand("vp", ["pack"]);
       const cliAssetDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-cli-asset-" });
-      const pack = (packMode: "bundle" | "bootstrap" | "1") =>
+      const pack = (packMode: "bundle" | "fast" | "bootstrap" | "1") =>
         runCommand(
           ChildProcess.make(spawnCommand.command, spawnCommand.args, {
             cwd: serverDir,
@@ -155,11 +155,13 @@ const buildExeCmd = Command.make(
 
       yield* pack("bundle");
       const cliMainPath = path.join(cliAssetDir, "binMain.mjs");
+      const fastMainPath = path.join(cliAssetDir, "fastMain.mjs");
+      yield* pack("fast");
       yield* pack(linuxArm64 ? "bootstrap" : "1");
 
       // Executables reject non-builtin imports even when bundling succeeds; inspect the emitted graph.
       const bootstrapPath = path.join(serverDir, "dist-exe/bin.mjs");
-      for (const bundlePath of [bootstrapPath, cliMainPath]) {
+      for (const bundlePath of [bootstrapPath, cliMainPath, fastMainPath]) {
         const specifiers = findEsmImportsOfExternalPackages(yield* fs.readFileString(bundlePath));
         if (specifiers.length > 0) {
           return yield* new ServerCliExecutableImportError({ bundlePath, specifiers });
@@ -178,6 +180,7 @@ const buildExeCmd = Command.make(
         yield* injectLinuxArm64Sea({
           bundlePath: bootstrapPath,
           cliAssetPath: cliMainPath,
+          fastAssetPath: fastMainPath,
           outputPath: path.join(serverDir, "dist-exe/t3"),
           nodeVersion: rootPackageJson.engines.node,
           verbose: config.verbose,

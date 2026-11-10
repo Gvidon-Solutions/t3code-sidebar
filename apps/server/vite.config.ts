@@ -36,7 +36,8 @@ if (!TELEMETRY_CHANNELS.includes(telemetryChannel)) {
 // "bootstrap" stops at bin.mjs for scripts/cli.ts to inject (linux-arm64).
 const packMode = process.env.T3CODE_PACK_EXE;
 const packBootstrap = packMode === "1" || packMode === "bootstrap";
-const packExecutable = packBootstrap || packMode === "bundle";
+const packFast = packMode === "fast";
+const packExecutable = packBootstrap || packMode === "bundle" || packFast;
 const cliAssetDir = process.env.T3CODE_CLI_ASSET_DIR ?? "";
 if (packExecutable && !cliAssetDir) throw new Error("Build the executable with build:exe.");
 // TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
@@ -91,12 +92,15 @@ export default mergeConfig(
       // SEA embeds one entry; expose the history worker as a hidden subcommand.
       entry: packBootstrap
         ? ["src/bin.ts"]
-        : packExecutable
-          ? ["src/binMain.ts"]
-          : ["src/bin.ts", "src/claude-history-worker.ts"],
+        : packFast
+          ? ["src/fastMain.ts"]
+          : packExecutable
+            ? ["src/binMain.ts"]
+            : ["src/bin.ts", "src/claude-history-worker.ts"],
       outDir: packBootstrap ? "dist-exe" : packExecutable ? cliAssetDir : "dist",
       sourcemap: !packExecutable,
-      clean: true,
+      // The bundle and fast passes share one asset directory; only the first one clears it.
+      clean: !packFast,
       // SEA can only resolve built-ins; keep dynamic imports inside each emitted module.
       ...(packExecutable ? { outputOptions: { codeSplitting: false } } : {}),
       ...(packMode === "1"
@@ -108,9 +112,12 @@ export default mergeConfig(
               // Node SEA useCodeCache breaks import(), which the server needs.
               seaConfig: {
                 useCodeCache: false,
-                // The bootstrap loads the embedded CLI with require(esm).
+                // The bootstrap loads the embedded modules with require(esm).
                 execArgv: ["--require-module"],
-                assets: { "binMain.mjs": NodePath.join(cliAssetDir, "binMain.mjs") },
+                assets: {
+                  "binMain.mjs": NodePath.join(cliAssetDir, "binMain.mjs"),
+                  "fastMain.mjs": NodePath.join(cliAssetDir, "fastMain.mjs"),
+                },
               },
             },
           }
@@ -119,7 +126,8 @@ export default mergeConfig(
         // alwaysBundle=false has no opinion; neverBundle must retain transitive native acceleration.
         alwaysBundle: shouldBundleCliDependency,
         neverBundle: (id: string) =>
-          (packBootstrap && id === "./binMain.ts") || isExternalCliDependency(id),
+          (packBootstrap && (id === "./binMain.ts" || id === "./fastMain.ts")) ||
+          isExternalCliDependency(id),
         onlyBundle: false,
       },
       banner: {
