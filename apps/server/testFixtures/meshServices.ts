@@ -103,7 +103,8 @@ export const toolkit = Layer.mergeAll(
   Layer.mock(MeshRelay)({}),
   Layer.mock(MeshReplicator)({}),
   Layer.succeed(McpClientAuthenticator, {
-    authenticate: Effect.fn("fixture.authenticate")(() => Effect.sync(() => undefined)),
+    // @effect-diagnostics-next-line effectSucceedWithUndefined:off -- No invocation scope means no authenticated client.
+    authenticate: Effect.fn("fixture.authenticate")(() => Effect.succeed(undefined)),
   }),
   Layer.mock(PeerForwarding)({
     call: () =>

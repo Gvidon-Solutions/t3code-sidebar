@@ -115,23 +115,22 @@ const networkPathChanges = Stream.callback<"network-changed">((queue) =>
   ).pipe(Effect.asVoid),
 );
 
+const nowMs = () => Date.now();
+
 const layerWakeups = Wakeups.layer({
   changes: Stream.mergeAll(
     [
       Stream.callback<"application-active-probe" | "application-active-long">((queue) =>
         Effect.acquireRelease(
           Effect.sync(() => {
-            let backgroundedAtMs = AppState.currentState === "background" ? Date.now() : null;
+            let backgroundedAtMs = AppState.currentState === "background" ? nowMs() : null;
             return AppState.addEventListener("change", (state) => {
               if (state === "background") {
-                backgroundedAtMs = Date.now();
+                backgroundedAtMs = nowMs();
                 return;
               }
               if (state === "active") {
-                Queue.offerUnsafe(
-                  queue,
-                  mobileApplicationActiveWakeup(backgroundedAtMs, Date.now()),
-                );
+                Queue.offerUnsafe(queue, mobileApplicationActiveWakeup(backgroundedAtMs, nowMs()));
                 backgroundedAtMs = null;
               }
             });
@@ -187,8 +186,8 @@ const layerCapabilities = Layer.effectContext(
       Context.add(
         ClientCapabilities.PrimaryEnvironmentAuth,
         ClientCapabilities.PrimaryEnvironmentAuth.of({
-          bearerToken: Effect.succeed(Option.none()),
-          webSocketTicket: Effect.succeed(Option.none()),
+          bearerToken: Effect.succeedNone,
+          webSocketTicket: Effect.succeedNone,
         }),
       ),
       // The relay device id already persists in secure storage; analytics only sends its hash.
@@ -206,7 +205,7 @@ const layerCapabilities = Layer.effectContext(
                   detail: `Could not load the mobile device identity: ${String(cause)}`,
                 }),
             ),
-            Effect.map(Option.some),
+            Effect.asSome,
           ),
         }),
       ),
@@ -219,21 +218,25 @@ const layerCapabilities = Layer.effectContext(
       Context.add(
         ClientCapabilities.SshEnvironmentGateway,
         ClientCapabilities.SshEnvironmentGateway.of({
-          provision: () =>
+          provision: Effect.fn("ClientCapabilities.SshEnvironmentGateway.provision")(() =>
             Effect.fail(
               new ConnectionBlockedError({
                 reason: "unsupported",
                 detail: "SSH environments are only available in the desktop app.",
               }),
             ),
-          prepare: () =>
+          ),
+          prepare: Effect.fn("ClientCapabilities.SshEnvironmentGateway.prepare")(() =>
             Effect.fail(
               new ConnectionBlockedError({
                 reason: "unsupported",
                 detail: "SSH environments are only available in the desktop app.",
               }),
             ),
-          disconnect: () => Effect.void,
+          ),
+          disconnect: Effect.fn("ClientCapabilities.SshEnvironmentGateway.disconnect")(
+            () => Effect.void,
+          ),
         }),
       ),
     );
@@ -253,7 +256,7 @@ const layerProvidedCapabilities = layerCapabilities.pipe(Layer.provide(Runtime.l
 const layerEnvironmentOwnedDataCleanup = Layer.succeed(
   Persistence.EnvironmentOwnedDataCleanup,
   Persistence.EnvironmentOwnedDataCleanup.of({
-    clear: (environmentId) =>
+    clear: Effect.fn("Persistence.EnvironmentOwnedDataCleanup.clear")((environmentId) =>
       Effect.all(
         [
           Effect.promise(() => clearThreadOutboxEnvironment(environmentId)),
@@ -262,13 +265,14 @@ const layerEnvironmentOwnedDataCleanup = Layer.succeed(
         ],
         { concurrency: "unbounded", discard: true },
       ).pipe(
-        Effect.catch((cause) =>
+        Effect.catchCause((cause) =>
           Effect.logWarning("Could not clear mobile environment-owned data.", {
             environmentId,
             cause,
           }),
         ),
       ),
+    ),
   }),
 );
 

@@ -497,10 +497,9 @@ const serviceLayer = Layer.effect(
         Effect.onError(() =>
           Effect.gen(function* () {
             const fs = fileSystem;
-            for (const path of claimedPaths)
-              yield* fs.remove(path, { force: true }).pipe(Effect.orDie);
-            yield* clearForkUploads(bundle.id).pipe(Effect.provide(uploadContext), Effect.orDie);
-          }),
+            for (const path of claimedPaths) yield* fs.remove(path, { force: true });
+            yield* clearForkUploads(bundle.id).pipe(Effect.provide(uploadContext));
+          }).pipe(Effect.orDie),
         ),
       );
       return staged;

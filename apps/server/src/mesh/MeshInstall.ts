@@ -47,7 +47,14 @@ export const layer = Layer.effect(
             reason: "validation",
             message: "Unsupported service platform",
           });
-        yield* Effect.try(() => cliReleaseDownloadBaseUrl(input.version, input.releaseBaseUrl));
+        yield* Effect.try({
+          try: () => cliReleaseDownloadBaseUrl(input.version, input.releaseBaseUrl),
+          catch: () =>
+            new MeshConfigError({
+              reason: "validation",
+              message: "Invalid release version or download base URL",
+            }),
+        });
         const baseDir = input.baseDir ?? path.join(home, ".t3-mesh");
         if (!path.isAbsolute(baseDir))
           return yield* new MeshConfigError({

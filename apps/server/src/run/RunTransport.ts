@@ -229,7 +229,10 @@ export async function remoteRun(
       const detail =
         reason.trim().split(/\r?\n/).at(-1) ||
         `SSH closed without a command result (status ${status ?? "signal"})`;
-      throw new RunRemoteError(`Cannot run on ${plan.machine}: ${detail}`, remoteReason);
+      throw new RunRemoteError({
+        detail: `Cannot run on ${plan.machine}: ${detail}`,
+        ...(remoteReason ? { reason: remoteReason } : {}),
+      });
     }
     return { ...done, ...(id ? { id } : {}) };
   } finally {

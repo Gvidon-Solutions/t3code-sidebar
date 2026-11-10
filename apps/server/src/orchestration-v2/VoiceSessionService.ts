@@ -13,13 +13,13 @@ import {
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import type { VoiceInitialItem } from "@t3tools/provider-core/server/ProviderAdapter";
@@ -101,9 +101,9 @@ export function carriedConversationNote(fromTitle: string): VoiceInitialItem {
 }
 
 /** A thread that is still preparing or starting; voice waits for it. */
-class VoiceThreadNotReady extends Data.TaggedError("VoiceThreadNotReady")<{
-  readonly detail: string;
-}> {}
+class VoiceThreadNotReady extends Schema.TaggedError<VoiceThreadNotReady>()("VoiceThreadNotReady", {
+  detail: Schema.String,
+}) {}
 
 const isLiveRun = (run: OrchestrationV2Run) =>
   run.status === "starting" || run.status === "running" || run.status === "waiting";

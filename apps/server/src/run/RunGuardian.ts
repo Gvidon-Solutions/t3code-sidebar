@@ -12,6 +12,7 @@ import * as Schema from "effect/Schema";
 import { RunPlan } from "./RunProtocol.ts";
 import { remoteRun } from "./RunTransport.ts";
 import { namespaceOf, privateDirectory, workerStateRoot } from "../platform/ServerPlatform.ts";
+const isRunRemoteError = Schema.is(RunRemoteError);
 const decode = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({
@@ -93,7 +94,7 @@ export async function runGuardian(payload: string) {
           await appendLog(
             `${new Date().toISOString()} ${cause instanceof Error ? cause.message : "Forwarding failed"}\n`,
           );
-          if (ready && cause instanceof RunRemoteError && cause.reason === "job_not_found") {
+          if (ready && isRunRemoteError(cause) && cause.reason === "job_not_found") {
             await flush();
             return;
           }

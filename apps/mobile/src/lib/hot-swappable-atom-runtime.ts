@@ -5,10 +5,11 @@ export interface AcceptingHotModule {
   readonly accept: (callback?: () => void) => void;
 }
 
+type HotRuntimeDeps = AtomRegistry.AtomRegistry | Reactivity.Reactivity;
+type StoredLayer = Layer.Layer<unknown, unknown, HotRuntimeDeps>;
+
 interface HotAtomRuntimeEntry {
-  readonly layerAtom: Atom.Writable<
-    Layer.Layer<unknown, unknown, AtomRegistry.AtomRegistry | Reactivity.Reactivity>
-  >;
+  readonly layerAtom: Atom.Writable<StoredLayer>;
   readonly runtime: Atom.AtomRuntime<unknown, unknown>;
 }
 
@@ -46,14 +47,8 @@ export function hotSwappableAtomRuntime<R, E>(options: {
     runtimes.set(options.id, entry);
   } else {
     entry = existing;
-    options.registry.set(
-      entry.layerAtom,
-      options.layer as Layer.Layer<
-        unknown,
-        unknown,
-        AtomRegistry.AtomRegistry | Reactivity.Reactivity
-      >,
-    );
+    // @effect-diagnostics-next-line anyUnknownInErrorContext:off -- The HMR registry stores layers from different runtimes, so it erases the per-runtime error type.
+    options.registry.set(entry.layerAtom, options.layer as StoredLayer);
   }
 
   // Keep the AtomRuntime stable across HMR while replacing its Layer.

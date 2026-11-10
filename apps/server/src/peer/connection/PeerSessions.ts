@@ -428,9 +428,17 @@ export const make = Effect.gen(function* () {
       );
 
   const notify = (entry: Live, name: string, body: unknown) =>
-    Effect.try(() => {
-      entry.channel.event(name, body);
-      return true;
+    Effect.try({
+      try: () => {
+        entry.channel.event(name, body);
+        return true;
+      },
+      catch: (cause) =>
+        new PeerConnectionError({
+          reason: "protocol",
+          message: `Peer notification ${name} could not be sent`,
+          cause,
+        }),
     }).pipe(
       Effect.catch((error) =>
         Effect.logDebug("Peer notification could not be sent", {

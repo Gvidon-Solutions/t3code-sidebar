@@ -1758,7 +1758,7 @@ it.effect(
         Layer.mock(UsageLimitSources.UsageLimitSources)({ current: Effect.succeed([]) }),
         Layer.mock(ExternalLauncher.ExternalLauncher)({
           resolveAvailableEditors: () => Effect.succeed([]),
-          // @effect-diagnostics-next-line effectSucceedWithVoid:off -- The optional discovery result is undefined.
+          // @effect-diagnostics-next-line effectSucceedWithUndefined:off -- The optional discovery result is undefined.
           resolveFileManagerRevealKind: () => Effect.succeed(undefined),
         }),
         Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),

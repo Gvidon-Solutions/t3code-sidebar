@@ -120,7 +120,14 @@ export const layer = Layer.effect(
       if (!(yield* fs.exists(sshDir)))
         yield* fs.makeDirectory(sshDir, { recursive: true, mode: 0o700 });
       const original = (yield* fs.exists(filePath)) ? yield* fs.readFileString(filePath) : "";
-      const contents = yield* Effect.try(() => managedBlock(original, lines));
+      const contents = yield* Effect.try({
+        try: () => managedBlock(original, lines),
+        catch: (cause) =>
+          new MeshConfigError({
+            reason: "validation",
+            message: `Cannot update ${filePath}: ${String(cause)}`,
+          }),
+      });
       if (contents !== original) {
         yield* writeFileStringAtomically({ filePath, contents }).pipe(
           Effect.provideService(FileSystem.FileSystem, fs),
@@ -210,16 +217,22 @@ export const layer = Layer.effect(
             );
           yield* blockLock.withPermit(
             Effect.gen(function* () {
-              const files = yield* Effect.try(() =>
-                sshFiles(peers, {
-                  platform,
-                  baseDir,
-                  identity,
-                  knownHosts,
-                  runtime:
-                    isExecutable || !args[1] ? [executable] : [executable, path.resolve(args[1])],
-                }),
-              );
+              const files = yield* Effect.try({
+                try: () =>
+                  sshFiles(peers, {
+                    platform,
+                    baseDir,
+                    identity,
+                    knownHosts,
+                    runtime:
+                      isExecutable || !args[1] ? [executable] : [executable, path.resolve(args[1])],
+                  }),
+                catch: (cause) =>
+                  new MeshConfigError({
+                    reason: "validation",
+                    message: `Cannot render SSH config: ${String(cause)}`,
+                  }),
+              });
               yield* write(configFile, mode === "managed" ? files.config : []);
               const sshdConfig = (yield* fs.exists(sshdConfigFile))
                 ? yield* fs.readFileString(sshdConfigFile)

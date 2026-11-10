@@ -10,6 +10,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as ServerConfig from "../config.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as ProcessRunner from "../processRunner.ts";
@@ -17,12 +18,19 @@ import * as MutagenInstaller from "./MutagenInstaller.ts";
 import * as MutagenRunner from "./MutagenRunner.ts";
 import { sessionStatus } from "./replicaModel.ts";
 
+class MutagenFixtureError extends Schema.TaggedError<MutagenFixtureError>()("MutagenFixtureError", {
+  cause: Schema.Defect(),
+}) {}
+
 it.live("installs verified Mutagen and synchronizes isolated local endpoints bidirectionally", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const platform = yield* HostProcess.Platform;
       const architecture = yield* HostProcess.Architecture;
-      const archive = yield* Effect.tryPromise(() => mutagenArchive(platform, architecture));
+      const archive = yield* Effect.tryPromise({
+        try: () => mutagenArchive(platform, architecture),
+        catch: (cause) => new MutagenFixtureError({ cause }),
+      });
       const fixtureHttp = Layer.succeed(
         HttpClient.HttpClient,
         HttpClient.make((request) =>

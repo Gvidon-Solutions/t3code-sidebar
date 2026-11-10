@@ -32,12 +32,13 @@ function setup() {
   }[] = [];
   const queries = Atom.family((cursor: string | null) =>
     Atom.make(
-      Effect.tryPromise(
-        () =>
+      Effect.tryPromise({
+        try: () =>
           new Promise<PullRequestDiffResult>((resolve, reject) => {
             requests.push({ cursor, resolve, reject });
           }),
-      ),
+        catch: (cause) => (cause instanceof Error ? cause.message : "Connection lost"),
+      }),
     ).pipe(Atom.keepAlive),
   );
   mocks.diff.mockImplementation((target: { input: { cursor?: string } }) =>

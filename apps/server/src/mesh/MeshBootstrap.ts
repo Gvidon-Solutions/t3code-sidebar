@@ -429,13 +429,13 @@ export const layer = Layer.effect(
             );
           }),
         ).pipe(
-          Effect.catch((error) =>
+          Effect.tapError((error) =>
             report(
               name,
               phase,
               "failed",
               error._tag === "MeshConfigError" ? error.message : "Bootstrap step failed",
-            ).pipe(Effect.andThen(Effect.fail(error))),
+            ),
           ),
           Effect.ensuring(
             Effect.sync(() => {

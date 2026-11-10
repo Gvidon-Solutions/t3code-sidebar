@@ -11,6 +11,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { sshDirectory } from "../../platform/ServerPlatform.ts";
+import { PeerConnectionError } from "./PeerConnectionError.ts";
 import packageJson from "../../../package.json" with { type: "json" };
 
 export const PeerFacts = Schema.Struct({
@@ -84,13 +85,21 @@ export const collectPeerFacts = Effect.fn("PeerFacts.collect")(function* (
       if (!include) continue;
       for (const token of include.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)) {
         const pattern = token[1] ?? token[2] ?? token[3]!;
-        const files = yield* Effect.tryPromise(async () => {
-          const paths: string[] = [];
-          for await (const included of NodeFSP.glob(NodePath.resolve(directory, pattern))) {
-            paths.push(included);
-            if (paths.length >= 256) break;
-          }
-          return paths.sort();
+        const files = yield* Effect.tryPromise({
+          try: async () => {
+            const paths: string[] = [];
+            for await (const included of NodeFSP.glob(NodePath.resolve(directory, pattern))) {
+              paths.push(included);
+              if (paths.length >= 256) break;
+            }
+            return paths.sort();
+          },
+          catch: (cause) =>
+            new PeerConnectionError({
+              reason: "protocol",
+              message: "SSH config Include could not be read",
+              cause,
+            }),
         }).pipe(
           Effect.catch((error) =>
             Effect.logWarning("SSH config Include could not be read", { error }).pipe(
