@@ -59,7 +59,7 @@ describe("CommandPalette open intents", () => {
       .toHaveFocus();
     await userEvent.keyboard("{ArrowDown}");
     await expect
-      .element(page.getByRole("option", { name: /^New thread in\.\.\./ }))
+      .element(page.getByRole("option", { name: /^New thread in…/ }))
       .toHaveAttribute("data-highlighted");
     await userEvent.keyboard("{Enter}");
 

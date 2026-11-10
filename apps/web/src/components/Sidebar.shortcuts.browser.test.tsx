@@ -52,6 +52,8 @@ it("leaves thread shortcuts and their hints to the preview when their rules excl
   __setClientSettingsForTests({
     ...DEFAULT_CLIENT_SETTINGS,
     onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+    // These hints live in the thread-list sidebar; the fork's workspace sidebar is a different list.
+    workspaceSidebarEnabled: false,
   });
   await page.viewport(1400, 900);
   const router = getRouter(
