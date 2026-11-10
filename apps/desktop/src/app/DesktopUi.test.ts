@@ -793,6 +793,8 @@ describe("Desktop connected UI source", () => {
       expect((yield* restored.selection)?.httpBaseUrl).toBeNull();
       expect(yield* restored.sourceOrigin).toBeNull();
       expect((yield* restored.getInfo).source).toBe("bundled");
+      // A disabled source is not kept in the window's CSP origin list.
+      expect(yield* restored.connectionOrigins).not.toContain("http://127.0.0.1:4080");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
